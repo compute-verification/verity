@@ -233,7 +233,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
         assert wrote["roots"]["ok"] == okr.root.hex() and "o1" in wrote["ports"]
         docs[c] = doc
 
-    # flock-verify holds ok's root to its known rows (Registered.checkKnown): a root with one unit's row 0 is refused, as
+    # the Lean verifier holds ok's root to its known rows (Registered.checkKnown): a root with one unit's row 0 is refused, as
     # are known rows of another window's salts, too few of them, or a wider row
     o1 = docs[0]["ports"]["o1"]
     kr = RN.ok_known_root(tmp_path / "ok-known-root.registered.json", win, com, docs[0], 3)
@@ -252,35 +252,35 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     # the window root, and another window's root
     desc, calls = RN.credit_descriptor(win), U.HW.call_units(win.program)
     assert hashlib.sha512(desc).hexdigest() == win.obj["program"]
-    drawn = [calls[0][0] + 1, calls[1][0]]
-    found = {u: RN.findings_of(docs[c]) for c, u in enumerate(drawn)}
-    assert found[drawn[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
+    sampled = [calls[0][0] + 1, calls[1][0]]
+    found = {u: RN.findings_of(docs[c]) for c, u in enumerate(sampled)}
+    assert found[sampled[1]]["o1"] == {"value": "ok", "root": okr.root.hex()}
     entries, ok = com["registered"], {"value": "ok", "root": okr.root.hex()}
-    assert RN.credit_registration(desc, drawn, entries, found, wr, ok) is None
+    assert RN.credit_registration(desc, sampled, entries, found, wr, ok) is None
     okd = G.domain(win.obj["program"], "ok", 1, T).domain_id.hex()
-    assert RN.credit_registration(desc, drawn, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
+    assert RN.credit_registration(desc, sampled, [*entries, dict(okr.entry(), domain=okd)], found, wr, ok) is None, (
         "the ok rows are the verifier's own, which credit builds and `_verified` holds each session to: registration "
         "reads no entry of them")
     # ok-unrooted: the sessions opened ok at its rows registered without the window root (the domain a file states
-    # without it, which flock-verify roots its known rows at), and credit's step-5 rule refuses them
+    # without it, which the Lean verifier roots its known rows at), and credit's step-5 rule refuses them
     oku = RN.unrooted_ok(win, com)
     assert oku.root != okr.root and oku.domain.domain_id.hex() == okd
     assert oku.root == G.Registered.commit(win.obj["program"], "ok", [[1]] * T, [U.ok_salt("w", u) for u in range(T)],
                                            16, U.V2, None).root
     bad_found = {u: dict(f, o1=dict(f["o1"], root=oku.root.hex())) for u, f in found.items()}
-    for bad, why in ((bad_found, f"call 0's session of unit {drawn[0]} opened the ok rows at another port, value or root"),
-                     ({drawn[0]: found[drawn[0]], drawn[1]: {p: e for p, e in found[drawn[1]].items() if p != "o1"}},
-                      f"call 1's session of unit {drawn[1]} opened the ok rows"),
+    for bad, why in ((bad_found, f"call 0's session of unit {sampled[0]} opened the ok rows at another port, value or root"),
+                     ({sampled[0]: found[sampled[0]], sampled[1]: {p: e for p, e in found[sampled[1]].items() if p != "o1"}},
+                      f"call 1's session of unit {sampled[1]} opened the ok rows"),
                      ({u: dict(f, o2=f["o1"]) for u, f in found.items()}, "opened the ok rows at another port")):
-        got = RN.credit_registration(desc, drawn, entries, bad, wr, ok)
+        got = RN.credit_registration(desc, sampled, entries, bad, wr, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
     for bad_entries, root, why in (
             (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
             (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
             ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
-        got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
+        got = RN.credit_registration(desc, sampled, bad_entries, found, root, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
-    assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
+    assert RN.credit_registration(desc, [*sampled, 0], entries, found, wr, ok)[0] == "missing"
 
     salt = U.unit_salt(U.stand_in_reveal(b"\x09" * 32), 1)
     served = window("serve", str(tmp_path / "w"), salt.hex(), str(tmp_path / "served.json"), "--workers", "2")
@@ -293,7 +293,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
 
 
 @pytest.mark.slow
-def test_drawn_units_open_to_their_window_and_no_other(tmp_path, win):
+def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
     """A sampled proof block's opening passes its own window's roots and no other's (a flipped record's, a receipt of another salt's,
     another window's), its ok row is the one word 1 under its public salt and row u of the verifier's registered ``ok``
     (a 0 row there opens no root; ``--unregistered-ok`` states no ok registration), a prover's rows with a tampered A row
@@ -447,6 +447,7 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
         U.layout()
 
 
+@pytest.mark.slow
 def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
@@ -529,7 +530,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
     are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
-    flock-verify --registered's check; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
+    the Lean verifier's check under --registered; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
     committed afresh state no ok registration, a prover's A row the registration does not hold opens none, two rows at one
     position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
     wrong output row."""
@@ -681,6 +682,32 @@ def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     qw, sw = L.quant_w(x)
     assert sa.tolist() == [np.float32(9.0) / np.float32(126), np.float32(4.0) / np.float32(126)] and qa.max() == 125
     assert sw.tolist() == [np.float32(9.0) / np.float32(110), np.float32(4.0) / np.float32(110)] and qw.max() == 110
+
+
+def test_a_layers_tokens_come_from_the_seed_or_the_models_tokenizer_and_a_tokenizer_that_fails_raises(tmp_path, monkeypatch):
+    """`layer.tokens_of` gives the seed's ids where a seed is given and a fresh seed's where the model has no tokenizer;
+    where it has one, the prompt's ids are the tokenizer's, and a tokenizer that doesn't load raises instead of
+    falling back to a fresh seed."""
+    L = _module("h1_prove_layer", "layer.py")
+    seeded = L.tokens_of(tmp_path, 6, b"\x01" * 16)
+    assert seeded == L._seeded(6, b"\x01" * 16) != L._seeded(6, b"\x02" * 16) and seeded[0] == 128000
+    fresh = L.tokens_of(tmp_path, 6, None)
+    assert len(fresh) == 6 and fresh[0] == 128000 and all(0 <= t < 128000 for t in fresh[1:])
+
+    class Tokenizer:
+        @staticmethod
+        def from_file(path):
+            if Path(path).read_text() != "{}":
+                raise ValueError(f"{path} is no tokenizer")
+            return SimpleNamespace(encode=lambda text, add_special_tokens: SimpleNamespace(ids=list(range(len(text)))))
+
+    monkeypatch.setitem(sys.modules, "tokenizers", SimpleNamespace(Tokenizer=Tokenizer, __spec__=object()))
+    assert L.tokens_of(tmp_path, 6, None)[1:] != [0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("{}")
+    assert L.tokens_of(tmp_path, 6, None) == [128000, 0, 1, 2, 3, 4]
+    (tmp_path / "tokenizer.json").write_text("truncated")
+    with pytest.raises(ValueError, match="is no tokenizer"):
+        L.tokens_of(tmp_path, 6, None)
 
 
 def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_path, monkeypatch):

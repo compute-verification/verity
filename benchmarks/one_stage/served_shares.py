@@ -38,8 +38,8 @@ sys.path.insert(0, str(HERE))
 import served_overhead as O  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
-#: the H200's clock readings, the tensor clock's (the data sheet's dense int8 rate) and the boost clock's
-#: (`benchmarks/pouw/accel_v31/h200_step.py`'s CLOCKS_MHZ), and θ at each: 132 SMs × 4,096 int8 MACs a clock
+#: the H200's clock readings, the tensor clock's (the data sheet's dense int8 rate) and the boost clock's, and θ at
+#: each: 132 SMs × 4,096 int8 MACs a clock
 CLOCKS_MHZ = {"tensor": 1830, "boost": 1980}
 RHO = {name: 4096 * 132 * mhz * 1e6 for name, mhz in CLOCKS_MHZ.items()}
 #: the served models' attention and LM head shapes; their linears are `served_verdicts.DECLARED`'s

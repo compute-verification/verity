@@ -146,7 +146,7 @@ from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
                                                     SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    final_hits, part, template, unit_templates)
+                                                    chain_ways, final_hits, part, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -260,6 +260,9 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     tp = template(t)
     if tp.layout in ("row", "part"):
         return 1
+    if tp.layout == "bits":
+        raise ValueError(f"{t}: a bits template's rows are its ports' bits (chunk_rows.unit_rows), which no reader of a served "
+                         f"row gives: its units are a replay block's, staged from the replay")
     S = d["statics"]
     if tp.layout in READERS:
         return int(READERS[tp.layout][0](tp, S))
@@ -290,16 +293,6 @@ def chunked(t: str, caps: Mapping[str, int] | None) -> bool:
             or (layout in ("row", "part") and t in (caps or {})))
 
 
-def unit_member(t: str, n: int, base: int = 0, name: str = "", seg: bool = False) -> CS.Member:
-    """``n`` units of template ``t`` from unit ``base`` on bit rows, as Flock's `UnitStager` stages a unit: its
-    `chunk_rows.unit_rows` in, its outputs' v2 rows out, or, ``seg`` (a history table's writer), its table's row-seg leaves."""
-    in_rows, _outs = CR.unit_rows(template(t))
-    outs = (("o0", 1),) if template(t).layout == "s8" else IF.layout(template(t).fn).outs
-    out_schema = CS.SCHEMA_HM96_SHA512_ROW_SEG if seg else CS.SCHEMA_HM96_SHA512_ROW_V2
-    schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, out_schema) for p, _w in outs)
-    return CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, n, base, name=name, schemas=schemas)
-
-
 def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[int] | None = None,
             caps: Mapping[str, int] | None = None, seg: Collection[str] = ()) -> list[CS.Member]:
     """Each template's ports, instance count and base, read off its first row; ``counts`` (the Definitions' own) must agree.  A
@@ -320,7 +313,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                  f"chunk_cap (pipeline.serving_rows.chunk_caps)")
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
-            out += [unit_member(t, min(cap, n - lo), base + lo, f"{t}/c{j}", seg=t in seg) for j, lo in enumerate(range(0, n, cap))]
+            out += [CR.unit_member(template(t), min(cap, n - lo), base + lo, f"{t}/c{j}", seg=t in seg)
+                    for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
         if layout == "rope":
@@ -356,24 +350,6 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
-def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
-    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
-    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
-    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
-    for a, b, k, rank in segs:
-        at = a
-        while at < b:
-            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
-                chunks.append((at, [], []))
-            take = min(b - at, first.n - sum(chunks[-1][2]))
-            chunks[-1][1].append((k, rank))
-            chunks[-1][2].append(take)
-            at += take
-    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
-                    links=tuple(links), link_units=tuple(units))
-            for j, (base, links, units) in enumerate(chunks)]
-
-
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
@@ -407,7 +383,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
         if m.template not in segs:
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
-            out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
+            out += S8.one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
     made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
                  for k in order)
     RTB.check_order(made)

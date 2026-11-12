@@ -18,7 +18,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -31,7 +31,7 @@ from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine import sampler_capture as SC
-from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
 
 ROPE = "RoPEHead_v1{D=64}"
 PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
@@ -244,6 +244,7 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
     assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
                                      "interior": True, "replay_sample": [0, 2], "replay": "replay-test"}
+    assert IR.interior_run(reg.digest, first.units) == SS.interior_root(reg.digest, first.units)
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 
@@ -389,8 +390,8 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
     k = V // C
     for s in _selects(tmp_path, V).values():
         chunks, comb = IR.pieces(s, c)
-        assert (chunks.member, comb.member) == (IR.named(SRW.unit_member(f"TokenSelectChunk_v2{{C={C}}}", s.n * k)),
-                                                IR.named(SRW.unit_member(f"TokenSelectCombine_v2{{V={V},C={C}}}", s.n)))
+        assert (chunks.member, comb.member) == (IR.named(CR.unit_member(SRW.template(f"TokenSelectChunk_v2{{C={C}}}"), s.n * k)),
+                                                IR.named(CR.unit_member(SRW.template(f"TokenSelectCombine_v2{{V={V},C={C}}}"), s.n)))
         assert [p for p, _w in chunks.member.rows + comb.member.rows] == ["x", "x0", "best", "idx"]
         assert [w for _p, w in comb.member.rows] == [1, k, 2 * k]
         best, idx = chunks.data["outs"]["o0"][:, 0].tolist(), chunks.data["outs"]["o1"].view("<u4")[:, 0].tolist()
@@ -433,11 +434,11 @@ def test_a_token_selects_pieces_on_the_logits_device_are_its_pieces_on_the_host(
 
 def test_a_token_selects_pieces_stage_as_the_second_stage_stages_an_interior_member():
     """`named` gives each piece's member the rows the second stage stages it on (`class_statement.member_stager`: row r
-    its Definition's input r), at a vocabulary whose combine rows hold a whole SHA-512 block, while `serving_rows.
+    its Definition's input r), at a vocabulary whose combine rows hold a whole SHA-512 block, while `chunk_rows.
     unit_member`'s positional ``in<g>`` rows are refused there."""
     from verity_flock import class_statement as CST
     for t in ("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=4096,C=64}"):
-        fn, m = SRW.template(t).fn, SRW.unit_member(t, 2)
+        fn, m = SRW.template(t).fn, CR.unit_member(SRW.template(t), 2)
         CST.member_stager(fn, IR.named(m), None)
         with pytest.raises(ValueError, match="are not the parameters"):
             CST.member_stager(fn, m, None)

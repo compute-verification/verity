@@ -1,8 +1,8 @@
 module
 
 public import Evaluate.MufuFits
-public import Flock.Bytes
-public import Flock.Hash
+public import Base.Bytes
+public import Base.Hash
 
 /-!
 # The MUFU primitives

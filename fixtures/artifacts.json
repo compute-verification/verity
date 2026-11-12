@@ -45,10 +45,9 @@
   "art:01c2b9eb67e8ef2eeb75523257351459a1f9265a1768692fabfff62d94260548": "adapters/vllm/tests/regression/files.toml",
   "art:531cdd949cc1f2d8cf0e5239701f1defbbb2efd5b3285ed89e8132d3d1ff4954": "adapters/vllm/data/logs/m1.jsonl.gz",
   "art:08ab3b7ebebddff3d18d66ef890c8594b41c52388749aee610f3b117fad27de2": "adapters/vllm/data/logs/m6/log.jsonl.gz",
-  "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "benchmarks/pouw/machine_model/data/cover/corpus.json",
-  "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "benchmarks/pouw/machine_model/data/cover/bu_12_9.json",
-  "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "benchmarks/pouw/machine_model/data/cover/sass_isa_tables.json",
-  "art:fdfa0b2082fef5a43cf9f24592b790cef05f0f2ea3548282a586827be99797ef": "benchmarks/torch_gpu/commit_slots/fixtures/families-shared.layout.json",
+  "art:ad56845b3654e20dbf3ac62ca346ca7a0c9f304160cc9a8d77a38a615135ded4": "benchmarks/machine_model/data/cover/corpus.json",
+  "art:61d521ebdf9cb49b76ba2343c027a6197addf0c83a6801a97801572202aeaa2b": "benchmarks/machine_model/data/cover/bu_12_9.json",
+  "art:eb79e5280af4a8bad9ff2a864de5ae4684e11cbed44a01d5ca6c66bafa24720c": "benchmarks/machine_model/data/cover/sass_isa_tables.json",
   "art:fbda52b07457b79607d0170e149923debd5ff104fb0c7e94bf3b933ddc946887": "demos/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json",
   "art:6de3e339833a96cd1c2df2878be6525cbde4a81d32dc10aa6f0b0d330cc4f72b": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json",
   "art:ac0642a356eff29ed4dc08992ebc2556dad56e76c2a54760bde4dbf7cd7d62c9": "adapters/vllm/workloads/dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json",
@@ -142,8 +141,10 @@
   "art:abb6201df38b08720d8251b836f523ed34396391c7977fa2a434f0a84ea86e4c": "benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json",
   "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "verity/protocols/spot/verifier/tests/fixtures/form-refusals",
+  "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5": "verity/definitions/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json",
+  "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

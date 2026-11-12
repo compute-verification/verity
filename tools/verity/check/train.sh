@@ -5,11 +5,11 @@
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
-# `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
+# `check.py --record --on MACHINE --priority --timeout 36000 --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
-# URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md) against origin/main, which
-# the run fetches. --agreement sends them whatever the train changes: the lander's rule for a train that adds or changes a
-# guarantee (`lean-audit.json`) anywhere.
+# URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ or a Lean package its verifier requires by path
+# (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
+# changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` and no free slot, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
@@ -129,17 +129,26 @@ tell() {
 trap tell EXIT
 root=$(git rev-parse --show-toplevel)
 sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$commit: no such commit"
+common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
+# origin holds the commit: a branch of origin points at it (the queue pushed it from this clone) or origin's main has it. Both
+# are milliseconds, where asking every branch of origin (`for-each-ref --contains`) walks the whole history
+held() {
+  [ -n "$(git -C "$root" for-each-ref --count=1 --points-at "$sha" refs/remotes/origin)" ] \
+    || git -C "$root" merge-base --is-ancestor "$sha" refs/remotes/origin/main 2>/dev/null
+}
 # one fetch and worktree at a time per checkout: two launches racing on the fetch both fail
-exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
+exec 9> "$common/train.lock"
 flock 9
-# a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
-for backoff in 5 15 ''; do
-  git -C "$root" fetch -q origin 2>>"$why" && break
-  [ -n "$backoff" ] || die "git fetch origin failed"
-  sleep "$backoff"
-done
-[ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
-  || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
+if ! held; then
+  # a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
+  for backoff in 5 15 ''; do
+    git -C "$root" fetch -q origin 2>>"$why" && break
+    [ -n "$backoff" ] || die "git fetch origin failed"
+    sleep "$backoff"
+  done
+  held || [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
+    || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
+fi
 if [ -n "$below" ]; then
   b=$(git -C "$root" rev-parse -q --verify "$below^{commit}") || die "--base $below: no such commit"
   pass+=(--base "$b")
@@ -179,9 +188,12 @@ if [ -n "$deselect" ]; then
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The
-# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`
+# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`.
+# --timeout: only a run with one extends its node's lease (`remote.lease_extend_s`), so a node that runs nothing but checks
+# would otherwise stop two hours after its boot; 10 h is past any check's wall time, as the nightly's
 setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN \
-  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
+  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --timeout 36000 --keep-going \
+  ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check

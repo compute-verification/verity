@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier import active
 from verity.protocols.certifier.verifier.active import Proxy
@@ -36,8 +37,8 @@ from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.spot.device import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
-import served_commit as SC  # noqa: E402
-import of_record as OR  # noqa: E402
+import served_commit as SC
+import of_record as OR
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
@@ -107,16 +108,16 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
                reveals) -> tuple[active.CertifierClient, dict[int, bytes]]:
     """The certifier's run `RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
     salts are sampled, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
-    drew."""
-    drawn: dict[int, bytes] = {}
+    sampled."""
+    sampled: dict[int, bytes] = {}
     signers = []
     for name, k in (("certifier", CERTIFIER), ("challenger", CHALLENGER)):
         (tmp_path / name).mkdir()
         signers.append(LmsSigner.create(k, tmp_path / name / "signer-state.json"))
 
     def source(p: int, n: int) -> bytes:
-        drawn[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
-        return drawn[p]
+        sampled[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
+        return sampled[p]
 
     c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * WINDOWS, origin=0.0,
               clock=lambda: 0.0, ingress_link=LINK, salt=source, registered=PS.registered, prover_key=key,
@@ -126,7 +127,7 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
         c.commit_weights(p, record, sign(active.weights_message(LINK, p, record, sid)))
     for _ in range(WINDOWS * INGRESS.buckets):
         c.bucketer.tick()
-    return active.CertifierClient(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
+    return active.CertifierClient(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), sampled
 
 
 def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
@@ -166,29 +167,31 @@ def _pub(priv, advice, t: int) -> bytes:
     return json.dumps(head).encode() + b"\n" + priv[e]["a"]["bcs"][i] + priv[e]["b"]["bcs"][j] + bytes(128)
 
 
+@pytest.mark.slow
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
     """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
     that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
     client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
-    `core_check.opening` under that salt and under none."""
+    `core_check.opening` under that salt and under none. Only this test takes the certified served path to the opening at
+    every sampled proof block; the next one holds the opening alone."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     key, sign = _prover(b"the prover")
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
-    c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
+    c, sampled = _certifier(sid, key, sign, committed, tmp_path, reveals)
     ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
-        w = _window(p, drawn[p], sid, prover, PRECOMPUTED)
+        w = _window(p, sampled[p], sid, prover, PRECOMPUTED)
         ch = _challenger(w["params"], c, prover, tmp_path / f"w{p}.json", ledger)
         ch.register(f"w{p}", w["rec"], manifest=w["raw"])
         assert ch.passes == {f"w{p}": "certifier"} and (p, sid, prover) in ledger
         d = ch.select(f"w{p}")
         assert d.units
-        salt = CC.certified_salt(w["raw"], w["params"]["context"], drawn[p], committed, sid, prover)
-        assert salt == PS.pouw_salt(drawn[p], p, sid, prover) == ch.salts[f"w{p}"]
+        salt = CC.certified_salt(w["raw"], w["params"]["context"], sampled[p], committed, sid, prover)
+        assert salt == PS.pouw_salt(sampled[p], p, sid, prover) == ch.salts[f"w{p}"]
         params, rec = SC.core_params(w["params"]), CC.commitment(bytes.fromhex(OR.hexed(w["rec"])))
         for u in d.units:
             pub, op = _pub(w["priv"], w["advice"], u), SC.opening(w["advice"], w["priv"], w["params"], u)

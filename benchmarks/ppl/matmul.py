@@ -6,13 +6,19 @@ Three kinds of matmul, all written y = x w^T but for P V: `linear` (x the layer'
 from __future__ import annotations
 
 import zlib
+from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 
 import gates as G
 import methodology
+
+if TYPE_CHECKING:
+    from glm import GlmLayer
+    from model import Layer
+    from spec import Arm, Step
 
 FP32_EXACT = 2 ** 24
 FP64_EXACT = 2 ** 53
@@ -63,7 +69,7 @@ class Run:
     """One arm at one seed through one window of one layer: the services its steps use (caches, coins, calibration,
     gates). `cache` is the engine's per-layer cache, shared by every arm, seed and window; `rotations` is run-wide."""
 
-    def __init__(self, arm, seed: int, window: int, layer, gates: G.Gates, cache: dict, rotations: dict,
+    def __init__(self, arm: Arm, seed: int, window: int, layer: Layer | GlmLayer, gates: G.Gates, cache: dict, rotations: dict,
                  calib: dict | None, hessian: Callable | None = None):
         self.arm, self.seed, self.window, self.layer, self.gates = arm, seed, window, layer, gates
         self.cache, self.rotations, self.calib, self.hessian = cache, rotations, calib or {}, hessian
@@ -79,20 +85,20 @@ class Run:
     def attention_noise_seed(self) -> int:
         return (self.seed + 1) * 1_000_003 + self.li + self.window * 7_919_003
 
-    def gen(self, device) -> torch.Generator:
+    def gen(self, device: torch.device | str) -> torch.Generator:
         """The attention's coins for this (seed, layer, window), taken in the order the steps ask (K's dither bits,
         then V's, per KV group)."""
         if self._gen is None:
             self._gen = torch.Generator(device=device).manual_seed(self.attention_noise_seed())
         return self._gen
 
-    def ugen(self, device) -> torch.Generator:
+    def ugen(self, device: torch.device | str) -> torch.Generator:
         """The peels' own stream, so a peel never moves the served coins."""
         if self._ugen is None:
             self._ugen = torch.Generator(device=device).manual_seed(self.attention_noise_seed() + 104_729 * 10 ** 9)
         return self._ugen
 
-    def steps_for(self, kind: str, name: str) -> list:
+    def steps_for(self, kind: str, name: str) -> list[Step]:
         steps = self.arm.linear if kind == "linear" else self.arm.attention
         return [s for s in steps if s.applies(self.li, kind, name)]
 
@@ -104,11 +110,11 @@ class MM:
 
     def __init__(self, kind: str, name: str, run: Run, x: torch.Tensor, w: torch.Tensor, maps: tuple = (),
                  cache: dict | None = None, extra: dict | None = None, stage: str = "real", prefix: tuple = (),
-                 draws: list | None = None):
+                 coin_calls: list | None = None):
         self.kind, self.name, self.run, self.x, self._w, self.maps = kind, name, run, x, w, maps
         self.store = run.cache if cache is None else cache
         self.extra, self.stage, self.prefix = extra or {}, stage, prefix
-        self._draws = draws if draws is not None else [0]
+        self._coin_calls = coin_calls if coin_calls is not None else [0]
 
     # ------------------------------------------------------------ what a step reads
 
@@ -125,7 +131,7 @@ class MM:
         return self.run.seed
 
     @property
-    def device(self):
+    def device(self) -> torch.device:
         return self.x.device
 
     @property
@@ -141,7 +147,7 @@ class MM:
 
     # ------------------------------------------------------------ what a step does
 
-    def replace(self, x: torch.Tensor | None = None, w: Callable | torch.Tensor | None = None, **extra) -> "MM":
+    def replace(self, x: torch.Tensor | None = None, w: Callable | torch.Tensor | None = None, **extra) -> MM:
         """A copy with a new x, and w either mapped (a callable, applied after the current maps) or replaced."""
         maps, base = self.maps, self._w
         if callable(w):
@@ -149,15 +155,15 @@ class MM:
         elif w is not None:
             maps, base = (), w
         return MM(self.kind, self.name, self.run, self.x if x is None else x, base, maps, self.store,
-                  {**self.extra, **extra}, self.stage, self.prefix, self._draws)
+                  {**self.extra, **extra}, self.stage, self.prefix, self._coin_calls)
 
-    def integer(self, x: torch.Tensor, w: torch.Tensor, **extra) -> "MM":
+    def integer(self, x: torch.Tensor, w: torch.Tensor, **extra) -> MM:
         """The integer stage: x and w on the grid; what the rest of the chain returns is their exact product."""
         m = self.replace(x=x, w=w, **extra)
         m.stage = "int"
         return m
 
-    def cached(self, name: str, fn: Callable, coinless: bool = False):
+    def cached(self, name: str, fn: Callable, coinless: bool = False) -> Any:
         """fn(), once per matmul (linear name, or the attention KV group), chain prefix and, if anything before it
         is seeded, seed: the layer's linears share it across windows and arms; attention's across its row chunks.
         `coinless`: fn reads none of this step's coins, so only the steps before it decide whether it is per seed."""
@@ -167,26 +173,26 @@ class MM:
             self.store[key] = fn()
         return self.store[key]
 
-    def shared(self, key, fn: Callable):
+    def shared(self, key: Hashable, fn: Callable) -> Any:
         """fn(), once per run (the rotations)."""
         if key not in self.run.rotations:
             self.run.rotations[key] = fn()
         return self.run.rotations[key]
 
-    def coins(self, shape, levels: int = 2) -> torch.Tensor:
+    def coins(self, shape: Sequence[int], levels: int = 2) -> torch.Tensor:
         """Fresh coins of the given shape, uniform on {0, ..., levels - 1} (bits by default; a b-bit dither takes
         levels = 2^b). Linears: one stream per (seed, layer, linear, window); attention: the (seed, layer, window)
         stream, in sample order."""
         if self.kind == "linear":
-            n = self._draws[0]
-            self._draws[0] += 1
+            n = self._coin_calls[0]
+            self._coin_calls[0] += 1
             tag = f"{self.seed}/{self.layer}/{self.name}/{self.window}" + (f"/{n}" if n else "")
             g = torch.Generator(device=self.device)
             g.manual_seed(zlib.crc32(tag.encode()))
             return torch.randint(0, levels, tuple(shape), generator=g, device=self.device).float()
         return torch.randint(0, levels, tuple(shape), generator=self.run.gen(self.device), device=self.device).float()
 
-    def gate(self, name: str, ok: bool, detail=None) -> bool:
+    def gate(self, name: str, ok: bool, detail: Any = None) -> bool:
         return self.run.gates.record(name, ok, self.where, detail)
 
     @property
@@ -224,10 +230,17 @@ class MM:
             self.gate("product_exact", bool(torch.equal(acc.index_select(-2, idx).double(), ref)))
         return acc
 
-    def enter(self, step) -> "MM":
+    def enter(self, step: Step) -> MM:
         m = self.replace()
         m.prefix = self.prefix + (step,)
         return m
+
+
+#: what a chain returns: the product; a qk chain's own softmax (`Softmaxed`); or nothing, from a pass that only gathers a
+#: quantizer's calibration statistics (`Run.hessian`)
+Product = torch.Tensor | Softmaxed | None
+#: the rest of the chain, as a step receives it: called on the matmul the step passes on, it returns the chain's product
+Next = Callable[[MM], Product]
 
 
 def terminal(mm: MM) -> torch.Tensor:
@@ -237,9 +250,9 @@ def terminal(mm: MM) -> torch.Tensor:
     return mm.x @ (w if mm.kind == "pv" else w.T if w.dim() == 2 else w.transpose(-1, -2))
 
 
-def run_chain(steps: list, mm: MM) -> torch.Tensor:
+def run_chain(steps: list[Step], mm: MM) -> Product:
     """The steps (already filtered to this matmul) from the first: each gets (mm, nxt) and its parameters."""
-    def call(i: int, m: MM):
+    def call(i: int, m: MM) -> Product:
         if i == len(steps):
             return terminal(m)
         st = steps[i]

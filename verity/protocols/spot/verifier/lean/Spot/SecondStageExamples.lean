@@ -345,6 +345,20 @@ private def exRegisteringBx : Own :=
 #guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering && !namesOk exRegisteringBx
 #guard (exCheck true (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-interior-names"]
+-- what a replay block returns is read only at round 1's port (`returnsOk`): the interior registering a value of a name
+-- the block's return has in the boundary record is refused, whatever the statements read and with the form off too
+-- (`second-return`); a value of another name is not, and neither is one where the return has no such name
+#guard returnsOk exRegistering && returnsOk { exRegistering with returns := #["o0"] } &&
+  !returnsOk { exRegistering with returns := #["o0", "w2"] } && returnsOk { exOwn with returns := #["w2"] }
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["o0"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck false (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck true (exReported "w2" 9 { exRegisteringBx with returns := #["bx"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-interior-names", "second-return"]
+#guard (check true { exRegistering with returns := #["w1"] } none).codes == #["second-return", "second-statements"]
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
   (.arr #[Json.mkObj [("value", "w2")]])
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null
@@ -699,5 +713,15 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true (exWiredAt 2 1) none).codes == #["second-wires"]
 #guard (check true { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
 #guard (check true (exWiredAt 3 2) none).codes == #["second-statements"]
+-- a wire whose writer's port a link names reads an output the replay block returns, and one whose writer's part is not
+-- before its reader's, or is its reader's own, is out of order: neither makes wires
+#guard wiresOk exTwoParts exWired
+#guard !wiresOk exTwoParts { exWired with links := some #[⟨"Pair_v0", "out", "o0"⟩] }
+#guard (check true { exWired with
+    links := some #[⟨"Pair_v0", "out", "o0"⟩]
+    rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts.reverse exWired
+#guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
 
 end Spot.SecondStage

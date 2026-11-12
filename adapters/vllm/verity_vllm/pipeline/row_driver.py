@@ -27,7 +27,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
+from verity_vllm.config import ROOT, TARGETS, CommitConfig, RowConfig, RunEnv, row_execution, row_path, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
@@ -245,17 +245,23 @@ class Row:
         doc = _read_json(self.path("EXPORT.json"))
         return (doc.get("commit") or "") if isinstance(doc, dict) else ""
 
-    def serving_rows_request(self, partition: str) -> str:
+    def serving_rows_request(self, ck: CommitConfig) -> str:
         """The Commit's serving-rows request (`pipeline.serving_rows`, `pipeline.tp.serving_rows`): its directory inside the research
-        run dir when there is one, so the run's custody preserves it, the verifier's partition file, and the run id and source the
-        registration names (its domains bind the run root)."""
+        run dir when there is one, so the run's custody preserves it, the verifier's partition file, the run id and source the
+        registration names (its domains bind the run root), and the per-expert cut's ``tables`` (`expert_rows.of_request`) when
+        ``SERVING_ROWS_TABLES`` names their registration, refused here without its key rather than after serving."""
+        tables = None
+        if ck.serving_rows_tables:
+            if not ck.serving_rows_tables_key:
+                raise SystemExit("SERVING_ROWS_TABLES: a tables registration is read under its committer's key file (SERVING_ROWS_TABLES_KEY)")
+            tables = {"key": ck.serving_rows_tables_key, "registration": ck.serving_rows_tables}
         rd = self.env.research_run_dir
         d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
         os.makedirs(d, exist_ok=True)
         req = os.path.join(d, "request.json")
         with open(req, "w") as f:
-            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
-                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+            json.dump({"dir": d, "partition": ck.serving_rows, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}, **({"tables": tables} if tables else {})}, f)
         return req
 
     # ------------------------------------------------------------------------------------------------ records
@@ -290,11 +296,13 @@ class Row:
             pass
 
     def research_result(self) -> None:
-        """The research runner's result envelope, from the stage verdicts (only under a research run)."""
-        if self.env.research_run_dir and os.path.isdir(self.d):
+        """The research runner's result envelope, from the stage verdicts (only under a research run), into the row's run dir: the
+        one `--research-run-dir` names, which a caller whose run dir is published points elsewhere."""
+        rd = self.env.research_run_dir
+        if rd and os.path.isdir(self.d):
             with open(f"{self.d}/row.log", "a") as f:
-                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages), stdout=f, stderr=subprocess.STDOUT,
-                               cwd=self.tree, env=self.child_env or dict(self.env.environ))
+                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages, "--run-dir", rd), stdout=f,
+                               stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env or dict(self.env.environ))
 
     # ------------------------------------------------------------------------------------------------ processes
     def cli(self, *args: str, py: str | None = None) -> list[str]:

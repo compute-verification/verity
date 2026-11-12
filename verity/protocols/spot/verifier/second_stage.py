@@ -18,14 +18,20 @@ difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never suppli
 `SecondStage.replayWires`): a template's parameter that is, at each of its callers, one field of one instance of
 another template reads that writer's output port for the field, one value the interior commits once, so
 ``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
-(`_held_port`). A template may have several callers in the body, a batch's members among them, its units theirs in
+(`_held_port`). No wire reads an output the replay block returns, a writer's port a link names: the boundary commits
+that output, and the interior's port of it is another tree, which nothing holds to the first. And each wire's writer's
+part is before its reader's (``second-wires``, `_wires_ok`).
+A template may have several callers in the body, a batch's members among them, its units theirs in
 body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
 `SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled. A port a link names reads
 the boundary port the link names or, where the interior registration registers a value of the link's name (a value its
 verifier supplies, say), that value, at its unit's row of its cell's sampled block (`_read_ok`). Each name is one
 registration's: an interior registration that registers a value of a name the boundary registration's record has, a
 port or a registered value, is refused (``second-interior-names``, `names_ok`), so the interior's value of a name never
-stands in for one round 1 committed.
+stands in for one round 1 committed. What a replay block returns is committed before the first stage's sample: an
+interior registration that registers a value of a name the block's return has in the boundary registration's record,
+one of its output ports ``o<j>`` (`replay_returns`), is refused (``second-return``, `returns_ok`), so a port a link
+names for the return is read only at the port round 1's record has for it.
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
@@ -57,7 +63,8 @@ run: ``second-read`` alone lets a port no link or wire names read any value eith
 The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
 ``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
 statement is read. With it, ``second-interior-names`` fails where the interior record registers a value of a name the
-boundary registration's record has (`names_ok`), and ``second-schedule`` where the boundary registration's record
+boundary registration's record has (`names_ok`), ``second-return`` where it registers one of a name the replay
+block's return has there (`returns_ok`), and ``second-schedule`` where the boundary registration's record
 commits a schedule (``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that
 commits none passes.
 
@@ -93,10 +100,13 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
              "one field, alike at every caller, or a link's rows don't place its part's units")
 WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
-             "don't place its part's units or its writer's")
+             "don't place its part's units or its writer's, or it reads an output the replay block returns, or its "
+             "writer's part is not before its reader's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 NAMES_WHY = ("the interior registration registers a value of a name the boundary registration's record has, a port or a "
              "registered value")
+RETURN_WHY = ("the interior registration registers a value of a name the replay block's return has in the boundary "
+              "registration's record: what a replay block returns is read only at a port that record commits")
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -261,8 +271,9 @@ class Own:
     (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
     of each template's statement, ``(template, header)``, and the registered reads it reads,
     ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
-    (`service.template_circuits`), the design's wires (`replay_wires`, None when the Definition makes none), and the
-    rows of the ports they and the links name (`replay_rows`)."""
+    (`service.template_circuits`), the design's wires (`replay_wires`, None when the Definition makes none), the
+    rows of the ports they and the links name (`replay_rows`), and the names the replay block's return has in the
+    boundary registration's record (`replay_returns`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -276,6 +287,7 @@ class Own:
     ref_reads: tuple[tuple[str, Any], ...] = ()
     wires: tuple[Wire, ...] | None = ()
     rows: tuple[Rows, ...] = ()
+    returns: tuple[str, ...] = ()
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -643,6 +655,40 @@ def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
     return None if links is None else tuple(Link(x.template, x.port, _port_of(named, key, x.value)) for x in links)
 
 
+def replay_returns(program: Any, key: str, rec: Any) -> tuple[str, ...]:
+    """`SecondStage.replayReturns`: the names the return of the replay block `program` defines under descriptor id `key`
+    has in the boundary registration, as record `rec` names its ports: its output ports ``o<j>``, one per field of what
+    it returns (`_outputs`), among them the value of each link its return makes (`_return_links`). Empty for a `key`
+    it doesn't define."""
+    fn, named = definitions(program).get(key), _by_template(rec)
+    return () if fn is None else tuple(_port_of(named, key, f"o{j}") for j in range(_outputs(fn.signature()[1])))
+
+
+def _words(t: Any) -> int:
+    """`Spot.Bits.wordsOf`: the 16-bit words of a value of type `t`, its bits packed sixteen to a word."""
+    return (sum(t.leaf_widths()) + 15) // 16
+
+
+def returned_bits(defs: Mapping[str, Any], key: str) -> int | None:
+    """`SecondStage.returnedBits`: the bits one replay block of ``defs[key]`` returns to the boundary: each part of its
+    return (`_return_links`) is one output field of a template's units, and gives its units times sixteen bits for each
+    word of the field (`_words`). The second stage's files lay a returned field on words of its own, every bit of them
+    a computed gate (`Spot.Bits.retWords`, `Spot.Bits.check`), so these are the gates a replay block's request is
+    served; a served cap below them charges it fewer bits than it returns (`plancheck.two`'s `returned`). None when
+    the design's links can't be derived (`link_runs`)."""
+    if link_runs(defs, key) is None:
+        return None
+    fn = defs[key]
+    return sum(s.run.count * 16 * _words(_fields(defs[s.fn].signature()[1])[int(s.edge.port[1:])])
+               for s in _return_links(_callers_of(defs, fn), fn) or ())
+
+
+def replay_returned(program: Any, key: str) -> int | None:
+    """`SecondStage.replayReturned`: the bits one replay block returns (`returned_bits`), the replay block the one
+    `program` defines under descriptor id `key`."""
+    return returned_bits(definitions(program), key)
+
+
 def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
 
@@ -738,10 +784,12 @@ def _links_ok(ps: Sequence[Part], own: Own) -> bool:
 
 def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
     """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
-    by its rows (`_placed`), whose rows a block are its writer's units a block."""
+    by its rows (`_placed`), whose rows a block are its writer's units a block, whose writer's port no link names, and
+    whose writer's part is before its reader's (`_pos_of`)."""
     def writer_ok(w: Wire) -> bool:
         r = _rows_of(own, w.template, w.port)
-        return r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
+        return (r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
+                and _link_of(own, w.writer, w.wport) is None and _pos_of(ps, w.writer) < _pos_of(ps, w.template))
     return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
                                          and writer_ok(w) for w in own.wires)
 
@@ -785,6 +833,17 @@ def _run_of(rec: Any) -> str | None:
     """`SecondStage.runOf`: the run the interior record names (``window.run``)."""
     run = _get(_get(rec, "window"), "run")
     return run if isinstance(run, str) else None
+
+
+INTERIOR_ROOT = "verity-vllm/interior-run/v1"
+
+
+def interior_root(boundary: str, sample: Sequence[int]) -> str:
+    """`SecondStage.interiorRoot`: the interior window's open root for the boundary registration of digest `boundary`
+    and the replay sample `sample`, in order. The verifier computes it, so a second stage sampled on a session of its
+    own is sampled on the one window its boundary registration and replay sample name."""
+    message = canonical_json({"boundary": boundary, "replay_sample": [int(u) for u in sample]})
+    return hashlib.sha512(INTERIOR_ROOT.encode() + b"\x00" + message).hexdigest()
 
 
 def set_name(run: str, k: int) -> str:
@@ -1136,13 +1195,25 @@ def names_ok(own: Own) -> bool:
                    for e in (es if isinstance(es, list) else ()))
 
 
+def returns_ok(own: Own) -> bool:
+    """`SecondStage.returnsOk`: no value the interior registration registers (its ``registered`` entries' values) is of
+    a name the replay block's return has in the boundary registration's record (`Own.returns`, `replay_returns`), so a
+    port a link names for the return reads no value of the interior's (`_read_ok`): only the port the boundary
+    registration's record has of that name, committed before the first stage's sample."""
+    es = _get(own.interior, "registered")
+    return not any(isinstance(v := _get(e, "value"), str) and v in own.returns
+                   for e in (es if isinstance(es, list) else ()))
+
+
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
     """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then
-    ``second-interior-names`` unless `names_ok`, then ``second-schedule`` where the schedule the boundary registration's
-    record commits is not one of its replay blocks (`schedule_failure`)."""
+    ``second-interior-names`` unless `names_ok`, then ``second-return`` unless `returns_ok`, then ``second-schedule``
+    where the schedule the boundary registration's record commits is not one of its replay blocks
+    (`schedule_failure`)."""
     why = schedule_failure(own.boundary)
     return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
             + ([] if names_ok(own) else [("second-interior-names", NAMES_WHY)])
+            + ([] if returns_ok(own) else [("second-return", RETURN_WHY)])
             + ([] if why is None else [("second-schedule", why)]))
 
 
@@ -1202,8 +1273,10 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "Rows", "Run", "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads", "link_runs",
-           "links_of",
-           "own_draw", "parts", "port_binding", "replay_links", "replay_rows", "replay_wires", "row_at", "rows_of",
+__all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "Checked", "Link", "Own", "Part", "Rows", "Run",
+           "Wire",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads",
+           "interior_root", "link_runs", "links_of",
+           "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_wires",
+           "returns_ok", "row_at", "rows_of",
            "set_name", "statement_reads", "verified_of", "wire_runs", "wires_of"]

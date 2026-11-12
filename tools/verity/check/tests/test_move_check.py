@@ -393,6 +393,42 @@ def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_pat
     assert f["reason"] == "relative path now resolves elsewhere"
 
 
+INNER_LAKEFILE = 'name = "requirer"\n\n[[require]]\nname = "inner"\npath = "inner"\n'
+INNER_MANIFEST = json.dumps({"packages": [{"type": "path", "name": "inner", "dir": "inner"}]}, indent=1) + "\n"
+INNER_FILES = {"outer/lakefile.toml": INNER_LAKEFILE, "outer/lake-manifest.json": INNER_MANIFEST, "outer/Outer.lean": "",
+               "outer/inner/lakefile.toml": 'name = "inner"\n', "outer/inner/Inner.lean": "def i := 1\n",
+               "outer/other/lakefile.toml": 'name = "other"\n'}
+
+
+def test_a_lake_path_with_no_leading_dot_follows_the_package_it_names(tmp_path):
+    """A package inside the one that requires it is required by its bare name, which Lake reads from the requirer's
+    directory as it reads `../x`. When the inner package leaves, the mover rewrites that path, in the lakefile and in the
+    manifest, and the commit is still a pure move; a path rewritten to any other package is not."""
+    repo, base = _repo(tmp_path / "moved", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "../apart/inner"'),
+                  "outer/lake-manifest.json": INNER_MANIFEST.replace('"dir": "inner"', '"dir": "../apart/inner"')})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert sorted(e["path"] for e in r["edits"]) == ["outer/lake-manifest.json", "outer/lakefile.toml"]
+    repo, base = _repo(tmp_path / "elsewhere", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "other"')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "outer/lakefile.toml" and '+path = "other"' in f["hunk"]
+
+
+def test_a_moved_lakefile_whose_bare_require_stayed_behind_is_refused(tmp_path):
+    """The requirer moves byte for byte and the package inside it goes elsewhere: `path = "inner"` now names nothing."""
+    repo, base = _repo(tmp_path, INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _move(repo, "outer", "far/outer")
+    refusals = _check(repo, base)["refusals"]
+    assert {f["path"]: f["reason"] for f in refusals} == {
+        "far/outer/lakefile.toml": "relative path now resolves elsewhere",
+        "far/outer/lake-manifest.json": "relative path now resolves elsewhere"}
+
+
 def test_lean_audit_pin_change_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
     _move(repo, "protocols/pous", "security_proofs/pous")
@@ -1319,6 +1355,43 @@ def test_anchor_that_names_another_directory_is_refused(tmp_path):
     [f] = _app(tmp_path, {}, {"pkg/tests/protocols/bandwidth/test_remote.py": "ROOT = Path(__file__).resolve().parents[4]\n"})[
         "refusals"]
     assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
+
+
+LEFT_BODY = "".join(f"STEP_{i} = {i}  # unchanged by the move\n" for i in range(12))
+LEFT_OLD = ("HERE = Path(__file__).resolve().parent\nsys.path.insert(0, str(Path(__file__).resolve().parents[1]))\n"
+            + LEFT_BODY)
+LEFT_NEW = ('HERE = (Path(__file__).resolve().parent.parent.parent / "bench" / "kv")\n'
+            'sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "bench")))\n' + LEFT_BODY)
+LEFT_BY_HAND = ('HERE = Path(__file__).resolve().parent.parent.parent / "bench" / "kv"\n'
+                'sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench"))\n' + LEFT_BODY)
+
+
+def _left(tmp_path: Path, new: str) -> dict:
+    """`bench/kv/run.py` moves to `pkg/kv/`, and the rest of `bench/kv/` stays."""
+    repo, base = _repo(tmp_path, {"bench/kv/run.py": LEFT_OLD, "bench/kv/stay.py": "x = 1\n", "pkg/__init__.py": ""})
+    _move(repo, "bench/kv/run.py", "pkg/kv/run.py")
+    _write(repo, {"pkg/kv/run.py": new})
+    return _check(repo, base)
+
+
+def test_an_anchor_joined_back_to_the_directory_its_file_left_is_certified(tmp_path):
+    """As `tools/move/layout.py` writes it: the anchor gains the path back, and parentheses around the two."""
+    r = _left(tmp_path, LEFT_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_back_by_hand_with_no_parentheses_of_its_own_is_certified(tmp_path):
+    """Where the anchor is a call's whole argument, the call's parentheses are around it and are not ones it gained."""
+    r = _left(tmp_path, LEFT_BY_HAND)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_to_another_directory_than_its_file_left_is_refused(tmp_path):
+    for i, (was, now) in enumerate((('"bench" / "kv"', '"bench" / "other"'), ("parents[2]", "parents[1]"),
+                                    ('(Path(__file__).resolve().parent.parent.parent / "bench" / "kv")',
+                                     '(Path(__file__).resolve().parent.parent.parent / "bench" / "kv").parent'))):
+        [f] = _left(tmp_path / str(i), LEFT_NEW.replace(was, now))["refusals"]
+        assert f["path"] == "pkg/kv/run.py" and now.split(" / ")[-1] in f["hunk"]
 
 
 SH_BODY = "".join(f'echo "step {i} of the session, unchanged by the move"\n' for i in range(12))

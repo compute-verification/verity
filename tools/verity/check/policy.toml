@@ -1,22 +1,23 @@
-# Drive's policy over what the runners (suites.py, circuit-check, check.py's steps) report: what of it gates and what may stay red
-# (`research.policy` reads it). Drive reads it at the commit it judges, so an allowance lands with the tip it lets pass; `research merge` reads
-# `off_gate` at the commit it merges; the quick tier's judge reads it at the tier's base on `main`. Its owner is the handle
+# The verified queue's policy over what the runners (suites.py, circuit-check, check.py's steps) report: what of it gates and
+# what may stay red (`research.policy` reads it). The loop reads its allowances at a candidate's base, so no candidate's own
+# allowance covers its own failure; `research merge` reads `off_gate` at the commit it merges; the quick tier's judge reads it
+# at the tier's base on `main`. Its owner is the handle
 # whose `owns` in .agents/skills/using-slack/registry.json covers it; tools/research/tests/test_policy.py holds it to the parse and
 # to ci.toml's jobs.
 schema = "policy/v0"
 
 # The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s
-# OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
-# after-landing run (`--deferred`, every job), where a red names its culprit on `checked`. Under drive.toml's `executor = "on"`
-# ratchet-gate runs in a train.sh run beside the executor's check instead, and is off the gate there too. circuit-check returns to the gate
+# OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and the verified queue moves `main` without
+# them: under its graph2 gate no task of theirs gates (`World.verdict`) and ratchet-gate runs in the run beside the check,
+# whose verdict leaves it out; under `--gate check` they run in the check (`--deferred`, every job), whose verdict leaves them
+# out, and what a candidate failed of one that its base's run didn't is rung to who acts on it (`Loop._off_gate`).
+# circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
-# run's base, and no plan holds it. lean-changed, which catches nothing the audit doesn't, runs in no shard either, of a
-# plan or an auto one (`shards.NO_SHARD`), so neither a recorded check nor a candidate's runs it. A job here has no
-# `merge_requires`, and no job on the gate `needs` it or runs `after` it.
-off_gate = ["circuit-check", "lean-changed", "ratchet-gate"]
+# run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
+off_gate = ["circuit-check", "ratchet-gate"]
 
-# Allowances: a failure drive doesn't take as red while its allowance is unexpired. It names no culprit, reverts nothing,
-# holds no promotion, and the after-landing run that failed only on such failures verifies its tip. Expired, it is as if absent,
-# and drive's ring names it and rings its owner. `id`: `suite NAME` (every failure of that suite), `suite NAME::TEST` (one test:
+# Allowances: a failure the verified queue doesn't take as one while its allowance at a candidate's base is unexpired: the
+# step or task counts as passed (`vqueue_slim.judge`, `World._allowed`), so it holds no candidate and makes no suspect.
+# Expired, it is as if absent. `id`: `suite NAME` (every failure of that suite), `suite NAME::TEST` (one test:
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed.

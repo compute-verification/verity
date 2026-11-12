@@ -31,7 +31,7 @@ import re
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
@@ -321,17 +321,31 @@ def kind_of(spec: str) -> str:
 
 #: the reader of a served workload's request Program, which the sidecar of the package that writes it defines
 ROW_READER = "request_program"
+#: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
+SPLIT_READER = "struct_slots_split"
+
+
+def _read_by(reader: str, what: str, path: str) -> Any:
+    """``path`` read by the one binding file that defines ``reader``; refused by name when none or several do."""
+    readers = {prefix: ns[reader] for prefix, ns in binding_files() if ns is not globals() and reader in ns}
+    if len(readers) != 1:
+        raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
+                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
+    return next(iter(readers.values()))(path)
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
     population as `verity.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
     (`verity.definitions.cross_call.check_program`)."""
-    readers = {prefix: ns[ROW_READER] for prefix, ns in binding_files() if ns is not globals() and ROW_READER in ns}
-    if len(readers) != 1:
-        raise ValueError(f"{path}: a request Program is read by the one sidecar that defines `{ROW_READER}`, and "
-                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
-    return next(iter(readers.values()))(path)
+    return _read_by(ROW_READER, "a request Program", path)
+
+
+def struct_slots_split(path: str) -> tuple[Callable[[], Any], str, dict[str, tuple[int, int]], Callable[[str], Sequence[int]]]:
+    """A struct-slots split's directory as `structural_slots` reads it, by the one binding file that defines `SPLIT_READER`:
+    its reading (which raises on a directory that holds none), the format's name, each slot table's (index width, word width),
+    and a slot table's words by its name."""
+    return _read_by(SPLIT_READER, "a struct-slots split", path)
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
@@ -638,6 +652,8 @@ def word_call_families() -> set[str]:
 CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
     "And2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
+    "AttnDotStepA_v1": ("AttnBlockFirst_v3",),
+    "AttnDotStep_v1": ("AttnBlockFirst_v3",),
     "Bf16AddF2fp_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "Bf16MulBf16_v2": ("AllReduceRmsNormMnnvl_v2",),
     "Bf16ToF32_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
@@ -668,16 +684,23 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "DsaWaksmanSwap_v1": ("DsaButterflyRows_v1",),
     "DsaWaksmanSwap_v2": ("DsaButterflyRows_v2",),
     "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "F32AddFtz_v3": ("AttnBlockFirst_v3",),
     "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
     "F32Add_v3": ("RMSNormFusedCudaVector8_v4",),
     "F32Div_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Max_v2": ("AttnBlockFirst_v3",),
+    "F32MulFtzConst_v1": ("AttnBlockFirst_v3",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
     "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "FmaSubRowF32FtzConstElement_v1": ("AttnBlockFirst_v3",),
+    "FmaSubRowF32FtzConstScalar_v1": ("AttnBlockFirst_v3",),
+    "GuardNegInfZero_v2": ("AttnBlockFirst_v3",),
     "MhcFusedSplit_v2": ("MhcFusedPostPre_v2",),
     "MhcPreBigFuse_v2": ("MhcFusedPostPre_v2",),
     "MoeExpertFp8CoordinateW_v1": ("MoeExpertFp8GemmW_v1",),
     "MoeExpertFp8Coordinate_v1": ("MoeExpertFp8Gemm_v1",),
     "MoeExpertFp8ScaleRow_v1": ("MoeExpertFp8GemmW_v1", "MoeExpertFp8Gemm_v1"),
+    "MufuEx2Ftz_v2": ("AttnBlockFirst_v3",),
     "MufuRcpFtz_v2": ("AllReduceRmsNormMnnvl_v2",),
     "Not_v1": ("DsaRadixTies_v1", "MhcFusedSplit_v2"),
     "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
@@ -762,11 +785,13 @@ def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
 
 
 def _registered() -> list[Any]:
-    """The catalog's first roots: every registered primitive and static-free composite (bound)."""
+    """The catalog's first roots: every registered primitive and static-free composite (bound), by id, never in the order the
+    registry's modules were imported in: `units.registered_entries` cuts this list into records by position, and a process that
+    imports a test module before the registries (a session of circuit-check's suite) must cut the records circuit-check stored."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     roots: list[Any] = []
-    for d in list(REGISTRY.defs.values()):
+    for d in sorted(REGISTRY.defs.values(), key=lambda d: d.id):
         if isinstance(d, PrimitiveDefinition):
             roots.append(d)
         elif isinstance(d, CompositeDefinition) and not d.statics:
@@ -1042,8 +1067,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "ROW_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
            "table_probe", "template_of", "template_params", "templates", "word_call_families"]

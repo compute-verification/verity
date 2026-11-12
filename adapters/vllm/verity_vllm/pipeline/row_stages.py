@@ -1,8 +1,8 @@
 """A single-GPU workload's phases under `verity-vllm row`: precheck -> Build -> Match -> Commit, stopping at the first FAIL.
 
 * **Precheck** (before any engine): the release line of the tree that runs, source identity (every package resolves
-  from this tree under the phases' interpreters), the target family (row id device class == declared target == device)
-  and the ADVISORY host-memory admission plan (never a stop).  A failing precheck is exit 3, by name.
+  from this tree under the phases' interpreters) and the target family (row id device class == declared target ==
+  device).  A failing precheck is exit 3, by name.
 * **Build**: the step Program, the request wrapper Program (``--lp``/``--t``, default the envelope; a stochastic workload:
   its first request) and every other declared request shape, each under its launch context at B >= 2; then GP-01's
   workload Program (the workload's Program digest) and the required-value manifest of record (``manifest build`` /
@@ -147,7 +147,6 @@ class SingleRow(Row):
         self.precheck_identity()
         self.shape()
         self.precheck_target()
-        self.admission()
         self.log(f"start B={self.B} I={self.I} O={self.O} LP={self.LP} T={self.T} ckpt={self.ck} stages={self.stages} "
                  f"target={self.tgt or 'device'} hidden_so={self.hidden_so} code={self.code9}")
         self.tl("row", "start", ("stages", self.stages), ("B", self.B), ("I", self.I), ("O", self.O), ("LP", self.LP), ("T", self.T),
@@ -205,19 +204,6 @@ class SingleRow(Row):
             raise Stop(3)
         self.tl("precheck-target", "end", ("rc", 0))
         self.verdict("precheck-target", "WAIVED" if line.startswith("TARGET-FAMILY-WAIVED") else "PASS", line, quiet=True)
-
-    def admission(self) -> None:
-        self.tl("admission", "start")
-        snapmax = ["--snapshot-max-bytes", self.cm.snapshot_max_bytes] if self.cm.snapshot_max_bytes else []
-        rc, line = self.output(self.cli("telemetry-admission", "plan", "--row", self.row, "--workload", self.wl, "--stages", self.stages,
-                                        "--pairs", str(self.ck_.pairs), "--snapshot-steps", self.snap_steps or self.snap_def, *snapmax,
-                                        "--out", f"{self.d}/admission.json"))
-        if rc != 0:
-            line = f"ADMISSION advisory unavailable rc={rc} {line}"
-        self.log(line)
-        if "WARN would-refuse" in line:
-            self.log(f"WARN admission advisory: a stage would be REFUSED by the planner (see {self.d}/admission.json); advisory in r18-int-3 -- the row continues")
-        self.tl("admission", "end", ("rc", 0), ("advisory", "true"))
 
     # ------------------------------------------------------------------------------------------------ manifest
     def guarded_max(self) -> bool:
@@ -559,7 +545,7 @@ class SingleRow(Row):
         if ck.vu_export != "0" and not self.config_run:
             cmd += ["--vu-export-dir", self.vu_export_dir()]
         if ck.serving_rows:
-            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+            cmd += ["--serving-rows", self.serving_rows_request(ck)]
         if ck.remote_verifier:
             cmd += ["--remote-verifier", ck.remote_verifier]
         return cmd + R.tap_source_args(taps, self.env)

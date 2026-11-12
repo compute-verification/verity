@@ -10,20 +10,16 @@ registered circuit is inference, not training).
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
 premise until proved at remote.
 
-This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
-Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (the reported advice, the
-registered compiler, an execution block and an execution phase) are in `ARCHITECTURE.md`'s Glossary, under Reported advice,
-Block and Period. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
+This file is an outline with signposts. The Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
+Glossary (the lifecycle's terms under Reported advice, Block and Period), with `GLOSSARY.md` for the notation and the
+older names. Lean names keep some older names until they are renamed: `Dampener*` means overhead, `*Horizon` a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
 **Which "remote".** Five things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
-- PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
-  `verity/protocols/poub/verifier/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
-  (`security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
-  its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
-  verifier;
+- PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/poub/verifier/`, `RemoteAudit`,
+  `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/spot/device/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/protocols/certifier/verifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` and `verity/protocols/inference_only/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
@@ -297,12 +293,14 @@ Pr[every phase accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ
 PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/pouw/verifier/credit.py`'s `DELTA`), the sample's error alone. Its pooled
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
 proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
-neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 730 and 8,766), the
-total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind + δ_ks must stay below about 1.1·10⁻⁶ a phase.
+neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 720 and 8,760,
+`reporting.PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
+1.1·10⁻⁶ a phase. A year's n·(δ_bind + δ_ks) below 2⁻¹⁰⁰ needs 2⁻¹¹³·¹ a phase; the total
+also needs δ_s below 2⁻¹⁰⁰.
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
+**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityHorizon`
 (sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
@@ -326,7 +324,7 @@ $$ \eta + \delta + \delta_s + n\,(\varepsilon_{ks} + \varepsilon_{bind} + \delta
 plus part 1's cryptographic terms: coverage's η, sampled proofs' δ with their per-phase knowledge-soundness and binding
 errors (part 5), and PoUW's δ_s = 2⁻⁴⁰ with its per-phase δ_ks and δ_bind. δ_ks and δ_bind have no number yet, so
 neither does the total. With e the per-phase sum, a week, a month and a year at one verification phase an hour give
-η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
+η + δ + 2⁻⁴⁰ + 168·e, + 720·e and + 8,760·e.
 
 - Ω_* is the weighted count of analysed computation any covered method needs.
 - C_ref is measured: the fleet-time at which the reference training algorithm reaches the target with probability
@@ -535,17 +533,17 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
   `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
-  98%).
+  98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
   at once.
 - **The failure probability.** The δ is pooled over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`),
-  not per verification phase.
+  not per verification phase. The calculator prints its own beside them: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
+  PoUW's per-window p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite; h200
-runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
-development run:
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, and
+the vLLM demo runs both halves on one served run, PoUW's as a development run:
 
 - `verity demo lifecycle` (`demos/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
@@ -553,11 +551,6 @@ development run:
   its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
-- `verity demo h200` (`archive/examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are sampled by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
-  refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
-  none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
-  `uv run python archive/examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity demo vllm` (`demos/vllm/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
@@ -565,9 +558,8 @@ development run:
   `verity/pouw/period/v1` case, so no run of record of the remote verdict has passed: its run is moved, at proof level none,
   and no remote guarantee exists for its verdicts to reach (the open gap, above).
 
-`archive/examples/dither_full_util/README.md` is archived, with no runner and no run of record. What of PoUW's own check runs
-is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
-`verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
+What of PoUW's own check runs is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the
+suite `verity-pouw-check-difftest`; `verity/protocols/pouw/verifier/lean/check/README.md`), and the composite's difftest
 (`verity/protocols/remote/verifier/composition/tests`).
 
 ## Read next

@@ -11,8 +11,8 @@ appends its own rows in position order from the table's length (`Histories.appen
 its tables, and the next window appends from that edge. The window's registration carries each table's root after the
 window's appends (`Histories.entries`), fixed before the window's coins; the verifier recomputes it from the writers'
 public strings and never takes the prover's. The window commits each appended row under the table's salt and string
-(`Histories.salts`, `Histories.strings`; `ml.windows.rows.commit`'s ``salts_of`` and ``strings_of``), so the leaf is the
-string the window commits and no row is hashed twice.
+(`Histories.salts`, `Histories.strings`; `verity.commitments.windows.rows.commit`'s ``salts_of`` and ``strings_of``), so
+the leaf is the string the window commits and no row is hashed twice.
 
 Retention is per request: a table keeps every row and salt it holds, `ROW_BYTES` a row a layer beside its tree, until its
 request ends (`Histories.end`), since any later window's read may open any earlier position; a Commit's hooks release
@@ -48,10 +48,16 @@ def on(config: Mapping[str, Any] | None) -> bool:
     return bool((config or {}).get(SWITCH, False))
 
 
-def name(request: str, layer: int) -> str:
-    """Request ``request``'s history table at layer ``layer``: the table that layer's long rows read, a registered parameter
-    of its own."""
-    return f"history/{request}/model.layers.{int(layer)}.self_attn.latent"
+#: a table's name: its request's public key and its layer
+NAME = "history/{key}/model.layers.{layer}.self_attn.latent"
+
+
+def name(key: str, layer: int) -> str:
+    """The history table at layer ``layer`` of the request ``key`` names: the table that layer's long rows read, a registered
+    parameter of its own. ``key`` is public, since a verifier derives the table's domain from it: a one-stage window's
+    request key, or a two-stage span's window run, class and slot (`pipeline.boundary_tables.key`), never the engine's id
+    for the request, which only the prover's index holds."""
+    return NAME.format(key=key, layer=int(layer))
 
 
 class Histories:

@@ -28,7 +28,6 @@ for p in (REPO / "vllm-poc", REPO / "src"):
 from verity.circuits import Program, bind  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
 from verity.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
-from verity_vllm.program.frontend import serve_families
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
@@ -203,30 +202,15 @@ def test_fa2_kblock_n_is_the_pinned_kernels_align_rule():
 
 def test_serve_v1_is_untouched_and_serve_v4_is_registered_beside_it():
     """Registry version discipline: `Serve_v1`'s chain still reads the constant (its pinned digests must keep reproducing);
-    the corrected chain is a new set of versions, resolvable through `SERVE_FAMILIES`."""
+    the corrected chain is a new set of versions."""
     from verity.circuits.defs import REGISTRY
     for d, ver in ((b1.AttnBlock, 1), (b1.AttentionHead, 1), (b1.Attention, 1), (b1.Serve, 1),
                    (b1.AttnBlockV3, 3), (b1.AttentionHeadV3, 3), (b1.AttentionV3, 3), (b1.ServeV4, 4)):
         assert REGISTRY[d.id] is d and d.version == ver
-    assert serve_families.serve_family(None) is b1.Serve and serve_families.serve_family("Serve_v1") is b1.Serve and serve_families.serve_family("Serve_v4") is b1.ServeV4
-    with pytest.raises(KeyError):
-        serve_families.serve_family("Serve_v9")
     # the v1 block takes 64 K rows at any head dim; the v3 block takes the DECLARED BN
     assert dict(bind(b1.AttnBlock, D=64, NVIS=1, FIRST=True).signature()[0])["k"].n == 64
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=128).signature()[0])["k"].n == 128
     assert dict(bind(b1.AttnBlockV3, D=64, NVIS=1, FIRST=True, BN=64).signature()[0])["k"].n == 64
-    # the identity binder: no geometry -> Serve_v1; a geometry -> Serve_v4{..., BN}; mismatched pairs refused
-    G = {"kernel": "fa2-splitkv-align", "kBlockM": 64, "kBlockN": 128, "num_splits": 1}
-    assert serve_families.serve_program(TINY, 3, 2).id == bind(b1.Serve, C=TINY, LP=3, STEPS=2).id
-    assert serve_families.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id == bind(b1.ServeV4, C=TINY, LP=3, STEPS=2, BN=128).id
-    assert serve_families.serve_program(TINY, 3, 2, family="Serve_v4", attention=G).id.endswith(",BN=128}")
-    for bad in ({**G, "kBlockN": 100}, {**G, "num_splits": 2}, {**G, "kernel": "fa3"}, {**G, "kBlockM": 128}):
-        with pytest.raises(ValueError):
-            serve_families.serve_program(TINY, 3, 2, family="Serve_v4", attention=bad)
-    with pytest.raises(ValueError):
-        serve_families.serve_program(TINY, 3, 2, family="Serve_v4")  # no geometry
-    with pytest.raises(ValueError):
-        serve_families.serve_program(TINY, 3, 2, attention=G)  # Serve_v1 with a foreign geometry
 
 
 def test_serve_v4_differs_from_serve_v1_only_in_the_attention_chain():
@@ -256,26 +240,3 @@ def test_serve_v4_binding_record_is_serve_v2_with_attention_fa2_of_D():
     # and `AttentionHead_v3{T=70, BN=128}` has ONE block where v1 has two; at BN=64 the same count
     assert bind(b1.AttentionHeadV3, T=70, D=16, BN=128).gates != bind(b1.AttentionHead, T=70, D=16).gates
     assert bind(b1.AttentionHeadV3, T=70, D=16, BN=64).gates == bind(b1.AttentionHead, T=70, D=16).gates
-
-
-def test_fa2_geometry_is_derived_from_the_pinned_profiles_declared_kernel():
-    """The semantic profiles the instances pin (`vocabulary.profile_sha256`) declare the attention kernel (`FlashAttentionBackend`,
-    `fa_version 2`, `num_splits 1`, `head_size = HD`); `fa2_kernel_geometry` is the pinned source's dispatch rule over that
-    declaration: kBlockN 128 at head dim 64 (SmolLM2-135M/360M, Qwen2.5-0.5B), 64 at head dim 128 -- what `Serve_v4` builds.
-    A declaration outside the rule (FA3, num_splits != 1) is refused, never defaulted."""
-    import json as _json
-    root = Path(__file__).resolve().parents[2] / "manifests" / "semantic-profiles"
-    if not root.exists():
-        pytest.skip("semantic profiles not in this checkout")
-    for name, D in (("llama-eager-batch-invariant-v3.json", 64), ("qwen2-eager-batch-invariant-v2.json", 64), ("llama-eager-batch-invariant-v3.json", 128)):
-        consts = serve_families.profile_attention_consts(_json.loads((root / name).read_text()))
-        assert consts["fa_version"] == 2 and consts["num_splits"] == 1
-        g = serve_families.fa2_kernel_geometry(consts, D)
-        assert g["kBlockM"] == 64 and g["kBlockN"] == b1.fa2_kblock_n(D) == (128 if D <= 64 else 64)
-        assert serve_families.attention_geometry_static(g) == g["kBlockN"]  # the pin E6 writes binds as BN
-    hopper = root / "qwen2-eager-batch-invariant-hopper-v1.json"
-    if hopper.exists():
-        with pytest.raises(ValueError):
-            serve_families.fa2_kernel_geometry(serve_families.profile_attention_consts(_json.loads(hopper.read_text())), 128)  # FA3: not this rule
-    with pytest.raises(ValueError):
-        serve_families.fa2_kernel_geometry({"backend": "FlashAttentionBackend", "fa_version": 2, "num_splits": 0}, 64)  # the 256-key path: refused

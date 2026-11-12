@@ -14,12 +14,14 @@ with the exact SASS counts the gate pins. A program the gate refuses is dropped 
 """
 from __future__ import annotations
 
+import argparse
+import json
 import random
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "machine_model"))
 
 #: form: (mix.cuh struct, SASS opcode, census kind)
 FORMS = {"i16832": ("I16832", "IMMA.16832.S8.S8", "IMMA16832"), "i16816": ("I16816", "IMMA.16816.S8.S8", "IMMA16816"),
@@ -986,8 +988,6 @@ def emit_cu(gs: list[dict]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    import argparse
-    import json
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--n", type=int, default=0, help="sampled programs beside the targeted part")
@@ -999,7 +999,7 @@ def main(argv: list[str] | None = None) -> int:
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
                         "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
                         "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms; r4: "
-                        "the break on every other form, its repeats, and ALU work beside the MMA; rt: RT-FACET's "
+                        "the break on every other form, its repeats, and ALU work beside the MMA; rt: the "
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
                         "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form; rt6: rt5's break past its "

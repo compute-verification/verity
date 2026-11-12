@@ -101,8 +101,8 @@ def row_bytes(row: PoolRow) -> tuple[bytes, int]:
         for v in (vs,) if isinstance(vs, int) else (min(vs), max(vs)):
             if v < 0 or v >> NW:
                 raise ValueError(f"{v} doesn't fit {NW} bits")
-    if bad := next((k for k in row.key if len(k) != 64), None):
-        raise ValueError(f"a digest is 64 bytes, not {len(bad)}")
+    if any(len(k) != 64 for k in row.key):
+        raise ValueError(f"a digest is 64 bytes, not {next(len(k) for k in row.key if len(k) != 64)}")
     fmt = f"0{NW}b"
     parts = [format(int.from_bytes(k[i:i + 8], "big"), "064b") for k in reversed(row.key) for i in range(56, -8, -8)]
     for f in reversed(LINKS + ("mlast",)):

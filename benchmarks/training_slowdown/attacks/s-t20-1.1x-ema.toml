@@ -1,0 +1,16 @@
+# AdamW on every parameter, and the output model an exponential average of the weights it wrote; E is the averages.
+start = "s-t20"
+route = "ema"
+target = { gain = 1.1 }
+budget = { steps = 838, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "*"
+opt = "adamw"
+lr = 3e-4
+weight_decay = 0.1
+warmup = 0.02
+decay = 0.4
+ema_decay = 0.99

@@ -3,7 +3,7 @@
 until a deadline (`allow`):
 
     schema = "policy/v0"
-    off_gate = ["circuit-check", "lean-changed", "ratchet-gate"]
+    off_gate = ["circuit-check", "ratchet-gate"]
     [[allow]]
     id = "suite NAME::NODE ID"        # one test; "suite NAME", every failure of that suite; "circuit-check CHECK/CODE FAMILY"
     owner = "ci"                      # a handle of the Slack registry
@@ -15,9 +15,10 @@ every failed test has one and that failed for nothing besides them (its report's
 step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Definition without its statics) has one.  Expired, it
 is as if absent, and the judge names it (each Coverage's ``expired``).
 
-The verified queue's loop reads the file at the candidate it judges (`at`; `Landing._allowed` and `Landing._task_allowed` judge
-its failures), so an allowance lands with the tip it lets pass; `research merge` reads `off_gate` at the commit it merges
-(`merge.declared_jobs`), and the quick tier's judge reads it at the tier's base, a commit of `main`.  Stdlib only."""
+The verified queue's loop reads its allowances at the base of the candidate it judges (`at`; `Landing._allowed` and
+`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research merge` reads
+`off_gate` at the commit it merges (`merge.declared_jobs`), and the quick tier's judge reads it at the tier's base, a commit of
+`main`.  Stdlib only."""
 from __future__ import annotations
 
 import re

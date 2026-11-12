@@ -44,6 +44,9 @@ if TYPE_CHECKING:
     from verity.protocols.poub.verifier.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+#: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner
+#: V2's name (`vllm.v1.worker.gpu.model_runner`), then the first runner's (`vllm.v1.worker.gpu_model_runner`).
+KERNEL_BLOCK_SIZES = ("kernel_block_sizes", "_kernel_block_sizes")
 
 
 class TorchBacking:
@@ -281,7 +284,10 @@ class Binder:
         if not caches:
             raise RuntimeError("the model runner bound no KV caches")
         slots = int(runner.cache_config.block_size)
-        kbs = getattr(runner, "_kernel_block_sizes", None) or [slots]
+        kbs = next((v for v in (getattr(runner, name, None) for name in KERNEL_BLOCK_SIZES) if v), None)
+        if kbs is None:
+            raise RuntimeError(f"the model runner names no kernel block sizes ({' or '.join(KERNEL_BLOCK_SIZES)}) to hold to "
+                               f"the manager's {slots}")
         if any(int(k) != slots for k in kbs):
             raise NotImplementedError(f"kernel block sizes {kbs} other than the manager's {slots}")
         pages = int(kv_cache_config.num_blocks)

@@ -12,10 +12,12 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from xml.sax.saxutils import escape
 
 import pytest
@@ -709,10 +711,16 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
     assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
     other = tmp_path / "node-b"                                       # another node, which built none of it
-    dest = tmp_path / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
-    h = hashlib.sha256(dest.read_bytes()).hexdigest()
-    assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
+    sizes = [(store / e).stat().st_size + sum((store / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, room := max(sizes))              # what it added is more than one bundle holds
+    assert n == len(arts.added) > 0 and len(dests) > 1
+    for d in dests:
+        with tarfile.open(d) as t:
+            assert sum(m.size for m in t.getmembers()) <= room
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    assert LA.LakeArtifacts(other).take(urls, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
     assert sorted(staged(other).values()) == mods
     for f, b in was.items():
@@ -800,9 +808,9 @@ TOY = {"lakefile.toml": 'name = "toy"\ndefaultTargets = ["Toy", "toy"]\n\n[[lean
        "Main.lean": "import Toy\n\ndef main : IO Unit := IO.println (Toy.word 1)\n"}
 
 
-def toy(pkg: Path) -> Path:
-    """`TOY` at ``pkg``, on the fixtures' toolchain."""
-    for name, text in TOY.items():
+def toy(pkg: Path, files: dict[str, str] = TOY) -> Path:
+    """``files`` (`TOY`) at ``pkg``, on the fixtures' toolchain."""
+    for name, text in files.items():
         (pkg / name).parent.mkdir(parents=True, exist_ok=True)
         (pkg / name).write_text(text)
     shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
@@ -957,13 +965,88 @@ def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_t
     assert not (store / MK.UNSTORED).exists()
 
 
+#: the smallest shape whose key reads a module for its code that Lake doesn't hand its compile (`module_keys.indexable`):
+#: `Fold.Protocol` imports `Fold.Deployed` by a `public import` and by a private `meta import`, which `keys` folds into one
+#: `public meta import`, and `Fold.Deployed` imports `Fold.Sizes` privately; `Fold` imports `Fold.Protocol`
+FOLD = {"lakefile.toml": 'name = "fold"\ndefaultTargets = ["Fold"]\n\n[[lean_lib]]\nname = "Fold"\n',
+        "lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [],
+                                          "name": "fold", "lakeDir": ".lake", "fixedToolchain": False}),
+        "Fold.lean": "module\n\npublic import Fold.Protocol\n",
+        "Fold/Protocol.lean": "module\n\npublic import Fold.Deployed\nmeta import Fold.Deployed\n",
+        "Fold/Deployed.lean": "module\n\nimport Fold.Sizes\n\npublic def Fold.deployed : Nat := 1\n",
+        "Fold/Sizes.lean": "module\n\npublic def Fold.size : Nat := 64\n"}
+
+
+def _fold_builds(tmp_path: Path, monkeypatch, tag: str):
+    """(check, lean_audit, the store, `build`): `build(pkg, edit)` is `check.py`'s build of ``pkg`` (staged and settled,
+    built in the sandbox, then put), with ``edit`` run between Lake's build and `put`, and returns (the modules Lake
+    compiled, the stage step's report, the module versions new in the cache, what `put` logged)."""
+    LC, LA = (_load(f"{tag}_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    n = iter(range(99))
+
+    def build(pkg: Path, edit=lambda: None) -> tuple[set[str], dict, int, list[str]]:
+        cache = store / LA.MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(LA.MK, pkg, ["Fold"], cache)
+        r = subprocess.run(LC.in_sandbox(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=pkg, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert LA.MK.misrestored(got, pkg) == []
+        shutil.rmtree(cache)
+        edit()
+        logged: list[str] = []
+        new = LA.LakeArtifacts(store).put({pkg: {"sandbox": True}}, log=logged.append)
+        return {m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, said, new, logged
+
+    return LC, LA, store, build
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_module_whose_key_reads_code_lake_did_not_hand_its_compile_is_indexed_and_a_second_tree_compiles_nothing(
+        tmp_path, monkeypatch):
+    """`Fold`'s key reads `Fold.Sizes` for its code, and Lake, which reads `Fold.Protocol`'s `meta import` as Lean does,
+    hands `Fold`'s compile no `Fold.Sizes`. Refused for that and recorded nowhere, `Fold` was compiled in every build of
+    every tree; indexed, a second tree restores every module and compiles none."""
+    LC, LA, store, build = _fold_builds(tmp_path, monkeypatch, "fold")
+    trees = [toy(tmp_path / n / "fold", FOLD) for n in ("build-0", "build-1")]
+    assert LA.MK.loads("Fold", LA.MK.keys(trees[0]))["Fold.Sizes"] == LA.MK.CODE
+    compiled, said, new, logged = build(trees[0])
+    assert (compiled, said["took"], new, logged) == ({"Fold", "Fold.Protocol", "Fold.Deployed", "Fold.Sizes"}, {}, 4, [])
+    ir = trees[0] / ".lake" / "build" / "ir"
+    assert "Fold.Sizes" not in json.loads((ir / "Fold.setup.json").read_text())["importArts"]
+    assert "Fold.Sizes" in json.loads((ir / "Fold" / "Protocol.setup.json").read_text())["importArts"], \
+        "`Fold.Protocol`'s own `meta import` loads `Fold.Deployed`'s code, and so `Fold.Sizes`'"
+    compiled, said, new, logged = build(trees[1])
+    assert (compiled, said["modules"], said["keyed"], new) == (set(), 4, 4, 0)
+    assert not (store / LA.MK.UNSTORED).exists()
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_build_lake_handed_a_module_its_key_does_not_read_is_refused_and_leaves_its_record(tmp_path, monkeypatch):
+    """`Fold`'s header changed after Lake compiled it, so Lake handed its compile `Fold.Protocol`, which the key of the
+    source now there doesn't read. `put` refuses it and records it under that key with `indexable`'s words, though no
+    module loads it, and says so in its log; the next build's stage step gives those words and leaves `Fold` to Lake,
+    which compiles it, and `put` indexes it and removes the record."""
+    LC, LA, store, build = _fold_builds(tmp_path, monkeypatch, "refused")
+    pkg = toy(tmp_path / "build-0" / "fold", FOLD)
+    compiled, _, new, logged = build(pkg, lambda: (pkg / "Fold.lean").write_text("module\n\npublic import Fold.Deployed\n"))
+    why = "Lake imports ['Fold.Protocol'] and not [] of the workspace"
+    assert (len(compiled), new) == (4, 2) and logged == [
+        f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under their keys: "
+        f"Fold: {why}"]
+    assert [json.loads(f.read_text())["why"] for f in (store / LA.MK.UNSTORED).glob("*.json")] == [why]
+    compiled, said, new, logged = build(pkg)
+    assert said["missed"] == {f"{LA.MK.UNINDEXED}: {why}": 1} and said["left"] == 1
+    assert f"1 {LA.MK.UNINDEXED}: {why} (first Fold)" in LC.staged_line(said)
+    assert (compiled, new, logged) == ({"Fold"}, 1, []) and not list((store / LA.MK.UNSTORED).glob("*.json"))
+
+
 #: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
 EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
          '@[noinline] def Toy.word (n : Nat) : String := s!"version B {Toy.extra n}"\n')
 CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.extra 1))\n"
 
 
-@pytest.mark.skipif(LAKE is None, reason="no lake")
 def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     """A published build of ``pkg`` in the Lake cache ``own``, as `cache.py` builds, stages and restores one."""
     writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
@@ -974,6 +1057,7 @@ def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
     """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
     a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
@@ -1014,19 +1098,10 @@ def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the
     assert put("as-said", compiled=LCH.compiled(out)) == []
 
 
-def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
-    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
-    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
-    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
-    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
-    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
-    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
-    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
-
-    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart;
-    and a tree an earlier repair left with the module rebuilt and the object kept loses the object for being older than
-    the C beside it."""
-    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+def unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH) -> SimpleNamespace:
+    """The toy in a slot tree through the builds and repairs of
+    `test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built`, each step asserted, and the tree's
+    steps for a test that goes on from the tree they leave."""
     MK = LA.MK
     store, own = tmp_path / "artifacts", tmp_path / "lakes-own-cache"
     monkeypatch.setattr(LC, "ARTIFACTS", store)
@@ -1095,6 +1170,42 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     rc, out = records()
     assert rc == 0, out
     assert says() == "version B 83" and held(tree) == apart("apart-b", EXTRA, CALLS_EXTRA)
+    return SimpleNamespace(tree=tree, ir=ir, z=z, a=a, edit=edit, from_own_cache=from_own_cache, repair=repair,
+                           records=records, says=says, apart=apart)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
+    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
+    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
+    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
+    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
+    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
+    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
+    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
+
+    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart."""
+    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_an_object_an_earlier_repair_kept_goes_for_being_older_than_the_c_restored_beside_it(tmp_path, monkeypatch):
+    """A repair that dropped a module's trace and `.hash` files and kept its objects left a tree where a records run
+    restores the module and takes the object, compiled from an earlier C, as built. The repair drops such an object for
+    being older than the C beside it, so the records run after it ends with every file of a tree built apart.
+
+    The rule goes by the files' times, so it holds where a restored file is a copy, with the time of its restore: in the
+    build sandbox, where a hard link from a cache into the package's `.lake` fails and Lake copies instead."""
+    LC, LA, LCH = (_load(f"kept_object_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    if not LC.sandboxed():
+        pytest.skip("no sandbox here, so Lake restores by a hard link and a restored file keeps the cache's time, which "
+                    "the repair's rule by time does not expect")
+    t = unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
+    tree, ir, z, a = t.tree, t.ir, t.z, t.a
+    edit, from_own_cache, repair, records, says, apart = t.edit, t.from_own_cache, t.repair, t.records, t.says, t.apart
 
     edit(tree, z)
     assert repair() == [] and "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main")

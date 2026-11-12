@@ -342,40 +342,32 @@ HD void midstates(const uint64_t prefixes[32], uint64_t ms[16]) {
 //
 // A table of ``cap`` leaves (a power of two) under its domain id: leaf p is the frame leaf (p, "hm96-sha512/row-seg/v1") of
 // the hm96 tree leaf of its row's string b || c, the placeholder's (``pad``, from the host) past the table's length. A row
-// is its ``L`` bytes as they are; its salt the table's ChaCha20 stream under its own key (nonce zero), blocks 3 p .. 3 p + 2.
+// is its ``L`` bytes as they are; its salt is the host's, 192 bytes as 48 little-endian u32 words.
 // The tree is kept whole: level l (0 the leaves) at node `hist_level`, the root at level ``depth``.
 
 constexpr uint32_t HIST_MAX_SEGS = 8;  // rows of at most 8 KiB
 
-// A history table as the host lays it out (`history_tables_device.Hist`: 22 words).
+// A history table as the host lays it out (`history_tables_device.Hist`: 18 words).
 struct Hist {
   uint64_t did[8];  // its domain id
   uint64_t pad[8];  // the placeholder's tree leaf
-  uint32_t key[8];  // its salt key's ChaCha20 words
   uint64_t cap;     // its leaves
   uint32_t L, depth;
 };
-static_assert(sizeof(Hist) == 176, "Hist is 22 words");
+static_assert(sizeof(Hist) == 144, "Hist is 18 words");
 
 HD uint64_t hist_level(uint64_t cap, uint32_t l) { return 2 * cap - ((2 * cap) >> l); }
 
 HD void hist_pad_leaf(const Hist& t, uint64_t p, uint64_t out[8]) { frame_leaf(t.did, p, ROWTAB_ROW_SCHEMA, t.pad, out); }
 
-// Position ``p``'s salt: the table's keystream bytes [192 p, 192 p + 192), as 48 little-endian u32 words.
-HD void hist_salt(const Hist& t, uint64_t p, uint32_t y[48]) {
-  const uint32_t nonce[3] = {0, 0, 0};
-  for (int c = 0; c < 3; ++c) chacha20_block(t.key, (uint32_t)(3 * p + c), nonce, y + 16 * c);
-}
-
-// Row ``row`` at position ``p``: its salt ``y``, its string ``bc`` and its leaf ``out``.
-HD void hist_row(const Hist& t, uint64_t p, const uint8_t* row, const uint64_t* hm, const uint64_t ms[16], uint32_t y[48],
-                 uint64_t bc[16], uint64_t out[8]) {
+// Row ``row`` at position ``p`` under its salt ``y``: its string ``bc`` and its leaf ``out``.
+HD void hist_row(const Hist& t, uint64_t p, const uint8_t* row, const uint64_t* hm, const uint64_t ms[16],
+                 const uint32_t y[48], uint64_t bc[16], uint64_t out[8]) {
   const uint32_t s = (t.L + SEG_BYTES - 1) / SEG_BYTES;
   uint64_t dig[8 * HIST_MAX_SEGS], x[8], tl[8];
   const bool aligned = (uintptr_t)row % 8 == 0;
   for (uint32_t j = 0; j < s; ++j) seg_digest_of(ByteRow{row}, row, aligned ? t.L : 0, t.L, j, s, dig + 8 * j);
   outer_digest_bytes(dig, t.L, s, x);
-  hist_salt(t, p, y);
   commit_string(x, y, hm, ms, bc);
   tree_leaf(bc, ms + 8, tl);
   frame_leaf(t.did, p, ROWTAB_ROW_SCHEMA, tl, out);

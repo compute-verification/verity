@@ -1,4 +1,4 @@
-"""run.py: one recorded H1 execution phase's sampled tile units through sampled proofs, the challenger's and the verifier's side.
+"""run.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
 
     python run.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
     python run.py summarize --work W --out OUT
@@ -117,6 +117,8 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import copy
+import functools
 import hashlib
 import itertools
 import json
@@ -142,7 +144,7 @@ from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.pouw.verifier import verifier  # noqa: E402
 from verity.protocols.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 
-DRAW_DOMAIN = "verity/pouw/h1-prove-draw/v0"
+SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
 #: the in-proof negatives, by `window.py tamper`'s flag
 IN_PROOF = {"in-receipt": "--receipt-word", "in-d": "--d-word", "in-y": "--y-cell", "in-z": "--z-cell", "in-swap": "--swap",
@@ -153,7 +155,7 @@ BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
 OK_ZERO = "in-z"
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
-#: flock-verify's last refusal of the selftest build's statement (`ProvedScope.servedForm`), once every check has passed
+#: the Lean verifier's last refusal of the selftest build's statement (`ProvedScope.servedForm`), once every check has passed
 SELFTEST = "refused: verity/flock-circuit+seed-injection, a selftest build's statement"
 
 
@@ -335,7 +337,7 @@ def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNa
                      ) -> bool:
     """Whether table row ``row`` of registered port ``port`` in a shared-row public file opens its value's registered root
     (``roots``, `roots_of`, of the execution phase whose open root is ``window_root``) at the position and through the path its
-    header states: the check flock-verify ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
+    header states: the check the Lean verifier makes of each table row under ``--registered`` (`h1unit.verify_registered`)."""
     nl = pub.index(b"\n") + 1
     head, body, names = json.loads(pub[:nl]), pub[nl:], [p.name for p in ports]
     at = sum(int(head["shared_rows"][q]) for q in names[:names.index(port)]) + row
@@ -348,7 +350,7 @@ def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNa
 def ok_known_root(path: Path, win: SimpleNamespace, com: dict, doc: dict, unit: int) -> dict:
     """A ``--registered`` file ``doc`` whose ``ok`` port keeps its known content (every unit's row the one word 1) and
     states the root of a registration of ``ok`` with ``unit``'s row 0 (a prover's, whose unit computed 0) under the same
-    salts, written to ``path``: flock-verify must refuse it as its root is not the known rows' (`h1unit.check_known`).
+    salts, written to ``path``: the Lean verifier must refuse it as its root is not the known rows' (`h1unit.check_known`).
     Returns the Python mirror's refusal of it and its acceptance of ``doc``."""
     o1, wr = U.OUT_PORTS["ok"], U.window_open_root(com)
     e = doc["ports"][o1]
@@ -368,9 +370,16 @@ def credit_descriptor(win: SimpleNamespace) -> bytes:
 
 
 def findings_of(doc: dict) -> dict:
-    """A ``--registered`` file's ports as a session verified against it states them (flock-verify's VERDICT
+    """A ``--registered`` file's ports as a session verified against it states them (the Lean verifier's VERDICT
     ``registered``, `Registered.finding`: ``{port: {value, root}}``)."""
     return {p: {"value": e["value"], "root": e["root"]} for p, e in doc["ports"].items()}
+
+
+@functools.lru_cache(maxsize=4)
+def _layout_of(descriptor: bytes) -> tuple:
+    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on a window's
+    descriptor, kept for `credit_registration`'s calls on the same one."""
+    return CR.layout_of(descriptor)
 
 
 def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str,
@@ -385,8 +394,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
     descriptor's SHA-512, the Program Lean was given. The
     steps before them (the challenger's log, the credit bits, the round roots) need a served execution phase's ledger, which this
-    harness has none of."""
-    layout, why = CR.layout_of(descriptor)
+    harness has none of. The layout is derived once per descriptor (`_layout_of`)."""
+    layout, why = copy.deepcopy(_layout_of(descriptor))
     if why is None:
         ss, why = CR.strata(layout)
     if why is None:
@@ -404,7 +413,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
 def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
     """The execution phase's ok rows as `ok_registration` registers them, the same rows and salts, but under the registered domain
     of ``ok`` with no execution phase root: the ok a session opens when its ``--registered`` file states ok's domain without the
-    execution phase's open root (flock-verify roots known rows at the domain the file gives)."""
+    execution phase's open root (the Lean verifier roots known rows at the domain the file gives)."""
     n = int(win.tp.population)
     return G.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
                                [U.ok_salt(com["window"], u) for u in range(n)], G.WORD_BITS, U.V2, None)
@@ -478,7 +487,7 @@ def registration(com: dict, served: dict) -> bytes:
     return digest(json.dumps(com, sort_keys=True).encode(), json.dumps({"receipt_root": served["receipt_root"]}).encode())
 
 
-def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
+def lean_sample(lean: str, n: int, k: int, src: bytes) -> list[int]:
     p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(k), "--stream", src.hex()], capture_output=True, text=True)
     lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
     if p.returncode != 0 or len(lines) != 1:
@@ -486,11 +495,11 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
-def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
+def sample_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
     """The `k` units of `population` an execution phase's sampling coin selects, after its registration (hex) was recorded: Lean
-    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the execution phase's name and its registration."""
-    key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
-    return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
+    ``flock-verify draw`` on the coin's stream under `SAMPLE_DOMAIN`, bound to the execution phase's name and its registration."""
+    key = derive(coin, SAMPLE_DOMAIN, {"window": window, "registration": registration})
+    return sorted(lean_sample(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
 
 
 def cmd_prepare(a) -> int:
@@ -529,7 +538,7 @@ def cmd_prepare(a) -> int:
     do = ch1.open("draw", reg)
     assert coin_reason(ch1.commitment, do, "draw", reg) is None
     T = com1["tiles"]
-    units = draw_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
+    units = sample_units(a.lean, do.coin, w1, reg.hex(), T, a.draw)
     u0 = units[0]
     by_call: dict[int, list[int]] = {}
     for u in units:
@@ -633,7 +642,7 @@ def cmd_prepare(a) -> int:
     if (not cr["descriptor_sha512_is_program"] or cr["reads"] is not None
             or any((cr[x] or [None])[0] != "registration" for x in ("unrooted", "ok-unrooted", "other-window-root"))):
         raise SystemExit(f"window credit's registration step does not take {w1}'s evidence and refuse the unrooted: {cr}")
-    # an ok registration whose root is not the known rows' (row u0 a 0): flock-verify refuses the file before any session
+    # an ok registration whose root is not the known rows' (row u0 a 0): the Lean verifier refuses the file before any session
     kr = record["ok_known_root"] = ok_known_root(vp / "ok-known-root.registered.json", win, com1, docs1[c0], u0)
     log(f"ok-known-root: {kr}")
     if kr["honest"] is not None or not kr["refused"]:
@@ -687,7 +696,7 @@ def cmd_prepare(a) -> int:
     log(f"the prover's pub.bin is the verifier's own: {eq}")
     if not all(eq[h] for h in honest.values()):
         raise SystemExit(f"an honest statement's pub.bin is not the verifier's own file: {eq}")
-    # the tampered A row's table row in its statement's own public file, as flock-verify --registered checks it
+    # the tampered A row's table row in its statement's own public file, as the Lean verifier checks it under --registered
     ta = record["tampered_a"]
     roots1 = roots_of(com1, ok1)
     record["tampered_a"]["table_row_0_opens"] = {
@@ -796,7 +805,7 @@ def _verdict(p: Path) -> dict | None:
 
 
 def lean_phases(err: Path) -> dict | None:
-    """flock-verify's own timings from its stderr: ``inputs`` (reading and parsing the statement's files, once a process),
+    """The Lean verifier's own timings from its stderr: ``inputs`` (reading and parsing the statement's files, once a process),
     each statement ``setup``, and each session's verification, in ms."""
     if not err.exists():
         return None
@@ -895,10 +904,10 @@ def cmd_summarize(a) -> int:
         fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
         proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
                             "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
-    firewall = a.firewall == "1"
+    zk_server = a.firewall == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
-    if firewall and not proofs.get("honest", {}).get("firewall_timed"):
-        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
+    if zk_server and not proofs.get("honest", {}).get("firewall_timed"):
+        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no ZK server times")
         ok = False
     # the selftest build's controls: its honest record passes every check and is refused last, for its statement
     # (`ProvedScope.servedForm`); a forged one is refused before that, by the check it breaks
@@ -938,7 +947,7 @@ def cmd_summarize(a) -> int:
     credit = lean_credit(work, out, record)
     ok &= not credit["ran"] or credit["result"] is None
     honest = next(c for c in checks if c["tag"] == "honest")
-    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok, "firewall": firewall,
+    summary = {"schema": "verity/pouw/h1-prove/summary/v1", "pass": ok, "firewall": zk_server,
                "unit": record["circuit"]["definition"], "k": record["circuit"]["k"], "tile_shape": [R, C],
                "ands": record["circuit"]["ands"], "k_log": record["circuit"]["k_log"],
                "circuit_bytes": record["circuit"]["circuit_bytes"], "circuit_build_seconds": record["circuit"]["build_seconds"],

@@ -1,11 +1,17 @@
 """`research run --on auto`'s size for a suites.py run, from what each suite it runs declares in its pyproject.toml's
-`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run.
+`[tool.verity.tests]`: `worker_gb`, one xdist worker's peak, and `timeout_s`, the bound `--timeouts` puts on its run, stretched
+as suites.py's `bound` stretches it for fewer workers than its `timeout_workers` (`_bound`).
 
 The run's memory is its test processes at the largest worker_gb, one per CPU (suites.py's `--jobs` is the CPUs it may use) or
-its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That reservation is also the budget suites.py divides
-among its test processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure),
-so a run stays inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked, held
-whether or not the run reaches it. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
+its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each. That is the budget suites.py divides among its test
+processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than it holds at each one's figure), so a run stays
+inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
+reserves it whole. A run of many suites has processes at their figure only while the few suites that reach it run, and in a
+pool's slot the reservation caps nothing and is held against the node, whether or not the run reaches it, for as long as the run
+holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it (slot.py's
+BUDGET_OPT). A run
+past its reservation meets the node's own limits, as one past its budget does, and where the node orders its OOM kills by
+reservation (pods/nebius/oom_order.py) it is picked before a run within its own. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
 for the environment's `uv sync`. A run of many suites, `--changed REV` (the suites the change touches, as suites.py's `--list`
 names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite), runs them side by side
 on its jobs: its time is the list-scheduling bound, their times summed over the jobs plus the longest, with an undeclared suite at
@@ -25,6 +31,9 @@ import tomllib
 from pathlib import Path
 
 SUITES_PY = "tools/verity/check/suites.py"
+#: slot.py's option that gives a run its budget where it reserves less: the launcher sends it only to a tree whose slot.py
+#: names it (one from before the option refuses it, so that tree's run reserves its budget whole)
+SLOT_PY, BUDGET_OPT = "tools/verity/check/slot.py", "--budget-gb"
 #: suites.py's options that take a value
 VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s", "--explain"}
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
@@ -35,6 +44,8 @@ SYNC_S = 600
 UNDECLARED_S = 300
 #: suites.py's TEST_PROCESS_GB: what a test process of a suite that declares no worker_gb may reach
 TEST_PROCESS_GB = 4.5
+#: the share of its budget a run of many suites reserves in a pool's slot (the module docstring)
+MANY_RESERVED = 0.5
 #: kind agent-test's shape (infra/cluster/src/cluster/kinds.py, phase cpu-test, and kinds/infra.toml's max_wall_min)
 AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 
@@ -110,8 +121,14 @@ def declared(source: Path) -> list[dict]:
         project = data.get("project", {})
         tests = data["tool"].get("verity", {}).get("tests", {})
         out.append({"name": "repository" if path == "." else _norm(project["name"]) if project.get("name") else path, "path": path,
-                    "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0))})
+                    "worker_gb": float(tests.get("worker_gb", 0)), "timeout_s": float(tests.get("timeout_s", 0)),
+                    "timeout_workers": int(tests.get("timeout_workers", 0))})
     return out
+
+
+def _bound(s: dict, workers: int, undeclared: float) -> float:
+    """suites.py's `bound`: ``s``'s timeout_s (else ``undeclared``), times how many fewer than its timeout_workers ``workers`` is."""
+    return (s["timeout_s"] or undeclared) * max(1.0, s["timeout_workers"] / max(1, workers))
 
 
 def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
@@ -126,8 +143,17 @@ def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
     return list({s["path"]: s for s in chosen}.values())
 
 
+def _takes_budget(source: Path) -> bool:
+    try:
+        return BUDGET_OPT in (source / SLOT_PY).read_text()
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
-    """`{suites, mem_gb?, max_s?}` for a suites.py run whose suites' declarations, or number, say more than the kind's size."""
+    """`{suites, mem_gb?, reserve_gb?, max_s?}` for a suites.py run whose suites' declarations, or number, say more than the
+    kind's size: `mem_gb` the budget its processes are counted on, `reserve_gb` what a run of many suites reserves of it in a
+    pool's slot (never under the kind's own memory; none where the tree's slot.py takes no BUDGET_OPT)."""
     if not (got := selection(command)):
         return None
     names, jobs, rev = got
@@ -144,14 +170,16 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     many = rev is not None or not names
     if many:
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * max(TEST_PROCESS_GB, *(s["worker_gb"] for s in chosen))))
+        if _takes_budget(source):
+            out["reserve_gb"] = max(AUTO_MEM_GB, math.ceil(out["mem_gb"] * MANY_RESERVED))
     elif gb := max(s["worker_gb"] for s in chosen):
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
     if many:
-        ts = [s["timeout_s"] or UNDECLARED_S for s in chosen]
+        ts = [_bound(s, workers, UNDECLARED_S) for s in chosen]
         if (t := math.ceil(sum(ts) / workers + max(ts)) + SYNC_S) > AUTO_MAX_S:
             out["max_s"] = t
     elif any(s["timeout_s"] for s in chosen):
-        out["max_s"] = max(AUTO_MAX_S, int(sum(s["timeout_s"] or SUITE_TIMEOUT_S for s in chosen)) + SYNC_S)
+        out["max_s"] = max(AUTO_MAX_S, int(sum(_bound(s, workers, SUITE_TIMEOUT_S) for s in chosen)) + SYNC_S)
     return out if len(out) > 1 else None
 
 

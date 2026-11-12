@@ -4,7 +4,7 @@
  "model": "GLM-5.3",
  "status": "measured",
  "provisional": true,
- "source": "the engine's rate on the 128k plan, as stock vLLM at TP8 on 8 H200s with a 131,072-token context limit computed it: the plan's first 651 requests sent at 4 times the plan's rate (1.6 a second; the run's `x4` pass) and then at 8 times (3.2 a second; `x8`), one rep each. The arrivals outran it at both: a request waited at 96.9% and 98.1% of the samples of its queue, each pass ran its whole 600 s drain, and 51 and 265 requests were cancelled there. The value is the `x4` pass's; `x8` computed 275.33 (0.985 of it), which is what `saturated` rests on. `bound`: while a request waited the KV pool was under 80% full at two thirds of the samples and 95% full or more at under a tenth, and at most 211 of the 256 sequences ran; the record does not tell the GPUs' arithmetic from the scheduler's step budget. Computed tokens are the engine's own count, prompt tokens less those its prefix cache served plus output tokens (2,172,672), over the pass's wall seconds on 8 GPUs (971.79 s); benchmarks/serve_tax's schedule record. Provisional: one rep a rate",
+ "source": "the engine's rate on the 128k plan, as stock vLLM at TP8 on 8 H200s with a 131,072-token context limit computed it: the plan's first 651 requests sent at 4 times the plan's rate (1.6 a second; the run's `x4` pass) and then at 8 times (3.2 a second; `x8`), one rep each. The arrivals outran it at both: a request waited at 96.9% and 98.1% of the samples of its queue, each pass ran its whole 600 s drain, and 51 and 265 requests were cancelled there. The value is the `x4` pass's; `x8` computed 275.33 (0.985 of it), which is what `saturated` rests on. `bound`: while a request waited the KV pool was under 80% full at two thirds of the samples and 95% full or more at under a tenth, and at most 211 of the 256 sequences ran, so the engine's step held it: in 64% and 65% of each pass's 15 s samples it finished at most 6 steps, a median 3.0 s a step. The record does not tell the GPUs' arithmetic from a step's token budget: in a third of each pass its counters credit no prompt token while the KV pool fills, and then a whole prompt in one sample, so they do not give what a step ran. Computed tokens are the engine's own count, prompt tokens less those its prefix cache served plus output tokens (2,172,672), over the pass's wall seconds on 8 GPUs (971.79 s); benchmarks/serve_tax's schedule record. Provisional: one rep a rate",
  "runs": [
   "r20261111-125507-9911"
  ],
@@ -13,6 +13,6 @@
   "tokens_per_gpu_second": 279.47,
   "plan": "art:41baec9bfb2c9631eaa999d66fd74fffbfe319f31de3b6f57054ce3f27afb0fb",
   "saturated": true,
-  "bound": "compute"
+  "bound": "engine-step"
  }
 }

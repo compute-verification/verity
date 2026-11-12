@@ -3,7 +3,7 @@ and the uniproc executor's driver worker).
 
 Each accessor takes a :class:`verity_vllm.LLM`, a ``vllm.LLM`` or its ``LLMEngine``, and raises ``RuntimeError`` naming
 the multiprocess engine core when the object lives in another process (build with ``VLLM_ENABLE_V1_MULTIPROCESSING=0``,
-`engine.env.ENGINE`).  Attribute reads only; nothing is patched.
+`engine.env.ENGINE`); `scheduler_or_none` returns None there instead.  Attribute reads only; nothing is patched.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     import vllm
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.engine.llm_engine import LLMEngine
-    from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+    from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 
     class Wrapper(Protocol):
         """:class:`verity_vllm.LLM`, structurally (`engine` sits below it in the layers)."""
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     Engine = Union[Wrapper, vllm.LLM, LLMEngine]
 
-__all__ = ["engine_of", "model_runner", "scheduler"]
+__all__ = ["engine_of", "model_runner", "scheduler", "scheduler_or_none"]
 
 
 def engine_of(llm: Engine) -> LLMEngine:
@@ -47,8 +47,16 @@ def scheduler(llm: Engine) -> Scheduler:
     return sched
 
 
+def scheduler_or_none(llm: Engine) -> Scheduler | None:
+    """The engine's in-process V1 scheduler where it holds its requests in a dict (``requests``), else None (a multiprocess
+    engine core, a stub): for a reader that goes without it."""
+    sched = getattr(_engine_core(llm), "scheduler", None)
+    return sched if isinstance(getattr(sched, "requests", None), dict) else None
+
+
 def model_runner(llm: Engine) -> GPUModelRunner:
-    """The engine's in-process model runner (the uniproc executor's driver worker's)."""
+    """The engine's in-process model runner (the uniproc executor's driver worker's): Model Runner V2 under
+    `engine.env.ENGINE`."""
     core = _engine_core(llm)
     worker = getattr(getattr(core, "model_executor", None), "driver_worker", None)
     for attr in ("worker", "model_runner"):

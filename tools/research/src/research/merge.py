@@ -123,7 +123,8 @@ REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: slot.py's options (`SLOT_FLAGS`, `SLOT_OPTS`), each at most once and in any order, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
-#: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
+#: slot.py's options a recorded check may carry: which slot it waits for, and how long, never what it runs (not `--budget-gb`,
+#: which changes how much CMD starts at once)
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
@@ -1716,11 +1717,16 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
-    None when ``repo`` can't make one."""
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
+    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
+    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    from .settings import train_trees
+
+    if root := train_trees():
+        os.makedirs(root, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         return None

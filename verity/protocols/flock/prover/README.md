@@ -23,7 +23,11 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
     Lean's `Tmpl.layoutM`), which the verifier covers only in the form `ProvedScope.scopeOkT` states; `tables.py`
-    (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a size class of
+    (`verity/flock-tables`), several tables in one commitment with private glue; `struct_slots.py`, `struct_lower.py`'s
+    template with its MUFU table reads in lookup slots, split by read depth into one template a net wired as `read_slots.py`
+    wires a flat unit's (circuit-check's `--structural DIR`, which reads a split by the reader `struct_slots_split` in
+    `struct_slots.circuit-check.py`), which no statement stages yet: `scopeOkT` admits one net;
+    `class_statement.py`, a size class of
     any partition as a `verity/flock-circuit` statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
     template, or a table read's as the verifier builds it, `read_tmpl.py`'s `flock-read-tmpl V H`, the flat unit never built, its
     outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the

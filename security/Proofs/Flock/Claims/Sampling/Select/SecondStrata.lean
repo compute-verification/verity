@@ -9,6 +9,7 @@ import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
 import Proofs.Flock.Claims.Sampling.Select.Steps
 import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.SamplingGeneric.TwoCode
 
 /-!
 # The second stage's proof blocks by template (`sum_proved_selectSecond_le`)
@@ -218,48 +219,12 @@ theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} 
   rwa [show cellOff sample.size ns t + i * ns.getD t 0 + (x - (cellOff sample.size ns t + i * ns.getD t 0)) = x by
     omega] at hx'
 
-theorem find?_range_eq {p : ℕ → Bool} {T t : ℕ} (ht : t < T) (hp : p t = true)
-    (hlt : ∀ t' < t, p t' = false) : (List.range T).find? p = some t := by
-  induction T with
-  | zero => omega
-  | succ T ih =>
-    rw [List.range_succ, List.find?_append]
-    rcases Nat.lt_succ_iff_lt_or_eq.1 ht with h | rfl
-    · rw [ih h]; rfl
-    · rw [List.find?_eq_none.2 fun x hx => by simp [hlt x (List.mem_range.1 hx)]]
-      simp [hp]
-
 end Properties.Spot.SecurityProofs
 
 namespace SamplingDeploy
 
 open Properties.Spot Properties.Spot.SecurityProofs
 open Lean (Json)
-
-/-- On template `t`'s cells, `templateAt` is `t`. -/
-theorem RegTwo.templateAt_cell (g : RegTwo) (q : ℕ) {t i j : ℕ} (ht : t < g.ns.size) (hi : i < q)
-    (hj : j < g.ns.getD t 0) : g.templateAt q (cellOff q g.ns t + i * g.ns.getD t 0 + j) = t := by
-  have h1 := cellOff_succ q g.ns t
-  have h2 : (i + 1) * g.ns.getD t 0 ≤ q * g.ns.getD t 0 := Nat.mul_le_mul_right _ hi
-  rw [Nat.succ_mul] at h2
-  have hf := find?_range_eq
-    (p := fun t' => decide (cellOff q g.ns t + i * g.ns.getD t 0 + j < cellOff q g.ns (t' + 1))) ht
-    (decide_eq_true (by omega)) fun t' ht' =>
-      decide_eq_false (Nat.not_lt.2 ((cellOff_mono q g.ns (show t' + 1 ≤ t by omega)).trans (by omega)))
-  unfold RegTwo.templateAt
-  rw [hf, Option.getD_some]
-
-/-- **A cell's units' blocks**: unit `j` of template `t`'s cell in replay block `i` is block `j` of template `t` in
-replay block `sample[i]`. -/
-theorem RegTwo.blockAt_cell (g : RegTwo) (sample : Array ℕ) {t i j : ℕ} (ht : t < g.ns.size)
-    (hi : i < sample.size) (hj : j < g.ns.getD t 0) :
-    g.blockAt sample (cellOff sample.size g.ns t + i * g.ns.getD t 0 + j) = g.blockOf (sample.getD i 0) t j := by
-  have hn : 0 < g.ns.getD t 0 := by omega
-  have hsub : cellOff sample.size g.ns t + i * g.ns.getD t 0 + j - cellOff sample.size g.ns t =
-      j + i * g.ns.getD t 0 := by omega
-  simp only [RegTwo.blockAt]
-  rw [g.templateAt_cell sample.size ht hi hj, hsub, Nat.add_mul_div_right _ _ hn, Nat.div_eq_of_lt hj,
-    Nat.zero_add, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
 
 /-- **The proved units' blocks by template, at a registration**: a weight `w` on blocks, at most `M t` on template
 `t`'s, sums over the blocks of an accepted second stage's proved units to at most `|sample| · Σ_t k_t · M t`. At the

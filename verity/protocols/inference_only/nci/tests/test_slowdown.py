@@ -40,11 +40,6 @@ def test_a_block_that_holds_the_state_gets_no_entry_fee():
     assert (d, e) == (1.0, 0.667 * 6e11 / 2)
 
 
-def test_chain_read_factor_matches_its_definition():
-    """f(K) at K = 2e7, b_w = b_a = 4, d = 2048: the split term binds near mu = 0.25."""
-    assert S.read_factor(2e7, 4, 4, 2048) == pytest.approx(3.286e-3, rel=1e-3)
-
-
 def test_shard_floor_is_twice_w_cut_over_b_tok():
     """Just past half a block of state, a forward-only shard pays 2 w_cut / b_tok when Gamma is inference's."""
     K, b_tok, n_active = 2e7, 20, 3.2e10
@@ -78,35 +73,23 @@ def test_search_reproduces_the_shard_closed_form():
     assert c["reads"]["state"] == pytest.approx(K / 2, rel=1e-2)
 
 
-def test_chain_bound_is_kappa_f():
-    """The slowdown >= kappa_chain f(K) / (2 alpha), the activation rate capped by the crossing over the residual's entries."""
-    K, Gamma = 2e7, 6.4e16
-    chain = {"kappa": 0.1, "d": 1536, "path": "x"}
-    want = 0.1 * S.read_factor(K, 4.0, 4.0, 1536) / (2 * K / Gamma)
-    assert S.chain_lower(BASE, chain, K, Gamma, 20, 12288) == pytest.approx(want)
-    narrow = BASE | {"w_cut": 12288.0}
-    assert S.chain_lower(narrow, chain, K, Gamma, 20, 12288) == pytest.approx(
-        0.1 * S.read_factor(K, 4.0, 1.0, 1536) / (2 * K / Gamma))
-
-
 def test_sweep_at_a_rows_own_rates_is_its_bracket():
     rows, cals, params = catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")
     row = next(r for r in rows if r["id"] == "pretrain-full")
     cal = next(c for c in cals if c["id"] == "kimi-k2-1m-raw")
     b = S.bracket(row, cal, params)
     cell = S.sweep(row, cal, params, [b["inputs"]["b_w"]], [b["inputs"]["b_a"]])[0]
-    assert (cell["thread"], cell["chain"], cell["upper"]) == pytest.approx((b["lower"], b["chain"], b["upper"]))
+    assert (cell["thread"], cell["upper"]) == pytest.approx((b["lower"], b["upper"]))
 
 
-def test_efficiency_of_bf16_is_one_over_the_bounds():
+def test_efficiency_of_bf16_is_one_over_the_construction():
     rows, cals, params = catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")
     row = next(r for r in rows if r["id"] == "pretrain-full")
     cal = next(c for c in cals if c["id"] == "kimi-k2-1m-raw")
     effs = S.efficiency(row, cal, params)
     bf16 = next(x for x in effs if x["recipe"] == "bf16")
     cell = S.sweep(row, cal, params, [16], [16])[0]
-    assert (bf16["ceiling"], bf16["attack"]) == pytest.approx((1 / cell["chain"], 1 / cell["upper"]))
-    assert all(x["attack"] <= x["ceiling"] for x in effs)
+    assert bf16["attack"] == pytest.approx(1 / cell["upper"])
 
 
 def test_every_bracket_is_consistent():
@@ -114,4 +97,3 @@ def test_every_bracket_is_consistent():
     assumptions; the caps in `rates` exist because two rows did."""
     for b in S.brackets(catalog.load("rows"), catalog.load("calibrations"), catalog.load("parameters")):
         assert 1 <= b["lower"] <= b["upper"] * (1 + 1e-9), b
-        assert b["chain"] is None or 1 <= b["chain"] <= b["upper"] * (1 + 1e-9), b
