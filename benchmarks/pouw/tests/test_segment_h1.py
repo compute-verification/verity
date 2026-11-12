@@ -24,12 +24,12 @@ def _load(path: Path, name: str):
 
 
 def _derive():
-    """e2e_slice's derive.py, with the `ref` it imports by name bound to floored_gemm's (another suite module may have
-    imported a different `ref`)."""
+    """floored_gemm's derive.py, with the `ref` it imports by name bound to the one beside it (another suite module may
+    have imported a different `ref`)."""
     saved = sys.modules.get("ref")
     try:
         sys.modules["ref"] = _load(POUW / "floored_gemm" / "ref.py", "floored_gemm_ref")
-        return _load(POUW / "e2e_slice" / "derive.py", "e2e_slice_derive")
+        return _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
     finally:
         if saved is None:
             sys.modules.pop("ref", None)

@@ -149,11 +149,10 @@ def test_linear_variants_pass_their_gates(llama, ids, calib):
         assert abs(ppl(r["nll"][f"{a.name}/s0"]) / bf - 1) < 0.1, a.name
 
 
-def test_the_calibration_pass_releases_its_layer_before_the_next_is_made(llama, ids, calib, monkeypatch):
-    """One layer at a time: when the engine makes the next layer, and when it reaches the head, a GPTQ arm's calibration pass
-    holds no layer made before. A collector that kept its layer would keep that layer's weights, cache and Hessians on the
-    device while the next one loads. No seed, so no arm's stream runs: a stream's last `Run` holds its layer until the next
-    layer's streams start."""
+def test_a_layer_is_released_before_the_next_is_made(llama, ids, calib, monkeypatch):
+    """One layer at a time: when the engine makes the next layer, and when it reaches the head, neither a GPTQ arm's
+    calibration pass nor an arm's stream holds a layer made before. A collector or a stream's last `Run` that kept its
+    layer would keep that layer's weights, cache and Hessians on the device while the next one loads."""
     made: list[weakref.ref] = []
     held: list[list[bool]] = []
 
@@ -173,7 +172,7 @@ def test_the_calibration_pass_releases_its_layer_before_the_next_is_made(llama, 
     monkeypatch.setattr(engine, "make_layer", make_layer)
     monkeypatch.setattr(engine, "head", head)
     gptq = spec.parse({"linear": [{"step": "int8", "weight_top": 63, "gptq": True}]}, "gptq")
-    evaluate(llama, ids[:2], [gptq], seeds=(), calib=calib)
+    evaluate(llama, ids[:2], [gptq], seeds=(0,), calib=calib)
     assert len(made) > 1 and len(held) > len(made)
     assert not any(any(alive) for alive in held), held
 

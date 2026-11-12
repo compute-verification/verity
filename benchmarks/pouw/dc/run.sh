@@ -3,7 +3,7 @@
 # gate and bench. From a pushed commit, on a 1x H200 or 1x B200 node:
 #
 #   research run --on <node> --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90|sm100
+#     --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90|sm90jb|sm100
 #
 # Outside the lease: build every binary and SASS-gate it (gate-build.txt; a refusal stops the run). Under one lease:
 # dgemm gate on three small shapes, each dump rechecked by dgemm_ref.py (dgemm/gate-<shape>/result.json, ref.json); dgemm
@@ -16,7 +16,7 @@
 # sm90jb is the stress of the H200 rows (probes/sm90_jbreak.cu): probes only, no dgemm. DC_ONLY=REGEX times only
 # the probes it matches and skips dgemm and fp8acc; DC_PASSED_ONLY=1 times what passes when some probes are refused.
 set -uo pipefail
-FAM=${1:?usage: run.sh sm90|sm100}
+FAM=${1:?usage: run.sh sm90|sm90jb|sm100}
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROBE="$HERE/../opcode_probe/probe.py"
