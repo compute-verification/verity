@@ -33,8 +33,9 @@ def install(rec: Recorder | None) -> None:
     """Wrap `JITFunction.run` once (idempotent) and bind the recorder; `rec=None` keeps the wrapper but disables
     recording (pass-through)."""
     if _STATE["patch"] is None:
-        _STATE["patch"] = hooks.triton_launch(lambda orig: _run)
-        _STATE["orig_run"] = _STATE["patch"].original
+        patch = hooks.triton_launch(lambda orig: _run)
+        _STATE["patch"] = patch
+        _STATE["orig_run"] = patch.original
     _STATE["rec"] = rec
 
 
