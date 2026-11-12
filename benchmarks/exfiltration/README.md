@@ -2,9 +2,9 @@
 
 `verity bench exfiltration` prints GLM-5.3's exfiltration capacity in GB over a monitoring period, at 10% of total
 compute: the most bits about the weights that can leave over the world's year, as two parts side by side, with every
-input labelled measured, modeled or assumed. It computes neither part. It composes the two calculators that do, so it
-needs no GPU and no node, only the evidence store. Its code is `benchmarks/harness/verity_bench/exfiltration.py`; this
-directory holds its runner.
+input labelled measured, modeled, simulated or assumed. It computes neither part. It composes the two calculators that
+do, so it needs no GPU and no node, only the evidence store. Its code is
+`benchmarks/harness/verity_bench/exfiltration.py`; this directory holds its runner.
 
 ```text
 verity bench exfiltration                 the figure, the inputs, each part, and the two side by side a period
@@ -34,14 +34,16 @@ verity bench exfiltration --help          every parameter and its default
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
-  stop block and once one has. The command reads that command's document (`certifier-term/v2`) and refuses another
-  schema.
+  stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
+  each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
+  and refuses another schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
-    `all three`), is what a network certifier with a set-time card would be charged, and no timing test has shown
-    such a card. Each is printed only under the label the document gives it, in a line, a column or a row's name
-    that carries the label. The command reads the label from the document, at its top and on each row that carries
-    it, and holds no copy.
+    `all three`), is what a network certifier with a set-time card would be charged. That card is simulated: none
+    is deployed, and it is an input of the document, `set_time_card`, the one input marked `simulated`. Each such
+    figure is printed only under the label the document gives it, "with a simulated set-time card", in a line, a
+    column or a row's name that carries the label. The command reads the label from the document, at its top and
+    on each row that carries it, and holds no copy.
   - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
     every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
     so the headline gives that command's own term of record beside this one's.
@@ -141,7 +143,7 @@ plan of the case, is left out and listed under "Refused".
   request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
   source, row `(i) honest` under its label at the planner's assumed prices, then the network
   certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
-  network certifier's label for what rests on the set-time card, then the output count. The network certifier's
+  network certifier's label for what rests on the simulated card, then the output count. The network certifier's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
   Where the ε is 1 or more the network certifier's part is "no bound at this period", with the ε, in place of every
   amount of it, the output count among them; where the two parts' errors sum to 1 or more, so are the two together.
@@ -150,7 +152,8 @@ plan of the case, is left out and listed under "Refused".
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
+  (derived from other figures), `simulated` (what a stand-in does in its place: the network certifier's set-time
+  card, the one such input) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
   pricing a block family covers (measured statements, computed, or both). The network certifier's are its
   calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
