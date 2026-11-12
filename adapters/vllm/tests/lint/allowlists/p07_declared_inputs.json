@@ -13,7 +13,6 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
-    {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "_rid_of", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "git_head", "detail": "except Exception", "count": 2},
@@ -66,7 +65,6 @@
     {"file": "verity/definitions/registry/lifted.py", "kind": "broad-except", "symbol": "_is_decoded", "detail": "except Exception"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "_real_rows", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"}
   ]
 }
