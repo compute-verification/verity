@@ -1456,7 +1456,8 @@ def test_a_tick_in_a_process_of_its_own_takes_what_the_tick_before_judged_on_mai
     cache = env.tmp / "cache"
     first = env.loop(lambda s: [], cache=cache).world
     main = first.fetch()
-    own = {p.head: first.q.own_change(p.head) for p in env.o.gh.prs.values()}
+    older = _git(env.tmp / "clone", "rev-parse", f"{main}^")                    # a head no open PR is at now
+    own = {h: first.q.own_change(h) for h in [*(p.head for p in env.o.gh.prs.values()), older]}
     assert (first.ready(main), first.left, first.lacking) == plain
     for name in ("own_files", "lacked_moves", "lean_change", "merged_tree", "base_drivers"):
         monkeypatch.setattr(L, name, lambda *a, _name=name, **k: pytest.fail(f"{_name} ran again"))

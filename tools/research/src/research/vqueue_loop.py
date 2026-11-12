@@ -1365,8 +1365,8 @@ class World:
 
     def _keep_judged(self, main: str) -> None:
         """What this tick judged of each open PR's head on ``main``, kept whole in the loop's cache (`JUDGED_CACHE`) for the next
-        tick's process, under the code and git that judged it (`_judging_key`); with its own change on the landing branch as
-        fetched (`Queue.own_change`), which is ``main``."""
+        tick's process, under the code and git that judged it (`_judging_key`); with the own change on ``main`` of each head the
+        labels read, older heads among them (`Queue.own_change`, on the landing branch as fetched)."""
         if self._judged_at is None:
             return
         heads = {p.head for p in self.open().values()}
@@ -1378,7 +1378,7 @@ class World:
         doc = {"main": main, "judging": self._judging_key(), "files": {h: sorted(v) for h, v in kept(self._files).items()},
                "judged": {h: list(v) for h, v in kept(self._judged).items()},
                "lacked": {h: [list(x) for x in v] for h, v in kept(self._lacked).items()},
-               "own": {h: v for (b, h), v in sorted(self.q._own.items()) if b == base and h in heads}}
+               "own": {h: v for (b, h), v in sorted(self.q._own.items()) if b == base}}
         if (text := json.dumps(doc, sort_keys=True) + "\n") != self._judged_text:
             tmp = self._judged_at.with_name(f"{self._judged_at.name}.{os.getpid()}.tmp")
             tmp.write_text(text)
