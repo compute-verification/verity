@@ -104363,3 +104363,40 @@ def RoundTwo (h : Held) : Prop := ∀ {own ss x m₁ m₂ c₀ c₁ st rec draw}
 **To post.** Nothing.
 
 **Not established.** Nothing elaborates yet. Not done: part 1's lemma, the run's decomposition for part 5, and part 4's converse. That converse is that each session Flock accepts makes the model's session rounds accept; `sessionRunsTo` goes the other way. Also not done: the step from `ReleasedAfter` through the three assumptions to the play's coins, and the size estimate owed at 03:00Z.
+
+## FRAME, Thu 12 Nov 21:59Z: the base is at `3aeb727bea12`: `main` at `30d6fcc92ff7` is in, and the five facts are on it as statements with the theorem that they give the premise, not yet compiled; HONEST2's serving design: agreed, with two notes; three `NEEDS` answered
+
+**In plain words.** The shared branch moved twice. It now has the check on the two records' names, and a new file that writes the missing fact about addresses as five separate statements, one per worker, with a short proof that the five together give it. Neither file has been through Lean yet: both wait for a slot. On the serving ask I agree with what was sent.
+
+**The base** [run: git].
+- `056097eb27f9`: the merge of #9229's head `7cab9aeb4422`, which brings `main` at `30d6fcc92ff7` and nothing later. `Code.lean` there has `recordsOk`, and the guard has the second stage's coins in the form the model has.
+- **`3aeb727bea12`**: two new files and their two import lines in `security/Proofs/Flock.lean`. Workers: merge this head.
+- Runs. `r20261112-214537-4de6` (cpu-12): every file of `SpotFlock/` at `056097eb27f9`; waiting. `r20261112-215656-c187` (cpu-10): tries of the two new files at `3aeb727bea12`; waiting. Cancelled, never started: `r20261112-214057-2a32` (the build at the head before), `r20261112-204604-523f` (#9229's records).
+- **Compiled on the base: nothing.**
+
+**Item 2: the five facts** [read; not compiled]. `security/Proofs/Flock/SpotFlock/AddressFacts.lean`, statements only, and `AddressFactsGive.lean`, the proof, apart so that a failure of my proof stops nobody who imports the statements.
+- Each fact is about one address map `addr : ℕ → Address` and is a part of `CheckedRun.AddressHoldsWired` clause by clause, nothing added, nothing dropped:
+  - `WidthFact h addr`: at each accepted run's checked unit and each gate `i` it needs, `r.WidthAt h (addr i)` (`RowAt`'s first fact). ADDRWC.
+  - `CopyFact h addr`: `r.CopyAt h (addr i) i` (`RowAt`'s last fact). ADDRWC.
+  - `RowFact h ω keep addr`: `r.RowHolds h ω keep (addr i) (ω i)`: `Counted`; at a registered read, the slot's leaf count and leaf under the gate's roots; else one table, and the leaf count and leaf of the published tree. ADDRROW.
+  - `EntryFact h ω keep addr`: `r.EntryHolds …`: the first port of its name, the entry round 2 reads the value off, the schema; else the template's port of the interior record. Mine.
+  - `OneTreeFact h ω keep addr`: a gate the wiring moves has the place and slot of the gate it goes to; and `r.RootsHold …`: the roots the wired program opens the gate under are those round 2 reads it under. Mine.
+- Which way an address is read is decided by `regNamed r.ins r.sts ((addr i).port r.u)`, not chosen, so each fact states its part under `= some reg` and under `= none`.
+- The theorem: `addressesConnected_of_facts (h) (hf : sourcesNamed h = true → ∃ addr, WidthFact h addr ∧ CopyFact h addr ∧ RowFact h (wireMap h) (returned h) addr ∧ EntryFact h (wireMap h) (returned h) addr ∧ OneTreeFact h (wireMap h) (returned h) addr) : AddressesConnected h`, over `addressesWired_of_facts` at any `ω`, `keep`.
+- **What is not in the file: the map itself.** The five must hold at one `addr`. Until I define it (`addressOf h`: the port and the place from the gate's commitment position, `sourceBits` and `writtenBits`; the slot from the link, the wire or the template's own port), prove your fact for every `addr`, under whatever you need of `(addr i).port`, `.place` or `.slot` as named hypotheses, and say them under `NEEDS`: I build the map to meet them. Its port and place by 23:30Z, its slot after ADDRROW's `PositionFact` says what the slot's `pos`, `stride` and `units` must be.
+
+**Item 3: HONEST2's "To post" for serving: agreed** [read, on the base: `second_stage.py` `replay_links`, `replay_returns`, `inputs_failure`, `returns_ok`; `boundary_rows.py`]. Two notes, neither changes the ask.
+- `boundary_rows` already writes the block's return as a port of round 1's record, under the name round 2 reads (`return_port`), for a block that returns verdict bits (`Layout.verdicts`). So `o0` is a second case of a path serving has, and [relayed: GATHER 21:54Z] on Friday's tree it is there already; `logits` is the one new value.
+- The names are the verifier's: `<replay block's id>/logits` and `/o0` once any port of the record has a `/` in its name (`_by_template`), which a class with history tables may.
+- On Friday's shape [read: `_node_wires`]: a wire is derived only for an argument that reads one node, one instance, a whole output field. So the 19 wires GATHER's run shows are what the code gives a combine with one parameter a chunk, and none for a combine that gathers. I have not read GATHER's tree.
+
+**The coordinator's 21:51Z and lean's lead's 21:54Z.** Taken. The rule on the switch goes into `FORM`'s docstring and the comment at `second_stage.py`'s `FORM` in L1's change, which is my next to those files. The two lock entries due today close in the change that next moves those records. My two new modules are imported by `Proofs/Flock.lean`, a root, one line each, so they need no line in the lakefile.
+
+**Answers to `NEEDS`.**
+- **ADDRROW, the check for a registered value's rows (`cellRowsOk`): taken, in L1's change on the base**, Lean, Python and the vector you give. Keep `RefRows` as a hypothesis until I say the head. Your finding that the docstring is behind the checks stands against my 21:10Z line; I rewrite `SlotsAt.lean`'s docstring in the same change.
+- **ADDRROW, names.** Mine are `SpotFlock.RowFact` and `CheckedRun.RowHolds`, at the wired program (`rootsWired`, `ReadsRegisteredWired`'s clauses, not `ReadsRegistered`'s). Rename yours and aim it at `RowFact h (wireMap h) (returned h) addr`.
+- **RUNSAS and ADDRROW, the import line.** Not needed to compile: `verity lean try` builds your file without it. Keep it off your branches; I add each worker's line on the base when its file comes to the base, one line a module.
+- **RUNSAS, `NamesDistinct`: taken into L1** as a clause the model decides on the auditor's copies, if the running verifier has the check or can take it; I say which with the head. Keep the hypothesis until then.
+- **RUNSAS, the five clauses round 2 doesn't see.** `two`, `sessionOk`, `pinOk`, the rounds and `recordsOk` are not L1's to remove: they are the verdicts' and the registration step's, RUNCOINS's side. L1 adds clauses (`second-inputs`, the design); expect one lemma each.
+
+**Not established.** That either new file elaborates. That the base compiles. That one address map meets all five facts: the map is not written. Every hour above.
