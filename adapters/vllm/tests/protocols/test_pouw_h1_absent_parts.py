@@ -1,7 +1,8 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
 from a rank that shipped no acquisitions, a window whose details state no tie to the Commit, a call with no tables,
-commitments that name no session, a manifest row with no tables, a window's record with no commitment object, a slot
-of a round the round log does not hold, and an engine that holds no executor in its own process."""
+commitments that name no session, a manifest row with no tables, a window's record with no commitment, a slot of a
+round the round log does not hold, and an engine that holds no executor in its own process; and of a round the log
+names by no number."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -15,7 +16,13 @@ from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
 from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME, UNTIED
 from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
-from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason, table_root
+from verity_vllm.protocols.pouw.h1.requests import (
+    RoundOpening,
+    slot_reason,
+    step_digest,
+    table_root,
+    tables_reason,
+)
 from verity_vllm.protocols.pouw.h1.served import Served, declared, descriptor
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
@@ -179,9 +186,10 @@ def _refusal(why: str) -> tuple[None, tuple[str, str]]:
     return None, ("draw", f"the window's draw coin is malformed ({why})")
 
 
-@pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": "a root"}])
-def test_a_record_with_no_commitment_object_is_refused_at_its_sampling_coin(record):
-    assert _sampled(record) == _refusal("the window's record carries no commitment object")
+@pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
+def test_a_record_with_no_commitment_is_refused_at_its_sampling_coin_as_one_whose_commitment_states_no_sample(record):
+    assert _sampled(record) == _refusal(OPENING_FORM)
 
 
 @pytest.mark.parametrize("sample", [..., None, {}, {"coin": {}}])
@@ -196,6 +204,25 @@ def test_a_slot_of_a_round_the_log_does_not_hold_is_refused_before_anything_is_o
     coins = LiveCommitment("pouw-h1/rounds", 0, (("round", 2),), bytes(64))
     slot = RoundOpening(round=3, position=0, value=b"", path=())
     assert slot_reason([{"round": 0}, {"round": 1}], coins, b"salt", 4, [], slot) == "the round log has no round 3"
+
+
+def _step(r: Any) -> list[dict[str, Any]]:
+    """The manifest row of the one call of the step the log names `r`, with its A table's root."""
+    return [{"step": r, "index": 0, "tables": {"a": "ab" * 64}}]
+
+
+@pytest.mark.parametrize("r", [0, "0"], ids=["a number", "a string"])
+def test_a_step_is_held_to_its_rounds_calls_digest_whatever_the_log_names_the_round(r):
+    """`tables_reason` holds a step to `step_digest` over the name the log gives its round, and the name to nothing else."""
+    rows = _step(r)
+    assert tables_reason(b"salt", [{"round": r, "calls": step_digest(b"salt", r, rows).hex()}], rows) is None
+    assert tables_reason(b"salt", [{"round": r, "calls": "00"}], rows) == (
+        f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root")
+
+
+def test_a_round_the_log_names_by_what_no_digest_takes_raises_as_the_digest_does():
+    with pytest.raises(TypeError, match="parts are bytes, str or nonnegative int, got float"):
+        tables_reason(b"salt", [{"round": 0.0, "calls": "00"}], _step(0))
 
 
 def _engine(**holds: Any) -> SimpleNamespace:
