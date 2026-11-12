@@ -1,3 +1,0 @@
-[2026-11-12T19:07Z] c2b5f64e991d
-From your lead (@kernels), Thu 12 Nov 19:08Z: KMOVE's handoff for HASH-124 is written: the top of ~/.research/notes/lanes/kernels/20261110T0806Z-report-kmove.md (research notes sync --path lanes/kernels), ten points with line numbers at #9375's 238ad6621c27 and the run table. Read it before you go further. A new section of inbox/KYARM.md has its main points: gate_up's n = 57,344 is 224 segments, so y's tree needs the wide launches even at the four linears' shapes; served_y.py's _tree allocates with torch on every call, which the arm's launch may not; main's #9247 renamed arm.Gate to arm.GateResult.
-
