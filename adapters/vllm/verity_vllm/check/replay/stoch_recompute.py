@@ -43,16 +43,12 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.registry import sampling_rows, sampling_topp_difftest
 
 from verity_vllm.check.replay.fork import fork_pool
-from verity_vllm.commit import challenge
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import header_of, read_log
 from verity_vllm.program import sampling_rng
-from verity_vllm.program.lifting import continuation
-from verity_vllm.properties.admission import evaluate_spec
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
 
@@ -115,13 +111,22 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
     return out
 
 
+def _lane() -> tuple[Any, Any]:
+    """The interpreter and the module of the lane evaluator's Definition, imported on a call since they load the core `verity`,
+    which importing this module does not; `_evaluate_all` calls this before it forks, so that a worker starts with both loaded."""
+    from verity.definitions.registry import sampling_topp_difftest
+
+    from verity_vllm.properties.admission import evaluate_spec
+    return evaluate_spec, sampling_topp_difftest
+
+
 def _eval_job(job: tuple) -> tuple[int, np.ndarray, float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
-    (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it; the interpreter and the
-    Definition are this module's imports, so a forked worker starts with both loaded."""
+    (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
+    evaluate_spec, definition = _lane()
     V, S, words = job
     t1 = time.time()
-    out = evaluate_spec(sampling_topp_difftest.spec({"V": int(V), "S": int(S)}), words)
+    out = evaluate_spec(definition.spec({"V": int(V), "S": int(S)}), words)
     tok = int(out[0])
     if tok & 0x80000000:
         tok -= 1 << 32
@@ -132,6 +137,8 @@ def _eval_job_rows(job: tuple) -> tuple[int, np.ndarray, float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
+    from verity.definitions.registry import sampling_rows
+
     V, S, words = job
     t1 = time.time()
     bf, p_w, seed_w, pos_w, t_w = words
@@ -169,6 +176,7 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
     n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
+    _lane()                                                        # loaded before the fork: a worker starts with both
     with fork_pool(min(n, len(jobs))) as pool:
         return list(pool.imap(fn, jobs, chunksize=1))
 
@@ -256,6 +264,8 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
+    from verity_vllm.program.lifting import continuation
+
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
     if eos_ids is None:
@@ -298,6 +308,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 
     Returns the ledger + the list of PROBLEMS (each a FAIL reason by name) and whether the lag slot was EXERCISED on this record at all
     (when it was not, the record half of 'RNG advances iff r_t' stays 'stated, not measured on this record', said so)."""
+    from verity_vllm.program.lifting import continuation
+
     out: dict = {"convention": "draw k of a request = its k-th sampled row (k from 0) = slot t = k + 1 at pos = prompt_len - 1 + k, keyed Philox(seed, pos); "
                                "expected draws = {pos of slot t : r_t = 1} under the Program's stop rule (EOS at slot t < C -> min(A, C - t) lag slot(s))",
                  "requests": {}, "problems": [], "lag_slot_exercised": False, "requests_with_eos_before_cap": 0, "requests_at_cap": 0,
@@ -605,6 +617,8 @@ def _evaluate_pending(pending: list, rows: list[dict], reasons: list[str], tally
     ref_check: dict = {"evaluator": evaluator, "reference_evaluator": None, "rows_requested": 0, "rows_checked": 0, "disagreements": [],
                        "seconds": 0.0}
     if evaluator != "lane" and reference_rows and pending:
+        from verity_vllm.commit import challenge
+
         stream = challenge.stream(challenge.reference_rows_seed(sampled_rows_total, len(pending)))
         pick = sorted(stream.sample(range(len(pending)), min(int(reference_rows), len(pending))))
         t_ref = time.time()
