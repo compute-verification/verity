@@ -46,16 +46,17 @@ read.
 
 `--per-call` also prints where the model's MACs the credit leaves out went (its give-up: the model's MACs less the
 credit), by cause and by matmul call, from the Pearl+ verifier's split of its accepted verdict's credit call by call
-(`out/pieces/pouw/verify.json`'s ``uncredited``, or ``--uncredited F``, the file ``served_passes.py uncredited`` writes
-from the passes for a verdict whose document predates the split). Each call's real MACs are the MACs its credited cells
+(`out/pieces/pouw/verify.json`'s ``uncredited``, which Pearl+'s verifier writes once it is on main, or
+``--uncredited F``, such a split written beside the run's passes). Each call's real MACs are the MACs its credited cells
 hold at |K| and the cells the band rule leaves out (excluded A rows, excluded B rows' column blocks, voluntary rows'
-bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's ε, over-cap and ρ terms
-and its credit, as exact fractions. The causes over the model are those, the LM head and attention (which Pearl+ doesn't
-credit), the linears outside the passes, and the floor of the credit; they sum to the give-up exactly. The split is the
-answer's or it is refused (exit 2): its commitment and its passes' records roots are the answer's, each call's terms sum
-as above, and its calls' credited cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. The
-ε deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most MACs a ticket, so
-the calls it lands on carry it for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
+bands and blocks, and the side channels' k − |K|); its credited cells' MACs are the deduction's terms (ε's, that of
+sampled tiles over the inert-work bound, and the inert-work share ι's) and its credit, as exact fractions. The causes
+over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
+the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
+commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
+cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. The ε deduction is the run's, at its
+sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
+for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
 It exits 0 with the number printed, 1 with none (the answer isn't an accept, the Lean verifier's verdict isn't the
 answer's, or the run left no answer) and 2 when the command line, the run or its policy can't be read. A record
@@ -94,10 +95,11 @@ CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "attention": "atten
           "outside": "linears outside the passes", "excluded_a": "excluded A rows",
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
-          "over_cap_macs": "draws over the inert-work bound", "rho_macs": "ρ, the scheme's cap", "floor": "the credit's floor"}
+          "over_bound_macs": "sampled tiles over the inert-work bound", "rho_macs": "ι, the inert-work share",
+          "floor": "the credit's floor"}
 #: a call's terms the split states, beside its MACs
 ROWS = ("excluded_a", "excluded_b", "voluntary", "kept_width")
-TERMS = ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs")
+TERMS = ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")
 ABSENT = ("absent: a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
           "developer's node")
 #: what the answer's ε and δ leave out, printed beside them
@@ -290,13 +292,12 @@ def linear(shape: Shape, k: int, n: int) -> str:
 
 def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, shape: Shape, top: int) -> dict:
     """The give-up of the record under `tree` by cause and by call (module docstring), from the verifier's split in its
-    verify document or in `given`, a ``served_passes.py uncredited`` output. `Unreadable` unless the split is the
-    answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
+    verify document or in `given`, such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
     try:
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
-            raise Unreadable("the record's verify document holds no per-call split (it predates it): `served_passes.py "
-                             "uncredited` writes one from the run's passes, and --uncredited reads it")
+            raise Unreadable("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
+                             "verifier side of the per-call give-up is on main")
         answer = _held(tree, ANSWER)
         work, passes = answer["public"]["work"], answer["public"].get("passes")
         got, records = held["uncredited"], held.get("records")
@@ -395,7 +396,7 @@ def per_call_text(got: dict, model_macs: int) -> list[str]:
              f"by cause, from the verifier's split of its {got['calls']} calls ({got['source']}):"]
     width = max(len(CAUSES[c["cause"]]) for c in got["causes"])
     lines += [f"    {CAUSES[c['cause']]:<{width}}  {_m(c['macs']):>17} MACs  {100 * c['share']:6.2f}%" for c in got["causes"]]
-    lines.append("  ε's deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most "
+    lines.append("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most "
                  "MACs a ticket, so the calls it lands on carry it for the whole run")
     lines.append(f"  the {len(got['top'])} calls that give up the most:")
     for c in got["top"]:
@@ -445,8 +446,8 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
     ap.add_argument("--per-call", action="store_true",
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
-                    help="with --per-call: the verifier's split from `served_passes.py uncredited`, for a record whose "
-                         "verify document predates it")
+                    help="with --per-call: a per-call give-up (`uncredited`) in a file of its own, for a record that holds "
+                         "none; the verifier writes it once Pearl+'s verifier side of the per-call give-up is on main")
     ap.add_argument("--top", type=int, default=10, metavar="N", help="with --per-call: the calls printed (default 10)")
     a = ap.parse_args(argv)
     if (a.uncredited or a.top != 10) and not a.per_call:

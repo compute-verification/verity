@@ -35,9 +35,16 @@ REPORT = (0.01, 0.05, 0.10)
 #: per-expert cut's 3.29e8 of 5.53e8 marginal and 3.95e8 of 1.70e9 at full statements, the registered cut's 1.3e10 of
 #: 1.4e10 and 2.4e10 of 1.3e11; the fixed ratio is (full - marginal) busy over (full - marginal) end to end
 BUSY = {"per_expert": (3.29 / 5.53, (3.95 - 3.29) / (17.0 - 5.53)), "tokens": (1.3 / 1.4, (2.4 - 1.3) / (13.0 - 1.4))}
-#: GLM-5.3's serve taxes from the serve_tax card, and their parts: the certified tick, the edge snapshot, the top-k
+#: GLM-5.3's serve taxes from the serve_tax card, and (A)'s parts by name
 TAXES = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("tokens", "per_expert"))
 PARTS = {p["part"]: p["share"] for p in TAXES["tokens"]["parts"]}
+#: the parts every two-stage case pays; the edge snapshot (`tc.EDGE`) is the one a case can go without
+SERVED = ("certified-tick rule", "step record", "two-stage boundary commitment", "history tables",
+          "deterministic top-k")
+if set(PARTS) != {*SERVED, tc.EDGE}:
+    raise ValueError(f"the serve_tax card's (A) has the parts {sorted(PARTS)} and Case.tax reads "
+                     f"{sorted({*SERVED, tc.EDGE})}: name each part of the card in SERVED (or as total_cost.EDGE), "
+                     "so that a case's serve tax is the sum of the card's parts")
 EDGE_PAUSE = tc.EDGE_PAUSE[0]
 WINDOW = c["window"].value
 REPLAY_FACTOR = c["replay_factor"].value
@@ -122,15 +129,16 @@ class Case:
     steady: str = ""
 
     def tax(self) -> float:
-        """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
-        length, or none when the replay reads the edge's state live; every full K/V page hashed when written if
-        `commit_write`; the prefill a prefix-cache hit would have skipped if `prefix_off`, or only the hits a pool per
-        window of `pool_window_s` loses.  The one-stage design's is the every-block line's, hashing every block's
-        outputs."""
+        """The serve tax, a sum of the serve_tax card's named parts: the certified tick, the step record, the two-stage
+        boundary commitment, the history tables and the top-k always (`SERVED`); the edge snapshot's pause over the
+        replay block's length (the card's part at the census window), or none when the replay reads the edge's state
+        live; every full K/V page hashed when written if `commit_write`; the prefill a prefix-cache hit would have
+        skipped if `prefix_off`, or only the hits a pool per window of `pool_window_s` loses.  The one-stage design's
+        is the every-block line's, hashing every block's outputs."""
         if self.form == "one-stage":
             return TAX_ONE_STAGE
-        edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)
-        return (PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
+        edge = 0.0 if self.live else (EDGE_PAUSE / self.edge_s if self.edge_s else PARTS[tc.EDGE])
+        return (sum(PARTS[p] for p in SERVED) + edge
                 + (COMMIT_WRITE if self.commit_write else 0.0) + (PREFIX_OFF if self.prefix_off else 0.0)
                 + (POOL_WINDOW_LOST[self.pool_window_s] if self.pool_window_s else 0.0))
 
