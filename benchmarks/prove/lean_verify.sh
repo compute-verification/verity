@@ -6,11 +6,12 @@
 # FlockVerify, by the name the lakefile gives it), and runs `verity bench prove lean-verify` on the tree, whose record
 # ($OUT/lean-verify.json) `verity bench prove` reads once the run is labelled `run_of_record=prove-WORKLOAD-lean-verify`.
 # The flags after the arts are lean-verify's (--repeat, --word, --k-log, ...). The job exits nonzero when the verifier
-# refuses the proof, and runs it no further; a program or partition file that isn't the one the circuit binds ends it
-# before the verifier starts. Run from a clone (the build writes the verifier's .lake), on a CPU node with the memory
-# the statement's circuit file needs; scratch (mktemp's, so $TMPDIR's) holds the circuit twice, the fetched file and
-# the verifier's archive of it:
-#   research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone -- \
+# refuses the proof, and runs it no further; a partition file that isn't the one the circuit binds ends it before the
+# verifier starts (the program is held to nothing the circuit states: lean_verify.py). Run from a clone (the build
+# writes the verifier's .lake) with the store's read-only key (--store-read: the job fetches the arts), on a CPU node
+# with the memory the statement's circuit file needs; scratch (mktemp's, so $TMPDIR's) holds the circuit twice, the
+# fetched file and the verifier's archive of it:
+#   research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone --store-read -- \
 #     bash benchmarks/prove/lean_verify.sh ART [--with ART PATH]... [--repeat N] [--word TYPE] [--k-log K] [--blocks N]
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}

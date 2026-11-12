@@ -178,13 +178,14 @@ labelled "accepted on the provisional unit cover, units as stated, the Program n
 the circuit file, and doesn't say the verifier knows what the statement computes. Any other accept is labelled by its
 partition rule alone.
 
-As a research run, from a clone on a CPU node. `lean_verify.sh` fetches the proof's art (kind `flock-proof/v1`: the
+As a research run, from a clone on a CPU node, with the store's read-only key (`--store-read`: the job fetches the
+arts, and without the key its first fetch ends it). `lean_verify.sh` fetches the proof's art (kind `flock-proof/v1`: the
 session directory and what of its statement the art holds) and, with `--with ART PATH`, each file the statement keeps
 in another art (a circuit too large for the proof's art, a program made after it) beside it in one tree, then builds
 the verifier:
 
 ```text
-research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone -- \
+research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone --store-read -- \
     bash benchmarks/prove/lean_verify.sh ART [--with ART PATH]... [--repeat N] [--word TYPE] [--k-log K] [--blocks N]
 research data label RUN run_of_record prove-glm53-lean-verify --by LANE --ref RUN
 ```
