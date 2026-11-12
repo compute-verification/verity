@@ -9,10 +9,12 @@
 #   `verity/runtime/runner.py`, what runs the parties (`run`), so no module reads `verity.runtime.runtime`; the package's
 #   `__init__.py` keeps its docstring.
 # - `verity/configuration/wire/`: `__init__.py` (frames, messages, schemas, refusals) to `verity/channel.py`, the
-#   handshake to `verity/runtime/handshake.py`, and its test to `verity/tests/test_channel.py`, the flat files' suite.
-#   Its `pyproject.toml` goes ([drop]): the flat files' suite reads what it read.
+#   handshake to `verity/runtime/handshake.py`, and its test to `verity/tests/tests/test_channel.py`, the flat files'
+#   suite. Its `pyproject.toml` goes ([drop]): the flat files' suite reads what it read.
 # - `verity/hardware/site/`: `__init__.py` (the Site's types and their bytes) to `verity/device.py`, its suite's
-#   `pyproject.toml` to `verity/pyproject.toml` and its test to `verity/tests/test_device.py`.
+#   `pyproject.toml` to `verity/tests/pyproject.toml` and its test to `verity/tests/tests/test_device.py`. The flat files'
+#   suite is laid out as `verity/protocols/tests/` is: a `pyproject.toml` directly under `verity/` would be the nearest
+#   project file above every workspace member under `verity/`, and uv would no longer find them in the workspace.
 # - `verity/configuration/__init__.py` is deleted with the package this move empties.
 # No Python class, Lean name or lock record changes. The format is `layout_map.toml`'s. This map runs after the map that
 # moves `verity/configuration/config/` to `tools/config/`, on the commit that one makes, so `verity_config`'s root is
@@ -30,10 +32,10 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "verity/configuration/deploy/" = "verity/runtime/"
 "verity/configuration/wire/__init__.py" = "verity/channel.py"
 "verity/configuration/wire/handshake.py" = "verity/runtime/handshake.py"
-"verity/configuration/wire/tests/test_wire.py" = "verity/tests/test_channel.py"
+"verity/configuration/wire/tests/test_wire.py" = "verity/tests/tests/test_channel.py"
 "verity/hardware/site/__init__.py" = "verity/device.py"
-"verity/hardware/site/pyproject.toml" = "verity/pyproject.toml"
-"verity/hardware/site/tests/test_site.py" = "verity/tests/test_device.py"
+"verity/hardware/site/pyproject.toml" = "verity/tests/pyproject.toml"
+"verity/hardware/site/tests/test_site.py" = "verity/tests/tests/test_device.py"
 
 [retired]
 # the directories this map empties: `layout.py` refuses a tracked file under one that has no row, so a file only a
@@ -65,6 +67,10 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [split]
 # references to a directory this move splits that stay right: "old file: old directory" = why
+"demos/lifecycle/README.md: verity/configuration/deploy" = "prose naming the deployment layer, which is the runtime: its parties run by `run`"
+"tools/verity/check/drive.toml: verity/configuration/deploy" = "the low-risk exclusions list the files that leave for verity/ beside it"
+"verity/configuration/deploy/README.md: verity/configuration/deploy" = "the runtime's README names its own suite, verity/runtime"
+"verity/protocols/pous/device/README.md: verity/configuration/deploy" = "prose naming the party runtime the wipe's parties run on"
 
 [modules]
 # the renames [paths] implies (`layout.py --modules`)
@@ -75,6 +81,6 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 "verity.configuration.deploy.runtime" = "verity.runtime.runner"
 "verity.configuration.wire" = "verity.channel"
 "verity.configuration.wire.handshake" = "verity.runtime.handshake"
-"verity.configuration.wire.tests.test_wire" = "verity.tests.test_channel"
+"verity.configuration.wire.tests.test_wire" = "verity.tests.tests.test_channel"
 "verity.hardware.site" = "verity.device"
-"verity.hardware.site.tests.test_site" = "verity.tests.test_device"
+"verity.hardware.site.tests.test_site" = "verity.tests.tests.test_device"

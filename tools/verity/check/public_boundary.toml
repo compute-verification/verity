@@ -328,7 +328,7 @@ from = "*"
 why = "the challenger and service code SPOT needs"
 paths = [
     "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
-    "verity/{channel.py,config.py,device.py,party.py,protocol.py,pyproject.toml,runtime,tests}",
+    "verity/{channel.py,config.py,device.py,party.py,protocol.py,runtime,tests}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
 from = ["spot"]
