@@ -116,11 +116,11 @@ ticks (`Shadow`, kept beside the log), and a tick reads `G2_FRESH` candidates' a
 while the check runs: one is read again at once once the candidate's check ended, at its drop, and after an enqueue, a
 rerun or a cancel of it.  `--no-graph2-shadow` reads none.  The steps the
 check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run, and hold no pass: a check passes once every
-step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and no drop, its landing's among them,
-cancels the runs still running one.  Once a candidate's verdict is pass or fail and its runs ended, what it failed of one
-that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of each member
-whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its drop while
-they run (`Past.off_gate_running`); a red its base shares rings nobody.
+step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and its landing's drop leaves the runs
+still running one, which any other drop cancels.  Once a candidate's verdict is pass or fail and its runs ended, what it
+failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of
+each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its
+drop while they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
@@ -216,8 +216,8 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
 from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
-from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
-                     Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
+from .vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject,
+                     Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
 from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
@@ -615,8 +615,8 @@ class Past:
         return out
 
     def off_gate_running(self) -> dict[str, dict]:
-        """The drops whose candidate's check passed while its runs still ran steps off the gate (``off_gate_running``,
-        `Loop._drop`), by sha, but those an `off_gate` line has read since (`Loop._off_gate`)."""
+        """The drops whose candidate kept a verdict while its runs or the run beside its base's check still ran
+        (``off_gate_running``, `Loop._drop`), by sha, but those an `off_gate` line has read since (`Loop._off_gate`)."""
         out: dict[str, dict] = {}
         for r in self.lines:
             if r.get("action") == "drop" and isinstance(r.get("off_gate_running"), dict) and r.get("sha"):
@@ -1980,7 +1980,7 @@ class World:
 def _running(j: Judged | None) -> dict:
     """The record of the run beside a judged candidate's check while that runs: pending, or a check that gates failed before
     it ended, a fail `vqueue_slim.judge` doesn't keep; {} once it ended or its verdict is kept, as a pass is while its runs
-    still run steps off the gate (`vqueue_slim._passed_early`), which no drop stops."""
+    still run steps off the gate (`vqueue_slim._passed_early`), which only its drop on `main` leaves running (`Loop._drop`)."""
     if j is None or j.slim is None or "verdict" in (j.record or {}) or j.slim.state not in (PENDING, FAIL):
         return {}
     return j.record or {}
@@ -3173,14 +3173,20 @@ class Loop:
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
-        (`vqueue_slim._passed_early`) leaves them running, its line keeping their record (``off_gate_running``), which
-        `_off_gate` reads until they end."""
+        (`vqueue_slim._passed_early`) leaves them running where it is dropped on `main`, and cancels them otherwise, as
+        nothing will land on what they find; its line keeps their record (``off_gate_running``) while it keeps
+        a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
         w, j = self.world, self._reread(t, c)
         shadow = j.shadow if j is not None else None
         follow = self._follow(c, t)
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
         why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
         rec, kept = _running(j), (j.record if j is not None else None) or {}
+        if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
+            rec = kept
+        base = t.below if c.base == t.main else t.past.slim(c.base)[1]
+        unread = not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
+            "verdict" not in base or base.get("still_running")))
         if "plan" in rec:
             self.slim.abandon(rec)
         ids = list(rec.get("ids") or ())
@@ -3196,7 +3202,7 @@ class Loop:
                            **({"follow": follow} if follow is not None else {}),
                            **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
                            **({"beside_launching": rec} if "launch" in rec or "shards" in rec else {}),
-                           **({"off_gate_running": kept} if kept.get("still_running") else {}),
+                           **({"off_gate_running": kept} if unread else {}),
                            **({"records_cancelled": rids} if rids else {}),
                            **({"records_cancel_failed": rfailed} if rfailed else {}),
                            **({"records_launching": regen} if "launch" in regen else {}),
@@ -3486,7 +3492,9 @@ class Loop:
         that passed while its runs still ran those steps (`vqueue_slim._passed_early`) failed of them is read once they ended
         (`vqueue_slim.failures`), its candidate dropped by then or not: a dropped one's runs (`Past.off_gate_running`, its
         landing's drop among them) are judged each tick until they and its base's have ended, then rung as a candidate's
-        are, and an `off_gate` line says they were read, unless a post failed, which the next tick rings again."""
+        are, and an `off_gate` line says they were read, unless a post failed, which the next tick rings again.  Its base's
+        run is judged here too while it has no verdict, as one beside a `main` since moved on, or beside a candidate since
+        dropped, is nowhere else; one still launching, waiting or planning isn't, since judging it would launch it."""
         recs, rung, d = [], t.past.rung(), self.world.slim_driver()
         for c in t.snap.candidates:
             if (j := t.judged[c.sha]).slim is None or j.slim.state not in (PASS, FAIL):
@@ -3496,7 +3504,8 @@ class Loop:
             c = Candidate(sha, drop.get("base") or "", tuple(drop.get("members") or ()), tuple(drop.get("heads") or ()))
             rec, base = dict(drop["off_gate_running"]), t.below if c.base == t.main else t.past.slim(c.base)[1]
             self.slim.judge(d, rec)
-            if base is not None and base.get("still_running"):
+            if base is not None and (base.get("still_running") or "verdict" not in base and base.get("ids")
+                                     and not any(k in base for k in ("launch", "wait", "shards"))):
                 self.slim.judge(d, base := dict(base))
             if rec.get("still_running") or base is not None and ("verdict" not in base or base.get("still_running")):
                 continue

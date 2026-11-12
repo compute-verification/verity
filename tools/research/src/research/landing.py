@@ -331,6 +331,9 @@ SPANS = "spans.jsonl"
 LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
+#: the step check.py records after its preflights only when the C++ prebuild refused the run, before it plans its groups
+#: (check.py's `prebuild`): a live record naming it names no planned step
+PREBUILD_STEP = "prebuild"
 
 
 def failing(run_dir: Path) -> str | None:
@@ -852,7 +855,7 @@ def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, st
         got: dict[str, str | None] = {}
         for d in dirs:
             live = live_steps(d)
-            known = known or any(s.get("step") not in PREFLIGHT for s in live)
+            known = known or any(s.get("step") not in (*PREFLIGHT, PREBUILD_STEP) for s in live)
             mine = {s.get("step") or "": s.get("state") for s in live}
             mine.update({st.get("step") or "": "stopped" if not_run(st) else st.get("status") or "failed" for st in step_records(d)})
             for step, v in mine.items():

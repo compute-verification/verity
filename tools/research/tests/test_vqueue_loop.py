@@ -4853,6 +4853,57 @@ def test_under_gate_check_a_candidate_whose_shard_runs_only_circuit_check_lands_
     assert loop.tick() == [] and len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
 
 
+def test_under_gate_check_a_landed_candidate_s_red_off_the_gate_rings_once_main_s_check_that_passed_early_ends(env, monkeypatch):
+    """`main`'s own check passed every step it is judged on and still runs circuit-check; the candidate's check ended, failing
+    circuit-check, and the candidate lands at once.  What it failed there is compared with `main`'s once that run ended, and
+    rung: its drop on `main` doesn't lose it."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS, decide=vqueue.decide)
+    runs.end(main)
+    runs.runs_on(main, 3, "circuit-check")
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and env.main() == sha and env.posts == []
+    runs.end(main)
+    loop.tick()
+    loop.tick()
+    assert env.posts == ["@heads vqueue: " + _off_said(sha, "#1", "circuit-check", main,
+                                                       f"lowering/pin-mismatch {HEAD} it failed")]
+
+
+def test_under_gate_check_a_candidate_that_landed_early_on_a_main_whose_check_still_ran_is_read_once_both_ended(env, monkeypatch):
+    """`main`'s own check still runs a step it is judged on when the candidate passes early and lands: once both runs ended, its
+    red off the gate is rung and its entry closed, though nothing judges the run beside the old `main` any more."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS, decide=vqueue.decide)
+    runs.end(main)
+    runs.runs_on(main, 2, "pytest")
+    runs.end(sha)
+    runs.runs_on(sha, 3, "circuit-check")
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and logged[-1]["off_gate_running"]["still_running"]
+    runs.end(main)
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    for _ in range(3):
+        loop.tick()
+    assert len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
+
+
+def test_under_gate_check_a_candidate_that_passed_early_and_is_dropped_off_main_has_the_runs_still_running_cancelled(
+        env, monkeypatch):
+    """Only a landing leaves a check's runs running steps off the gate: a candidate whose check passed while a shard still runs
+    circuit-check, dropped for any other cause, has its runs cancelled as any dropped candidate's, and its line keeps no
+    record for `_off_gate` to read."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS)
+    runs.end(main)
+    runs.end(sha)
+    runs.runs_on(sha, 3, "circuit-check")
+    assert _acts(loop.tick()) == ["slim", "slim"]
+    loop.decide = lambda s: [Drop(sha, "its base failed")] if s.candidates else []
+    (drop,) = [r for r in loop.tick() if r["action"] == "drop"]
+    ids = [r for r in runs.state if r.startswith("c-")][-len(PLAN):]
+    assert (drop["sha"], drop["beside_cancelled"], "off_gate_running" in drop) == (sha, ids, False)
+    assert [got for got, _ in env.cancelled] == [ids] and not L.Past.read(env.log, 0).off_gate_running()
+
+
 def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):
     """The run beside `main`'s check that ended in infra errors runs again, and what a candidate fails off the gate is compared
     with that run once it ends, not with the one that ended so."""
