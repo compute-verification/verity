@@ -818,6 +818,32 @@ def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmp
     assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
 
 
+def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(world, monkeypatch):
+    """`_regenerated` runs `rename.py` in a worktree of the tip: under TMPDIR, the control pod's network volume, its add and
+    remove took minutes; under `MERGED_ROOT` (--preflight-root), as `merged_worktree`'s, they don't, and it leaves nothing."""
+    import tempfile
+
+    from research import queue
+
+    tmp, fast, ran = world.tmp / "tmpdir", world.tmp / "fast", world.tmp / "ran"
+    tmp.mkdir()
+    main = _move_main(world, {
+        "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
+                                "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
+        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('certified')\n"})
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(queue, "MERGED_ROOT", fast)
+    commit, why = q._regenerated(main, PR(1, main, "move", "Lane `lane-1`.\nMove: tools/move/x_map.toml\n"), main)
+    assert commit and why == "", why
+    assert _git(q.workdir, "show", f"{commit}:moved.txt") == "m"
+    assert Path(ran.read_text()).is_relative_to(fast), ran.read_text()
+    assert not list(fast.iterdir()) and not list(tmp.iterdir())
+    assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
     """A landing gate judges a PR as the sync merges it onto `next`, never at landing, where ejecting a
     member low on `next` rebuilds it and cancels the Lean check running there.  A member the sync keeps isn't judged again; one

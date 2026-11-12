@@ -2406,7 +2406,7 @@ class Queue:
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
                           f"until those members land on `{into}`")
-        with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
+        with scratch() as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
@@ -4493,7 +4493,8 @@ LEAN_FIXTURES = "tools/verity/lean/"
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
 #: where a merged worktree goes when its caller names no root (`merged_worktree`): `main` sets it from --preflight-root, so
-#: drive's other merged trees (`ported`'s codemod) leave its network-volume TMPDIR too, where each add and remove takes minutes
+#: drive's other merged trees (`ported`'s codemod, a move's regeneration: `scratch`) leave its network-volume TMPDIR too, where
+#: each add and remove takes minutes
 MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before
