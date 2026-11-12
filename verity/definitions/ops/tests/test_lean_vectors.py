@@ -1,4 +1,4 @@
-"""The Python `tc_dot_total` is held to its Lean definition (`Security/Definitions/Core/TC/Spec.lean`) by
+"""The Python `tc_dot_total` is held to its Lean definition (`security/Definitions/Core/TC/Spec.lean`) by
 vectors: `Verity/SecurityProofs/TC/Vectors.lean` states each one as a theorem the kernel checks against the Lean, and this
 test checks the same vectors against the Python. A change to either side's semantics then fails a build."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ from pathlib import Path
 from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16 as AMP
 from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, tc_dot_total
 
-VECTORS = Path(__file__).resolve().parents[4] / "Security" / "Proofs" / "Core" / "TC" / "Vectors.lean"
+VECTORS = Path(__file__).resolve().parents[4] / "security" / "Proofs" / "Core" / "TC" / "Vectors.lean"
 PIPES = {"HOPPER_BF16_WGMMA_K16": HOP, "AMPERE_BF16_M16N8K16": AMP}
 THEOREM = re.compile(
     r"theorem \w+ : tcDotTotal (\w+) (0x[0-9a-f]+)\s*\[([^\]]*)\]\s*\[([^\]]*)\] =\s*(0x[0-9a-f]+) :=")

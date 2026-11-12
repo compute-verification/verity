@@ -112,9 +112,9 @@ def test_list_is_a_tasks_v1_graph_closed_under_its_deps_and_the_same_each_time(t
 
 
 def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
-    """Only an audit of `Security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
+    """Only an audit of `security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
     others queued for the two large slots while 21 small ones sat idle."""
-    spec = "Security"
+    spec = "security"
     for name, deps in ((spec, []), ("lean/Q", [f"../../{spec}"])):
         (tree / name).mkdir(parents=True)
         (tree / name / "lakefile.toml").write_text(f'name = "{name.rsplit("/", 1)[-1]}"\n')
@@ -130,7 +130,7 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
 
 def test_a_lean_audit_fails_on_a_lock_record_difference_as_the_after_landing_run_does(tree, monkeypatch):
     """An audit task never regenerates lock records (`--no-regenerate`, drive's after-landing run), listed or run: with
-    `--regenerate` it passed `Security` on a stale lock that the after-landing run of the same commit failed."""
+    `--regenerate` it passed `security` on a stale lock that the after-landing run of the same commit failed."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("tasks_under_test", tree / "tools" / "verity" / "check" / "tasks.py")

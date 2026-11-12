@@ -408,7 +408,7 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
     sides = json.loads((FIXTURES / "hash-basic-definition-taken-out-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
-    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
     assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"]["Definitions.Hash.Basic"]
     hash_basic = {n: sides[n]["reads"]["Definitions.Hash.Basic"] for n in sides}
@@ -431,7 +431,7 @@ def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, caps
     assert sides["ours"]["reads"][m]["guarantees"] != sides["base"]["reads"][m]["guarantees"]
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
-    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/Properties/lean-audit.json"]) == 0
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/Properties/lean-audit.json"]) == 0
     assert capsys.readouterr().err == ""
     group = json.loads((tmp_path / "ours").read_text())["reads"][m]
     assert group["definitions"] == sides["theirs"]["reads"][m]["definitions"]
@@ -533,26 +533,26 @@ def test_a_side_that_is_not_json_is_the_other_side_and_only_two_leave_git_s_conf
     def run(b, o, t) -> tuple[int, str, list[str]]:
         for n, d in (("base", b), ("ours", o), ("theirs", t)):
             (tmp_path / n).write_text(d if isinstance(d, str) else A.text(d))
-        rc = M.main(files + ["Security/lean-audit.json"])
+        rc = M.main(files + ["security/lean-audit.json"])
         return rc, (tmp_path / "ours").read_text(), capsys.readouterr().err.splitlines()
     rc, got, err = run(base, "{\"guarantees\": ", theirs)
     assert (rc, got) == (0, A.text(theirs)) and len(err) == 1
-    assert err[0].startswith("merge.py: Security/lean-audit.json: ours is not a record (")
+    assert err[0].startswith("merge.py: security/lean-audit.json: ours is not a record (")
     assert err[0].endswith(": took theirs")
     rc, got, err = run(base, ours, "[1, 2]")
     assert (rc, got) == (0, A.text(ours)) and err == [
-        "merge.py: Security/lean-audit.json: theirs is not a record (not a JSON object): took ours"]
+        "merge.py: security/lean-audit.json: theirs is not a record (not a JSON object): took ours"]
     rc, got, err = run("<<<<<<<", ours, theirs)
     assert rc == 0 and json.loads(got)["guarantees"].keys() == {"P.t", "P.u", "P.v"}
-    assert err[0].startswith("merge.py: Security/lean-audit.json: base is not a record (")
+    assert err[0].startswith("merge.py: security/lean-audit.json: base is not a record (")
     assert err[0].endswith("): merged as if the base were empty")
     monkeypatch.setattr(M, "merge", lambda *_: 1 / 0)
     rc, got, err = run(base, ours, theirs)
     assert (rc, got) == (0, A.text(theirs)) and err == [
-        "merge.py: Security/lean-audit.json: the merge failed (ZeroDivisionError: division by zero): took theirs"]
+        "merge.py: security/lean-audit.json: the merge failed (ZeroDivisionError: division by zero): took theirs"]
     rc, got, err = run(base, "{\"a\": 1,\n", "{\"a\": 2,\n")
     assert rc == 1 and "<<<<<<< ours" in got and ">>>>>>> theirs" in got and len(err) == 1
-    assert err[0].startswith("merge.py: Security/lean-audit.json: neither side is a record (ours is not a record (")
+    assert err[0].startswith("merge.py: security/lean-audit.json: neither side is a record (ours is not a record (")
     assert err[0].endswith("): left to git's merge, as a conflict")
 
 
@@ -631,7 +631,7 @@ def test_shape_entries_and_frozen_names_merge_one_by_one():
 
 
 def test_two_sides_restating_one_guarantee_s_inline_premises_merge_premise_by_premise():
-    """`Security/Properties/lean-audit.json`'s `shape.inline` entry for `scheduledRequirement` at c92bc0a53f (ours),
+    """`security/Properties/lean-audit.json`'s `shape.inline` entry for `scheduledRequirement` at c92bc0a53f (ours),
     5e3e9ea235 (theirs) and their merge base fc4958a86b, where all three list the guarantee with one record: both sides add
     the two premises restated over `sessionLayout`, ours keeping the two texts they restate and theirs dropping them.
     Compared whole, the guarantee's map would be one side's; premise by premise the added ones stay, and the two texts ours
@@ -696,7 +696,7 @@ def test_an_inline_premise_both_sides_give_different_reasons_keeps_theirs_and_th
 
 
 def test_a_branch_regenerated_on_an_older_tree_keeps_the_inline_texts_next_still_prints(tmp_path, capsys):
-    """`Security/lean-audit.json` at 3be133850d (theirs), a branch whose `--update` ran on a tree based on 538c00f54e (the base),
+    """`security/lean-audit.json` at 3be133850d (theirs), a branch whose `--update` ran on a tree based on 538c00f54e (the base),
     merged onto `next` at ab4de4a2d2 (ours).  The branch's tree prints two of `LiveCoinsDrawn`'s five premises, so its
     `--update` dropped the other three, renamed `Coins` texts that `next`'s tree still prints; premise by premise the merge
     applied the drop, and the merged lock failed `next`'s Lean check on all three.  `next` in turn re-keyed one of
@@ -720,9 +720,9 @@ def test_a_branch_regenerated_on_an_older_tree_keeps_the_inline_texts_next_still
         p.replace("Accounting.Op.oracle", "Accounting.OpClass.oracle") for p in gone[pouw]]
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
-    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
     err = capsys.readouterr().err.strip().splitlines()
-    assert err == [f"merge.py: Security/lean-audit.json: shape[inline][{live}][{p}] (kept): a shape.inline premise one "
+    assert err == [f"merge.py: security/lean-audit.json: shape[inline][{live}][{p}] (kept): a shape.inline premise one "
                    f"side dropped and the other, restating its guarantee, has as the base had it, kept; `check.py "
                    f"--update` drops it where the merged tree's premise no longer offends" for p in gone[live]]
     merged = json.loads((tmp_path / "ours").read_text())
@@ -865,10 +865,10 @@ def test_a_merge_that_loses_most_of_a_side_s_reads_groups_is_left_to_git_s_confl
     for n, d in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp_path / n).write_text(A.text(d))
     monkeypatch.setattr(M, "merge", lambda *a, **k: (collapsed, []))
-    assert M.main([*files, "Security/lean-audit.json"]) == 1
+    assert M.main([*files, "security/lean-audit.json"]) == 1
     assert "<<<<<<< ours\n" in (tmp_path / "ours").read_text()
     err = capsys.readouterr().err
-    assert err.startswith("merge.py: Security/lean-audit.json: the merged record loses most of a section") and \
+    assert err.startswith("merge.py: security/lean-audit.json: the merged record loses most of a section") and \
         "reads: the merge keeps 1 of ours' 41, losing 40 the base doesn't account for (M0001, M0002, M0003, ...)" in err, err
 
 
@@ -1060,7 +1060,7 @@ def test_a_branch_from_before_the_port_merges_as_its_codemod_rerun_would(tmp_pat
 
 
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
-    """`Security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
+    """`security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
@@ -1347,7 +1347,7 @@ def test_an_unwitnessed_entry_both_sides_changed_is_the_side_at_its_merged_recor
     sides = json.loads((FIXTURES / "unwitnessed-at-the-merged-record-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
-    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
     merged = json.loads((tmp_path / "ours").read_text())
     assert merged["unwitnessed"][V5] == sides["theirs"]["unwitnessed"][V5] != sides["ours"]["unwitnessed"][V5]
     assert merged["unwitnessed"][V5]["unfolded_hash"] == merged["guarantees"][V5]["unfolded_hash"]
@@ -1367,14 +1367,14 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
     assert sides["theirs"]["unwitnessed"][V5]["unfolded_hash"] != sides["theirs"]["guarantees"][V5]["unfolded_hash"]
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
-    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
+    assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "security/lean-audit.json"]) == 0
     assert json.loads((tmp_path / "ours").read_text())["unwitnessed"][V5] == sides["ours"]["unwitnessed"][V5]
-    assert (f"merge.py: Security/lean-audit.json: unwitnessed[{V5}] (ours, neither side at its merged record): kept as "
+    assert (f"merge.py: security/lean-audit.json: unwitnessed[{V5}] (ours, neither side at its merged record): kept as "
             "named; the Lean check of the merged tree judges it, and a stale entry fails there as a witness failure\n"
             in capsys.readouterr().err)
 
 
-SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",
@@ -1447,7 +1447,7 @@ def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_as_the_
     merges as the larger under theirs' comment."""
     inline = {SEC: 1422}
     base = packages({SEC: 354, PROPS: 184}, inline)
-    new = '\n\n#: the spec\'s theorems\nSPEC_THEOREMS = {"Security": 154}\n'
+    new = '\n\n#: the spec\'s theorems\nSPEC_THEOREMS = {"security": 154}\n'
     ours, theirs = packages({SEC: 355, PROPS: 184}, inline, above="ours"), packages({SEC: 380, PROPS: 185}, inline, above="theirs")
     assert _caps(tmp_path, base, ours, theirs + new) == (packages({SEC: 380, PROPS: 185}, inline, above="theirs") + new, 0)
     assert _caps(tmp_path, base, ours + new, theirs) == (packages({SEC: 380, PROPS: 185}, inline, above="theirs") + new, 0)
@@ -1466,7 +1466,7 @@ def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_co
 
 
 def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_below_its_count(tmp_path, capsys):
-    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and a PR,
+    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["security"]` from 331 to 311, its count then, and a PR,
     from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged cap was 287 against a
     merged count of 305, since what the two lowerings dropped overlapped, and every PR on it failed `grew`. As the larger,
     311 holds the count, and the lock run lowers it to the count and its room."""
