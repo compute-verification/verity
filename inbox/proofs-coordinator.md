@@ -79528,3 +79528,44 @@ My 08:27Z entry promised one entry when the three had ended. I write two of them
 - Against lean's branch (`a88eee998fa2` at 08:42Z) the merge stops on the same five files as at 07:37Z, and all five are `main`'s own: lean's branch stops on each of them against `main` `19fb19a21e40` alone, among twelve, and #9087 changes none of the five. [run] They are `adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`, `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py` and `verity/protocols/poub/verifier/PROTOCOL.md`. [run]
 - Both mailbox files read at 08:43Z: nothing newer than 07:40Z and 05:31Z. [run]
 - The ready line follows when `12f8` ends: its verdict into #9087's body, both merge-trees once more, then the line. [read: your order]
+
+## WIDEZK, Thu 12 Nov 08:50Z: the importers are built at `6160c59e6c22`: 57 modules in 12 packages pass (`8a03`, exit 0); 9 of 10 scripts compile and the tenth fails on `main` too, not this change's (`bae3`); one more module is out (`512f`, about 09:10Z); no records run launched
+
+**The count is 69, not 67.** WRONG, mine, in my 08:15Z entry: "67 unchanged Lean files in other packages". Two were missing.
+
+- At `6160c59e6c22`, 287 unchanged Lean files outside `security/` import a file this change changes [read: the import graph over the head's headers, `tools/widezk_importers.py.txt` in the lane's notes].
+- 142 are modules of the verifier's package and the certifier's, which `ad5b`'s two passing package checks compiled: the check builds a package's default targets and then every root of its lock [read: `tools/verity/lean/check.py:5558-5561`].
+- 76 are modules of the 12 packages below that some module of `security/Proofs` imports, so the records run compiles them [read: the graph].
+- 69 no run had compiled: 57 modules of those 12 packages, 11 scripts in no Lake package, and one module of the verifier's package that its lock exempts.
+- The two I had left out: `verity/protocols/recursion/verifier/recursive/VStarRecursive.lean` (only the twenty modules `ad5b` never reached import it, and I had counted all of `security/Proofs` as built; `00fa` builds it as an import, I built it too), and `verity/protocols/flock/verifier/Flock/Test/RecCap.lean` (exempt at `verity/protocols/flock/verifier/lean-audit.json:99`, in no default target, so the verifier's own passing check never compiles it; it reads seven changed files, `Flock/RecCoins.lean` and `Flock/Zk.lean` among them, and its `#guard`s evaluate the repetitions' schedule at m 22 to 35; the suite compiles it only after landing, `verity/protocols/flock/prover/tests/test_lean_rec_cap_guards.py`) [read].
+
+**The three runs, all at `6160c59e6c22`, each placed by `--on auto`, 32 GB, limit 120 min (the tool's README line, `tools/verity/lean/README.md:53`).**
+
+1. `r20261112-083358-8a03` (vy-nebius-cpu-12; launched 08:33:58Z, slot at 08:37:55Z, ended 08:44:47Z, **exit 0**): `python3 tools/verity/lean/lean_changed.py --build` with the 57 files named, `--cwd source`. Its last line: `built` has all 12 packages at 0, `failed` is `{}`, `skipped` is `{}` [run `r20261112-083358-8a03`, `stdout.log`]. The packages and the count in each:
+   - `verity/protocols/pous/verifier/check` 10
+   - `verity/protocols/pous/device/lean` 9
+   - `verity/protocols/spot/verifier/lean` 9
+   - `verity/protocols/pouw/verifier/lean/check` 7
+   - `verity/protocols/poub/verifier/lean` 4
+   - `verity/protocols/recursion/verifier/vstar_cli` 4
+   - `verity/protocols/pouw/verifier/lean/commit` 3
+   - `verity/protocols/pouw/verifier/lean/window` 3
+   - `verity/protocols/recursion/verifier/firewall` 3
+   - `verity/protocols/onsite/verifier` 2
+   - `verity/protocols/recursion/verifier/recursive` 2
+   - `verity/protocols/remote/verifier` 1
+2. `r20261112-083555-bae3` (vy-nebius-cpu-13; launched 08:35:55Z, slot at 08:38:06Z, ended 08:44:10Z, **exit 1**): the 10 scripts that import no `security/` module. `lean_changed.py --build` skips a file outside a Lake package with a lock [read: `lean_changed.py:1716-1718`], so this run builds in its own clone: `lake build` of the verifier's library with the nine modules the scripts import by name (185 jobs, exit 0) and of the sampled proof system's library (248 jobs, exit 0), then `lake env lean` on each script [run `r20261112-083555-bae3`, `stdout.log`, `out/`].
+   - Nine elaborate with no error: `benchmarks/verifier_cost/{flock_read,flock_served,flock_tmpl,registration,table_root}/Main.lean` and `verity/protocols/flock/prover/tests/lean/{InnerClaims,InnerFold,TmplUnit,TypedRowsPart}.lean` [run].
+   - The tenth fails: `benchmarks/verifier_cost/whole_run/Main.lean:86:6: error: Type mismatch`: it calls `rule.over n`, one argument short of `Select.Rule.over : Rule → Nat → List Nat → Option Rule` (`verity/protocols/spot/verifier/lean/Spot/Select.lean:235`) [run, `out/benchmarks_verifier_cost_whole_run_Main.lean.log`].
+   - It is not this change's and it fails on `main` as it is: that definition and line 86 are the same at the merge base `62bf29346f76` and at `main` `bcaf58a45d53`, and #9108 changes neither file [read: `git show` of both files at both commits; `git diff --stat` of the two directories].
+   - It stops nothing in the queue: the script is no task of `verity graph`'s listing and only `benchmarks/verifier_cost/whole_run.sh` builds it [read]. I change nothing: the file is outside my directories. It is the benchmark's owner's to mend, one argument at line 86 (`Run.lean:246` passes `Select.strataSizes v.program v.query`) [read].
+   - Not shown: Lean elaborated the lines after 86 of that definition against a term in error, so this run does not show them clean under this change. By grep the file names none of the names #9108 changes [read].
+3. `r20261112-083913-512f` (vy-nebius-cpu-8; launched 08:39:13Z, slot at 08:44:33Z, running at 08:50Z): `lean_changed.py --build verity/protocols/flock/verifier/Flock/Test/RecCap.lean`, `--cwd source`. **ETA about 09:10Z** [guess: the lock's reason gives 1,097 to 1,246 s for this module on a check node].
+
+**The one that imports `security/Proofs`:** `benchmarks/two_stage/tests/TwoGuard.lean` (`Proofs.Flock.SpotFlock.Code`, `Proofs.Flock.SamplingGeneric.TwoAt`) [read: the graph, the file's lines 1-2]. None of the 57 modules and none of the other 10 scripts imports anything under `security/` [read: the graph]. I left it out. The records run compiles the two modules it imports, not the script: no check compiles it, its test is opt-in (`VERITY_TWO_STAGE_GUARD`) and its own build is `benchmarks/two_stage/tests/guard_node.py` on a node [read]. If you want it compiled after the records run passes, say so: one small run.
+
+**Listing the importers by tool (your question):** yes for every module, by no flag: `verity graph --json --family lean-module` lists each module with the modules its compile reads (`reads`), from the headers as Lean reads them, with no build (21 s on my VM); I took the changed files' importers as the reverse closure over `reads`. It gives 275 unchanged modules outside `security/`, every one of them in my graph's 287 [read: the listing at `6160c59e6c22`]. The 12 it lacks are the 11 scripts and `Flock/Test/RecCap.lean`, none of them a task of the listing: those are the files only a search by hand finds. `lean_changed.py` has no listing: `--build` compiles the named files and what they import, `--records` goes by package (`requirers`) [read: its docstring and `build_files`].
+
+**Standing.** My head is `6160c59e6c22`, pushed, unchanged; #9108's head is `8428b506e6b9` at 08:42Z; the mailbox's newest section is 08:05Z at 08:42Z [read]. No records run is out. I launch it at `6160c59e6c22` on your line that `00fa` passed. My VM was reset before this turn; I restored my tools from the lane's notes and fetched the runs again.
+
+Evidence: `/opt/cursor/artifacts/widezk-importers-builds.log` (each package's `lean-build:` lines of `8a03`, `bae3`'s output and its one error), `widezk-importers-6160c59e6c.json` (the 69 by package).
