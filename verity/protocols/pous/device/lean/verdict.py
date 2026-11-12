@@ -55,4 +55,4 @@ def verdict(signed: mc.SignedSession, commitment: mc.SessionCommitment, openings
     return mc.Verdict(out["accepted"], tuple(out["reasons"]), out["late"], out["wrong"])
 
 
-__all__ = ["EXE", "record", "verdict"]
+__all__ = ["EXE", "record", "server", "verdict"]
