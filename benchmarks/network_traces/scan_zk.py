@@ -62,7 +62,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
   unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
-  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
+  one-stage partition or reads (`registered.reads`) aren't the members'. A member's statement's input set is its
+  template's (`set_of`), naming no round and no link-window, so its frame domains are its template's and its unit
+  count's in every round. Ingress unit t reads ``row`` (the warden's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
   `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
@@ -382,6 +384,20 @@ def block_binding(set_name: str, n: int) -> bytes:
     committed under the same salts, since both are ``hm96-sha512/row/v2`` leaves of owner −1 over ranks 0 … n."""
     return identity_digest_sha512(FRAME_BINDING, {"set": set_name, "lo": 0, "hi": int(n), "port": "o0",
                                                   "schema": BitRowLeaf.hiding_schema})
+
+
+def set_of(template: str) -> str:
+    """A scan template's statements' input set, which their frame domains bind (`frame_domain`): the template's alone,
+    naming no round and no link-window, so a member's frame domains are its template's and its unit count's, the same
+    in every round and in every link-window of a group. The block's is its run's (`block_set`)."""
+    return f"unit-scan-{template}"
+
+
+def frame_domain(set_name: str, n: int) -> bytes:
+    """The o0 frame domain of a statement of ``n`` units of input set ``set_name``, its o0 a row/v2 row: the domain of
+    `block_binding`'s binding over ranks 0 … n, a function of the set and the count, which `stage` holds each
+    member's staged o0 domain to."""
+    return ADV.domain(block_binding(set_name, n), n).domain_id
 
 
 def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Committed:
@@ -732,7 +748,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     group's last unit's none (its o1 a fresh salt's, `stage`). The block's unit k reads ``x``, slot entry k, its free
     input, read at its own root once staged (`own_rows`), and its o0, that entry, is a registered read of `prog`'s
     leaf k, no public word
-    (``outputs`` None); its statement's input set is ``set_name`` (`block_set`)."""
+    (``outputs`` None). A member's statement's input set is ``set_name``: the block's its run's (`block_set`), every
+    other member's its template's (`set_of`)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
     rows = [b - w * T for b in bs]
@@ -790,7 +807,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                            units=units, made=made, salts=salts, entries=entries, ports=ports, bcs=bcs, refused=refused,
                            refs={p: r for p, r in refs.items() if r != list(range(len(bs)))}, outputs=outputs,
                            changed=changed, warden={p: s.registration for p, s in warden.items()},
-                           set_name=at.block_set if tp == "block" else None)
+                           set_name=at.block_set if tp == "block" else set_of(tp))
 
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
@@ -997,7 +1014,9 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     which names every port. Its outputs are
     the references' (o0 every unit's where it is public, each output row where the reference gives one), and each
     row's b‖c the one the host read. The block's o0 frame root and domain must be the `prog` tree's: the scan reads
-    the slot entries only where they are one tree. Its ports in the registration are ``at``'s (`port_prefix`)."""
+    the slot entries only where they are one tree. Its ports in the registration are ``at``'s (`port_prefix`). Its
+    input set is the member's (``mr.set_name``), and its o0's frame domain must be that set's over its units
+    (`frame_domain`): the same in every round, where the set names none."""
     t0 = time.time()
     sg = pg.stagers[mr.template]
     st, n = sg.st, mr.n
@@ -1008,7 +1027,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
                              dtype=M.np.uint16) for k, (r, _b) in enumerate(sg.ins)}
     refs = {r: mr.refs.get(r, list(range(n))) for r in words}
     tables = {r: x[[refs[r].index(i) for i in range(max(refs[r]) + 1)]] for r, x in words.items()}
-    set_name = mr.set_name or f"{st.iset.name}-{mr.round}-{mr.window}"
+    set_name = mr.set_name
     salts = {"o0": [os.urandom(WR.SALT_BYTES) for _ in range(n)], **mr.salts}
     got = st.stage(words, out, os.urandom(32), salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
                    tables=tables, refs=refs, registered=mr.entries)
@@ -1040,6 +1059,9 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
                                                                                  mr.ports["o0"]["domain"]):
         raise SystemExit(f"{mr.round}/{mr.name}: its o0's frame root and domain are not the prog tree's: the tree's "
                          f"binding is not the o0 domain's (block_binding, FRAME_BINDING)")
+    if fv["domain_ids"]["o0"] != frame_domain(set_name, n).hex():
+        raise SystemExit(f"{mr.round}/{mr.name}: its o0's frame domain is not its input set {set_name}'s over its {n} "
+                         f"units (frame_domain): the statement's binding is not block_binding's")
     m["bcs"] = shared_bcs(out / f"pub-{n}.bin", st.ports)
     if any(bc is not None and m["bcs"][i][p] != bc for p, col in mr.bcs.items() for i, bc in enumerate(col)):
         raise SystemExit(f"{mr.round}/{mr.name}: a staged row's b‖c isn't the one the host read")
