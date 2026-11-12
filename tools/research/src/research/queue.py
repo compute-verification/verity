@@ -3,7 +3,7 @@ PRs ready to land (marked ready at their heads, with a reviewer's land verdict o
 `lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
 gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
 `main`'s reds only shrink.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
-candidate is built again without them.
+candidate and those above it are built again without them in the same tick.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
