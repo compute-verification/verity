@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
+SW = importlib.import_module("stop_words")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("a5_coins")
 
@@ -414,9 +415,10 @@ def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_inte
 def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_like_any_other():
     """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
     names those, its first stage registers their record and samples its spans, and its stop word, the stop record's
-    port, is no value of this stream. Its spans set ``ignore_eos``, so the stop id one of them serves ends none."""
+    port, is no value of this stream. Each span ends at its ``max_tokens`` and sets no ``ignore_eos``, which no stop
+    block reads."""
     stop = BS.Stop((3,), 64, 4)
-    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), {**GREEDY, "ignore_eos": False}, (7, 8, 9, 9), "length") for i in range(N)]
     c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
@@ -437,6 +439,18 @@ def _stop_class(held: bool = True) -> BR.Committed:
     ends = [((7, 8, 3), "stop"), ((7, 8, 9, 9), "length")] if held else [((7, 8), "abort")]
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), sampling, *ends[i % len(ends)]) for i in range(N)]
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
+
+
+def _certified(spans: tuple[BR.Span, ...], out: Path, max_tokens: dict[int, int] | None = None) -> dict[str, Path]:
+    """A stand-in network certifier's files of a class of ``spans``' words table under ``out`` (`stop_words.sign`), its
+    key the fixture's. ``max_tokens``: by span, where the certifier released another than the engine served."""
+    out.mkdir(parents=True, exist_ok=True)
+    return SW.sign(SW.certifier(out / "signer-state.json"), spans, 0, out, max_tokens=max_tokens)
+
+
+def _port(files: dict[str, Path]) -> dict:
+    """The verifier's port of the class's words table, read from the certifier's signed head under its copy of the key."""
+    return SW.port_of(files["words"], files["certifier"])
 
 
 class OneSession(FC.Challenger):
@@ -490,31 +504,46 @@ def _args(tmp_path: Path, **more: object) -> NS:
                  "stop_design": None, **more})
 
 
-def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sampled_on_a_stream_of_their_own():
+def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sampled_on_a_stream_of_their_own(tmp_path):
     """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
     whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
-    record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
-    coins opened after its own registration's digest. Refused: a boundary record that is another class's, another
-    rule than the commitment's, and a sampling design that is a fixed count."""
-    pub = json.loads(json.dumps(_stop_class().public()))
+    record's `b.egress` as an output value and the class's certified words table, a registered value of the stream's
+    Spec under the root the verifier read in the network certifier's signed head. It is sampled at a rate over the
+    class's N stop blocks on coins opened after its own registration's digest. Refused: a boundary record that is
+    another class's, another rule than the commitment's, a sampling design that is a fixed count, and, each under its
+    own key, a class with no certified words and a table of another count of rows than the class's stop blocks."""
+    c = _stop_class()
+    pub = json.loads(json.dumps(c.public()))
+    words = _port(_certified(c.spans, tmp_path / "certifier"))
     got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), stop=STOP)
     coins = FC.Challenger("stop")
-    s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
+    s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record, words)
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
-    assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
+    registered = {e["value"]: e for e in s["record"]["registered"]}
+    assert sorted(registered) == sorted([*BS.STOP_READS, words["value"]])
+    assert (registered[words["value"]]["root"], registered[words["value"]]["leaves"]) == (words["root"], N)
     assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
     assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
-    assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
+    spec = TS.stop_spec(got.layout, f"rate:{Q}/{N}", words["value"])
+    assert s["spec"] == spec.digest() != got.stream.spec.digest()
+    assert [(v.name, v.registered) for v in spec.values if v.registered] == [(words["value"], True)]
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
     assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, after, read, AC.lms_verify) is None
     other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
     with pytest.raises(ValueError, match="not this commitment's values"):
-        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
+        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record, words)
     with pytest.raises(ValueError, match="not the verifier's own"):
-        TS.stop_first(pub, PAIR, BS.Stop((7,), 64, 4), f"rate:{Q}/{N}", FC.Challenger("y"), got.record)
+        TS.stop_first(pub, PAIR, BS.Stop((7,), 64, 4), f"rate:{Q}/{N}", FC.Challenger("y"), got.record, words)
     with pytest.raises(ValueError, match="a fixed count samples each proof block with K/N"):
-        TS.stop_first(pub, PAIR, STOP, "subset:2", FC.Challenger("z"), got.record)
+        TS.stop_first(pub, PAIR, STOP, "subset:2", FC.Challenger("z"), got.record, words)
+    with pytest.raises(BS.StopRefused, match=f"^{BS.UNCERTIFIED}: ") as e:
+        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("u"), got.record, None)
+    assert e.value.key == BS.UNCERTIFIED
+    with pytest.raises(BS.StopRefused, match=f"^{BS.COUNT}: ") as e:
+        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("v"), got.record,
+                      _port(_certified(c.spans[:N - 1], tmp_path / "short")))
+    assert e.value.key == BS.COUNT
 
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
@@ -559,15 +588,21 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
     ranks, the stop class's stop blocks the third, registered and sampled after its first stage at the rate given (the
     first stage's when none is), and its order held by the session's signed log. A stop sample whose order does not
     hold refuses every class of the window, each by name, with no sample handed on. A stop class whose stop blocks
-    register nothing is refused itself and the other class goes on. A stop class that cannot plan its stop sample (a
+    register nothing is refused itself and the other class goes on, as is one the verifier holds no certified words
+    for, under that refusal's key. A stop class that cannot plan its stop sample (a
     sampling design that is no rate; a verifier holding no rule) refuses the window's whole first stage, and no
     session opens. The sessions here are what no cheaper test has: the ranks' turns on one session and its log's
     order."""
-    pubs = [json.loads(json.dumps(_stop_class(held).public())) for held in (True, False)]
+    classes = [_stop_class(held) for held in (True, False)]
+    pubs = [json.loads(json.dumps(c.public())) for c in classes]
+    port = _port(_certified(classes[0].spans, tmp_path / "certifier"))
 
-    def run(seed: str, stop: BS.Stop | None = STOP, **more: object) -> list[dict]:
+    def certified(k: int) -> dict | None:
+        return port if k == 0 else None
+
+    def run(seed: str, stop: BS.Stop | None = STOP, words: object = certified, **more: object) -> list[dict]:
         monkeypatch.setattr(AC, "start", _start(OneSession(seed)))
-        return TS._first_all(_args(tmp_path, **more), pubs, PAIR, RULE, None, stop)
+        return TS._first_all(_args(tmp_path, **more), pubs, PAIR, RULE, None, stop, words)
 
     stopped, plain = run("window", stop_design=f"rate:1/{N}")
     assert len(stopped["units"]) == len(plain["units"]) == Q and "stop" not in plain
@@ -595,6 +630,10 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
         stopped, plain = run("unregistered")
     assert stopped["refused"] == [TS.STOP_REFUSED] and "units" not in stopped and "no stop record" in stopped["error"]
     assert len(plain["units"]) == Q
+
+    stopped, plain = run("uncertified", words=None)
+    assert stopped["refused"] == [TS.STOP_REFUSED] and "units" not in stopped and len(plain["units"]) == Q
+    assert stopped["stop"]["refused"] == [BS.UNCERTIFIED] and f"{BS.UNCERTIFIED}: " in stopped["error"]
 
     stopped, plain = run("no-rate", stop_design="subset:2")
     assert "units" not in stopped and "units" not in plain and "session was not opened" in plain["session"]["error"]

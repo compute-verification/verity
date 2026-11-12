@@ -22,12 +22,17 @@ gives its outcome (`prove`, `outcome_of`).
   names another rule, or names one where the verifier holds none, is refused: the serve chooses neither.
 * **The stop blocks** (a stop class's, `stop_first`): a population of their own, one a span, on a one-stage stream of
   the stop block (`stop_spec`) whose log starts with the class's boundary record. After the class's first stage its
-  stop record (`boundary_stop.stop_record`) is registered, its inputs that record's ``b.request`` and ``b.egress`` as
-  output values, and sampled once at ``--stop-design`` (a rate over the class's stop blocks; the first stage's unless
-  given) on a rank of its own in the same session. The sample is the hand-off's ``stop``; no proof of a sampled stop
-  block is built here. A stop class whose stop blocks cannot plan their sample refuses the window's whole first stage,
-  as any rank that cannot; one whose stop blocks then register or sample nothing is refused itself (``stop-stage``):
-  a stop class is audited with its stop blocks or not at all.
+  stop record (`boundary_stop.stop_record`) is registered, its inputs that record's ``b.egress`` as an output value
+  and the class's certified words table, and sampled once at ``--stop-design`` (a rate over the class's stop blocks;
+  the first stage's unless given) on a rank of its own in the same session. The sample is the hand-off's ``stop``; no
+  proof of a sampled stop block is built here. A stop class whose stop blocks cannot plan their sample refuses the
+  window's whole first stage, as any rank that cannot; one whose stop blocks then register or sample nothing is
+  refused itself (``stop-stage``): a stop class is audited with its stop blocks or not at all.
+* **The certified words** (``--words``, ``--certifier``): each stop class's words table as the network certifier
+  signed it, read under the verifier's own copy of the certifier's key (`stop_words.read`). The stop record registers
+  the table under the root that read gives, as a certified value (R7), so a request's ``max_tokens`` and count of
+  prompt ids reach its stop block from the certifier and never from the serve. A stop class handed no table, or a head
+  that lists none for it, has no certified words and is refused (``stop-uncertified``).
 * **The order** (`stop_order`, once the session has closed): read from the challenger's signed log as the session
   published it, never from a prover's file. Every coin a stop sample read was released after the challenger received
   the stop registration, and the class's boundary registration's coins come before them. A window where one stop
@@ -80,7 +85,7 @@ Usage::
 
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K|COUNTS.json \\
         --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
-        [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]]
+        [--proof-deadline S] [--stop RULE --words WORDS.json|- [...] --certifier CERTIFIER.json [--stop-design rate:NUM/DEN]]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
         [--unlinked] [--stop RULE]
@@ -92,7 +97,8 @@ registration registers as values, ``[[name, rows a sampled span, leaf type], ...
 REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
 id, where they differ; RULE the stop rule as JSON, ``{"ids": [...], "max_model_len": n, "outputs": T}``
-(`boundary_stop.Stop.of`). ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
+(`boundary_stop.Stop.of`); WORDS.json a class's signed head of its words table, one a DIR in their order (``-``: none),
+and CERTIFIER.json the verifier's own copy of the network certifier (`stop_words`). ``second`` writes under OUT2 the interior window (``interior/``, its private files too), the
 params (``proofs.json``, ``references/``), a5's records (``audit/``), the sessions' statements (``statements.json``),
 its challenger session's records (``challenger/``), both stages' coin evidence (``coins.json``) and ``summary.json``;
 it exits 0 when the second stage held (`held`). A ``local`` session's challenger reads its coins through
@@ -378,40 +384,46 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     return First(dict(pub), rule, layout, stream, dict(stage1["record"]), reg, draw, coins, bytes.fromhex(stage1["read"]))
 
 
-def stop_spec(layout: BR.Layout, design: str, proof_deadline: float = PROOF_DEADLINE_S) -> S.Spec:
-    """A stop class's stop population's Spec: its one committed value `b.stop`, the stop blocks' outputs; the block's
-    parameters (`boundary_stop.STOP_READS`) as registered values, the class's boundary record's rows; the one-stage
-    sampling design ``design``, a rate over the class's stop blocks; and the check, the verifier's stop block's program
-    and its instances."""
+def stop_spec(layout: BR.Layout, design: str, words: str, proof_deadline: float = PROOF_DEADLINE_S) -> S.Spec:
+    """A stop class's stop population's Spec: its one committed value `b.stop`, the stop blocks' outputs; its registered
+    values, the block's parameter that is the class's boundary record's rows (`boundary_stop.STOP_READS`) and the
+    class's certified words table, the value ``words``; the one-stage sampling design ``design``, a rate over the
+    class's stop blocks; and the check, the verifier's stop block's program and its instances."""
     block = layout.stop.template
     public = (S.Public("population", "structure", "the stop class's spans N, one stop block each"),
               S.Public("window", "structure", "provenance: the class's boundary record's window, named the stop population's"),
               *(S.Public(f"{k}:{BR.STOP}", "structure", f"{BR.STOP}'s {k}, from the class and its spans")
                 for k in ("leaves", "domain")),
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}: the boundary record's {port} rows, from the class and its spans")
-                for v, port in BS.STOP_READS.items() for k in ("leaves", "words", "domain", "word_bits")))
-    values = (S.Value(BR.STOP, BR.SCHEMA, "serve"), *(S.Value(v, None, "serve", registered=True) for v in BS.STOP_READS))
+                for v, port in BS.STOP_READS.items() for k in ("leaves", "words", "domain", "word_bits")),
+              *(S.Public(f"{k}:{words}", "structure", f"the certified words table's {k}, from the head the network "
+                                                      f"certifier signed") for k in ("leaves", "words", "domain")))
+    values = (S.Value(BR.STOP, BR.SCHEMA, "serve"),
+              *(S.Value(v, None, "serve", registered=True) for v in (*BS.STOP_READS, words)))
     check = S.Check(P.program_digest(Program(block)), P.template_instance_query(block), proof_deadline=proof_deadline)
     return S.Spec(values, S.Law(design), check, public, f"{BR.FORMAT}\0{layout.run}\0{BR.STOP}".encode())
 
 
 def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str,
-               coins: CC.ChallengerCoins, boundary: Mapping[str, Any], *, delta: float = 0.5,
-               window_root: str | None = None, proof_deadline: float = PROOF_DEADLINE_S) -> dict[str, Any]:
+               coins: CC.ChallengerCoins, boundary: Mapping[str, Any], words: Mapping[str, Any] | None, *,
+               delta: float = 0.5, window_root: str | None = None,
+               proof_deadline: float = PROOF_DEADLINE_S) -> dict[str, Any]:
     """A stop class's stop blocks, registered and sampled once on ``coins`` after the class's first stage: a one-stage
     stream of the verifier's stop block (`stop_spec`) whose log starts with the class's boundary record ``boundary``,
     as the challenger logged it; the stop record (`boundary_stop.stop_record`, at ``design`` over the class's spans)
-    registered on it, its inputs that record's ports as output values; the coins committed to the registration's
-    digest; and the sample. The hand-off's ``stop``: the Spec's digest, the sampling design, the record, its
-    registration's digest and receipt, the sample and the bytes it read. Raises `service.Refused` as the stream does,
-    and ValueError where the class is no stop class of ``stop`` or ``boundary`` isn't its record."""
+    registered on it, its inputs that record's port as an output value and the class's certified words table
+    (``words``, the verifier's own port of it: `boundary_stop.certified`) as a certified value; the coins committed to
+    the registration's digest; and the sample. The hand-off's ``stop``: the Spec's digest, the sampling design, the
+    record, its registration's digest and receipt, the sample and the bytes it read. Raises `service.Refused` as the
+    stream does, ValueError where the class is no stop class of ``stop`` or ``boundary`` isn't its record, and
+    `boundary_stop.StopRefused` where the class has no certified words or the table isn't the class's."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
-    stream = S.Stream(stop_spec(layout, design, proof_deadline), stop.template, budget=1, delta=delta,
+    held = BS.stop_registration(pub, check, stop, boundary, words)
+    stream = S.Stream(stop_spec(layout, design, held.table, proof_deadline), stop.template, budget=1, delta=delta,
                       challenger=CHALLENGER, coins=coins, log=[boundary])
-    held = BS.stop_registration(pub, check, stop, boundary)
-    rec = BS.stop_record(pub, check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
-    reg = stream.register(rec, layout.stop_ports(), registered=held.values, outputs=held.outputs, schemas=held.schemas,
+    rec = BS.stop_record(pub, check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary, words)
+    reg = stream.register(rec, layout.stop_ports(), **held.copies(),
                           **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
     sample = stream.select(reg)
@@ -883,12 +895,15 @@ def _refusal(pub: Mapping[str, Any], e: Exception) -> dict[str, Any]:
 
 
 def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefinition, rule: Rule | None,
-               window: Mapping[str, Any] | None, stop: BS.Stop | None = None) -> list[dict]:
+               window: Mapping[str, Any] | None, stop: BS.Stop | None = None,
+               words: Callable[[int], Mapping[str, Any] | None] | None = None) -> list[dict]:
     """Every class's first stage on one challenger session over the window's run, each class a rank on a thread of its own
     (`a5_coins.Draws`: the session opens once every rank has planned): each class's ``stage1.json`` contents, or why it
     sampled nothing. ``rule``: every class's, or None for each class's own from its replay block (`rule_of`). ``stop``:
     the verifier's own stop rule. A stop class's stop blocks are a rank more of the session (`stop_first`), planned
-    with the class's own and sampled on the class's thread after its first stage: its ``stop``. Once the session has
+    with the class's own and sampled on the class's thread after its first stage: its ``stop``. ``words``: by class,
+    the verifier's own port of the class's certified words table, None where it has none (`stop_words.read`; ValueError
+    for a head that is not the certifier's). Once the session has
     closed, each stop sample's order is read from the challenger's signed log (`stop_order`), and a window where one
     does not hold is refused whole."""
     import a5_coins as AC
@@ -939,10 +954,12 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                 raise unplanned[0]
             if "units" not in out[k]:
                 raise ValueError(f"the class's first stage sampled nothing: {out[k].get('error')}")
-            mine_stop = stop_first(pubs[k], check, stop, stop_design, blocks, out[k]["record"], delta=a.delta,
-                                   window_root=root, proof_deadline=a.proof_deadline)
+            mine_stop = stop_first(pubs[k], check, stop, stop_design, blocks, out[k]["record"],
+                                   None if words is None else words(k), delta=a.delta, window_root=root,
+                                   proof_deadline=a.proof_deadline)
         except caught as e:
-            mine_stop = {"refused": getattr(getattr(e, "verdict", None), "codes", None), "error": f"{type(e).__name__}: {e}"}
+            codes = [e.key] if isinstance(e, BS.StopRefused) else getattr(getattr(e, "verdict", None), "codes", None)
+            mine_stop = {"refused": codes, "error": f"{type(e).__name__}: {e}"}
         finally:
             mine_stop["segment"] = blocks.drawn()
             turns.skip(stops[k])
@@ -1086,6 +1103,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--stop", help=STOP_HELP)
     f.add_argument("--stop-design", help="the sampling design over a stop class's stop blocks, one a span: a rate, as "
                                          "--replay is; without it, --replay's")
+    f.add_argument("--words", nargs="+", help="each class's signed head of its certified words table, in --boundary's "
+                                              "order (stop_words.py: words.json; -: the class has none); without it a "
+                                              "stop class has no certified words and registers no stop record")
+    f.add_argument("--certifier", help="the verifier's own copy of the network certifier's key, session and schedule "
+                                       "(stop_words.py: certifier.json), under which --words is read")
     f.add_argument("--delta", type=float, default=0.5)
     f.add_argument("--challenger", required=True, help="local, loopback:HOST:PORT or gate:USER@HOST (a5_coins.start)")
     f.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`, a file")
@@ -1127,6 +1149,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--span-values is the rule's that --interior gives: without --interior each class's rule is its replay block's")
     if a.stop_design and not a.stop:
         ap.error("--stop-design is the sampling design over the stop blocks of the rule --stop gives")
+    if a.words and (not a.stop or not a.certifier or len(a.words) != len(a.boundary)):
+        ap.error("--words: one a class of --boundary, in its order, for the stop blocks of the rule --stop gives, "
+                 "read under --certifier")
     pubs = [json.loads((Path(d) / BR.COMMIT).read_text()) for d in a.boundary]
     if len({(p["run"], p["window"]) for p in pubs}) != 1:
         ap.error("--boundary: every class of one window (one run and window index)")
@@ -1147,7 +1172,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.replay, a.k, tuple((str(n), str(s)) for n, s in json.loads(Path(a.interior).read_text())),
         a.proof_deadline, _span_values(json.loads(Path(a.span_values).read_text())) if a.span_values else ())
     out = Path(a.out)
-    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, stop), strict=True):
+
+    def words(k: int) -> Mapping[str, Any] | None:
+        import stop_words as SW
+
+        return None if not a.words or a.words[k] == "-" else SW.port_of(a.words[k], a.certifier)
+
+    for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, stop, words), strict=True):
         dest = out / Path(d).name
         dest.mkdir(parents=True, exist_ok=True)
         (dest / STAGE1).write_text(json.dumps(s, indent=1) + "\n")
