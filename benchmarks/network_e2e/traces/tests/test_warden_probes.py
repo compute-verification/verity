@@ -104,9 +104,9 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
                                         "close": [1.0, 0.5]}
 
 
-def test_a_probe_given_no_clock_reads_the_wardens_own(tmp_path, mod, monkeypatch):
-    """A probe's times are laid against the warden's origin, a reading of its host's raw clock: with no clock given,
-    the warden's probe, its collections and the publisher's keeps each read that clock, by its clock id."""
+def test_a_probe_given_no_clock_reads_the_network_certifiers_own(tmp_path, mod, monkeypatch):
+    """A probe's times are laid against the network certifier's origin, a reading of its host's raw clock: with no
+    clock given, the probe, its collections and the publisher's keeps each read that clock, by its clock id."""
     probe_mod = mod("warden_probe")
     from verity.protocols.certifier.verifier import pacer
 
