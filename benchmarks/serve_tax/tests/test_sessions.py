@@ -262,6 +262,17 @@ def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_ours_
     seeds = [S.user_seed(f"agentic@4-r{r}-u{j}") for r in (1, 2) for j in range(4)]
     assert len(set(seeds)) == 8 and all(0 <= x < 2 ** 63 for x in seeds)
     assert seeds[0] == int.from_bytes(hashlib.sha512(b"serve-tax/user-seed/v1/" + user.encode()).digest()[:8], "big") >> 1
+    # and its server lifetime's: the users' names repeat in every lifetime, and under one seed the arm's lifetimes
+    # would serve one sample of text, whose chance no interval over the lifetimes holds
+    lives = [S.user_seed(user, k) for k in (None, 1, 2, 3)]
+    assert len(set(lives)) == 4 and lives[0] == seeds[0] and all(0 <= x < 2 ** 63 for x in lives)
+    assert lives[2] == int.from_bytes(hashlib.sha512(b"serve-tax/user-seed/v1/" + user.encode() + b"/lifetime-2")
+                                      .digest()[:8], "big") >> 1
+    second = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True,
+                          seeded=True, lifetime=2)
+    assert json.loads(second[at + 5]) == {"user": user, "seed": lives[2]} and second[:at + 5] == argv[:at + 5]
+    assert S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True,
+                        lifetime=2) == stock
     # each user's client names its own user
     (tmp_path / "tmp").mkdir()
     monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
@@ -276,6 +287,11 @@ def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_ours_
     S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1", dataset=whole, prompts=3,
                   sampled=True, seeded=True, run=run, clock=lambda: 0.0, now=lambda: 0.0)
     assert sorted(bodies, key=lambda b: b["user"]) == [{"user": u, "seed": S.user_seed(u)}
+                                                       for u in ("agentic@2-r1-u0", "agentic@2-r1-u1")]
+    del bodies[:]
+    S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1-life-3", dataset=whole, prompts=3,
+                  sampled=True, seeded=True, lifetime=3, run=run, clock=lambda: 0.0, now=lambda: 0.0)
+    assert sorted(bodies, key=lambda b: b["user"]) == [{"user": u, "seed": S.user_seed(u, 3)}
                                                        for u in ("agentic@2-r1-u0", "agentic@2-r1-u1")]
     del bodies[:]
     S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1-stock", dataset=whole, prompts=3,
