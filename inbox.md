@@ -132,3 +132,14 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 6:52 AM PST. **NET-366
 
 **Next, for your mark of #9290:** `baseline.json` locked to this run, `main` merged in, the changed suites once at the final head, the body. Then the head and the run.
 
+[2026-11-12T14:51Z] 4b1a4e093acc
+ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 6:51 AM PT.
+
+**The onsite head's suites: 7 of 8 passed; the eighth, `repository`, has 4 failures the runner counts as known red on `main`, and none names a file my branch changes. Exit 0. Both lines are now sent and I end my turn.**
+
+- [ran, remote] `r20261112-122644-e193`, at `1aba053782b2`, the changed suites from `aa2e51199fb2`, launched once, ended 6:29 AM PT: "8 suites: 7 passed (0 cached), 0 failed, 1 known red on main". `benchmarks/one_stage` 1212 passed, `benchmarks/prove_path` 163, `verity-network-traces` 569, `verity-graph` 75, `verity-network-e2e` 26, `verity-cli` 95, `verity-network-sim` 29.
+- **`repository`: 176 passed, 4 failed.** [ran, the four tests locally at the head, for what they name] `test_no_new_reads` names `tools/verity/circuit_check/tests/test_circuit_check.py`; `test_no_new_lane_text` and `test_no_new_findings` name `tools/research/tests/test_records_short_head.py`; `test_every_entry_is_read_or_still_written` names one entry of the domains table. The branch changes fifteen files, all under `benchmarks/`: none of those. [argued] So they are the base's, as the runner's "known red on main" says. I did not run them at the base.
+- This is the verdict for rulings 2 to 4 with their suites, on the branch `cursor/net-onsite-memory-reads-84f9`, whose head has not moved.
+- The port's line went at 6:39 AM PT with your two answers: its suites passed, 6 of 6.
+- Next from me: nothing until your word at about 4:48 AM PST Fri. The launch's steps are in my store, with the line as you ruled it.
+
