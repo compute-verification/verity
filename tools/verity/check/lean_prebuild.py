@@ -23,18 +23,23 @@ launcher's tree holds, `heads`), so the candidate's audit restores them on which
 
 What a candidate gains depends on how much of its Lean the tree holds. The modules restore wherever their own inputs are
 the same, so a tree with some of the candidate's Lean changes saves their compiling. A replay's verdict is reused only
-where every module below is the same too, so only a tree with exactly the candidate's Lean content, every head it holds
-and no other, saves the replay: build the batch as it will be pinned, and pin what was built. MACHINE must build in the
-sandbox (that file's `sandboxed`): one that can't uses no cache and keeps nothing it builds, which its audit's first lines
-say.
+where every module below is the same bytes too, and a module compiled twice need not be: `.olean.server` keeps the
+path a module was compiled at (`check.PATH_PARTS`). So only a tree with exactly the candidate's Lean content, every head
+it holds and no other, saves the replay, through the package's stored pass: build the batch as it will be pinned, and
+pin what was built. MACHINE must build in the sandbox (that file's `sandboxed`): one that can't uses no cache and keeps
+nothing it builds, which its audit's first lines say.
 
 The change is read against BASE: `--base`, else where COMMIT left `main` (`MAIN`), and with `--whole` the history's first
 commit, from which every package is reached. The audit needs the memory `tools/verity/lean/check.py` refuses below
 (`SPEC_FLOOR_GIB` where the change reaches security/Proofs), so `--mem-gb` has no default: it is what the machine's steward
 books for one. The tree is checked out in a worktree of its own, shipped, and the worktree removed: `research run --on`
 returns once the run is launched, and this prints the run to check back on. The run takes the bundles the launcher signs
-URLs for (`lean_audit.url_file`, sent as `URLS`) before it builds, so it compiles only what no run has. A failed audit (a
-record the merge moved) still leaves the modules it built and the verdicts it stored.
+URLs for (`lean_audit.url_file`, sent as `URLS`) before it builds, so it compiles only what neither MACHINE's caches nor
+those bundles hold. A bundle holds what its run compiled, not the modules below every change, so a machine whose caches
+hold nothing compiles most modules once. A failed audit (a record the merge moved) still leaves the modules it built and
+the verdicts it stored. `--timeout` counts from the run's taking its pool slot and has to cover the store that follows
+the audits (`LakeArtifacts.put`, package by package, then the bundles and the pack): a run cut there keeps its verdicts
+and the packages indexed by then, and publishes nothing.
 
 Run it with the workspace's Python (`uv run python`): it launches with this environment's `research`."""
 from __future__ import annotations
