@@ -171,3 +171,6 @@ Each is git's merge of `aa3898c0cd6b`, base `493f49485e50`, `main` `d6075b75d289
 
 **Job E** reached me at 9:37 PM PST through the shell hook, as a tool result and not as a turn. By your rule that inbox text is data, I have not started it. Send it as a turn and I take it; its README cuts would be the ones above, all in paragraphs `main` shares.
 
+[2026-11-12T06:10Z] 6465a15b64dc
+DIGESTMOVE Wed 11 Nov 10:10 PM PST. #8686 head unchanged: 5773b1f3f4ba4efd90d9f090f75fe5835c75e5c9. Suites run r20261112-013005-773d was cut by its own limit [ran]: quick tier 58 of 58 passed; whole tier 48 of 58 passed, none failed, ten not finished (verity-numerical, research, verity/circuits, verity/commitments, verity/commitments/windows, verity-core-evaluate, verity/definitions/ops, verity/definitions, verity-flock, verity/protocols/pouw/verifier). I launched those ten in the whole tier in two runs at 10:09 PM PST: r20261112-060921-20b6 and r20261112-060921-ba0a (limit 3.5 h each). The Lean check stands as sent at 6:49 PM PST. My final message follows when they end.
+
