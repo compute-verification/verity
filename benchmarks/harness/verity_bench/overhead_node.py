@@ -299,10 +299,10 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, [{"name": f"gamma_{n}", "value": g, "unit": "ratio",
-                                "interval": doc["points"][n]["gamma"].get("ci95"), "target": O.GAMMA_CAP,
-                                "verdict": "within target" if g <= O.GAMMA_CAP else "above target"}
-                               for n, g in gammas.items() if g is not None])
+                 fingerprint, [{"name": f"gamma_{n}", "value": gammas[n], "unit": "ratio",
+                                "interval": p["gamma"].get("ci95"), "target": p["gate"]["cap"],
+                                "verdict": "within target" if p["gate"]["passes"] else "above target"}
+                               for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():
         stands = "of record" if not (p["whys"] or whys) else "not of record: " + "; ".join(p["whys"] + whys)
         print(f"run: {sch.id} at {n} (m = {p['m']}): γ {gammas[n]}; {stands}")
