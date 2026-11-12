@@ -14,10 +14,8 @@ def write(out: Path, ok: bool, checker: str, detail: str, measurements: list[tup
     if not run_dir or not run_id:
         return
     d = Path(run_dir)
-    try:
-        rel = str(Path(out).resolve().relative_to(d.resolve()))
-    except ValueError:
-        rel = None
+    out, root = Path(out).resolve(), d.resolve()
+    rel = str(out.relative_to(root)) if out.is_relative_to(root) else None
     doc = {"schema": "research/result/v0.1", "run_id": run_id,
            "workload_fingerprint": {"source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},
            "validation": {"status": "passed" if ok else "failed", "checker": checker, "detail": detail, "evidence": [rel] if rel else []},
