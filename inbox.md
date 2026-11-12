@@ -179,3 +179,44 @@ On `cursor/na-certifier-term-simulated-b4e6`, two commits on `efe2fcdb33e8`, hea
 
 **Slips:** the record form written before it was agreed (above; not pushed). From this morning, already named: a run cancelled after it had started, an estimate of its wait that was off, two header times, a test edited by a script.
 
+[2026-11-12T20:49Z] 2066e2767fd1
+CERTNEG, Thu 12 Nov 12:49 PM PST, NET-396. **The G = 1 run is done and says where the 23 to 26 s go: the prover waits for the ZK server's Lean finish. That one step is 98.69 s of the round's 101.39 s between Register and the repetitions (97%). The witness, which holds the packing, is 2.42 s. So on these sessions the answer to proofs' candidate is no.**
+
+**The run** [ran once; record read after it ended]
+- `r20261112-195057-ab2e`: done, exit 0, SUCCESS, result valid, the guard holds. Commit `0212b89c7cdc`, tree `d9616eff0267`, clean: `main` at `4a90174415b7` plus my two commits. **Lean's tip was not run.** The baseline's machine and slot. 11:51:19 AM to 12:43:28 PM PST, wall 3,129 s. Labelled, with which `main` it was.
+- **The both-paths test passed at that head** (`r20261112-191806-4bd2`, exit 0, 6 passed in 521 s, none skipped), so the run's head is not stale.
+
+**Register to the repetitions by step, in seconds** [read: the run's document, `result.py table`]
+
+| session | `register` | `tables` | `lean_finish` | `witness` | `total` | server busy | its wait for the prover |
+|---|---|---|---|---|---|---|---|
+| `first` | 0.03 | 0.03 | 24.42 | 0.35 | 24.82 | 0.43 | 71.34 |
+| `ingress-0` | 0.06 | 0.05 | 25.28 | 1.24 | 26.63 | 0.54 | 212.58 |
+| `last` | 0.05 | 0.04 | 25.54 | 0.68 | 26.31 | 0.52 | 93.68 |
+| `egress-0` | 0.01 | 0.02 | 23.45 | 0.15 | 23.63 | 0.30 | 59.41 |
+| the round | 0.16 | 0.13 | 98.69 | 2.42 | 101.39 | 1.80 | 437.01 |
+
+- The five other steps (`config`, `level0_wait`, `zk_pads_wait`, `level0_next`, `device_wait`) read 0.00 in every session. The server's build is 0.06 s for the round.
+- **What `lean_finish` is** [read: `flock-circuit.rs` 4106 to 4114, `firewall.rs` 350 to 366]: the prover connects the Lean session loop's frames port, sends `finish` with the sample, and waits for its `ok 0`. The code's own words: "the loop sets the statement up as its `Hello` does". So the 23 to 26 s are the Lean session loop setting the statement up at the sample while the prover waits. The ZK server's Rust thread is busy 0.30 to 0.54 s a session.
+- [argued, not tested] It is the size of the Lean verifier's own inputs and setup on the same Program: 19.0 to 21.3 s a session in the baseline.
+- **proofs' candidate** (`HostSlots::pack_units`, 1.9 s a statement): it is inside `witness`, which is 0.15 to 1.24 s a session. No.
+
+**The two numbers beside the baseline** [ran: `result.py compare`]
+- 146.7 proving seconds and 35.2 Lean verifier CPU seconds a second of execution phase, beside 141.1 and 31.2: 1.040 and 1.128 of the baseline.
+- The stage this change names is level: 31.3 beside 31.1. The difference is in the repetitions (290.9 s a round beside 276.4) and in the Lean verifier's CPU (112.8 s beside 99.9; 10.5 of the 12.9 s are the `first` session's verifier, in its inputs and setup).
+- [argued] Not the change: it adds ten clock reads in the prover before the repetitions and two a frame in the server, and the Lean verifier is another binary that reads `session.json`, which is unchanged. [read: the two records] The machine's load average was 36.3 at this run's start and 44.2 at its end; the baseline's was 31.4 and 32.1. The logs say no more than that.
+- **So two runs at one identity differ by 4% and 13%. That is the first figure for this benchmark's spread.** NET-385's ratios (0.664 and 0.557) are far outside it [derived].
+- Wall 3,129 s beside 2,687 s: 300 s more before the scan starts (319 s beside 19 s), since the changed source rebuilt the prover and what else the job caches by source [read: its `built` and `proving` lines; the baseline's 19 s from this morning's estimate table]; the other 142 s are slower sessions.
+
+**One thing found, now in the branch** [read: the prover; ran: the run]
+- The existing stage, `e2e_s` − `tp_s`, is short of the steps' `total` by 0.18 to 0.36 s a session. The prover reads `tp_s` after the session's verdict and `e2e_s` before it sends its proofs, so the difference leaves those seconds to the tail. The test's rule already allowed it. A third commit, `9c804110e7`, says so in the README and `result.py` and makes the test's kept files hold such a difference: three files under `benchmarks/scan_cost/`, pushed. The stage's definition and the baseline are untouched.
+
+**Open**
+- The changed suites (`r20261112-191856-299f`) took a slot after 51 minutes in the pool's line and are running.
+- #9375 is open; its head moved to `bafae2eaec2e`, which holds `main`. My files are the same bytes there and on `main`. The pull request waits for it, as ordered. Its body is drafted: at this head 81 sites in 53 files read a line by its tag, the table is by file, and the four frozen files are named.
+- The abort job's dry run (`r20261112-202516-6f7e`) is still in the pool's line. My line about it was stamped 12:27 PM PST and sent at 12:26 PM.
+
+**Not looked at:** what the Lean session loop does inside the wait; a group above 1 with the fields; the run's logs in the store (only its document is there yet: I read the lines in the run's scratch on the node while it ran, then the document's table).
+
+TIMER: none
+
