@@ -90,6 +90,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import importlib.util
 import json
 import math
 import re
@@ -1391,12 +1392,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
                     response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only)
+        doc["spot_holes"] = spot_status.status(doc["runs"]) if served is None else spot_status.served(served)
     except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
-    doc["spot_holes"] = spot_status.status(doc["runs"])
+    shown = None
+    if served is not None and importlib.util.find_spec("verity_bench.served_row") is not None:
+        from verity_bench import served_row  # it reads this module's names
+
+        shown = served_row.account(served)
+    if shown is not None:
+        doc["served_run"] = shown
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else
-          render(doc) + "\n\n" + spot_status.render(doc["spot_holes"]))
+          render(doc) + ("" if shown is None else "\n\n" + served_row.render(shown))
+          + "\n\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
