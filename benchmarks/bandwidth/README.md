@@ -30,11 +30,13 @@ control that writes nothing rejected).
 
 ## A node's own report
 
-A node file (`verity/hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads two
-of those on the node, in one Attempt that writes nothing to a device:
+A node file (`verity/hardware/nodes/`) states what a node's registration does and no card states. `node.py` reads
+three of those on the node, in one Attempt that writes nothing to a device:
 
 - the interfaces that carry traffic off the node, each with its line rate: every interface's own report, `ethtool`
   and the routes, and which interfaces the routes send packets out of (`net.json`, `net.txt`);
+- the interface each disk is behind: its driver and bus, and the PCI Express link of a drive that is the node's own,
+  which bounds its read; a disk the hypervisor gives the guest reports none (`disks.json`, `disks.txt`);
 - what each NVIDIA card's firmware says it gives a program: the usable-memory register and the MMU's local memory
   range, read over BAR0 at the addresses of NVIDIA's open kernel modules, beside `nvidia-smi -q` (`regs.json`).
 
