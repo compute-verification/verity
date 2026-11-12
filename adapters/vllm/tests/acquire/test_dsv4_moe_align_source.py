@@ -19,6 +19,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import marlin_moe as MM
 
+from tests import fake_vllm
 from tests.acquire.test_glm53_sources import Committer
 from tests.program.test_marlin_moe import _vllm_align
 from verity_vllm.acquire.sources import call_boundary_source as CB
@@ -151,9 +152,8 @@ def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> Non
         out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)
         return _tamper(*out, ids, num_experts, block_size, tamper) if tamper else out
 
-    m = types.ModuleType(MA.MARLIN_MODULE)
-    m.__dict__.update(moe_align_block_size=moe_align_block_size)
-    monkeypatch.setitem(sys.modules, MA.MARLIN_MODULE, m)
+    fake = fake_vllm.install(monkeypatch, extra=[f"{MA.MARLIN_MODULE}:{MA.ALIGN}"])     # a module the source reaches by name
+    fake[MA.MARLIN_MODULE].moe_align_block_size = moe_align_block_size
 
 
 def align_rows(layer: int, P: int, step: int = 0) -> list[dict]:
