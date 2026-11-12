@@ -520,7 +520,7 @@ def _attention_backward_sig(S):
 
 
 _BLOCK = (f"exact-model-tested; against numerics.torch_blocks' model, composed of its Definitions' models, at N = 16 "
-          f"(tests/test_torch_attention.py), "
+          f"(verity/definitions/tests/test_torch_attention.py), "
           f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {GPU_STEP} "
           f"(10,452,992 words): a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; its bmm's are "
           f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")
