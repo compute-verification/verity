@@ -26,7 +26,8 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   * `CoinsRead` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
     device's (`Good`), the coin the check reads for a round of the group is the device's release for it. Every piece but
     the coin map's, the cut's and the assemblies' is a lemma about the form's check alone, at `Acc`; that the sampled
-    verdict accepts only where the check does is the composite's wiring's, one hypothesis of `ProjectionOf`.
+    verdict accepts, on a play of the parameters `θ`, only where the check does is the composite's wiring's, one
+    hypothesis of `ProjectionOf`.
   * `MessagesFixed`: on such a play, the message the check reads for each round is the one the prover sends there, but
     on plays at most `miss` likely; and the prover's calls are within the strategy's (`CallsLe`).
   * `CutBound`: an accepted play whose log the check read is not the device's is at most `terms` likely (the read
@@ -181,14 +182,15 @@ def ProjectionBound (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
       (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2).out = .acc) + bound
 
-/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict
-only where the form's check accepts (`Acc`, which the composite's wiring owes), the coin map's law, the coins read at
-the first stage's, the second stage's and the sessions' rounds, no coin read at the statements', the messages, the cut,
-the accept and the statement read give the projection's bound at `hide + miss + terms`. -/
+/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict, on
+a play of the parameters `θ`, only where the form's check accepts (`Acc`, which the composite's wiring owes; at other
+parameters the sampled verdict also accepts other forms), the coin map's law, the coins read at the first stage's, the
+second stage's and the sessions' rounds, no coin read at the statements', the messages, the cut, the accept and the
+statement read give the projection's bound at `hide + miss + terms`. -/
 def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop :=
   ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (hide miss terms : ℝ≥0∞),
-    (∀ o, V.Verdict k .sampled o → Acc o) →
+    (∀ o, o.params = θ → V.Verdict k .sampled o → Acc o) →
     CoinMapLaw V A x θ F c σ Fr Rd hide → CoinsRead A Rd Acc Good .first → CoinsRead A Rd Acc Good .second →
       CoinsRead A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
       CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
