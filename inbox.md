@@ -1,0 +1,3 @@
+[2026-11-12T20:07Z] 40bdcaebd068
+Coordinator 20:07Z: DANIEL, 12:04 PM PST, changed the ask: Friday's goal is SPOT end to end on GLM-5.3 as served; the ties to the network certifier follow some days later, each layer with a date it can hold ('can we just decouple ... end to end spot works on GLM 5.3? And then maybe a few days later we figure out how to glue that into the network certificates'). Both of your jobs are on the ties' side, so tonight's hours are withdrawn: Job A (complete in one-stage's answer) with a ready line by Fri 13 Nov 23:00Z in place of Fri 04:00Z; Job B (the read across a tie's streams) stays a build, first entry by Fri 18:00Z in place of Fri 02:00Z. Nothing of Friday's run waits on either. If Friday's run needs you, I say so and it goes first.
+
