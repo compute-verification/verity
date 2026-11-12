@@ -1576,7 +1576,7 @@ fn zk_server_asked() -> bool {
     std::env::var("FC_FIREWALL").as_deref() == Ok("1")
 }
 
-/// Starts the ZK server's Lean tap for this process, which is before any sample of the prover's.
+/// Starts the ZK server's Lean tap for this process. Each caller starts it before the prover samples anything.
 fn start_lean_tap() {
     flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
 }
