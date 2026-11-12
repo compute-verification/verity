@@ -13,7 +13,7 @@ import pytest
 
 from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     ArgSlot,
     ReturnSlot,
     runtime_tree_from_paths,
@@ -73,14 +73,14 @@ def base_rows():
 def make_plan(rows, rt=None, **hdr):
     rt = rt or tree()
     man = manifest(rows, **hdr)
-    corr = AnnotationCorrespondence(rt, wrapper_prefix=man["wrapper_prefix"], aliases=man["op_path_aliases"])
+    corr = AcquireCorrespondence(rt, wrapper_prefix=man["wrapper_prefix"], aliases=man["op_path_aliases"])
     return P.acquisition_plan(man, corr, tables=TABLES), man, rt
 
 
 # ------------------------------------------------------------------------------------------------------------------ correspondence
 
 def test_adapter_three_functions():
-    corr = AnnotationCorrespondence(tree(), wrapper_prefix="model.")
+    corr = AcquireCorrespondence(tree(), wrapper_prefix="model.")
     assert corr.owning_module({"op_path": "body.embed", "output_member": "out"}) == "body.embed"
     assert corr.owning_module({"name": "model.body.blocks.0.proj_a/linear_3/[7]", "spec": "Gemm_v1{K=8,N=8}"}) == "body.blocks.0.proj_a"
     assert corr.return_slot({"op_path": "x", "output_member": "out"}) == ReturnSlot()
@@ -88,7 +88,7 @@ def test_adapter_three_functions():
     assert corr.return_slot({"op_path": "x", "output_member": "in"}) is None
     assert corr.return_slot({"op_path": "runner.sampler", "output_member": "sampled_token_ids"}) == ReturnSlot(attr="sampled_token_ids")
     assert corr.arg_slot({"op_path": "x"}, 0) == ArgSlot(0) and ArgSlot(0).label() == "in[0]"
-    corr2 = AnnotationCorrespondence(tree(), aliases={"body.blocks.1.rope": ["body.blocks.0.rope", 1]})
+    corr2 = AcquireCorrespondence(tree(), aliases={"body.blocks.1.rope": ["body.blocks.0.rope", 1]})
     assert corr2.owning_module({"op_path": "body.blocks.1.rope"}) == "body.blocks.0.rope"
 
 
@@ -149,7 +149,7 @@ def test_promoted_value_consumer_input_only():
     assert v.chosen.lifetime == "unknown"
     # in-place facts, when the annotations carry them, decide the lifetime
     man = manifest(rows)
-    corr = AnnotationCorrespondence(tree(), inplace_facts={"body.blocks.0.norm_in": {"mutates_input": False}})
+    corr = AcquireCorrespondence(tree(), inplace_facts={"body.blocks.0.norm_in": {"mutates_input": False}})
     p2 = P.acquisition_plan(man, corr, tables=TABLES)
     assert {v.value_id: v for v in p2.values}["body/out"].chosen.lifetime == "unmutated"
     # one promoted-consumer pre-hook, whatever the consumer's class
@@ -214,7 +214,7 @@ def test_prescribed_padding_identities():
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
     # padding identities as the finalize phase knows them: every identity of a Value -> prescribed as a whole
     pad = [r for r in rows if r["op_path"] == "logits"]
-    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AnnotationCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
+    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AcquireCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
     assert lg.prescribed and lg.chosen.kind == "prescribed" and lg.prescribed_identities == 2
     assert ("logits", "producer_output", "out") not in [h.key() for h in plan2.hooks()]
@@ -246,8 +246,8 @@ import json, sys
 if sys.argv[3] == "blocked":
     sys.modules["torch"] = None
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, RuntimeTree
-plan = P.acquisition_plan(json.load(open(sys.argv[1])), AnnotationCorrespondence(RuntimeTree.load(sys.argv[2])))
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
+plan = P.acquisition_plan(json.load(open(sys.argv[1])), AcquireCorrespondence(RuntimeTree.load(sys.argv[2])))
 print(json.dumps({"digest": plan.digest, "residuals": {r.table: r.values for r in plan.residuals},
                   "tables": {k: sorted(v) for k, v in P._lifetime_tables().items()}, "torch": sys.modules.get("torch") is not None}))
 """

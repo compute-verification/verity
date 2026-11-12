@@ -20,7 +20,7 @@ from verity_vllm.acquire.install import (
     install_from_plan,
 )
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_of,
 )
 from verity_vllm.query.manifest import format as RM
@@ -86,7 +86,7 @@ def row(family, op, member, step=0, **extra):
 def make(rows, model, runner):
     man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
     rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AnnotationCorrespondence(rt), tables=TABLES), rt
+    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():

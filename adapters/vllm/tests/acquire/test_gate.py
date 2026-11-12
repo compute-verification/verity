@@ -20,7 +20,7 @@ from verity_vllm.acquire.plan import acquisition_plan
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, SkipRefused
 from verity_vllm.correspondence.reader_for_acquire import (
     RUNNER_PATH,
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_of,
 )
 from verity_vllm.query.manifest import format as MF
@@ -117,7 +117,7 @@ def test_apply_plan_to_committer_replaces_the_class_tables():
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
     rows.append(row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.post"]})))
     man = manifest(rows)
-    plan = acquisition_plan(man, AnnotationCorrespondence(rt))
+    plan = acquisition_plan(man, AcquireCorrespondence(rt))
     assert plan.complete
     c = offline_committer(model, runner, acquire_inputs=MF.promoted_observation(man)["consumers"])
     before = [n for n, _m in c._modules]
@@ -142,7 +142,7 @@ def promoted_plan(model, runner):
     rows = [r for r in rows_matching_v1() if r["op_path"] != "norm"]
     rows.append(row("instance_outputs", "layers.1.mixer", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 1, "width": 4, "dtype": "bf16", "spec": "Add_v1", "consumers": ["layers.1.post"]})))
     man = manifest(rows)
-    plan = acquisition_plan(man, AnnotationCorrespondence(runtime_tree_of(model, runner, source="test")))
+    plan = acquisition_plan(man, AcquireCorrespondence(runtime_tree_of(model, runner, source="test")))
     assert plan.complete
     return man, plan
 
