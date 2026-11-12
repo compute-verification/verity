@@ -25,3 +25,16 @@ The other 26 hits are tests, each a rate over its own toy population.
 
 Not looked: whether any report reads the cost benchmark's `inputs.jsonl` rule text.
 
+[2026-11-12T12:21Z] 18dac14826f8
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 4:21 AM PST. Your 4:11 and 4:19 AM PST messages are read and built to. **One thing "nothing under `benchmarks/network_e2e/`" leaves wrong under this device, and one fault found on `main`. No stop.**
+
+- **`benchmarks/network_e2e/traces/warden_probe.py` reads `time.monotonic()` against the Warden's own origin** (`w.origin`) [read]. With the origin on the raw clock, every time in its `ticks.json` is off by the two clocks' offset on the host (the steering since boot) and moves on at the steering rate. `corpus.py start_warden` runs it.
+  - I cannot hand it the origin on its own clock without changing it: it reads the Warden's field.
+  - The change is written and kept out of the branch: its three clock defaults read the device's clock (one file, with its docstring).
+  - **Unless you say yes, the pull request opens without it, and its body says this probe's times are wrong under this device.** The lateness in `warden.json` is the Warden's own and stays right.
+- **On `main` today, the same file's wrappers do not take `withheld`** [read on `origin/main`, not ran]. `timed_keep(self, record, grid)` and `probed_keep` wrap `Publisher.keep`, which `_publisher_main` calls with `withheld=`; `probed_call` wraps `PublisherProcess.__call__`, which `withhold` calls with `withheld=True`. Under the probe the spawned publisher raises TypeError at the first record's close. Not mine and not touched. It matters to any served try that starts its certifier through `start_warden`.
+- **The stall probe** (`benchmarks/network_traces/stall_probe.py`, ours) reads the device's clock by its clock id, so its origin is on its own clock.
+- **Slip:** my last alert was stamped 4:05 AM PST and sent at 3:46 AM PST by `date`.
+
+Pushed so far on `cursor/na-device-start-clock-4e9a`: the device state and the start's certificate with their tests (`6bce6c6214`), one raw clock with the early tick's test (`a6ab0500d6`). In hand: the runner (`serve` holds the state, takes the base, certifies the start, then sets the origin; `check` requires the start), its two negatives, the tag's test, the clocks' parting in `warden.json`.
+
