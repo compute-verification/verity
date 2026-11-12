@@ -2,40 +2,53 @@
 
 The circuit is a Program in the `verity-ir/descriptor/v1` format, and nothing beside it: the reading takes no source
 language, trace, model or optimizer. It is computed once per specialized Definition and context and multiplied through
-batches and scans, so it never walks the unrolled circuit. It reads, for `min_cut.bound`'s inputs:
+batches and scans, so it never walks the unrolled circuit. Its rules are the training benchmark's reading of a trace
+(`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.formalism`'s
+`he_of_rows`), each resolved on the side of the smaller bound wherever a Program doesn't state what the rule reads.
+For `min_cut.bound`'s inputs it reads:
 
 * `|C|` (`Work.gates`, `boolean_gates`): Boolean gates, each primitive at its Boolean version's AND, XOR and NOT
   gates and an input node at none; a primitive with no Boolean version is refused by name.
+* What depends on the update, θ′: a scan's carried word that an earlier iteration reached from a fresh input (a run
+  input outside `θ`) or from θ′. Every input is free like `θ`, the batch included: it is what makes a carried word
+  updated, and nothing more. A carry's first iteration is `θ`'s, so a Program with no scan has no θ′ and no bound.
+* The rate of each array: the bits a block of k bits pays a word of it, at the policy's k. A carried word of θ′ is
+  paid at its width; a word θ′ doesn't reach costs nothing; a registered gather (`LOOKUPS`) whose index reads the
+  batch and not θ′ gives rows at 0, whatever its table; a product's output is `_gemm_rate`'s (`gemm_rate`); any other
+  primitive's is the largest over its arguments of their distinct words' rates over its words (a view keeps its
+  argument's rate, a repeated one spreads it, a concatenation sums its parts'); a call's, a batch's and a scan's are
+  their callee's, at most that rule's at the node; each at most its width.
 * The products: each activation of a Definition in `PRODUCTS` (outermost first, so a `LinearRef`'s own dots are its
-  MACs) multiplies its parameter `x` by its parameter `w`, one MAC a word of the larger of the two, and gives its
-  returned leaves. A product's operand reads the arrays its argument's references name.
-* Which are charged: a product both of whose operands are wholly reached from a fresh input (a run input outside
-  `θ`; a registered input, a `θ` input and a constant are not), neither of which reads a lookup's words, and whose
-  two operands are no one array. A word is a lookup's (`LOOKUPS`) where the table it is read from is not reached
-  from a fresh input; a value computed from such words and words no fresh input reaches is one too, and one computed
-  from any value all of whose words reach a fresh input some other way is not. These are the words `min_cut` names
-  "a function of θ and a few fresh gates", whose matmuls a caller leaves out of `N`.
-* `N` and `O`: the charged products' MACs, and their returned leaves times their width.
-* The kinds: an operand is a weight where it reads nothing of the current iteration's inputs: in a scan, its
-  sequence arguments' (`xs`), so a carried value is a weight from the iteration that first finds it reached from a
-  fresh input; outside every scan, nothing is a weight.
-* The `β` and `b`: a weight's `β` at most `min_cut`'s default (bf16's 16 bits), an activation's at most `β(k)` and
-  `b` at most bf16's 16, each at most its width and a `β` at most the source bits its operand's values hold. A fresh
-  input's word and, in a scan, a carried word reached from one hold their width; a computed array's words hold on
-  average the bits of the source words its node reads, each once, over its words, at most their width. So a weight a
-  body decodes from a narrower carry (a ternary code's two bit planes and a scale) holds its code's bits.
+  MACs) multiplies its parameter `x` by its parameter `w`, one MAC a word of the larger, with the dims `_gemm_rate`
+  reads: its contraction K (the smaller operand's words), its other dims from which operands its batch maps, and its
+  batch count. An operand is a weight where it reads nothing of the current iteration's inputs, else an activation
+  and the product's token side.
+* Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
+  θ′ in every word ("theta" else), neither of which carries a gather's rows ("gathered"), whose operands are no one
+  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op and
+  every carry, since no op a Program states can be shown to make them specific to a position (a mask's and a rope
+  table's positions are an axis the Program doesn't name). A weight gradient and attention's products are both
+  products of two activations, which a Program tells apart only by where their outputs go, which its author chooses.
+* Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
+  source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
+  the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
+  on a Program where an operand no θ′ reaches and no input reaches multiplies one θ′ reaches; or of two weights both
+  of whose sides are 4K or more), every activation is at most `beta_eff` at it. Every operand is at most
+  min(bf16's 16, β(k)): a Program states no code size, and which operands are weights is its author's choice.
+* `N` and `O`: the charged products' MACs and their returned leaves times their width. A token-indexed product keeps
+  1 − `SHARED_PREFIX`/s of its MACs, s the least sequence a Program's products of two activations allow (the second
+  smallest of each one's dims above 1, at least two of which a token indexes where it is attention's); a Program
+  with none keeps all of them.
 * `F`: `share(ω)`, ω the largest set of arrays the work multiplies pairwise (at least 2).
 
 Each status is per array, never per word: a node's output has one status unless it is a call's or a scan's, whose
-status is its callee's returned runs. A value is fresh only where every word read is, a lookup's where any may be, and
-two arrays are one where any references overlap. Against the statements, the reading's errors go both ways:
-
-* Less work than they count, so a bound true but weak: a product the tables don't name is not counted, a value with
-  any word no fresh input reaches is θ's, and overlapping references are one array (F may be higher).
-* More than they may support, so a bound the theorem may not give: (H) fails at a `β` above the bits a value holds,
-  and the source bits are an average from data flow, which a value holds no more of where words repeat, as a gather's
-  rows do over the tokens that share an id; and a value carried through a scan's state is a weight, at bf16's 16
-  bits where an activation is at `β(k)`, which a submitter can choose.
+status is its callee's returned runs. A value depends on θ′ only where every word read does, carries a gather's rows
+where any may, and two arrays are one where any references overlap. A rule's branch that a Program can't decide is
+the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
+the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
+say which products are the head's. So every error of the reading is less work or a smaller `β` than the trace's
+reading of the same step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 `bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
 contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
@@ -91,48 +104,59 @@ class Lookup:
 PRODUCTS = (Product(r"LinearRef_v\d+", "x", "w"), Product(r"DotRef_v\d+", "x", "w"))
 #: the registered gathers: a column of a table at a token
 LOOKUPS = (Lookup(r"Gather\w+x\d+_v\d+", "token", "column"),)
+#: `training_slowdown.capture.products`' and `training_slowdown.formalism`'s constants, which its suite holds equal:
+#: the partial sums' width, the share of a rate that pays a width, the positions a sequence's start shares, and the k
+#: from which the head's products leave M
+ACC_BITS, PAID, SHARED_PREFIX, HEAD_K = 32, 0.999, 1, 8e7
 
 
 class Status(NamedTuple):
     """What an array's words depend on."""
 
-    #: every word is reached from a fresh input
-    fresh: bool
-    #: some word may be
+    #: every word depends on θ′
+    aff: bool
+    #: some word may
+    dep: bool
+    #: some word may depend on a fresh input or on θ′
     reach: bool
-    #: some word may be a function of lookups' words and words no fresh input reaches
-    looked: bool
+    #: some word may carry a gather's rows
+    gathered: bool
     #: the scan levels (0: outside every scan) whose current inputs some word may read
     data: frozenset
-    #: the source bits a word holds on average: a fresh input's and a carried word's width, θ's 0, and a computed
+    #: the bits a block pays a word on average (its rate), at most its width
+    rate: float = 0.0
+    #: the source bits a word holds on average: a fresh input's and a carried θ′ word's width, θ's 0, and a computed
     #: array's the bits of the sources it reads over its words, at most its width
     bits: float = 0.0
 
 
-THETA = Status(False, False, False, frozenset())
+THETA = Status(False, False, False, False, frozenset())
 
 
 def join(sts, weights=None) -> Status:
-    """The status of an array made of arrays of statuses ``sts``, of ``weights`` leaves each (None: its bits the
-    most of theirs)."""
+    """The status of an array made of arrays of statuses ``sts``, of ``weights`` leaves each (None: its rate and bits
+    the most of theirs)."""
     sts = list(sts)
     if not sts:
         return THETA
     if weights is None:
-        bits = max(s.bits for s in sts)
+        rate, bits = max(s.rate for s in sts), max(s.bits for s in sts)
     else:
         weights = list(weights)
-        bits = sum(w * s.bits for w, s in zip(weights, sts)) / max(1, sum(weights))
-    return Status(all(s.fresh for s in sts), any(s.reach for s in sts), any(s.looked for s in sts),
-                  frozenset().union(*(s.data for s in sts)), bits)
+        total = max(1, sum(weights))
+        rate = sum(w * s.rate for w, s in zip(weights, sts)) / total
+        bits = sum(w * s.bits for w, s in zip(weights, sts)) / total
+    return Status(all(s.aff for s in sts), any(s.dep for s in sts), any(s.reach for s in sts),
+                  any(s.gathered for s in sts), frozenset().union(*(s.data for s in sts)), rate, bits)
 
 
-def computed(sts, bits: float) -> Status:
-    """The status of an array each of whose words is computed from words of each of arrays ``sts``, ``bits`` a word."""
+def computed(sts, rate: float, bits: float) -> Status:
+    """The status of an array each of whose words is computed from words of each of arrays ``sts``, at ``rate`` and
+    ``bits`` a word; 0 a word where none depends on θ′."""
     sts = list(sts)
-    looked = any(s.looked for s in sts) and not any(s.fresh and not s.looked for s in sts)
-    return Status(any(s.fresh for s in sts), any(s.reach for s in sts), looked,
-                  frozenset().union(*(s.data for s in sts)), bits)
+    dep = any(s.dep for s in sts)
+    return Status(any(s.aff for s in sts), dep, any(s.reach for s in sts), any(s.gathered for s in sts),
+                  frozenset().union(*(s.data for s in sts)), rate if dep else 0.0, bits)
 
 
 #: an array's status by leaf: runs (end, status), ends rising, the last the array's leaves
@@ -170,10 +194,10 @@ def _over(p: Profile, lo: int, hi: int) -> tuple[list[Status], list[int]]:
     return out, weights
 
 
-def bits_in(p: Profile, lo: int, hi: int) -> float:
-    """The source bits ``p``'s leaves ``lo`` to ``hi`` hold."""
+def total_in(p: Profile, lo: int, hi: int) -> tuple[float, float]:
+    """The rates and the source bits ``p``'s leaves ``lo`` to ``hi`` hold between them."""
     out, weights = _over(p, lo, hi)
-    return sum(w * s.bits for w, s in zip(weights, out))
+    return sum(w * s.rate for w, s in zip(weights, out)), sum(w * s.bits for w, s in zip(weights, out))
 
 
 def whole(p: Profile) -> Status:
@@ -184,13 +208,13 @@ def drop(p: Profile, levels: frozenset) -> Profile:
     return runs_of([(e, s._replace(data=s.data - levels)) for e, s in p])
 
 
-def capped(p: Profile, bits: float) -> Profile:
-    return runs_of([(e, s._replace(bits=min(s.bits, bits))) for e, s in p])
+def capped(p: Profile, rate: float, bits: float) -> Profile:
+    return runs_of([(e, s._replace(rate=min(s.rate, rate), bits=min(s.bits, bits))) for e, s in p])
 
 
 def carried(p: Profile, t) -> Profile:
-    """A carry ``p`` of type ``t`` as an iteration's source: a word reached from a fresh input holds its width, any
-    other none."""
+    """A carry ``p`` of type ``t`` as an iteration's input: a word reached from a fresh input or θ′ is θ′, paid at
+    and holding its width, any other is free and holds nothing."""
     cuts = sorted({e for e, _ in p} | {e for e, _ in _width_runs(t)})
     widths = _width_runs(t)
     out, i, j = [], 0, 0
@@ -199,9 +223,16 @@ def carried(p: Profile, t) -> Profile:
             i += 1
         while widths[j][0] < e:
             j += 1
-        s = p[i][1]
-        out.append((e, s._replace(bits=float(widths[j][1]) if s.reach else 0.0)))
+        s, w = p[i][1], float(widths[j][1])
+        out.append((e, s._replace(aff=True, dep=True, rate=w, bits=w) if s.reach else
+                    s._replace(aff=False, dep=False, rate=0.0, bits=0.0)))
     return runs_of(out)
+
+
+def first(p: Profile) -> Profile:
+    """A carry's initial value as its first iteration's input: `θ`'s, whatever it is computed from, but for the gather's
+    rows it carries."""
+    return runs_of([(e, s._replace(aff=False, dep=False, reach=False, rate=0.0, bits=0.0)) for e, s in p])
 
 
 def _width_runs(t) -> list[tuple[int, int]]:
@@ -259,6 +290,59 @@ def _parts(refs, memo: dict) -> list[tuple[int, int, str, int, int, int]]:
     return out
 
 
+def _leaf_runs(refs, limit: int = 1 << 15) -> tuple[list, list]:
+    """The leaves ``refs`` read, each once, as runs (space, idx, lo, hi); a two-level strided view whose leaves take
+    more than ``limit`` runs as its hull (space, idx, lo, hi, share), ``share`` the most of the hull its leaves are."""
+    exact: list = []
+    hulls: list = []
+
+    def grid(space, idx, base: int, a: int, sa: int, b: int, sb: int) -> None:
+        """Leaves base + i·sa + j·sb, i < a, j < b."""
+        if a <= 0 or b <= 0:
+            return
+        a, sa = (1, 1) if sa == 0 else (a, sa)
+        b, sb = (1, 1) if sb == 0 else (b, sb)
+        if sa == 1 and sb != 1:
+            a, sa, b, sb = b, sb, a, sa
+        if sb == 1 and a <= limit:
+            exact.extend((space, idx, base + i * sa, base + i * sa + b) for i in range(a))
+        elif sb != 1 and a * b <= limit:
+            exact.extend((space, idx, base + i * sa + j * sb, base + i * sa + j * sb + 1) for i in range(a)
+                         for j in range(b))
+        else:
+            ends = [base + i * sa + j * sb for i in (0, a - 1) for j in (0, b - 1)]
+            lo, hi = min(ends), max(ends) + 1
+            hulls.append((space, idx, lo, hi, min(1.0, a * b / (hi - lo))))
+
+    def walk(r) -> None:
+        if isinstance(r, Affine):
+            if r.count:
+                exact.append((r.space, r.idx, r.base, r.base + r.count))
+        elif isinstance(r, Strided):
+            rows, rem = divmod(r.count, r.inner)
+            grid(r.space, r.idx, r.base, rows, r.outer_stride, r.inner, r.inner_stride)
+            grid(r.space, r.idx, r.base + rows * r.outer_stride, 1, 1, rem, r.inner_stride)
+        elif isinstance(r, Concat):
+            if r.prefix is not None:
+                log, j = r.prefix
+                for p in log.parts[:j]:
+                    walk(p)
+                parts = r.parts[j:]
+            else:
+                parts = r.parts
+            for p in parts:
+                walk(p)
+        else:
+            for space, idx, leaf in r:
+                if exact and exact[-1][:2] == (space, idx) and exact[-1][3] == leaf:
+                    exact[-1] = (space, idx, exact[-1][2], leaf + 1)
+                else:
+                    exact.append((space, idx, leaf, leaf + 1))
+
+    walk(refs)
+    return exact, hulls
+
+
 def _hulls(log, j: int, memo: dict) -> dict:
     """The hull each source's leaves span in a `PartLog`'s first ``j`` parts, extended part by part."""
     hs = memo.setdefault(id(log), (log, [{}]))[1]
@@ -269,6 +353,21 @@ def _hulls(log, j: int, memo: dict) -> dict:
             h[(space, idx)] = (lo, hi) if old is None else (min(old[0], lo), max(old[1], hi))
         hs.append(h)
     return hs[j]
+
+
+def paid(rate: float, width: float) -> bool:
+    """Whether a rate pays its operand's width (`training_slowdown.formalism.is_paid`)."""
+    return rate >= PAID * width
+
+
+def k_star(k: float, w: float) -> float:
+    """K* = ½√(k/w), the least contraction whose output a block can't make below its width (`formalism.k_star`)."""
+    return 0.5 * math.sqrt(k / w)
+
+
+def beta_eff(w: float, r: float, k: float) -> float:
+    """An operand's β where the update reaches it through a rank-r bottleneck (`formalism.beta_eff`)."""
+    return w / (1 + (k_star(k, w) / r) ** 2) if r > 0 else 0.0
 
 
 @dataclass
@@ -288,8 +387,40 @@ class Site:
     w: Status
     #: each operand's source runs (space, idx, lo, hi) in the body
     sources: tuple[tuple, tuple]
-    #: the source bits each operand's words hold on average
-    bits: tuple[float, float] = (0.0, 0.0)
+    #: (batch, m, k, n), x spanning batch, m and k and w batch, k and n
+    dims: tuple[int, int, int, int]
+    #: each operand's rate and source bits, its words' average
+    rates: tuple[float, float]
+    bits: tuple[float, float]
+
+    def passed(self) -> tuple[float, float]:
+        """Each operand's width at most the source bits its values hold (`_passed_width`)."""
+        return tuple(min(w, b) for w, b in zip(self.widths, self.bits))
+
+
+def gemm_rate(site: Site, k: float) -> float:
+    """A product's output rate at k (`training_slowdown.capture.products._gemm_rate`), its token side the operand that
+    reads the current iteration's inputs: where only one does, its dims are the ones it spans that the other doesn't; where
+    neither, no dim is a token's and the output is paid at its width; where both, the least of attention's form and each
+    single token side's, since the Program doesn't say which dims are a token's."""
+    batch, m, K, n = site.dims
+    x, w = site.x, site.w
+    ra, rb = site.rates
+    ba, bb = site.passed()
+    if not (x.dep or w.dep):
+        return 0.0
+    if not (x.data or w.data):
+        return math.inf
+
+    def one(token_x: bool) -> float:
+        r_tok, b_tok, b_par, par, spread = (ra, ba, bb, w.dep, n) if token_x else (rb, bb, ba, x.dep, m)
+        if par and (paid(r_tok, b_tok) or K >= 3 ** 1.5 * math.sqrt(k / ACC_BITS)):
+            return 4 * K ** 2 * b_tok * b_par / k
+        return r_tok * K / max(spread, 1)
+
+    if x.data and w.data:
+        return min(ra * K / max(n, 1) + rb * K / max(m, 1), one(True), one(False))
+    return one(bool(x.data))
 
 
 @dataclass
@@ -315,11 +446,12 @@ def _unit(t) -> int:
 
 
 class Reader:
-    def __init__(self, program, products=PRODUCTS, lookups=LOOKUPS) -> None:
-        self.program, self.products, self.lookups = program, products, lookups
+    def __init__(self, program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> None:
+        self.program, self.k, self.products, self.lookups = program, k, products, lookups
         self.memo: dict = {}
         self.logs: dict = {}
         self._match: dict = {}
+        self._leaves: dict = {}
 
     def product(self, fn) -> Product | None:
         return self._of(fn, self.products)
@@ -335,6 +467,12 @@ class Reader:
 
     def parts(self, refs):
         return _parts(refs, self.logs)
+
+    def leaves(self, refs):
+        key = id(refs)
+        if key not in self._leaves:
+            self._leaves[key] = (refs, _leaf_runs(refs))
+        return self._leaves[key][1]
 
     def root(self) -> Summary:
         root = self.program.root
@@ -365,51 +503,61 @@ class Reader:
                 return [(i, 0, -1, s, j, lo, hi) for _a, _b, s, j, lo, hi in ps]
             return [(i, a_, b_, s, j, lo, hi) for a_, b_, s, j, lo, hi in ps]
 
-        def read_bits(args) -> tuple[float, int]:
-            """The source bits ``args`` read between them, each source leaf once, and how many leaves those are."""
+        def read(args) -> tuple[float, float]:
+            """The rates and source bits ``args`` read between them, each source leaf once."""
             spans: dict = {}
+            rate = bits = 0.0
             for a in args:
-                for _a, _b, s, i, lo, hi in self.parts(a.refs):
+                exact, hulls = self.leaves(a.refs)
+                for s, i, lo, hi in exact:
                     spans.setdefault((s, i), []).append((lo, hi))
-            total, n = 0.0, 0
+                for s, i, lo, hi, share in hulls:
+                    r, b_ = total_in(source(s, i), lo, hi)
+                    rate, bits = rate + share * r, bits + share * b_
             for (s, i), rs in spans.items():
                 rs.sort()
                 lo, hi = rs[0]
                 for a, b in [*rs[1:], (math.inf, math.inf)]:
                     if a > hi:
-                        total += bits_in(source(s, i), lo, hi)
-                        n += hi - lo
+                        r, b_ = total_in(source(s, i), lo, hi)
+                        rate, bits = rate + r, bits + b_
                         lo, hi = a, b
                     else:
                         hi = max(hi, b)
-            return total, n
+            return rate, bits
 
-        def made_bits(args, out) -> float:
-            """The source bits a word of ``out`` holds on average, computed from ``args``: at most its width."""
-            return min(max(out.width_set(), default=0), read_bits(args)[0] / out.leaves) if out.leaves else 0.0
+        def made(args, out) -> tuple[float, float]:
+            """A word of ``out``'s rate, the most any one argument's distinct words pay over ``out``'s words, and its
+            source bits, those all of them hold; each at most its width."""
+            if not out.leaves:
+                return 0.0, 0.0
+            w = max(out.width_set(), default=0)
+            rate = max((read([a])[0] for a in args), default=0.0) / out.leaves
+            return min(w, rate), min(w, read(args)[1] / out.leaves)
 
-        def operand_bits(a) -> float:
-            total, n = read_bits([a])
-            return total / n if n else 0.0
+        def operand(a) -> tuple[float, float]:
+            rate, bits = read([a])
+            n = a.refs.count
+            return (rate / n, bits / n) if n else (0.0, 0.0)
 
         for k, nd in enumerate(body.nodes):
             f, leaves = nd.fn, nd.out.leaves
             if is_input(f):
                 st = THETA if is_registered(f) or k in theta else \
-                    Status(True, True, False, frozenset({0}), float(max(nd.out.width_set(), default=0)))
+                    Status(False, False, True, False, frozenset({0}), 0.0, float(max(nd.out.width_set(), default=0)))
                 prof.append(((leaves, st),))
                 continue
+            rate, bits = made(nd.args, nd.out)
             if isinstance(f, PrimitiveDefinition):
                 sts = [arg_status(a) for a in nd.args]
-                bits = made_bits(nd.args, nd.out)
                 lk = self.lookup(f)
                 if lk is not None:
                     names = [n for n, _t in f.params]
                     t, x = sts[names.index(lk.table)], sts[names.index(lk.index)]
-                    st = Status(x.fresh, True, True, t.data | x.data, bits) if x.reach and not t.reach else \
-                        computed(sts, bits)
+                    st = Status(t.aff, t.dep, True, True, t.data | x.data, 0.0, bits) if x.reach and not x.dep else \
+                        computed(sts, rate, bits)
                 else:
-                    st = computed(sts, bits)
+                    st = computed(sts, rate, bits)
                 prof.append(((leaves, st),))
                 continue
             p = self.product(f)
@@ -418,19 +566,25 @@ class Reader:
                 names = [n for n, _t in params]
                 ix, iw = names.index(p.x), names.index(p.w)
                 tx, tw = params[ix][1], params[iw][1]
-                S.sites.append(Site(p, k, nd.n if nd.form == "batch" else 1, max(_unit(tx), _unit(tw)), ret.leaves,
-                                    _width(ret), min(_unit(tx), _unit(tw)), (_width(tx), _width(tw)),
-                                    arg_status(nd.args[ix]), arg_status(nd.args[iw]),
-                                    (tuple(x[2:] for x in self.parts(nd.args[ix].refs)),
-                                     tuple(x[2:] for x in self.parts(nd.args[iw].refs))),
-                                    (operand_bits(nd.args[ix]), operand_bits(nd.args[iw]))))
-                prof.append(((leaves, computed((arg_status(a) for a in nd.args), made_bits(nd.args, nd.out))),))
+                members = nd.n if nd.form == "batch" else 1
+                K = min(_unit(tx), _unit(tw))
+                cols = max(_unit(tx), _unit(tw)) // max(K, 1)
+                xm, wm = (nd.form == "batch" and nd.axes[i] is not None for i in (ix, iw))
+                dims = (1, members, K, cols) if xm and not wm else (1, 1, K, cols * members) if wm and not xm else \
+                    (members, 1, K, cols)
+                (ra, bx), (rb, bw) = operand(nd.args[ix]), operand(nd.args[iw])
+                site = Site(p, k, members, max(_unit(tx), _unit(tw)), ret.leaves, _width(ret), K,
+                            (_width(tx), _width(tw)), arg_status(nd.args[ix]), arg_status(nd.args[iw]),
+                            (tuple(x[2:] for x in self.parts(nd.args[ix].refs)),
+                             tuple(x[2:] for x in self.parts(nd.args[iw].refs))), dims, (ra, rb), (bx, bw))
+                S.sites.append(site)
+                out = min(float(site.out_width), gemm_rate(site, self.k))
+                prof.append(((leaves, computed((arg_status(a) for a in nd.args), out, bits)),))
                 continue
-            bits = made_bits(nd.args, nd.out)
             if nd.form == "call":
                 C = self.summary(f, tuple(arg_profile(a) for a in nd.args), depth)
                 S.children.append((C, 1, [b for i, a in enumerate(nd.args) for b in bindings(i, a, False)]))
-                prof.append(capped(C.ret, bits))
+                prof.append(capped(C.ret, rate, bits))
             elif nd.form == "batch":
                 params, _ = f.signature()
                 cctx = tuple(arg_profile(a) if ax is None else ((t.leaves, arg_status(a)),)
@@ -440,9 +594,10 @@ class Reader:
                                              for b in bindings(i, a, ax is not None)]))
                 per = C.ret[-1][0]
                 prof.append(capped(runs_of([(m * per + e, s) for m in range(nd.n) for e, s in C.ret])
-                                   if len(C.ret) == 1 or nd.n * len(C.ret) <= 4096 else ((leaves, whole(C.ret)),), bits))
+                                   if len(C.ret) == 1 or nd.n * len(C.ret) <= 4096 else ((leaves, whole(C.ret)),),
+                                   rate, bits))
             elif nd.form == "scan":
-                prof.append(capped(self.scan(S, nd, depth, arg_profile, arg_status, bindings), bits))
+                prof.append(capped(self.scan(S, nd, depth, arg_profile, arg_status, bindings), rate, bits))
             else:
                 raise ValueError(f"{fn.id} node {k}: form {nd.form!r}")
         S.ret = runs_of([(b_, span(source(s, i), lo, hi)) for _a, b_, s, i, lo, hi in self.parts(body.ret)]) or \
@@ -452,7 +607,7 @@ class Reader:
         return S
 
     def scan(self, S: Summary, nd, depth: int, arg_profile, arg_status, bindings) -> Profile:
-        """A scan's iterations by context: the first's carry its init's, each next one's the carry the one before
+        """A scan's iterations by context: the first's carry `first`'s, each next one's the carry the one before
         returned, until a context repeats. A carried value reads none of the current iteration's inputs, and outside
         every scan, the init and the shared arguments are the loop's, not an iteration's."""
         step, n, nx = nd.fn, nd.n, nd.n_xs
@@ -464,7 +619,7 @@ class Reader:
                    for j in range(nx))
         shared = tuple(drop(arg_profile(a), outer) for a in nd.args[1 + nx:])
         carry_leaves = params[0][1].leaves
-        carry = carried(drop(arg_profile(nd.args[0]), gone), params[0][1])
+        carry = first(drop(arg_profile(nd.args[0]), gone))
         seq: list[tuple[tuple, Summary]] = []
         seen: dict = {}
         while len(seq) < n:
@@ -541,10 +696,10 @@ class _Classes:
 
 @dataclass(frozen=True)
 class Group:
-    """Charged products of one shape: an operand pair's widths and kinds, an output width and a contraction length."""
+    """Products of one shape and one reason: an operand pair's widths, kinds, rates and β, an output width and dims."""
 
     product: str
-    #: (x, w) widths in bits, and whether each is a weight
+    #: (x, w) widths in bits, and whether each is a weight (reads none of the current iteration's inputs)
     widths: tuple[int, int]
     weight: tuple[bool, bool]
     out_width: int
@@ -553,20 +708,42 @@ class Group:
     wires: int
     #: the pairs of arrays its products multiply
     edges: frozenset
-    #: (x, w) source bits a value holds, which cap its β
-    bits: tuple[float, float] = (math.inf, math.inf)
+    #: (batch, m, k, n) of one product node
+    dims: tuple[int, int, int, int] = (1, 1, 1, 1)
+    #: (x, w): the bits a block pays a word, the source bits a word holds, and the β (H) charges
+    rates: tuple[float, float] = (0.0, 0.0)
+    bits: tuple[float, float] = (0.0, 0.0)
+    beta: tuple[float, float] = (0.0, 0.0)
+    #: why it is left out of the charged work ("" where it is charged): "theta", "gathered", "self" or "activations"
+    reason: str = ""
 
 
 @dataclass
 class Work:
-    """The products of a Program and the ones the bound charges."""
+    """The products of a Program at a policy's k, and the ones the bound charges."""
 
+    #: the policy's k in bits
+    k: float
     #: |C| in Boolean gates (`boolean_gates`)
     gates: int
-    groups: list[Group]
-    #: MACs a product left out by why: "theta" (an operand some word of which no fresh input reaches), "lookup" (an
-    #: operand that reads a lookup's words) and "self" (both operands of one array)
-    left_out: dict[str, int]
+    #: every product, by shape and reason
+    products: list[Group]
+    #: the adapter's rank that caps every activation's β, if any shows
+    r_step: int | None = None
+    #: the share of a token-indexed product's MACs a sequence's start leaves (`SHARED_PREFIX`)
+    keep: float = 1.0
+
+    @property
+    def groups(self) -> list[Group]:
+        return [g for g in self.products if not g.reason]
+
+    @property
+    def left_out(self) -> dict[str, int]:
+        out = dict.fromkeys(REASONS, 0)
+        for g in self.products:
+            if g.reason:
+                out[g.reason] += g.macs
+        return out
 
     @property
     def N(self) -> int:
@@ -575,6 +752,9 @@ class Work:
     @property
     def O(self) -> int:
         return sum(g.wires for g in self.groups)
+
+
+REASONS = ("theta", "gathered", "self", "activations")
 
 
 def boolean_gates(program) -> int:
@@ -609,10 +789,45 @@ def boolean_gates(program) -> int:
     return total
 
 
-def read(program, products=PRODUCTS, lookups=LOOKUPS) -> Work:
-    """The work ``program`` holds (module docstring)."""
+def adapter_rank(sites) -> int | None:
+    """`he_of_rows`' r_step on a Program's products (module docstring), each of ``sites`` once."""
+    frozen = any(not a.dep and not a.data and b.dep for s in sites for a, b in ((s.x, s.w), (s.w, s.x)))
+    ranks = []
+    for s in sites:
+        if not (s.x.dep and s.w.dep):
+            continue
+        _b, m, K, n = s.dims
+        widened = frozen and bool(s.x.data) != bool(s.w.data) and 4 * K <= (n if s.x.data else m)
+        if widened or (not s.x.data and not s.w.data and 4 * K <= min(m, n)):
+            ranks.append(K)
+    return min(ranks, default=None)
+
+
+def least_sequence(sites) -> int | None:
+    """The least sequence a Program's products of two activations allow: the second smallest of each one's dims above
+    1, at least two of which a token indexes where it is attention's; None where none is."""
+    seqs = []
+    for s in sites:
+        if s.x.data and s.w.data and s.x.dep and s.w.dep:
+            ds = sorted(d for d in s.dims[1:] if d > 1)
+            if len(ds) >= 2:
+                seqs.append(ds[1])
+    return min(seqs, default=None)
+
+
+def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k: float, cap: float) -> float:
+    """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ρ/(w + ρ), an activation's at most
+    `beta_eff` at the adapter's rank, and every one at most ``cap``."""
+    b = w if paid(rate, w) else w * rate / (w + rate) if rate > 0 else 0.0
+    if r_step is not None and activation:
+        b = min(b, beta_eff(w, r_step, k))
+    return min(b, cap)
+
+
+def read(program, k: float, products=PRODUCTS, lookups=LOOKUPS) -> Work:
+    """The work ``program`` holds at a policy's k (module docstring)."""
     gates = boolean_gates(program)
-    R = Reader(program, products, lookups)
+    R = Reader(program, k, products, lookups)
     root = R.root()
     order = sorted(R.memo.values(), key=lambda s: -s.sid)
     count = {root.sid: 1}
@@ -636,29 +851,40 @@ def read(program, products=PRODUCTS, lookups=LOOKUPS) -> Work:
             for vs in (xs, ws):
                 for v in vs[1:]:
                     cls.union(vs[0], v)
-            ops.append((s, site, xs[0] if xs else None, ws[0] if ws else None))
-    left = {"theta": 0, "lookup": 0, "self": 0}
+            if count.get(s.sid, 0) * site.n * site.macs:
+                ops.append((s, site, xs[0] if xs else None, ws[0] if ws else None))
+    sites = [site for _s, site, _x, _w in ops]
+    r_step = adapter_rank(sites)
+    seq = least_sequence(sites)
+    keep = 1 - SHARED_PREFIX / seq if seq else 1.0
+    bk = min_cut().beta(k)
+    cap = min(min_cut().BF16, bk) if bk is not None else min_cut().BF16
     groups: dict = {}
     for s, site, x, w in ops:
-        n = count.get(s.sid, 0) * site.n
-        macs = n * site.macs
-        if not macs:
-            continue
-        if not (site.x.fresh and site.w.fresh):
-            left["theta"] += macs
-        elif site.x.looked or site.w.looked:
-            left["lookup"] += macs
+        n = count[s.sid] * site.n
+        if not (site.x.aff and site.w.aff):
+            reason = "theta"
+        elif site.x.gathered or site.w.gathered:
+            reason = "gathered"
         elif x is None or w is None or cls.find(x) == cls.find(w):
-            left["self"] += macs
+            reason = "self"
+        elif site.x.data and site.w.data:
+            reason = "activations"
         else:
-            key = (site.product.op, site.widths, (not site.x.data, not site.w.data), site.out_width, site.k_dim,
-                   tuple(round(b, 6) for b in site.bits))
-            g = groups.setdefault(key, [0, 0, set()])
-            g[0] += macs
-            g[1] += n * site.outputs * site.out_width
+            reason = ""
+        weight = (not site.x.data, not site.w.data)
+        beta = tuple(round(operand_beta(r, p, not wt, r_step, k, cap), 9)
+                     for r, p, wt in zip(site.rates, site.passed(), weight))
+        key = (site.product.op, site.widths, weight, site.out_width, site.k_dim, site.dims,
+               tuple(round(r, 6) for r in site.rates), tuple(round(b, 6) for b in site.bits), beta, reason)
+        g = groups.setdefault(key, [0, 0, set()])
+        g[0] += n * site.macs
+        g[1] += n * site.outputs * site.out_width
+        if x is not None and w is not None:
             g[2].add(frozenset((cls.find(x), cls.find(w))))
-    return Work(gates, [Group(k[0], k[1], k[2], k[3], k[4], m, o, frozenset(e), k[5])
-                        for k, (m, o, e) in sorted(groups.items(), key=lambda kv: repr(kv[0]))], left)
+    out = [Group(key[0], key[1], key[2], key[3], key[4], m, o, frozenset(e), *key[5:])
+           for key, (m, o, e) in sorted(groups.items(), key=lambda kv: repr(kv[0]))]
+    return Work(k, gates, out, r_step, keep)
 
 
 def clique(edges) -> int:
@@ -703,27 +929,27 @@ class Priced:
     bound: object
     groups: tuple[Group, ...]
     omega: int
-    N: int
+    N: float
     O: int
 
 
-def betas(g: Group, bk: float, bw: float) -> tuple[float, float]:
-    """A group's (β_w, β_x): a weight's at most ``bw``, an activation's at most ``bk``, each at most its width and the
-    source bits a value holds; where both are of one kind, the larger first."""
-    b = [min(w, bits, bw if weight else bk) for w, bits, weight in zip(g.widths, g.bits, g.weight)]
+def betas(g: Group) -> tuple[float, float]:
+    """A group's (β_w, β_x): the weight's first, and where both are of one kind, the larger."""
+    b = g.beta
     if g.weight[0] != g.weight[1]:
         return (b[1], b[0]) if g.weight[1] else (b[0], b[1])
     return tuple(sorted(b, reverse=True))
 
 
-def bound(work: Work, c: float, k: float, n: float | None = None) -> Priced | None:
-    """The best bound at the policy (c, k, n) over ``work``'s sub-works (module docstring); None where it has no
-    charged products or (H) states no activation's β at k."""
+def bound(work: Work, c: float, n: float | None = None, F: float | None = None) -> Priced | None:
+    """The best bound at the policy (c, the work's k, n) over ``work``'s sub-works (module docstring), each at ``F``
+    where given, else its own share; None where it charges no product, (H) states no activation's β at k, or k is
+    `HEAD_K` or more."""
     mc = min_cut()
-    bk = mc.beta(k)
-    if bk is None or not work.groups:
+    k = work.k
+    if mc.beta(k) is None or k >= HEAD_K or not work.groups:
         return None
-    priced = [(math.prod(betas(g, bk, mc.BF16)), g) for g in work.groups]
+    priced = [(math.prod(g.beta), g) for g in work.groups]
     best = None
     for P in sorted({q for q, _ in priced if q > 0}):
         for K0 in sorted({g.k_dim for g in work.groups}):
@@ -732,11 +958,12 @@ def bound(work: Work, c: float, k: float, n: float | None = None) -> Priced | No
                      (kinds == "both" or any(g.weight) == (kinds == "weights"))]
                 if not M:
                     continue
-                bw, bx = betas(min(M, key=lambda x: x[0])[1], bk, mc.BF16)
+                bw, bx = betas(min(M, key=lambda x: x[0])[1])
                 omega = max(2, clique(e for _, g in M for e in g.edges))
-                N, O = sum(g.macs for _, g in M), sum(g.wires for _, g in M)
+                N = sum(g.macs * (1.0 if all(g.weight) else work.keep) for _, g in M)
+                O = sum(g.wires for _, g in M)
                 b = mc.bound(c, k, n, N=N, O=O, size=work.gates, beta_w=bw, beta_x=bx,
-                             b=min(mc.BF16, *(g.out_width for _, g in M)), F=mc.share(omega))
+                             b=min(mc.BF16, *(g.out_width for _, g in M)), F=mc.share(omega) if F is None else F)
                 if best is None or b.blocks > best.bound.blocks:
                     best = Priced(b, tuple(g for _, g in M), omega, N, O)
     return best
