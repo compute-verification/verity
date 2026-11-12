@@ -102365,3 +102365,86 @@ The records run of #9251 at `8a5aebc549a65e018ba78c728627c859ddc29721`, each lau
 ## FOLD, Thu 12 Nov 21:21Z: one reading later than my 21:20Z entry: vy-nebius-cpu-12 now reads -270 GB free, so `r20261112-211724-00f5` is not near a slot
 
 **My 21:20Z entry called vy-nebius-cpu-12 the nearest of the three nodes to a slot, at 10 to 19 GB free; at 21:20:54Z the same node read -270 GB free with 594 GB reserved by live runs, so that no longer holds and #9251's records run `r20261112-211724-00f5` has no ETA I can give [run: its `slot.json`].** A node's free memory moved by some 280 GB inside two minutes, so which node is nearest cannot be told from one reading, and I leave the run where it is. Everything else in the 20:59Z and 21:20Z entries stands: #9264 whole at `6dc48bd394e2` and markable once #9209 is on `main`; #9251 at `8a5aebc549a6` with its quick tier and four tries passed, enough for a mark by `main`'s rule, its records run the one thing not run [run, read].
+
+## ONSITE, Thu 12 Nov 21:22Z: #9455's ready line; #9486 is open (the world's map), its quick tier still running; the pins regenerate as predicted, 7 min on a node; no path of the three maps is one of kernels' files; the open pull request with its pins holds inside 2 h 30 min, its quick tier does not; one rehearsal is in the proofs pool's line (`r20261112-211503-b1a0`)
+
+Your 21:03Z and 21:12Z messages are read [read: the turn's message; the doorbell, 21:12Z]. `main` is `5f0c008aa040`, lean's `cursor/lean-remote-merge-onmain-fc8d` is `bafae2eaec2e`, and #9375 is open at that head [read: `git rev-parse` after a fetch, 21:20Z; `gh pr view`, 21:22Z]. This VM is new; `AGENTS.md` on `main` is unchanged since `ab3f1d53a606`, where I reread it at 19:02Z [read: `git diff --stat ab3f1d53a606 origin/main -- AGENTS.md`, empty].
+
+### 1. #9455
+
+**Ready line:** #9455, head `fbaf4e74e3de`, branch `cursor/proofs-carve-maps-roots-7c3e`. `main` (`ab3f1d53a606`) is in it and nothing else [read: `git log origin/main..HEAD`, one commit; `git merge-base`].
+
+- The changed suites' quick tier at that head: `r20261112-194809-b6e7`, rc 0, 3 suites of 3 passed (`repository` 352, `tools/move` 227, `verity-graph` 220) [run: its `stdout.log`; `job.json`'s `source_sha` is the head].
+- `ratchet_gate.py origin/main HEAD`: passed, against `main` `5f0c008aa040` [run locally].
+- The step against lean's `bafae2eaec2e`: no file stops, as with `main` alone [run locally: `git merge-tree`].
+- `main` moved to `5f0c008aa040` after the branch was cut. It merges onto that tip with no stop, and of the 14 files `main` changed since, none is under `tools/move/` [run locally: `git merge-tree`; read: `git diff --name-only`]. I did not merge `main` in: it would give a head the quick tier did not run at.
+- Its body now carries the quick tier's verdict [run: `research queue edit 9455`]. GitHub shows it mergeable [read: `gh pr view`, 21:09Z].
+- It needs a land verdict: `tools/move/` is in `lowrisk_excludes` [read: `tools/verity/check/drive.toml:74`].
+
+### 2. #9486, the world's map
+
+- Opened unmarked from `cursor/proofs-world-map-3b9d` at `0a13c1c90cb3`, with `Lane proofs` first in its body [run: `research queue open`, 21:11Z; read: `gh pr view`, open and mergeable at 21:20Z]. Two commits on `main` `ab3f1d53a606`: `tools/move/world_map.toml`, and one line of `verity/protocols/certifier/device/README.md` [read: `git log`].
+- The gate passes against `main` `5f0c008aa040`, the two map test files pass (10 passed), and the step stops on no file [run locally, on this VM].
+- **No ready line yet.** Its quick tier `r20261112-194809-9cc5` took its slot at 20:36:44Z after waiting 48 min, and is running [read: its `slot.json`; `research status`, 21:20Z]. Its change touches eleven suites; six had passed at 21:20Z (`verity-pouw-benchmarks`, `repository`, `verity-bench`, `verity-graph`, `tools/move`, `verity-network-e2e`) and five had not ended (`verity-vllm`, `research`, `verity/commitments`, `verity-flock`, `verity/protocols/pouw/verifier`) [run: its `stdout.log`].
+- Its cap is 60 min from the slot, so it ends by 21:36:44Z, passed or cut [read: its `stderr.log`]. If it is cut, I launch the same command on the proofs pool with a two-hour cap and say the new id.
+
+### 3. The three runs of 20:22Z
+
+None was still unstarted when I read them at 21:03Z, so I cancelled none and relaunched none [read: `research status`].
+
+| Run | What | Waited for a slot | Ran | State |
+|---|---|---|---|---|
+| `r20261112-194809-b6e7` | #9455's quick tier | 37 min | 5.5 min | done, rc 0 |
+| `r20261112-195233-6ab1` | the pins regenerated on the staged tip `5b07a3b63200` | 45 min | 7 min | done, rc 0 |
+| `r20261112-194809-9cc5` | the world branch's quick tier | 48 min | 46 min so far | running |
+
+[read: each run's `slot.json` and `status.json`.]
+
+### 4. The pins: the node's regeneration is the predicted one
+
+- `pins.py --regen` on the staged tip ran its Lean build in `security/Proofs` in 7 min, 20:38:04Z to 20:45:04Z ("Build completed successfully (9012 jobs)") [run `r20261112-195233-6ab1`: its `stdout.log`].
+- Its patch changes four files, one line each: the recorded digest of `security/Proofs/lake-manifest.json`, from `82ef7424…` to `ead4b534…` [run: its `out/pins.patch`]. The new digest is that file's sha256 on the staged tip [run locally: `sha256sum`].
+- With the patch on the staged tip, `pins.py --stale` exits 0 (it exits 1 naming the four without it) and `tests/test_pins.py` passes (4 passed) [run locally].
+- A slip of mine in that job: `--stale` writes to stderr and I kept its stdout, so the run's `stale-before.txt` and `stale-after.txt` are empty and its line "stale after: 0" shows nothing [read]. The local run above is the evidence.
+
+**For ci, to paste.** A path map's move (`tools/move/layout.py`) that rewrites a Lake manifest leaves stale every pin of `tools/verity/check/pins.py` that records that manifest's digest; `tools/move/rename.py` rewrites such digests itself (`repin`, `repin_manifests`, `rename.py:718, 760`), and `layout.py` does not (`layout.py:46`: "neither do the digests a path-keyed pin file records") [read]. The carve's three moves each rewrite `security/Proofs/lake-manifest.json`: the `dir` of the path packages that move (`core_composition`; `core_remote` and `core_onsite`; `core_world`) [read: each commit's diff]. After each, `pins.py --stale` names these four [run locally]:
+
+| Pin | What it is (`pins.py`) | Why the move leaves it stale |
+|---|---|---|
+| `verity/protocols/pous/lean/TRUSTED.sha256` | a `sha256sum` listing (64 files), written by the command in `verity/protocols/pous/lean/README.md` (`:129`) | it lists `../../../../security/Proofs/lake-manifest.json` |
+| `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json` | a JSON pin, key `inputs`; command `bash verity/protocols/flock/prover/tests/lean/generate.sh`, which builds in `security/Proofs` (`:130-131`) | `inputs` records `security/Proofs/lake-manifest.json` |
+| `verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json` | a JSON pin, key `inputs`; command `bash verity/protocols/spot/verifier/tests/lean/generate.sh`, which builds in `security/Proofs` (`:132-133`) | the same |
+| `verity/protocols/spot/verifier/tests/fixtures/exfiltration_two_lean.json` | a JSON pin, key `inputs`; the same command (`:134-135`) | the same |
+
+- `tests/test_pins.py::test_no_pin_is_stale` fails on the moved tree until they are regenerated [run locally].
+- `move_check.py` takes a manifest's digest rewritten in a JSON pin inside the commit that changes the manifest (`manifest_pin`), and a `TRUSTED.sha256` line rewritten likewise [read], so a mover that repins gives a commit today's certificate accepts: with the four digests rewritten inside the first move's commit it certified at 12 renames and 44 path-only edits [run locally before my 20:19Z entry, on the earlier VM: scratch, the digests written by a script of mine].
+
+### 5. Your 21:12Z message
+
+- **1, lean's say.** Taken. Every row of the three maps is a directory row; none names a file under `remote/` or `onsite/` [read: each map's `[paths]`, `[retired]`, `[modules]` and `[rewrite]`]. So whichever of our move and the renames lands second, our maps need no change: a file renamed inside those directories moves with its directory, and only my counts change [derived].
+- **2, whether the target holds.**
+  - **The pull request open with its pins commit inside 2 h 30 min of #9375's landing: yes** [guess]. The parts are 10 min of staging [run `r20261112-193301-c004`], 7 min of pins [run `r20261112-195233-6ab1`], about 5 min of per-commit checks here [run locally], a quarter of an hour to build and push the base, and one wait for a slot, since one job now does the staging and the pins (item 6). Today's waits were 37, 45 and 48 min (the table). It fails only if that one wait passes about 1 h 45 min.
+  - **Its quick tier's verdict inside 2 h 30 min: no.** I put it there at 20:19Z and withdraw that half. The world branch's quick tier, for one README line, is eleven suites and has run 46 min after a 48 min wait [run `r20261112-194809-9cc5`]. The move rewrites lakefiles and manifests, so its changed suites bring Lean builds. I give no figure before a quick tier has run on a staged tree; the rehearsal of item 6 is how I get one.
+  - **On `main` by Sat 14 Nov 10 PM PST:** I can time only my part. After the ready line it needs your mark, ci's land verdict and the queue's check of its candidate. #9189, the one staged path map landed this way, was opened at 07:35Z and on `main` at 18:35Z today, 11 hours [read: `gh pr view 9189`]. On that figure plus four hours to a ready line, it holds if #9375 is on `main` by about Sat 14 Nov 7 AM PST [guess].
+- **3, kernels' move.** **No path of the three maps is one of its files**, as its map stands on `cursor/kernels-names-move-680d` at `44e2b04a1a0d` (`tools/move/kernels_names_map.toml`: 11 words and 6 rows naming 14 files) [read].
+  - Run on its own branch, the map rewrites 29 files: 24 under `security/Proofs/`, and `verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean`, `verity/protocols/flock/prover/tests/test_randomness_spec.py`, `verity/protocols/pouw/prover/circuit/plan.py`, `verity/protocols/pouw/verifier/tests/test_circuit_plan.py` and `verity/protocols/spot/verifier/lean/Spot/ChallengerDraw.lean` [run locally: `rename.py --map` in a scratch worktree, discarded].
+  - Our three commits and the pins commit touch 135 paths, old and new names counted. The two sets share none [run locally: `comm`].
+  - It cannot be otherwise for Lean: our maps move only the four directories and exclude `**/*.lean` from the rewrite, and under `security/Proofs/` they change one file, `lake-manifest.json` [read: the maps; the commits' diffs].
+  - **One file both regenerate, though neither move names it:** `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json`. Its `inputs` record `security/Proofs/Flock/Soundness/PlanDraw.lean` and `RandomnessVectors.lean`, which kernels' map rewrites, and it is stale after their move too ("pins repinned: 0", then `pins.py --stale` names it) [run locally]. So kernels' move needs a pins commit as ours does, and whichever lands second regenerates that pin on the first [derived]. That is an order only in the sense every two moves have one: each is staged on `main` after the other is on it. Its list may grow by Saturday; I read it again when its pull request opens.
+
+### 6. The route, prepared
+
+- **The pull request** carries, on `main`'s tip: the preparation commits not yet on `main` (the one_stage change; #9455's and #9486's if they have not landed), then the three staged commits, then the pins commit. Its body has no `Move:` line, and says first which commits are certified moves, with `verity check move PARENT COMMIT` for each, and that the last is `pins.py --regen` [derived from `tools/move/README.md:61-67` and your decision 3].
+- **One job now makes the four commits** [read: `/tmp/maps/carve_pool.sh` on this VM, kept in the notes]: `stage.py` on the three maps, then `pins.py --regen` on the staged tip, one commit, and a bundle over the base. It is the command you gave for the proofs pool, with `--cwd clone`, since `stage.py` writes commits.
+- **A rehearsal of that job is in line:** `r20261112-211503-b1a0`, on `vy-nebius-cpu-12`'s proofs pool, launched 21:15Z, waiting with six checks ahead at 21:19Z [read: its `slot.json`]. Its base is lean's `bafae2eaec2e` merged with `main` `5f0c008aa040` (no file stopped) and the four preparation commits: `2de443c648`, on my new scratch `cursor/proofs-scratch-carve-base-2de4` [read: `git log`]. That tree is what `main` holds the hour #9375 lands if nothing else lands first, so its table is the nearest thing to the real one [derived].
+- **Then one more run, the changed suites' quick tier on the rehearsal's tip.** It is the first run of the suites, `verity-core-composition` among them, on a moved tree, and it times the quick tier for item 5. I launch it when `b1a0` returns its bundle, unless you say the pool has no room for it.
+- **Before the ready line, one check more than before** [derived]: the staged commits are merged, not rerun, so a file another pull request adds under the four directories between the staging and the landing would stay behind. At the ready line I merge `main`'s tip into a scratch copy of the head and run the three maps again; they must change nothing.
+- The registry's row and the owners' map: untouched, as you decided [read: the staged commit rewrites the row's path only].
+
+### 7. What I wait on
+
+- `r20261112-194809-9cc5`: ends by 21:36:44Z. Then #9486's ready line, or the relaunch.
+- `r20261112-211503-b1a0`: six ahead at 21:19Z; about 20 min of run once it has a slot [guess: 10 min of staging and 7 of pins, measured on another node]. Then its per-commit checks here, and the quick tier's launch.
+- #9375 on `main`. Then: the one_stage change opened, the restaging on the new `main`, the pull request with the table redone, the ready line with the hour.
+- Yours: ci's word on the route and on the mover's repinning; the marks.
+- My branches on the remote are those of my 20:19Z entry and one more scratch, `cursor/proofs-scratch-carve-base-2de4` [read: `git ls-remote`]. Nothing is marked; nothing went to Linear or Slack.
