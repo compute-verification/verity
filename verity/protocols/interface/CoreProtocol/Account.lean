@@ -120,10 +120,10 @@ def tensorRate (S : Site) (digest : Sheet → String) (A : Site.Registration.Aud
   (S.device digest A d tick 0 0 (fun (e : Empty) => nomatch e)).map fun m => m.rate .tc
 
 /-- **The registered capacity** of the leaves `xs` of a part, at each reading of the registration it can be read at: a
-rate a tick for a flow, an amount for memory. Compute has two readings: `stated`, the registered sheets' own figures, and
-`bound`, the larger of those and the auditor's estimate, which is the device model's rate. A tier's read rate is its
-devices' sheets' `bw`; no sheet states one for memory under a host, so the list is empty there: the registration holds
-none. -/
+rate a tick for a flow, an amount for memory. Compute has two readings: `stated`, the registered sheets' own figures,
+and `bound`, the larger of those and the auditor's estimate, which is the device model's rate. A tier's read rate is
+its devices' sheets' `bw`; no sheet states one for memory under a host, so the list is empty there: the registration
+holds none. -/
 def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (xs : List String) : List (String × Nat) :=
   match p with
@@ -338,18 +338,18 @@ private def plus (a b : Ratio) : Ratio := (Ratio.mk' (a.num * b.den + b.num * a.
 
 private def larger (a b : Ratio) : Ratio := if a.le b then b else a
 
-/-- The row of amount `m` certified as `n` at `error`, against capacity `cap`: the other amount follows, and neither is
-printed at an error of 1 or more. A free amount is at most the capacity. -/
-private def certifiedRow (m : Amount) (place reading : String) (cap : Option Nat) (n : Nat) (error : Ratio)
+/-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
+is printed at an error of 1 or more. A free amount is at most the capacity. -/
+private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
     (sessions : Nat) (session : Option Nat) : Row :=
-  let n : Nat := match m.side, cap with
+  let n : Nat := match m.side, total with
     | .free, some c => min n c
     | _, _ => n
-  let other : Option Nat := cap.map fun c => c - n
+  let other : Option Nat := total.map fun c => c - n
   let bounded : Bool := !whole.le error
   { metric := m.metric, part := m.part, place, reading, session, sessions, side := some m.side, error,
     status := if bounded then .certified else .noBound,
-    capacity := cap,
+    capacity := total,
     verified := if bounded then (match m.side with | .verified => some n | .free => other) else none,
     free := if bounded then (match m.side with | .verified => other | .free => some n) else none,
     unpriced := m.unpriced }
@@ -359,12 +359,12 @@ leaves it is about. None when the site holds no such leaf. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
   let xs := m.part.leavesAt S place
-  let caps : List (String × Option Nat) :=
+  let totals : List (String × Option Nat) :=
     match m.part.capacity S digest A tick xs with
     | [] => [("", none)]
     | cs => cs.map fun c => (c.1, some c.2)
   let at_ : String := place.getD ""
-  if xs.isEmpty then [] else caps.flatMap fun (reading, cap) =>
+  if xs.isEmpty then [] else totals.flatMap fun (reading, total) =>
     if m.part.flow then
       let good := rs.filter fun r => r.certified
       let error : Ratio := match m.pool, rs with
@@ -375,25 +375,25 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       let uncovered : Nat := ticks - (good.map fun r => r.ticks).sum
       let n : Nat := match m.side with
         | .verified => amount
-        | .free => amount + cap.getD 0 * uncovered
-      [certifiedRow m at_ reading (cap.map fun c => c * ticks) n error rs.length none]
+        | .free => amount + total.getD 0 * uncovered
+      [certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none]
     else
       let each : List (Nat × Ratio) := rs.map fun r =>
-        let fits : Bool := r.certified && (r.capacity.all fun c => decide (c ≤ cap.getD c))
-        let rest : Nat := match r.capacity, cap with
+        let fits : Bool := r.certified && (r.capacity.all fun c => decide (c ≤ total.getD c))
+        let rest : Nat := match r.capacity, total with
           | some c, some C => C - c
           | _, _ => 0
         match m.side, fits with
         | .verified, true => (r.amount, r.error)
         | .verified, false => (0, r.error)
         | .free, true => (r.amount + rest, r.error)
-        | .free, false => (cap.getD r.amount, r.error)
+        | .free, false => (total.getD r.amount, r.error)
       let worst : Nat := match m.side with
         | .verified => each.foldl (fun n x => min n x.1) ((each.head?.map fun x => x.1).getD 0)
         | .free => each.foldl (fun n x => max n x.1) 0
       let error : Ratio := each.foldl (fun e x => larger e x.2) ⟨0, 1⟩
-      (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading cap x.1 x.2 1 (some i)) ++
-        [certifiedRow m at_ reading cap worst error rs.length none]
+      (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading total x.1 x.2 1 (some i)) ++
+        [certifiedRow m at_ reading total worst error rs.length none]
 
 /-- **What the accepted answers certify**, amount by amount. An answer counts for an account when it names the
 account's protocol, accepts, and names `head` under the account's key; of such an answer, each amount of a form `rows`
@@ -413,13 +413,13 @@ def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Audi
   Part.all.flatMap fun p =>
     let covered : List String := (cs.filter fun x => x.1.part = p).flatMap fun x => p.leavesAt S x.2.place
     let rest : List String := (p.leaves S).filter fun x => !covered.contains x
-    let caps : List (String × Option Nat) :=
+    let totals : List (String × Option Nat) :=
       match p.capacity S digest A tick rest with
       | [] => [("", none)]
       | ks => ks.map fun k => (k.1, some (if p.flow then k.2 * ticks else k.2))
-    if rest.isEmpty then [] else caps.map fun (reading, cap) =>
+    if rest.isEmpty then [] else totals.map fun (reading, total) =>
       { metric := "not audited", part := p, place := ", ".intercalate rest, reading, status := .notAudited,
-        capacity := cap, verified := some 0, free := cap }
+        capacity := total, verified := some 0, free := total }
 
 /-- **The accounting rows** of the site `S` registered at `head`, over a period of `ticks` ticks of `tick` seconds, from
 the protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows
@@ -465,7 +465,16 @@ private def site : Site := ⟨[sheet], locs, links⟩
 private def digest : Sheet → String := Site.Registration.sha512.sheet
 private def tick : Figure := fig 1 1000000000
 private def root : ByteArray := ⟨(List.replicate 32 (7 : UInt8)).toArray⟩
-private def passed : Answer := Core.Example.protocol.answer "{\"k\":2}".toUTF8 root "{\"drawn\":2,\"passed\":2}".toUTF8
+/-- The example protocol's accepted answer on two units: its check's public output and profile, as it writes them. -/
+private def passed : Answer :=
+  match Core.Example.check 2 root ⟨2, 2⟩ with
+  | .accept pub prof =>
+    { protocol := Core.Example.protocol.id, verdict := .accept, reason := none, digest := none,
+      published := some (Core.Example.protocol.publicJson pub),
+      profile := some (Core.Example.protocol.profileJson prof) }
+  | _ =>
+    { protocol := Core.Example.protocol.id, verdict := .reject, reason := none, digest := none, published := none,
+      profile := none }
 
 private def accept (protocol : String) (published profile : List (String × Json)) : Answer :=
   { protocol, verdict := .accept, reason := none, digest := none, published := some (Json.mkObj published),
