@@ -64,7 +64,7 @@ def _gemm_fixtures():
     _need(GEMM_FIX, "B1 GEMM fixtures (RTX 4090 eager)")
     for d in sorted(p for p in GEMM_FIX.iterdir() if p.is_dir()):
         f = json.loads((d / "fixture.json").read_text())
-        x = np.fromfile(d / "x.u16", dtype="<u2")
+        x: np.ndarray = np.fromfile(d / "x.u16", dtype="<u2")
         if f["x_arg_cols"] is not None:
             lo, hi = f["x_arg_cols"]
             x = x[lo:hi]
