@@ -46,6 +46,7 @@ from __future__ import annotations
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -1749,7 +1750,7 @@ def main(args: Options) -> None:
                         oc["value_source"] = _ocr.record()
                         print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
-                        oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
+                        oc = {"schema": ORACLE_COMPARE_SCHEMA, "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
                     row["commit"]["oracle_compare"] = oc
                     vc = row["commit"]["value_correspondence"]
