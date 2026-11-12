@@ -146,6 +146,19 @@ def test_memory_decides_not_slots():
     assert stranded_jobs(docs) == ["r05", "r04"]
 
 
+def test_a_job_whose_ticket_names_no_ask_is_placed_as_asking_what_a_run_gets_by_default():
+    """slot.py would start a run that reserves nothing in an idle slot without mem=, past a line stalled on memory. That is no
+    place: the job is placed by NO_ASK_GB, so it is stranded only where that much memory is not reserved."""
+    line = tuple(waiter(m, f"r{m}", mem_gb=32) for m in (40, 30))
+    there = pool(slot("r0", "0-15", mem=None), slot("r1", "16-31", held=True, mem=None), waiters=line, free_gb=3)
+    docs = {A: machine(research=pool(slot("r0", held=True), waiters=(waiter(20, "r-noask"),))), B: machine(research=there)}
+    assert stranded_jobs(docs) == [] and stranded.analyse(docs, T0, CPUS)["pools"]["research"]["places"] == 0
+    there["free_gb"], there["waiters"] = 40, []
+    assert stranded_jobs(docs) == ["r-noask"]
+    there["free_gb"] = 14
+    assert stranded_jobs(docs) == [], f"{stranded.NO_ASK_GB} GB is 15 GiB"
+
+
 def test_twins_are_one_job_and_its_move_is_a_late_twin_where_the_machine_can_claim_on_its_home():
     home = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(twin="p1", run="r-a"),)))
     away = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(twin=f"p1@{A}", run="r-b"),)))

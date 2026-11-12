@@ -18,7 +18,8 @@ A place (`analyse`) is a slot the launcher's own rule would start the job in now
     waiters ahead, and a Lean `check` slot free there too. A priority waiter (a candidate's shard) may take an only=trains slot
     of mem= TRAIN_GB or its ticket's ask if more; a lane's own check takes no only=trains slot. A held check slot that shares a
     core closes it; lane runs on its cores do not, since they run niced and yield (`lane_cores` says how many they hold);
-  - any other pool as `auto._pool` decides for the ask on the job's ticket, against the memory not reserved (`free_gb`), with
+  - any other pool as `auto._pool` decides for the ask on the job's ticket (NO_ASK_GB for a ticket that names none: a run
+    that reserves nothing would start beside a line stalled on memory), against the memory not reserved (`free_gb`), with
     each slot that shares a core with any held slot on the machine first marked blocked;
   - two idle slots that overlap are one place, and one place takes one job: places are dealt oldest first (priority first in
     the check pool), and a job left with none is in line but not stranded;
@@ -42,6 +43,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import auto, remote
+from .suite_size import AUTO_MEM_GB
 
 SCHEMA = "research/stranded/v1"
 #: the pool slot.py's default slots file (`<root>/locks/slots`) is, beside the lane pools under `<root>/locks/NAME/slots`
@@ -56,6 +58,8 @@ LEAN_WAIT_MIN = 10
 POOL_S, READ_S = 20, 60
 #: check.py's TRAIN_GB: the least mem= of a slot a candidate's shard takes
 TRAIN_GB = 200
+#: the ask a lane job is placed by when its ticket names none: what `research run --on auto` gives a run that declares none
+NO_ASK_GB = AUTO_MEM_GB
 #: where auto.PROBE's functions end and its own ending begins
 MARK = "\n\nout = {}\n"
 PEERS = "/etc/vy/peers"
@@ -406,7 +410,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
         for m, pools in work.items():
             if m in mine or j["pool"] not in pools or (m, j["pool"]) in shut:
                 continue
-            doc, ask = pools[j["pool"]], float(j["mem_gb"] or 0)
+            doc, ask = pools[j["pool"]], float(j["mem_gb"] or (0 if j["pool"] == CHECK else NO_ASK_GB))
             if j["pool"] == CHECK:
                 free = _check_free(doc, j["priority"], ask)
                 n, first = int(min(len(free), _lean_room(docs[m].get("lean")))), (free[0] if free else None)
@@ -420,7 +424,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
     def deal(j: dict, at: dict) -> None:
         doc = work[at["machine"]][j["pool"]]
         if j["pool"] != CHECK:
-            doc["waiters"].append({"pid": 0, "minutes": 0, "mem_gb": j["mem_gb"], "dealt": j["job"]})
+            doc["waiters"].append({"pid": 0, "minutes": 0, "mem_gb": j["mem_gb"] or NO_ASK_GB, "dealt": j["job"]})
             return
         s = next(s for s in doc["slots"] if s["name"] == at["slot"])
         s["holder"] = {"pid": 0, "dealt": j["job"]}
@@ -445,7 +449,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
             if p == CHECK:
                 summary[p]["places"] += int(min(len(_check_free(doc, True, 0)), max(_lean_room(docs[m].get("lean")), 0)))
             else:
-                summary[p]["places"] += _lane_free(doc, 0)[0]
+                summary[p]["places"] += _lane_free(doc, NO_ASK_GB)[0]
     runs_on: dict[str, list[str]] = {}
     for m, pools in work.items():
         for doc in pools.values():
