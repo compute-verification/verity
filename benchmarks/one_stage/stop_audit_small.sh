@@ -2,12 +2,14 @@
 # stop_audit.py end to end on a CPU node, on a stop class at small statics (stop_audit_small.py: no engine):
 # flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as two_stage_small.sh builds them, then
 # `two_stage.py first --stop` (the boundary registration, the stop registration and both samples on a local challenger
-# session) and four audits of the stop population:
+# session) and five audits of the stop population:
 #   accept      the class as served: the audit record accepts on Lean's verdict of record, and is not complete
 #   length      a class registered with stop words that are not the rule's: Lean refuses its session
 #   unlogged    a stop record on a boundary record the boundary stream never logged: refused before any session
 #   unaccepted  a boundary stream's outcome that did not accept: the boundary-audit entry refuses the record
-# Exit 0 when the four are what stop_audit_small.py expect holds them to. Records under $OUT (never a circuit, a
+#   incomplete  a boundary stream's outcome that accepted with an entry that did not run: the record accepts, the
+#               boundary-audit entry has no verdict, and it is not complete
+# Exit 0 when the five are what stop_audit_small.py expect holds them to. Records under $OUT (never a circuit, a
 # prover file, a private body or salts, or a challenger's key or secret).
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/stop_audit_small.sh
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS="--serve NONCE"
@@ -70,17 +72,19 @@ first first-wrong "$WRONG"
 S1=$W/first/$NAME/stage1.json
 "${PY[@]}" benchmarks/one_stage/stop_audit_small.py unlogged "$S1" > "$W/unlogged.json"
 "${PY[@]}" benchmarks/one_stage/stop_audit_small.py unaccepted "$S1" > "$W/unaccepted.json"
+"${PY[@]}" benchmarks/one_stage/stop_audit_small.py incomplete "$S1" > "$W/incomplete.json"
 audit accept "$S1" "$CLASS"
 audit length "$W/first-wrong/$NAME/stage1.json" "$WRONG_FILES" --forge "$(seq -s, 0 5)"
 audit unlogged "$W/unlogged.json" "$CLASS"
 audit unaccepted "$S1" "$CLASS" --boundary-outcome "$W/unaccepted.json"
+audit incomplete "$S1" "$CLASS" --boundary-outcome "$W/incomplete.json"
 
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name '*-private.bin' ! -name index.json ! -name index-salt.bin
          ! -name salts.bin ! -path '*/archive/*' ! -path './prover/*' ! -path '*/challenger/*' -size -64M)
-for d in first first-wrong accept length unlogged unaccepted; do
+for d in first first-wrong accept length unlogged unaccepted incomplete; do
   [ -d "$W/$d" ] || continue
   mkdir -p "$O/$d"
   (cd "$W/$d" && find . "${RECORDS[@]}" -print0 | xargs -0 -r -I{} cp --parents {} "$O/$d/")
 done
-cp "$W/unlogged.json" "$W/unaccepted.json" "$O/"
+cp "$W/unlogged.json" "$W/unaccepted.json" "$W/incomplete.json" "$O/"
 "${PY[@]}" benchmarks/one_stage/stop_audit_small.py expect "$W" | tee "$O/expect.txt"

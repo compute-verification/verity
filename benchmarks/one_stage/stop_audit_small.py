@@ -4,7 +4,8 @@
     python stop_audit_small.py serve --out DIR [--outputs 32] [--spans 6] [--serve NONCE]
     python stop_audit_small.py unlogged STAGE1.json      # case 2's hand-off, to stdout
     python stop_audit_small.py unaccepted STAGE1.json    # case 3's boundary outcome, to stdout
-    python stop_audit_small.py expect DIR                # the four runs' summaries under DIR
+    python stop_audit_small.py incomplete STAGE1.json    # case 4's boundary outcome, to stdout
+    python stop_audit_small.py expect DIR                # the five runs' summaries under DIR
 
 ``serve`` writes two classes of ``spans`` requests under the stop rule `stop_rule`, each request ended at the stop id
 or at its ``max_tokens``, the check `TokenSelect_v4{V}`'s:
@@ -19,14 +20,17 @@ or at its ``max_tokens``, the check `TokenSelect_v4{V}`'s:
 
 ``unlogged``: a hand-off whose stop record is built on a boundary record the class's boundary stream never logged
 (the class's own, chained after a record that is not there). ``unaccepted``: an outcome record on the class's boundary
-registration that did not accept, as a boundary stream that refused its sample would log it; today's two-stage
-streams reach no outcome, so the record is written here and no stream's.
+registration that did not accept, as a boundary stream that refused its sample would log it. ``incomplete``: one
+that accepted with an entry that did not run, so its audit record is not complete. Today's two-stage streams reach no
+outcome, so both records are written here and no stream's.
 
-``expect`` holds the rehearsal's four runs to what each must be, each with the case Lean's verdict on the read across
+``expect`` holds the rehearsal's five runs to what each must be, each with the case Lean's verdict on the read across
 the class's two streams gives it (`stop_audit.across`): ``accept`` accepted by Lean's verdict of record with every
 entry that ran accepted, not complete, and no length held, case 3 since no boundary outcome is handed; ``length``
 refused by Lean's verdict on the session alone; ``unlogged`` refused as case 2 before any session, Lean's verdict
-that the boundary stream's log holds no such record; ``unaccepted`` refused by the boundary-audit entry alone, case 3."""
+that the boundary stream's log holds no such record; ``unaccepted`` refused by the boundary-audit entry alone, case 3;
+``incomplete`` accepted as ``accept`` is, the boundary-audit entry without a verdict and with its reason, not
+complete, and no length held, case 4."""
 from __future__ import annotations
 
 import argparse
@@ -52,7 +56,7 @@ SAMPLING = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tok
 STOP_ID, MAX_MODEL_LEN = 3, 64
 #: a request ended at the stop id, and one ended at its max_tokens
 ENDS = (((7, 8, STOP_ID), "stop"), ((7, 8, 9, 9), "length"))
-RUNS = ("accept", "length", "unlogged", "unaccepted")
+RUNS = ("accept", "length", "unlogged", "unaccepted", "incomplete")
 
 
 def template(v: int) -> str:
@@ -114,12 +118,20 @@ def unaccepted(stage1: Mapping[str, Any]) -> dict[str, Any]:
             "symbol": S.REJECT, "public": {}, "audit": audit}
 
 
+def incomplete(stage1: Mapping[str, Any]) -> dict[str, Any]:
+    """An outcome record on the class's boundary registration that accepted with an entry that did not run (module
+    docstring): its audit record names that registration, accepted on its verdict of record, and is not complete."""
+    got = unaccepted(stage1)
+    verdicts = {"lean-verify/boundary": {"accepted": True, "of_record": True}, "not-run": {"accepted": None, "of_record": False}}
+    return {**got, "symbol": S.ACCEPT, "audit": {**got["audit"], "accepted": True, "complete": False, "verdicts": verdicts}}
+
+
 def expect(summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, bool]:
-    """The four runs' summaries (`stop_audit.py`'s ``summary.json`` by run, `RUNS`) against what each must be."""
-    a, w, u, b = (summaries.get(k) or {} for k in RUNS)
+    """The five runs' summaries (`stop_audit.py`'s ``summary.json`` by run, `RUNS`) against what each must be."""
+    a, w, u, b, i = (summaries.get(k) or {} for k in RUNS)
     ran = {SA.LEAN, SA.M0, SA.READS, SA.ORDER}
     null = {SA.BOUNDARY_AUDIT, SA.REQUEST_ROW, SA.STOP_RULE}
-    va, vw, vb = (x.get("verdicts") or {} for x in (a, w, b))
+    va, vw, vb, vi = (x.get("verdicts") or {} for x in (a, w, b, i))
     return {
         "accept": a.get("accepted") is True and a.get("symbol") == S.ACCEPT and a.get("failed") == []
         and all(va.get(k) is True for k in ran) and all(k in va and va[k] is None for k in null),
@@ -132,6 +144,10 @@ def expect(summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, bool]:
         and ((u.get("across") or {}).get("logged") or {}).get("accepted") is False and "verdicts" not in u,
         "unaccepted": b.get("accepted") is False and vb.get(SA.BOUNDARY_AUDIT) is False and b.get("case") == 3
         and all(vb.get(k) is True for k in ran) and b.get("failed") == [] and b.get("length_held") is False,
+        "incomplete": i.get("accepted") is True and i.get("symbol") == S.ACCEPT and i.get("failed") == []
+        and all(vi.get(k) is True for k in ran) and all(k in vi and vi[k] is None for k in null) and i.get("case") == 4
+        and i.get("complete") is False and i.get("length_held") is False and i.get("not_run") == sorted(null)
+        and (i.get("why") or {}).get(SA.BOUNDARY_AUDIT) == SA.NOT_COMPLETE,
     }
 
 
@@ -144,15 +160,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--outputs", type=int, default=32)
     s.add_argument("--spans", type=int, default=6)
     s.add_argument("--serve", default=SERVE, help="the serve's nonce, which the window's run is of")
-    for name in ("unlogged", "unaccepted"):
+    for name in ("unlogged", "unaccepted", "incomplete"):
         sub.add_parser(name).add_argument("stage1", type=Path)
     sub.add_parser("expect").add_argument("dir", type=Path)
     a = ap.parse_args(argv)
     if a.cmd == "serve":
         print(json.dumps({k: str(x) for k, x in serve(a.out, a.v, a.outputs, a.spans, a.serve).items()}))
         return 0
-    if a.cmd in ("unlogged", "unaccepted"):
-        print(json.dumps({"unlogged": unlogged, "unaccepted": unaccepted}[a.cmd](json.loads(a.stage1.read_text())), indent=1))
+    if a.cmd in ("unlogged", "unaccepted", "incomplete"):
+        made = {"unlogged": unlogged, "unaccepted": unaccepted, "incomplete": incomplete}[a.cmd]
+        print(json.dumps(made(json.loads(a.stage1.read_text())), indent=1))
         return 0
     summaries = {k: json.loads(f.read_text()) for k in RUNS if (f := a.dir / k / "summary.json").exists()}
     checks = expect(summaries)

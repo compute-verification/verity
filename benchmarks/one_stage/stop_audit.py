@@ -36,14 +36,19 @@
                            shows the boundary registration's coins before the stop registration's, which the stop
                            sample read whole
       boundary-audit       the boundary stream's outcome on that record (``--boundary-outcome``, a record of that
-                           stream's `Stream.records`): null when none is handed, else whether it is that
-                           registration's accept and Lean's verdict on its audit record accepts
+                           stream's `Stream.records`): null when none is handed; refused when it is not that
+                           registration's accept, or Lean's verdict on its audit record refuses it; null, with
+                           its reason, when that audit record accepted and is not complete (it accepted with
+                           entries that did not run, and is no audit of those); accepted when it accepted and
+                           is complete
       request-row          null: nothing holds `b.request`'s words to the certified request
       stop-rule            null: nothing holds ``--stop`` to the pinned checkpoint
 
-  ``case`` is Lean's, of the whole read: 1 when the log, the order and the boundary stream's audit record all hold;
-  2 when the log or the order does not; 3 when they do and that audit record is missing or did not accept. A record
-  whose boundary stream's audit record is missing is case 3 with no verdict on it: it can accept, and is not complete.
+  ``case`` is Lean's, of the whole read: 1 when the log and the order hold and the boundary stream's audit record
+  accepted and is complete; 2 when the log or the order does not hold; 3 when they do and that audit record is missing
+  or did not accept; 4 when they do and that audit record accepted and is not complete. A record whose boundary
+  stream's audit record is missing (case 3) or accepted and is not complete (case 4) has no verdict on it: it can
+  accept, and is not complete, so no record is complete on a boundary stream's audit record that is not.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
@@ -94,6 +99,7 @@ ACROSS = f"{V.EXE} across"
 BOUNDARY_PREMISE = ("boundary stream's audit: its verdict carried from that stream's audit record by the audit driver, "
                     "not checked by the Lean verifier")
 REQUEST_PREMISE = "request row: the engine's words, not held to the certified request"
+NOT_COMPLETE = "the boundary stream's audit record accepted with entries that did not run: it is not complete"
 STOP_RULE_PREMISE = "stop rule: the driver's parameter, not held to the pinned checkpoint"
 
 
@@ -311,7 +317,8 @@ def link(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] 
 
 def across(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Lean's verdicts on the stop record's read across the class's two streams (`Record.across`, the Lean verifier's
-    piece ``across``, on `link`'s read): ``logged``, ``order`` and ``audit``, each ``{"accepted", "why"}``, with
+    piece ``across``, on `link`'s read): ``logged``, ``order`` and ``audit``, each ``{"accepted", "why"}``, ``audit``
+    with ``complete`` too (whether the boundary stream's audit record says every one of its entries ran), with
     ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
     ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
     return V.lean("across", link(stage1, first, outcome))
@@ -322,8 +329,8 @@ def across_all(boundary: str, links: Sequence[Mapping[str, Any]]) -> dict[str, A
     Lean verifier's piece ``across_all``): ``boundary`` is that record's digest, and each of ``links`` a read as
     `link` gives the stop record's. -> ``links``, each read's `across` with ``reaches``, whether its earlier record is
     ``boundary`` or the later record of a read of the list that reaches it, and the list's ``case``: 2 when a read
-    does not reach the boundary record or is case 2, else 3 when one is case 3, else 1. A record the list leaves out
-    is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No entry of the audit record
+    does not reach the boundary record or is case 2, else 3 when one is case 3, else 4 when one is case 4, else 1. A
+    record the list leaves out is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No entry of the audit record
     reads it: the stop record's is one read, `across`'s."""
     return V.lean("across_all", {"boundary": boundary, "links": [dict(x) for x in links]})
 
@@ -347,26 +354,51 @@ def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -
             "stop": {"registration": r.registration.digest, "previous": r.registration.record.get("previous")}}
 
 
+def boundary_audit(boundary: str, outcome: Mapping[str, Any] | None) -> dict[str, Any]:
+    """What the driver itself reads of the boundary stream's outcome record ``outcome`` on the class's boundary
+    registration ``boundary`` (an entry of that stream's `Stream.records`: it names the registration and holds the
+    audit record): ``accepted``, ``complete`` and, where it did not accept, ``why``, as `Record.across`'s ``audit``
+    gives them of the audit record inside. ``accepted``: none when no outcome is handed; false when it is no outcome
+    record, is another registration's, or its audit record did not accept. ``complete``: none unless it is that
+    registration's outcome record with an audit record, and then whether that audit record says every one of its
+    entries ran."""
+    if outcome is None:
+        return {"accepted": None, "complete": None}
+    audit = outcome.get("audit")
+    if outcome.get("format") != S.OUTCOME:
+        return {"accepted": False, "complete": None, "why": f"not a {S.OUTCOME} record"}
+    if outcome.get("registration") != boundary:
+        return {"accepted": False, "complete": None,
+                "why": "the outcome is another registration's than the class's boundary record's"}
+    complete = audit.get("complete") is True if isinstance(audit, Mapping) else None
+    if outcome.get("symbol") != S.ACCEPT or not isinstance(audit, Mapping) or audit.get("accepted") is not True:
+        return {"accepted": False, "complete": complete,
+                "why": f"the boundary stream's outcome is {outcome.get('symbol')!r}: its audit record did not accept"}
+    return {"accepted": True, "complete": complete}
+
+
 def boundary_entry(boundary: str, outcome: Mapping[str, Any] | None, lean: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The ``boundary-audit`` entry, from the boundary stream's outcome record on the class's boundary registration
-    ``boundary`` (``outcome``, an entry of that stream's `Stream.records`: it names the registration and holds the
-    audit record): null when none is handed; refused when it is no outcome record, is another registration's, or its
-    audit record did not accept. ``lean``: Lean's verdict on that audit record (`across`'s ``audit``), which the entry
-    then needs too, and holds. ``audit``: the audit record's SHA-512."""
-    entry = {"accepted": None, "of_record": False, "tool": TOOL, "premise": BOUNDARY_PREMISE, "audit": None,
-             "registration": boundary}
+    ``boundary`` (`boundary_audit`): null when none is handed; refused when it is no outcome record, is another
+    registration's, or its audit record did not accept; null again, with its ``why``, when that audit record accepted
+    and is not complete, so that the stop stream's record can accept and is then not complete either; accepted when
+    it accepted and is complete. ``lean``: Lean's verdict on that audit record (`across`'s ``audit``), which the entry
+    then needs too, its ``accepted`` and its ``complete``, and holds. ``complete``: whether the audit record is
+    complete, by the driver and by Lean's verdict when given; ``audit``: the audit record's SHA-512."""
+    entry = {"accepted": None, "complete": None, "of_record": False, "tool": TOOL, "premise": BOUNDARY_PREMISE,
+             "audit": None, "registration": boundary}
     if outcome is None:
         return entry
-    audit, why = outcome.get("audit"), None
-    if outcome.get("format") != S.OUTCOME:
-        why = f"not a {S.OUTCOME} record"
-    elif outcome.get("registration") != boundary:
-        why = "the outcome is another registration's than the class's boundary record's"
-    elif outcome.get("symbol") != S.ACCEPT or not isinstance(audit, Mapping) or audit.get("accepted") is not True:
-        why = f"the boundary stream's outcome is {outcome.get('symbol')!r}: its audit record did not accept"
-    elif lean is not None and lean.get("accepted") is not True:
+    mine, audit = boundary_audit(boundary, outcome), outcome.get("audit")
+    why, complete = mine.get("why"), mine["complete"]
+    if why is None and lean is not None and lean.get("accepted") is not True:
         why = f"Lean's verdict on the boundary stream's audit record: {lean.get('why') or 'none'}"
-    return {**entry, "accepted": why is None, "audit": None if audit is None else sha512(dict(audit)),
+    if why is None and lean is not None:
+        complete = complete is True and lean.get("complete") is True
+    accepted: bool | None = why is None
+    if accepted and complete is not True:
+        accepted, why = None, NOT_COMPLETE
+    return {**entry, "accepted": accepted, "complete": complete, "audit": None if audit is None else sha512(dict(audit)),
             "outcome": sha512(dict(outcome)), **({} if why is None else {"why": why}),
             **({} if lean is None else {"lean": {"tool": ACROSS, **lean}})}
 
@@ -422,8 +454,8 @@ def decide(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], prove
 
 def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -> dict[str, Any]:
     """What a run reports of an outcome (`decide`'s): the audit record's ``accepted`` and ``complete`` as they are, each
-    verdict, why one did not accept, Lean's ``case`` of the read across the streams, every entry's premise, and
-    whether the response's length is held: only by a record that accepted and is complete."""
+    verdict, why one did not accept or gives a reason for having none, Lean's ``case`` of the read across the streams,
+    every entry's premise, and whether the response's length is held: only by a record that accepted and is complete."""
     L, audit = r.layout, got.get("audit") or {}
     verdicts = audit.get("verdicts") or {}
     accepted, complete = audit.get("accepted") is True and got.get("accepted") is True, audit.get("complete") is True
@@ -435,7 +467,8 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "symbol": got.get("symbol"), "record": got.get("record"), "refused": got.get("refused"),
             "failed": sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok")),
             "verdicts": {k: v.get("accepted") for k, v in verdicts.items()},
-            "why": {k: v.get("why") for k, v in verdicts.items() if v.get("accepted") is False},
+            "why": {k: v.get("why") for k, v in verdicts.items()
+                    if v.get("accepted") is False or (v.get("accepted") is None and v.get("why"))},
             "not_run": sorted(k for k, v in verdicts.items() if v.get("accepted") is None),
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
