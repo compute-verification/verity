@@ -70,6 +70,20 @@ def test_a_tp_rank_s_dead_free_request_reaches_the_construction(tmp_path, monkey
     assert "--dead-free" in json.loads((tmp_path / "tp1" / "result.json").read_text())["message"]
 
 
+@pytest.mark.parametrize("text, code_rev", [
+    ('{"commit": "c0ffee", "patch_sha256": null}', {"commit": "c0ffee", "patch_sha256": None}),     # an export: what its file says
+    ("{not JSON", None),
+    (None, None),                                                                                    # no export here
+])
+def test_a_build_records_the_export_it_ran_in(tmp_path, monkeypatch, text, code_rev):
+    """A Build's ``code_rev`` is the ``EXPORT.json`` of the directory it ran in, and nothing where there is none or it is not JSON."""
+    monkeypatch.chdir(tmp_path)
+    if text is not None:
+        (tmp_path / "EXPORT.json").write_text(text)
+    _construct_engine_args(tmp_path, monkeypatch, None, 1)
+    assert json.loads((tmp_path / "out" / "result.json").read_text())["code_rev"] == code_rev
+
+
 def _logged(caplog) -> list[logging.LogRecord]:
     return [r for r in caplog.records if r.name == "verity_vllm.pipeline.build"]
 
