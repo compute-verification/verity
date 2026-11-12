@@ -92,7 +92,7 @@ import os
 import sys
 import types
 from collections import Counter, deque
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator
@@ -1026,9 +1026,11 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
             took = CC._dir(cache, e.key) / f"{eid}.seconds"
             # a temporary name of this writer's own, as `cache.store` writes an entry
             tmp = took.with_name(f".{took.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
-            with suppress(FileNotFoundError):          # the version's directory went (`cache.expire`)
+            try:
                 tmp.write_text(f"{e.seconds}\n")
                 os.replace(tmp, took)
+            except FileNotFoundError as x:             # the version's directory went (`cache.expire`)
+                CC.LOST.append(f"{took.parent.name}: {x!r}")
     return n
 
 

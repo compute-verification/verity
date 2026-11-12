@@ -40,7 +40,7 @@ def test_a_version_used_within_the_window_stays_an_older_one_goes_and_the_run_s_
     _version(cache, old, NOW - 73 * HOUR)
     _version(cache, unmarked, None)
     (cache / "not-a-version").mkdir()
-    assert CC.expire(cache, now=NOW, delete=CC.sweep) == [old]
+    assert CC.expire(cache, now=NOW, delete=CC.sweep) == {"gone": [old], "left": []}
     assert sorted(p.name for p in cache.iterdir() if not p.name.startswith(".")) == sorted([own, recent, unmarked, "not-a-version"])
     assert not any(p.name.startswith(CC.EXPIRED) for p in cache.iterdir()), "the renamed directory is deleted"
     assert (_used(cache, own), _used(cache, recent), _used(cache, unmarked)) == (NOW, NOW - 71 * HOUR, NOW)
@@ -51,10 +51,10 @@ def test_a_version_first_seen_unmarked_goes_a_window_after_that_and_a_use_restar
     cache, seen, used = tmp_path / "cache", "c" * 128, "d" * 128
     _version(cache, seen, None)
     _version(cache, used, None)
-    assert CC.expire(cache, now=NOW, delete=CC.sweep) == []
+    assert CC.expire(cache, now=NOW, delete=CC.sweep)["gone"] == []
     os.utime(cache / CC.USED / used, (NOW + 70 * HOUR, NOW + 70 * HOUR))     # a run of it, as `mark` leaves it
-    assert CC.expire(cache, now=NOW + CC.EXPIRE_S - 1, delete=CC.sweep) == []
-    assert CC.expire(cache, now=NOW + CC.EXPIRE_S, delete=CC.sweep) == [seen]
+    assert CC.expire(cache, now=NOW + CC.EXPIRE_S - 1, delete=CC.sweep)["gone"] == []
+    assert CC.expire(cache, now=NOW + CC.EXPIRE_S, delete=CC.sweep)["gone"] == [seen]
     assert (cache / used).is_dir() and not (cache / seen).exists()
 
 
@@ -74,7 +74,7 @@ def test_a_start_reads_the_cache_s_top_and_the_marks_never_what_a_version_holds(
 
     for f in real:
         monkeypatch.setattr(os, f, seen(f))
-    assert CC.expire(cache, now=NOW, delete=lambda top: pytest.fail("nothing to delete")) == []
+    assert CC.expire(cache, now=NOW, delete=lambda top: pytest.fail("nothing to delete")) == {"gone": [], "left": []}
     marks = {("stat", cache / CC.USED / (c * 128)) for c in "0123456789"}
     assert sorted(set(calls) - marks) == [("listdir", cache), ("stat", cache / CC.USED)] and len(calls) == 12
 
@@ -91,15 +91,16 @@ def test_two_runs_removing_one_version_at_once_both_pass_and_it_goes_once(tmp_pa
         rename(src, dst)
 
     monkeypatch.setattr(os, "rename", racing)
-    assert CC.expire(cache, now=NOW, delete=lambda top: None) == []
-    assert other == [[old]]
+    mine = CC.expire(cache, now=NOW, delete=lambda top: None)
+    assert mine["gone"] == [] and [n for n, _ in mine["left"]] == [old] and "FileNotFoundError" in mine["left"][0][1]
+    assert other == [{"gone": [old], "left": []}]
     away = [p for p in cache.iterdir() if p.name.startswith(CC.EXPIRED)]
     assert len(away) == 1 and not (cache / old).exists()
     with open(cache / CC.USED / ".sweep.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)                                          # another sweeper is at work
-        CC.sweep(cache)
+        assert CC.sweep(cache) == "another sweeper holds the lock"
         assert away[0].exists()
-    CC.sweep(cache)
+    assert CC.sweep(cache) == "swept 1"
     assert not away[0].exists()
 
 
@@ -114,7 +115,8 @@ def test_a_version_marked_between_reading_its_mark_and_renaming_it_is_given_back
             os.utime(cache / CC.USED / old, (NOW, NOW))                           # a run of it starts here
 
     monkeypatch.setattr(os, "rename", marked_meanwhile)
-    assert CC.expire(cache, now=NOW, delete=lambda top: pytest.fail("nothing to delete")) == []
+    assert CC.expire(cache, now=NOW, delete=lambda top: pytest.fail("nothing to delete")) == {
+        "gone": [], "left": [[old, "marked while it was renamed away: given back"]]}
     assert (cache / old / "k" / "0.json").is_file()
 
 
@@ -123,7 +125,7 @@ def test_a_directory_left_renamed_away_is_deleted_by_a_later_run_in_a_process_of
     away = _version(cache, f"{CC.EXPIRED}{'b' * 128}.1.ab", None)
     started = []
     CC.expire(cache, now=NOW, delete=lambda top: started.append(CC._sweep_apart(top)))
-    assert len(started) == 1 and started[0] is not None
+    assert len(started) == 1 and not isinstance(started[0], OSError)
     assert started[0].wait() == 0 and not away.exists()
 
 
@@ -142,7 +144,9 @@ def test_a_run_whose_version_goes_while_it_stores_stores_nothing_and_does_not_ra
         replace(src, dst)
 
     monkeypatch.setattr(os, "replace", gone)
+    monkeypatch.setattr(CC, "LOST", [])
     assert CC.store(cache, k, tmp_path, got, rep) is None
+    assert len(CC.LOST) == 1 and "FileNotFoundError" in CC.LOST[0]
     assert CC.lookup(cache, k, tmp_path) is None
     CC._VISIBLE.clear()
     CC._MEMO.clear()
@@ -150,8 +154,8 @@ def test_a_run_whose_version_goes_while_it_stores_stores_nothing_and_does_not_ra
 
 def test_a_read_only_run_marks_its_version_only_where_the_cache_holds_it(tmp_path):
     cache, own = tmp_path / "cache", CC.version()
-    CC.mark(cache, now=NOW)
+    assert CC.mark(cache, now=NOW) is None
     assert not cache.exists()
     (cache / own).mkdir(parents=True)
-    CC.mark(cache, now=NOW)
+    assert CC.mark(cache, now=NOW) is None
     assert _used(cache, own) == NOW
