@@ -1084,11 +1084,11 @@ def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_non
     the object compiled from the unpacked C stays under the hash of the C before it, and the repair drops it for being
     older than the C a records build restores.
 
-    Outside the sandbox `build` gives Lake no cache to read, whatever the environment names: `--build` compiles the
-    module, no file of the tree's `.lake` is one of Lake's own cache's, and after each build the executable runs the
-    source the tree holds. A records build stages nothing there. Where one staged all the same, its restore by a link gave
-    the C the cache file's time, older than the object compiled from the unpacked C: the repair kept that object and the
-    executable ran the earlier source. With nothing unpacked, no build leaves such an object."""
+    Outside the sandbox `build` gives Lake no cache to read, whatever the environment names: `--build` and `--try`
+    compile the module, no file of the tree's `.lake` is one of Lake's own cache's, and after each build the executable
+    runs the source the tree holds. A records build stages nothing there. Where one staged all the same, its restore by a
+    link gave the C the cache file's time, older than the object compiled from the unpacked C: the repair kept that object
+    and the executable ran the earlier source. With nothing unpacked, no build leaves such an object."""
     LC, LA, LCH = (_load(f"no_cache_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
     if sandbox and not LC.sandboxed():
         pytest.skip("no sandbox here, so there is no build in the sandbox to test; the cases with no sandbox run")
@@ -1141,6 +1141,12 @@ def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_non
         assert LCH.build_files(["toy/Toy/Word.lean", "toy/Main.lean"], tmp_path / "deps", log=lambda s: None) == 0
         return capsys.readouterr().out
 
+    def try_file() -> str:
+        """`--try` of `Main.lean`: the slot tree synced and repaired, `lake build +Main:deps`, then `lean` on its copy."""
+        capsys.readouterr()
+        assert LCH.try_file("toy/Main.lean", tmp_path / "deps", log=lambda s: None) == 0
+        return capsys.readouterr().out
+
     def repair() -> list[str]:
         said: list[str] = []
         LCH.repair(slot, ["toy"], {}, None, said.append)
@@ -1171,13 +1177,18 @@ def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_non
     rc, out = records()
     assert rc == 0 and says() == "version Z 1", out
 
-    edit(a)
-    out = build()
-    assert ("Unpacked Toy.Word" in out) == sandbox and ("Built Toy.Word" in out) != sandbox, out
-    assert linked(tree, own) == []
-    repair()
-    rc, out = records()
-    assert rc == 0 and says() == "version A 1" and linked(tree, own) == [], out
+    for run in (build, try_file):
+        edit(a)
+        out = run()
+        assert ("Unpacked Toy.Word" in out) == sandbox and ("Built Toy.Word" in out) != sandbox, out
+        assert linked(tree, own) == []
+        repair()
+        rc, out = records()
+        assert rc == 0 and says() == "version A 1" and linked(tree, own) == [], out
+        edit(z)
+        repair()
+        rc, out = records()
+        assert rc == 0 and says() == "version Z 1", out
     assert staged or not store.exists(), "the node's artifact cache is for what a build compiled in the sandbox"
 
 
