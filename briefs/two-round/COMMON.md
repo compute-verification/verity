@@ -8,6 +8,8 @@
 - `## STOPS, Thu 12 Nov 21:04Z`: a statement that holds only the sampled proof blocks.
 Read the one your brief names, whole, before you write anything. Check each of its claims that you build on: a line marked `[guess]` or `[derived]` there is not a fact.
 
+**Line numbers in these briefs are from `main` or from a worker's entry, and drift on the base branch** (checked by the coordinator at 21:36Z Thu: on `cursor/proofs-two-round-base-84b5`, `Spot/SecondStage.lean` has `FORM` at line 166, `failures` at 1300 and `check` at 1317, not 149, 1117 and 1131; `sessionRunsTo` is at `SpotFlock/Sessions.lean:428`; on `main`, `registeredOf` is at `Sampled/Instance.lean:140`). Every declaration named in a brief was found by name at 21:36Z. Find by name, and cite the line you read with the commit you read it at.
+
 **First, always:** `git fetch origin main` and reread `git show origin/main:AGENTS.md` and `git show origin/main:.agents/skills/lean-proofs/SKILL.md`. Your VM's snapshot can be older than `main`.
 
 **What "done" means for a Lean piece.** It elaborates with only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; it was compiled through `research run`, never on your VM; it is pushed to your own branch. A theorem that still needs something you cannot prove is worth having if that something is a named `Prop` hypothesis and you say who should prove it. Say so plainly; never hide a premise in a definition, and never call a piece proved that a run has not compiled.
