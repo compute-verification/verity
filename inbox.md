@@ -40,3 +40,35 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 3:33 AM PST. **Job C 
 - **Slip:** one search printed unmasked showed a node's name in my own run; it was sent nowhere.
 - `main` moved to `33866d93e66e` while I read. Of the files I read only the hardware cards changed, and I read that diff. #9197 is still open at `368902c12484`.
 
+[2026-11-12T11:33Z] fddf306dafda
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 3:34 AM PST. Job 5 part 3, ahead of Fri 13 Nov noon PST.
+
+**Part 3 is built and passes: branch `cursor/network-accounting-okbit-constant-4e7a`, head `60b8a8560f28`, ten commits on lean's landing tip `f3837f57d113`. Not opened as a pull request, no lock `--update`. No STOP: the constant is computed from the schedule's T and fixed tags alone. The equal-roots case ran against the built Lean and passes.**
+
+What it does: a public `o0` is committed under public salts (`scan_ok.salt`); the period check computes each member's ok root once a `check` from T (`ScanOk.consts`: `first`, `ingress-0`, `last`, `egress-0`) and, last in its findings, refuses an execution phase whose scan's registration names a `<member>/o0` at another root, leaf count or domain, names none for a member, or names another port ending `/o0`.
+
+Runs, each launched once:
+
+1. `r20261112-103307-0ce8` at `a930b03c6919` [ran]: `lean_changed.py --try` on `ScanOk.lean`, `Period.lean`, `NetworkCheck.lean`, `security/Proofs/Properties/NetworkPeriod.lean`, `CoreOnsite.lean`: each `lean exit 0`; the proofs' 43 theorems, no axiom beyond the three. `ScanOk.lean`'s guards hold Lean's constants at T = 16 and T = 3 to the hex Python printed. (`r20261112-100746-28b4` at `5bfa1b25b4`: the same on three files.)
+2. `r20261112-103307-baca` at `a930b03c6919` [ran]: `suites.py --changed f3837f57d113 --quick --fresh`: 83 suites, 83 passed, 0 cached, 0 failed. (83 because the domains table gained two entries.)
+3. `r20261112-104617-8275` at `b2f2658fda25` [ran]: the certifier verifier's two suites whole, slow tests included, each outcome kept: network 97 passed, verifier 1360 passed and 1 opt-in skip.
+4. `r20261112-111640-75ed` at the head `60b8a8560f28` [ran]: `Period.lean`, `NetworkCheck.lean` and the proofs exit 0 again; the network suite whole, 97 passed. The head differs from run 3's by one bound variable's name.
+5. `r20261112-103307-25cb` at `a930b03c6919` [ran]: `scan_zk.sh` at the test class, one execution phase a registration (T = 16): rc 0, honest round drawn 32 of 32 and accepted; the honest registration as the verifier received it names `first/o0`, `ingress-0/o0`, `last/o0`, `egress-0/o0` at exactly the computed constants; held; not held with one root moved; the unread round's (ok bit 0) not held.
+6. Ratchet gate from the landing tip at the head [ran locally]: passed.
+
+**The equal-roots case** (T = 3: `ingress-0` and `last` at one domain and root): `test_two_members_at_one_root_are_each_held_to_it` `PASSED` against the built `network-period` in runs 3 and 4: both accept a registration naming both ports at the one root with one public, and both refuse, by name, each way of breaking it, a registration naming one twin and not the other among them. `ScanOk.lean`'s guard runs the same in Lean alone.
+
+**The cost ruling**: `test_network_period_ok_cost.py`, 4 `PASSED` in runs 3 and 4. The mirror is counted as it runs: the constants once a period, the same SHA-512 count at one, two and three execution phases, zero in every comparison, and a refused period costs the same. Lean is read by the test: `ScanOk.consts` is named once, outside the function mapped over the execution phases, and that function and `held` name nothing that hashes. The count: `ScanOk.calls 32 = 524`, 512 for the trees and 3 a member for its domain [argued from the code, pinned by guards, not instrumented].
+
+Five things for you:
+
+1. **It holds the registration's `roots`, not a member's file.** The period check reads no member's registered file. A member's statement's `o0` root is held to the registration's `<member>/o0` by the registration check, and that entry to the constant here. [read] in `scan_zk.audit`; I did not re-read the Lean of that tie. Say if soundness meant the member's file itself.
+2. **Member names are matched as text** in `scan_ok.members` and `ScanOk.members`. They move with proofs' naming rule; a test compares the table with the staging's.
+3. **Public salts.** PoUW's ok row is committed the same way and `ScanOk.root` uses the same known-rows code (`Flock.RegKnown`), but `Flock/Firewall/Salts.lean` is worded for salts under the ZK server's key. For proofs: is a known row outside that rule?
+4. **Every scan registration staged before this is refused** by the period check, its `o0` being under the prover's salts [ran locally on a kept run's files]. The table is one execution phase a registration's; a group of two is refused.
+5. **No property statement.** `RowsOkHeld`, in `RowsStateTied`'s shape, is written out in the note and not built: it needs a lock entry. Say if you want it stated and proved on this branch.
+
+Also: `r20261112-091349-288a` ended, 7 suites, 7 passed, 0 failed at `4a07fca408fd`; it is in #9228's body. #9228 is open, unmarked, head `c4a83b814a6f`.
+
+Note: `20261112T1105Z-report-net357-part3-okbit-constant`. Not looked at: the Lean check (`check.py`), `circuit-check`, a scan on V3c's trees, PRF-586's branch.
+
