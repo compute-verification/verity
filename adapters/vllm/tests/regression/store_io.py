@@ -173,11 +173,6 @@ def snapshot(name: str, members: list[str], note: str | None = None) -> str:
     return ids[-1]
 
 
-def push(artifact_ids: list[str]) -> subprocess.CompletedProcess:
-    """`research data push ART...` (preserve on the remote; needs credentials in the environment).  Returns the completed process."""
-    return _cli("push", *artifact_ids, check=False)
-
-
 # ---- attempts (Phase 5a: a stage is an Attempt publishing typed artifacts) ---------------------------------------------------------------------
 
 ATTEMPT_RE = re.compile(r"\br[0-9]{8}-[0-9]{6}-[0-9a-f]{4}\b")
