@@ -268,7 +268,10 @@ proof blocks, each carried leaf read at its one value in every session that shar
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b},$$
 `δ_carry,ℓ,b` the carried leaf's term with only its sessions in block `b` weighed (`CarriedLeaf.carryOn`). Its named
 assumptions are `IntegrityBlock`'s, and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder,
-as in `IntegrityHorizonCarried`. With no carried leaf it is `IntegrityBlock`. -/
+as in `IntegrityHorizonCarried`. With no carried leaf it is `IntegrityBlock`.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityBlockCarried : Prop :=
   ∀ (S : CarriedBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -291,7 +294,10 @@ their session's units, the probability that every session is accepted and the in
 carried leaf read at its one value in every session that shares it, total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell}.$$
 Its named assumptions are `IntegrityHorizonBlocks`', and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried
-leaf's finder, whose cost counts `t'_j` for each session `j` it plays before the one it picked. -/
+leaf's finder, whose cost counts `t'_j` for each session `j` it plays before the one it picked.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.pooledIntegrityCarried_rate` is this statement at that rate), while
+under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
 def IntegrityHorizonCarried : Prop :=
   ∀ (S : CarriedBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →

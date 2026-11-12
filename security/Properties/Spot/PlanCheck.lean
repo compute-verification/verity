@@ -19,6 +19,10 @@ arithmetic. These properties say what a check that passes establishes, against t
   work at least `target` escapes with probability at most `delta` (`MeetsTarget`).
 
 Neither says the design is the cheapest: that is the planner's claim, which nothing here checks.
+
+Each is about a Bernoulli design, whose rate is each unit's own probability whatever population is registered. The
+audit and the stream's run refuse a registration under one (`Spot.Draw.bernoulli`), so none of these reads a served
+window's rule; what a served window's rule samples of its population is `RuleAtRate` (`Properties.Spot.Rate`).
 -/
 
 @[expose] public section
