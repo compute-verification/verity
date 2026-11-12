@@ -1914,7 +1914,6 @@
     {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "union-attr", "symbol": "InvRopeQuant.match", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "assignment", "symbol": "DynamicDeepGemmFp8Linear.match", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/gemm.py", "kind": "union-attr", "symbol": "GemmLaunch.match", "detail": ""},
-    {"file": "verity_vllm/observe/fold/patterns/resolutions.py", "kind": "union-attr", "symbol": "label", "detail": ""},
     {"file": "verity_vllm/observe/fold/patterns/sampling.py", "kind": "assignment", "symbol": "LogitsGather.match", "detail": ""},
     {"file": "verity_vllm/observe/fold/patterns/sampling.py", "kind": "union-attr", "symbol": "TokenSelectGumbelTopP._temperature", "detail": ""},
     {"file": "verity_vllm/observe/fold/patterns/sampling.py", "kind": "union-attr", "symbol": "TokenSelectGumbelTopP._topp", "detail": ""},
