@@ -10,14 +10,16 @@ The two-stage guarantees are stated of a modeled verifier, `SpotFlock.V h`, over
 (`Spot.SecondStage.check`, called by `Spot.Run.run` with what it holds of the run, an `Own`). This module states, clause
 by clause, what a passing round 2 gives the model's statement check; `RunsAs.Round2` proves each.
 
-**What the model reads of round 2, and what it does not.** The model's `readsOk` is round 2's own interior order
-(`interiorOrderOk`) and per-statement checks (`codesOk`, which is `SecondStage.stmtCodes`), at what the model holds of the
-run (`ownOf`). So they follow from round 2's, where the running verifier holds what the model holds (`OwnAgrees`) and the
+**What the model reads of round 2, and what it does not.** The model's `readsOk` is round 2's own interior order and
+names (`interiorOrderOk`, `namesOk`) and per-statement checks (`codesOk`, which is `SecondStage.stmtCodes`), at what
+the model holds of the run (`ownOf`). So they follow from round 2's, where the running verifier holds what the model holds (`OwnAgrees`) and the
 statements round 2 reads are the session statements' (`StmtsAre`). The rest of `stmtOk` round 2 does not check, and each
 is a premise here, named for what it says:
 
 * `TwoHolds`: the design evaluates (`two`: the two-stage scope, the layout fitting the members' files, each reference
   statement reading as a member's). It reads only the auditor's copies, never the run.
+* `RecordsHeld`: the run's records name their registrations' names (`recordsOk`), which `Run.run`'s registration
+  step checks, not round 2.
 * `NamesDistinct`: the templates' names are distinct. Round 2 takes the statements by position and finds a statement's
   part by its template's name, so with two parts of one name it passes a run with fewer statements than parts.
 * `RoundsHeld`, `ScopeHeld`, `PinHeld`: each session statement has its template's reference statement's rounds, is in
@@ -38,10 +40,11 @@ open Lean (Json)
 
 /-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
 set to them: the reads the verifiers of record report (`reported`), what they name of each session (`verified`), the
-names of what the replay block returns (`returns`), and the values the verifier supplies or fixes (`supplied`,
-`fixed`). Round 2's per-statement checks read none of these but `verified`. -/
+names of what the replay block returns (`returns`), the values the verifier supplies or fixes (`supplied`,
+`fixed`) and the templates the auditor's params record as reads (`reads`). Round 2's per-statement checks read none
+of these but `verified`. -/
 def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
-  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[] }
+  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
 
 /-- **The running verifier holds what the model holds of the run**, at the run's statement `st`, round 1's record `rec`,
 the second stage's draw and round 0's coin: the replay sample, the parts, the two records, the second draw's units, the
@@ -63,6 +66,10 @@ def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
 
 /-- **The design evaluates** (`two`), at every statement: it reads only the auditor's copies. -/
 def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
+
+/-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
+registration step (`Registration.check`) does. -/
+def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
 
 /-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
 def RoundsHeld (h : Held) (m₂ : Msg) : Prop :=
@@ -130,8 +137,8 @@ def StmtOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → TwoHolds h → NamesDistinct h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
-        (Spot.SecondStage.check true own (some ss)).codes = #[] →
+      StmtsAre h m₂ ss → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ → RoundsHeld h m₂ → ScopeHeld h m₂ →
+        PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
           stmtOk h x m₁ m₂ c₀ c₁ = true
 
 end SpotFlock.RunsAs

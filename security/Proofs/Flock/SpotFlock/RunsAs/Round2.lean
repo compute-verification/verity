@@ -232,7 +232,8 @@ theorem readsOk_of_check : ReadsOkOfCheck := by
   unfold readsOk
   rw [hx, hm₁, hd, hdw']
   simp only [Bool.and_eq_true]
-  refine ⟨⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, ?_⟩, hP t htm w hdw'⟩
+  refine ⟨⟨⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc⟩,
+    ?_⟩, hP t htm w hdw'⟩
   rw [hjw, hs]
   exact codesOk_of_check h own ss st rec draw c₀ hA hc t ht s hs
 
@@ -248,7 +249,7 @@ theorem stmtOkAt_of_check : StmtOkAtOfCheck := by
     exact ⟨⟨⟨⟨rfl, hT s⟩, hR t htm⟩, hSc t htm⟩, hr⟩
 
 theorem stmtOk_of_check : StmtOkOfCheck := by
-  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hT hN hR hSc hP hc
+  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hT hN hRec hR hSc hP hc
   have hcount := count_of_check h own ss st rec draw c₀ hA hN hc
   obtain ⟨xs, hxs, hlen, -⟩ := id hS
   unfold stmtOk
@@ -257,7 +258,7 @@ theorem stmtOk_of_check : StmtOkOfCheck := by
   | some s =>
     rw [hxs]
     simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range]
-    refine ⟨⟨⟨rfl, hT s⟩, hlen.trans hcount⟩, fun t ht => ?_⟩
+    refine ⟨⟨⟨⟨rfl, hT s⟩, hlen.trans hcount⟩, hRec⟩, fun t ht => ?_⟩
     have hat : stmtAt h m₂ t = xs.getD t (h.xS₀ t) := by
       unfold stmtAt
       rw [hxs]
