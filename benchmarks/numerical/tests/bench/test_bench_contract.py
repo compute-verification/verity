@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 import subprocess
 from collections.abc import Callable
 
@@ -294,15 +295,15 @@ def tools(monkeypatch: pytest.MonkeyPatch, present: tuple[str, ...], answer: Cal
         ran.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout=answer(cmd), stderr="")
 
-    monkeypatch.setattr(contract.shutil, "which", lambda tool: f"/usr/bin/{tool}" if tool in present else None)
-    monkeypatch.setattr(contract.subprocess, "run", run)
+    monkeypatch.setattr(shutil, "which", lambda tool: f"/usr/bin/{tool}" if tool in present else None)
+    monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(contract, "Path", NoCpuinfo)
     return ran
 
 
 def test_probe_hardware_runs_no_tool_that_is_absent(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     ran = tools(monkeypatch, (), lambda cmd: "")
-    with caplog.at_level(logging.WARNING, logger=contract.log.name):
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
         assert contract.probe_hardware() == {"gpu": None, "cpu": None}
     assert ran == [] and caplog.records == []
 
@@ -314,7 +315,7 @@ def test_probe_hardware_reads_what_the_tools_answer(monkeypatch: pytest.MonkeyPa
         return "RTX PRO 6000, 580.65, 97887\nRTX PRO 6000, 580.65, 97887\n" if len(cmd) > 1 else "| CUDA Version: 12.9 |\n"
 
     ran = tools(monkeypatch, ("nvidia-smi", "sysctl"), answer)
-    with caplog.at_level(logging.WARNING, logger=contract.log.name):
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
         hw = contract.probe_hardware()
     assert hw == {"gpu": {"name": "RTX PRO 6000", "driver": "580.65", "cuda": "12.9", "count": 2, "memory_total_bytes": 97887 << 20},
                   "cpu": {"model": "Apple M3 Max", "count": 16}}
@@ -334,9 +335,9 @@ def test_probe_hardware_warns_of_a_tool_it_could_not_read(monkeypatch: pytest.Mo
         return "Apple M3 Max\n16\n"
 
     tools(monkeypatch, ("nvidia-smi", "sysctl"), answer)
-    with caplog.at_level(logging.WARNING, logger=contract.log.name):
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
         assert contract.probe_hardware() == {"gpu": None, "cpu": {"model": "Apple M3 Max", "count": 16}}
-    assert [(r.levelname, r.name) for r in caplog.records] == [("WARNING", contract.log.name)]
+    assert [(r.levelname, r.name) for r in caplog.records] == [("WARNING", contract.__name__)]
     assert "nvidia-smi" in caplog.text and type(fault).__name__ in caplog.text and "recorded as None" in caplog.text
 
 
@@ -345,7 +346,7 @@ def test_probe_hardware_warns_of_a_sysctl_it_could_not_run(monkeypatch: pytest.M
         raise PermissionError(13, "Permission denied")
 
     tools(monkeypatch, ("sysctl",), answer)
-    with caplog.at_level(logging.WARNING, logger=contract.log.name):
+    with caplog.at_level(logging.WARNING, logger=contract.__name__):
         assert contract.probe_hardware() == {"gpu": None, "cpu": None}
     assert [r.levelname for r in caplog.records] == ["WARNING"] and "sysctl" in caplog.text and "PermissionError" in caplog.text
 

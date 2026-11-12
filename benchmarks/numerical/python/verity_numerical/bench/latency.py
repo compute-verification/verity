@@ -48,14 +48,21 @@ from typing import Any
 from verity_numerical.bench import census
 
 __all__ = [
+    "A_CHECKER_LAYERS_B4096",
+    "A_COMMITTED_B4096",
+    "A_R16_LEVELS_B4096",
     "BANDWIDTHS_GBPS",
     "CATALOG",
     "RTTS_MS",
     "Design",
+    "a_depth_options",
     "bandwidth_for_compute_bound",
+    "checker_chain",
     "crossover_rtt",
     "e2e",
     "from_envelope",
+    "lookup_chain",
+    "measured_row",
     "memory_binding_rtt",
     "n_saturate",
     "pipeline",
