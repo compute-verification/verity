@@ -185,7 +185,7 @@ def _step(sched: Scheduler, served: dict[str, tuple[list[int], str | None]]) -> 
 def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(tmp_path):
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
-    reopen to the roots its sink line holds; an abort finishes a request; and prefix caching is refused."""
+    reopen to the roots its sink line holds; and an abort finishes a request."""
     now, lines = [0.0], []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
@@ -218,8 +218,30 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     finally:
         bw.stop()
         hooks.uninstall()
-    with pytest.raises(ValueError, match="prefix caching off"):
-        BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
+
+
+def test_a_scheduler_that_caches_prefixes_commits_the_same_spans(tmp_path):
+    """A request served from the prefix cache commits what one served without it commits: its whole prompt, the cached
+    part too, and the ids it was served. The boundary holds nothing of the request whose pages it read."""
+    spans = {}
+    for caching in (False, True):
+        sched, hooks = Scheduler(caching=caching), Hooks(tag=f"test-boundary-rows-caching-{caching}")
+        bw = BW.BoundaryWindows(tmp_path / str(caching), PAIR, 0, 1, 10.0, clock=lambda: 0.0, serve="s")
+        try:
+            bw.install(sched, hooks)
+            first, hit = Request("a", [1, 2, 3, 4, 5]), Request("b", [1, 2, 3, 4, 9])
+            hit.num_cached_tokens = 4 if caching else 0       # vLLM's count of the prompt ids its prefill skipped
+            sched.add_request(first)
+            sched.add_request(hit)
+            _step(sched, {"a": ([7], "length"), "b": ([8, 9], "stop")})
+            bw.stop()
+            spans[caching] = BR.reopen(tmp_path / str(caching) / "w0" / "p8-o2", PAIR).spans
+        finally:
+            bw.stop()
+            hooks.uninstall()
+    assert spans[True] == spans[False]
+    assert [(x.engine_id, x.prompt, x.served, x.finish) for x in spans[True]] == [
+        ("a", (1, 2, 3, 4, 5), (7,), "length"), ("b", (1, 2, 3, 4, 9), (8, 9), "stop")]
 
 
 #: a serve's stop rule: two stop ids, a model of 64 ids, responses of at most 4
@@ -629,3 +651,157 @@ def test_a_request_the_certifier_did_not_release_is_in_no_stop_class(tmp_path):
     released = BR.Span("x", span.prompt, span.sampling, span.served, "stop", ("run", 7))
     assert list(BS.filed([released], RULE, released=True)) == [(4, 4, True)]
     assert BR.Span.from_json(json.loads(json.dumps(released.to_json()))) == released and "release" not in span.to_json()
+
+
+#: three drained windows, each request (name, prompt ids, ids served, which is its ``max_tokens``): classes (4, 4) of two
+#: spans and (16, 2) of one, twice; then (4, 4) of three spans and (16, 4), another class of (4, 4)'s four instances a
+#: replay block, of two. Under `RULE` every one is a stop class at the rule's T, 4, so all share one replay block
+WINDOWS = ([("a", 3, 4), ("b", 9, 2), ("c", 4, 4)], [("a", 3, 4), ("b", 9, 2), ("c", 4, 4)],
+           [("a", 3, 4), ("b", 4, 3), ("c", 3, 3), ("d", 9, 4), ("e", 12, 3)])
+BUILDERS = ("population", "inlined", "population_program", "template_instance_query", "partition")
+#: a serve's check template, whether its replay block inlines it, and its stop rule
+SERVES = [pytest.param(PAIR, False, None, id="population"), pytest.param(CHAIN, True, None, id="inlined"),
+          pytest.param(PAIR, False, RULE, id="stop-rule")]
+
+
+def _salts(layout: BR.Layout, window: int) -> dict[str, bytes]:
+    """Each leaf's salt and the index's as a function of the window, the class and the value, for a commitment a test
+    makes twice."""
+    def fill(tag: str, n: int) -> bytes:
+        return (f"{window}/{layout.prompt}-{layout.outputs}/{tag}/".encode() * n)[:n]
+    return {**{p: fill(p, CS.SALT_BYTES * layout.spans) for p in layout.committed}, "index": fill("index", CS.SALT_BYTES)}
+
+
+def _served(monkeypatch, out, check, inline: bool, stop: BS.Stop | None) -> list[tuple[dict, dict[str, int]]]:
+    """`WINDOWS` served on the stand-in scheduler under the hook, each window drained by one step; every commitment
+    with `_salts` and a clock that stands still. Each class's sink line, with how often each of `BUILDERS` had been
+    called by then."""
+    calls, lines, commit = dict.fromkeys(BUILDERS, 0), [], BW.commit
+
+    def counted(name: str, real):
+        def call(*a, **kw):
+            calls[name] += 1
+            return real(*a, **kw)
+        return call
+    for name in BUILDERS:
+        mod = BR if name in ("population", "inlined") else P
+        monkeypatch.setattr(mod, name, counted(name, getattr(mod, name)))
+
+    def salted(spans, layout, window, **kw):
+        y = _salts(layout, window)
+        return commit(spans, layout, window, salts={p: y[p] for p in layout.committed}, index_salt=y["index"],
+                      clock=lambda: 0.0, **kw)
+    monkeypatch.setattr(BW, "commit", salted)
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-kept")
+    bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, inline=inline, sink=lambda x: lines.append((x, dict(calls))),
+                            clock=lambda: 0.0, serve="s", stop=stop).install(sched, hooks)
+    try:
+        for w, requests in enumerate(WINDOWS):
+            for name, prompt, n in requests:
+                sched.add_request(Request(f"{name}{w}", [1 + w] * prompt, n))
+            _step(sched, {f"{name}{w}": ([20 + w] * n, "length") for name, _prompt, n in requests})
+            assert bw.window == w + 1
+    finally:
+        bw.stop()
+        hooks.uninstall()
+    assert [x.get("error") for x, _ in lines] == [None] * 6
+    return lines
+
+
+@pytest.mark.parametrize("check, inline, stop", SERVES)
+def test_a_later_window_builds_no_part_of_a_class_that_an_earlier_one_built(monkeypatch, tmp_path, check, inline, stop):
+    """The first window builds each class's replay block, program, grain and partition once. The second, of the same
+    classes at the same counts of spans, calls no builder. In the third, another count of spans of a class builds its
+    program, grain and partition and not its replay block, and a class new to the serve whose replay block holds the
+    instances of one served before, at a count of spans that one had, calls none. Under a stop rule, where each count of
+    spans has the stop population's program, query and partition too, each of those is built once as well."""
+    lines = _served(monkeypatch, tmp_path, check, inline, stop)
+    short, replays, each = (2, [1, 2, 2, 2, 2, 2], 1) if stop is None else (4, [1] * 6, 2)
+    assert [(x["window"], x["prompt"], x["outputs"], x["spans"]) for x, _ in lines] == [
+        (0, 4, 4, 2), (0, 16, short, 1), (1, 4, 4, 2), (1, 16, short, 1), (2, 4, 4, 3), (2, 16, 4, 2)]
+    assert [x.get("stopped") for x, _ in lines] == [None if stop is None else True] * 6
+    assert [tuple(n[k] for k in BUILDERS) for _, n in lines] == [
+        (0, r, *[each * counts] * 3) if inline else (r, 0, *[each * counts] * 3)
+        for r, counts in zip(replays, [1, 2, 2, 2, 3, 3])]
+
+
+@pytest.mark.parametrize("check, inline, stop", SERVES)
+def test_a_class_commits_byte_for_byte_what_a_layout_built_for_its_window_alone_commits(monkeypatch, tmp_path, check, inline,
+                                                                                     stop):
+    """Every file of every class of three windows (``commit.json`` with each value's root and domain id and the
+    program's and the partition's digests; the index, its salt and the leaves' salts) and every sink line are what a
+    `Layout` made for that window and class alone, with nothing kept, commits and writes under the same salts: two
+    classes in two windows each, one of them again at another count of spans, and a third class; under a stop rule,
+    with each stop class's `b.stop` under its stop population's domain. No two of them share a domain: the run is each
+    window's own."""
+    lines = _served(monkeypatch, tmp_path / "served", check, inline, stop)
+    classes: dict[tuple[int, int, int, bool], list[BR.Span]] = {}
+    for w, requests in enumerate(WINDOWS):
+        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, BR.sampling_of(Request("", [], n).sampling_params), (20 + w,) * n,
+                         "length") for name, p, n in requests]
+        classes |= {(w, *k): mine for k, mine in BS.filed(spans, stop).items()}
+    assert [(x["window"], x["prompt"], x["outputs"]) for x, _ in lines] == [k[:3] for k in classes]
+    for (line, _), ((w, p, o, held), mine) in zip(lines, classes.items()):
+        alone = BR.Layout(check, 0, 1, p, o, len(mine), BR.run_root("s", w), inline, stop=stop, held=held)
+        ref = BR.write(BW.commit(mine, alone, w), tmp_path / "alone" / f"w{w}" / f"p{p}-o{o}")
+        got = tmp_path / "served" / f"w{w}" / f"p{p}-o{o}"
+        assert sorted(f.name for f in got.iterdir()) == sorted([BR.COMMIT, BR.INDEX, BR.SALTS, CS.INDEX_SALT])
+        for f in ref.iterdir():
+            assert (got / f.name).read_bytes() == f.read_bytes(), (w, p, o, f.name)
+        pub = json.loads((ref / BR.COMMIT).read_text())
+        assert {k: line[k] for k in pub} == pub and list(pub["values"]) == list(alone.committed)
+        assert (pub["program"], pub["partition"]) == (alone.partition["program"], P.digest(alone.partition))
+        assert {v: x["domain"] for v, x in pub["values"].items()} == {
+            v: x["domain"] for v, x in {**alone.ports(), **alone.stop_ports()}.items()}
+    for v in BR.PORTS if stop is None else (*BR.PARTS, BR.STOP):
+        assert len({x["values"][v]["domain"] for x, _ in lines}) == len({x["values"][v]["root"] for x, _ in lines}) == 6
+
+
+def test_what_a_serve_keeps_built_is_bounded_and_the_least_recently_used_leaves_first(monkeypatch):
+    """`_built` keeps replay blocks of `KEEP` instances at most in all, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block past `KEEP` is built for its layout alone
+    and moves nothing; and a part it hands over is the one a layout of its own builds."""
+    monkeypatch.setattr(BW, "KEEP", 12)
+    monkeypatch.setattr(BW, "COUNTS", 2)
+    kept: dict = {}
+
+    def at(outputs: int, spans: int = 1) -> BR.Layout:
+        return BW._built(BR.Layout(PAIR, 0, 1, 4, outputs, spans, "a" * 128), kept)
+
+    four, eight = at(4), at(8)
+    assert list(kept) == [4, 8] and at(4).program is four.program and list(kept) == [8, 4]
+    two = at(2)
+    assert list(kept) == [4, 2] and sum(kept) <= BW.KEEP and at(2).replay is two.replay
+    assert at(8).replay is not eight.replay and list(kept) == [2, 8]
+    wide = at(16)
+    assert list(kept) == [2, 8] and wide.partition == BR.Layout(PAIR, 0, 1, 4, 16, 1, "a" * 128).partition
+    for n in (1, 2, 3):
+        mine, alone = at(2, n), BR.Layout(PAIR, 0, 1, 4, 2, n, "a" * 128)
+        assert mine.replay is two.replay and P.template_id(mine.replay) == P.template_id(alone.replay)
+        assert (mine.partition, mine.grain, mine.ports()) == (alone.partition, alone.grain, alone.ports())
+    assert list(kept[2][1]) == [2, 3] and at(2, 2).program is kept[2][1][2]["program"]
+    assert at(2, 1).program is not two.program
+
+
+def test_a_stop_class_is_handed_its_stop_population_and_a_class_without_a_stop_block_none():
+    """Under a stop rule `_built` keeps a stop class's stop population's program, query and partition beside its
+    program, by its count of spans: a later stop class of that count, of another prompt size, is handed them, and they
+    are what a layout of its own builds. A class without a stop block at the same sizes and count shares the program
+    and is handed no stop population, before a stop class built one and after: it still has none."""
+    kept: dict = {}
+
+    def at(prompt: int, held: bool = True, spans: int = 2) -> BR.Layout:
+        return BW._built(BR.Layout(PAIR, 0, 1, prompt, RULE.outputs, spans, "a" * 128, stop=RULE, held=held), kept)
+
+    before, first, again, after = at(4, held=False), at(4), at(16), at(4, held=False)
+    alone = BR.Layout(PAIR, 0, 1, 16, RULE.outputs, 2, "a" * 128, stop=RULE)
+    assert first.program is before.program and again.program is first.program and after.program is first.program
+    assert again.stop_program is first.stop_program and again.stop_partition is first.stop_partition
+    assert (again.stop_partition, again.stop_query, again.stop_ports(), again.ports()) == (
+        alone.stop_partition, alone.stop_query, alone.stop_ports(), alone.ports())
+    assert list(kept) == [4] and set(kept[4][1][2]) == {*BW._PARTS, *BW._STOP_PARTS}
+    for unheld in (before, after):
+        assert not set(vars(unheld)) & set(BW._STOP_PARTS) and unheld.stop_ports() == {}
+        with pytest.raises(ValueError, match="only a stop class has stop blocks"):
+            _ = unheld.stop_program
+    assert at(4, spans=3).stop_program is not first.stop_program

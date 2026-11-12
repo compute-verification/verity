@@ -56,7 +56,7 @@ def load(sku: str) -> dict:
         raise InvalidArtifact(f"{path.name}: sku = {card.get('sku')!r}; set it to the file's name, {sku!r}")
     if card.get("kind") not in KINDS:
         raise InvalidArtifact(f"{path.name}: kind = {card.get('kind')!r}; set it to one of {KINDS}")
-    _check(card, path.name)
+    check(card, path.name)
     return card
 
 
@@ -88,13 +88,15 @@ def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: f
     return units if fmt is None else units / number(card["weight"][fmt])
 
 
-def _check(table: dict, where: str) -> None:
+def check(table: dict, where: str) -> None:
+    """Refuse ``table``, the file ``where``'s, unless every number in it, at any depth, is an entry with its unit, mark
+    and source: the rule of a card file, and of every file that states numbers as the cards do."""
     for key, item in table.items():
         at = f"{where}: {key}"
         if isinstance(item, dict) and "value" in item:
             _check_entry(item, at)
         elif isinstance(item, dict):
-            _check(item, at)
+            check(item, at)
         elif isinstance(item, (int, float)):
             raise InvalidArtifact(f"{at} is a bare number; write it as {{ value, unit, mark, source }}")
 

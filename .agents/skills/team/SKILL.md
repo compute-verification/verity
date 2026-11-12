@@ -73,8 +73,10 @@ it, and fast-forwards `main` only to a candidate with no new failure, each gatin
   owner told the fix. A candidate holding a change to a
   `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
   Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
-  run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
-  `main` moves only to regenerated records; a records run that fails is a failure like any other.
+  run) off the chain, while batches with no Lean change are built and checked beside it; it then goes onto the chain's
+  top, the records it regenerated committed as `Lock records regenerated for #N...` (regenerated again if that top
+  changed a Lean input), and is checked on that commit, so `main` moves only to regenerated records; a records run that
+  fails is a failure like any other.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
   machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
   unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it. A failure
