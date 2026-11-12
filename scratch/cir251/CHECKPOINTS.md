@@ -4,3 +4,4 @@
 - 2026-11-12T20:07Z suites A ae82 and B 372b: 56/57, verity-vllm 3 failed (vllm long-row tests); long_row c97c: 4 tests fail, pin d27c07cc->877f04d2; item 3 sidecars 66d6 0 failures, suites d93f running; opt-in 66fd 2 passed; caps 481a ok; shards running.
 - 2026-11-12T21:06Z bodies of #9318 and #9371 updated; item 3 d93f: no pin moves; shards 1-3 0 failures, shard 4 1d95 running.
 - 2026-11-12T21:53Z resume 3: long_row _v2 probe 4dcfddd223 (local scratch/cir251-lr-v2); tests -vv 5074, update-pins + five sidecars 04f3.
+- 2026-11-12T22:52Z probe ead4cd10c3: the two long-row test files 13 passed 1 skipped (07c9); pins + sidecars 04f3 running.
