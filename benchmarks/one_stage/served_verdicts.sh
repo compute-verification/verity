@@ -249,7 +249,7 @@
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit (and, under COMPOSE_OFF_NODE=0, the
 # composite; `defer`), under either product. Onsite's own pieces have each written its case in the serve dir by then (the
 # wipe's in step 1, the others' in step 4), and before an onsite run's deferral an ONSITE-CASES line gives, for each of
-# onsite's own subprotocols, the verdict of the answer its piece wrote beside its case (`served_verdicts.py onsite-cases`).
+# onsite's own subprotocols, the verdict of the answer its piece wrote beside its case (`served_verdicts.py onsite-written`).
 # The deferral's list holds none of the cases onsite's composite reads of them (PoUS's, the wipe's), so the preflight
 # refuses a deferral of onsite's composite: PRODUCT=onsite defers with COMPOSITE set empty.
 # Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
@@ -1158,7 +1158,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   [ "$PRODUCT" != onsite ] \
     || say "ONSITE-CASES: before the deferral, each of onsite's own subprotocols with the verdict of the answer its piece" \
         "wrote beside its case on this node (none: no piece wrote one):" \
-        "$("$SAY_PY" "$SV" onsite-cases --serve-run "$D" --pieces "$OUT/pieces" 2>&1 | tail -1 | cut -c1-600)"
+        "$("$SAY_PY" "$SV" onsite-written --serve-run "$D" --pieces "$OUT/pieces" 2>&1 | tail -1 | cut -c1-600)"
   if [ "$COMPOSE_OFF_NODE" = 1 ]; then
     say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs it there and writes the compose hand-off," \
         "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \

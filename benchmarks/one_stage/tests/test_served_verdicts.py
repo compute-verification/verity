@@ -3728,12 +3728,12 @@ def test_an_onsite_deferrals_line_names_each_subprotocol_whose_piece_wrote_no_ca
         "verity/certifier/v0 reject; verity/pous/p2/v4/run none; verity/remote-bandwidth/p2/v0 accept; verity/wipe/v0 accept")
 
 
-def test_onsite_cases_reads_each_own_subprotocols_answers_beside_a_case_and_none_of_the_runners_copies(tmp_path):
-    """`onsite_cases` names onsite's own subprotocols, the ones its composite holds and remote's doesn't, and gives each
+def test_onsite_written_reads_each_own_subprotocols_answers_beside_a_case_and_none_of_the_runners_copies(tmp_path):
+    """`onsite_written` names onsite's own subprotocols, the ones its composite holds and remote's doesn't, and gives each
     the verdict of every answer of its beside a case: under the serve dir's private/ or the run's pieces, never under the
     composite's, a hand-off's or a deferral's directory, never an answer of another protocol (PoUW's period case) or one
     that doesn't parse, and with no serve dir or pieces, none."""
-    assert S.onsite_cases(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
+    assert S.onsite_written(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
         "verity/certifier/v0": [], "verity/pous/p2/v4/run": [], "verity/remote-bandwidth/p2/v0": [], "verity/wipe/v0": []}
     _onsite_wrote(tmp_path)
     private = tmp_path / "serve" / "private"
@@ -3748,10 +3748,10 @@ def test_onsite_cases_reads_each_own_subprotocols_answers_beside_a_case_and_none
         (private / at / "answer.json").write_text(json.dumps(answer))
     (private / "pous" / "w4").mkdir()
     (private / "pous" / "w4" / "case.json").write_text("{}")
-    assert S.onsite_cases(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
+    assert S.onsite_written(tmp_path / "serve", tmp_path / "served-out" / "pieces") == {
         "verity/certifier/v0": ["reject"], "verity/pous/p2/v4/run": ["undecided", "accept"],
         "verity/remote-bandwidth/p2/v0": ["accept"], "verity/wipe/v0": ["accept"]}
-    assert S.main(["onsite-cases", "--serve-run", str(tmp_path / "serve"), "--pieces", str(tmp_path / "none")]) == 0
+    assert S.main(["onsite-written", "--serve-run", str(tmp_path / "serve"), "--pieces", str(tmp_path / "none")]) == 0
 
 
 def _follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
