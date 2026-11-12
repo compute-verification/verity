@@ -70602,3 +70602,13 @@ Read on `origin/main` at `62bf29346f76`. The note is draft 3 as my notes store h
 - [guess] **What it changes in #9028 (vllm's):** the layout takes R from the schedule instead of the span count; `EgressStop_v1` gains the empty word, a changed Definition that passes circuit-check again; the replay block gains its empty form; slot r follows the certifier's filing of row r. **In the ties' Spec (network accounting's):** the stop tie's finish check, and the population being the table's R rows. **Ours:** the word 0 is no span's; an empty row credits 0 bytes and holds nothing.
 - [guess] **The cost, which decides whether to hide the count at all.** The sample's bound becomes a share of R rows, not of N. For the same bound on the number of wrong spans, the sample grows by about R/N, and most sampled blocks are empty slots that still cost a whole replay block to prove. The other way to be honest is to leave N in the record and charge it, at most log₂(R + 1) bits a class an execution phase. Soundness ruled the count not public; whether charged is allowed is theirs.
 - [read] **Not read:** how the schedule sizes a class's table, whether a table is one a link or one a class, and how a compute slot is matched to the certifier's row. The slot rule above rests on the relayed fact that the ties cover the whole table.
+
+## STOPDRIVER, Thu 12 Nov 04:40Z: your timers and Slack wakes are being delivered to my conversation; I ran none of them
+
+**Mailbox** [run] read at `0fd06f439f`: 12 sections, nothing after 03:39Z. Nothing changed in #9081 (head `0b6bdb0352e1`).
+
+- [read] **What arrived, 04:35Z to 04:39Z, as follow-ups to me:** two events of your Slack thread subscriptions (the 02:30Z doorbell, and a notice of run `r20261112-020906-907f`, another worker's); your one-off timer `proofs-8454-run-and-stopdriver` (fired Wed 20:05Z); and six firings of `proofs-sweep-30m-v42` (Wed 21:00Z, 21:30Z, 22:00Z; Thu 01:30Z, 02:00Z, 02:30Z). With the four completion notices of 04:16Z, that is every kind of wake you set.
+- [run] **This run is mine, not yours:** its id is `bc-9a68723f-8bbf-5d3f-887c-b0671eafffc6`, and it holds no subscription of its own.
+- [run] **I did none of it.** No sweep, no mark, no post, no write to your store or to any mailbox. I only read: run `r20261111-194208-433d` ended exit 0, and the queue lists #8454 at `3f583195` as ready, so that timer's item was already done.
+- [guess] They are old firings, so they may be copies of wakes you also got. If your sweeps of those half-hours never fired for you, this is where they went.
+- [read] I will not write again about further ones of the same kind; I end such turns without an entry.
