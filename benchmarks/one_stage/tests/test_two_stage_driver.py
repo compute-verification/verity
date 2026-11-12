@@ -411,6 +411,54 @@ def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_inte
     assert spec.selection == S.TwoStage(_class().layout.grain, RULE.replay, K)
 
 
+class _Decided:
+    """A stream that has decided: it takes the delivery and gives the outcome and the record it was built with."""
+
+    def __init__(self, accepted: bool, *audits: dict | None, refuses: Exception | None = None) -> None:
+        self.accepted, self.refuses = accepted, refuses
+        self.records = [{"symbol": "s", "audit": audits[0], "replay_sample": {"audit": audits[1]}}]
+
+    def deliver(self, *_a: object) -> None:
+        return None
+
+    def outcome(self, *_a: object, **_k: object) -> NS:
+        if self.refuses is not None:
+            raise self.refuses
+        return NS(accepted=self.accepted, record="r")
+
+
+def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
+    """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
+    request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
+    stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
+    one switched on alone. With both on it is, and then only for an accepted outcome whose records both accepted and
+    are complete. A refused outcome is not."""
+    handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
+              "session_roots": {}}
+    whole = {"accepted": True, "complete": True, "checks": {}}
+
+    def said(stream: _Decided) -> bool:
+        return TS.outcome_of(stream, None, handed, [None, None], [], {})["complete"]
+
+    assert TS.REQUEST_DEFINITION is False and SS.FORM is False
+    assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "FORM", True)
+    monkeypatch.setattr(TS, "REQUEST_DEFINITION", True)
+    assert said(_Decided(True, whole, whole)) is True
+    assert said(_Decided(False, whole, whole)) is False
+    assert said(_Decided(True, whole, {**whole, "complete": False})) is False
+    assert said(_Decided(True, {**whole, "accepted": False}, whole)) is False
+    assert said(_Decided(True, whole, None)) is False
+    assert said(_Decided(True, whole, whole, refuses=S.Pending("no proof yet"))) is False
+
+
 def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_like_any_other():
     """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
     names those, its first stage registers their record and samples its spans, and its stop word, the stop record's

@@ -71,7 +71,8 @@ gives its outcome (`prove`, `outcome_of`).
   them yet.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
-instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
+instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws: no outcome
+here says it is complete (`REQUEST_DEFINITION`, `second_stage.complete`). An inlined
 check whose body calls several templates needs core's two-stage over a window of templates. ``second`` replays a token
 select's spans from a capture of the sampler's inputs (`engine.sampler_capture`); a block whose ports read a table or a
 value the verifier supplies is not its yet.
@@ -129,6 +130,9 @@ CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 STAGE1 = "stage1.json"
 #: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
+#: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
+#: docstring), so no outcome here is complete (`second_stage.complete`), whatever its audit records say of themselves
+REQUEST_DEFINITION = False
 #: a window refused after its samples: a stop class's coins don't follow its registrations in the challenger's log
 ORDER_REFUSED = "cross-stream-order"
 #: a stop class whose stop blocks registered or sampled nothing
@@ -816,7 +820,10 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
     checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
-    `verifier.audit_record`'s ``own_reads``), and the codes of round 2's check in the interior's (``statements``)."""
+    `verifier.audit_record`'s ``own_reads``), the codes of round 2's check in the interior's (``statements``), and
+    whether the outcome is complete (`second_stage.complete`): the two-stage form allowed, the replay block the
+    registered request Definition (`REQUEST_DEFINITION`) and both audit records accepted and complete, so never
+    here. A reader that wants a complete audit of the boundary stream reads that, never ``accepted`` alone."""
     sessions = handed["sessions"]
     verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
     given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}
@@ -825,10 +832,12 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
                                                                interior_coins=evidence[1], statements=statements,
                                                                proofs=proofs, **given)
     except (S.Refused, S.Pending) as e:
-        return {"accepted": False, "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
+        return {"accepted": False, "complete": False,
+                "refused": e.verdict.to_json() if isinstance(e, S.Refused) else str(e)}
     body = stream.records[-1]
     audits = {"interior": body["audit"], "replay_sample": (body.get("replay_sample") or {}).get("audit")}
     return {"accepted": o.accepted, "record": o.record, "symbol": body["symbol"],
+            "complete": o.accepted is True and SS.complete(SS.FORM, REQUEST_DEFINITION, list(audits.values())),
             **{k: None if r is None else sorted(x for x, c in r["checks"].items() if not c["ok"]) for k, r in audits.items()},
             "registered": {k: ((r or {}).get("checks") or {}).get("registered") for k, r in audits.items()},
             "statements": ((body["audit"].get("checks") or {}).get("statements") or {}).get("codes")}
