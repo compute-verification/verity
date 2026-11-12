@@ -1042,3 +1042,42 @@ the build is.
   whether the slow card is `vy-nebius-2`'s or the pass's. Read it before the plan (18:00Z) and put
   it beside lease 3's own per-card table. It takes up the pads' split when your plan says what the
   0.72 ms is.
+
+## Thu 12 Nov 10:47Z: lease 3 is read; the pull request is L8@160 and comes FIRST now; YES to the hybrid's build and to the consumers' arm, both after the timed comparison
+
+Read whole: your return, the comment on HASH-120 (10:42Z), the record's table (the mode pass by
+pass). Recomputed by me from it: the read 61.740 ms; L8@160 1.0359, X8@188 1.0417, today's 1.0766;
+today's with no card slow 65.633 ms, 1.0631 of the read, and L8@160 0.9744 of that. The run read as
+done, rc 0. Rung: memory-accounting on HASH-120. **Counting the mode pass by pass is what turned "one
+card is slow" into something a one-line arm can test; and you wrote "my guess was 1.025; it is
+1.042" without my asking.** X goes into the attempts' record with both numbers (1.0091 alone, 1.042
+in a pass) and your reading of why, marked as derived: no arm isolates it.
+
+**Lease 3 came back five hours before its bound, so the order changes:**
+1. **The pull request first, now:** L8@160 as a mode, carried from `5444b0d5fdbb` to `main` and
+   built there, opened unmarked at a pushed commit **by 15:00Z**, with lease 2's and lease 3's
+   figures named as screens, the gap to 1.02, and X as tried and not in it. `Lane kernels`,
+   `Refs HASH-120`, `Goal kernels/poub-pass-near-plain-read`. The timed comparison runs from that
+   commit. If its build on `main` is not clean by 15:00Z, say so then, not at 19:00Z: a comparison
+   from the notes' file is one more screen and is called that.
+2. **The hybrid: yes, a build today, after the pull request is open.** On your own rule (no stack
+   use and no spill in its loops), its registers and shared memory an SM stated with its sha256.
+   **Its arm is in the 21:00Z slot AFTER the timed comparison, in a lease of its own**, guard first
+   (the eight checks): a kernel that faults a card must not take the comparison with it. It stays
+   out of the pull request until it has beaten L8@160 on the cards.
+3. **The slow mode's test: yes, one arm, today's pass with its consumers cut to fit** (248 to 224,
+   "400 half-SMs of 376"), in the same later lease, with every pass's part on each card kept as in
+   lease 3. If the mode goes, that is a one-line gain of 1.3 points for today's pass that is
+   memory-accounting's to take, whatever becomes of our mode: say it in the plan as a test, not a
+   finding.
+4. **The 21:00Z slot, in this order:** the timed comparison of L8@160 against today's pass (card
+   by card and pass by pass; the candidate over today's both ways: every pass, and the passes with
+   no card in the slow mode); then, in a second lease, the consumers' arm and the hybrid's guard
+   and screen. Nothing new runs in the comparison's lease.
+5. **The plan (18:00Z)** says 1 to 4, the pads' line (whether 40 against 39 is the 0.72 ms, still
+   owed), and puts memory-accounting's per-card medians from node A (HASH-120, by 16:30Z) beside
+   your table. **The 64-row review (20:00Z)** as before. The attempts' record before Friday.
+6. **If something must give, say which by 15:00Z.** What gives first is the hybrid's build; the
+   pull request and the timed comparison do not give.
+
+Return when the pull request is open, or at 15:00Z with where it is.
