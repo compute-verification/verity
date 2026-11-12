@@ -29,6 +29,10 @@
                                     axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
+    verity lean bits [PKG...] [--json] [--locks-only]
+                                    every guarantee the locks list (default the three security locks), with its
+                                    security in bits where something gives it a number, and that number's source
+                                    (lean/bits.py)
 """
 from __future__ import annotations
 
@@ -47,7 +51,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = "verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]"
+USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
+         "verity lean bits [PKG...] [--json] [--locks-only]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
 
@@ -172,6 +177,8 @@ def _lean_here(file: str, siblings: bool = False) -> int:
 
 
 def _lean(args: list[str]) -> int:
+    if args and args[0] == "bits":
+        return _run([sys.executable, str(HERE / "lean" / "bits.py"), *args[1:]])
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
                                  "package that holds it (the nearest lakefile above FILE), against that package's built "
                                  "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
