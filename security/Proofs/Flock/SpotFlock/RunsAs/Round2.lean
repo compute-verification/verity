@@ -14,6 +14,8 @@ Each statement of `SpotFlock.RunsAs.Statements`, proved from what a passing roun
   earlier part is (`find?_first`). And the model's check reads, of the verdicts, only the statement's own
   (`Stmt.checked`), which pass `second-verified` and `second-tables` wherever round 2's verdicts of record do; its
   other checks read nothing the two differ in (`stmtCodes_core`, `stmtCodes_verified`);
+* the design is derived over the model's parts as over round 2's (`designOk_of_check`), and a round-1 record that
+  registers no value has no value an input may not read (`inputsFailure_none`);
 * round 2 reads one statement a template where the templates' names are distinct (`count_of_check`);
 * `readsOk`, `stmtOkAt` and `stmtOk` follow (`readsOk_of_check`, `stmtOkAt_of_check`, `stmtOk_of_check`), with the
   premises round 2 does not check.
@@ -21,7 +23,7 @@ Each statement of `SpotFlock.RunsAs.Statements`, proved from what a passing roun
 
 @[expose] public section
 
-namespace SpotFlock.RunsAs
+namespace SpotFlock.RunsAs.Round2
 
 open Claims
 open Lean (Json)
@@ -216,8 +218,49 @@ theorem count_of_check : CountOfCheck := by
     rw [List.length_map, List.length_range] at hle
     exact hle.trans ((List.length_filterMap_le _ _).trans (by simp))
 
+/-- **The design is derived over the model's parts** (`designOk`): round 2's `second-links` and `second-wires` read
+the links, wires and rows, which the running verifier holds as the model does. -/
+theorem designOk_of_check {h : Held} {own : Spot.SecondStage.Own} {ss : Array Json} {st : Roots} {rec draw : Json}
+    {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
+    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    Spot.SecondStage.designOk (partsAt h (ownOf h st rec draw c₀).sample.size) (ownOf h st rec draw c₀) = true := by
+  obtain ⟨-, -, ps, hp, hl, hw, -⟩ := Spot.SecondStage.check_ok hc
+  obtain rfl := parts_of_check hA hp
+  rw [← show core own = ownOf h st rec draw c₀ from hA]
+  unfold Spot.SecondStage.designOk
+  rw [Bool.and_eq_true]
+  exact ⟨hl, hw⟩
+
+/-- **A record that registers no value has no value a replay block's input may not read** (`inputsFailure`), whatever
+the verifier holds. -/
+theorem inputsFailure_none {own : Spot.SecondStage.Own} (hR : RegistersNone own.interior) :
+    Spot.SecondStage.inputsFailure own = none := by
+  unfold Spot.SecondStage.inputsFailure
+  dsimp only
+  rw [Array.find?_eq_none]
+  intro v hv
+  exfalso
+  obtain ⟨e, he, hev⟩ := Array.mem_filterMap.1 hv
+  try dsimp only at hev
+  have hstr : ∃ v', Spot.getD e "value" = .str v' := by
+    revert hev
+    split
+    · rename_i v' hval
+      intro _
+      exact ⟨v', hval⟩
+    · intro hnone
+      cases hnone
+  obtain ⟨v', hval⟩ := hstr
+  revert he
+  split
+  · rename_i es hes
+    intro he
+    exact hR es hes e he v' hval
+  · intro he
+    simp at he
+
 theorem readsOk_of_check : ReadsOkOfCheck := by
-  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hP hc t ht
+  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t ht
   obtain ⟨xs, hxs, hlen, hw⟩ := hS
   obtain ⟨-, -, ps, -, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
   obtain ⟨s, -, hs, -, -, -, -⟩ := hst t ht
@@ -232,15 +275,16 @@ theorem readsOk_of_check : ReadsOkOfCheck := by
   unfold readsOk
   rw [hx, hm₁, hd, hdw']
   simp only [Bool.and_eq_true]
-  refine ⟨⟨⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc⟩,
-    ?_⟩, hP t htm w hdw'⟩
+  refine ⟨⟨⟨⟨⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc⟩,
+    ?_⟩, designOk_of_check hA hc⟩, ?_⟩, hP t htm w hdw'⟩
+  · simp [inputsFailure_none (own := ownOf h st rec draw c₀) hRN]
   rw [hjw, hs]
   exact codesOk_of_check h own ss st rec draw c₀ hA hc t ht s hs
 
 theorem stmtOkAt_of_check : StmtOkAtOfCheck := by
-  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hT hR hSc hP hc t ht
+  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hT hR hSc hP hc t ht
   have htm := lt_of_check hA hc ht
-  have hr := readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hP hc t ht
+  have hr := readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t ht
   unfold stmtOkAt
   cases hpx : parse h x with
   | none => simp [parse, hx] at hpx
@@ -249,7 +293,7 @@ theorem stmtOkAt_of_check : StmtOkAtOfCheck := by
     exact ⟨⟨⟨⟨rfl, hT s⟩, hR t htm⟩, hSc t htm⟩, hr⟩
 
 theorem stmtOk_of_check : StmtOkOfCheck := by
-  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hT hN hRec hR hSc hP hc
+  intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hT hN hRec hR hSc hP hc
   have hcount := count_of_check h own ss st rec draw c₀ hA hN hc
   obtain ⟨xs, hxs, hlen, -⟩ := id hS
   unfold stmtOk
@@ -264,7 +308,7 @@ theorem stmtOk_of_check : StmtOkOfCheck := by
       rw [hxs]
     rw [← hat]
     exact ⟨⟨hR t ht, hSc t ht⟩,
-      readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hP hc t (by omega)⟩
+      readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t (by omega)⟩
 
 /-- **A passing round 2, template by template**: the interior record's order and names are the model's, and where the
 templates' names are distinct, each template `t` has a statement at position `t` that names it and passes the model's
@@ -289,4 +333,4 @@ theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondSt
   refine ⟨s, by rw [hg]; exact hs, (partsAt_template hi).2.symm, ?_⟩
   exact codesOk_of_check h own ss st rec draw c₀ hA hc t hts s hs
 
-end SpotFlock.RunsAs
+end SpotFlock.RunsAs.Round2

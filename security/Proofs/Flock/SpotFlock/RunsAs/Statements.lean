@@ -20,6 +20,8 @@ is a premise here, named for what it says:
   statement reading as a member's). It reads only the auditor's copies, never the run.
 * `RecordsHeld`: the run's records name their registrations' names (`recordsOk`), which `Run.run`'s registration
   step checks, not round 2.
+* `RegistersNone`: round 1's record registers no value. The model refuses every registered value
+  (`SecondStage.inputsFailure` at `ownOf`), where round 2 passes those the verifier holds.
 * `NamesDistinct`: the templates' names are distinct. Round 2 takes the statements by position and finds a statement's
   part by its template's name, so with two parts of one name it passes a run with fewer statements than parts.
 * `RoundsHeld`, `ScopeHeld`, `PinHeld`: each session statement has its template's reference statement's rounds, is in
@@ -31,7 +33,7 @@ is a premise here, named for what it says:
 
 @[expose] public section
 
-namespace SpotFlock.RunsAs
+namespace SpotFlock.RunsAs.Round2
 
 open Claims
 open Lean (Json)
@@ -70,6 +72,13 @@ def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 /-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
 registration step (`Registration.check`) does. -/
 def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
+
+/-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model's
+`readsOk` reads `SecondStage.inputsFailure` at what it holds of the run (`ownOf`), with no value of the verifier's own
+and no read, where every registered value is refused; round 2 passes a value the verifier pinned, fills or opens as a
+read's row (`second-inputs`). So the model's clause follows from round 2's only where there is no such value. -/
+def RegistersNone (rec : Json) : Prop :=
+  ∀ es, Spot.getD rec "registered" = .arr es → ∀ e ∈ es, ∀ v, Spot.getD e "value" ≠ .str v
 
 /-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
 def RoundsHeld (h : Held) (m₂ : Msg) : Prop :=
@@ -120,7 +129,8 @@ def ReadsOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+      StmtsAre h m₂ ss → RegistersNone rec → PinHeld h m₂ →
+        (Spot.SecondStage.check true own (some ss)).codes = #[] →
         ∀ t < ss.size, readsOk h t x m₁ (stmtAt h m₂ t) c₀ c₁ = true
 
 /-- **A passing round 2 gives the model's `stmtOkAt` at each template**, with the premises round 2 does not check. -/
@@ -128,7 +138,7 @@ def StmtOkAtOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → TwoHolds h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
+      StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
         (Spot.SecondStage.check true own (some ss)).codes = #[] →
           ∀ t < ss.size, stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true
 
@@ -137,8 +147,8 @@ def StmtOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ → RoundsHeld h m₂ → ScopeHeld h m₂ →
-        PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+      StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
+        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
           stmtOk h x m₁ m₂ c₀ c₁ = true
 
-end SpotFlock.RunsAs
+end SpotFlock.RunsAs.Round2
