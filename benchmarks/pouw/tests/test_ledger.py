@@ -466,7 +466,7 @@ def test_a_repository_only_refresh_keeps_the_store_s_rows_and_rereads_the_reposi
         (lean / root).symlink_to(P.REPO_AUDIT.parent / root)
     short = gone.rsplit(".", 1)[1]
     source = (P.REPO_AUDIT.parent.parent / P.REPO_LEMMAS).read_text()
-    edited = source.replace(f"def {short} : Prop :=", f"def {short}Other : Prop :=")
+    edited = source.replace(f"{short} : Prop :=", f"{short}Other : Prop :=")
     assert edited != source
     (tmp_path / P.REPO_LEMMAS).parent.mkdir(parents=True)
     (tmp_path / P.REPO_LEMMAS).write_text(edited)
