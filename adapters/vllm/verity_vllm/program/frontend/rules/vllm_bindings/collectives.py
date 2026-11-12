@@ -20,7 +20,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
 )
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 # -- tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
 

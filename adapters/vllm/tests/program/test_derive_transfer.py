@@ -41,14 +41,11 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
 
 from tests.program.test_derive_negative import (
-    _DERIVE,
     IMPORTER_NAME,
     Outcome,
     run_importer,
 )
 from verity_vllm.program.frontend.provenance import registry_version
-
-pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
 
 # ---------------------------------------------------------------------------------------------------------
 # the second family
@@ -423,7 +420,7 @@ def kinds_emitted(out: Outcome) -> list[str]:
 # the run: every case, reported as-is
 # ---------------------------------------------------------------------------------------------------------
 
-OUT_PATH = os.environ.get("XFER_OUT") or f"/tmp/xfer/transfer-{'derive' if _DERIVE else 'shipped'}.jsonl"
+OUT_PATH = os.environ.get("XFER_OUT") or "/tmp/xfer/transfer-derive.jsonl"
 def _git_head() -> str:
     if os.environ.get("XFER_HEAD"):
         return os.environ["XFER_HEAD"]
@@ -526,8 +523,6 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     """Independent reproduction of the importer's S3 claim: `GreedyServe(B0, steps=15)` on a 32-token prompt derives, the
     family rule claims `Serve_v1{B0,LP=32,STEPS=15}`, the digest equals the certificate of record's, and this file's
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
-    if not _DERIVE:
-        pytest.skip("derive() not available")
     from verity.definitions.registry.b1 import B0_CONFIG
 
     from tests.program.test_derive_negative import (

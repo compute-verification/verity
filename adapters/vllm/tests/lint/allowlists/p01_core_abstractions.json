@@ -1,7 +1,6 @@
 {
   "rule": "P1 (use core's abstractions; never copy or patch them)",
   "entries": [
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.circuits.defs._static_key"},
     {"file": "verity/definitions/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.circuits.defs.REGISTRY.add()"},
     {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.circuits.codec._spec_id"},
     {"file": "verity/definitions/call_scope.py", "kind": "core-private", "symbol": "spec_statics", "detail": "verity.circuits.codec._split_record"}

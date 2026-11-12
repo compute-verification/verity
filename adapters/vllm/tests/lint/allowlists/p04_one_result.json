@@ -26,8 +26,6 @@
     {"file": "verity_vllm/pipeline/report.py", "kind": "g-literal", "symbol": "vu_partition_text", "detail": "G8"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_export", "detail": "'...' in msg", "count": 2},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "reason-prefix", "symbol": "_no_rule", "detail": "msg.startswith"},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg", "count": 3},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "reason-prefix", "symbol": "_classify", "detail": "'...' in msg.lower()"},
     {"file": "verity/definitions/numerics/twins.py", "kind": "reason-prefix", "symbol": "_skip_class", "detail": "'...' in msg", "count": 3}
   ]
 }

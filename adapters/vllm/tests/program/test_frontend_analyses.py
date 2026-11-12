@@ -16,6 +16,7 @@ from verity_vllm.program.frontend.correspond import (
     _statics_diff,
     compare_bodies,
     correspond,
+    correspond_rebound,
 )
 from verity_vllm.program.frontend.provenance import registry_version
 
@@ -118,6 +119,36 @@ def test_correspond_reports_digest_and_structure():
     r = correspond(make_program(act=Relu16), make_program(act=Id16))
     assert not r.corresponds and not r.digest_equal
     assert any(m.verdict.startswith("missing") or m.verdict == "mismatch" for m in r.mismatches)
+
+
+def test_correspond_counts_a_definition_in_two_encodings_as_same_references_and_lists_its_node_names():
+    """One id, two encodings of one reference sequence: the programs correspond with unequal digests, the definition is counted
+    and named as same-references, and a node named differently on the two sides is reported, not refused."""
+    def concat(B, S):
+        z = B.call(b1.ZERO32, name="zero")
+        return Coll(Array(3, F32), Concat([z.refs] * 3))
+
+    def strided(B, S):
+        B.call(b1.ZERO32, name="nought")
+        return Coll(Array(3, F32), Strided("n", 0, 0, 1, 0, 0, 3))
+
+    def program(body) -> Program:
+        leaf = CompositeDefinition("ThreeZeros", 1, (), lambda S: ((), Array(3, F32)), body, register=False)
+        top = CompositeDefinition("ThreeZerosTop", 1, (), lambda S: ((), Array(3, F32)), lambda B, S: B.call(bind(leaf)), register=False)
+        return Program(bind(top))
+
+    r = correspond(program(concat), program(strided))
+    assert r.corresponds and not r.digest_equal and not r.mismatches and not r.unverified
+    assert r.same_references == 1 and r.same_reference_ids == ["ThreeZeros_v1"] and r.identical == r.definitions - 1
+    assert r.name_differences == ["ThreeZeros_v1 node 0: 'zero' vs 'nought'"]
+    doc = r.to_json()
+    assert doc["corresponds"] is True and doc["digest_equal"] is False and doc["digest_left"] != doc["digest_right"]
+    assert doc["same_reference_ids"] == ["ThreeZeros_v1"] and doc["name_differences"] == r.name_differences
+    assert doc["mismatches"] == [] and doc["unverified"] == [] and "pairs" not in doc  # pairs are `correspond_rebound`'s
+    same = correspond(program(concat), program(concat))
+    assert same.corresponds and same.digest_equal and same.same_references == 0 and same.name_differences == []
+    rebound = correspond_rebound(program(concat), program(strided))
+    assert rebound.corresponds and rebound.to_json()["pairs"] == rebound.pairs != []
 
 
 def test_a_bindings_diff_names_a_function_by_its_id():

@@ -415,7 +415,9 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     if launch.get("conflict"):
         raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
                                     "co-scheduled with different batches; build one Program per (shape, arrival) or declare the contexts")
-    by = launch.get("max_seqlen_q_by_step") or {}
+    by = launch.get("max_seqlen_q_by_step")
+    if not by:
+        by = {}
     v = by.get(int(step))
     if v is None:
         raise LaunchContextInvalid(f"the declared launch context names steps {sorted(by)} but the request runs step {int(step)}: declare every "

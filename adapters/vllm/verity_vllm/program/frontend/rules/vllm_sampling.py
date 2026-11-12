@@ -30,7 +30,8 @@ from verity.definitions.registry.sampling import SPLIT_COUNTS
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 BF16 = torch.bfloat16
 

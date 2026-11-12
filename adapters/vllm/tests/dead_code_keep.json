@@ -7,7 +7,6 @@
   "verity.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
-  "verity_vllm.program.frontend.examples": "authored examples of the torch-frontend tests (LIVE frontend.torch_frontend / correspond)",
   "verity_vllm.program.lifting.dump": "complete-assignment dump used by tests/program/test_lifted_tiny.py (LIVE registry.lifted / pad_prims)",
   "verity.definitions.numerics.fa3_split_twins": "numpy twins of registry.fa3_split's Definitions, checked word for word against them by tests/program/test_fa3_split.py (LIVE registry.fa3_split) and run by the H200 capture tests/properties/glm53_fa3_prefill_capture_gpu.py; live once a replay row binds AttentionSplit_v1",
   "verity.definitions.numerics.deepgemm_schedule": "DeepGEMM's cc 9.0 launch-configuration model (the chosen layout, its boundaries over M, the sweep and the JIT template arguments), pinned by tests/program/test_deepgemm_schedule.py and read by the capture tests/properties/deepgemm_capture_gpu.py; live once a Program carries a schedule claim",
