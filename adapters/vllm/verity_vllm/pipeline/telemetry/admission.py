@@ -26,7 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import row_tokens, workload_file
-from verity_vllm.engine.profiles.admission_calibration import CALIBRATION, DENSE_DEFAULT, MODELS, uncalibrated_model_note
+from verity_vllm.engine.profiles.admission_calibration import (
+    CALIBRATION,
+    DENSE_DEFAULT,
+    MODELS,
+    uncalibrated_model_note,
+)
 
 MiB = 1 << 20
 SCHEMA = "verity/admission-plan/v1"
@@ -192,7 +197,7 @@ def peak_overlap(intervals: Iterable[tuple[str, float, float, int]]) -> dict[str
     ev.sort(key=lambda e: (e[0], e[1]))   # frees (0) before allocs (1) at the same instant: touching intervals do not overlap
     cur = 0
     live: dict[str, int] = {}
-    best = {"peak_bytes": 0, "t": None, "live": {}}
+    best: dict[str, Any] = {"peak_bytes": 0, "t": None, "live": {}}
     for t, is_alloc, name, b in ev:
         if is_alloc:
             cur += b
@@ -209,7 +214,7 @@ def peak_overlap(intervals: Iterable[tuple[str, float, float, int]]) -> dict[str
 
 def _terms_to_intervals(terms: list[Term], points: list[str]) -> list[tuple[str, float, float, int]]:
     idx = {p: i for i, p in enumerate(points)}
-    out = []
+    out: list[tuple[str, float, float, int]] = []
     for t in terms:
         if t.kind == "device":
             continue
