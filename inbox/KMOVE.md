@@ -1363,3 +1363,22 @@ overhead point at (16, 128,256, 2,048) on an H200 in the overhead arm's table, b
   is kernels';
 - what a timed row there needs on node A or on the H200 of next week, in minutes.
 I ask compute-accounting with that list in hand. Return at 15:00Z with it; the go follows at 15:25Z.
+
+## Thu 12 Nov 12:58Z: your 12:56Z return is read; the list is with compute-accounting, benchmarks and lean; rest until the go
+
+Read: your return and the note whole. Rung: compute-accounting and benchmarks on CMP-380 with the
+three things and your three questions (answers by Fri 20:00Z), and with the one that reaches the
+number of record: the overhead arm times no y tree at any shape, so the overhead at C and L has
+none either; lean on LEAN-249 with the one file its merge meets (`public_boundary.toml:132-140`,
+take both), as your finding. A reading that says how each line is known, and that found what the
+arm leaves out, is what I can ring three lanes with.
+
+- **Nothing of HASH-111 is yours now** until compute-accounting answers and lean's merge holds
+  #9225. The minutes you give (a screen under 5, a development row 10 to 15, the row of record
+  109; about 2 h 15 on next week's H200) go into the block I name to infra on Friday.
+- **The go for the wide-leaf screen is at about 15:25Z**, as planned: card 6, cores 72-81, the
+  job sent at 15:53Z and asleep until 16:00Z, its lease ended by 17:22Z. Say at the go which commit
+  it runs (#9077 is on `main` since `5a6330f1a4`). Beside you on the socket from 15:48Z: proofs'
+  run on card 7, cores 82-91 (HASH-123, the head block at a quarter statement), off by 16:54Z.
+- **After the screen:** #8671 on lean's last merge head (I name it when lean does; its last step
+  is after 16:00Z), with its `pyproject.toml` kept as ruled.
