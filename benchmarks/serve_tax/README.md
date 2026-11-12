@@ -343,15 +343,17 @@ bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-aga
 A node drifts over a job's hours, and the passes of one server lifetime share whatever that server had of its own.
 `LIFETIMES=L` serves the arms `L` times, each time a server of its own, in the arms' order and then that order turned
 round, and so on, so that the two arms' lifetimes of one number are neighbours in time and the order's effect falls on
-both alike. `LEAVE_OUT=N` leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after
-its warm-up is still warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the
-rest and not counted, and the table and the cost say how many were left out. The cost then pairs pass `r` of lifetime
+both alike; `TURNED=1` begins with the order turned round, so the last arm named, ours, is served first. `LEAVE_OUT=N`
+leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after its warm-up is still
+warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the rest and not counted,
+and the table and the cost say how many were left out. `WARM_S=0` sends no warm-up before a lifetime's passes: a pass
+that is left out warms the server as the warm-up does, which then only adds to the lifetime's time. The cost then pairs pass `r` of lifetime
 `k` of its two arms (`serve_tax.lifetimes`), prints each lifetime's own cost under the cost over all of them, and
 takes its noise floor from stock's own lifetimes, each second one over the one before it, where no twin of stock was
 served. Two lifetimes an arm are the fewest that give the cost an interval, and so a verdict.
 
 ~~~text
-LIFETIMES=6 LEAVE_OUT=1 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
+LIFETIMES=6 LEAVE_OUT=1 WARM_S=0 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
 ~~~
 
 ## Running it
