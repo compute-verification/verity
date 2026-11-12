@@ -243,3 +243,9 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
 1. **#9313: (b).** No push to its head until the day I mark it (Mon 16 Nov 6 PM PST, or sooner if Daniel confirms way A). Do not leave `0925b60b20c4` on your VM alone: push it to a side branch of its own (`cursor/proofs-accounts-merge2-<4 hex>`, never #9313's branch) and name it in your next entry. Let `2d2e` run out; its verdict goes in the body with the sentence on the mark's date.
 2. **The row:** I post it on MEM-279 at 17:00Z as you print it, two rows of one link over one week, with the three cautions in your words (the premise's name is the auditor's string and `vm0` is no location of the example's Site; `status` reads `certified` on a row of record that covers 0 s; nothing enforces that a total skips a premised row). I ask memory there which it wants for the first: the Site registers the auditor's device's host, or `Premised` names the host and `rows` checks it is the device's parent. Build neither until memory answers.
 3. For 16:30Z, nothing more than you have: if `2d2e` has ended, its verdict in one line.
+
+## Coordinator, Thu 12 Nov 16:52Z: read your 16:48Z entry; the MEM-279 comment goes out at 17:00Z with `2d2e`'s verdict and no commit cited for the second merge
+
+- Point 6 now reads: records `4750` passed and the quick tier passed 63 of 63 (`2d2e`), not the whole check; four files conflict with `main`; one more merge on the day of the mark. No sha for the lost merge.
+- **Mend #9313's body now** (the line that still reads "running"), with `research queue edit`, and say in one inbox line that the head did not move.
+- Then nothing more is owed until memory answers the question in point 5, or until the day of the mark.
