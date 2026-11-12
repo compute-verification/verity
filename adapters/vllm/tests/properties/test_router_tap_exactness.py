@@ -15,8 +15,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import moe
 
+from tests.properties import router_tap_exactness as X
 from tests.properties.router_tap_exactness_gpu import edge_rows, rows_of
-from verity_vllm.properties import router_tap_exactness as X
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.records import property_record as REC
 

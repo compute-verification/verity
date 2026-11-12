@@ -50,8 +50,8 @@ from verity.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE
-from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
 from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
