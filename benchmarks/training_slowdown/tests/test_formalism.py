@@ -644,16 +644,16 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     fig = figure(he, c, C, beta_code=2.0)
     share = 2 / math.sqrt(3)
 
-    def rho(M: list, bw: float, bx: float, f: float = share) -> float:
+    def slowdown(M: list, bw: float, bx: float, f: float = share) -> float:
         work = {"N": sum(g["macs"] for g in M), "O": sum(g["wires"] for g in M), "beta_w": bw, "beta_x": bx,
                 "b_y": 16, "F": f, "C_gates": C}
         return calculators_count(c, k, work)
 
     assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
     assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
-    assert fig["rho"] == pytest.approx(rho([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
-    assert rho([fwd, dx, dw], 2.0, 8.0) < rho([fwd, dx, dw], 2.0, 15.9)
-    assert fig["rho"] > max(rho([fwd, dw], 2.0, 15.9), rho([dw], 15.9, 8.0), rho([dw], 15.9, 8.0, 1.0)) > 0
+    assert fig["rho"] == pytest.approx(slowdown([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert slowdown([fwd, dx, dw], 2.0, 8.0) < slowdown([fwd, dx, dw], 2.0, 15.9)
+    assert fig["rho"] > max(slowdown([fwd, dw], 2.0, 15.9), slowdown([dw], 15.9, 8.0), slowdown([dw], 15.9, 8.0, 1.0)) > 0
 
 
 def test_f_is_1_where_the_binding_m_holds_forward_products_alone():

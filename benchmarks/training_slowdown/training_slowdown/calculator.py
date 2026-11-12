@@ -2,7 +2,7 @@
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
-on the slowdown and what binds. The grade (`formalism.bound`, which `grade.rho_of` reads) and the library's table
+on the slowdown and what binds. The grade (`formalism.bound`, which `grade.slowdown_of` reads) and the library's table
 (`library.bound`) both call it, and nothing else of this benchmark computes a slowdown from a step
 (`tests/test_one_calculator.py`). It reads the work the record states (`training_slowdown.work`: M, the products whose
 two operands both depend on the update), chooses the subset of M the bound is largest on, and asks the calculator's

@@ -619,7 +619,7 @@ def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
     token form among them, and its label) and the attack side (module docstring)."""
     d = m.decoder_gates if m.decoder_gates is not None else math.inf
     delta, delta_t = (m.delta_bits, m.delta_t) if d < c else (None, None)
-    rho_fit = c / (c - d) if d < c else math.inf
+    slowdown_fit = c / (c - d) if d < c else math.inf
     parts, fits = [], []
     for p in m.parts:
         w = p.token_gates / p.tokens if p.tokens else math.inf
@@ -638,8 +638,8 @@ def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
                       math.floor(c / (t * m.alpha_max)) if t * m.alpha_max else math.inf) if 0 < t < 1 else 0
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     b = bound(m, c, k, kinds)
-    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
+    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": slowdown_fit,
+            "rho": slowdown_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
             "bound": b}
 
 
@@ -678,7 +678,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
 
     v = at(m, c, k)
     b = v["bound"]
-    rho, partial, why = v["rho"], False, None
+    slowdown, partial, why = v["rho"], False, None
     off = uncomputed(b)
     if v["fit"]:
         binding = "fit"
@@ -693,8 +693,8 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
         binding = "none"
     he = b["inputs"]["products"]
     products = he_rests_on(he) if b["terms"]["products"] is not None else None
-    return {"label": f"{THE_CODE} {VERSION}", "rho": rho, "binding_kind": binding,
-            "rests_on": products if binding == "products" else RESTS_ON_CELL["unmeasured" if rho is None else binding],
+    return {"label": f"{THE_CODE} {VERSION}", "rho": slowdown, "binding_kind": binding,
+            "rests_on": products if binding == "products" else RESTS_ON_CELL["unmeasured" if slowdown is None else binding],
             "products_rests_on": products, "partial": partial, "why": why, "terms": dict(b["terms"]),
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},
             "capture_code": he.get("capture_code")}
@@ -873,7 +873,7 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         raise ValueError(f"tail share {t} is not in [0, 1)")
     u1 = f["u1_bits"] if f.get("u1_bits") is not None else (f["u"][-1][1] if f.get("u") else out["delta_bits"])
     if u1 is None:
-        raise ValueError("no update profile and no update code: rho is unmeasured")
+        raise ValueError("no update profile and no update code: the record's slowdown is unmeasured")
     u, u_in = tail(u1, t)
     for name, default, a, how in (("u", u, "A1", "done reading no update bits, the changed update even over the rest"),
                                   ("u_in", u_in, "A1", "u_in jumps to the changed layers' full update at once")):

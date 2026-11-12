@@ -197,8 +197,8 @@ STATES = {
         "`rho`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
         "calculator's, else the entry point's slowdown",
     ("training_slowdown/formalism.py", "published"): "`at`'s `rho`",
-    ("training_slowdown/grade.py", "rho_of"): "`published`'s `rho`, or none with the reason",
-    ("training_slowdown/grade.py", "grade"): "`rho_of`'s `rho`, and `S`, p times it",
+    ("training_slowdown/grade.py", "slowdown_of"): "`published`'s `rho`, or none with the reason",
+    ("training_slowdown/grade.py", "grade"): "`slowdown_of`'s `rho`, and `S`, p times it",
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
     ("training_slowdown/library.py", "row"): "`bound`'s slowdown",
 }
@@ -294,18 +294,18 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
                    decoder_gates=0.0, products=work.products_of_trace(work.priced(traced(k))))
     honest = F.published(m, c, k)["rho"]
     assert honest == real(pol, traced(k))["slowdown"] > 1
-    for give, rho, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
+    for give, slowdown, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
                                ({"slowdown": 1.0, "term": 0.5, "binds": "none"}, 1.0, "none"),
                                ({"slowdown": None, "term": None, "binds": "unmeasured", "why": "unmeasured: said so"},
                                 None, "unmeasured")):
         given.clear()
         given.update(give)
         b, one = F.bound(m, c, k), F.published(m, c, k)
-        assert b["entry"]["slowdown"] == rho and b["terms"]["products"] == give["term"]
-        assert F.at(m, c, k)["rho"] == rho and (one["rho"], one["binding_kind"]) == (rho, binding)
+        assert b["entry"]["slowdown"] == slowdown and b["terms"]["products"] == give["term"]
+        assert F.at(m, c, k)["rho"] == slowdown and (one["rho"], one["binding_kind"]) == (slowdown, binding)
         row = library.bound(traced(k), c, k)
-        assert row["slowdown"] == rho
-        if rho is None:
+        assert row["slowdown"] == slowdown
+        if slowdown is None:
             assert b["unmeasured"]["products"] == row["binds"] == "unmeasured: said so"
     fits = F.Measured((F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12, delta_grad_bits=1e5),),
                       tau_bits=32, a_bits=8192, u=F.even(1e5), u_in=F.even(1e5), delta_bits=1e5, decoder_gates=1e12)

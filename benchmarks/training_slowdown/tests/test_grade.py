@@ -169,16 +169,16 @@ def test_the_runs_gates_at_s_read_the_mean_of_c_over_seeds_that_differ():
     """The run at S is the mean |C| over the final seeds times ρ: not their least, their greatest, or the search
     record's |C| that ρ was read at."""
     s = graded([reach(5, 0), reach(7, 1), traced([OVER, UNDER, UNDER])], [reach(2, 0), reach(4, 1)])
-    C, rho = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
-    assert C["min"] < C["mean"] < C["max"] and rho > 1
+    C, slowdown = s["attack"]["splits"]["final"]["C"], s["rho"]["rho"]
+    assert C["min"] < C["mean"] < C["max"] and slowdown > 1
     per_and = gates.per_and("gemm/bf16")
-    assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * rho / per_and)
+    assert s["per_period"]["run_and_gates"] == pytest.approx(C["mean"] * slowdown / per_and)
     for other in (C["min"], C["max"], s["rho"]["C_gates"]):
-        assert s["per_period"]["run_and_gates"] != pytest.approx(other * rho / per_and)
-    assert s["S"]["honest"] == pytest.approx(2.0 * rho)
+        assert s["per_period"]["run_and_gates"] != pytest.approx(other * slowdown / per_and)
+    assert s["S"]["honest"] == pytest.approx(2.0 * slowdown)
 
 
-def test_rho_reads_the_first_planned_search_seed():
+def test_the_records_slowdown_reads_the_first_planned_search_seed():
     """With two search records, ρ is read on the seed the config's `seeds.search` names first, whatever order the
     records come in."""
     early, late = traced([OVER, UNDER, UNDER]), traced([OVER, OVER, OVER, UNDER], seed=1)
@@ -248,7 +248,7 @@ def test_an_unknown_policy_is_refused_by_name_and_a_name_resolves_in_one_place()
     assert set(calculator.policies()) >= {"v4-pro-session"} and calculator.policy("console") is None
 
 
-def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
+def test_the_records_slowdown_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     """ρ is `formalism.published` at the policy's (c, k) on the search job's first checkpoint reaching the gain, and
     S = p·ρ against each H. At a registry policy whose k the trace's products aren't classified at, ρ is unmeasured
     with the formalism's reason and there is no S; p stands."""
@@ -328,7 +328,7 @@ def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitiviti
         why.endswith("the term sums the parts that have it") for why in s["rho"]["unmeasured"].values())
     red, upd = s["rho"]["sensitivities"].values()
     text = G.text(s)
-    assert f"reduction {red:,.6g}, update {upd:,.6g}, beside rho and never in it" in text
+    assert f"reduction {red:,.6g}, update {upd:,.6g}, beside the record's slowdown and never in it" in text
     assert f"reduction: partial: {s['rho']['unmeasured']['reduction'].removeprefix('unmeasured: ')}" in text
     assert "unmeasured" not in text and ", its code 9.9" in text
     assert "blank" not in text
@@ -355,7 +355,7 @@ def test_a_trace_without_its_circuit_or_code_version_still_grades_and_says_what_
     no_code = f"the search record's trace has no capture_code, the version of the code that took the trace; {again}"
     assert s["rho"]["blank"] == {"reduction": no_circuit, "update": no_circuit, "capture_code": no_code}
     text = G.text(s)
-    assert "reduction blank, update blank, beside rho and never in it" in text
+    assert "reduction blank, update blank, beside the record's slowdown and never in it" in text
     assert f"reduction: blank: {no_circuit}" in text and f"update: blank: {no_circuit}" in text
     assert f", its code blank: {no_code}" in text
     coded = graded([final, heavy(traced([OVER, UNDER], capture_code="9.9"))], ref)["rho"]
@@ -382,7 +382,7 @@ def test_a_step_is_after_the_first_update_when_it_reads_a_changed_weight():
     assert G.changed_steps(steps({"new/1": [""]}, {"new/1": [""]}), None) == []
 
 
-def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
+def test_no_slowdown_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again():
     """p reads the count alone, so it stands where ρ has no trace to read: a record with none, one whose step the
     capture refused, one of another capture version, or one without a key ρ reads. The reason names the job that
     re-traces the record at its commit and config.text; a record without them is told it has no config to re-trace
@@ -428,7 +428,7 @@ def test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is
         "; the record has no config.text, so no config to re-trace from")
 
 
-def test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes():
+def test_no_slowdown_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes():
     """A read-back that decides what the graph can't carry, a trace whose products no update reaches, and a
     checkpoint with a nonempty E before any step reads a changed weight are refused, never priced; p stands."""
     ref = [job([UNDER])]
@@ -514,14 +514,14 @@ def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):
     assert rest["token_gates"] == circuit["sigma"] * rest["gates"] and circuit["grad_cut_bits"] > 0
     run = {"seed": 0, "split": "search", "record": ran}
     c, k = rest["token_gates"] / 2 / 3.5, policy.CONSOLE[1]
-    rho, _ = G.rho_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
+    slowdown, _ = G.slowdown_of(run | {"checkpoints": G.checkpoints(run, "tiny")}, FIT, 1.1, {"c_gates": c, "k_bits": k},
                       synthetic.SHAPE)
-    total = rho["C_gates"]
+    total = slowdown["C_gates"]
     assert total == pytest.approx(setup["gates"] + first["gates"] + rest["gates"])
-    assert rho["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
+    assert slowdown["sensitivities"] == pytest.approx({"reduction": c * 2 * 3 * circuit["partial_cut_bits"] / (k * total),
                                                   "update": c * 2 * circuit["grad_cut_bits"] / (k * total)})
-    assert rho["sensitivities"]["reduction"] > rho["sensitivities"]["update"] > 0
-    assert rho["blank"] == {} and rho["capture_code"] == VERSION and set(rho["unmeasured"]) == {"reduction", "update"}
+    assert slowdown["sensitivities"]["reduction"] > slowdown["sensitivities"]["update"] > 0
+    assert slowdown["blank"] == {} and slowdown["capture_code"] == VERSION and set(slowdown["unmeasured"]) == {"reduction", "update"}
 
 
 def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
@@ -541,7 +541,7 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
     assert not bad["reached"] and bad["why"] == "no scored checkpoint: invalid: foreign op"
 
 
-def test_rho_is_the_bound_of_record_where_products_bind():
+def test_the_records_slowdown_is_the_bound_of_record_where_products_bind():
     """ρ's products term is the bound of record: the calculator's count solved for the fewest blocks
     (`min_cut.blocks_at_least`) times c/|C|, on the traced step's N, O, β_w, β_x, b_y and F. So where products bind, ρ
     is the bound's slowdown and S is p times it, and the block says so under the bound."""
@@ -553,11 +553,11 @@ def test_rho_is_the_bound_of_record_where_products_bind():
     assert s["rho"]["binding_kind"] == "products"
     assert s["rho"]["rho"] == s["rho"]["terms"]["products"] == got["slowdown"]
     assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * got["slowdown"])
-    assert f"\n  {'':<17} {G.BOUND_IS_RHO}\n" in G.text(s) and "this attack pays" not in G.text(s)
-    assert "rho is it" in G.BOUND_IS_RHO and "closed form" not in G.text(s) and "overhead" not in G.text(s)
+    assert f"\n  {'':<17} {G.BOUND_IS_SLOWDOWN}\n" in G.text(s) and "this attack pays" not in G.text(s)
+    assert "the record's slowdown is it" in G.BOUND_IS_SLOWDOWN and "closed form" not in G.text(s) and "overhead" not in G.text(s)
 
 
-def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
+def test_the_bound_of_record_is_the_calculators_and_the_records_slowdown_follows_it(monkeypatch):
     """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
     β_x, b_y, F and |C|, with no n, and ρ's products term is its blocks times c/|C|: with the calculator's `bound`
     replaced, each choice of the work is scored by it, and ρ and S follow it. Without a traced step, or on one whose
