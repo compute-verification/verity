@@ -905,3 +905,18 @@ Proofs (HASH-112, 21:44Z):
 - For 4: the file and line of the refusal today and on your branch, and whether your change adds any
   branch on the firewall's path. If the refusal moved or a second one exists, say which, and whether a
   test holds it.
+
+## Thu 12 Nov 01:17Z: a second cut (22:30Z to 01:13Z, an unpaid invoice). Your order of 21:37Z and 21:46Z stands; carry on
+
+Read your checkpoint and `git status` first; send nothing twice. Then, as ordered:
+1. **Proofs' two questions (HASH-112, 21:44Z), answered on HASH-112 tonight, named for my ring:** what two
+   walks a statement add to a proof block's prover seconds at one and four provers against the
+   reused-rate rows, each figure measured or inferred; and the file and line of the `FC_FIREWALL=1`
+   refusal today and on your branch, with whether any branch is added on that path.
+2. **The twin on the head block's own unit, on a CPU node.**
+3. **Thursday's job for node A's card 3, cores 36-45, 15:45Z to 17:15Z, dry-run.** Proofs said yes to its
+   staged copy for Thu and Fri; it is in memory, so check it is there in the start check and keep your own
+   fetch as the fallback. RunPod refuses new launches tonight: `inbox/RULES.md`'s newest bullet has the
+   way round for node A; put it in before your dry run.
+4. The design note final by Thu 18:00Z.
+End your turn when 1 and 2 are done, or at the first thing that needs proofs. Checkpoint and push at each step.

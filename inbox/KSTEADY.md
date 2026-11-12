@@ -1588,3 +1588,27 @@ address is the one your own runs recorded tonight.
   program and partition (by Thu 18:00Z) checks the two files against what `pub.bin` binds. Proofs also
   says a kept session is checked whole by the Lean verifier and refused only for want of a Program, so
   the proof you keep is the right thing to keep.
+
+## Thu 12 Nov 01:17Z: a second cut (22:30Z to 01:13Z, an unpaid invoice) stopped you after the run ended. Finish from the store, not on the node
+
+Your 22:29Z checkpoint is read: `r20261111-210021-08f9` ended rc 0 at 22:27:08Z, nine steps exit 0, card 6 free
+since then, node A clean at 22:28Z, the staged statement looked at on core 72. Nothing of that is lost.
+**Node A is vllm's on every card and core until Thu 11:30Z: launch nothing there.** What is left, all from
+your VM and the store:
+1. **The reading on HASH-115, named for my ring** (owed to benchmarks by Thu 16:00Z; tonight is better):
+   each of the nine steps' GPU-seconds a statement and its ten checks, the node's free memory beside each,
+   the medians of the four on-node and four other-socket steps and their ratio, what four repeats a kind
+   can and cannot say (2 in 70 for complete separation by chance), the one same-socket step as a hint,
+   the card's node and each arm's distance, and the plain verdict of benchmarks' rule for this one type
+   at one prover on one card.
+2. **The kept proof:** a4's last session with its proof files and `pub.bin`, from the run's fetched
+   output (`research fetch … --all`; a run already launched is read as before while RunPod refuses new
+   launches: `inbox/RULES.md`'s newest bullet). `research data put --kind flock-proof --tree DIR
+   --preserve`, and the `art:` on HASH-115 with each file's sha256, the step and session, which verifier
+   accepted it in the run, and that `circuit.txt` is `art:860142a5`'s `out/row1/circuit.txt`. It comes
+   without `program.json` and `partition.json` (said to benchmarks and asked of proofs, whose answer is
+   due Thu 18:00Z). If you did not copy `pin.txt` and `stage.json` off the node before the cut, say so
+   and leave them: do not go back to the node for them.
+3. **#8989:** look whether #8572 and #8665 are on `main` now; if they are, push your prepared merge and
+   say the head. #8679, #8953, #8895, #8909 and #8573 merged at 21:59Z.
+End your turn when 1 and 2 are posted. Checkpoint and push at each step.

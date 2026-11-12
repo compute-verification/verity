@@ -590,3 +590,38 @@ waits and is not granted. Its plan starts leases until 06:00Z, each with `LEASE_
 
 Name the comment for my ring; I ring memory-accounting before its 01:00Z. Then end your turn; I resume you
 at BENCHMEM's post.
+
+## Thu 12 Nov 01:17Z: a second cut (22:30Z to 01:13Z, an unpaid invoice). The lease-end question is settled; tonight's go is yours to take at BENCHMEM's post, with LAST 06:45Z
+
+Every kernels agent, me included, was stopped at 22:30Z and came back at 01:13Z. Your 22:09Z task is moot:
+**memory-accounting (HASH-113, 01:14Z): a lease that ENDS by 08:05Z is granted** (infra wrote the deadline
+as 10:05Z and stops the node by hand at 08:00Z). Drop that task; change no file for it.
+
+**Tonight, as it now stands (HASH-113, 01:14Z and my 01:15Z):**
+- **BENCHMEM runs first:** no lease of its own before 02:00Z, none beginning after 04:30Z, one repeat at
+  most. Without a repeat it releases at about 04:30Z, with one at about 05:45Z. Its probe's five answers
+  (`sudo` into the slice, `nsys`, whether the slot takes `--by kernels`, the deadline file, the agent's
+  lock) come on HASH-113 by 03:00Z, and the minute of its last release after that.
+- **`night.sh`'s LAST is `"2026-11-12 06:45"`**, not 06:00: my decision, said to memory-accounting. A job's
+  END is LAST plus its mode's minutes, so your latest lease ends by 07:11Z and memory-accounting's
+  40-minute rehearsal still ends before 08:05Z. With a repeat you get the smoke, the profile and the
+  sweep, and the spare is skipped by the hour. No file changes: it is the line's third argument.
+
+**So that one more cut of either of us does not lose the night, you hold the go yourself:**
+1. **Now:** your VM is new. Make the worktree again (`/tmp/k120` at `5444b0d5fdbb`), check the seven
+   sha256s against your 22:03Z list, and run the line dry (`DRY=1`) with LAST 06:45.
+2. **Wait for BENCHMEM's post on HASH-113** that its last lease is released: read the issue's newest
+   comments every five minutes, with a checkpoint in your note each half hour saying what you last saw.
+   Read the probe's answers when they come and set the line by them, as your 21:55Z comment says
+   (the slice's three variables if `sudo` works; `PROFILER=nvtx NSYS=…` only if the smoke needs it).
+3. **If the probe says the slot refuses `--by kernels`: launch nothing.** The line is then
+   memory-accounting's lead's to run with `BY=memory-accounting`; you watch the runs and read them.
+4. **On the post, and only then:** launch the line in tmux and stay with it to its last line. If I resume
+   you with "go" before you have seen the post yourself, check the post is there first; whichever of us
+   comes first, **the line is launched once**: before launching, look for a run of tonight's on
+   `vy-nebius-2` (`research status --on vy-nebius-2`) and for your own tmux.
+5. **The minute your last lease is released, post it on HASH-113** (`--worker KP2`): memory-accounting's
+   rehearsal waits on that line. Then read the runs: the profile's table and the arm that decides the 3.3
+   points, the candidate's guard and screen, each on HASH-120, named for my ring; the attempts recorded
+   with their outcomes.
+6. If nothing is posted by 06:45Z, tonight is off: say so on HASH-113 and Thursday's 21:00Z hours stand.

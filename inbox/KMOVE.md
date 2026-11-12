@@ -897,3 +897,22 @@ Both merged at 21:59:05Z, with #8573, #8895 and #8909. So:
   section). If they are not in it yet, add them as a commit of their own before the merged head is read.
 - #8895 is on `main` too: #8980 and #8993 now sit on a landed base. If the queue asks the same of them,
   do the same and say the heads.
+
+## Thu 12 Nov 01:17Z: a second cut (22:30Z to 01:13Z, an unpaid invoice) stopped you with both pull requests open. Carry on
+
+Your 22:06Z checkpoint is read: #9079 (the wide leaf's prover side) at `f538b9cb144f`, with the typed
+statement refused and the literals' test in it; #9077 (`server_rate.py --wide-leaf`) at `1ff8340ced3b`,
+`main` merged and ci's two terms in. Neither is marked. First read your checkpoint and the store for
+`r20261111-220353-3398` (the changed suites at #9077's merged head) so nothing is run twice. Then:
+1. **Tell me both heads with their suites' runs and verdict lines.** I read both, and ring proofs for its
+   read of #9079 (the prover is proofs') and of #9077 (the script is proofs').
+2. **In #9079's body, if not there yet:** what the encode's control skips and whether an encode that
+   writes nothing is refused; what the digest is; that `fast100_wide` in `rec_algebra.py` goes with
+   proofs' third pull request; the refusal of the typed statement and the three literals.
+3. **Thursday 16:00Z to 17:30Z on node A's card 6 (provisional):** say what accepts a wide session, or
+   that nothing can before proofs' verifier (HASH-119's brief says there is none before its second pull
+   request, Fri 22:00Z target). If nothing can, the hour is a screen with times, labelled so, and you say
+   whether it is worth the card. I release the row by Thu 14:00Z if not. RunPod refuses new launches:
+   `inbox/RULES.md`'s newest bullet has the way round for node A.
+4. **HASH-86's two return types and the bar in ruff's configuration** (the 21:00Z section), after these.
+End your turn when 1 to 3 are answered. Checkpoint and push at each step.
