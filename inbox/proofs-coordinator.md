@@ -95065,3 +95065,259 @@ Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2
 ## HEADSPLIT, Thu 12 Nov 18:38Z: correction to one sentence of my 18:37Z line 2; the finding stands
 
 - I wrote that the organization's only other repositories are `infra` and `zkp-harness`. That was the list my token sees, and it is not all of them: the notes' repository, private, is not on it [run]. What holds: listed with no credentials at 18:38Z, the organization's public repositories are two, `verity` and `zkp-harness` (one PDF, last pushed 5 Aug), so no export sits in a public repository of this organization; a repository outside the organization I cannot see [run].
+
+## COUNT, Thu 12 Nov 18:39Z: the benchmark reports one of the three numbers today, from a model; tonight's table needed a reader, which is written and on a branch; nine gaps, three of them ours
+
+**For Daniel.** Today the benchmark reports one of the three numbers, and it comes from a model, not from a run. It
+prints the GB that could leave undetected in a world-year in two parts: 6,770 GB for the compute audit, at an assumed
+cache factor of 0.1, and the network certifier's part as its two checks stand today, 50.8 million GB by one and
+1.86 million GB by the other. The 10% of compute is a number the benchmark is given, not one it measures. It prints no
+security level. Of its 32 inputs it marks two measured, nine modeled and 21 assumed. One of the two measured ones is
+the proving time of 20 block types, 32% of the plan's proving, each timed alone; what they cost when four provers
+share a GPU is the assumed cache factor. For the largest block type, 67% of the plan's proving, the benchmark uses
+no measured time: it computes the time from the block's size. After tonight's run, proving times measured on our
+GPUs for up to 40 block types, which carry 98% of the proving time by benchmarks' ranking, can take the place of
+the computed and modeled ones. The piece that was missing for that, a reader that turns tonight's file
+into the table the planner takes, is written today and is on a branch for review. The benchmark would then report the
+same GB figure on measured proving times, for one prover on a GPU (the plan today assumes four sharing one), and still
+for a planned audit, not a served one. Four things are missing before it reports all three numbers from one served
+run. It has no reader of a served run's own files: those files hold the sample sizes and each session's proving
+seconds, and do not hold the serving seconds or how many GPUs the provers held. It does not print the security level:
+the code that computes one exists and nothing calls it. It does not compute the compute share from a run. And it
+cannot yet print a simulated network card's figure under the word "simulated"; the network lane is writing that for
+Friday morning. With the card simulated the network certifier's part is still 48.9 million GB a world-year as the
+check on `main` charges it: the card accounts for 1.85 million of the 50.8 million.
+
+Each statement above has its source below. Marks: [read] with file and line at `main` `30d6fcc92f`; [local] run on the
+VM; [run] with its id; [relayed]; [derived]; [guess]. The command's output is from `verity bench exfiltration --json`
+on the VM at `main` `99b81651cc`, 18:03Z to 18:08Z, exit 0 [local]; nothing under `benchmarks/harness`,
+`benchmarks/exfiltration`, `benchmarks/network_traces` or `benchmarks/spot_figures` differs between the two commits
+[read: `git diff --stat`]. Files: `verity-bench-exfiltration-at-99b81651cc.json`,
+`count-binding-at-row-of-record.txt` (my artifacts).
+
+### (i) Every input it reads today
+
+The command computes nothing itself. It joins two calculators (`benchmarks/harness/verity_bench/exfiltration.py`; its
+runner is `benchmarks/exfiltration/run.py`). [read]
+
+- **Compute audit.** The planner's stored rows, found by label and never by name: every run labelled
+  `run_of_record=exfiltration-glm53-compute-audit` and not superseded, its `out/rows.jsonl` and its plan
+  `out/mix.json` (exfiltration.py:68-69, 124, 146) [read]. Today that is one run, `r20261112-124742-a3fe`: 54 rows,
+  six scopes at budgets from 0.05 to 15 [local].
+- **Network certifier.** `benchmarks/network_traces/leak_bounds.py` in the tree, called at exfiltration.py:323-341.
+  No run is behind it. [read]
+- **The 32 inputs**, each with its mark (`_inputs`, exfiltration.py:351-395; the certifier's come from
+  `leak_bounds.inputs`, leak_bounds.py:577-676) [read; values local]:
+  - measured, 2: `weights`, 3.013e12 bits (the workload card's `params`, provisional); "proving priced measured",
+    0.3176 of the plan's proving time.
+  - modeled, 9: `planner_rows` 54; proving priced computed 0.6804, measured and computed 0.002031, modeled 1.169e-06;
+    `world_machines` 46,870,000; `datacenter_machines` 12,500; `request_tokens` 3,320; `token_macs` 7.925e10;
+    `world_requests` 1.778e16.
+  - assumed, 21: `compute_share` 0.1; `delta` 0.01; `lambda` 1.05; `output_bits` 28,000 a request;
+    `network_check_share` 0.003 (no run); `advice` 0; `output_count` 0; `connections` 1; `links` 1; `response_ids`
+    1,024; `id_bits` 18; `phase_buckets` 1,280; `bucket_s` 0.1; `lanes` none; `syncs` 128; `failure_rate` 0;
+    `scan_delta` 9.537e-07; `machine_gpus` 8; `mfu_serve` 0.4; `peak_flops` 1.979e15; `request_count` plan.
+- **What "measured" covers for the proving.** In the stored row nearest the 10% (the world's year, budget 0.055), the
+  proving time's price rests on: `reprice.DEFAULT`, the assumed cache factor 0.1 (reprice.py:37), for 97.86%;
+  measured cache factors (`reprice.CACHE`) for 0.95%; the proof server's table (`reprice.SERVER`) for 0.59%; a
+  family's stand-in (`reprice.FAMILY`) for 0.47%; a CPU share for 0.13% [local: the run's `out/rows.jsonl`]. The
+  31.76% the command marks measured (exfiltration.py:377) is 20 block families whose single-session seconds come
+  from measured cards, chiefly `MoeExpertFp8GemmW_v1` at 29.41% [local]. What those seconds cost with four provers on
+  a GPU is the assumed factor for at least 29.6 of the 31.76 points [derived: 31.76 less the 2.14 priced otherwise].
+  The head block type, `SparseMlaHeadBlock_v1`, is 67.48% of the proving and is priced computed, from its gate
+  counts, inside the 68.04% marked modeled [local].
+- **What it prints from them** [local], none of it from a served run:
+  - compute audit over the world's year: 6,770.39 GB at an assumed cache factor of 0.1, status `modeled`, read where
+    the rows' total is 10%: serving 4.42% (of which waiting 2.29%), proving 5.00%, replay 0.36%, pool 0.07%, edge
+    0.04%, compile 0.01%; with the network check's own proving at an assumed 0.3%, 7,194.8 GB at an assumed cache
+    factor of 0.1.
+  - network certifier over the world's year, modeled, for a class of at most 1,024 ids a response: 50,753,639 GB as
+    the scan's check charges it and 1,857,720 GB as the clock check charges it, both on `main`; under the label "with
+    a set-time card (not yet tested)", 48,906,024 GB and 10,104 GB; 0 GB only with three changes to the scan that are
+    not on `main`.
+
+### (ii) Tonight's table: not the one benchmarks' reader takes; it needed a reader, ours, now written
+
+- **What benchmarks' reader takes** (`verity bench prove`, `benchmarks/harness/verity_bench/prove_records.py:8-15`):
+  one `proof_overhead` card, or runs that hold the proof server's rate file `out/rate/rate.json`
+  (`steady.py:67`), each row held to steady-state checks (`steady.py:476`). From those it writes the planner's rows
+  (`--steady-rows`, `prove.py:735`, `cli.py:277`). [read]
+- **What tonight's run writes** (`benchmarks/served_units/window.py:488`): `out/prove.tsv`, a line a statement: its GPU
+  group, its name, its block count, `k_log`, `prove_total_s` (the median timed session, one prover on a GPU of its
+  own) and the rest of its record. No rate file and no card. [read]
+- **Nothing on `main` reads `prove.tsv` into either form** [read: `git grep prove.tsv` finds its writer, its test
+  and unrelated files of other benchmarks].
+- **What tonight's run times** [relayed: the overhead run's 17:48Z entry]: benchmarks' 40 ranked block types, 98.36%
+  of proving time by its ranking; the smallest run it calls worth having is seven types, 44.2%. Its shares are by census
+  block type and the stored row's are by family, so I have not checked which of the 40 are the head block's; the
+  units file (due 19:30Z) will say.
+- **With the reader**, taking tonight's table is a chain of four steps and one decision:
+  1. fetch the run's `out/` from the store (`research data fetch`): exists;
+  2. `prove_rows.py OUT --record RUN`, the planner's rows by block type: written today, on a branch (below);
+  3. a map file for the block types whose name is not a block of the planner's line (`--steady-map`,
+     headline.py:25-29): data, not written. On Tuesday's run of the same kind 13 of 34 types needed an entry [local].
+     Tonight's units are named after the served partition's Definitions [relayed: the overhead run's 17:48Z entry], so
+     the count will differ, and the planner refuses by name any type left unmapped (headline.py:253-257) [read];
+  4. the planner with `--steady ROWS.json --steady-map MAP.json` through `research run`: exists (the control command
+     of my 17:30Z entry);
+  5. the label that makes the command read the new run (`benchmarks/exfiltration/README.md:92-93`). The command
+     itself needs no change: it reads whatever run carries the label. This step changes the figure it reports and is
+     yours.
+- **Three things about the rows that are yours to rule**, none decided by the reader:
+  - *One prover.* Every row says `provers: 1`. The planner prices a row as the statement's seconds over its blocks
+    (reprice.py:320) and records `provers` without applying it (reprice.py:250-266) [read]. A plan priced on tonight's
+    table is therefore priced at one prover on a GPU, a different configuration from today's four provers
+    (`PROVERS = 4`, reprice.py:44) at an assumed cache factor of 0.1. It is a measured price and wants its own label.
+  - *Which seconds.* The row takes `prove_total_s`, the column `prove.tsv` names. The session's wall seconds are
+    carried beside it (`session_seconds`). On Tuesday's 34 types the wall seconds are 0.23 to 6.85 times
+    `prove_total_s`, median 0.70 [local], so the choice moves the figure.
+  - *Which statement.* A type's row is its largest statement that timed; its other sizes are listed beside it and
+    price nothing. Your ruling (b) stands as it is: nothing here splits a time into a fixed and a per-block part.
+
+### (iii) One served two-stage run: what its record holds and what it lacks
+
+The run's record is `second`'s `summary.json` (`benchmarks/one_stage/two_stage.py:999-1056`) with each class's
+`stage1.json` (two_stage.py:317-319). [read]
+
+- **Sample sizes: held.** First stage: `stage1.json`'s `units` (the sampled replay blocks), `rule` (the replay rate)
+  and `commit.spans` (what was sampled from); the same sample again as `first_stage.units` (two_stage.py:1017).
+  Second stage: `second_stage.draw` and `interior.population`, `interior.members[].n` (two_stage.py:1038-1041), and
+  `audit.draw_counts` (two_stage.py:797-798, from a5.py:1114). [read]
+- **Proving seconds: held, by session.** `audit.timing`, by member: `session_s`, `timing.prove_total_s`,
+  `timing.e2e_s`, `timing.witness_s`, `timing.k_log`, `timing.units`, `verify_s`, `lean_verify_s` (a5.py:970-973, into
+  the summary at a5.py:1016 and 1114-1115, carried by two_stage.py:797-798). [read]
+- **Serving seconds: not held.** `two_stage.py` reads no clock [read: no `time.` call in the file]. The nearest are
+  outside the record: a class's commitment carries the Commit's own `seconds`
+  (`adapters/vllm/verity_vllm/pipeline/boundary_rows.py:504, 520`), and the serve writes its own `overhead.json`
+  (`benchmarks/one_stage/served_overhead.py`: each load's `requests`, `tokens`, `span_s`, `windows`, line 70; its
+  `table --composed RUN --stock RUN` gives the serving charge against a stock serve, lines 298, 433-434). [read]
+- **Missing**, for the three numbers from that one run:
+  - how many GPUs each session held, so seconds become GPU-seconds;
+  - the replay's seconds and the interior commitment's seconds (no clock in `two_stage.py`);
+  - the staging seconds, which the one-stage audit computes (`staged_s`, a5.py:883, 966) and leaves out of the summary;
+  - the serving GPU-seconds of the window the sample is over, tied to the audit's record (the denominator of a
+    share), and a stock serve of the same load for the serving charge;
+  - a name the store labels such a run under, and a reader in the command: today it reads only the planner's rows.
+  That VLLM-300's first verifying run will write these fields as `main` has them is [guess]: I read the code, not a
+  run of it.
+
+### (iv) The security level
+
+- **What computes the bits of a design today.** `benchmarks/spot_figures/binding.py` (`Design` 167, `report` 416,
+  `main` 537): a Python evaluation of the binding bound per sampled replay block, per verification phase and per
+  monitoring period, by gates and by classes, in calls and in compressions. Nothing calls it but its own test and a
+  README line (`benchmarks/spot_figures/README.md:25`) [read: `git grep`]. It is on `main` and has run only by hand.
+- **What does not.** `Spot.Bits.check` (`verity/protocols/spot/verifier/lean/Spot/Bits.lean:773`) checks a sampled
+  statement's bit layout against its template's Definition; "bits" there are the statement's, not a security level
+  [read]. The script in the notes (`tools/prf599/finder-sessions-cell.py`) is 63 lines over another notes script and
+  says of itself "Nothing here is a theorem" [read]. PRF-602 (`verity lean bits`) is not started [read: Linear,
+  Backlog, due 1 Dec].
+- **What the planner's rows already hold for it.** A row's `verification_phase` has the sampled replay blocks, the
+  sessions, the machines and the seconds (headline.py:402-405) [read]. It does not hold the classes of gates or the
+  codewords' symbols; both are assumed inputs today.
+- **What it reads by hand at the stored row's design** [local, modeled, no served run]: 41 sampled replay blocks and
+  617,836 sessions a verification phase (15,069 a sampled replay block), 5,382,327 proof blocks a sampled replay
+  block, an assumed 4,130 classes of gates a proof block, assumed codewords of 2^23 symbols, 2^80 calls of SHA-512,
+  the rewinding term under `StrictBirthday`. One verification phase: 2^-103.0 counted in calls as the Lean counts,
+  2^-94.0 in compressions. The world's year (197.1 million phases): 2^-75.4 and 2^-66.4. One datacenter's year
+  (52,560 phases): 2^-87.3 and 2^-78.3. At four tables a session, the row's largest, each is 2 bits fewer. So at this
+  design a year reads under 100 bits. The notes' script evaluates other inputs (1,135,341 sessions a sample, phases
+  counted by machine) and reads 2^-62.3 to 2^-68.1 over the world's year as the forms stand and 2^-96.0 to 2^-97.0
+  with the prover's calls charged once [read: its output file]; the two do not compare.
+- **The smallest change that prints bits beside the GB**, in two halves [guess on sizes]:
+  - the planner writes the bound into each row's `verification_phase` from `binding.report`, with the classes and the
+    symbols as stated inputs: about 40 lines and a test, ours;
+  - the command prints the row's bits beside its GB, marked modeled, and lists the two assumed inputs: about 40 lines
+    and a test, benchmarks'.
+  It adds a reported figure, so I have not started it. PRF-602 is the version that reads Lean; this is the Python
+  stand-in until then.
+
+### (v) The compute share
+
+- **Where the 10% enters.** `SHARE = 0.10` (exfiltration.py:80, `--share`), listed as an assumed input
+  (exfiltration.py:369). The planner is handed budgets, not the 10%: `BETAS` (headline.py:56), each a share of a
+  scope's GPU-seconds that proving and replay may spend (`budget=beta * s.gpu_seconds`, total_cost.py:1072). A row's
+  total is serving + edge + that budget + compile + pool (headline.py:395). The command then finds, between the pinned
+  rows, the budget at which the total is 10% (`at_share`, exfiltration.py:277-317) and reads the bound there: 5.454%
+  today [local]. Every part of the total is the planner's model. [read]
+- **What a share measured on a run would be** [derived]: the audit's GPU-seconds on that run over the stock serving
+  GPU-seconds of the same load. The audit's are the serving charge (the composed serve against a stock serve), the
+  wait, the replay of the sampled replay blocks, the interior commitment, the sessions' GPU-seconds, staging and
+  compile. A served run samples at its own rate, so the share at the plan's sampling rate scales the proving and the
+  replay by the ratio of the two rates: that step stays modeled, the rest is measured. It needs every field (iii)
+  lists as missing.
+
+### (vi) The network certifier's part
+
+- **Where the command takes it from.** `certifier()` (exfiltration.py:323-341) calls `leak_bounds.document` on
+  `leak_bounds.inputs(response_ids=1024)` (line 331). The set-time card's figures are the term at D_j = 1, the jitter
+  that is not of record (`JITTERS`, `OF_RECORD`, leak_bounds.py:446-448; exfiltration.py:338), printed only under the
+  label `SET_TIME = "with a set-time card (not yet tested)"` (leak_bounds.py:452, 791). [read]
+- **What a set-time card does not change** [local]: as the scan's check charges today, the card takes 1,847,615 GB
+  off 50,753,639 GB over the world's year. The rest is the schedules (a response's length) and the fail cells, which
+  a card does not touch.
+- **Network answered NET-390 at 18:34Z** [relayed: its comment; I read it at 18:35Z]. Its figures with the card
+  simulated agree with what the command printed for me: 48,906,024 GB a world-year as the scan charges it on `main`,
+  1,847,615 GB less than without the card. It adds two I cannot check from the command: 24,453,012 GB for the check
+  chosen for GLM-5.3 until a served audit samples the stop block (a design, no run; the command prints this as its
+  row `design, no stop block`), and about 73,000 GB after it, from a term for the count that the benchmark does not
+  hold today. Its simulation is the certifier's software pacer standing in for the card; that a real card releases at
+  its set time stays an input marked `assumed`. It takes the change itself: the term at D_j = 1 becomes the term of
+  record under the label "simulated set-time card", in `leak_bounds.py` and `verity bench certifier_term`, in review
+  Fri 13 Nov 8 AM PST.
+- **What that leaves for the command** [read]. `MARKS` is `("measured", "modeled", "assumed")` in both files
+  (exfiltration.py:102, leak_bounds.py:441) and the command refuses any other (exfiltration.py:393); network's plan
+  keeps to those three and changes the label, which the command reads from the calculator's document
+  (exfiltration.py:430). But the command takes "with the card" to be whichever jitter is not of record
+  (exfiltration.py:338) and builds its sums and headline on that (430, 460-461, 558-561, 579). Once D_j = 1 is of
+  record, those lines name the two the wrong way round until they are changed with it: about 30 lines and a test in
+  benchmarks' file [guess]. Network's list of files does not name it.
+
+### The gaps
+
+Sizes are guesses. "Today" means I can write it today as a pull request benchmarks reviews.
+
+1. **Reader of tonight's file into the planner's rows.** 148 lines and 124 of test. Ours. Written, on a branch.
+   Changes no figure.
+2. **Map file for tonight's block types.** About 40 lines of data. Ours. Today, once the overhead run's units file is
+   final (due 19:30Z). Changes no figure until a planner run uses it.
+3. **Planner run on tonight's table, and its label.** No code. The run is ours to launch once the table is in the
+   store (due Fri 22:00Z). The label is yours: it changes the command's figure, at one prover on a GPU.
+4. **The "measured" mark on proving whose price at four provers is the assumed cache factor** (exfiltration.py:377).
+   A label, about 15 lines and a test. Benchmarks' (PRF-456). Today if you want it from me; it changes a mark and
+   the count of measured inputs, no GB.
+5. **The simulated card's label.** In the calculator: network's, taken on NET-390, in review Fri 8 AM PST. In the
+   command, the lines that take "with the card" to be the jitter not of record: about 30 lines and a test,
+   benchmarks'. It must land with network's change, not before it; I can write it against network's branch once it
+   is pushed.
+6. **Bits beside the GB.** About 40 lines in the planner (ours) and 40 in the command (benchmarks'), with tests. Adds
+   a figure: waits for you.
+7. **Reader of a served two-stage run's record** (sample sizes, sessions, proving seconds) for the command. About 150
+   to 250 lines and a test. Benchmarks' command, vllm's record. I can write the reading half today against `main`'s
+   field names; it reports nothing until a run exists.
+8. **The fields a served run's record lacks** (GPUs a session held, replay and interior commitment seconds, staging
+   seconds, the window's serving GPU-seconds). About 60 lines in `two_stage.py` and `a5.py`. vllm's (VLLM-300).
+9. **The compute share computed on a run, and a label for a served run.** About 100 lines. Benchmarks'. Needs 7, 8
+   and a stock serve of the same load.
+
+### What I started
+
+Gap 1, without waiting, as you said. Branch `cursor/proofs-count-e41c`, head `3dc5aae4d9`, one commit over `main`
+`30d6fcc92f`, four files:
+
+- `benchmarks/served_units/prove_rows.py`: `prove_rows.py OUT --record RUN [--cores N] [--leave NAME ...]`. It reads
+  `prove.tsv` and each group's own `stage.json` and prover exit status, and prints the planner's rows. A statement
+  gives a row only if its prover exited 0 and every session was accepted (and the verifier's, where the record has
+  it). Everything it does not take is listed with its reason.
+- its test (13 cases, among them nine refusals, and the row's fields held to the planner's own list),
+  the suite's declared inputs, and the README.
+
+Checked [local]: the 13 tests pass, ruff is clean, the lint for swallowed errors passes. On Tuesday's run of the same
+kind (`r20261110-013529-74a7`, 69 statements) the reader refuses every statement, because that run is from before
+the script wrote a prover's exit status; on a scratch copy with an exit status of 0 written by me beside each (a
+check of the format, not a measurement) it gives 34 block types' rows, and the planner's own `reprice.steady` reads
+them. The changed suites at the head: run `r20261112-182411-7b4c`, launched 18:24Z, running at 18:39Z; I add its verdict in one line when it ends. Nothing is marked
+and no pull request is opened.
+
+Next of ours without your word, if you agree: gap 2 when the units file is final. Gaps 4 and 7, and the command's
+half of gap 5, I can write on your word; gap 6 waits for you.
