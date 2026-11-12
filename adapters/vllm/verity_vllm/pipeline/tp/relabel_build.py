@@ -26,8 +26,9 @@ from typing import Any
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.tp import emit_ranks
+from verity_vllm.records.schema_ids import BUILD_RELABEL_GUARD_SCHEMA
 
-SCHEMA = "verity-vllm/build-relabel-guard/v1"
+SCHEMA = BUILD_RELABEL_GUARD_SCHEMA
 #: what two derives of one rank may differ in (wall, memory, host, when), and a relabel's provenance
 TELEMETRY = {
     "result.json": ("utc", "wall_secs_total", "max_rss_mb", "derive_secs", "export/secs", "target/host", "relabeled_from"),

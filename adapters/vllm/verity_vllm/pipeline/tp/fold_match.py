@@ -37,12 +37,13 @@ from verity_vllm.log import init_logger
 from verity_vllm.pipeline.match import fold_construction_args
 from verity_vllm.pipeline.row_records import decomp_rc
 from verity_vllm.pipeline.tp.links import read_tp_links
+from verity_vllm.records.schema_ids import TP_FOLD_MATCH_SCHEMA
 
 __all__ = ["Options", "main"]
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity/tp2/fold-match/v1"
+SCHEMA = TP_FOLD_MATCH_SCHEMA
 
 
 def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:

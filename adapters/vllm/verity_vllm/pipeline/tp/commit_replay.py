@@ -52,12 +52,13 @@ from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.program.compiled_relations import warm_vml
+from verity_vllm.records.schema_ids import TP_RANK_REPLAY_SCHEMA
 
 __all__ = ["Options", "Refused", "main"]
 
 logger = init_logger(__name__)
 
-RESULT_SCHEMA = "verity-vllm/tp-rank-replay/v1"
+RESULT_SCHEMA = TP_RANK_REPLAY_SCHEMA
 
 
 @dataclass(frozen=True, kw_only=True)

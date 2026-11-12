@@ -18,13 +18,14 @@ from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMA
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
 
 __all__ = ["DEFER_WORLDS"]
 
 logger = init_logger(__name__)
 
 DEFERRED = "replay_deferred.json"
-SCHEMA = "verity-vllm/tp-replay-deferred/v1"
+SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
 #: the worlds whose Commit defers its ranks' C2 replay, each proven by a row whose deferred arm (the Commit's bundles, then
 #: `tp-commit-replay` on CPU) gave the in-process arm's picks, per-rank records, verdict and run root; any other world replays in process
 DEFER_WORLDS = (2, 8)

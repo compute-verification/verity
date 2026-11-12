@@ -25,10 +25,15 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.records.schema_ids import (
+    BOUNDARY_LINKAGE_SCHEMA,
+    SAMPLED_REPLAY_SCHEMA,
+    TP_SAMPLED_REPLAY_SCHEMA,
+)
 
 __all__ = ["load", "manifest_of_rank", "request_program_dirs"]
 
-SCHEMA = "verity-sweep/tp-sampled-replay/v1"
+SCHEMA = TP_SAMPLED_REPLAY_SCHEMA
 METHOD = "sampled-exact-replay per rank (sampled_replay on the rank's map, Programs and shards)"
 
 
@@ -249,9 +254,9 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
 
 def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
     """Fail closed: an unrunnable replay is 'not evaluated', never PASS."""
-    return ({"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated", "rank": rank,
+    return ({"schema": SAMPLED_REPLAY_SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated", "rank": rank,
              "why": f"rank {rank}: sampled replay not run: {e!r}"[:400], "error": repr(e)[:400], "trace": trace[-1500:]},
-            {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
+            {"schema": BOUNDARY_LINKAGE_SCHEMA, "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
 
 
 @contextmanager

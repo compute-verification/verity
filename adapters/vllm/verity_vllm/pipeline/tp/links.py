@@ -6,6 +6,7 @@ import json
 import os
 
 from verity_vllm.errors import Refused
+from verity_vllm.records.schema_ids import TP_LINKS_SCHEMA
 
 
 def module_in_model_vocabulary(module_path: str | None, model_root: str | None) -> str | None:
@@ -58,7 +59,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
         if tp == 2:   # the v1 fields, kept verbatim for the two-rank readers (one peer)
             ln.update({"peer_input": peers[0]["input"], "peer_rank": peers[0]["rank"], "peer_operand": peers[0]["operand"]})
         links.append(ln)
-    doc = {"schema": "cb-a/tp_links/v2", "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
+    doc = {"schema": TP_LINKS_SCHEMA, "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
            "model_root": model_root,
            "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
                                 "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",

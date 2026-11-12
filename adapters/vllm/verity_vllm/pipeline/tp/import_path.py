@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import IMPORT_PATH_RUNTIME_SCHEMA
 
 logger = init_logger(__name__)
 
@@ -20,10 +21,10 @@ def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
         union = set(drv["files"])
         for rm in ranks_mods:               # each rank's `repo_modules_loaded()`; a rank that answered without its files is the error below
             union.update(rm["files"])
-        (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "method": drv["method"],
+        (out / "import_path_runtime.json").write_text(json.dumps({"schema": IMPORT_PATH_RUNTIME_SCHEMA, "method": drv["method"],
                                                                    "driver": drv, "ranks": ranks_mods, "union_n": len(union), "union": sorted(union)},
                                                                   indent=1, default=str) + "\n")
         logger.info("[tp2commit] import path of record (runtime): driver %s files, ranks %s, union %d -> import_path_runtime.json",
                     drv["n"], [r.get("n") for r in ranks_mods], len(union))
     except Exception as e:  # noqa: BLE001 -- evidence, not a gate
-        (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "error": repr(e)[:300]}) + "\n")
+        (out / "import_path_runtime.json").write_text(json.dumps({"schema": IMPORT_PATH_RUNTIME_SCHEMA, "error": repr(e)[:300]}) + "\n")
