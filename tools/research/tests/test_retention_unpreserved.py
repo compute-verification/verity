@@ -629,4 +629,4 @@ def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_ke
     for needed in ("`research keep RUNDIR ...`", "`research data custody RUN --publish`", "`--unpreserved-runs`", "[--unpreserved-runs]"):
         assert needed in section, f"the retention section names {needed}"
     assert f"{days} d after its last write" in R.UNPRESERVED_HEAD and f"expires {R.UNPRESERVED_RUN_EXPIRY.days} days" in rule
-    assert f"nor one whose clone stands (`{R.CLONES}/<run id>` goes first)" in " ".join(section.split())
+    assert f"one whose clone stands waits (`{R.CLONES}/<run id>` goes first)" in " ".join(section.split())
