@@ -345,6 +345,20 @@ private def exRegisteringBx : Own :=
 #guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering && !namesOk exRegisteringBx
 #guard (exCheck true (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-interior-names"]
+-- what a replay block returns is read only at round 1's port (`returnsOk`): the interior registering a value of a name
+-- the block's return has in the boundary record is refused, whatever the statements read and with the form off too
+-- (`second-return`); a value of another name is not, and neither is one where the return has no such name
+#guard returnsOk exRegistering && returnsOk { exRegistering with returns := #["o0"] } &&
+  !returnsOk { exRegistering with returns := #["o0", "w2"] } && returnsOk { exOwn with returns := #["w2"] }
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["o0"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck false (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck true (exReported "w2" 9 { exRegisteringBx with returns := #["bx"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-interior-names", "second-return"]
+#guard (check true { exRegistering with returns := #["w1"] } none).codes == #["second-return", "second-statements"]
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
   (.arr #[Json.mkObj [("value", "w2")]])
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null

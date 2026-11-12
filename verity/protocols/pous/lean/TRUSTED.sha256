@@ -7,9 +7,9 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../security/lean-toolchain
 5a2e06a3f0ac3d9566d2296f5f9c725d81ac0ad7b59bf82bd6afffad6e069d6c  ../../../../security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../security/lake-manifest.json
-a7190d19d17de06944691464fcd2000ea4792c0ff35a54057582b0bd76bedf79  ../../../../security/Proofs/lakefile.toml
+7338b84fb4ce1e9da8516e6d1138bdcaf55410c73f5a0584ee87d1171f14ce39  ../../../../security/Proofs/lakefile.toml
 4fbac37d25f914a1b1abe8c3ff9280165c57e1ac8ca4f4980443b527b44a3b53  ../../../../security/Proofs/lake-manifest.json
-6eb8aa85e0636d2d44525e655924b19b5f2554f378d4db1f9f5966c8a94fea2e  ../../../../security/Definitions/Pous.lean
+7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../../../security/Definitions/Pous.lean
 004fecb2ad265eb15d7e55aef8350790d4eb66fe7e24038153637a8db8a5d066  ../../../../security/Definitions/Core/Game.lean
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../../../security/Proofs/Pous/Statements.lean
 3990519592c3bc12d2be58e66bd7f2f053e673be369bd28696f82c0df4495740  ../../../../security/Proofs/Pous/Sanity.lean
