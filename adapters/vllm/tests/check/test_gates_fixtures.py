@@ -98,7 +98,7 @@ def write_run(tmp: Path, arts: dict[str, dict]) -> Path:
 
 def gate(tmp: Path, arts: dict, gid: str) -> G.GateResult:
     write_run(tmp, arts)
-    return G._GATE_FNS[gid](G.RunArtifacts(tmp))
+    return getattr(G, f"gate_{gid}")(G.RunArtifacts(tmp))
 
 
 def by_id(results):
@@ -272,7 +272,7 @@ def test_G1_malformed_is_error(tmp_path):
     assert r.status == "error" and "totals" in r.reason
     write_run(tmp_path, arts)
     (tmp_path / "nonint/noninterference.json").write_text("{not json")
-    assert G.gate_observation(G.RunArtifacts(tmp_path)).status == "error"
+    assert G.gate_G1(G.RunArtifacts(tmp_path)).status == "error"
 
 
 # --- G2 --------------------------------------------------------------------------------------------------
@@ -699,7 +699,7 @@ def test_G8_malformed_is_error_not_skipped(tmp_path):
     assert r.status == "error" and "width" in r.reason
     write_run(tmp_path, arts)
     (tmp_path / "query_use.json").write_text("{not json")
-    assert G.gate_vu_partition(G.RunArtifacts(tmp_path)).status == "error"
+    assert G.gate_G8(G.RunArtifacts(tmp_path)).status == "error"
 
 
 def test_reference_integrity_names_error_classes_it_cannot_sum():
