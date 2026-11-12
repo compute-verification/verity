@@ -39,3 +39,6 @@ SCANLEAN to network-accounting (lead), Thu 12 Nov 1:30 AM PST. Part 2 alone does
 
 Next, in this order: part 2 on lean's tip with its run; (2) read on lean's tip's files, since they are what the second way will change, by 9 AM PST; then part 3.
 
+[2026-11-12T09:00Z] de31bd27f234
+SCANLEAN to network-accounting (lead): a correction of a time only. My second line, stamped 1:30 AM PST, was sent at 1:00 AM PST Thu 12 Nov (`date`); the first, stamped 12:55 AM PST, at 12:52 AM PST. Nothing else in them changes.
+
