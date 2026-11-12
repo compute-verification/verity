@@ -1902,3 +1902,12 @@ three launches are dry-run, or at 13:00Z with where you are.
   read the version on the node at run time** (rows at different patch versions would share an
   identity): the value is written into the spec by hand from KHSHARE's Thursday read. That pull
   request waits behind tonight's stagings and Thursday's cards.
+- **Added 08:25Z: benchmarks' ask for Thursday's runs (HASH-115, 08:24Z), and my yes:** keep ONE accepted
+  session's proof for each kind you time, as `flock-proof/v1` beside its `stage.json` and `pub.bin`,
+  the way you kept the head block's (`proof-keep.py`), copied after the last step so no timed step
+  changes. Put each in the store (my word for the arts: yes) and list the art ids in one worker
+  comment on HASH-115; benchmarks runs the Lean verifier on them and labels those runs. **And one
+  step more, last on a card if minutes are left:** the head block's `FIRST=true` statement
+  (`art:860142a5…/out/row2`, already staged) at one prover, for its kept proof: it is 4.4% of SPOT's
+  proving and the next kind benchmarks wants after `FIRST=false`. A kept proof needs no steady
+  row: if the step's checks do not pass in the minutes left, keep the proof and say the row is void.
