@@ -22,6 +22,8 @@ import json
 from dataclasses import dataclass, field, fields
 from typing import Any
 
+__all__ = ["Phi"]
+
 PHI_SCHEMA = "verity-predict/phi/v1"
 
 

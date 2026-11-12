@@ -29,6 +29,8 @@ from . import compiled as PC
 from . import node_registration as NR
 from .node import build_node_program
 
+__all__ = ["COMMANDS", "main"]
+
 logger = init_logger(__name__)
 
 

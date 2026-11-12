@@ -67,6 +67,8 @@ from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
 
+__all__ = ["Unexpressible", "build_program"]
+
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
 BF16 = Value(16)
