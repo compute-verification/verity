@@ -47,6 +47,9 @@ if args[1:2] == ["rehearse"]:
 else:
     print("the reader's table")
 """
+#: the stand-ins, by the name the job calls each. With a `sleep` that returns at once the job's two waits end on the
+#: stand-in `tcpdump`'s line and on its file's size, and on no clock
+STAND_INS = {"tcpdump": TCPDUMP, "python": PYTHON, "sleep": "#!/bin/sh\n"}
 
 
 def job(tmp_path: Path, *flags: str, **env: str) -> tuple[subprocess.CompletedProcess, list[list[str]], Path]:
@@ -54,7 +57,7 @@ def job(tmp_path: Path, *flags: str, **env: str) -> tuple[subprocess.CompletedPr
     recorded, in order, and its `$OUT`."""
     bin_, run = tmp_path / "bin", tmp_path / f"run{len(list(tmp_path.glob('run*')))}"
     bin_.mkdir(exist_ok=True)
-    for name, text in (("tcpdump", TCPDUMP), ("python", PYTHON), ("sleep", "#!/bin/sh\n")):
+    for name, text in STAND_INS.items():
         (bin_ / name).write_text(text.format(python=sys.executable, front=FRONT, relay=RELAY))
         (bin_ / name).chmod(0o755)
     log = run / "calls.jsonl"
