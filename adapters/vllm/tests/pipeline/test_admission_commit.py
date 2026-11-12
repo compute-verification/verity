@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -157,11 +158,13 @@ def test_a_sizing_record_without_its_widths_or_its_model_gets_no_rope_correction
 def test_a_request_without_a_prompt_len_is_as_long_as_its_token_ids_and_one_with_neither_is_refused():
     sizing, _, _ = _fixture("b16")
     by_len = ADM.scheduled_step_bytes(sizing, [{"prompt_len": 7, "max_tokens": 2, "arrive_step": 0}])
-    for request in ({"prompt_token_ids": list(range(7))}, {"prompt_len": None, "prompt_token_ids": list(range(7))},
-                    {"prompt_len": 7, "prompt_token_ids": list(range(3))}):
+    seven_long: list[dict[str, Any]] = [{"prompt_token_ids": list(range(7))}, {"prompt_len": None, "prompt_token_ids": list(range(7))},
+                                        {"prompt_len": 7, "prompt_token_ids": list(range(3))}]
+    for request in seven_long:
         assert ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=2, arrive_step=0)]) == by_len
     assert by_len["prompt_tokens"] == 7
-    for request in ({}, {"prompt_token_ids": []}, {"prompt_token_ids": None}, {"prompt_len": 0}):
+    no_length: list[dict[str, Any]] = [{}, {"prompt_token_ids": []}, {"prompt_token_ids": None}, {"prompt_len": 0}]
+    for request in no_length:
         with pytest.raises(ValueError, match=r"request 0: prompt_len=0 max_tokens=1 arrive_step=0"):
             ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=1)])
 
