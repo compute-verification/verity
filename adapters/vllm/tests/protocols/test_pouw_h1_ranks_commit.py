@@ -185,6 +185,21 @@ def test_a_zero_on_one_ranks_call_is_refused_at_arow(monkeypatch):
     assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
 
 
+@pytest.mark.parametrize("kind", RG.NEGATIVES)
+def test_the_harness_edit_of_rank_1s_first_call_is_refused_at_arow_and_names_no_expert_site(monkeypatch, kind):
+    """The GPU harness's ``a-zero`` and ``a-row-off`` on rank 1 (`pouw_h1_ranks_gpu._w_edit`): H1 handed its first call's
+    codes all zero, or with row 1's first code off by one, every Commit honest. The window is refused as rank 1's own
+    edited call is, and the edit names no expert site."""
+    holder, _ = _window(monkeypatch, negative=kind)
+    run = holder.run
+    assert holder.edited == [{"tp": 1, "at": None}]
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0, 1, 2, 3] is not "
+                                                      "the Commit's row-table/0/k64")
+    assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}
+    v = G.negative_verdict({"core": _verdict(holder), "roots1": run.details["roots1"], "same_tokens": True})
+    assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
+
+
 def test_a_ranks_input_ids_off_the_first_ranks_leave_the_window_untied(monkeypatch):
     """Rank 1's Commit acquiring other input ids at step 1 than rank 0's: the window's ids are the first rank's, and the
     tap refuses, so the serving process credits nothing."""

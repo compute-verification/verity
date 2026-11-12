@@ -79,7 +79,9 @@ class Unit:
         return self.k <= 32768 and len(self.b) <= 88412 and finite
 
     def describe(self) -> str:
-        hexes = lambda vs: [bytes(v).hex() for v in vs]
+        def hexes(vs):
+            return [bytes(v).hex() for v in vs]
+
         return f"unit {self.name} (k={self.k}, T={self.T}, m={len(self.xq)}, n={len(self.b)}): xq={hexes(self.xq)}, " \
                f"b={hexes(self.b)}"
 
@@ -94,7 +96,10 @@ def words(U: Unit, g) -> list[float]:
     """`U.word c g` for every credited word `c`, in `keys` order, as values: the FP32 words of `row_words` read as
     numbers, so `−0` and `+0` are one value, as in ℚ."""
     h, T, out = model(), U.T, []
-    pad = lambda v: list(v) + [0] * (29 * T - U.k)
+
+    def pad(v):
+        return list(v) + [0] * (29 * T - U.k)
+
     for i in range(len(U.xq)):
         for j, col in enumerate(U.b):
             I, R, _, _ = h.row_words(T, pad(U.xq[i]), pad(col), j, g[i])
@@ -120,12 +125,14 @@ class Case:
     salts: int = N
 
 
-def sampled_units() -> list:
+def units_with_sampled_salts() -> list:
     """Legal units of one to three slices (and one of eight), with columns `j` whose tuples differ in one lane (`j` and
     `j + 1`, `j + 23`), columns that differ only by their tuple, and loud, zero, subnormal and padded rows."""
     rng = random.Random(SEED)
-    codes = lambda n, pool=FINITE: tuple(rng.choice(pool) for _ in range(n))
     out = []
+
+    def codes(n, pool=FINITE):
+        return tuple(rng.choice(pool) for _ in range(n))
 
     def unit(name, k, rows, cols, slow=False, salts=N):
         case = Case(Unit(name, k, tuple(rows), tuple(cols)), salts=salts)
@@ -157,14 +164,16 @@ def exact_units() -> list:
         case = Case(Unit(name, 29, tuple(rows), tuple(cols)), live=tuple(live))
         out.append(pytest.param(case, id=name, marks=[pytest.mark.slow] if slow else []))
 
-    rand = lambda pool=FINITE: tuple(rng.choice(pool) for _ in range(29))
+    def rand(pool=FINITE):
+        return tuple(rng.choice(pool) for _ in range(29))
+
     unit("tags-n2", [rand(), (0,) * 29], [(0,) * 29] * 2, [])
     unit("tags-n24", [rand()], [(0,) * 29] * 24, [], slow=True)
     unit("live2-n4", [rand(), rand([0x7E, 0xFE])], [rand() for _ in range(4)], [3, 17], slow=True)
     return out
 
 
-CASES = sampled_units() + exact_units()
+CASES = units_with_sampled_salts() + exact_units()
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -298,8 +307,13 @@ def test_the_model_is_the_leans_word() -> None:
     text = (LEAN / "Definitions/Pouw/Fp8Atom/H1TVectors.lean").read_text()
     rows = ROW.findall(text)
     assert len(rows) >= 30
-    nums = lambda s: [int(w, 16) for w in s.split(", ") if w]
-    unpack = lambda n, bits, count: [(n >> (bits * i)) & ((1 << bits) - 1) for i in range(count)]
+
+    def nums(s):
+        return [int(w, 16) for w in s.split(", ") if w]
+
+    def unpack(n, bits, count):
+        return [(n >> (bits * i)) & ((1 << bits) - 1) for i in range(count)]
+
     for T, j, x, b, raws, I, R in rows:
         T, j = int(T), int(j)
         xs, bs = unpack(int(x, 16), 8, 29 * T), unpack(int(b, 16), 8, 29 * T)

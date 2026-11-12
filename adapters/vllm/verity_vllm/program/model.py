@@ -31,6 +31,9 @@ from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16
 
+__all__ = ["INT8_EXACT_QUANT", "check_cos_sin", "config_of", "cos_sin_table", "f32_to_bf16_words", "fp8_moe_block",
+           "mla_weights_type", "normalizer_word", "quant_refusal", "rotary_dim", "weights_type"]
+
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
 #: model_type -> family facts vLLM hard-codes (not in config.json).  `qkv_bias`: Qwen2Attention passes bias=True unconditionally;

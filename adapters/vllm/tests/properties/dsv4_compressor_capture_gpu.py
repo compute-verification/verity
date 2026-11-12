@@ -440,7 +440,9 @@ def launches(layer: str, o: dict[str, Any]) -> tuple[list[dict[str, np.ndarray]]
     ("saved") and after the compress ("after") and the cache bytes ("k"); on ratio 128 the split call on the first run's saved
     state, its f32 `compressed_kv` words ("cols"), state ("state") and cache ("k"), else None."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.save_partial_states import save_partial_states
+    from vllm.models.deepseek_v4.common.ops.save_partial_states import (
+        save_partial_states,
+    )
     from vllm.models.deepseek_v4.nvidia.ops import sparse_attn_compress_cutedsl as K
 
     L = LAYERS[layer]
@@ -705,7 +707,7 @@ def bind_check() -> dict[str, Any]:
         "Dsv4MlaCompressC128_v1{W=8,R=16,...}": lambda: entry_fn("c128", LAYERS["c128"].window),
         "FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": lambda: bind(F.FlashMlaKvRow, DN=NOPE, DR=ROPE, QT=QB),
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

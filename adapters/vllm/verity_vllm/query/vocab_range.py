@@ -18,9 +18,6 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
-from verity.circuits.defs import bind
-from verity.definitions import word as W
-
 from verity_vllm.query.manifest.format import identity_rows
 
 FAMILY = "vocab_range"
@@ -49,6 +46,8 @@ def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
 
 
 def shard_fn(VS: int, H: int, START: int) -> Any:
+    # inside the function: importing this module loads neither numpy nor the core `verity`
+    from verity.circuits.defs import bind
     from verity.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
@@ -58,6 +57,9 @@ def shard_fn(VS: int, H: int, START: int) -> Any:
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
+    # inside the function: importing this module loads neither numpy nor the core `verity`
+    from verity.definitions import word as W
+
     G = W.Graph(shard_fn(VS, H, START))
     R = W.units(G, 16, 32)
     if not R["cut"].ok or G.recomputed:

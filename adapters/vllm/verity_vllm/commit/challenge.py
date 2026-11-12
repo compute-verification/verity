@@ -10,14 +10,13 @@ other bindings as context.  Such a sample without its coin is refused by name:
   proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
   No replay calls it.
 
-The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
-difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
-(`stream`, `generator`): changing one moves every sample taken from it.  Every replay of the Commit takes a legacy seed.
-`root_seed` and `kernel_check_seed` read the run root alone, with no coin: the prover fixes the root, so it steers
-their samples by committing again, in about the lesser of 1/p and 2^64 tries (2^32 for the kernel seed), p the chance
-one sample misses its faults, and a replay under either is a measurement.  `legacy_replay_seed` hashes a challenge
-string with the root through SHA-256 and keeps 8 bytes: it is a coin's only when the auditor host's challenger issued
-that string.
+The legacy seeds of the other drivers (replay's tiers, recompute's reference rows, difftest, the relation checkers)
+are here too (`root_seed` .. `case_seed`), with the only generator constructors (`stream`, `generator`): changing one
+moves every sample taken from it.  Every replay of the Commit takes a legacy seed.  `root_seed` reads the run root
+alone, with no coin: the prover fixes the root, so it steers the sample by committing again, in about the lesser of 1/p
+and 2^64 tries, p the chance one sample misses its faults, and a replay under it is a measurement.
+`legacy_replay_seed` hashes a challenge string with the root through SHA-256 and keeps 8 bytes: it is a coin's only
+when the auditor host's challenger issued that string.
 """
 from __future__ import annotations
 
@@ -26,17 +25,14 @@ import random
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from itertools import accumulate
-from typing import Any, TypeVar
+from typing import Any
 
 import numpy as np
-
 from verity.commitments.randomness import Key, derive
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
 REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
-
-T = TypeVar("T")
 
 
 def _source(source: bytes | None) -> bytes:
@@ -57,7 +53,9 @@ def run_root_of(run: Any) -> bytes:
     if len(root) in (32, 64):
         return root
     bad = [s.step for s in run.steps if len(s.root) not in (32, 64)]
-    errors = list((run.extra or {}).get("errors") or [])
+    extra = run.extra
+    listed = extra.get("errors") if extra else None
+    errors = list(listed) if listed else []
     raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
                     f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")
 
@@ -103,18 +101,18 @@ def replay_key(source: bytes, run_root: bytes) -> Key:
     return derive(_source(source), REPLAY_DOMAIN, {"run_root": bytes(run_root)})
 
 
-def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
+def stratum_picks[T](pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
     """`per_stratum` members of each pool (all of a smaller pool), in pool order.
 
     With `seed` (legacy; pass None with a key): one `random.Random(seed)` samples the pools in turn.  With `key`: pool i's
     members at the positions of `key.subset(min(per_stratum, len(pool)), len(pool), ("vu", i))`."""
-    if (seed is None) == (key is None):
-        raise ValueError("stratum_picks takes a legacy seed or a key, not both")
-    if key is not None:
+    if key is not None and seed is None:
         if int(per_stratum) < 0:
             raise ValueError("stratum_picks needs per_stratum >= 0")
         return [[pool[j] for j in key.subset(min(int(per_stratum), len(pool)), len(pool), ("vu", i))]
                 for i, pool in enumerate(pools)]
+    if key is not None or seed is None:
+        raise ValueError("stratum_picks takes a legacy seed or a key, not both")
     rng = random.Random(int(seed))
     out = []
     for pool in pools:
@@ -134,12 +132,6 @@ def challenge_seed(challenge: str, run_root: bytes) -> int:
     """The legacy seed under a challenge string (`legacy_replay_seed`): bound to the root, so a challenge issued
     before the root was fixed, or for another run, selects another sample."""
     return legacy_replay_seed(challenge, run_root)
-
-
-def kernel_check_seed(run_root: bytes) -> int:
-    """The compiled-kernel check's step seed: the run root's first 4 bytes, ``int(run_root.hex()[:8], 16)``.  No coin: the
-    prover steers the sampled steps by committing again, in at most about 2^32 tries, and no rule grades this seed."""
-    return int(bytes(run_root).hex()[:8], 16)
 
 
 def reference_rows_seed(rows_total: int, rows_pending: int) -> int:

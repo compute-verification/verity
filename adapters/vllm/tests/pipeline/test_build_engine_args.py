@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
 
+from verity_vllm import gc_tuning
 from verity_vllm.pipeline import build as B
-from verity_vllm.pipeline import gc_tuning
 
 WL = Path(__file__).resolve().parents[2] / "workloads"
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
@@ -67,3 +68,46 @@ def test_a_tp_rank_s_dead_free_request_reaches_the_construction(tmp_path, monkey
     assert json.loads((tmp_path / "tp2" / "result.json").read_text())["tp"] == {"world": 2, "rank": 1, "dead_free": True}
     assert B.main(B.Options(out=str(tmp_path / "tp1"), wrapper="request", dead_free=True)) == 2
     assert "--dead-free" in json.loads((tmp_path / "tp1" / "result.json").read_text())["message"]
+
+
+@pytest.mark.parametrize("text, code_rev", [
+    ('{"commit": "c0ffee", "patch_sha256": null}', {"commit": "c0ffee", "patch_sha256": None}),     # an export: what its file says
+    ("{not JSON", None),
+    (None, None),                                                                                    # no export here
+])
+def test_a_build_records_the_export_it_ran_in(tmp_path, monkeypatch, text, code_rev):
+    """A Build's ``code_rev`` is the ``EXPORT.json`` of the directory it ran in, and nothing where there is none or it is not JSON."""
+    monkeypatch.chdir(tmp_path)
+    if text is not None:
+        (tmp_path / "EXPORT.json").write_text(text)
+    _construct_engine_args(tmp_path, monkeypatch, None, 1)
+    assert json.loads((tmp_path / "out" / "result.json").read_text())["code_rev"] == code_rev
+
+
+def _logged(caplog) -> list[logging.LogRecord]:
+    return [r for r in caplog.records if r.name == "verity_vllm.pipeline.build"]
+
+
+def test_a_build_of_a_declared_target_names_the_platform_it_selected(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(B, "_construct", lambda *a, **k: None)
+    monkeypatch.setattr(B.engine_env, "apply_target", lambda env: None)
+    monkeypatch.setattr(B, "_cuda_available", lambda: False)
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    monkeypatch.setattr("verity_vllm.program.frontend.export_compat.select_cuda_platform", lambda world, name: f"{world} of {name}")
+    target = json.dumps({"compute_capability": [12, 0], "num_sms": 188})
+    with caplog.at_level(logging.INFO, logger="verity_vllm"):
+        B.main(B.Options(out=str(tmp_path / "declared"), target=target, tp=2, device_name="a device"))
+        B.main(B.Options(out=str(tmp_path / "host"), tp=2, device_name="a device"))     # no declared target: the line is not written
+    (rec,) = _logged(caplog)
+    assert (rec.levelno, rec.getMessage()) == (logging.INFO, "[derive_step] declared target sm_120 x2: vLLM platform 2 of a device")
+
+
+def test_a_build_that_raises_says_so_in_one_error_that_ends_with_its_traceback(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    with caplog.at_level(logging.INFO, logger="verity_vllm"):
+        assert B.main(B.Options(out=str(tmp_path / "tp1"), wrapper="request", dead_free=True)) == 2
+    (rec,) = _logged(caplog)
+    res = json.loads((tmp_path / "tp1" / "result.json").read_text())
+    head, _, trace = rec.getMessage().partition("\n")
+    assert rec.levelno == logging.ERROR and head == f"[derive_step] CRASH {res['exception']}: {res['message']}"
+    assert trace and res["traceback_tail"].endswith(trace) and trace.rstrip().splitlines()[-1] == f"{res['exception']}: {res['message']}"

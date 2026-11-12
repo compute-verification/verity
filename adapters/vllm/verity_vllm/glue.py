@@ -118,9 +118,16 @@ def checkpoints() -> list[dict[str, Any]]:
     return json.loads(CHECKPOINTS.read_text())["checkpoints"]
 
 
+def _pinned_repo(capture_map: dict[str, Any]) -> str | None:
+    """The repo of the checkpoint a capture map pins; None for a map that pins none."""
+    pins = capture_map.get("pins")
+    checkpoint = pins.get("checkpoint") if pins else None
+    return checkpoint.get("repo") if checkpoint else None
+
+
 def capture_maps(repo: str | None = None) -> list[dict[str, Any]]:
     maps = [CM.load(p) for p in sorted(CM.MAPS.glob("*.json"))]
-    return [m for m in maps if repo is None or ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == repo]
+    return [m for m in maps if repo is None or _pinned_repo(m) == repo]
 
 
 def known() -> set[str]:
@@ -198,7 +205,8 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
     if fam is None:
         return None
     others = sorted({c["repo"] for c in checkpoints() if c["repo"] != repo and c.get("role") and _model_type(c["role"]) == model_type})
-    params = sum(len(v) for k, v in (fam.get("params") or {}).items() if isinstance(v, dict))
+    groups = fam.get("params")
+    params = sum(len(v) for _, v in groups.items() if isinstance(v, dict)) if groups else 0
     return {"model_type": model_type, "arch": fam["arch"], "facts": len(fam["facts"]), "params": params, "rules": fam["rules"],
             "shared_with": others}
 

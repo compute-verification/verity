@@ -322,7 +322,7 @@ class SelectRule(OpRule):
         fn = ctx.kind("select_bf16", node)
         if cflat.type.n == n:
             out = ctx.B.batch(fn, cflat, aflat, brow, axes=(0, 0, 0), name=ctx.hint_name(node))
-            axes = (0, 0, 0)
+            axes: tuple[int | None, ...] = (0, 0, 0)
         else:
             out = ctx.B.batch(fn, _scalar_of(cflat), aflat, brow, axes=(None, 0, 0), name=ctx.hint_name(node))
             axes = (None, 0, 0)

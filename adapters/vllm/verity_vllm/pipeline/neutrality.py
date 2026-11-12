@@ -34,6 +34,9 @@ from verity_vllm.config import ROOT, UsageError, option
 from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
+from verity_vllm.records.schema_ids import NEUTRALITY_REPORT_SCHEMA
+
+__all__ = ["Options", "main"]
 
 PINS = CR.INDEX
 #: `row run` flags a tier's rebuild adds: GLM-5.3's Build manifest (the word check over 8 ranks) takes hours at 200-450 GB a worker
@@ -101,7 +104,7 @@ class Options:
 def main(a: Options) -> int:
     doc = CR.load_index(Path(a.pins))
     out, failed, unpinned = Path(a.out), False, []
-    report: dict[str, Any] = {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}
+    report: dict[str, Any] = {"schema": NEUTRALITY_REPORT_SCHEMA, "pins": a.pins, "rows": {}}
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
         pin = doc["rows"][row]

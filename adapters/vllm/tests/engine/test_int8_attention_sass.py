@@ -6,6 +6,8 @@ a GPU; skipped without them.  The rules' own cases (an instruction each rule ref
 from __future__ import annotations
 
 import functools
+import sys
+import types
 
 import pytest
 
@@ -114,3 +116,49 @@ def test_the_sass_rules_refuse_each_class():
                                             "IMMA.16832.S8.S8.SAT R14, R16, R18, R14"))
     assert lut["refused"] == [("SASS: 1 FMUL and 0 FADD for 1 bf16 outputs, where Int8LutAttentionRow_v1 rounds three products "
                                "and one sum per output (3 and 1): a product contracted into its add")]
+
+
+def test_the_fmad_rule_compares_ptxas_two_builds_instruction_by_instruction(monkeypatch):
+    """`fmad_rule` on stand-ins for ptxas and nvdisasm: a build is the listing its flag names."""
+    builds = {b"allowed": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5"), b"fmad=false": _listing("FMUL R1, R2, R3", "FADD R4, R1, R5")}
+    asked = []
+
+    def ptxas(ptx, arch, fmad):
+        asked.append((ptx, arch, fmad))
+        return b"allowed" if fmad else b"fmad=false"
+
+    monkeypatch.setattr(S, "ptxas", ptxas)
+    monkeypatch.setattr(S, "listing", lambda cubin: builds[cubin])
+    assert S.fmad_rule("the ptx", 90) == {"same": True, "ffma_contraction_allowed": 0, "ffma_fmad_false": 0, "refused": []}
+    assert asked == [("the ptx", 90, True), ("the ptx", 90, False)]
+    # with contraction allowed ptxas fuses the product into its add: one FFMA where the flag's build has none
+    builds[b"allowed"] = _listing("FFMA R4, R2, R3, R5")
+    assert S.fmad_rule("the ptx", 120) == {
+        "same": False, "ffma_contraction_allowed": 1, "ffma_fmad_false": 0,
+        "refused": ["fmad: ptxas contracts this PTX when allowed (1 FFMA against 0 with --fmad=false)"]}
+
+
+def _stand_in_kernels(monkeypatch, tmp_path, source: str) -> None:
+    """A module in `int8_attention_triton`'s place whose file holds ``source``: `div_full_mutant` reads the file alone."""
+    path = tmp_path / "stand_in_kernels.py"
+    path.write_text(source)
+    stand_in = types.ModuleType("verity_vllm.engine.int8_attention_triton")
+    stand_in.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.int8_attention_triton", stand_in)
+    monkeypatch.setattr("verity_vllm.engine.int8_attention_triton", stand_in, raising=False)
+
+
+def test_the_div_full_mutant_is_the_kernels_module_with_one_division_changed(monkeypatch, tmp_path):
+    _stand_in_kernels(monkeypatch, tmp_path, "BLOCK_S = 7\n\n\ndef _q8(tl, x, s):\n    return tl.div_rn(x, tl.broadcast_to(s, x.shape))\n")
+    mutant = S.div_full_mutant(tmp_path)
+    assert mutant.__name__ == "int8_attention_triton_div_full" and mutant.BLOCK_S == 7
+    written = tmp_path / "int8_attention_triton_div_full.py"
+    assert mutant.__file__ == str(written)
+    assert written.read_text() == "BLOCK_S = 7\n\n\ndef _q8(tl, x, s):\n    return x / s\n"
+    assert mutant._q8(None, 6.0, 4.0) == 1.5
+
+
+def test_the_div_full_mutant_is_refused_when_the_division_is_no_longer_there(monkeypatch, tmp_path):
+    _stand_in_kernels(monkeypatch, tmp_path, "def _q8(tl, x, s):\n    return tl.div_rn(x, s)\n")
+    with pytest.raises(RuntimeError, match="_q8 no longer divides by"):
+        S.div_full_mutant(tmp_path)

@@ -405,7 +405,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Program binds at DeepSeek-V4-Pro's statics."""
-    out = {}
+    out: dict[str, bool | str] = {}
     for case in CASES_L:
         st = statics(case)
         name = "Dsv4GlobalTopk_v1{" + ",".join(f"{k}={v}" for k, v in st.items()) + "}"

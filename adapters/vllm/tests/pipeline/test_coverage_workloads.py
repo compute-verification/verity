@@ -3,6 +3,7 @@ The generated B0 workloads are `test_coverage_workloads_of_record`."""
 from __future__ import annotations
 
 import json
+import logging
 import types
 from pathlib import Path
 
@@ -396,3 +397,14 @@ def test_expected_steps_prefers_the_control_run(tmp_path):
     ctl.parent.mkdir(parents=True, exist_ok=True)
     ctl.write_text(json.dumps({"requests": [{"request_id": "x", "prompt_token_ids": [1] * 5, "max_tokens": 16}], "timing": {"engine_steps": 21}}))
     assert G.RunArtifacts(run).expected_steps() == 21, "arrivals / chunking / EOS: the control run's realized steps"
+
+
+def test_the_command_names_each_file_it_writes_and_the_head_of_its_note(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(gw, "Tok", lambda path: None)
+    monkeypatch.setattr(gw, "workload_doc", lambda **kw: {"note": f"{kw['profile']} at {kw['ctx']}: " + "n" * 300})
+    a = gw.Options(case="B0", model="m", tokenizer="t", profiles="P,Q", ctx="C", out_dir=str(tmp_path / "out"), checkpoints=str(tmp_path / "none.json"))
+    with caplog.at_level(logging.INFO, logger="verity_vllm"):
+        assert gw.main(a) == 0
+    logged = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.pipeline.coverage_workloads"]
+    assert logged == [(logging.INFO, f"workload_cov_b0_{p.lower()}_c.json: " + (f"{p} at C: " + "n" * 300)[:200]) for p in "PQ"]
+    assert sorted(f.name for f in (tmp_path / "out").iterdir()) == ["workload_cov_b0_p_c.json", "workload_cov_b0_q_c.json"]

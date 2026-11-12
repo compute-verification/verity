@@ -101,11 +101,19 @@ def find_map(model: Any, world: int | None = None) -> dict[str, Any] | None:
 def manifest_map(manifest: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """The capture map with a `route_site` a manifest's TP Commit attaches on every rank (`find_map` on the served model): its pinned
     checkpoint is the manifest's model (`fixture.model`) and its target runs the manifest's ranks; None when none is."""
-    model, ranks = ((manifest or {}).get("fixture") or {}).get("model"), int((manifest or {}).get("ranks") or 1)
+    fixture = manifest.get("fixture") if manifest else None
+    model, ranks = (fixture.get("model") if fixture else None), int((manifest or {}).get("ranks") or 1)
     if not model:
         return None
     return next((m for m in (CM.load(p) for p in sorted(MAPS.glob("*.json"))) if m.get("route_site")
-                 and ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == model and m["target"]["tensor_parallel_size"] == ranks), None)
+                 and _pinned_repo(m) == model and m["target"]["tensor_parallel_size"] == ranks), None)
+
+
+def _pinned_repo(cmap: Mapping[str, Any]) -> Any:
+    """The repo of the checkpoint a capture map pins; None where it pins none."""
+    pins = cmap.get("pins")
+    checkpoint = pins.get("checkpoint") if pins else None
+    return checkpoint.get("repo") if checkpoint else None
 
 
 class UnbuiltBinders(ValueError):
@@ -142,15 +150,13 @@ def known_modules(cmap: dict[str, Any], env: dict[str, int]) -> set[str]:
 class RouteSource:
     short_name = "routes"
 
-    def __init__(self, com: Any, model: Any, cmap: dict[str, Any], *, rank: int = 0, world: int | None = None,
-                 config: Mapping[str, Any] | None = None, target: bool | None = None) -> None:
+    def __init__(self, com: Any, model: Any, cmap: dict[str, Any], *, rank: int = 0, target: bool | None = None) -> None:
         if not cmap.get("route_site"):
             raise ValueError(f"capture map {cmap.get('id')}: no route_site")
         self.sites = CM.route_sites(cmap)
         self.c, self.cmap, self.site, self.rank = com, cmap, self.sites[0], int(rank)
         self.on_target = on_target(cmap) if target is None else bool(target)
-        world = world_of(model) if world is None else world
-        self.env = CM.symbols(cmap, dict(config) if config is not None else model.config.to_dict(), world)
+        self.env = CM.symbols(cmap, model.config.to_dict(), world_of(model))
         #: per site, layer -> the module whose method it is; a decision's layers are those of its sites
         self.site_layers: list[dict[int, Any]] = []
         self.decisions: dict[str | None, set[int]] = {}
@@ -278,7 +284,7 @@ class RouteSource:
             return None, NO_ROUTE
         taken: set[str] = set()
         for d, layers in self.decisions.items():
-            got = rec.get(d) or {}
+            got = rec.get(d)
             why = "" if d is None else f" ({d})"
             if not got:
                 return None, NO_ROUTE[:-1] + why + ">"

@@ -15,7 +15,6 @@
     {"file": "verity_vllm/check/c2_rules.py", "kind": "model", "symbol": "c2_rules", "detail": "mixtral"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "layer-class", "symbol": "compare_boundary", "detail": "RMSNorm"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "model", "symbol": "<module>", "detail": "smollm"},
-    {"file": "verity_vllm/check/match/rank_match.py", "kind": "layer-class", "symbol": "<module>", "detail": "ParallelLMHead"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "FusedMoE"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "MoERunner"},
     {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "layer-class", "symbol": "<module>", "detail": "SharedFusedMoE"},
@@ -67,12 +66,9 @@
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
     {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "sm-arch", "symbol": "CutlassScaledMmFp8Block.match", "detail": "sm_90"},
-    {"file": "verity_vllm/observe/runtime_tree.py", "kind": "layer-class", "symbol": "meta_runtime_tree", "detail": "Sampler"},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "layer-class", "symbol": "per_token_bytes_of", "detail": "RotaryEmbedding", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "Options", "detail": "llama", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
-    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "gpu", "symbol": "main", "detail": "rtx4090"},
-    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "layer-class", "symbol": "<module>", "detail": "LayerNorm", "count": 3},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "layer-class", "symbol": "<module>", "detail": "RMSNorm", "count": 3},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "GPT2Attention"},
@@ -187,12 +183,6 @@
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_80"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_89"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "sm-arch", "symbol": "<module>", "detail": "sm_90"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension._tp2_binding", "detail": "LogitsProcessor"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "LogitsProcessor"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "ParallelLMHead"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "RowParallelLinear"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install", "detail": "VocabParallelEmbedding"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "LogitsProcessor"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "layer-class", "symbol": "TP2CaptureWorkerExtension.tp2_param_hashes", "detail": "ParallelLinear"}
   ]
 }

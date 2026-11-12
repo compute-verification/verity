@@ -25,10 +25,13 @@ from functools import cache
 from pathlib import Path
 
 import torch
-from vllm.utils.torch_utils import is_quantized_kv_cache
 from vllm.v1.attention.backend import AttentionType
-from vllm.v1.attention.backends.flash_attn import FlashAttentionBackend, FlashAttentionImpl
+from vllm.v1.attention.backends.flash_attn import (
+    FlashAttentionBackend,
+    FlashAttentionImpl,
+)
 from vllm.v1.attention.backends.registry import AttentionBackendEnum, register_backend
+from vllm.v1.kv_cache_interface import is_quantized_kv_cache
 from vllm.v1.kv_cache_layout import KVCacheLayout
 
 from verity_vllm.engine import int8_attention as A
@@ -93,7 +96,10 @@ class Int8AttentionImpl(FlashAttentionImpl):
 
 def tp_rank() -> tuple[int, int]:
     """(rank, world) of this process's tensor-parallel group."""
-    from vllm.distributed import get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size
+    from vllm.distributed import (
+        get_tensor_model_parallel_rank,
+        get_tensor_model_parallel_world_size,
+    )
     return int(get_tensor_model_parallel_rank()), int(get_tensor_model_parallel_world_size())
 
 

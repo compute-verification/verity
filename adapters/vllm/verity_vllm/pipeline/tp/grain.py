@@ -34,6 +34,8 @@ from verity.definitions.registry import tp_combine as TC
 
 from verity_vllm.pipeline import serving_templates as ST
 
+__all__ = ["GROUP"]
+
 COORD, ROW = "coordinate", "row"
 #: the all-reduces whose every element is the same sum of the ranks' words there, by the static holding the element count
 ELEMENTWISE = {B1T.AllReduce2: "N", B1T.AllReduce: "N"}

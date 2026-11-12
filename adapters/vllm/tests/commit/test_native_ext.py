@@ -4,6 +4,8 @@ the binding check are stand-ins: no compiler and no torch."""
 from __future__ import annotations
 
 import logging
+import subprocess
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -57,3 +59,13 @@ def test_an_extension_that_lacks_a_bound_name_is_refused_and_not_kept(loads, cap
     assert native_ext._EXT is None and not caplog.records
     missing.clear()
     assert native_ext.ext(build_dir=str(tmp_path)) is built and len(calls) == 2, "the refused module was not kept"
+
+
+def test_importing_the_module_loads_neither_numpy_nor_torch_nor_the_core():
+    """`verity_vllm.commit.committer.native_ext`: the loader (`native_jit`), which reads the kernels' headers from the core `verity`, is
+    read when `ext` builds, not when this module is imported."""
+    code = ("import sys; before = set(sys.modules); import verity_vllm.commit.committer.native_ext; "
+            "print(sorted({m.split('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'}))")
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == "[]"

@@ -618,7 +618,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics and the edge width."""
-    out = {}
+    out: dict[str, bool | str] = {}
     for case in CASES_L:
         fn = R.Dsv4SwaIndices if PHASE[case] == "swa" else R.Dsv4C128aGlobalTopk
         for kind in ("served", "edge"):

@@ -28,8 +28,10 @@ from typing import Any
 from verity_vllm.check import gates as G
 from verity_vllm.check.gates import GateResult, RunArtifacts
 from verity_vllm.config import RowEngine
+from verity_vllm.pipeline.row_json import field_of
+from verity_vllm.records.schema_ids import CONFIGURATION_CARD_SCHEMA
 
-CARD_SCHEMA = "verity-gen/card/v1"
+CARD_SCHEMA = CONFIGURATION_CARD_SCHEMA
 
 #: `C` fields the profile derives from others (never read from the HF config).
 DERIVED_FIELDS = ("QKV", "GU", "BN")
@@ -80,9 +82,9 @@ def _flag(v: Any) -> str:
 def kappa_short(versions: dict) -> str:
     """First 10 hex digits of sha256 over the canonical κ pins {torch, cuda, triton, vllm, gpu.name, gpu.cc}."""
     v = versions or {}
-    gpu = v.get("gpu") or {}
-    pins = {"torch": v.get("torch"), "cuda": v.get("cuda"), "triton": v.get("triton"), "vllm": v.get("vllm"),
-            "gpu": gpu.get("name") if isinstance(gpu, dict) else gpu, "cc": gpu.get("cc") if isinstance(gpu, dict) else None}
+    gpu = v.get("gpu")   # a GPU's {name, cc}, or its bare name; versions that name no GPU pin neither
+    name, cc = (gpu.get("name"), gpu.get("cc")) if isinstance(gpu, dict) else (gpu if gpu else None, None)
+    pins = {"torch": v.get("torch"), "cuda": v.get("cuda"), "triton": v.get("triton"), "vllm": v.get("vllm"), "gpu": name, "cc": cc}
     return hashlib.sha256(json.dumps(pins, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:10]
 
 
@@ -181,6 +183,18 @@ def log_header(path: str | Path) -> dict | None:
     return d if isinstance(d, dict) and d.get("$e") == "RunHeader" else None
 
 
+def _listed(block: dict, key: str) -> Any:
+    """What ``block`` lists under ``key``, to count or to walk; nothing where the list is absent, null or empty."""
+    xs = block.get(key)
+    return xs if xs else ()
+
+
+def _detail(gates: dict, gid: str) -> dict:
+    """What gate ``gid`` recorded beside its status; the empty block for a gate that did not run or recorded nothing."""
+    d = field_of(gates.get(gid), "detail")
+    return d if d else {}
+
+
 def workload_summary(path: str | Path | None) -> dict:
     """{path, sha256, n_requests, prompt_lens, max_tokens, requests: [{request_id, prompt_len, max_tokens}]} of a workload
     file (`sha256` as `vllm_adapter.load_workload` computes it: canonical JSON of the file)."""
@@ -191,12 +205,12 @@ def workload_summary(path: str | Path | None) -> dict:
         return {"path": str(path), "sha256": None, "n_requests": 0, "prompt_lens": [], "max_tokens": [], "requests": [], "error": "missing"}
     doc = json.loads(p.read_text())
     sha = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    reqs = [{"request_id": r.get("request_id"), "prompt_len": len(r.get("prompt_token_ids") or []), "max_tokens": r.get("max_tokens"),
+    reqs = [{"request_id": r.get("request_id"), "prompt_len": len(_listed(r, "prompt_token_ids")), "max_tokens": r.get("max_tokens"),
              "arrive_step": int(r.get("arrive_step") or 0)}
             for r in doc.get("requests", [])]
     return {"path": str(path), "sha256": sha, "n_requests": len(reqs), "prompt_lens": sorted({r["prompt_len"] for r in reqs}),
             "max_tokens": sorted({r["max_tokens"] for r in reqs if r["max_tokens"] is not None}), "requests": reqs,
-            "model": doc.get("model"), "case": doc.get("case"), "sampling": (doc.get("variants") or {}).get("greedy"),
+            "model": doc.get("model"), "case": doc.get("case"), "sampling": field_of(doc.get("variants"), "greedy"),
             # [coverage D87] serving-regime dimensions of the coverage campaign (None for the older hand-authored workloads)
             "serving_profile": doc.get("serving_profile"), "context_class": doc.get("context_class"),
             "length_seed": doc.get("length_seed"), "arrive_steps": [r["arrive_step"] for r in reqs],
@@ -210,38 +224,40 @@ def engine_args_of(run: RunArtifacts) -> dict:
     src = []
     hdr = log_header(run.path("log")) if run.exists("log") else None
     if hdr:
-        prof = hdr.get("profile") or {}
-        cache, par, comp = prof.get("cache") or {}, prof.get("parallelism") or {}, prof.get("compilation") or {}
-        out.update({"max_num_seqs": cache.get("max_num_seqs"), "enable_prefix_caching": cache.get("enable_prefix_caching"),
-                    "enable_chunked_prefill": cache.get("enable_chunked_prefill"), "kv_cache_dtype": cache.get("kv_cache_dtype"),
-                    "block_size": cache.get("block_size"), "dtype": prof.get("dtype"), "quantization": prof.get("quantization"),
-                    "tensor_parallel_size": par.get("tensor_parallel_size"), "enforce_eager": comp.get("enforce_eager"),
-                    "attention_backend": (prof.get("backends") or {}).get("attention")})
-        kw = prof.get("engine_kwargs") or {}
+        prof = hdr.get("profile")
+        if not prof:
+            prof = {}   # a header without a profile states no argument: each stays None
+        cache, par, comp = prof.get("cache"), prof.get("parallelism"), prof.get("compilation")   # a block the profile leaves out states none of its arguments
+        out.update({**{k: field_of(cache, k) for k in ("max_num_seqs", "enable_prefix_caching", "enable_chunked_prefill", "kv_cache_dtype", "block_size")},
+                    "dtype": prof.get("dtype"), "quantization": prof.get("quantization"),
+                    "tensor_parallel_size": field_of(par, "tensor_parallel_size"), "enforce_eager": field_of(comp, "enforce_eager"),
+                    "attention_backend": field_of(prof.get("backends"), "attention")})
+        kw = prof.get("engine_kwargs")
         for k in ("seed", "max_model_len", "gpu_memory_utilization"):
-            out[k] = kw.get(k)
-        out["sampling"] = prof.get("sampling") or (hdr.get("workload") or {}).get("sampling")
+            out[k] = field_of(kw, k)
+        out["sampling"] = prof.get("sampling") or field_of(hdr.get("workload"), "sampling")
         out["env_flags"] = prof.get("engine_flags")
-        out["vllm_commit"] = (prof.get("vllm") or {}).get("commit")
+        out["vllm_commit"] = field_of(prof.get("vllm"), "commit")
         src.append("capture log header")
     census = run.json("census")
     if isinstance(census, dict):
-        kw = census.get("engine_kwargs") or {}
-        for k in ("dtype", "seed", "max_model_len", "gpu_memory_utilization", "enforce_eager", "enable_prefix_caching", "max_num_seqs",
-                  "tensor_parallel_size", "quantization", "enable_chunked_prefill"):
-            if k in kw:
-                out[k] = kw[k]
+        kw = census.get("engine_kwargs")   # what the census's engine was made with; a census that records none overrides nothing
+        if kw:
+            for k in ("dtype", "seed", "max_model_len", "gpu_memory_utilization", "enforce_eager", "enable_prefix_caching", "max_num_seqs",
+                      "tensor_parallel_size", "quantization", "enable_chunked_prefill"):
+                if k in kw:
+                    out[k] = kw[k]
         out.setdefault("sampling", None)
         if out.get("sampling") is None:
-            out["sampling"] = (census.get("workload") or {}).get("sampling")
+            out["sampling"] = field_of(census.get("workload"), "sampling")
         if not out.get("env_flags"):
             out["env_flags"] = census.get("env_flags")
         src.append("census.json engine_kwargs")
-    req = run.manifest.get("engine_args_requested") or {}
-    for k, v in req.items():
-        if out.get(k) is None:
-            out[k] = v
+    req = run.manifest.get("engine_args_requested")   # what the driver asked for: it fills what neither the header nor the census states
     if req:
+        for k, v in req.items():
+            if out.get(k) is None:
+                out[k] = v
         src.append("run.json engine_args_requested")
     if out.get("tensor_parallel_size") is None:
         out["tensor_parallel_size"] = 1
@@ -261,10 +277,11 @@ def kappa_of(run: RunArtifacts, hdr: dict | None) -> dict:
         return dict(census["versions"], source="census.json")
     if not hdr:
         return {}
-    prof = hdr.get("profile") or {}
-    py, gpu = prof.get("python") or {}, prof.get("gpu") or {}
-    return {"torch": py.get("torch"), "cuda": py.get("cuda"), "triton": py.get("triton"), "vllm": (prof.get("vllm") or {}).get("version"),
-            "python": py.get("version"), "gpu": {"name": gpu.get("name"), "cc": gpu.get("compute_capability"), "driver": gpu.get("driver")},
+    prof = hdr.get("profile")   # the capture's own pins; a header that leaves out the profile, or a block of it, pins None for each
+    py, gpu = field_of(prof, "python"), field_of(prof, "gpu")
+    return {"torch": field_of(py, "torch"), "cuda": field_of(py, "cuda"), "triton": field_of(py, "triton"),
+            "vllm": field_of(field_of(prof, "vllm"), "version"), "python": field_of(py, "version"),
+            "gpu": {"name": field_of(gpu, "name"), "cc": field_of(gpu, "compute_capability"), "driver": field_of(gpu, "driver")},
             "host": None, "source": "log header (no versions.json)"}
 
 
@@ -272,17 +289,17 @@ def _model_of(run: RunArtifacts, C: dict | None, hdr: dict | None) -> dict:
     m: dict[str, Any] = {"repo": (C or {}).get("model"), "revision": (C or {}).get("revision"),
                          "family": run.manifest.get("family") or "Serve_v4", "sha256": None}
     if hdr:
-        hm = hdr.get("model") or {}
-        m["repo"] = m["repo"] or hm.get("repo")
-        m["revision"] = m["revision"] or hm.get("revision")
-        cfg = hm.get("config") or {}
-        m["hf_model_type"] = cfg.get("model_type")
-        m["architectures"] = cfg.get("architectures")
-        pm = (hdr.get("profile") or {}).get("model") or {}
-        ws = pm.get("weights_sha256")
+        hm = hdr.get("model")   # the model the capture loaded; a header that names none adds nothing to what the record states
+        m["repo"] = m["repo"] or field_of(hm, "repo")
+        m["revision"] = m["revision"] or field_of(hm, "revision")
+        cfg = field_of(hm, "config")
+        m["hf_model_type"] = field_of(cfg, "model_type")
+        m["architectures"] = field_of(cfg, "architectures")
+        pm = field_of(hdr.get("profile"), "model")   # the digests of the files it loaded; a profile without them leaves both None
+        ws = field_of(pm, "weights_sha256")
         if isinstance(ws, dict) and ws:
             m["sha256"] = ws if len(ws) > 1 else next(iter(ws.values()))
-        m["config_sha256"] = pm.get("config_sha256")
+        m["config_sha256"] = field_of(pm, "config_sha256")
     if run.manifest.get("model_sha256"):
         m["sha256"] = run.manifest["model_sha256"]
     return m
@@ -316,28 +333,27 @@ def vu_partition_text(gates: dict) -> str:
     if not isinstance(g8, dict):
         return "n/a (record predates G8)"
     st = g8.get("status")
-    d = g8.get("detail") or {}
+    d = g8.get("detail")   # the partition's status, its set count and its widths; a gate that recorded none prints n/a for each
     if st == "skipped":
         return f"skipped ({g8.get('reason') or 'no query-use document'})"
     if st == "error":
         return f"error ({str(g8.get('reason') or '')[:80]})"
-    part, width = d.get("partition") or {}, d.get("width") or {}
-    count = d.get("count")
-    max_seen = width.get("max_seen")
-    txt = (f"{part.get('status')}, {count if count is not None else 'n/a'} sets, max w_out {max_seen if max_seen is not None else 'n/a'}"
-           f"/{width.get('w_max') if width.get('w_max') is not None else 'n/a'}")
+    part, width = field_of(d, "partition"), field_of(d, "width")
+    count = field_of(d, "count")
+    max_seen, w_max = field_of(width, "max_seen"), field_of(width, "w_max")
+    txt = (f"{field_of(part, 'status')}, {count if count is not None else 'n/a'} sets, max w_out {max_seen if max_seen is not None else 'n/a'}"
+           f"/{w_max if w_max is not None else 'n/a'}")
     if st == "unsupported":                        # undecided: neither PASS nor FAIL; the reason names what was undecidable
         return f"unsupported ({str(g8.get('reason') or '').removeprefix('unsupported (').removesuffix(')')[:120]}); {txt}"
     if st == "fail":
-        codes = list(part.get("codes") or [])
-        extra = []
-        if codes:
-            extra.append(f"codes {codes[:4]}")
-        if width.get("n_violators"):
-            extra.append(f"{width['n_violators']} violators")
-        if width.get("n_unsupported"):
-            extra.append(f"{width['n_unsupported']} unsupported")
-        vs = d.get("status") or d.get("verdict_status")
+        codes = field_of(part, "codes")   # the partition's failure codes; a detail that lists none names none
+        extra = [f"codes {list(codes)[:4]}"] if codes else []
+        violators, undecided = field_of(width, "n_violators"), field_of(width, "n_unsupported")
+        if violators:
+            extra.append(f"{violators} violators")
+        if undecided:
+            extra.append(f"{undecided} unsupported")
+        vs = field_of(d, "status") or field_of(d, "verdict_status")
         if vs not in (None, "ok"):
             extra.append(f"status {vs}")
         if any(str(p).startswith("binding:") for p in str(g8.get("reason") or "").split("; ")):
@@ -354,64 +370,69 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
     rp = run.json("root_policy") or {}
     q = run.json("quarantine")
     ra = run.json("replay_a") or {}
-    g2 = (gates.get("G2") or {}).get("detail") or {}
-    g5 = (gates.get("G5") or {}).get("detail") or {}
-    unsupported = (res.get("totals") or {}).get("unsupported")
-    ambiguous = g2.get("ambiguous", (cr.get("totals") or {}).get("ambiguous"))
-    unknown = len(fs.get("unknown_roots") or ((res.get("roots") or {}).get("unknown") or []))
-    unvalidated = sum(int((c or {}).get("failed") or 0) for c in (rp.get("classes") or {}).values() if isinstance(c, dict))
-    unvalidated += sum(1 for r in (rp.get("roots") or []) if isinstance(r, dict) and r.get("status") not in ("pass", "validated", "ok"))
-    residue = (cr.get("totals") or {}).get("residue_kernels")
+    g2, g5 = _detail(gates, "G2"), _detail(gates, "G5")
+    unsupported = field_of(res.get("totals"), "unsupported")
+    ambiguous = g2.get("ambiguous", field_of(cr.get("totals"), "ambiguous"))
+    unknown_roots = fs.get("unknown_roots") or field_of(res.get("roots"), "unknown")   # the fold's, else the resolution's; a run that names none has none
+    unknown = len(unknown_roots) if unknown_roots else 0
+    classes = rp.get("classes")   # the root policy's classes, then its roots; a policy that lists neither leaves none unvalidated
+    unvalidated = sum(int(c.get("failed") or 0) for c in classes.values() if isinstance(c, dict)) if classes else 0
+    unvalidated += sum(1 for r in _listed(rp, "roots") if isinstance(r, dict) and r.get("status") not in ("pass", "validated", "ok"))
+    residue = field_of(cr.get("totals"), "residue_kernels")
     prov = provenance or {}
-    cov = ra.get("coverage") or {}
-    n_specs = len(cov) if cov else len(res.get("by_spec") or {})
-    n_covered = (len(cov) - len(ra.get("uncovered_specs") or [])) if cov else None
-    diff = (q or {}).get("differential") or {}
-    # G5 (D82): exhaustive operand provenance, sampled VUs (verifier seed), served tokens, chained slices
-    pv = g5.get("provenance") or {}
-    if pv.get("reads") is not None:
+    cov = ra.get("coverage")   # tier a's specs, each with what covered it; a run without tier a counts the resolution's specs and compares none
+    if cov:
+        n_specs = len(cov)
+        n_covered = len(cov) - len(_listed(ra, "uncovered_specs"))
+    else:
+        n_specs, n_covered = len(_listed(res, "by_spec")), None
+    diff = field_of(q, "differential")   # the quarantine's differential tests; a run without them prints n/a
+    # G5 (D82): exhaustive operand provenance, sampled VUs (verifier seed), served tokens, chained slices: a part G5 did not reach is skipped
+    pv = g5.get("provenance")
+    if pv and pv.get("reads") is not None:
         wiring_ok = (pv.get("n_mismatch") == 0 and pv.get("uncovered") == 0 and pv.get("single_stream") is not False
                      and not (pv.get("writes_outside_schema") or 0))
         wiring_txt = f"{pv['reads']} reads, {pv.get('n_mismatch', '?')} mismatches" + (" PASS" if wiring_ok else " FAIL")
     else:
         wiring_txt = "skipped"
-    smp = g5.get("sample") or {}
+    smp = g5.get("sample")
     sample_txt = (f"k={smp.get('k')} x {smp.get('strata')} strata, seed {smp.get('seed')} " + ("PASS" if smp.get("status") == "pass" else "FAIL")
-                  if smp.get("status") else "skipped")
-    tk = g5.get("tokens") or {}
-    if tk.get("evaluated"):
+                  if smp and smp.get("status") else "skipped")
+    tk = g5.get("tokens")
+    if tk and tk.get("evaluated"):
         tokens_txt = f"{tk.get('equal')}/{tk.get('evaluated')} rows at steps {tk.get('steps')}" + (" PASS" if tk.get("all_rows_equal") else " FAIL")
     else:
         tokens_txt = "skipped"
-    chn = g5.get("chain") or {}
+    chn = g5.get("chain")
     chain_txt = (f"{chn.get('n_slices')} slices, {chn.get('n_edges_chained')} chained edges " + ("PASS" if chn.get("status") == "pass" else "FAIL")
-                 if chn.get("status") else "skipped")
+                 if chn and chn.get("status") else "skipped")
     ni_status = _gate_status(gates, "G1")
     # D85: what the sampled population covers (vu_query; informational, never gates)
-    vp = ra.get("vu_population") or {}
-    if vp.get("status") == "ok":
-        n_zero, n_partial = len(vp.get("zero_mass_specs") or []), len(vp.get("partial_tiling_specs") or [])
+    vp = ra.get("vu_population")   # what the sampled population covers; a run whose tier a did not compute it says so
+    if vp and vp.get("status") == "ok":
+        n_zero, n_partial = len(_listed(vp, "zero_mass_specs")), len(_listed(vp, "partial_tiling_specs"))
         vu_txt = (f"{vp.get('count')} VUs / {vp.get('instances')} instances, {vp.get('oversize_instances')} oversize; "
                   f"{vp.get('instances_without_units')} zero-mass instances ({n_zero} specs), {n_partial} partially tiled specs"
                   + ("" if not (n_zero or n_partial) else " -- SEE replay_a.vu_population"))
-    elif vp.get("status") == "error":
+    elif vp and vp.get("status") == "error":
         vu_txt = f"unavailable ({vp.get('error')})"
     else:
         vu_txt = "not computed"
     return {
-        "vu_coverage": vu_txt, "vu_zero_mass_specs": vp.get("zero_mass_specs"), "vu_partial_tiling_specs": vp.get("partial_tiling_specs"),
+        "vu_coverage": vu_txt, "vu_zero_mass_specs": field_of(vp, "zero_mass_specs"), "vu_partial_tiling_specs": field_of(vp, "partial_tiling_specs"),
         # G8: the VU-partition structural gate over query_use.json -- skipped / pass / fail + set count + max w_out
         "vu_partition": vu_partition_text(gates),
-        "protected_files_modified": len(prov.get("protected_files_modified") or []) if prov else None,
-        "existing_primitives_modified": len(prov.get("existing_primitives_modified") or []) if prov else None,
-        "new_root_classes": len(prov.get("new_root_classes") or []) if prov else (len(rp.get("new_root_classes") or []) if rp else None),
-        "new_allowlist_entries": len(prov.get("new_allowlist_entries") or []) if prov else None,
-        "golden_digest_changes": len(prov.get("golden_digest_changes") or []) if prov else None,
+        # each provenance row counts what the sealed verifier's provenance lists; an unsealed card has none, and prints n/a
+        "protected_files_modified": len(_listed(prov, "protected_files_modified")) if prov else None,
+        "existing_primitives_modified": len(_listed(prov, "existing_primitives_modified")) if prov else None,
+        "new_root_classes": len(_listed(prov, "new_root_classes")) if prov else (len(_listed(rp, "new_root_classes")) if rp else None),
+        "new_allowlist_entries": len(_listed(prov, "new_allowlist_entries")) if prov else None,
+        "golden_digest_changes": len(_listed(prov, "golden_digest_changes")) if prov else None,
         "unsupported": unsupported, "ambiguous": ambiguous, "unknown_or_unvalidated_roots": unknown + unvalidated if (fs or res or rp) else None,
         "census_residue": residue,
-        "new_patterns": len(prov.get("new_patterns") or []) if prov else None,
-        "new_definitions": len(prov.get("new_definitions") or []) if prov else None,
-        "differential_passed": diff.get("passed"), "differential_total": diff.get("total"),
+        "new_patterns": len(_listed(prov, "new_patterns")) if prov else None,
+        "new_definitions": len(_listed(prov, "new_definitions")) if prov else None,
+        "differential_passed": field_of(diff, "passed"), "differential_total": field_of(diff, "total"),
         "specs_captured": n_specs, "specs_compared": n_covered,
         "operand_provenance": wiring_txt, "sampled_vus": sample_txt, "served_tokens": tokens_txt, "chained_slices": chain_txt,
         "control_noninterference": "PASS" if ni_status == "pass" else ("FAIL" if ni_status == "fail" else "n/a"),
@@ -440,26 +461,31 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
     fs = run.json("fold_summary") or {}
     prov = run.json("provenance")
     unsealed = not isinstance(prov, dict)
-    kernels = [k.get("kernel") for k in (cr.get("kernels") or []) if isinstance(k, dict)]
+    kernels = [k.get("kernel") for k in _listed(cr, "kernels") if isinstance(k, dict)]
     if not kernels and isinstance(run.json("census"), dict):
-        kernels = list((run.json("census").get("run_histogram") or {}).keys())
+        histogram = run.json("census").get("run_histogram")   # a run without the reconcile's kernels names the census's own; a census without them names none
+        kernels = list(histogram.keys()) if histogram else []
     missing = []
     seen = set()
-    for u in res.get("unsupported_examples") or []:
+    for u in _listed(res, "unsupported_examples"):
         key = (u.get("op"), u.get("reason"))
         if key not in seen:
             seen.add(key)
             missing.append({"op": u.get("op"), "reason": u.get("reason"), "step": u.get("step")})
-    for op, n in ((res.get("primary_report") or {}).get("unsupported_ops") or {}).items():
-        if not any(m["op"] == op for m in missing):
-            missing.append({"op": op, "count": n})
-    roots = dict((res.get("roots") or {}).get("classes") or {})
-    if (res.get("roots") or {}).get("unknown"):
-        roots["unknown_names"] = res["roots"]["unknown"]
+    primary = res.get("primary_report")   # the resolution's report by pattern; one that resolved nothing uses no pattern and misses no op
+    unsupported_ops = field_of(primary, "unsupported_ops")
+    if unsupported_ops:
+        for op, n in unsupported_ops.items():
+            if not any(m["op"] == op for m in missing):
+                missing.append({"op": op, "count": n})
+    by_pattern = field_of(primary, "by_pattern")
+    by_class, unknown = field_of(res.get("roots"), "classes"), field_of(res.get("roots"), "unknown")   # a resolution that names no root has neither
+    roots = dict(by_class) if by_class else {}
+    if unknown:
+        roots["unknown_names"] = unknown
     spend = run.json("spend") or {}
     hf_C = hf_config if hf_config is not None else man.get("hf_config")
-    g4 = (gates.get("G4") or {}).get("detail") or {}
-    g5 = (gates.get("G5") or {}).get("detail") or {}
+    g4, g5 = _detail(gates, "G4"), _detail(gates, "G5")
     card = ReportCard(
         schema=CARD_SCHEMA, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), config_id=cid, model=model,
         C=c_with_provenance(C, hf_C), engine_args=engine_args,
@@ -468,11 +494,11 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
                   **{k: wl.get(k) for k in ("serving_profile", "context_class", "arrive_steps", "expected_engine_steps") if wl.get(k) is not None},
                   **({"realized": man["realized"]} if isinstance(man.get("realized"), dict) else {})},
         kappa=versions, gates=gates, verdict=G.verdict(results), census_kernels=kernels,
-        patterns_used=dict((res.get("primary_report") or {}).get("by_pattern") or {}), patterns_missing=missing, roots_by_class=roots,
-        per_step_instances=[{"step": s.get("step"), "phase": s.get("phase"), "n_instances": s.get("n_instances")} for s in fs.get("per_step") or []],
-        mechanism_notes=list(mechanism_notes if mechanism_notes is not None else man.get("mechanism_notes") or []),
+        patterns_used=dict(by_pattern) if by_pattern else {}, patterns_missing=missing, roots_by_class=roots,
+        per_step_instances=[{"step": s.get("step"), "phase": s.get("phase"), "n_instances": s.get("n_instances")} for s in _listed(fs, "per_step")],
+        mechanism_notes=list(mechanism_notes if mechanism_notes is not None else _listed(man, "mechanism_notes")),
         spend={"pod_hours": spend.get("pod_hours"), "usd": spend.get("usd"), **{k: v for k, v in spend.items() if k not in ("pod_hours", "usd")}},
-        artifacts=_artifacts_of(run), notes=list(notes if notes is not None else man.get("notes") or []),
+        artifacts=_artifacts_of(run), notes=list(notes if notes is not None else _listed(man, "notes")),
         provenance=dict(prov) if isinstance(prov, dict) else {}, unsealed=unsealed, diagnostics=G.diagnostics(run),
         counts=counts_of(run, gates, prov if isinstance(prov, dict) else None),
         replay={"tier_a": {k: g4.get(k) for k in ("status", "k", "specs", "covered", "uncovered_specs", "pass", "fail", "skipped")},
@@ -518,7 +544,7 @@ def top_section(card: ReportCard) -> str:
     """The fixed-width top section (one line per row, labels padded to 34 columns)."""
     ea, k, c = card.engine_args or {}, card.kappa or {}, card.counts or {}
     prov = card.provenance or {}
-    gpu = k.get("gpu") or {}
+    gpu = k.get("gpu")   # a GPU's {name, cc}, or its bare name; a card whose κ states no cc claims sm_unknown
     cc = str(gpu.get("cc") or "").replace(".", "") if isinstance(gpu, dict) else ""
     sm = f"sm_{cc}" if cc else "sm_unknown"
     vllm_commit = ea.get("vllm_commit") or prov.get("vllm_commit")
@@ -555,8 +581,7 @@ def top_section(card: ReportCard) -> str:
         _row("VU partition (G8, structural)", c.get("vu_partition") or vu_partition_text(card.gates or {})),
         "HOLDOUTS",
     ]
-    g7 = (card.gates.get("G7") or {}).get("detail") or {}
-    hold = g7.get("holdouts") or {}
+    hold = _detail(card.gates, "G7").get("holdouts")   # the holdout cases G7 ran; a card without them says (none)
     if hold:
         for name, h in hold.items():
             L.append(f"  {name:<{_W - 2}}{'PASS' if h.get('pass') else 'FAIL'}")
@@ -575,8 +600,8 @@ def summarize_md(card: ReportCard) -> str:
     """The top section (in a fenced block) followed by a short markdown summary."""
     ea, k = card.engine_args or {}, card.kappa or {}
     C = {f: v.get("value") for f, v in (card.C or {}).items()}
-    gpu = k.get("gpu") or {}
-    host = k.get("host") or {}
+    gpu, host = k.get("gpu"), k.get("host")   # κ that names no GPU or no host prints None for each of their fields
+    gpu_name, gpu_cc = (gpu.get("name"), gpu.get("cc")) if isinstance(gpu, dict) else (gpu, "") if gpu else (None, None)
     L = [f"# Card `{card.config_id}` — **{card.verdict}**" + ("  (unsealed: no provenance.json)" if card.unsealed else ""), "", "~~~text",
          top_section(card), "~~~", ""]
     L.append(f"- model: `{card.model.get('repo')}` @ `{str(card.model.get('revision') or '')[:12]}` (family reference `{card.model.get('family')}`, "
@@ -588,18 +613,20 @@ def summarize_md(card: ReportCard) -> str:
     L.append(f"- workload: `{wl.get('path')}` ({wl.get('n_requests')} requests, prompt lens {wl.get('prompt_lens')}, max_tokens {wl.get('max_tokens')}), "
              f"sha256 `{str(wl.get('sha256') or '')[:12]}`")
     if wl.get("serving_profile") or wl.get("realized"):
-        rz = wl.get("realized") or {}
+        rz = wl.get("realized")   # what the driver saw served; a card written before the GPU phase prints None for each
         L.append(f"- serving regime: profile {wl.get('serving_profile')}, context class {wl.get('context_class')}, arrivals {wl.get('arrive_steps')}; "
-                 f"realized prompt lens {rz.get('prompt_lens')}, generated {rz.get('n_generated')}, engine steps capture/control "
-                 f"{rz.get('engine_steps_capture')}/{rz.get('engine_steps_control')} (declared upper bound {wl.get('expected_engine_steps')}), "
-                 f"peak concurrent requests {rz.get('max_concurrent_requests')}")
-    L.append(f"- κ: vLLM `{k.get('vllm')}`, torch `{k.get('torch')}`, triton `{k.get('triton')}`, CUDA {k.get('cuda')}, GPU `{gpu.get('name') if isinstance(gpu, dict) else gpu}`"
-             f" cc {gpu.get('cc') if isinstance(gpu, dict) else ''}; host clocksource `{host.get('clocksource')}` ({host.get('clock_read_us')} µs/clock read)")
+                 f"realized prompt lens {field_of(rz, 'prompt_lens')}, generated {field_of(rz, 'n_generated')}, engine steps capture/control "
+                 f"{field_of(rz, 'engine_steps_capture')}/{field_of(rz, 'engine_steps_control')} (declared upper bound {wl.get('expected_engine_steps')}), "
+                 f"peak concurrent requests {field_of(rz, 'max_concurrent_requests')}")
+    L.append(f"- κ: vLLM `{k.get('vllm')}`, torch `{k.get('torch')}`, triton `{k.get('triton')}`, CUDA {k.get('cuda')}, GPU `{gpu_name}`"
+             f" cc {gpu_cc}; host clocksource `{field_of(host, 'clocksource')}` ({field_of(host, 'clock_read_us')} µs/clock read)")
     L.append("")
     L.append("| gate | name | status | reason |")
     L.append("| --- | --- | --- | --- |")
     for gid in G.GATES:
-        g = card.gates.get(gid) or {}
+        g = card.gates.get(gid)
+        if not g:
+            g = {}   # a gate the card has no result for prints as missing
         L.append(f"| {gid} | {g.get('name', G.GATE_NAMES.get(gid))} | **{g.get('status', 'missing')}** | {str(g.get('reason') or '').replace('|', '/')[:200]} |")
     for gid in G.STRUCTURAL_GATES:     # outside the frozen set: `n/a` (not `missing`) for a record that predates it
         g = card.gates.get(gid)
@@ -609,15 +636,15 @@ def summarize_md(card: ReportCard) -> str:
             L.append(f"| {gid} | {G.GATE_NAMES.get(gid)} (structural) | n/a | record predates G8 |")
     L.append("")
     d = card.diagnostics or {}
-    ds, dfm, do = d.get("structure") or {}, d.get("family_match") or {}, d.get("overhead") or {}
-    L.append(f"- diagnostics: per-decode-step histograms equal mod T: {ds.get('histograms_equal_mod_T')}, instance count constant: {ds.get('count_constant')} "
-             f"(decode {ds.get('decode_instances')}, prefill {ds.get('prefill_instances')}), linear: {ds.get('linear')} (residual {ds.get('linear_residual')}); "
-             f"family match `{dfm.get('family')}`: {dfm.get('status')} (extra {dfm.get('n_extra')}, unclassified {dfm.get('unclassified')})")
-    if do.get("status") == "ok":
-        rungs = do.get("rungs") or {}
+    ds, dfm, do = d.get("structure"), d.get("family_match"), d.get("overhead")   # a diagnostic the run did not compute prints None for each of its fields
+    L.append(f"- diagnostics: per-decode-step histograms equal mod T: {field_of(ds, 'histograms_equal_mod_T')}, instance count constant: {field_of(ds, 'count_constant')} "
+             f"(decode {field_of(ds, 'decode_instances')}, prefill {field_of(ds, 'prefill_instances')}), linear: {field_of(ds, 'linear')} (residual {field_of(ds, 'linear_residual')}); "
+             f"family match `{field_of(dfm, 'family')}`: {field_of(dfm, 'status')} (extra {field_of(dfm, 'n_extra')}, unclassified {field_of(dfm, 'unclassified')})")
+    if do and do.get("status") == "ok":
+        rungs = do.get("rungs")   # the ladder's rungs, each with its step time; an overhead without them lists none
         L.append("- overhead ladder (step wall ms, × baseline, per-event µs minus clock): " + "; ".join(
             f"{r}: {v.get('step_wall_ms')} ({v.get('x_baseline')}×" + (f", {v.get('overhead_per_event_us_minus_clock')} µs" if v.get("overhead_per_event_us_minus_clock") is not None else "") + ")"
-            for r, v in rungs.items()) + f"; host clock read {do.get('host', {}).get('clock_read_us')} µs ({do.get('host', {}).get('clocksource')})")
+            for r, v in (rungs.items() if rungs else ())) + f"; host clock read {do.get('host', {}).get('clock_read_us')} µs ({do.get('host', {}).get('clocksource')})")
     L.append(f"- census: {len(card.census_kernels)} distinct kernel names; patterns used: {len(card.patterns_used)}; unsupported ops: {len(card.patterns_missing)}; "
              f"roots: {card.roots_by_class}")
     if card.per_step_instances:

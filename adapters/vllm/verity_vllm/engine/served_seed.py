@@ -10,7 +10,7 @@ Commit all see the seed the sample used. The seed's rule (`rule_of`):
 - ``default``: for a greedy request (temperature 0), whose sample reads no seed, the public constant `DEFAULT_SEED`;
 - ``derived``: for a stochastic request that sent none, `derived` from its window's seed coin and its certified id (the body's
   ``user``), the seed the compiler derives from the same two (`program.predict.reads.seed_of`), which refuses one served under
-  `DEFAULT_SEED` or drawn. Without an id it is refused (`UNSEEDED`).
+  `DEFAULT_SEED` or under one from ``np.random``. Without an id it is refused (`UNSEEDED`).
 
 A window's seed coin (`SeedCoins`) is a verifier coin of its own: no sample's coin, each of which opens only after the
 commitment it samples, and held by serving before the window's first request is added.
@@ -26,7 +26,7 @@ import secrets
 from collections.abc import Callable, Mapping
 from typing import Any
 
-__all__ = ["DEFAULT_SEED", "SeedCoins", "derived", "served"]
+__all__ = ["DEFAULT_SEED", "DERIVED", "UNSEEDED", "SeedCoins", "derived", "param_of", "rule_of", "served"]
 
 #: The public default seed: the first 63 bits of SHA-512 over its name, so nobody chose its value.
 DEFAULT_SEED = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
@@ -88,21 +88,21 @@ def served(params: Any, request_id: str | None, coin: bytes | None) -> tuple[Any
 
 def in_process() -> tuple[bytes, str]:
     """A seed coin from this process's `secrets`, and its source ``in-process``: a measurement's, which credits nothing, since
-    whoever serves drew it."""
+    whoever serves flipped it."""
     return secrets.token_bytes(64), "in-process"
 
 
 class SeedCoins:
-    """The seed coins of a server's windows, each a verifier coin of its own that `derived` reads, drawn by ``draw`` (a coin
+    """The seed coins of a server's windows, each a verifier coin of its own that `derived` reads, flipped by ``flip`` (a coin
     and its source; default `in_process`).
 
-    `admitting` draws a fresh coin when a request is admitted to an engine holding nothing, with no window open, before that
+    `admitting` flips a fresh coin when a request is admitted to an engine holding nothing, with no window open, before that
     request is added, and every window until the engine is next idle keeps it: the window that opens next and those cut from
     it by a bound. So each request is seeded under the coin of every window that holds one of its rows, its admitting window's
     (the one holding its first row) among them, and each window's record names its coin (`record`)."""
 
-    def __init__(self, draw: Callable[[], tuple[bytes, str]] | None = None) -> None:
-        self.draw = draw or in_process
+    def __init__(self, flip: Callable[[], tuple[bytes, str]] | None = None) -> None:
+        self.flip = flip or in_process
         self.index = -1
         self.coin: bytes | None = None
         self.source: str | None = None
@@ -110,12 +110,12 @@ class SeedCoins:
     def admitting(self, idle: bool) -> bytes:
         """The coin a request admitted now is seeded under: a fresh one when ``idle`` (nothing in the engine, no window open)."""
         if idle or self.coin is None:
-            coin, source = self.draw()
+            coin, source = self.flip()
             if type(coin) is not bytes or not coin:
                 raise ValueError(f"a seed coin is non-empty bytes, not {coin!r}")
             self.index, self.coin, self.source = self.index + 1, coin, str(source)
         return self.coin
 
     def record(self) -> dict[str, Any] | None:
-        """The current coin as a window's record names it (``index``: how many were drawn before it), None before the first."""
+        """The current coin as a window's record names it (``index``: how many were flipped before it), None before the first."""
         return None if self.coin is None else {"index": self.index, "coin": self.coin.hex(), "source": self.source}

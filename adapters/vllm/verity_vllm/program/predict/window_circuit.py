@@ -150,6 +150,7 @@ from verity.definitions.registry.dead_free import (
 from verity.definitions.registry.fa3_check_inf import AttentionV20
 
 from verity_vllm.pipeline.tp.grain import GROUP
+from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -700,7 +701,6 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
 
 def stop_ids(registered: Any) -> tuple[int, ...]:
     """The registered model's stop ids (`frontend.stop_rule.stop_ids`): outputs end at the first, kept."""
-    from verity_vllm.program.frontend.stop_rule import stop_ids as of_config
     return of_config(registered.phi.hf_config)
 
 
@@ -786,5 +786,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, provable, tables)
 
 
-__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "Tables", "WindowClass",
+__all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "Tables", "WEIGHTS", "WindowClass",
            "class_circuit", "class_program", "lower", "stop_ids", "takes", "window_circuit"]

@@ -64,6 +64,68 @@ def test_identical_layers_fold_by_structure(tmp_path):
     assert [m["subtree_hash"] for m in again["modules"]] == [m["subtree_hash"] for m in g["modules"]]
 
 
+def _more_specs(inst: dict, spec: str, others: list[str]) -> dict:
+    """The Program with its first row of `spec` repeated once under each of `others`: one module, more specializations."""
+    rows = inst["rows"]
+    row = next(r for r in rows if r["spec"] == spec)
+    return dict(inst, rows=rows + [dict(copy.deepcopy(row), i=len(rows) + k, spec=s) for k, s in enumerate(others)])
+
+
+def test_a_static_of_more_values_than_the_limit_varies_and_leaves_its_groups_template_parameters(tmp_path):
+    """A module whose Gemm takes more than `VARYING_MAX` values of K is one group that states K's range and its Calls at each
+    value, with no K among its statics or its template's parameters; at one value the K is a static of both."""
+    inst, _w = _program(attn=True)
+    logits, dot = "Gemm_v1{K=16,N=8}", "AmpereBF16TcDot16_v2"
+    fixed = next(x for x in PG.program_graph([_write(inst, tmp_path / "fixed.json.gz")])["groups"] if x["spec"] == logits)
+    assert fixed["varying"] == {} and fixed["varying_calls"] is None
+    assert fixed["statics"] == {"K": 16, "N": 8} and fixed["template_params"] == {"K": 16, "dot": dot}
+    ks = range(17, 17 + PG.VARYING_MAX)                    # with the 16: one value more than the limit
+    g = PG.program_graph([_write(_more_specs(inst, logits, [f"Gemm_v1{{K={k},N=8}}" for k in ks]), tmp_path / "instances.json.gz")])
+    (x,) = [x for x in g["groups"] if x["varying"]]
+    assert x["module"] == fixed["module"] and x["definition"] == "Gemm_v1" and x["spec"] is None and x["specs"] == PG.VARYING_MAX + 1
+    assert x["varying"] == {"K": [16, 16 + PG.VARYING_MAX]} and x["statics"] == {"N": 8} and x["template_params"] == {"dot": dot}
+    assert x["varying_calls"] == {"16": fixed["calls"], **{str(k): 1 for k in ks}} and x["calls"] == fixed["calls"] + PG.VARYING_MAX
+
+
+def test_a_varying_groups_word_rule_is_partitioned_at_every_value_and_totals_each_values_calls(tmp_path):
+    """Attention's T at one value more than `VARYING_MAX`: the group's word rule states T's range with the smallest value's
+    figures as its minimum, is partitioned at every recorded value (nothing interpolated), and totals each value's rule over that
+    value's Calls: the groups the values up to the limit make one by one, and the largest value's one Call."""
+    inst, _w = _program(attn=True)
+    spec = "Attention_v3{{T={},NH=3,KVH=1,D=16,BN=16}}".format
+    last = PG.VARYING_MAX + 1
+
+    def attention(upto: int, name: str) -> list[dict]:
+        doc = _more_specs(inst, spec(1), [spec(t) for t in range(5, upto + 1)])                # the Program's own T are 1 to 4
+        return [x for x in PG.with_word_rules(PG.program_graph([_write(doc, tmp_path / name)]))["groups"] if x["definition"] == "Attention_v3"]
+
+    each = {x["statics"]["T"]: x["q_word_v1"] for x in attention(PG.VARYING_MAX, "limit.json.gz")}
+    assert sorted(each) == list(range(1, last))
+    (x,) = attention(last, "instances.json.gz")
+    q = x["q_word_v1"]
+    assert x["varying"] == {"T": [1, last]} and q["per_call"]["T"] == {"min": 1, "max": last}
+    assert q["partitioned_at"] == last and q["interpolated"] is False
+    for f in ("units_per_call", "gates", "committed_interior_words"):
+        assert q["per_call"][f]["min"] == each[1]["per_call"][f] < q["per_call"][f]["max"]
+    for f, per_call in (("units", "units_per_call"), ("gates", "gates"), ("committed_interior_words", "committed_interior_words")):
+        assert q[f] == sum(r[f] for r in each.values()) + q["per_call"][per_call]["max"]
+
+
+def test_units_of_a_stratum_at_no_module_go_to_its_definitions_unplaced_groups_by_their_calls():
+    """A stratum whose op path is no module (the sampler's rows): its units go to the groups of its Definition that no stratum
+    placed, in proportion to their Calls, the remainder to the largest remainder first; a group a stratum placed takes none."""
+    acc = PG._Acc()
+    acc.groups = {("m.a", "g0"): {"family": "Gemm_v1", "statics": {"N": 8}, "calls": 2},
+                  ("m.b", "g1"): {"family": "Gemm_v1", "statics": {"N": 8}, "calls": 1},
+                  ("m.c", "g2"): {"family": "Gemm_v1", "statics": {"N": 8}, "calls": 4},
+                  ("m.d", "g3"): {"family": "Gemm_v1", "statics": {"N": 16}, "calls": 9},
+                  ("m.e", "g4"): {"family": "SiluMul_v1", "statics": {}, "calls": 9}}
+    strata = {"Gemm_v1{K=16,N=8}|r0|0|decode|c|x": {"population": 7},            # placed: m.c is a module with that Definition
+              "Gemm_v1{K=16,N=8}|r0|0|decode|sampler|x": {"population": 5},      # no module: over m.a (2 Calls) and m.b (1)
+              "Gemm_v1{K=16,N=8}|r0": {"population": 11}}                        # not a stratum key
+    assert PG.units_from_strata(strata, acc, "m.") == {("m.c", "g2"): 7, ("m.a", "g0"): 3, ("m.b", "g1"): 2}
+
+
 def test_units_and_exported_vus_reconcile_with_the_run(tmp_path):
     world = _world(attn=True)
     s = _export(world, tmp_path / "exp", limits=VX.Limits(per_family=64, workers=1))

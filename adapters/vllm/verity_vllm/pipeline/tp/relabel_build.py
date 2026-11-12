@@ -26,8 +26,9 @@ from typing import Any
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.tp import emit_ranks
+from verity_vllm.records.schema_ids import BUILD_RELABEL_GUARD_SCHEMA
 
-SCHEMA = "verity-vllm/build-relabel-guard/v1"
+SCHEMA = BUILD_RELABEL_GUARD_SCHEMA
 #: what two derives of one rank may differ in (wall, memory, host, when), and a relabel's provenance
 TELEMETRY = {
     "result.json": ("utc", "wall_secs_total", "max_rss_mb", "derive_secs", "export/secs", "target/host", "relabeled_from"),
@@ -197,8 +198,8 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
     row.derive_all(steps + [row.step(t, f"{chk}/rank{t}/build_step") + _emit_args(others, chk)], jobs)
     guard = step_guard(row.bdir, chk, W, t)
     for r, g in sorted(guard.items()):
-        d = g.get("difference") or {}
-        row.tl("build.relabel_guard", "mark", ("rank", r), ("ok", _tlv(g["ok"])), ("file", _tlv(d.get("file"))),
+        d = g.get("difference")      # a rank whose real step is its relabel's, or was not compared with it, has none
+        row.tl("build.relabel_guard", "mark", ("rank", r), ("ok", _tlv(g["ok"])), ("file", _tlv(d.get("file") if d else None)),
                ("path", _tlv(_where(d) if d else None)))
     passed = [r for r in others if guard[r]["ok"]] if guard[t]["ok"] else []
     doc: dict[str, Any] = {"schema": SCHEMA, "world": W, "template": t, "steps": {str(r): g for r, g in sorted(guard.items())},
@@ -213,10 +214,11 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
             first.append(js[rel[-1]])
     row.derive_all(first, jobs)
     for name, js in by_shape.items():
-        rep = {x["rank"]: x for x in emit_ranks.read_report(js[t][1])["ranks"]} if t in js else {}
+        rep = _emit_report(js[t][1]) if t in js else {}
         for r in doc["requests"][name]["relabel"]:
-            if not (rep.get(r) or {}).get("ok"):
-                doc["requests"][name]["emit_failed"][str(r)] = (rep.get(r) or {}).get("error") or "no emit report"
+            entry = rep.get(r)
+            if not entry or not entry.get("ok"):
+                doc["requests"][name]["emit_failed"][str(r)] = _emit_error(rep, r)
     can = doc["canary"]
     if can is not None:
         failed = doc["requests"][can["request"]]["emit_failed"]
@@ -225,8 +227,8 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
         else:
             d = compare_dirs(by_shape[can["request"]][can["rank"]][1], f"{chk}/staged/rank{can['rank']}/{can['request']}")
             can["ok"], can["difference"] = d is None, d
-        row.tl("build.relabel_canary", "mark", ("rank", can["rank"]), ("ok", _tlv(can["ok"])),
-               ("file", _tlv((can.get("difference") or {}).get("file"))))
+        d = can.get("difference")    # None where the canary is its relabel, absent where the two were not compared
+        row.tl("build.relabel_canary", "mark", ("rank", can["rank"]), ("ok", _tlv(can["ok"])), ("file", _tlv(d.get("file") if d else None)))
     _write(chk, doc)
     if can is not None and can["ok"] is False:
         d = can["difference"]
@@ -246,9 +248,22 @@ def _tlv(v: Any) -> Any:
     return {None: "null", True: "true", False: "false"}[v] if v is None or isinstance(v, bool) else v
 
 
+def _emit_report(out: str) -> dict[int, dict]:
+    """The template's report of the relabels it wrote from its derive at `out`, by rank; empty when its process wrote none."""
+    return {x["rank"]: x for x in emit_ranks.read_report(out)["ranks"]}
+
+
+def _emit_error(rep: dict[int, dict], r: int) -> str:
+    """Why the template's report (`_emit_report`) says rank `r` was not relabeled: its `error`, or "no emit report" for a rank the
+    report does not name and for one it names without an error."""
+    entry = rep.get(r)
+    error = entry.get("error") if entry else None
+    return error if error else "no emit report"
+
+
 def step_guard(bdir: str, chk: str, world: int, t: int) -> dict[int, dict]:
     """Per rank: its real step against the template's relabel of it (the template: its real step against its extra derive)."""
-    rep = {x["rank"]: x for x in emit_ranks.read_report(f"{chk}/rank{t}/build_step")["ranks"]}
+    rep = _emit_report(f"{chk}/rank{t}/build_step")
     out: dict[int, dict] = {}
     for r in range(world):
         real, rel = f"{bdir}/rank{r}/build_step", f"{chk}/rank{r}/build_step"
@@ -256,7 +271,7 @@ def step_guard(bdir: str, chk: str, world: int, t: int) -> dict[int, dict]:
             out[r] = {"ok": False, "why": "its step derive failed"}
         elif not R.derived_ok(rel):
             out[r] = {"ok": False, "why": "the template's step derive failed" if r == t else
-                      f"its relabel failed: {(rep.get(r) or {}).get('error') or 'no emit report'}"}
+                      f"its relabel failed: {_emit_error(rep, r)}"}
         else:
             d = compare_dirs(real, rel)
             out[r] = {"ok": d is None, "difference": d} if d else {"ok": True}

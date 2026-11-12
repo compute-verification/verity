@@ -45,7 +45,7 @@ SUMMARY = "ranks-summary.json"
 
 def entropy(label: str) -> Callable[[int], bytes]:
     """A fixed SHA-512 counter stream for `label`: the same coins in every run, so no verifier trusts them."""
-    state = {"i": 0, "buf": b""}
+    state: dict[str, Any] = {"i": 0, "buf": b""}
 
     def draw(n: int) -> bytes:
         while len(state["buf"]) < n:
@@ -110,8 +110,7 @@ def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
         edit = GPU.editor(GPU.EXPERT_NEGATIVE)
     else:
         codes = _edit_of(kind)
-        edit = lambda _layer, xq: codes(xq)  # noqa: E731
-        edit.at = None
+        edit = GPU.Edit(lambda _layer, xq: codes(xq))
     hooks = Hooks(tag=f"roots1-{kind}-tp{tp}")
     for m in layers:
         hooks.wrap(m.quant_method, "observe", lambda orig: GPU.edited(orig, edit))
@@ -154,6 +153,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
                          transcript_dir=str(tdir), key=KEY, served=served,
                          commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
+    w: dict[str, Any]
     h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
     if edit is not None:
         w["edit"] = {"kind": edit, "ranks": [x for x in holder.executor.collective_rpc(
@@ -194,8 +194,15 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
 
 def serve(a: argparse.Namespace) -> dict[str, Any]:
     import torch
+
     from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
-    from tests.protocols.pouw_h1_gpu import declared_of, fill_prompts, generate_static, static_check, tokens_digest
+    from tests.protocols.pouw_h1_gpu import (
+        declared_of,
+        fill_prompts,
+        generate_static,
+        static_check,
+        tokens_digest,
+    )
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -221,6 +228,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             llm = eng.llm
         else:
             from vllm import LLM
+
             from verity_vllm.engine.build import engine_kwargs_for
             from verity_vllm.protocols.pouw.h1 import ranks as PHR
             kw, _env, cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={

@@ -22,17 +22,24 @@ store, with no GPU and no node.
   held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
   says so and marks no proving measured.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
-  `inputs`, `document`): the schedules, the fail cells and the jitter of each of its rows, at the same scopes.
+  `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
+  rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
+  at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
+  bound, and every figure of a row that carries the calculator's label (the row's `with_set_time_card`), is printed
+  only under that label, which the command reads from the document and never spells itself.
 
-Both count over the same requests: the planner's (`PLAN`, read from the planner in the tree,
-`benchmarks/spot_figures/breakeven/`), handed to the network certifier's calculator as the world's requests a year in
-place of the census's it would count. The two parts must cover the same GPU-seconds, the same requests (the count the
-rows of record are priced over) and the same weights, or the command refuses.
+Both count the same requests: the sampling plan's, which the network certifier's calculator counts by default (its
+`request_count`, read from the break-even planner in the tree). The command holds no count of its own. The two parts
+must cover the same GPU-seconds, the same requests (the count the rows of record are priced over) and the same
+weights, or the command refuses.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
 bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
-part, and the command sums them per scope and monitoring period under each of the network certifier's rows
-(`together`). It prices no advice.
+part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
+`TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice. The
+sums under the rows whose schedules are 0, the lengths held by a stop block, take a response's output count at 0.
+Until a served audit has sampled a stop block the server chooses that count, which the network certifier's row
+`OUTPUT_COUNT` charges as its schedules: the command prints it beside those sums, marked assumed.
 
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
@@ -52,7 +59,10 @@ from typing import Any
 from verity_bench import jobs
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
-SCHEMA = "exfiltration/v1"
+SCHEMA = "exfiltration/v2"
+#: the network certifier's document the command reads: its `value` the term of record, its rows' `term` by jitter
+#: bound, and the label of what rests on a set-time card, at its top and on each row that carries it
+TERM_SCHEMA = "certifier-term/v2"
 MODEL = "GLM-5.3"
 #: the record whose runs hold the planner's rows, and the rows' file in a run's files
 RECORD = "exfiltration-glm53-compute-audit"
@@ -74,22 +84,25 @@ NETWORK_CHECK_SHARE = 0.003
 #: cut with every modeled lever at its measured value, and the step of that row that prices the verifier as measured
 #: (a prefix of the step's name)
 WORLD, ROW, STEP = "ours", "(i) honest", "+ the verifier as measured"
-#: the planner's case whose line carries the request the rows of record are priced over, and so its requests
-PLAN = "P5+poolwin600"
+#: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
+#: longest output the plan of record serves (assumed, as every class is: no run has certified one)
+RESPONSE_IDS = 1024
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
 #: the network certifier's rows the two parts are summed under, and what each is called beside the compute audit's
 TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges it today",
-            "all three": "with the lengths held, the timing taken once and the entries charged through the compute audit",
-            "design": "by the design no run has behind it"}
+            "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
+                         "the compute audit",
+            "design, no stop block": "by the design no run has behind it, before a served audit has sampled a stop block",
+            "design": "by the design no run has behind it, once a served audit has sampled a stop block"}
+#: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
+#: it: the design before a served audit has sampled a stop block
+OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
 MARKS = ("measured", "modeled", "assumed")
-#: a card's status for a figure, as its mark
-_MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "datasheet": "assumed", "assumed": "assumed",
-         "ruled": "assumed"}
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
-          "token_macs", "world_requests", "weights")
+          "token_macs", "world_requests", "request_count", "weights")
 
 
 def _load(root: Path, directory: str, module: str) -> Any:
@@ -304,36 +317,28 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
 
 
-# ---- the requests both parts count over, and the network certifier's part ---------------------------------------------
+# ---- the network certifier's part, and the requests both parts count over --------------------------------------------
 
 
-def plan(root: Path) -> dict:
-    """The request the rows of record are priced over, from the planner in the tree: each scope's requests and
-    GPU-seconds, and what a request is."""
-
-    sweep = _load(root, "spot_figures", "breakeven.sweep")
-    line = sweep.build(sweep.cases()[PLAN])
-    tokens, more = line[1]["tokens_per_request"], line[7]
-    where = f"benchmarks/spot_figures/breakeven sweep.cases()['{PLAN}']"
-    return {"scopes": {name: {"requests": s.requests, "gpu_seconds": s.gpu_seconds} for name, s in more["scopes"].items()},
-            "request_tokens": {"value": tokens.value, "unit": tokens.unit, "mark": _MARK[tokens.status],
-                               "source": f"{where}: {tokens.source}"},
-            "token_macs": {"value": more["served_macs"], "unit": "MAC", "mark": "modeled",
-                           "source": f"{where}: the workload card's served MACs a token with the indexer's blocks scaled "
-                                     "to the keys the plan reads (reprice.workload at reprice.C343)"},
-            "source": f"{where}: the world fleet's GPU-seconds x mfu_serve x peak_flops / (request_tokens x 2 x "
-                      "token_macs), the requests the rows of record are priced over (their `replay_sample / q`, held "
-                      "equal to these)"}
-
-
-def certifier(root: Path, requests: float, source: str) -> dict:
-    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`), counted over
-    ``requests`` a world year, which are marked modeled with ``source``."""
+def certifier(root: Path, response_ids: int = RESPONSE_IDS) -> dict:
+    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
+    at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's.
+    Beside the document: the jitter bound of its term of record and the one its labelled term is at, each as the
+    rows' `term` names it (`of_record`, `set_time`), and the term of record at the class the calculator assumes by
+    default, which is `verity bench certifier_term`'s own figure (`default_class`)."""
 
     lb = _load(root, "network_traces", "leak_bounds")
-    inp = lb.inputs(world_requests=requests)
-    inp["world_requests"] = inp["world_requests"]._replace(mark="modeled", source=source)
-    return lb.document(inp, only=("datacenter", "world"))
+    term = lb.document(lb.inputs(response_ids=response_ids), only=("datacenter", "world"))
+    default = lb.document(lb.inputs(), only=("world",), periods=("year",))
+    if (schema := term["schema"]) != TERM_SCHEMA:
+        raise ValueError(f"the network certifier's document is `{schema}` and this command reads `{TERM_SCHEMA}`: its "
+                         "term of record, its rows' terms by jitter bound and their labels may mean something else "
+                         "(read the new document in benchmarks/harness/verity_bench/exfiltration.py and name its schema "
+                         "there)")
+    set_time, = (str(dj) for dj in lb.JITTERS if dj != lb.OF_RECORD)
+    return term | {"of_record": str(lb.OF_RECORD), "set_time": set_time,
+                   "default_class": {"response_ids": default["inputs"]["response_ids"]["value"],
+                                     "value": default["value"], "unit": default["unit"]}}
 
 
 # ---- the document ----------------------------------------------------------------------------------------------------
@@ -343,11 +348,11 @@ def _same(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=1e-9)
 
 
-def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, planned: Mapping, share: float,
+def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
-    as its calculator marks them, and those both read. A request's tokens and MACs are the plan's, in place of the
-    census's the calculator would count the requests from."""
+    as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
+    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0."""
 
     head = points["world year"]
     budgets = sorted({b for p in points.values() for b in p["pinned"]})
@@ -378,9 +383,12 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
             "no run: the network check's own proving as a share of total compute, which the planner's rows don't "
             "count (--network-check-share)"),
         one(audit, "advice", 0, "bit", "assumed", "not counted: no input here prices the advice"),
+        one(net, "output_count", 0, "bit/request", "assumed",
+            f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a stop block "
+            f"the server chooses a response's output count, which the network certifier's row `{OUTPUT_COUNT}` "
+            f"charges {_n(count['bits_a_request'])} bits a request as its schedules"),
     ]
     for name, i in term["inputs"].items():
-        i = planned.get(name, i)
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
     if off := sorted(i["input"] for i in out if i["mark"] not in MARKS or not i["source"]):
         raise ValueError(f"an input is marked one of {', '.join(MARKS)}, with its source: {', '.join(off)}")
@@ -388,11 +396,19 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
 
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
-          variant: str | None = None, store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
+          variant: str | None = None, response_ids: int = RESPONSE_IDS, store: Any = None, root: Path | None = None,
+          local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year,
-    and the two side by side for each scope and monitoring period, summed under each of `TOGETHER`. It refuses rows
-    of record priced over other requests than the network certifier's part counts."""
+    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    for a class of at most ``response_ids`` ids a response, and the two side by side for each scope and monitoring
+    period, summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
+    certifier's part counts.
+
+    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
+    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
+    the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0)."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
@@ -410,8 +426,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
 
-    planned = plan(root)
-    term = certifier(root, planned["scopes"]["world year"]["requests"], planned["source"])
+    term = certifier(root, response_ids)
+    of, set_time, card = term["of_record"], term["set_time"], term["with_set_time_card"]["label"]
     weights = term["inputs"]["weights"]["value"]
     if not _same(head["weights_bits"], weights):
         raise ValueError(f"the two parts are shares of different weights: the rows of record hold {head['weights_bits']:,} "
@@ -421,11 +437,9 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     periods = []
     for (compute, period), at in seen.items():
         scope = f"{compute} {period}"
-        point, its = points.get(scope), planned["scopes"][scope]
+        point = points.get(scope)
         for name, mine, theirs in (("GPU-seconds", point and point["gpu_seconds"], at["gpu_seconds"]),
-                                   ("requests", point and point["requests"], at["requests"]),
-                                   ("GPU-seconds", its["gpu_seconds"], at["gpu_seconds"]),
-                                   ("requests", its["requests"], at["requests"])):
+                                   ("requests", point and point["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
                 raise ValueError(f"the two parts cover different compute over the {scope}: {mine:.6g} {name} on the compute "
                                  f"audit's side and {theirs:.6g} on the network certifier's")
@@ -438,10 +452,22 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             r = rows[name]
             entries = r["entries"] and r["entries"]["bits"]
             mine = None if audit is None else audit["bits"] if entries is None else min(entries, audit["bits"])
-            together[name] = {"certifier_GB": r["term"]["1"]["GB"],
-                              "GB": None if mine is None else (r["term"]["1"]["bits"] + mine) / GB}
+
+            def summed(dj: str) -> dict:
+                return {"certifier_GB": r["term"][dj]["GB"],
+                        "GB": None if mine is None else (r["term"][dj]["bits"] + mine) / GB}
+
+            together[name] = {**summed(of), "label": r["with_set_time_card"],
+                              "with_set_time_card": {**summed(set_time), "label": card}}
+        count = rows[OUTPUT_COUNT]["schedules"]
         periods.append({"compute": compute, "period": period, "gpu_seconds": at["gpu_seconds"], "requests": at["requests"],
-                        "eps": at["eps"], "compute_audit": audit, "together": together})
+                        "eps": at["eps"], "compute_audit": audit,
+                        "output_count": {"row": OUTPUT_COUNT, "GB": count["GB"], "bits": count["bits"],
+                                         "bits_a_request": count["bits"] / at["requests"] if at["requests"] else None,
+                                         "mark": "assumed",
+                                         "at_zero_in": [name for name in TOGETHER if not rows[name]["schedules"]["bits"]]},
+                        "together": together})
+    year = next(p for p in periods if (p["compute"], p["period"]) == ("world", "year"))
 
     return {"schema": SCHEMA, "model": MODEL,
             "name": f"{MODEL}'s exfiltration capacity over the world's year at {_pct(share)} of total compute: the "
@@ -449,10 +475,13 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
             "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
-            "inputs": _inputs(points, runs, term, planned, share, network_check, row),
+            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
-            "certifier": {"legend": term["legend"], "entries_rule": term["entries_rule"], "phase": term["phase"],
+            "certifier": {"schema": term["schema"], "request_count": term["request_count"],
+                          "response_ids": term["inputs"]["response_ids"]["value"], "of_record": of, "set_time": set_time,
+                          "with_set_time_card": {"label": card}, "default_class": term["default_class"],
+                          "legend": term["legend"], "entries_rule": term["entries_rule"], "phase": term["phase"],
                           "rows": [r for r in term["rows"] if (r["scope"], r["period"]) == ("world", "year")]},
             "periods": periods}
 
@@ -511,15 +540,46 @@ def _how(priced: Mapping | None) -> str:
             + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
 
 
+def _names(names: Sequence[str]) -> str:
+    """Rows' names in a sentence."""
+
+    quoted = [f"`{name}`" for name in names]
+    return " and ".join(quoted) if len(quoted) < 3 else ", ".join(quoted[:-1]) + f" and {quoted[-1]}"
+
+
+def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
+    """The world year's figures (``key`` of each of its sums) that are printed only under a label, one clause a
+    label: every row that carries its own, and every other row at the jitter bound ``set_time``."""
+
+    own: dict[str, list[str]] = {}
+    other: dict[str, list[str]] = {}
+    for name, what in TOGETHER.items():
+        t = year["together"][name]
+        if t["label"]:
+            own.setdefault(t["label"], []).append(f"{_n(t[key])} GB {what}")
+        else:
+            other.setdefault(t["with_set_time_card"]["label"], []).append(f"{_n(t['with_set_time_card'][key])} GB {what}")
+    return [f"{label}: " + "; and ".join(filter(None, (
+                "; ".join(own.get(label, ())),
+                label in other and f"at D_j = {set_time}, " + "; ".join(other[label]))))
+            for label in dict.fromkeys((*own, *other))]
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
-    by side for every scope and monitoring period."""
+    by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
+    that is under a label is printed in a line, a row or a column that carries that label, as the document gives
+    it."""
 
-    share, net, w = doc["share"], doc["network_check"], doc["weights"]
+    share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
     planned = [p for p in doc["compute_audit"] if p["priced"]]
     year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
-    scan = next(r for r in doc["certifier"]["rows"] if r["row"] == "scan")
+    scan = next(r for r in cert["rows"] if r["row"] == "scan")
+    of, set_time, card, default = cert["of_record"], cert["set_time"], cert["with_set_time_card"]["label"], cert["default_class"]
+    count, sums = year["output_count"], year["together"]
+    record = [name for name in TOGETHER if not sums[name]["label"]]
+    labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the registered and served cut with every modeled lever at its measured value" if doc["row"] == ROW else ""
@@ -535,13 +595,24 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
         f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
         f"- {_how(head['priced'])}.",
-        f"- **the network certifier's part: {_n(scan['term']['1']['GB'])} GB** (modeled, on an assumed class) "
-        f"{TOGETHER['scan']}, {_n(scan['term']['1']['bits_a_request'])} bits a request, and "
-        + ", ".join(f"{_n(year['together'][name]['certifier_GB'])} GB {what}" for name, what in TOGETHER.items()
-                    if name != "scan") + ", each at D_j = 1.",
+        f"- **the network certifier's part: {_n(sums['scan']['certifier_GB'])} GB** (modeled, on an assumed class of at "
+        f"most {_n(cert['response_ids'])} ids a response) {TOGETHER['scan']}, {_n(scan['term'][of]['bits_a_request'])} "
+        "bits a request, and "
+        + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {TOGETHER[name]}" for name in record if name != "scan")
+        + f", each at D_j = {of}, its term of record."
+        + ("" if default["response_ids"] == cert["response_ids"] else
+           f" On the class of at most {_n(default['response_ids'])} ids a response that `verity bench certifier_term` "
+           f"assumes by default, the scan's is {_n(default['value'])} {default['unit']}."),
+        *(f"- the network certifier's part {clause}." for clause in _labelled(year, "certifier_GB", set_time)),
         "- **together**, a link's execution phase carrying K = schedules + cells + jitter + min(entries, advice + the "
-        "compute audit's part), with no advice priced: "
-        + "; ".join(f"{_n(year['together'][name]['GB'])} GB {what}" for name, what in TOGETHER.items()) + ".",
+        f"compute audit's part), at D_j = {of}, with no advice priced and with a response's output count taken at 0 "
+        f"under {_names(count['at_zero_in'])}: "
+        + "; ".join(f"{_n(sums[name]['GB'])} GB {TOGETHER[name]}" for name in record) + ".",
+        *(f"- together, {clause}." for clause in _labelled(year, "GB", set_time)),
+        f"- the output count: {_n(count['GB'])} GB ({count['mark']}), {_n(count['bits_a_request'])} bits a request. Until "
+        "a served audit has sampled a stop block the server chooses a response's output count, and the network "
+        f"certifier's row `{count['row']}` charges it as its schedules. The sums under {_names(count['at_zero_in'])} "
+        "take it at 0, as they price no advice.",
         f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The scan's ε "
         f"over the world's year, its execution phases' δ summed, is {_n(year['eps'])}: at 1 or more it bounds nothing.",
         f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
@@ -555,7 +626,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{len(doc['compute_audit'])} scopes"
         + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned if p["priced"]["of"] == "plan"),
         "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
-        "not records): `verity bench certifier_term`'s inputs and the planner's plan, in the table below", "",
+        "not records): `verity bench certifier_term`'s inputs, among them the request it counts and what that request "
+        "is, in the table below", "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], i["mark"], i["source"]) for i in doc["inputs"]]), "",
@@ -575,25 +647,46 @@ def render(doc: Mapping[str, Any]) -> str:
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
                      for p in planned for way, x in p["priced"]["ways"].items()]), "")),
         "## The network certifier's part over the world's year", "",
-        "`verity bench certifier_term`'s rows, at the planner's requests. The term is the schedules, the fail cells and "
-        "the jitter; the entries are the compute side's.", "",
-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["certifier"]["legend"].items()), "",
-        *_table(("row", "schedules, GB", "cells, GB", "term at D_j = 1, GB", "x weights", "term at D_j = 2, GB",
-                 "entries, GB"),
-                [(r["row"], _n(r["schedules"]["GB"]), _n(r["cells"]["GB"]), _n(r["term"]["1"]["GB"]),
-                  _n(r["term"]["1"]["of_weights"]), _n(r["term"]["2"]["GB"]),
-                  _n(r["entries"] and r["entries"]["GB"], "the compute side's")) for r in doc["certifier"]["rows"]]), "",
-        f"The entries as the scan's check charges them: {doc['certifier']['entries_rule']}.", "",
+        f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
+        f"class of at most {_n(cert['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
+        f"jitter, and the term of record is the one at D_j = {of}. The term at D_j = {set_time}, and every figure of a "
+        f"row whose name carries it, is printed only under the network certifier's label, \"{card}\". The entries are "
+        "the compute side's.", "",
+        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in cert["legend"].items()), "",
+        *_table(("row", "schedules, GB", "cells, GB", f"term at D_j = {of}, GB", "x weights",
+                 f"term at D_j = {set_time} {card}, GB", "entries, GB"),
+                [(r["row"] + (f", {r['with_set_time_card']}" if r["with_set_time_card"] else ""),
+                  _n(r["schedules"]["GB"]), _n(r["cells"]["GB"]), _n(r["term"][of]["GB"]),
+                  _n(r["term"][of]["of_weights"]), _n(r["term"][set_time]["GB"]),
+                  _n(r["entries"] and r["entries"]["GB"], "the compute side's")) for r in cert["rows"]]), "",
+        f"The entries as the scan's check charges them: {cert['entries_rule']}.", "",
         "## Each monitoring period over all compute: the two parts side by side, in GB", "",
-        "The network certifier's term is at D_j = 1, and `together` adds the compute audit's part to it, or the entries "
-        "where the row charges them and they are fewer.", "",
+        f"The network certifier's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
+        "to it, or the entries where the row charges them and they are fewer. The output count is the schedules of "
+        f"the row `{count['row']}`, what a response's output count is charged while the server chooses it "
+        f"({count['mark']}): the sum under {_names([name for name in count['at_zero_in'] if name in record])} takes it "
+        "at 0.", "",
         *_table(("compute", "period", "GPU-seconds", "requests", "compute audit", "bits a request",
-                 *(f"certifier, {name}" for name in TOGETHER), *(f"together, {name}" for name in TOGETHER)),
+                 *(f"certifier, {name}" for name in record), *(f"together, {name}" for name in record),
+                 f"output count ({count['mark']})"),
                 [(p["compute"], p["period"], _n(p["gpu_seconds"]), _n(p["requests"]),
                   _n(p["compute_audit"] and p["compute_audit"]["GB"], "no rows of record"),
                   _n(p["compute_audit"] and p["compute_audit"]["bits_a_request"]),
-                  *(_n(p["together"][name]["certifier_GB"]) for name in TOGETHER),
-                  *(_n(p["together"][name]["GB"]) for name in TOGETHER)) for p in doc["periods"]]),
+                  *(_n(p["together"][name]["certifier_GB"]) for name in record),
+                  *(_n(p["together"][name]["GB"]) for name in record), _n(p["output_count"]["GB"]))
+                 for p in doc["periods"]]), "",
+        f"## Each monitoring period over all compute, {card}: in GB", "",
+        f"No figure of this table is of record. Each is under the network certifier's label, \"{card}\", which its "
+        f"column carries: every figure of a row that carries the label, and every other row's at D_j = {set_time}."
+        + (f" The sum under {_names([name for name in count['at_zero_in'] if name in labels])} takes the output count "
+           "at 0 too." if any(name in labels for name in count["at_zero_in"]) else ""), "",
+        *_table(("compute", "period",
+                 *(f"{part}, {name}, {label}" for name, label in labels.items() for part in ("certifier", "together")),
+                 *(f"{part}, {name}, D_j = {set_time} {card}" for part in ("certifier", "together") for name in record)),
+                [(p["compute"], p["period"],
+                  *(_n(p["together"][name][key]) for name in labels for key in ("certifier_GB", "GB")),
+                  *(_n(p["together"][name]["with_set_time_card"][key]) for key in ("certifier_GB", "GB") for name in record))
+                 for p in doc["periods"]]),
     ]
     if doc["refused"]:
         lines += ["", "Refused (not read):", "", *(f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"])]
@@ -619,11 +712,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--step", default=STEP, help=f"the row's step, or the beginning of its name (default `{STEP}`)")
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
+    ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
+                    help="the most ids a response holds in the network certifier's class (default "
+                         f"{RESPONSE_IDS}, assumed: the class that holds the plan of record's longest output)")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     a = ap.parse_args(argv)
     try:
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    local_only=a.local_only)
+                    response_ids=a.response_ids, local_only=a.local_only)
     except (ValueError, RuntimeError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2

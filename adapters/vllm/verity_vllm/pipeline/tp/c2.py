@@ -17,9 +17,12 @@ from typing import Any
 from verity_vllm.acquire.sources.oracle_witness import SUMMARY_KEYS as TPS_SUMMARY_KEYS
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.records.schema_ids import TP_REPLAY_DEFERRED_SCHEMA
+
+__all__ = ["DEFER_WORLDS"]
 
 DEFERRED = "replay_deferred.json"
-SCHEMA = "verity-vllm/tp-replay-deferred/v1"
+SCHEMA = TP_REPLAY_DEFERRED_SCHEMA
 #: the worlds whose Commit defers its ranks' C2 replay, each proven by a row whose deferred arm (the Commit's bundles, then
 #: `tp-commit-replay` on CPU) gave the in-process arm's picks, per-rank records, verdict and run root; any other world replays in process
 DEFER_WORLDS = (2, 8)
@@ -46,12 +49,44 @@ def write_atomic(p: Path, text: str) -> None:
     os.replace(tmp, p)
 
 
+def per_rank_of(row: dict) -> dict:
+    """A run row's commit blocks by rank; none for a control run, and for an instrumented run that finalized no rank (its row holds no
+    commit, or a commit with no ranks)."""
+    commit = row.get("commit")
+    per_rank = commit.get("per_rank") if commit else None
+    return per_rank if per_rank else {}
+
+
 def last_per_rank(rows: list[dict]) -> dict:
     """The per-rank commit blocks of the last instrumented pair (attribution / binding records live there)."""
     for r in reversed(rows):
-        if r.get("arm") != "control" and (r.get("commit") or {}).get("per_rank"):
+        if r.get("arm") != "control" and per_rank_of(r):
             return r["commit"]["per_rank"]
     return {}
+
+
+def _rank_record(cblock: dict, name: str) -> dict:
+    """A rank's record ``name`` on its commit block (`sampled_replay`, `boundary_linkage`, `weights_pin`, `attribution`,
+    `match_oracle`); empty for a rank that holds none: the gate that writes it had nothing to write (it writes None: no replay, no
+    pin, no Match record), or the rank's finalize never reached it.  Every fold reads a result off the record, and an empty one's is
+    None, which no fold takes for a pass."""
+    record = cblock.get(name)
+    return record if record else {}
+
+
+def _replay_block(sr: dict, name: str) -> dict:
+    """A replay record's block ``name`` (`sample`, `population`, `strata`, `strata_keys`, `weights`); empty for a record without it, which is
+    a replay that did not run (`rank_replay.not_run`, a deferred rank's record, no record at all): each of its fields then reads None
+    and adds nothing to a sum over the ranks."""
+    block = sr.get(name)
+    return block if block else {}
+
+
+def _replay_list(sr: dict | None, name: str) -> list:
+    """A replay record's list ``name`` (`unreplayable`, `strata_unevaluated`, `mismatch`); empty for a record that lists none, and
+    for no record."""
+    listed = sr.get(name) if sr else None
+    return listed if listed else []
 
 
 def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tuple[dict, str | None]:
@@ -146,8 +181,9 @@ def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: fro
     if isinstance(pop.get("not_evaluable"), dict):
         not_ev, codes = pop["not_evaluable"], RC.not_evaluable_codes(pop)
     else:
-        not_ev, codes = unreplayable_reasons(sr_.get("unreplayable") or [])
-    fam_of = {str(k): str((codes.get(str(k)) or {}).get("family") or "") for k in not_ev}
+        not_ev, codes = unreplayable_reasons(_replay_list(sr_, "unreplayable"))
+    # a reason with no code names no family, so no rule waives it
+    fam_of = {str(k): str(codes[str(k)].get("family") or "") if codes.get(str(k)) else "" for k in not_ev}
     waived = sorted({f for f in fam_of.values() if f and xrank_families is not None and evaluated_cross_rank(f, xrank_families)})
     keep = {str(k): v for k, v in not_ev.items() if fam_of[str(k)] not in waived}
     view = dict(sr_, population=dict(pop, not_evaluable=keep, not_evaluable_codes={k: codes.get(k) or RC.reason_code("other") for k in keep}))
@@ -166,7 +202,7 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
     (`no_evaluator_gate`) go INTO the verdict, fail closed, by the dense committer's rules -- not behind the gates above: a PASS-graded
     replay over a population that does not reconcile, or with a family nothing evaluates, is named.  So does the cuBLAS route pin
     (`route_pin_gate`): a rank that binds the pin's routes and served under other conditions is named."""
-    cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(sr_.get("strata") or {})}) if sr_ else None
+    cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(_replay_block(sr_, "strata"))}) if sr_ else None
     cblock["boundary_linkage"] = lk_ or None
     if replay_on and ok:
         if sr_.get("result") is not True:
@@ -193,7 +229,12 @@ def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, r
     earlier gates: a served shard that is not the checkpoint of record is the first-named fault even when its downstream symptoms
     (match oracle mismatches at the first collective input) already failed the rank (measured b1_tp12 neg_flip_weight_r1: oracle 826
     mismatches on rank 1 AND weights_pin False naming down_proj)."""
-    cblock["weights_pin"] = ({k: v for k, v in wp_.items() if k != "mismatched"} | {"mismatched": (wp_.get("mismatched") or [])[:8], "mismatched_n": len(wp_.get("mismatched") or [])}) if wp_ else None
+    if wp_:
+        stated = {k: v for k, v in wp_.items() if k != "mismatched"}
+        differing = wp_.get("mismatched")       # the served weights that differ from the checkpoint's; a pin that found none, or compared none, lists none
+        cblock["weights_pin"] = stated | {"mismatched": differing[:8] if differing else [], "mismatched_n": len(differing) if differing else 0}
+    else:
+        cblock["weights_pin"] = None
     if required:
         pin_why = None
         if wp_.get("result") is False:
@@ -214,32 +255,39 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
     failed already is decided here, any other is PENDING (None) with its pre-replay verdict in ``cblock["replay_deferred"]["pre"]``,
     which `pipeline.tp.commit_replay.fold` passes to `replay_gates` once the rank's replay is on the record.  ``xrank_families``: as
     `no_evaluator_gate` reads it."""
-    srb = f.get("sampled_replay") or {}
-    sr_, lk_ = (srb.get("sampled_replay") or {}), (srb.get("boundary_linkage") or {})
+    # a finalize that replayed nothing (no replay config on the rank, a warm-up) holds no replay block, and a block may hold one record
+    # of the two: each record then reads empty, which `replay_gates` names ("not run") and never passes.  A finalize with no weights
+    # pin (no checkpoint of record given to the rank) is unpinned, which `pin_gate` fails closed under a required manifest.
+    srb, pin = f.get("sampled_replay"), f.get("weights_pin")
+    sr, lk = (srb.get("sampled_replay"), srb.get("boundary_linkage")) if srb else (None, None)
+    sr_, lk_, wp_ = (sr if sr else {}), (lk if lk else {}), (pin if pin else {})
     if replay_on and sr_.get("grade") == "deferred":
         cblock["sampled_replay"], cblock["boundary_linkage"] = sr_, lk_
         cblock["replay_deferred"] = {"pre": [ok, why], "bundle": bundle}
-        ok, why = pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
+        ok, why = pin_gate(cblock, wp_, ok, why, rank=rank, required=required)
         return (None, RB.PENDING) if ok else (ok, why)
     ok, why = replay_gates(cblock, sr_, lk_, ok, why, rank=rank, replay_on=replay_on, required=required, xrank_families=xrank_families)
-    return pin_gate(cblock, f.get("weights_pin") or {}, ok, why, rank=rank, required=required)
+    return pin_gate(cblock, wp_, ok, why, rank=rank, required=required)
 
 
-def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
+def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: frozenset[str] | set[str] | list[str]) -> None:
     """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
     (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
 
-    byf = xr.get("by_family") or {}
-    cov = (xr.get("coverage_of_unreplayable") or {}).get("families") or {}
+    # a pass that did not run holds neither its picks by family nor its coverage of the families the replay cannot evaluate, and a
+    # pass that ran may have picked or covered nothing of a family: the family's fields then read None
+    byf, coverage = xr.get("by_family"), xr.get("coverage_of_unreplayable")
+    cov = coverage.get("families") if coverage else None
     for sr in srs:
-        for u_ in (sr or {}).get("unreplayable") or []:
+        for u_ in _replay_list(sr, "unreplayable"):
             fam_ = str(u_.get("family"))
             if evaluated_cross_rank(fam_, xrank_families):
-                c_ = cov.get(fam_) or {}
+                c_, picked = (cov.get(fam_) if cov else None), (byf.get(fam_) if byf else None)
                 u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12)", "result": xr.get("result"),
-                                      "picks": (byf.get(fam_) or {}).get("picks"), "equal": (byf.get(fam_) or {}).get("equal"),
-                                      "sites": c_.get("sites"), "sites_covered": c_.get("covered"), "sites_missing": c_.get("missing"),
+                                      "picks": picked.get("picks") if picked else None, "equal": picked.get("equal") if picked else None,
+                                      "sites": c_.get("sites") if c_ else None, "sites_covered": c_.get("covered") if c_ else None,
+                                      "sites_missing": c_.get("missing") if c_ else None,
                                       "artifact": f"xrank_pair{pair}.json", "rule": "sampled strata over the committed collective outputs (>= per_stratum per site x kind x phase), not every VU"}
 
 
@@ -248,7 +296,7 @@ def query_population_component(rows: list[dict], replay_on: bool) -> dict:
     instrumented pair's per-rank blocks, where the gate wrote it into the verdict); None while a rank's replay is deferred."""
     pr = last_per_rank(rows)
     qp_per_rank = {str(r_): (c.get("query_population") or None) for r_, c in pr.items()}
-    deferred = sorted(str(r_) for r_, c in pr.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred")
+    deferred = sorted(str(r_) for r_, c in pr.items() if _rank_record(c, "sampled_replay").get("grade") == "deferred")
     return {"result": (None if not replay_on or not qp_per_rank or deferred else all(isinstance(b, dict) and b.get("ok") is True and not b.get("fail") for b in qp_per_rank.values())),
             "per_rank": {r_: ({k: b.get(k) for k in ("present", "ok", "counts", "fail")} if isinstance(b, dict) else None) for r_, b in sorted(qp_per_rank.items())},
             "rule": "population.query_checks.ok True on EVERY rank (reconciliation against Q(P)); False / absent with a required manifest = the rank FAILs by name",
@@ -291,29 +339,47 @@ def annotate_value_correspondence(vc: dict | None, sr_comp: dict, lk_comp: dict,
 SR_SUMMARY_KEYS = ("result", "n", "sample", "population", "weights", "weights_self_consistent", "weights_pinned", "weights_note", "unreplayable", "per_rank", "per_run", "why")
 
 
+def _strata_key(keys: dict, name: str, part: str) -> Any:
+    """A rank's strata keys' ``name.part`` (`lifetime.values`, `lifetime.ring_slots`, `steps.early`, `steps.late`); None for keys
+    that hold no ``name``: a replay that did not run has no strata keys at all."""
+    block = keys.get(name)
+    return block.get(part) if block else None
+
+
+def _strata_union(keys: dict[str, dict], name: str, part: str | None = None) -> list:
+    """What the ranks' strata keys list under ``name`` (under ``name.part`` for `steps`), sorted, each value once; a rank whose keys
+    list nothing there adds nothing."""
+    out: set = set()
+    for k_ in keys.values():
+        listed = k_.get(name) if part is None else _strata_key(k_, name, part)
+        out.update(listed if listed else ())
+    return sorted(out)
+
+
 def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, dict]:
     """`components.sampled_replay` {result, population, n, strata, seed, unreplayable,
     why, per_rank} and `components.boundary_linkage` {result, method, checked, why, per_rank}, folded over the ranks of the LAST
     instrumented pair (AND: one rank not True = not True) with every earlier instrumented pair AND-ed in (`per_run`), so a failing pair
     or rank is named.  A TP2 row's population is the union of the ranks' rank-Program rows; the `ranks` stratum lists the true ranks."""
-    pairs = [r["commit"]["per_rank"] for r in rows if r.get("arm") != "control" and (r.get("commit") or {}).get("per_rank")]
+    pairs = [r["commit"]["per_rank"] for r in rows if r.get("arm") != "control" and per_rank_of(r)]
     if not versions.get("sampled_replay") or not pairs:
         na = {"result": None, "why": ("not run (--no-sampled-replay or no --required-manifest)" if not versions.get("sampled_replay") else "no instrumented pair finalized")}
         return ({"method": "sampled-exact-replay per rank (sampled_replay)", "population": None, "n": 0, "strata": None, "seed": None, "unreplayable": []} | na,
                 {"method": "committed input ids at arrival == declared prompt; later steps == previous step's committed sampled id, per request per rank", "checked": 0} | na)
     pr = pairs[-1]
-    srs = {r_: (c.get("sampled_replay") or {}) for r_, c in pr.items()}
-    lks = {r_: (c.get("boundary_linkage") or {}) for r_, c in pr.items()}
-    per_run = [{r_: {"sampled_replay": (c.get("sampled_replay") or {}).get("result"), "grade": (c.get("sampled_replay") or {}).get("grade"),
-                     "boundary_linkage": (c.get("boundary_linkage") or {}).get("result")} for r_, c in p.items()} for p in pairs]
+    srs = {r_: _rank_record(c, "sampled_replay") for r_, c in pr.items()}
+    lks = {r_: _rank_record(c, "boundary_linkage") for r_, c in pr.items()}
+    per_run = [{r_: {"sampled_replay": _rank_record(c, "sampled_replay").get("result"), "grade": _rank_record(c, "sampled_replay").get("grade"),
+                     "boundary_linkage": _rank_record(c, "boundary_linkage").get("result")} for r_, c in p.items()} for p in pairs]
     sr_ok = len(srs) > 0 and all(s.get("result") is True for s in srs.values()) and all(all(v["sampled_replay"] is True for v in p.values()) for p in per_run)
     lk_ok = len(lks) > 0 and all(link.get("result") is True for link in lks.values()) and all(all(v["boundary_linkage"] is True for v in p.values()) for p in per_run)
-    smp = {r_: (s.get("sample") or {}) for r_, s in srs.items()}
-    popn = {r_: (s.get("population") or {}) for r_, s in srs.items()}
-    keys = {r_: (s.get("strata_keys") or {}) for r_, s in srs.items()}
+    smp = {r_: _replay_block(s, "sample") for r_, s in srs.items()}
+    popn = {r_: _replay_block(s, "population") for r_, s in srs.items()}
+    keys = {r_: _replay_block(s, "strata_keys") for r_, s in srs.items()}
+    wts = {r_: _replay_block(s, "weights") for r_, s in srs.items()}
     unrep: dict[str, dict] = {}
     for r_, s in srs.items():
-        for u in s.get("unreplayable") or []:
+        for u in _replay_list(s, "unreplayable"):
             k = str(u.get("family"))
             unrep.setdefault(k, {"family": k, "n": 0, "why": u.get("why"), "ranks": []})
             unrep[k]["n"] += int(u.get("n") or 0)
@@ -322,8 +388,10 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                 unrep[k]["evaluated_by"] = u["evaluated_by"]
     lifetimes: dict[str, int] = {}
     for k_ in keys.values():
-        for lv, n_ in ((((k_.get("lifetime") or {}).get("values")) or {}).items()):
+        values = _strata_key(k_, "lifetime", "values")
+        for lv, n_ in (values.items() if values else ()):
             lifetimes[lv] = lifetimes.get(lv, 0) + int(n_)
+    families = [p["by_family"] for p in popn.values() if p.get("by_family")]      # a rank whose population names no family adds none
     sr_comp: dict[str, Any] = {"result": sr_ok if all(s for s in srs.values()) else None,
                "method": ("per rank, in the rank's committing process (tp2_worker finalize): sampled_replay on THIS rank's binding map (identity.rank == r), "
                           "THIS rank's request Programs of record (derive_step --tp 2 --rank r; components per (LP, T)), the rank's committed members and "
@@ -331,29 +399,27 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                           "by a peer rank's partial have no evaluator and are counted by name"),
                "population": {"n": sum(int(p.get("vus") or 0) for p in popn.values()), "per_rank": {r_: p.get("vus") for r_, p in popn.items()},
                               "source": next((p.get("source") for p in popn.values() if p.get("source")), None),
-                              "by_family": {f: sum(int((p.get("by_family") or {}).get(f) or 0) for p in popn.values()) for f in sorted({f for p in popn.values() for f in (p.get("by_family") or {})})}},
+                              "by_family": {f: sum(int(by.get(f) or 0) for by in families) for f in sorted({f for by in families for f in by})}},
                "n": sum(int(m.get("evaluated") or 0) for m in smp.values()),
                "sample": {"picked": sum(int(m.get("picked") or 0) for m in smp.values()), "evaluated": sum(int(m.get("evaluated") or 0) for m in smp.values()),
                           "equal": sum(int(m.get("equal") or 0) for m in smp.values()), "mismatch_n": sum(int(m.get("mismatch_n") or 0) for m in smp.values()),
                           "not_evaluated_n": sum(int(m.get("not_evaluated_n") or 0) for m in smp.values()), "per_stratum": next((m.get("per_stratum") for m in smp.values()), None)},
                "strata": {"n": sum(int(p.get("strata_n") or 0) for p in popn.values()),
                           "ranks": [f"rank {r_}" for r_ in sorted(srs, key=int)],
-                          "mechanisms": sorted({m for k_ in keys.values() for m in (k_.get("mechanisms") or [])}),
-                          "requests": sorted({q for k_ in keys.values() for q in (k_.get("requests") or [])}),
-                          "phases": sorted({q for k_ in keys.values() for q in (k_.get("phases") or [])}),
-                          "steps": {"early": sorted({s_ for k_ in keys.values() for s_ in ((k_.get("steps") or {}).get("early") or [])}),
-                                    "late": sorted({s_ for k_ in keys.values() for s_ in ((k_.get("steps") or {}).get("late") or [])})},
-                          "lifetime": {"values": lifetimes, "ring_slots": next((((k_.get("lifetime") or {}).get("ring_slots")) for k_ in keys.values()), None)},
+                          "mechanisms": _strata_union(keys, "mechanisms"), "requests": _strata_union(keys, "requests"),
+                          "phases": _strata_union(keys, "phases"),
+                          "steps": {"early": _strata_union(keys, "steps", "early"), "late": _strata_union(keys, "steps", "late")},
+                          "lifetime": {"values": lifetimes, "ring_slots": next((_strata_key(k_, "lifetime", "ring_slots") for k_ in keys.values()), None)},
                           "key": next((k_.get("key") for k_ in keys.values() if k_.get("key")), None),
-                          "unevaluated": sorted({u for s in srs.values() for u in (s.get("strata_unevaluated") or [])})[:12]},
+                          "unevaluated": sorted({u for s in srs.values() for u in _replay_list(s, "strata_unevaluated")})[:12]},
                "seed": {r_: {"seed": m.get("seed"), "source": m.get("seed_source")} for r_, m in smp.items()},
-               "weights": {r_: (s.get("weights") or {}).get("equal") for r_, s in srs.items()},
+               "weights": {r_: w.get("equal") for r_, w in wts.items()},
                # the per-rank weights check is self-consistency (re-registered shards == the run's root); a pin of record is a Build-side digest
-               "weights_self_consistent": {r_: (s.get("weights") or {}).get("self_consistent", (s.get("weights") or {}).get("equal")) for r_, s in srs.items()},
-               "weights_pinned": {r_: (s.get("weights") or {}).get("pinned") for r_, s in srs.items()},
+               "weights_self_consistent": {r_: w.get("self_consistent", w.get("equal")) for r_, w in wts.items()},
+               "weights_pinned": {r_: w.get("pinned") for r_, w in wts.items()},
                "weights_note": "self-consistency, not a weights-of-record pin",
                "unreplayable": sorted(unrep.values(), key=lambda u: u["family"]),
-               "mismatch": [dict(m, rank=int(r_)) for r_, s in srs.items() for m in (s.get("mismatch") or [])][:12],
+               "mismatch": [dict(m, rank=int(r_)) for r_, s in srs.items() for m in _replay_list(s, "mismatch")][:12],
                "per_rank": {r_: {k2: s.get(k2) for k2 in ("result", "grade", "why", "rank", "rank_note")} for r_, s in srs.items()},
                "per_run": per_run,
                "why": (None if sr_ok else "; ".join(f"rank {r_}: {s.get('grade')} {s.get('why') or s.get('error') or 'no result'}" for r_, s in srs.items() if s.get("result") is not True) or "a rank of an earlier pair failed")}
@@ -363,7 +429,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                "checked": sum(int(link.get("pairs") or 0) for link in lks.values()), "linked": sum(int(link.get("linked") or 0) for link in lks.values()),
                "per_rank": {r_: {k2: link.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, link in lks.items()},
                "why": (None if lk_ok else "; ".join(f"rank {r_}: {link.get('why') or 'no result'}" for r_, link in lks.items() if link.get("result") is not True) or "a rank of an earlier pair failed")}
-    deferred = sorted({str(r_) for p in pairs for r_, c in p.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred"}, key=int)
+    deferred = sorted({str(r_) for p in pairs for r_, c in p.items() if _rank_record(c, "sampled_replay").get("grade") == "deferred"}, key=int)
     if deferred:
         for comp in (sr_comp, lk_comp):
             comp.update(result=None, deferred={"ranks": deferred}, why=f"deferred: ranks {deferred} replay on CPU from their bundles (`verity-vllm tp-commit-replay`)")
@@ -377,7 +443,8 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
     every rank's bundle, writes `replay_deferred.json` and makes ``summ`` PENDING; otherwise the Commit is decided and every partial
     bundle goes."""
     trt = [r for r in rows if r["arm"] != "control"]
-    pending = [r["pair"] for r in trt if (r.get("commit") or {}).get("commit_pass") is None]
+    # a run whose Commit is not decided: its ranks await their replay (`commit_pass` None), or the run holds no commit
+    pending = [r["pair"] for r in trt if not r.get("commit") or r["commit"].get("commit_pass") is None]
     if not (pending and summ.get("pass") is True and replay_cfg is not None):
         for p, ranks in bundles_of.items():
             for rk in ranks:
@@ -421,15 +488,16 @@ def weights_pin_component(rows: list[dict], versions: dict) -> dict:
     for r in rows:
         if r.get("arm") == "control":
             continue
-        for rk, c in ((r.get("commit") or {}).get("per_rank") or {}).items():
-            wp = c.get("weights_pin") or {}
+        for rk, c in per_rank_of(r).items():
+            wp = _rank_record(c, "weights_pin")
             results.append(wp.get("result"))
             per_rank[str(rk)] = {k: wp.get(k) for k in ("result", "root_of_record", "compared", "mismatched_n", "missing", "unpinned", "all_shards_pinned", "committed_weights_root", "why")}
     res = (all(x is True for x in results) if results and all(x is not None for x in results) else (False if any(x is False for x in results) else None))
     return {"result": res, "per_rank": per_rank, "pairs": len({id(r) for r in rows if r.get("arm") != "control"}),
             "method": "MAN-09 per rank: sha256(served shard bytes) == digest composed from the PINNED checkpoint shards by the rank Program's shard map, every weight field",
             "reference": "the checkpoint of record (manifests/checkpoints.json revision + shard sha256), never the live engine",
-            "checkpoint_dir": (versions.get("weights_pin") or {}).get("checkpoint_dir"),
+            # the Commit's pin settings; a Commit that pinned no weights (`--no-weights-pin`, no checkpoint of record) names no checkpoint
+            "checkpoint_dir": versions["weights_pin"].get("checkpoint_dir") if versions.get("weights_pin") else None,
             "why": (None if res is True else ("weights unpinned (MAN-09) on a rank" if res is None else "served weights differ from the checkpoint of record on a rank"))}
 
 
@@ -441,7 +509,7 @@ def linkage_component(rows: list[dict], versions: dict) -> dict:
     if not versions.get("match_record") or not pr:
         return {"result": None, "method": "per-(request, engine step) committed sampled_token_ids vs the Match record", "checked": 0,
                 "why": "not run (no --match-dir Match record)" if not versions.get("match_record") else "no instrumented pair finalized"}
-    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
+    atts = {r_: _rank_record(c, "attribution") for r_, c in pr.items()}
     ok = all(a.get("ok") is True for a in atts.values()) and len(atts) > 0
     return {"result": ok,
             "method": ("per rank: committed runner.sampler/sampled_token_ids row j of engine step s -> request of row j in the rank's request->rows map "
@@ -462,12 +530,15 @@ def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | N
     pr = last_per_rank(rows)
     if not versions.get("match_record") or not pr:
         return {"result": None, "complete": False, "reference": "not run (no --match-dir: no Match record to compare the committed values against)"}
-    atts = {r_: (c.get("attribution") or {}) for r_, c in pr.items()}
-    mos = {r_: (c.get("match_oracle") or {}) for r_, c in pr.items()}
+    atts = {r_: _rank_record(c, "attribution") for r_, c in pr.items()}
+    mos = {r_: _rank_record(c, "match_oracle") for r_, c in pr.items()}
     att_ok = len(atts) > 0 and all(a.get("ok") is True for a in atts.values())
     mo_ran = any(m for m in mos.values())
     mo_ok = mo_ran and all(m.get("verdict") == "PASS" for m in mos.values())
-    fam = (man_doc or {}).get("populations", {}).get("by_family") or {}
+    # the required manifest's identity counts by family; none for a Commit without a manifest, or one whose manifest states none:
+    # the families covered are then named with no counts
+    by_family = man_doc.get("populations", {}).get("by_family") if man_doc else None
+    fam = by_family if by_family else {}
     covered = [f for f in ("tp_rank_partials", "sampled_token_ids") if f in fam] if fam else ["tp_rank_partials", "sampled_token_ids"]
     if not mo_ran:
         covered = [f for f in covered if f != "tp_rank_partials"]
@@ -475,9 +546,8 @@ def oracle_compare_component(rows: list[dict], versions: dict, man_doc: dict | N
     # component says so and its result is not True (a commit == a failed Match's bytes is not a PASS ingredient)
     mv = versions["match_record"].get("tp2_match_verdict")
     oracle_failed_match = (mv is False)
-    result = (att_ok and (mo_ok if mo_ran else True)) if (att_ok is not None) else None
-    if oracle_failed_match and result:
-        result = None
+    compared_equal = att_ok and (mo_ok if mo_ran else True)
+    result = None if oracle_failed_match and compared_equal else compared_equal
     return {"result": result,
             "complete": False,
             "oracle_match_verdict": mv,

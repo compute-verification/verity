@@ -67,6 +67,8 @@ from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
+__all__ = ["COMMANDS", "STAGED", "checkpoint", "data", "main"]
+
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
@@ -109,13 +111,20 @@ def part_dir(part: str) -> str:
     return "build_workload" if part == "workload" else part if part.startswith("build_") else f"build_{part}"
 
 
+def _per_rank(build: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """A record's Build by rank.  A TP1 row's has no `per_rank`: its Programs are rank 0's, none where its Build states none."""
+    if per := build.get("per_rank"):
+        return per
+    programs = build.get("programs")
+    return {"0": {"programs": programs if programs else {}, "workload_digest": build.get("workload_digest")}}
+
+
 def parts(rec: dict[str, Any]) -> dict[int, dict[str, str]]:
     """{rank: {part: program digest}} of every Program the record names (a TP1 row's are rank 0), the workload Program included."""
-    b = rec["build"]
-    per = b.get("per_rank") or {"0": {"programs": b.get("programs") or {}, "workload_digest": b.get("workload_digest")}}
     out = {}
-    for r, p in per.items():
-        d = {k: v for k, v in (p.get("programs") or {}).items() if v}
+    for r, p in _per_rank(rec["build"]).items():
+        named = p.get("programs")   # a rank that derived no Program has its workload Program alone
+        d = {k: v for k, v in named.items() if v} if named else {}
         if p.get("workload_digest"):
             d["workload"] = p["workload_digest"]
         out[int(r)] = d
@@ -192,7 +201,8 @@ def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
     the registered property's, its digest recomputes and it holds.  Returns {property: art: id}."""
     from verity_vllm.properties.record import REGISTRY, PropertyRecord
     att = json.loads(data("show", run, "--json"))
-    rr = (att.get("outputs") or {}).get("run_record")
+    outputs, source = att.get("outputs"), att.get("source")   # an attempt may have kept no output, and may name no checkout
+    rr = outputs.get("run_record") if outputs else None
     if not rr:
         raise UsageError(f"{run}: no run record (outputs.run_record; `research run --on` keeps one)")
     found: dict[str, str] = {}
@@ -212,7 +222,7 @@ def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
             if problems or not pr.ok:
                 raise UsageError(f"{run} {p}: {'; '.join(problems) or 'the property does not hold'}: not a capture of record")
             meta = {"property": name, "schema": pr.doc["schema"], "digest": pr.digest, "ok": True, "path": p, "run_id": run,
-                    "commit": (att.get("source") or {}).get("commit")}
+                    "commit": source.get("commit") if source else None}
             art = ART.findall(data("put", "--kind", PROPERTY_KIND, "--meta", json.dumps(meta, sort_keys=True), "--file", str(root / p),
                                    f"--ref=run={rr}"))[-1]
             data("push", art)
@@ -220,11 +230,17 @@ def capture(run: str, properties: list[str] | None = None) -> dict[str, str]:
     return out
 
 
+def _meta(manifest: dict[str, Any]) -> dict[str, Any]:
+    """An artifact's `meta` as its manifest states it; one put with none has no field to read."""
+    meta = manifest.get("meta")
+    return meta if meta else {}
+
+
 def check_capture(prop: str, art: str) -> None:
     """Refuse `art` as `prop`'s capture of record unless it is a holding `property-record/v1` of `prop` at its registered schema."""
     from verity_vllm.properties.record import REGISTRY
     m = json.loads(data("show", art, "--json"))["manifest"]
-    meta, want = m.get("meta") or {}, REGISTRY.get(prop)
+    meta, want = _meta(m), REGISTRY.get(prop)
     if m.get("kind") != PROPERTY_KIND or meta.get("property") != prop or meta.get("ok") is not True or want is None \
             or meta.get("schema") != want.schema:
         raise UsageError(f"--conformance {prop}={art}: a {m.get('kind')} of {meta.get('property')} at {meta.get('schema')} "
@@ -239,9 +255,9 @@ def newest_capture(prop: str) -> str | None:
     from verity_vllm.properties.record import REGISTRY
     if (want := REGISTRY.get(prop)) is None:
         return None
-    held = [((r["manifest"].get("meta") or {}).get("run_id") or "", r["id"])
+    held = [(meta.get("run_id") or "", r["id"])
             for r in json.loads(data("select", "--kind", PROPERTY_KIND, "--where", f"meta.property={prop}", "--json") or "[]")
-            if (r["manifest"].get("meta") or {}).get("ok") is True and r["manifest"]["meta"].get("schema") == want.schema]
+            if (meta := _meta(r["manifest"])).get("ok") is True and meta.get("schema") == want.schema]
     return max(held)[1] if held else None
 
 
@@ -250,6 +266,14 @@ def unindexed(prop: str) -> bool:
     $STORE_PRIVATE_READER_URL and no `research data index` build), as in a `research run` job's custody store.  There, a property
     missing from the catalog says nothing about the store."""
     return selected_from("--kind", PROPERTY_KIND, "--where", f"meta.property={prop}") == "the catalog"
+
+
+def _pin(construction: dict[str, Any]) -> tuple[str | None, int]:
+    """The checkpoint and the world a construction manifest states (`model.pin.model`, `tp.world`): None where it pins no
+    checkpoint, 1 where it states no world."""
+    model, tp = construction.get("model"), construction.get("tp")
+    pin = model.get("pin") if model else None
+    return pin.get("model") if pin else None, int((tp.get("world") if tp else None) or 1)
 
 
 def due(build: str, listed: list[str]) -> dict[str, Any]:
@@ -266,14 +290,15 @@ def due(build: str, listed: list[str]) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="records-") as tmp:
         root = fetch(build, Path(tmp), cms)
         docs = [json.loads((root / p).read_text()) for p in cms]
-    pins = {(((m.get("model") or {}).get("pin") or {}).get("model"), int((m.get("tp") or {}).get("world") or 1)) for m in docs}
+    pins = {_pin(m) for m in docs}
     if len(pins) != 1:
         raise UsageError(f"the Build {build}'s construction manifests name {len(pins)} checkpoints and worlds: {sorted(map(str, pins))}")
     repo, world = pins.pop()
     cmap = CM.of_checkpoint(repo, world) if repo else None
     if cmap is None:
         return {"map": None, "due": {}}
-    used = {spec_base(s) for m in docs for s in m.get("spec_histogram") or {}}
+    histograms = [h for m in docs if (h := m.get("spec_histogram"))]   # a construction that derived no Definition states none
+    used = {spec_base(s) for h in histograms for s in h}
     progs = {prop: [p for p in pids if used & set(cmap["programs"][p]["definitions"])] for prop, pids in CM.captures(cmap).items()}
     return {"map": cmap["id"], "due": {prop: ps for prop, ps in progs.items() if ps}}
 
@@ -298,16 +323,24 @@ def entry(rec: dict[str, Any], art: str, tier: str) -> dict[str, Any]:
     """A published record's index entry: its art: id, the tier of its rebuild, what it was pinned from and its circuit's pins, the
     Build's manifest digest and every rank's Program digests as `epoch.build_programs` reads them from the Build."""
     b = rec["build"]
-    per = b.get("per_rank") or {"0": {"programs": b.get("programs") or {}, "workload_digest": b.get("workload_digest")}}
     programs = {r: {"step": p["programs"].get("step") or p["programs"].get("build_step"), "workload": p.get("workload_digest"),
                     "requests": {k: v for k, v in sorted(p["programs"].items()) if k == "request" or k.startswith("build_request")}}
-                for r, p in sorted(per.items(), key=lambda kv: int(kv[0]))}
+                for r, p in sorted(_per_rank(b).items(), key=lambda kv: int(kv[0]))}
     return {"record": art, "tier": tier, "pinned_from": {"record": art, "build": rec["evidence"]["build"], "tree": rec["tree"]},
             "manifest_digest": b.get("manifest_digest"), "programs": programs}
 
 
+def _block(evidence: dict[str, Any], key: str) -> dict[str, str]:
+    """The evidence's `conformance` or `gaps`, {property: its capture's art: id, or its gap's reason}; evidence that cites or
+    names nothing may leave the block out."""
+    block = evidence.get(key)
+    return block if block else {}
+
+
 def _tier(row: str, tier: str | None) -> str:
-    if (tier := tier or (index().get(row) or {}).get("tier")) not in CR.TIERS:
+    if not tier and (held := index().get(row)):   # a row new to the index has no entry to read its tier from
+        tier = held.get("tier")
+    if tier not in CR.TIERS:
         raise UsageError(f"{row}: a row new to {INDEX.name} needs --tier {'|'.join(CR.TIERS)}, the tier of its rebuild "
                          f"(`verity-vllm neutrality`)")
     return tier
@@ -331,10 +364,11 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
     rec = CR.record(d, row, tree=tree, summary=summary, evidence=evidence)
     if rec["outcome"] != "PASS":
         raise UsageError(f"{row}: the record is {rec['outcome']} ({rec['why']}): the database keeps rows whose circuit is faithful")
-    cm = (rec["commit"].get("manifest") or {}) if summary is not None else {}
+    cm = rec["commit"].get("manifest") if summary is not None else None   # what the Commit committed against, where it says
     workloads = {str(r): ps.get("workload") for r, ps in parts(rec).items()}
-    if cm.get("manifest_digest") not in (None, rec["build"].get("manifest_digest")) or any(
-            workloads.get(str(r)) != v for r, v in (cm.get("program_digest_per_rank") or {}).items()):
+    served = cm.get("program_digest_per_rank") if cm else None
+    if cm and (cm.get("manifest_digest") not in (None, rec["build"].get("manifest_digest")) or any(
+            workloads.get(str(r)) != v for r, v in (served.items() if served else ()))):
         raise UsageError(f"{row}: the Commit committed against manifest {str(cm.get('manifest_digest'))[:16]}… and its Programs, not the "
                          f"Build's ({str(rec['build'].get('manifest_digest'))[:16]}…): the record's Build is not the one served")
     listed = listing(evidence["build"])
@@ -345,7 +379,7 @@ def publish(d: str | Path, row: str, *, evidence: dict[str, Any], tree: str, by:
         raise UsageError(f"{row}: a switched row's pins are its AOT Build's Programs (`aot` in {INDEX.name}), and this Build traced "
                          f"{len(traced)} of them ({', '.join(traced[:4])}): run its Build with --build-construction record")
     rec["conformance"] = due(evidence["build"], listed)
-    cited, gaps = evidence.get("conformance") or {}, evidence.get("gaps") or {}
+    cited, gaps = _block(evidence, "conformance"), _block(evidence, "gaps")
     if newest:
         left = [p for p in rec["conformance"]["due"] if p not in cited and p not in gaps]
         found = {p: a for p in left if (a := newest_capture(p))}
@@ -381,7 +415,7 @@ def pull(art: str, tier: str | None = None) -> str:
     it was published with (`tier` overrides it), a switched row keeping its `aot`; returns its row.  A row whose file in this tree is
     not done only at its public cap (`config_record.index_refusal`) is refused before the index is touched."""
     m = json.loads(data("show", art, "--json"))["manifest"]
-    meta = m.get("meta") or {}
+    meta = _meta(m)
     if m.get("kind") != CR.KIND or meta.get("outcome") != "PASS":
         raise UsageError(f"{art}: a {m.get('kind')} ({meta.get('outcome')}), not a PASS {CR.KIND}")
     rec = json.loads(fetch(art).read_text())
@@ -389,7 +423,8 @@ def pull(art: str, tier: str | None = None) -> str:
     if why := CR.index_refusal(row):
         raise UsageError(f"{why}; pull would index it as one, so it indexes nothing")
     doc = CR.load_index(INDEX)
-    aot = (doc["rows"].get(row) or {}).get("aot")
+    held = doc["rows"].get(row)   # a row new to this tree's index is on the trace
+    aot = held.get("aot") if held else None
     doc["rows"][row] = {**entry(rec, art, _tier(row, tier or meta.get("tier"))), **({"aot": aot} if aot else {})}
     CR.write_index(doc, INDEX)
     return row
@@ -416,8 +451,9 @@ def staged(repo: str, revision: str, *, at: str, ref: str, by: str) -> str:
 def constructions(d: Path) -> dict[str, dict[str, str]]:
     """Per rank of a row dir's Build (`build_summary.json`), each derived Program's construction: `aot` or `trace`."""
     s = json.loads((d / "build_summary.json").read_text()) if (d / "build_summary.json").is_file() else {}
+    ranks = s.get("ranks")   # none with no Build summary, or one of a Build that reached no rank
     return {k.removeprefix("rank"): {p: v.get("construction", "trace") for p, v in rk.items() if p.startswith("build_")}
-            for k, rk in (s.get("ranks") or {}).items()}
+            for k, rk in ranks.items()} if ranks else {}
 
 
 def switch(row: str, comparison: dict[str, Any], *, run: str, trace: str, tier: str | None = None) -> dict[str, Any]:

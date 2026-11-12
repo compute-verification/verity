@@ -84,6 +84,8 @@ def mla_field_words(sources: MlaSources, name: str, tensor_words: Callable[[str,
     """The words of layer field `name` (`dense_layers[d].f` / `layers[i].f`, matching `MLA_LAYER_FIELD`): its source tensors'
     words (`tensor_words(checkpoint name, field)`) concatenated, the f32 router gate widened from bf16."""
     m = MLA_LAYER_FIELD.match(name)
+    if m is None:
+        raise ValueError(f"{name}: not a layer field of an MLA Program")
     fd, dense, moe = sources
     L = int(m[2]) + (0 if m[1] == "dense_layers" else fd)
     srcs = (dense if m[1] == "dense_layers" else moe)[m[3]]

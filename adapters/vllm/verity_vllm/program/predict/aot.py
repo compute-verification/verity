@@ -48,6 +48,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.circuits.codec import canonical_json, descriptor_size
+from verity.circuits.types import RecordType
+
+from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
 from verity_vllm.config import (
     WORKLOADS,
     RowEngine,
@@ -56,13 +60,20 @@ from verity_vllm.config import (
     row_file,
     workload_file,
 )
+from verity_vllm.correspondence.runtime import correspondence_digest
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.pipeline import epoch
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.query.required import QUERY_OF_RECORD
 from verity_vllm.records.predicted_row import FILE, PredictedRow
+from verity_vllm.records.schema_ids import AOT_COMPARISON_SCHEMA
 
 from . import score as S
 from .build import build_program
+from .naming import named_program, write_build
 from .phi import Phi
 
-SCHEMA = "verity-vllm/aot-comparison/v1"
+SCHEMA = AOT_COMPARISON_SCHEMA
 #: what a predicted row's `build_workload/workload_program.json` names as its maker
 ROW_BUILT_BY = "verity_vllm.program.predict.aot"
 #: the traced derive dir's files a switched row's carries as written; `instances.json.gz` is the predicted Program's own
@@ -85,10 +96,9 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
-    from verity.circuits.types import RecordType
-
-    from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
-    hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
+    annotations = desc.get("annotations")   # a descriptor without annotations, or without their `node_hints`, hints no Call
+    node_hints = annotations.get("node_hints") if annotations else None
+    hints = {int(k): v for k, v in node_hints.items()} if node_hints else {}
     params = []
     for n, t in program.fn.body.params:
         if n == WEIGHTS and isinstance(t, RecordType):
@@ -104,16 +114,17 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
          aot: dict | None = None) -> dict:
     """One derive dir of a switched row's Build at `out`: the predicted Program, with the data `trace` (the traced derive dir at the
     same rank and shape) holds about it.  Returns the `aot` block it records."""
-    from verity_vllm.correspondence.runtime import correspondence_digest
     from verity_vllm.pipeline.build import write_instances
     res = json.loads(Path(trace, "result.json").read_text())
-    traced = res.get("program") or {}
+    recorded = res.get("program")   # the trace's record of its Program; a result without it names no digest, and is refused below
+    traced = recorded if recorded else {}
     r = predict(phi, wrapper, M=M, pos0=pos0, LP=LP, T=T)
     if r.digest != traced.get("digest"):
         raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest'))[:16]}… is not the predicted {r.digest[:16]}…: what it "
                          f"holds is about another Program (the row's comparison no longer holds: `verity-vllm predict compare` on a "
                          f"fresh trace, `verity-vllm neutrality --tier heavy`)")
-    desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
+    annotations = S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations")
+    desc = {**r.desc, "annotations": annotations if annotations else {}}   # a trace without annotations: predicted under empty ones
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
         raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {str(got[1])[:16]}…), "
@@ -186,7 +197,6 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
     """Every Program the traced Build under `row_dir` holds (`epoch.build_programs`), predicted at its rank and shape, a fresh
     process a rank (`workers` at once; 0 = every rank: a reused one keeps the decode caches of the ranks before), and compared
     digest by digest; with `predicted`, the predicted row's Build there too (`compare_row`)."""
-    from verity_vllm.pipeline import epoch
     traced = epoch.build_programs(Path(row_dir))
     if not traced:
         raise UsageError(f"{row_dir}: no build_summary.json, so no traced Build to compare with")
@@ -227,7 +237,6 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     """A predicted row's Build (`write_row`, under `predicted`) against the traced Build of the same row under `row_dir`: each
     request Program and the workload by digest, and the required-value manifest by its digest (over its identities), Program
     digest and identity count."""
-    from verity_vllm.pipeline import epoch
     traced = traced if traced is not None else epoch.build_programs(Path(row_dir))
     if list(traced) != ["0"]:
         raise UsageError(f"{row_dir}: a predicted row is one rank's, and the traced Build has ranks {sorted(traced)}")
@@ -244,12 +253,7 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
 def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, log=None) -> PredictedRow:
     """A single-GPU row's Build of record at `out` from its declared inputs alone (module docstring): no trace, no vLLM.  The
     checkpoint's `config.json` is `config`, else the pin's (`pinned_hf_config`).  Returns the record it writes beside them."""
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.pipeline import manifest as MN
-    from verity_vllm.program import prefix_plan as PP
-    from verity_vllm.query.required import QUERY_OF_RECORD
-
-    from .naming import named_program, write_build
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):
         raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")
@@ -293,7 +297,6 @@ def write_workload(phi: Phi, comps: dict, out: str):
     own: `workload_program.json`, the Program's artifact (`WorkloadProgram.artifact`) with the `lag` block and
     `applicability.engine.async_scheduling` the declared target resolves, and `descriptor.json.gz`, from which GM-01's
     `check.match.declaration.from_gprog` recomputes the workload digest and the `lag` static the block claims."""
-    from verity.circuits.codec import canonical_json, descriptor_size
     wl = S.workload_program(phi, comps)
     lag = phi.target_profile().async_scheduling_declaration()
     desc = wl.descriptor

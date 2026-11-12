@@ -12,6 +12,8 @@ from dataclasses import dataclass, replace
 
 from verity.circuits.types import Type, Value
 
+from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
+
 from .common import Unexpressible, _arr, served_class
 
 #: the family facts (`engine.profiles.family_facts`) `model_shape` reads; a family with any other refuses
@@ -76,19 +78,20 @@ def model_shape(hf: dict) -> ModelShape:
     exact-int8 one with an int8 LM head or a biased linear raises `Unexpressible` (an exact-int8 checkpoint's linears are `int8`).  A
     sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
     (the `dense2` patterns); `build_program` refuses a history longer than it."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
     from verity_vllm.observe.fold.profiles.generic import effective_sliding_window
     from verity_vllm.program import model as analytic
     family = str(hf.get("model_type", "")).lower()
     ff = FAMILY_FACTS.get(family)
     if ff is None:
         raise Unexpressible(f"model_type {family!r}: not in the family facts table")
-    rules = dict(ff.get("rules") or {})
+    stated_rules = ff.get("rules")
+    rules = dict(stated_rules) if stated_rules else {}    # a family that states no rules has none
     facts = []
     arch = ff.get("arch")
     if arch not in ("dense", "moe"):
         facts.append(f"family {family!r} constructor {arch!r} (the dense and MoE blocks only)")
-    other = sorted(set(ff.get("facts") or {}) - set(_FACTS_READ))
+    stated_facts = ff.get("facts")
+    other = sorted(set(stated_facts if stated_facts else {}) - set(_FACTS_READ))    # and one that states no facts, none
     if other or rules.get("qk_norm") not in (None, "head"):
         facts.append(f"family {family!r} per-family facts {other}, q/k norm {rules.get('qk_norm')}")
     try:

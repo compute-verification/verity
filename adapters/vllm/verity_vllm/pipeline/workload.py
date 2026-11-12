@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import uuid
 from dataclasses import dataclass
 from importlib import resources
@@ -45,7 +44,6 @@ from typing import Any
 import numpy as np
 
 from verity_vllm import settings
-from verity_vllm.commit import challenge as CH
 from verity_vllm.config import (
     CHECKPOINTS,
     VLLM,
@@ -60,10 +58,16 @@ from verity_vllm.config import (
 from verity_vllm.engine import served
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
+from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import GENERATED_WORKLOAD_SCHEMA
+
+__all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
-SWEEP_SCHEMA = "verity-sweep/workload/v1"
+SWEEP_SCHEMA = GENERATED_WORKLOAD_SCHEMA
 SAMPLING = {
     "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},
@@ -87,6 +91,8 @@ def row_seed(row_id: str) -> str:
 
 
 def rng_for(seed_hex: str, purpose: str) -> np.random.Generator:
+    # imported here, not at the top: it loads the core `verity`, which importing this module does not
+    from verity_vllm.commit import challenge as CH
     h = hashlib.sha256(bytes.fromhex(seed_hex) + b"/" + purpose.encode()).digest()
     return CH.generator([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
 
@@ -454,25 +460,24 @@ def main(a: Options) -> int:
     p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=a.shared_prefix)
     bad = check_plan(p)
     if a.check:
-        print(f"[check] {a.row_id}: B={a.batch} lens={p['input_lengths']} caps={p['output_caps']} steps={p['arrive_steps']} -> "
-              f"{'PASS' if not bad else 'FAIL: ' + '; '.join(bad)}", file=sys.stderr)
+        logger.info("[check] %s: B=%s lens=%s caps=%s steps=%s -> %s", a.row_id, a.batch, p["input_lengths"], p["output_caps"],
+                    p["arrive_steps"], "PASS" if not bad else "FAIL: " + "; ".join(bad))
         if bad:
             return 1
     elif bad:
-        print(f"[warn] §12 self-check: {'; '.join(bad)}", file=sys.stderr)
+        logger.warning("§12 self-check: %s", "; ".join(bad))
 
     tok = None
     if not a.lengths_only:
         tp = Path(a.tokenizer) if a.tokenizer else find_tokenizer(a.hf_repo, a.revision)
         if tp is None:
-            print(f"[error] tokenizer.json for {a.hf_repo}@{a.revision} not found under {hf_home()} — pass --tokenizer or use --lengths-only",
-                  file=sys.stderr)
+            logger.error("tokenizer.json for %s@%s not found under %s — pass --tokenizer or use --lengths-only", a.hf_repo, a.revision, hf_home())
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
     reasons = dict(r.partition("=")[::2] for r in a.reason)
     if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        logger.error("--reason %s: a reason is SWITCH=TEXT for a switch of %s", unknown, sorted(served.DEFAULTS))
         return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -486,7 +491,7 @@ def main(a: Options) -> int:
         label = row_execution(a.row_id)
         exec_suffix = a.row_id if label is None else label
         if exec_suffix != profile.execution_label:
-            print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {profile.execution_label!r}", file=sys.stderr)
+            logger.error("row id execution suffix %r != the target's execution label %r", exec_suffix, profile.execution_label)
             return 3
         if "attention" in profile.int8_parts:
             reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
@@ -500,5 +505,5 @@ def main(a: Options) -> int:
     out = Path(a.out) if a.out else WORKLOADS / f"{a.row_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(RowConfig.of(doc).to_json(), indent=1, ensure_ascii=False) + "\n")
-    print(f"{out}: {doc['note'][:220]}", file=sys.stderr)
+    logger.info("%s: %s", out, doc["note"][:220])
     return 0

@@ -38,6 +38,8 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.query.manifest.format import identity_rows, spec_family
+
 FAMILY = "call_boundaries"
 #: the manifest's word dtype -> the numpy word it is evaluated as and the torch dtype it is committed as
 WORD_DTYPES = {"bf16": (np.uint16, "bfloat16"), "f32": (np.uint32, "float32"), "w8": (np.uint8, "uint8"), "i64": (np.uint64, "int64")}
@@ -159,7 +161,7 @@ def build_dirs(*roots: str | None) -> dict[str, str]:
                 continue
             art = os.path.join(d, "artifact.json")
             try:
-                got = (_load(art) if os.path.exists(art) else {}).get("program_digest") or (_load(p).get("program") or {}).get("digest")
+                got = (_load(art) if os.path.exists(art) else {}).get("program_digest") or _result_digest(p)
             except (OSError, ValueError):
                 continue
             if got:
@@ -180,6 +182,12 @@ def _load(p: str) -> Any:
         return json.load(f)
 
 
+def _result_digest(path: str) -> Any:
+    """The Program digest a Build's `result.json` at `path` names; None where it names no Program."""
+    program = _load(path).get("program")
+    return program.get("digest") if program else None
+
+
 def _label(r: Mapping[str, Any]) -> str:
     return f"{r.get('op_path')}/{r.get('output_member')} of {r.get('request_id')} @ engine step {r.get('engine_step')}"
 
@@ -189,8 +197,8 @@ def plan(manifest: Mapping[str, Any], ids: Sequence[Mapping[str, Any]], *roots: 
     """Identities `ids` of `manifest` as targets of the bodies the source evaluates, or uncovered with the reason; the Programs are the
     Build dirs under `roots`."""
     p = Plan(identities=len(ids))
-    requests, ranks, progs = list(manifest.get("requests") or []), int(manifest.get("ranks") or 1), request_programs(manifest)
-    steps = manifest.get("engine_steps") or []
+    stated, steps = manifest.get("requests"), manifest.get("engine_steps")
+    requests, ranks, progs = (list(stated) if stated else []), int(manifest.get("ranks") or 1), request_programs(manifest)
     if steps and isinstance(steps[0], Mapping):
         p.composition = {int(e["engine_step"]): {str(m["request_id"]): int(m["rows"]) for m in e.get("members") or ()} for e in steps}
     p.order = {str(d["workload_request_id"]): str(d["request_id"]) for d in manifest.get("requests_declared") or () if d.get("workload_request_id")}
@@ -287,7 +295,6 @@ def _definition(spec: str) -> tuple[Any, list[Any]]:
     from verity.circuits.evaluation.reference import signature_of
     from verity.definitions.call_scope import specialization
 
-    from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
 
     d = specialization(spec_family(spec), spec_statics(spec))
@@ -586,7 +593,7 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
     """(bytes per token row, tensors per step): the most any engine step commits per token row (its `input_token_ids` rows, over the
     step's requests), and the most targets of one step."""
     tokens: dict[int, int] = defaultdict(int)
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") == "input_token_ids" and "engine_step" in r:
             tokens[int(r["engine_step"])] += int(r.get("rows") or 0)
     nbytes: dict[int, int] = defaultdict(int)

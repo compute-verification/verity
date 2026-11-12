@@ -15,7 +15,9 @@ and `commit_verdict` states the scope on EVERY PASS and FAILs by name when the r
 from __future__ import annotations
 
 import copy
+import importlib
 import json
+import sys
 
 import pytest
 from verity.definitions.registry import bf16_gemm_check as BC
@@ -28,6 +30,7 @@ from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
+from verity_vllm.check.replay import replay_codes as RC
 
 
 def _programs(w):
@@ -530,9 +533,6 @@ def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_o
 def test_r3_a_broken_continuation_unit_fails_the_import_rather_than_falling_back_to_the_arithmetic(monkeypatch):
     """The recurrence is the mechanism whenever a served list is supplied: Continuation_v1 failing to import fails the population's import,
     never a record whose class silently reads 'arithmetic'."""
-    import importlib
-    import sys
-
     monkeypatch.setitem(sys.modules, "verity_vllm.program.lifting.continuation", None)
     monkeypatch.delitem(sys.modules, "verity_vllm.check.replay.population")
     with pytest.raises(ImportError):
@@ -551,9 +551,8 @@ class _NotYetPi:
 
 
 def test_a_not_yet_row_whose_address_rule_fails_is_a_mapping_fault_by_name_not_a_dropped_identity():
-    from verity_vllm.check.replay import replay_codes as RC
-
-    addresses, codes = {}, {}
+    addresses: dict[tuple, object] = {}
+    codes: dict[str, dict] = {}
     vus, ne, nef = POP.population(_NotYetPi(), "r0", addresses=addresses, codes=codes)
     domain = RC.NOT_YET["AttentionHead_v1"]
     assert vus == [] and list(addresses) == [("r0", 0, "model.layers.0.attn", "out")] and ne[domain] == 1

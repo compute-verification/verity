@@ -726,4 +726,5 @@ class DsaIndexerAttnRule(StateRule):
 
 VLLM_DSA_RULES = [CopyIntoAllocRule(), DsaNormRopeRule(), DsaQRule(), DsaIndexerAttnRule()]
 
-__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "VLLM_DSA_RULES"]
+__all__ = ["CopyIntoAllocRule", "DsaIndexerAttnRule", "DsaNormRopeRule", "DsaQRule", "FA3_SPARSE_GEOMETRY", "VLLM_DSA_RULES",
+           "DECODE_THRESHOLD", "DECODE_THRESHOLD_DEFAULT", "PAD_SCORE", "long_row_blocks", "long_row_keys", "pad_words"]

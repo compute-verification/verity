@@ -20,7 +20,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-SCHEMA = "verity-vllm/build-relabel/v1"
+from verity_vllm.records.schema_ids import BUILD_RELABEL_SCHEMA
+
+SCHEMA = BUILD_RELABEL_SCHEMA
 
 
 @dataclass

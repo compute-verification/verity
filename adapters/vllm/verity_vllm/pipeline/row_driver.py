@@ -11,6 +11,7 @@ through ``timeout`` to the stage's workers), the row waits for the stage to be g
 """
 from __future__ import annotations
 
+import contextlib
 import glob
 import hashlib
 import json
@@ -27,10 +28,21 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
+from verity_vllm.config import (
+    ROOT,
+    TARGETS,
+    CommitConfig,
+    MatchConfig,
+    RowConfig,
+    RunEnv,
+    row_execution,
+    row_path,
+    row_target,
+)
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 #: A row's stages as research Attempts (`row stage|chain|shed`), loaded by name (`config.run_store`): it runs the run store.
@@ -162,6 +174,10 @@ class Row:
     ``proc`` names the driver in the timeline (``row_pod`` for a single-GPU row, ``tp_stage`` for a tensor-parallel one).
     """
 
+    #: What each kind of row sets for the stages here that read them: its batch (from the row's shape) and its Match options.
+    B: int
+    cm: MatchConfig
+
     def __init__(self, *, row: str, role: str, repo: str, rev: str, stages: str, env: RunEnv, proc: str):
         self.row, self.role, self.repo, self.rev, self.stages, self.env, self.proc = row, role, repo, rev, stages, env, proc
         self.tree = os.path.realpath(ROOT)
@@ -201,7 +217,7 @@ class Row:
             cublas_names(env, self.py)
         except (OSError, ValueError) as e:
             print(f"PRECHECK_FAIL_CUBLAS_NAMES: {e}", file=sys.stderr)
-            raise Stop(3)
+            raise Stop(3) from e
         self.child_env = env
         if not os.access(self.py, os.X_OK):
             print(f"no python at {self.py} (run verity_vllm/ops/pod_bootstrap.sh first)", file=sys.stderr)
@@ -232,8 +248,8 @@ class Row:
         doc = _read_json(self.path(self.wl))
         if not isinstance(doc, dict):
             return None
-        sw = doc.get("sweep") if isinstance(doc.get("sweep"), dict) else {}
-        return doc.get("execution") or sw.get("execution") or row_execution(self.row)
+        sw = doc.get("sweep")
+        return doc.get("execution") or (sw.get("execution") if isinstance(sw, dict) else None) or row_execution(self.row)
 
     def bi_eager(self) -> bool:
         """The row's execution is ``bi-eager``, the only one the template gives JIT caches.  A compiled row records cubins its Triton
@@ -245,17 +261,23 @@ class Row:
         doc = _read_json(self.path("EXPORT.json"))
         return (doc.get("commit") or "") if isinstance(doc, dict) else ""
 
-    def serving_rows_request(self, partition: str) -> str:
+    def serving_rows_request(self, ck: CommitConfig) -> str:
         """The Commit's serving-rows request (`pipeline.serving_rows`, `pipeline.tp.serving_rows`): its directory inside the research
-        run dir when there is one, so the run's custody preserves it, the verifier's partition file, and the run id and source the
-        registration names (its domains bind the run root)."""
+        run dir when there is one, so the run's custody preserves it, the verifier's partition file, the run id and source the
+        registration names (its domains bind the run root), and the per-expert cut's ``tables`` (`expert_rows.of_request`) when
+        ``SERVING_ROWS_TABLES`` names their registration, refused here without its key rather than after serving."""
+        tables = None
+        if ck.serving_rows_tables:
+            if not ck.serving_rows_tables_key:
+                raise SystemExit("SERVING_ROWS_TABLES: a tables registration is read under its committer's key file (SERVING_ROWS_TABLES_KEY)")
+            tables = {"key": ck.serving_rows_tables_key, "registration": ck.serving_rows_tables}
         rd = self.env.research_run_dir
         d = os.path.join(rd, "serving-rows", self.row) if rd else f"{self.d}/serving-rows"
         os.makedirs(d, exist_ok=True)
         req = os.path.join(d, "request.json")
         with open(req, "w") as f:
-            json.dump({"dir": d, "partition": partition, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
-                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}}, f)
+            json.dump({"dir": d, "partition": ck.serving_rows, "run": self.env.environ.get("RESEARCH_RUN_ID") or self.row,
+                       "committer": {"source": self.env.environ.get("RESEARCH_SOURCE_SHA")}, **({"tables": tables} if tables else {})}, f)
         return req
 
     # ------------------------------------------------------------------------------------------------ records
@@ -273,7 +295,7 @@ class Row:
             f.write(line + "\n")
 
     def tl(self, stage: str, ev: str, *kv: tuple[str, Any]) -> None:
-        """Append one ``verity-sweep/timeline/v1`` event: values that read as numbers / true / false / null unquoted."""
+        """Append one timeline event (`TIMELINE_SCHEMA`): values that read as numbers / true / false / null unquoted."""
         parts = []
         for k, v in kv:
             v = str(v)
@@ -281,7 +303,7 @@ class Row:
                 parts.append(f',"{k}":{v}')
             else:
                 parts.append(f',"{k}":"{v.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"')
-        line = (f'{{"t":{_stamp()},"utc":"{utc()}","schema":"verity-sweep/timeline/v1","proc":"{self.proc}","pid":{os.getpid()},'
+        line = (f'{{"t":{_stamp()},"utc":"{utc()}","schema":"{TIMELINE_SCHEMA}","proc":"{self.proc}","pid":{os.getpid()},'
                 f'"stage":"{stage}","ev":"{ev}","hot":false{"".join(parts)}}}\n')
         try:
             with open(self.timeline, "a") as f:
@@ -317,10 +339,8 @@ class Row:
         self.signalled = name
         for pid in list(self._running):
             self.log(f"SIG{name} received: forwarding to the running stage (timeout pid {pid} -> its process group)")
-            try:
+            with contextlib.suppress(OSError):
                 os.kill(pid, signum)
-            except OSError:
-                pass
 
     def run_to(self, to: int | str, lf: str, cmd: list[str]) -> int:
         """Run one stage command under ``timeout TO`` with its output in ``lf`` (first line: ``$ <command>``) -> rc."""
@@ -420,7 +440,9 @@ class Row:
             r = subprocess.run(self.cli("launch-context", self.wl, str(lp), str(t), *([str(C)] if C else [])), stdout=subprocess.PIPE,
                                stderr=f, text=True, cwd=self.tree, env=self.child_env)
         if r.returncode != 0:
-            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {open(err, errors='replace').read().replace(chr(10), ' ')[-300:]}")
+            with open(err, errors="replace") as f:
+                said = f.read().replace(chr(10), " ")[-300:]
+            self.log(f"Build FAIL shape {name}: launch_context rc={r.returncode} -- {said}")
             return None
         os.remove(err)
         lc = r.stdout.rstrip("\n")

@@ -7,7 +7,11 @@ weight, stay its own). So no peer Input is left, and the node reads only its pro
 
 from __future__ import annotations
 
+import gzip
+import json
+
 import pytest
+from verity.circuits.codec import canonical_json
 from verity.circuits.program import RUN, input_id, is_input, is_registered
 
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
@@ -115,6 +119,23 @@ def test_a_world_of_one_has_no_node_program():
     from verity_vllm.program.predict.common import Unexpressible
     with pytest.raises(Unexpressible, match="φ's world is 1"):
         build_node_program(_phi(TINY), "step")
+
+
+def test_the_node_command_writes_the_descriptor_and_prints_the_summary(tmp_path, monkeypatch, capsys):
+    """`predict node` (`verity_vllm.program.predict.cli`) writes the node Program's descriptor and, in `node.json`, its summary, θ
+    and spans; the summary is the last line on its stderr."""
+    pytest.importorskip("torch")  # `predict.cli` loads `predict.compiled`, which imports torch; this file is collected without it
+    from verity_vllm.program.predict import cli as CLI
+    phi = _phi(TINY, tp={"world": 2, "rank": 0})
+    monkeypatch.setattr(CLI.A, "phi_at", lambda row, rank, config: phi)
+    assert CLI.node_main(CLI.NodeOptions(row="row", config="config.json", wrapper="step", out=str(out := tmp_path / "node"))) == 0
+    node = build_node_program(phi, "step", M=1, pos0=8)
+    assert gzip.decompress((out / "node_descriptor.json.gz").read_bytes()) == canonical_json(node.desc)
+    doc = json.loads((out / "node.json").read_text())
+    timings = doc.pop("timings")
+    assert doc == {"schema": "verity-predict/node/v1", "row": "row", "context_digest": phi.digest(),
+                   **{k: v for k, v in node.summary().items() if k != "timings"}, "theta": list(node.theta), "spans": [list(s) for s in node.spans]}
+    assert json.loads(capsys.readouterr().err.splitlines()[-1]) == {**node.summary(), "timings": timings}
 
 
 def _first_layers(phi: Phi, n: int) -> Phi:

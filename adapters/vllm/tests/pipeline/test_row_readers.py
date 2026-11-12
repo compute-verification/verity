@@ -5,10 +5,18 @@ the Match and Build records' fields
 the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
+(`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
+log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
+record of a row that
+ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's window and its command, which report a file's
+last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
-(`verity_vllm.pipeline.epoch`: `main` for `digests`).
+(`verity_vllm.pipeline.epoch`: `main` for `digests`).  The last tests are of a field its document may leave out, null or empty:
+a TP Build's rank blocks, a Commit's decision document, a job's inputs (`research_outputs`), a run's source identity
+(`verity_vllm.pipeline.research_result.build_result`), the replay bundles a Commit's verdict names
+(`verity_vllm.pipeline.row_config`: `commit_verdict`, `replay`), and what `verity_vllm.pipeline.epoch` reads of a run's status, a
+row file, a manifest, a Build's summary and a verdict.
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -24,16 +32,23 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.pipeline.config_record as CR
 import verity_vllm.pipeline.epoch as EP
 import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
 import verity_vllm.pipeline.research_outputs as RO
+import verity_vllm.pipeline.research_result as RES
 import verity_vllm.pipeline.row_build as RB
+import verity_vllm.pipeline.row_config as RCFG
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
+from tests.check.test_verdict import _base, _row_dir
 from tests.pipeline.test_row import STAGE_START, _summary_row
+from verity_vllm.check.gates import GateResult
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -231,6 +246,34 @@ def test_the_card_names_each_stage_that_is_not_ok():
     assert "stages not ok" not in card({"build": {"status": "ok"}, "commit": {}})
 
 
+def test_the_card_reads_each_gates_detail_under_that_gates_id(tmp_path):
+    """The ambiguous count is G2's, tier a and the quarantine are G4's, and the sample is G5's: a detail under another id is not read."""
+    sample = {"status": "pass", "k": 2, "strata": 4, "seed": 9}
+    detail: dict[str, dict[str, Any]] = {"G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample}}
+    other = {"ambiguous": 99, "k": 99, "quarantine": {"specs": 99}, "sample": {"status": "fail"}}
+    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="pass", detail=detail.get(g, other))
+                                      for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8")])
+    assert card.counts["ambiguous"] == 7 and card.counts["sampled_vus"] == "k=2 x 4 strata, seed 9 PASS"
+    assert (card.replay["tier_a"]["k"], card.replay["quarantine"], card.replay["sample"]) == (3, {"specs": 1}, sample)
+
+
+def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_code(tmp_path, capsys):
+    """The row driver's Commit stage reads the first word of the one line `verdict from-record` prints.  Evidence that passes
+    under a Commit that exited nonzero is not a PASS, and without `--out` the record goes beside the row."""
+    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    for rc, outcome in (("0", "PASS"), ("1", "INSUFFICIENT_EVIDENCE")):
+        out = tmp_path / f"rc{rc}.json"
+        assert cli.main(["verdict", "from-record", str(d), "--rc", rc, "--out", str(out)]) == 0
+        said = capsys.readouterr().out.splitlines()
+        assert len(said) == 1 and said[0].startswith(f"{outcome} {out} [") and json.loads(out.read_text())["outcome"] == outcome
+    assert cli.main(["verdict", "from-record", str(d)]) == 0 and capsys.readouterr().out.startswith(f"PASS {d / 'verdict.json'} [")
+
+
+def test_the_config_record_of_a_row_that_ran_nothing_fails_at_its_build(tmp_path):
+    rec = CR.record(tmp_path, "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager")
+    assert (rec["schema"], rec["outcome"], rec["why"]) == ("verity-vllm/config-record/v1", "FAIL", "build FAIL")
+
+
 def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
     several = [{"prompt_len": 8, "max_tokens": 3}, {"prompt_len": 5, "max_tokens": 2}]
     varies = {"engine": {"target": {"batch_invariant": False}}}
@@ -238,6 +281,10 @@ def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it
     assert LC.batch_dispatch_of(_put(tmp_path / "several.json", {**varies, "requests": several})) is True
     assert LC.batch_dispatch_of(_put(tmp_path / "one.json", {**varies, "requests": several[:1]})) is False
     assert LC.batch_dispatch_of(_put(tmp_path / "invariant.json", {"requests": several})) is False
+    engines: list[dict[str, Any] | None] = [None, {}, {"target": None}, {"target": {}}, {"target": {"batch_invariant": None}},
+                                            {"target": {"batch_invariant": True}}]
+    for engine in engines:
+        assert LC.batch_dispatch({"engine": engine, "requests": several}) is False, engine
 
 
 def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes():
@@ -255,7 +302,7 @@ def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes
 def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
     start = {"t": 10.0, "proc": "row", "pid": 1, "stage": "build", "ev": "start"}
     rep = TL.report([start, {**start, "t": 12.5, "ev": "end"}])
-    assert (rep["events"], rep["spans"], rep["elapsed_s"]) == (2, 1, 2.5)
+    assert (rep["schema"], rep["events"], rep["spans"], rep["elapsed_s"]) == ("verity-sweep/timeline/v1/report", 2, 1, 2.5)
     assert (rep["t_first_utc"], rep["t_last_utc"]) == ("1970-01-01T00:00:10Z", "1970-01-01T00:00:12Z")
     for events in ([], [{"proc": "row", "pid": 1, "stage": "build", "ev": "mark"}]):
         rep = TL.report(events)
@@ -390,3 +437,197 @@ def test_the_digests_command_writes_each_rows_digests_and_their_table(tmp_path, 
     (d / "manifest.json").unlink()
     assert EP.main(EP.DigestsOptions(row_dirs=[str(d)], out=str(out))) == 1
     assert json.loads(out.read_text())["rows"][0]["programs"] == whole["programs"] and not capsys.readouterr().err
+
+
+def test_a_tp_builds_digests_read_a_summary_whose_rank_blocks_are_not_all_there(tmp_path):
+    """A rank whose block, or whose `workload`, is absent, null or empty has no workload digest, and then the row has no digest of
+    record.  Rank 0's `build_step` may be left out the same way, and then there is no step digest."""
+    row = "llama32-1b__bf16__l40s__tp2__b8__i256__o32__mixed__greedy__bi-eager"
+    whole = {"build_step": {"program_digest": "s" * 64}, "workload": {"workload_digest": "w" * 64}}
+
+    def digests(ranks: dict[str, Any]) -> dict[str, Any]:
+        _put(tmp_path / "build_summary.json", {"tp": {"world": 2}, "ranks": ranks})
+        return RO.program_digest(tmp_path, row)
+    of_record = digests({"rank0": whole, "rank1": whole})
+    assert of_record["program_digest"] and (of_record["step_digest"], of_record["rank_workload_digests"]) == ("s" * 64, ["w" * 64] * 2)
+    left_out: list[dict[str, Any]] = [{}, {"rank1": None}, {"rank1": {}}, {"rank1": {"workload": None}}, {"rank1": {"workload": {}}}]
+    for rank1 in left_out:
+        got = digests({"rank0": whole, **rank1})
+        assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, "s" * 64, ["w" * 64, None]), rank1
+    left_out = [{}, {"build_step": None}, {"build_step": {}}]
+    for step in left_out:
+        got = digests({"rank0": {"workload": whole["workload"], **step}, "rank1": whole})
+        assert (got["program_digest"], got["step_digest"]) == (of_record["program_digest"], None), step
+    left_out = [{}, {"rank0": None}]
+    for rank0 in left_out:
+        got = digests({"rank1": whole, **rank0})
+        assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, None, [None, "w" * 64]), rank0
+
+
+def test_a_commits_verdict_entry_reads_a_decision_document_without_its_replay_or_its_runs(tmp_path):
+    """A config record's `replay` and a verdict's `runs` may be absent, null or empty: the entry then states no replay and no runs."""
+    row, run = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", tmp_path / "run"
+
+    def meta(d: Path, stages: str, rel: str, doc: dict[str, Any]) -> dict[str, Any]:
+        _put(d / "stages.txt", stages)
+        _put(d / rel, doc)
+        return RO.build_outputs(d, row, "commit", run, {})["outputs"][0]["meta"]
+    config, verdict = "config PASS 2026-09-23T00:00:00Z\ncommit PASS 2026-09-23T00:00:01Z rc=0\n", "commit PASS 2026-09-23T00:00:00Z rc=0\n"
+    left_out: list[dict[str, Any]] = [{}, {"replay": None}, {"replay": {}}]
+    for replay in left_out:
+        got = meta(tmp_path / "config", config, "config_record.json", {"outcome": "PASS", "why": "w", **replay})
+        assert (got["outcome"], got["why"], got["replay_equal"], got["replay_k"]) == ("PASS", "w", None, None), replay
+    got = meta(tmp_path / "config", config, "config_record.json", {"outcome": "PASS", "replay": {"equal": True, "k": 64}})
+    assert (got["decision_record"], got["replay_equal"], got["replay_k"]) == ("config_record.json", True, 64)
+    left_out = [{}, {"runs": None}, {"runs": {}}]
+    for runs in left_out:
+        got = meta(tmp_path / "tp1", verdict, "verdict.json", {"outcome": "PASS", **runs})
+        assert (got["outcome"], got["n_runs"], got["runs_failed"]) == ("PASS", None, None), runs
+    got = meta(tmp_path / "tp1", verdict, "verdict.json", {"outcome": "PASS", "runs": {"instrumented": 1, "control": 1, "failed": 0}})
+    assert (got["decision_record"], got["n_runs"], got["runs_failed"]) == ("verdict.json", 2, 0)
+
+
+def test_a_jobs_inputs_are_the_artifacts_its_store_names(tmp_path):
+    """A job.json that is absent or no document, or whose `store` or its `inputs` is absent, null or empty, names no input."""
+    assert RO.inputs_from_job(tmp_path) == {}
+    left_out: list[Any] = [{}, {"store": None}, {"store": {}}, {"store": {"inputs": None}}, {"store": {"inputs": {}}}, ["not a job"], "{"]
+    for job in left_out:
+        _put(tmp_path / "job.json", job)
+        assert RO.inputs_from_job(tmp_path) == {}, job
+    _put(tmp_path / "job.json", {"store": {"inputs": {"build": "art:" + "1" * 64, "weights": "/a/path", "n": 3}}})
+    assert RO.inputs_from_job(tmp_path) == {"build": "art:" + "1" * 64}
+
+
+def test_a_results_tree_is_the_first_one_its_source_identity_states(tmp_path):
+    """The tree of a run's result is the first `git_sha` its `source_identity.json` states.  One whose `identities` is absent, null or
+    empty states no tree, and one that does not parse is said to be unreadable."""
+    def fingerprint(doc: Any) -> dict[str, Any]:
+        _put(tmp_path / "source_identity.json", doc)
+        return RES.build_result(tmp_path, "row", "role", ["build"], "r1", None)["workload_fingerprint"]
+    stated = fingerprint({"ok": True, "requested_sha": "ab", "identities": {"a": "not a dict", "b": {"git_sha": ""}, "c": {"git_sha": "cd"}}})
+    assert (stated["tree_sha"], stated["source_identity"]) == ("cd", {"ok": True, "requested_sha": "ab"})
+    left_out: list[dict[str, Any]] = [{}, {"identities": None}, {"identities": {}}, {"identities": {"a": {"path": "/p"}}}]
+    for identities in left_out:
+        got = fingerprint({"ok": True, **identities})
+        assert (got["tree_sha"], got["source_identity"]) == (None, {"ok": True}), identities
+    assert fingerprint("{")["source_identity"] == "unreadable"
+
+
+@pytest.mark.parametrize("verdict", [None, {}, {"replay_deferred": None}, {"replay_deferred": {}}, {"replay_deferred": {"bundles": None}},
+                                     {"replay_deferred": {"bundles": []}}])
+def test_a_commit_verdict_that_names_no_replay_bundle_is_not_pending_and_leaves_nothing_to_replay(tmp_path, verdict):
+    """`commit/verdict.json`, its `replay_deferred` or the `bundles` under it may be absent, null or empty, and each reads as no bundle:
+    a Commit that decided nothing is then a FAIL, not PENDING, and the replay stage refuses by the count."""
+    said: list[tuple[Any, ...]] = []
+    row = SimpleNamespace(d=str(tmp_path), config_run=True, ck="", verdict=lambda *a: said.append(a), tl=lambda *a: None, log=lambda *a: None)
+    _put(tmp_path / "commit" / "summary.json", {"commit_pass": None})
+    if verdict is not None:
+        _put(tmp_path / "commit" / "verdict.json", verdict)
+    with pytest.raises(Stop) as stop:
+        RCFG.commit_verdict(row, 0, 60)
+    assert stop.value.rc == 12 and said[-1][:2] == ("commit", "FAIL")
+    with pytest.raises(Stop):
+        RCFG.replay(row)
+    assert said[-1][:2] == ("replay", "FAIL") and "0 replay bundles named in commit/verdict.json" in said[-1][2]
+
+
+def test_a_runs_end_and_a_rows_tp_world_read_a_status_and_a_row_file_without_their_optional_blocks(tmp_path, monkeypatch):
+    """A status.json whose `transitions` is absent, null or empty, or holds no running one, has no end.  A row file states its TP world
+    under `sweep`; one whose `sweep` is absent, null or empty states it as `tp`, else in its id, else it is 1."""
+    left_out: list[dict[str, Any]] = [{}, {"transitions": None}, {"transitions": []}, {"transitions": [{"state": "queued"}]}]
+    for status in left_out:
+        _put(tmp_path / "run" / "status.json", status)
+        assert EP.run_end(tmp_path / "run") is None, status
+    _put(tmp_path / "run" / "status.json", {"transitions": [{"state": "running", "started_utc": "2026-09-29T00:00:00Z", "timeout_s": 60}]})
+    assert EP.run_end(tmp_path / "run") == 1790640000 + 60
+    role = json.loads(CHECKPOINTS.read_text())["checkpoints"][0]["role"]
+    monkeypatch.setenv("VERITY_WORKLOADS", str(tmp_path / "rows"))
+
+    def world(row: str, doc: dict[str, Any]) -> int:
+        _put(tmp_path / "rows" / f"{row}.json", {"case": role, **doc})
+        return EP.resolve(row)[3]
+    assert world("a-row-outside__tp2__the-tree", {"sweep": {"tp": 4}, "tp": 3}) == 4
+    left_out = [{}, {"sweep": None}, {"sweep": {}}, {"sweep": {"batch": 8}}, {"sweep": {"tp": None}}]
+    for sweep in left_out:
+        assert world("a-row-outside__tp2__the-tree", {"tp": 3, **sweep}) == 3, sweep
+        assert world("a-row-outside__tp2__the-tree", sweep) == 2, sweep
+        assert world("a-row-outside-the-tree", sweep) == 1, sweep
+
+
+def test_the_word_check_and_the_row_state_read_a_manifest_without_its_query_and_a_row_file_without_its_batch(tmp_path, monkeypatch):
+    """A manifest whose `query` is absent, null or empty requires no family, is not the query of record and names no partition.  The
+    word check wants one Q_word line a component: the row's `sweep.batch` times the world, else its count of `requests`, else one."""
+    monkeypatch.setenv("VERITY_WORKLOADS", str(tmp_path / "rows"))
+    d = tmp_path / "row"
+    line = "Q_word_v1{X=16,W=32,R=no-recompute}: 10 calls -> 20 units over 30 gates\n"
+    _put(d / "manifest.log", line * 3)
+    assert EP.row_state(d, None) == ([], None, None)
+    left_out: list[dict[str, Any]] = [{"manifest_digest": "m"}, {"query": None}, {"query": {}}, {"query": {"required_families": None}},
+                                      {"query": {"required_families": []}}]
+    for man in left_out:
+        _put(d / "manifest.json", man)
+        assert EP.row_state(d, None)[0] == [], man
+        got = EP.word_check("a-row-outside-the-tree", d, 1, "", "", "")
+        assert (got["query_id"], got["partition"], got["ok"], len(got["problems"])) == (None, False, False, 2), man
+        assert f"manifest query None is not the query of record {got['query_of_record']}" in got["problems"], man
+        assert "the manifest names no partition (query.partition)" in got["problems"], man
+    of_record = EP.word_check("a-row-outside-the-tree", d, 1, "", "", "")["query_of_record"]
+    _put(d / "manifest.json", {"query": {"query_id": of_record, "partition": {"object": "p", "digest": "pd"}, "required_families": ("f1", "f2")}})
+    assert EP.row_state(d, None)[0] == ["f1", "f2"]
+
+    def components(doc: dict[str, Any], world: int = 1) -> tuple[int, bool]:
+        _put(tmp_path / "rows" / "a-row-outside-the-tree.json", doc)
+        got = EP.word_check("a-row-outside-the-tree", d, world, "", "", "")
+        return got["components"], got["ok"]
+    three = [{"prompt_len": 4, "max_tokens": 2}] * 3
+    assert components({"sweep": {"batch": 2}, "requests": three}) == (2, True) and components({"sweep": {"batch": 2}}, 2) == (4, False)
+    left_out = [{}, {"sweep": None}, {"sweep": {}}, {"sweep": {"tp": 2}}, {"sweep": {"batch": None}}]
+    for sweep in left_out:
+        assert components({"requests": three, **sweep}) == (3, True), sweep
+        none: list[dict[str, Any]] = [{}, {"requests": None}, {"requests": []}]
+        for requests in none:
+            assert components({**sweep, **requests}) == (1, True), (sweep, requests)
+
+
+def test_a_rows_digests_read_a_build_a_manifest_and_a_verdict_with_blocks_left_out(tmp_path):
+    """A Build summary's `ranks` that is null is a TP1 summary and one that is empty has no rank; a rank's step digest is its `step`'s,
+    else its `build_step`'s, and a block that is absent, null or empty has no digest.  A partition's `by_component` or `by_rank`, a
+    verdict's `run_roots` and a manifest's `query` may each be absent, null or empty; the table's cells for a row with no rank 0 are dashes."""
+    d = tmp_path / "row"
+
+    def programs(summary: dict[str, Any]) -> dict[str, Any]:
+        _put(d / "build_summary.json", summary)
+        return EP.build_programs(d)
+    none: dict[str, Any] = {"step": None, "workload": None, "requests": {}}
+    assert programs({"ranks": None, "step": {"program_digest": "s"}}) == {"0": {**none, "step": "s"}} and programs({"ranks": {}}) == {}
+    left_out: list[dict[str, Any]] = [{"x": 1}, {"step": None, "build_step": None, "workload": None}, {"step": {}, "build_step": {}, "workload": {}}]
+    for rank in left_out:
+        assert programs({"ranks": {"rank0": rank}}) == {"0": none}, rank
+    assert programs({"ranks": {"rank0": {"step": {}, "build_step": {"program_digest": "b"}, "workload": {"workload_digest": "w"}}}}) == {
+        "0": {"step": "b", "workload": "w", "requests": {}}}
+    _put(d / "build_summary.json", {})
+    left_out = [{}, {"query": None}, {"query": {}}, {"query": {"partition": None}}, {"query": {"partition": {}}},
+                {"query": {"partition": {"by_component": None, "by_rank": {}}}}]
+    for man in left_out:
+        _put(d / "manifest.json", man)
+        got = EP.row_digests(d)
+        assert (got["query_id"], got["partition_digests"], got["programs"]) == (None, [], {}), man
+        assert EP.store_meta(d, kind="build", role="R", rownum=1, run_id="r", epoch_sha="x", gpu="", pod="", epoch="e")["query_id"] is None, man
+    part = {"by_component": {"c": {"object": "p", "digest": "pc"}}, "by_rank": {"0": {"by_component": {"c": {"object": "p", "digest": "pa"}}}}}
+    _put(d / "manifest.json", {"query": {"query_id": "q", "partition": part}})
+    assert (EP.row_digests(d)["query_id"], EP.row_digests(d)["partition_digests"]) == ("q", ["pa", "pc"])
+    assert EP.store_meta(d, kind="build", role="R", rownum=1, run_id="r", epoch_sha="x", gpu="", pod="", epoch="e")["query_id"] == "q"
+    left_out = [{"outcome": "PASS"}, {"outcome": "PASS", "run_roots": None}, {"outcome": "PASS", "run_roots": []}]
+    for verdict in left_out:
+        _put(d / "verdict.json", verdict)
+        assert (EP.row_digests(d)["run_roots"], EP.row_digests(d)["verdict"]) == ([], "PASS"), verdict
+    _put(d / "verdict.json", {"run_roots": ("r1", "r2")})
+    assert EP.row_digests(d)["run_roots"] == ["r1", "r2"]
+    row: dict[str, Any] = {"row": "a", "verdict": None, "manifest_digest": None, "partition_digests": [], "run_roots": []}
+    dashes = "| a | - | - | - | 0 | - | 0 | - |"
+    left_out = [{}, {"0": None}, {"0": {}}, {"0": {"step": None, "workload": None, "requests": None}}, {"0": {"requests": {}}}]
+    for rank0 in left_out:
+        assert EP.digests_markdown([{**row, "programs": rank0}]).splitlines()[2] == dashes, rank0
+    assert EP.digests_markdown([{**row, "programs": {"0": {"step": "s", "workload": "w", "requests": {"request": "p", "build_request_LP8": "q"}}}}]
+                               ).splitlines()[2] == "| a | - | s | w | 2 | - | 0 | - |"
+

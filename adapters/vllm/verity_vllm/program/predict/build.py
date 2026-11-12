@@ -38,7 +38,9 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+from verity.definitions.replay import replayer
 
+from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
@@ -64,6 +66,8 @@ from .common import (
 from .domain import check_phi
 from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
+
+__all__ = ["Unexpressible", "build_program"]
 
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
@@ -445,12 +449,13 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
-    ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
+    family = str(phi.hf_config.get("model_type", "")).lower()
+    entry = FAMILY_FACTS.get(family)
+    arch = entry.get("arch") if entry else None    # a family the table lacks, or one with no constructor, is `model_shape`'s to refuse
     Net: type[Any]
-    if ff.get("arch") == "dsa-moe":
+    if arch == "dsa-moe":
         from .dsa import Net
-    elif ff.get("arch") == "mhc-moe":
+    elif arch == "mhc-moe":
         from .dsv4 import Net
     else:
         Net = _Decoder
@@ -574,8 +579,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched, model.table_reads = True, table_reads
-    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
+    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, decode_steps, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
     if C:
@@ -604,7 +609,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
                                                                   **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
-    from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)

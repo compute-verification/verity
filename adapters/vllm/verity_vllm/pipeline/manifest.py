@@ -51,8 +51,7 @@ from verity_vllm.query.required import (
     request_manifest,
 )
 
-__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
-           "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["COMMANDS", "build", "build_global", "cpus", "incomplete_rc", "main", "taps_of"]
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
@@ -121,9 +120,8 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
     """The Program's digest (`verity.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither.  A Build recorded before the SHA-512 re-baseline
     (ad58900df) names its Program by SHA-256 under `digest` and by today's digest under `sha512`; its `digest` is not read."""
-    prog = res.get("program") or {}
-    s = prog.get("sha512") or (prog.get("digest") if re.fullmatch(r"[0-9a-f]{128}", str(prog.get("digest"))) else None)
-    if s:
+    prog = res.get("program")   # the Build's record of its Program; a Build that wrote none is read from its descriptor
+    if prog and (s := prog.get("sha512") or (prog.get("digest") if re.fullmatch(r"[0-9a-f]{128}", str(prog.get("digest"))) else None)):
         return s
     p = os.path.join(program_dir, "descriptor.json.gz")
     if not os.path.exists(p):
@@ -606,10 +604,16 @@ def incomplete_rc(man: dict[str, Any]) -> int:
     an incomplete manifest, so the row's Build fails here instead of passing with it."""
     if man.get("complete") is not False:
         return 0
-    um = man.get("unmodelled") or {}
-    print(f"manifest INCOMPLETE: {len(um)} unmodelled key(s), first {sorted(um)[:3]}; tp_peer_binding n_unbound "
-          f"{(man.get('tp_peer_binding') or {}).get('n_unbound')}", file=sys.stderr)
+    um = man.get("unmodelled")   # the keys no rule models, each with its count; an incomplete manifest may state none
+    print(f"manifest INCOMPLETE: {len(um) if um else 0} unmodelled key(s), first {sorted(um)[:3] if um else []}; tp_peer_binding n_unbound "
+          f"{_unbound_peers(man)}", file=sys.stderr)
     return 4
+
+
+def _unbound_peers(man: dict[str, Any]) -> int | None:
+    """How many peer values a manifest leaves unbound (`tp_peer_binding.n_unbound`); None where it states no peer binding."""
+    binding = man.get("tp_peer_binding")
+    return binding.get("n_unbound") if binding else None
 
 
 COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
@@ -619,7 +623,7 @@ def main(a: Any) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     if a.cmd in ("build", "build-global"):
         # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+        from verity_vllm.gc_tuning import tune as _gc_tune
         _gc_tune()
         word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":
@@ -640,6 +644,6 @@ def main(a: Any) -> int:
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
-                          "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
+                          "tp_peer_binding_n_unbound": _unbound_peers(man), "out": a.out}))
         return incomplete_rc(man)
     return 2

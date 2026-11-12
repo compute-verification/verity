@@ -1,11 +1,11 @@
 # verity_vllm.program.frontend
 
 The Torch-to-circuit translator: a traced torch model becomes a Program in which every Call names a registered
-Definition. `derive` exports the model and walks its graph, `rules/` holds the rules the walk applies, `targets` and
-`gemm_targets` bind a rule to the kernels of the served hardware, `target_profile` is the target a Program is derived
-for, and `emit` writes a finished derivation's runtime correspondence. `train_step` derives one training step as a
-Program, and the package's `__init__` re-exports the authoring frontend (`torch_frontend`), in which a Program is
-written by hand. Each module's docstring says what it holds.
+Definition. `derive` exports the model and walks its graph (the walk's state is `derive_context`), `rules/` holds the
+rules the walk applies, `targets` and `gemm_targets` bind a rule to the kernels of the served hardware, `target_profile`
+is the target a Program is derived for, and `emit` writes a finished derivation's runtime correspondence. `train_step`
+derives one training step as a Program, and the package's `__init__` re-exports the authoring frontend
+(`torch_frontend`), in which a Program is written by hand. Each module's docstring says what it holds.
 
 ## What other packages import
 

@@ -19,11 +19,7 @@ from __future__ import annotations
 import hashlib
 import os
 
-from verity.circuits.codec import descriptor_id
-
-from verity_vllm.pipeline import global_program as GP
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program import workload as W
 
 from .. import resolver
 
@@ -95,6 +91,11 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
+    # numpy and the core `verity` load with these three, which only a recomputation needs: the module itself loads neither
+    from verity.circuits.codec import descriptor_id
+
+    from verity_vllm.pipeline import global_program as GP
+    from verity_vllm.program import workload as W
 
     # the registry set build_workload decodes components with
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
