@@ -106349,3 +106349,41 @@ Nothing after them looks at the kind again. The refusal of my 22:15Z entry is on
 - For soundness, who asked which draw Friday's run uses: "Two-round: the first stage is `rate:2/8`, resolved to `subset:2` over 8 replay blocks (`Run.lean:262`); the second stage is `work`, k = 1 per cell (`Select.secondLaw`). One-statement: the driver samples by a rate, so `subset:K`; the exception is a run under the tie to the weights' window, which sets `stratified:1`."
 - For the workers of B8, B9 and B10: "`SpotFlock.two` reads the first stage's rule with `lawOver`, which throws on a rate text. Hand the model the rule after `Rule.over`, or `two` is none at every stream."
 - For the holder of `OneStageZk.lean`: "the refusal goes at the end of `paramsOfJson`; of the first accept's two cases it keeps `subset:1` and refuses `stratified:1`".
+
+## COINMAP, Thu 12 Nov 22:40Z: started on the coin map (TWOLEG's piece B); the law's second clause looks unprovable as stated, because a strategy that closes the device at once leaves no release to read
+
+**In plain words.** I build the map that writes the two-stage verifier's coins into the period's play, at the places where the auditor's challenger device releases them, and prove that the play read this way has the right probability law (`CoinMapLaw` in `SampledTwo/Projection.lean`). I have read the brief and the statement. One early finding for TWOLEG: the law's second clause asks that, at every tape and every run's coins, the device's log holds a release equal to the run's coin for every round the verifier reads. A strategy that closes the device before any frame has an empty log whatever the coins are, so no reading of the log can equal every possible coin. I will give the smallest change with the counterexample written out in my next entry, and work with the changed text as a hypothesis meanwhile.
+
+Clock: `date -u` read 22:39Z. Agent id `bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a`; mailbox `inbox/bc-3253d1a3-1eb4-56a8-9297-080d9d938c5a.md` does not exist yet (read 22:37Z) [run].
+
+**Branch** `cursor/proofs-coinmap-8b0c`, made from `origin/cursor/proofs-twoleg-c5e5` at `f26b181cfd` (the base has moved one commit past the brief's `08e3d2b2d7`: TWOLEG's form `VStarRecursive/SampledTwo.lean`, which my piece does not read) [run]. Pushed, equal to the base for now. Composite: the base's (before lean's merge), so `Vocab` has no `macs` field yet.
+
+**Plan, in five lines.**
+1. Write `SampledTwo/CoinMap.lean` with `Frame.place`, `Reading.dev` and `coinMapLaw` as signatures that elaborate, and launch a try, by 00:30Z Fri.
+2. Settle the stopping-order question on paper in my second entry (first reading below).
+3. Build `place` on the game's tape tree, `Verity.Game.Tape`: it walks the play and, at each release node of a read round, puts the run's coin in the node's value.
+4. Prove the first clause (the law) by the tape's per-node uniformity at the fresh-coin nodes, and by the one-stage leg's opening gap (`Sampled/OpenGap.lean`, `CoinMap.lean`'s `shortfall`) at tree openings, by import.
+5. Prove the second clause in the changed form, then size what is left in my third entry.
+
+**First reading on the stopping order** [derived, from `Definitions/Core/Game/Tape.lean` and `releases` in `Properties/Verity/Game.lean`]. The tape is a tree: each coin node's value picks the subtree after it. So the node at which a round is released is always determined by the values before it, which is a stopping order by construction. The question that decides `hide` is therefore not the order but the law at the node:
+- At a family's fresh coin (`Frame.fresh`), the game draws `Fin 512 → Bool` uniformly, so writing coins there costs nothing.
+- At a tree's opening (`Frame.opening`), the game draws from `TreeOpenable`, the rounds whose leaf equals the one the tree's `Hello` committed to. That is not uniform, so `hide` there is the one-stage leg's opening gap plus the empty-class term.
+I check which rounds of the two-stage run are which kind before the second entry.
+
+**A second doubt on the second clause** [guess]. A run's coin is `FlockDeploy.Coin`, 65,536 elements of GF(2^128) (`Proofs/Flock/Claims/Deploy.lean:86`) [read]. A fresh release is 512 bits, and an opening releases the round's first `n` elements, `n` the prover's (`Game.lean`, `releases`) [read]. So a release can equal the run's whole coin only where it carries all of it. If the verifier reads only a prefix, the clause should say "agrees on what the verifier reads"; I check this next.
+
+### STOP RULE
+
+Nothing: one new file, which nothing imports, and no lock.
+
+### NEEDS
+
+None yet; the change to `CoinMapLaw`'s second clause for TWOLEG comes in my next entry, with its counterexample.
+
+### To post
+
+Nothing.
+
+### Not established
+
+Everything: nothing is written or compiled. The stopping-order reading is an argument from the definitions, not a proof, and which rounds are fresh coins and which are openings is not yet read.
