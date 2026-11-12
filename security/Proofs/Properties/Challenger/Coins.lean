@@ -457,28 +457,30 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
         · cases h
         · rename_i v hv
           split at h
-          · rename_i hord
-            cases h
-            refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
-              LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
-              ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
-                ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord⟩
-            intro ⟨doc, i⟩ b r hr
-            simp only at hr
-            split at hr
-            · cases hr
-            · rename_i o ho
+          · split at h
+            · rename_i hord
+              cases h
+              refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
+                LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
+                ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
+                  ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord⟩
+              intro ⟨doc, i⟩ b r hr
+              simp only at hr
               split at hr
               · cases hr
-              · rename_i w hw
+              · rename_i o ho
                 split at hr
                 · cases hr
-                · rename_i hn
-                  cases w with
-                  | some why => exact absurd rfl (hn why)
-                  | none =>
-                    cases hr
-                    exact ⟨o, ⟨ho, hw⟩, rfl⟩
+                · rename_i w hw
+                  split at hr
+                  · cases hr
+                  · rename_i hn
+                    cases w with
+                    | some why => exact absurd rfl (hn why)
+                    | none =>
+                      cases hr
+                      exact ⟨o, ⟨ho, hw⟩, rfl⟩
+            · cases h
           · cases h
       · cases h
     · cases h

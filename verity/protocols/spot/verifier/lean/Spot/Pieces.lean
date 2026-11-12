@@ -616,14 +616,17 @@ private def valuesOf (j : Json) (what : String) : V (Array Service.Value) := do
     | _, _ => throw "a value is not a string name with a boolean"
 
 /-- `{"params", "record", "rule", "values", "public", "challenger", "received", "source", "closure", "sessions",
-"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coins"}` to the
-stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s rule, closure map and
+"verdicts", "outputs", "statement", "delta", "proved_units", "instances", "served", "session_roots", "coins",
+"family"}` to the stream's run of one registration (`Run.run`): `registration`'s parameters, the record, `select`'s
+rule, closure map and
 hex source, `check_public`'s values and declared items, the challenger's name and the log's length at the receipt
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
-with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
-that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
-"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
-same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming each template's
+with the proved units and instances null for the sample's own, the coins' evidence (`coins_reason`'s, which a sample
+that read coins must carry) and the challenger's family the stream read them from (`family`, a string, or null for a
+sample that read none); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
+"record", "received", "source", "coins", "family", "proved_units", "instances", "served", "session_roots",
+"statements"}` in the same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming
+each template's
 circuit file, reference header and registered reads (`Run.templateCircuits`), and no `links` or `wires`, which the
 verifier derives; null otherwise.
 The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
@@ -662,6 +665,12 @@ def run (j : Json) : V Json := do
       | some n => pure (some n)
       | none => throw "instances is not an integer"
   let instances ← instancesOf (getD j "instances")
+  let familyOf (x : Json) (what : String) : V (Option String) := match getD x "family" with
+    | .null => pure none
+    | .str f => pure (some f)
+    | _ => throw s!"{what} family is not a string"
+  let family ← familyOf j "the run's"
+  let interiorFamily ← familyOf (getD j "interior") "an interior's"
   let interior ← match getD j "interior" with
     | .null => pure none
     | it => do
@@ -693,7 +702,8 @@ def run (j : Json) : V Json := do
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
-            served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
+            served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", family,
+            interior := interior.map fun it => { it with family := interiorFamily } }
 
 /-- `second_stage.check`'s input, read: the two-stage form allowed or not (`allow`), the first stage's replay sample,
 the interior program and query, whose strata make the parts, the interior and boundary registrations' records, the
