@@ -710,8 +710,9 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
-LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
+#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
+#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 #: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
@@ -778,8 +779,8 @@ class DriveFlags:
     #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
     lowrisk_lane: bool = True
     lowrisk_per_tick: int = 20
-    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), or a file name glob;
-    #: none, the lane lands nothing
+    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
+    #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
@@ -870,7 +871,8 @@ class DriveFlags:
             if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
                                                          and ".." not in x.split("/") for x in v)):
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "and file name globs, as [\"*.lean\", \"verity/core/\"]")
+                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
+                                              "\"verity/__init__.py\"]")
             got["lowrisk_excludes"] = tuple(v)
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
@@ -1192,18 +1194,25 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
 
 
 def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
-    """Whether a change to ``files`` is low-risk, so drive lands it on its ready mark alone, with no land verdict and no wait in
-    `next` (drive.toml's `lowrisk_lane`, `drive.Driver.land_lowrisk`): no file is under an ``excludes`` entry
-    that ends in `/` (a directory from the repository's root: the verifiers under `verity/core/` and the soundness-path Python
-    in `verity/ml/`) and no file's name matches an entry without one as a glob (`*.lean`, every `lean-audit.json`, the Lake
-    files, `TRUSTED.sha256`).  ``files`` are what the PR's merge onto the landing branch's tip changes against that tip, not
-    its own diff.  No excludes, nothing is low-risk; no file, nothing to land."""
-    dirs, names = [], []
+    """Whether a change to ``files`` is low-risk, so the verified queue's loop takes it on its ready mark alone, with no land
+    verdict (drive.toml's `lowrisk_lane`, `vqueue_loop.World.ready`): no file is under an ``excludes`` entry
+    that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
+    a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
+    it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
+    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    dirs, paths, names = [], set(), []
     for x in excludes:
-        (dirs if x.endswith("/") else names).append(x)
+        if x.endswith("/"):
+            dirs.append(x)
+        elif "/" in x:
+            paths.add(x)
+        else:
+            names.append(x)
     files = list(files)
-    return bool(files and (dirs or names)) and not any(
-        f.startswith(tuple(dirs)) or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names) for f in files)
+    return bool(files and (dirs or paths or names)) and not any(
+        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        for f in files)
 
 
 #: what a row of `research queue review` says of a head the verified queue's loop takes on its ready mark alone (`lands_on_mark`)
