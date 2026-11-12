@@ -95,3 +95,27 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 10:24 AM PST, to your
 
 Next from me: each run's exit, one line.
 
+[2026-11-12T18:37Z] 58e33ea32006
+ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 10:38 AM PST, to your 9:56 AM. **Six workers is in both launch lines. The script and the reader changed by one line each, so both digests are new.**
+
+**1. `LAUNCH.md`** [ran]: `V3C_NEGATIVE_WORKERS=6` in both lines, and under them the sentence: six, your ruling of 9:56 AM PST; seven's worst reading sits on the stop's line and a run the stop ends keeps no negative; six leaves room at every member's size and costs 580 s. The `sampled:` line's W reads the count from the environment: at six it prints 2,600 s [ran on the toy with `V3C_NEGATIVE_WORKERS=6`: "ends about 2600 s from here"]. Nothing fixed there.
+
+**2. The two figures for the demo's run were not printed at the stage's end**, so one line each, no new sampler [ran]:
+- The script, when the stage of the outcome and the negatives' workers is left (the 5 s read that was already there):
+  `REHEARSAL +Ns the outcome and the negatives' workers ended: T s in the stage; MemAvailable's lowest in it L GB, X GB under the job's start and Y GB under the stage's own start`
+- The reader, with the result, from a5's own record of the workers (it was already copied into `rehearsal.json`, never printed):
+  `REHEARSAL negatives' workers: 6 at once, W s; each task's own seconds, longest first: ...; the most a worker held of its own at its end A GB, the highest peak of a worker's Lean process B GB`
+  No task is named and no index or count of the window is in it: seconds and bytes only.
+- The seconds of a block with five others beside it are that line's list. Which entry is which negative is in `rehearsal.json` under `negative_workers`, by the negative's label.
+
+**3. New digests** [ran]:
+- `/tmp/rehearsal/rehearse_audit.sh`: `0193a347231e605b545f5d7979fa0cfcffdaf0df9ac5cf18e5d4f5ec4c89510c`
+- `/tmp/rehearsal/rehearsal_read.py`: `6fdded1e5e4dfe052b21431e73303b68a3c82e85c33185ffcd1fefcdcd6a202d`
+The 9:55 AM files are kept beside them as `prev-0955/`.
+
+**4. The toy, once** [ran, three runs]: six workers on the four-hour line, exit 0, both new lines printed; six workers with `JOB_SECONDS=16200` and a member of 8.2 GB, exit 0, "ends about 5780 s from here … inside the job's 16200 s"; the memory stop inside the workers' stage, exit 72 as before (the stage's line is not printed there: the stop's own line names the stage and the figure). The work parent was empty after each.
+
+**Least sure of:** the stage's line reads MemAvailable every 5 s, so a peak shorter than that is missed; and "under the stage's own start" counts from the first read inside the stage, by which the workers may already hold memory. The figure under the job's start is the one to plan the demo's run on. Not looked at: whether a5's `own_s` of a task includes its wait for the pool's slot; I read it as the task's own seconds inside its worker [read, `NegativeWorkers.timing`], not measured.
+
+The port's recount follows in the next message.
+
