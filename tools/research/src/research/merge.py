@@ -84,6 +84,7 @@ and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends i
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -98,7 +99,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .gates import FINDING, OK, REFUSED, git_env, refuse
+from .gates import FINDING, OK, REFUSED, git_env, refuse, worktrees_shared
 
 PROG = "research merge"
 
@@ -108,9 +109,12 @@ class Refused(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True, lazy: bool = True) -> subprocess.CompletedProcess:
-    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`)."""
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape",
-                       env=git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1"))
+    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`).  A
+    fetch holds the clone's worktree lock shared (`worktrees_shared`), as the queue's do: the queue's clone, where drive's
+    steps after a landing fetch, has its worktrees added beside them."""
+    env = git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1")
+    with worktrees_shared(repo, env) if args[:1] == ("fetch",) else contextlib.nullcontext():
+        r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=env)
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
@@ -1719,15 +1723,22 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
     (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
     under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
-    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
+    volume, where each worktree add and remove takes minutes.  It is added under `queue.worktrees_locked`, as the queue adds
+    its own in that clone.  None when ``repo`` can't make one."""
     import shutil
 
+    from .queue import QueueError, worktrees_locked
     from .settings import train_trees
 
     if root := train_trees():
         os.makedirs(root, exist_ok=True)
     tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
-    if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
+    try:
+        with worktrees_locked(repo):
+            added = _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode == 0
+    except QueueError:                      # no repository: its git directory, where the locks are, can't be read
+        added = False
+    if not added:
         shutil.rmtree(tree, ignore_errors=True)
         return None
     return tree

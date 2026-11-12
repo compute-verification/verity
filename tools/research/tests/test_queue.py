@@ -852,32 +852,46 @@ def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(wo
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def test_a_moves_regeneration_adds_and_removes_its_worktree_under_the_clones_worktree_lock(world, monkeypatch):
-    """train.sh's launches add and prune worktrees of the same clone under its lock (`worktrees_locked`): a regeneration that
-    didn't take it could prune a launch's worktree half made, and that shard then registers no run."""
+def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool]]:
+    """Whether train.lock is held, and whether the worktree lock is held so that a fetch's shared hold would wait, in ``repo``'s
+    git directory, asked from a file of their own as another process would."""
     import fcntl
 
+    common = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+
+    def held(name: str, op: int) -> bool:
+        with open(common / name, "a") as f:
+            try:
+                fcntl.flock(f, op | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return False
+
+    return lambda: (held("train.lock", fcntl.LOCK_EX), held(Q.WORKTREES_LOCK, fcntl.LOCK_SH))
+
+
+def test_a_moves_regeneration_adds_and_removes_its_worktree_under_train_lock_and_the_worktree_lock(world, monkeypatch):
+    """train.sh's launches add and prune worktrees of the same clone under train.lock, and two at once fail ("Could not write
+    new index file"); and a fetch there, which holds the worktree lock shared, reads every worktree's HEAD, which a worktree
+    half added has as a placeholder (`bad object worktrees/…/HEAD`), so the steps after a landing that fetched beside a
+    regeneration's add lost their fetch.  So each worktree command of a regeneration holds both (`worktrees_locked`)."""
     from research import queue
 
     q, main, pr = _regeneration(world, world.tmp / "ran")
     monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
-    lock = Path(_git(q.workdir, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "train.lock"
-    real, held = queue._git, []
+    locks, real, held = _worktree_locks(q.workdir), queue._git, []
 
     def git(repo, *args, **kw):
         if args[:1] == ("worktree",):
-            with open(lock, "a") as f:
-                try:
-                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    held.append((args[1], False))
-                except BlockingIOError:
-                    held.append((args[1], True))
+            held.append((args[1], *locks()))
         return real(repo, *args, **kw)
 
     monkeypatch.setattr(queue, "_git", git)
     commit, why, _ = q._regenerated(main, pr, main)
     assert commit and why == "", why
-    assert held == [("add", True), ("remove", True), ("prune", True)], held
+    assert held == [("add", True, True), ("remove", True, True), ("prune", True, True)], held
+    assert locks() == (False, False)
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):

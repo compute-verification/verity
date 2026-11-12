@@ -326,7 +326,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
-from .gates import git_env
+from .gates import WORKTREES_LOCK, git_env, worktrees_shared
 from .store import ids, vocab
 
 BRANCH, SHADOW_BRANCH = "next", "queue-shadow"
@@ -447,7 +447,7 @@ def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) ->
     if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
         for k in DATES:
             full.pop(k, None)
-    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+    with worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
         r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
                            errors="surrogateescape", env=full)
     if check and r.returncode:
@@ -461,24 +461,6 @@ def _subcommand(args: tuple[str, ...]) -> str:
     while args[i:i + 1] == ("-c",):
         i += 2
     return args[i] if i < len(args) else ""
-
-
-#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
-#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
-#: reads every worktree's HEAD, holds it shared
-WORKTREES_LOCK = "research-worktrees.lock"
-
-
-@contextlib.contextmanager
-def _worktrees_shared(repo: Path, env: dict[str, str]):
-    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
-                            env=env).stdout.strip()
-    if not common:
-        yield
-        return
-    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_SH)
-        yield
 
 
 def _out(repo: Path, *args: str) -> str:
@@ -2445,8 +2427,8 @@ class Queue:
         are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
         holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
         fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None).  Its
-        worktree is added and removed under the clone's worktree lock (`worktrees_locked`), which train.sh's launches in the
-        same clone hold for theirs: a prune beside a worktree half made deletes it."""
+        worktree is added and removed under `worktrees_locked`: train.sh's launches in the same clone add and prune theirs
+        under train.lock, and a fetch there reads every worktree's HEAD, which a worktree half added has as a placeholder."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
@@ -4717,11 +4699,15 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
 def worktrees_locked(repo: Path):
     """``repo``'s worktrees to this caller alone: train.sh's lock (`<git common dir>/train.lock`), so drive's launches at once
     and train.sh never add, remove or prune a worktree beside another (two at once fail with "Could not write new index
-    file")."""
+    file"), then the worktree lock (`WORKTREES_LOCK`), so no fetch in the clone reads a worktree's placeholder HEAD while it
+    is added (`bad object worktrees/…/HEAD`).  Always in that order: train.lock first, which train.sh takes alone, and
+    `WORKTREES_LOCK` second, which nothing holds while it waits for train.lock."""
     common = Path(_out(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     with open(common / "train.lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
-        yield
+        with open(common / WORKTREES_LOCK, "a") as w:
+            fcntl.flock(w, fcntl.LOCK_EX)
+            yield
 
 
 @contextlib.contextmanager
