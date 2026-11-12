@@ -97674,3 +97674,31 @@ I launched none twice. Ends [guess, each from when its slot comes, which I canno
 For CROSSCLOSE, as at 18:51Z: #9229's head is `7cab9aeb4422`, not `9e075516baff`, so its row is to be read again. I did not touch `cursor/proofs-landing-closes-99d1`.
 
 #9357: answered at 19:12Z (yes to each of the three; its body has its `Lane proofs` line).
+
+## MEMBERS, Thu 12 Nov 19:34Z: PRF-585 is open as #9441, unmarked, at `ce41e7c92e8e`; not a ready line yet: `main` changed 28 files under the two Lean packages it builds on, and the merged head's build is out in `cfeb` and `c3cf` (about 21:40Z). The lever is merged and pushed at `7d4e96a5fa07`, its runs out
+
+Clock: `date -u` read 19:34Z. [run] unless tagged.
+
+**The four runs**
+- `r20261112-110753-e3ca` (PRF-585's suites at `0429a81f9848`): cut by its slot's four-hour limit at 15:09Z, rc 130. 64 of 69 passed, none failed a test; `verity/protocols/flock/prover` was running and four had not started.
+- `r20261112-132105-80e5`: rc 0, 6 of 6 passed: those five (`verity/protocols/flock/prover`, `tools/verity/circuit_check`, `verity/definitions/ops`, `benchmarks/numerical`, `verity/commitments`) and `tools/research` again. **So all 69 passed at `0429a81f9848`.**
+- `r20261112-122425-2767` (the lever's suites at `408e4ab6c75e`, changed against `0429a81f9848`): rc 0, 60 of 60 passed.
+- `r20261112-122420-e765` (the lever's records at `408e4ab6c75e`): rc 0. The spot verifier's package and `security/Proofs` pass; `security` and `security/Properties` regenerated.
+
+**PRF-585: https://github.com/compute-verification/verity/pull/9441** (8 files, +270 −45, no label, `Lane proofs` first in the body, linked to PRF-585).
+- `main` merged once, at `4a90174415b7` (it moved from `0582899c4392` between my two fetches; the 66 commits between change none of the files my 19:20Z entry reads, and the 15 are the same 15). Head `ce41e7c92e8e`, a merge commit on `ebae5323c1`; pushed, no force.
+- **Both merge-trees at that head are clean, exit 0, no file stops**: against `origin/main`, and against #9375's head `origin/cursor/lean-remote-merge-onmain-fc8d` at `e122d8e38121` (it moved from `e209a56847d4` at 19:19Z and now holds `main`). The two sides change six files in common against `main` (`a5.py`, `test_a5_case_v2.py`, `test_difftest.py`, `proofs.py`, and the locks of `security` and `security/Properties`); all six merge. The locks are merged there as text, not by `merge.py`.
+- **Why no ready line yet.** `main` did not change `Spot/OneStageZk.lean` or `Flock/KsScope.lean`, but it changed 28 other files under the spot verifier's Lean package and Flock's verifier (`ProvedScope.lean`, `ProgramRead.lean`, `Witness.lean` among them), and it now holds #8569's proofs, which read these definitions. Nothing has built the merged head. [derived] By reading, #9199's `MembersRefusal.lean` calls `checkBlobs` and cites `checkBlobsAt_accept` and `checkMembersAt_refuses`, whose statements this change keeps; it names nothing else this change touches.
+- Out at `ce41e7c92e8e`, each `--cwd clone`:
+  - `r20261112-192812-cfeb` (vy-nebius-cpu-11): records from Flock's verifier, with its requirers.
+  - `r20261112-192956-c3cf` (vy-nebius-cpu-3): records from the spot verifier's package.
+  - `r20261112-193034-af8d` (vy-nebius-cpu-7): suites `verity/protocols/spot/verifier/lean`, `verity/protocols/spot/verifier`, `benchmarks/one_stage` (#9199's fixture is in it) and `verity/protocols/tests`.
+  - `r20261112-193144-473a` (vy-nebius-cpu-4): the root suite.
+  - Every pool had a line: starts were forecast 25 to 34 minutes out. [guess] Suites end about 21:00Z, records about 21:40Z.
+- When they pass: I commit the regenerated records on the branch, replace the body's two "not yet ended" lines (`research queue edit`), and write the ready line at that head with both merge-trees again. The head moves once more, by that records commit, so please do not mark `ce41e7c92e8e`.
+- Not rerun at the merged head: the other 65 suites. The candidate's check runs them.
+- `research queue open` warned that PRF-585 has no label naming a live goal (its labels: `from:proofs`). The label is yours.
+
+**The lever** (`cursor/proofs-members-oneparse-7b3e`): PRF-585's merged head merged into it, head `7d4e96a5fa07`, pushed. Both merge-trees clean, exit 0 (`origin/main`; `e122d8e38121`). Out: `r20261112-193212-c3b4` (vy-nebius-cpu-1, records from the spot verifier's package) and `r20261112-193250-e820` (vy-nebius-cpu-7, the same three suites and the root suite). I did not commit `e765`'s records: they are of the base before the merge, and `c3b4` regenerates them at this head. Its pull request opens, unmarked, after PRF-585's records commit is merged into it and `c3b4` and `e820` pass; [guess] about 22:00Z.
+
+Waiting on: `cfeb`, `c3cf` (about 21:40Z), `af8d`, `473a`, `e820` (about 21:00Z), `c3b4` (about 21:15Z).
