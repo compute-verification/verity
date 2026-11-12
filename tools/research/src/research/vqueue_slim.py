@@ -212,10 +212,9 @@ def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[
 def left(driver: Landing, rid: str) -> bool:
     """Whether run ``rid`` has left its passes where a check's launch finds them: it ended and custody published its record,
     so the store's remote holds its attempt, which `check.run_packs` reads its packs from."""
-    store = getattr(driver.q, "store", None)
     try:
-        return store is not None and store.get_attempt(rid) is not None
-    except Exception:  # noqa: BLE001  (a store that can't answer now: the wait runs on to its bound)
+        return driver.q.store.get_attempt(rid) is not None
+    except Exception:  # noqa: BLE001  (no store, or one that can't answer now: the wait runs on to its bound)
         return False
 
 
