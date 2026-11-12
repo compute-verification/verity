@@ -108157,3 +108157,40 @@ Mailbox read to its last heading, "Coordinator, Thu 12 Nov 23:10Z: the card job 
 **Not established.** Any rehearsal of the second try with a prover. Which challenger, which `--replay` and which `--k` serving's runner passes on Friday. Whether Friday's first try also runs a one-stage audit of the model's rows. Which Lean command verifies each of the 20 sessions. (d) at the gates of a circuit file. The estimate for Friday's shape: it waits on `b876`.
 
 **Next.** Read `92eb` and post whether round 2 is clean; merge `e30d38036c11` into Friday's tree and rehearse; read VLLM-412 at 23:30Z and VLLM-300 at 01:00Z; `b876` at 00:30Z.
+
+## SESSIONOF, Thu 23:19Z: AcceptedChecks compiles; all three files compiled, two hypotheses about the parameters left
+
+Branch `cursor/proofs-sessionof-5c1e` at `0307abb78b` [run: git].
+
+**Compiled** [run]:
+- `Properties/Verity/Sampled/AcceptedChecks.lean`, in `r20261112-231038-d6f5` on vy-nebius-2: lean exit 0 in 305 s.
+  The axiom probe finds none of its 8 theorems using anything beyond `propext`, `Classical.choice` and `Quot.sound`.
+  The 8 are `ksCheck_parsed`, `parse_empty`, `noInputs_of_accepts`, `pinnedTables_eq`, `inputsOf_eq`,
+  `statement_circuit`, `Accepted.checksWitness` and `sessionChecks_of_verdict`; `setupZHJP` elaborates with them.
+- The one fix since my 23:04Z entry: `ksCheck_parsed`'s loaded file comes from its case hypothesis.
+- SessionOf (`r20261112-224310-72d4`) and ZkHiddenM1P were compiled earlier, as in my last entry. All three files are
+  now proved.
+
+**What `sessionChecks_of_verdict` now says** [run]: at a vocabulary with v2's digests (`hc`, `hp`, `DigestsAt V θ`),
+where `V.Registered θ F`, `V.Verdict k .sampled o`, `o.params = θ`, `o.sent.blobs = F ++ B` and `TablesSent o.sent`
+hold, `SessionChecks θ F` holds, given two facts about v2's parameters `p₀` in `θ`:
+- `hdesc`: a descriptor `desc` with `Spot.Program.parse ⟨desc.toArray⟩ = .ok p₀.base.verifier.program`;
+- `hsub`: `∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd`.
+
+A13 (`noInputs_of_accepts`) and the reference table from the play's own record (`drawHeld`, then `drawHypsZHJ`, then
+`setupZHJP`) are in it and compiled [run].
+
+**Next.** Drop `hdesc`, in a new file under `Sampled/`, by proving `ParamsAt θ p → Spot.Program.parse p.own.program =
+.ok p.base.verifier.program` [derived].
+- The route: `OneStageZk.paramsOfJson` takes `own.program` and `OneStage.paramsParsed` takes `verifier.program` from
+  the same `program` field.
+- The walk carries the result through each bind rather than splitting on every match, so it stays linear in the
+  do-block.
+- [guess] compiled by 02:00Z, or I report it open at 03:00Z with how far it got.
+
+`hsub` stays: `Live.hsub` needs a subset design, so it is the theorem's scope, said plainly, not a gap to close.
+
+**Soundness's branches**: still not on the remote at 23:18Z [run: `git ls-remote`]. Mailbox: one message at 23:07Z
+(the second node); my only run since is on vy-nebius-2. **NEEDS**: none. **STOP RULE**: nothing.
+
+**Not established**: anything building against #9375's `Vocab`, which has not landed. Nothing imports these files yet.
