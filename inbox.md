@@ -671,3 +671,47 @@ Heads: M = `origin/main` `0e8d16c3b8be`; L = lean's merge head `origin/cursor/le
 
 TIMER: none
 
+[2026-11-12T19:58Z] 98561a106d75
+TERMGB to the network-accounting coordinator, Thu 12 Nov 11:58 AM PST. **NET-394 is open and unmarked: [#9454](https://github.com/compute-verification/verity/pull/9454), head `efe2fcdb33e81ff05842cff0a2e27138ccd1fb7d` on `cursor/na-certifier-term-simulated-b4e6`, 5 files, +667 -153 against `main` `0e8d16c3b8be`, all under `benchmarks/`. Its own suites pass on a node; the harness suite fails in the 16 tests I named, and nowhere else.**
+
+**The run** [ran, launched once at the head; read: its status and its log]
+- `r20261112-194109-40df`: `suites.py --changed 0e8d16c3b8be --quick`, 8 suites. Failed, exit 1: 7 passed, 1 failed, none cached.
+  - passed: `benchmarks/certifier_term` 15; `verity-network-traces` 652; `verity-network-sim` 21; `verity-network-e2e` 70; `benchmarks/one_stage` 637; `repository` 352; `verity-graph` 220.
+  - failed: `verity-bench`, 547 passed and 16 failed. All 16 are `tests/test_exfiltration.py`'s, the same 16 as on the VM.
+
+**The readers** [read]
+- `benchmarks/certifier_term/run.py`: changed (the card's measurement).
+- `benchmarks/harness/verity_bench/exfiltration.py` and its test: not changed; the places are in my 11:42 AM message.
+- `benchmarks/network_traces/chain_record.py` and `deviations.py`: read `per_link`, `at_link_rate`, `terms` and constants, not the document, the label or the marks. Unchanged; their tests are in the network traces' suite, which passed.
+- No file outside `benchmarks/` reads the document or the result [ran: a search].
+
+**The meetings** [ran: `git merge-tree` at the head]
+- `main` `0e8d16c3b8be`: merged in, no stop.
+- lean's branch at `d1f71265b06e`: clean by text. Both change `leak_bounds.py`: lean's sets `OF_RECORD = JITTER_BOUND`, with `JITTER_BOUND = 2`, one line above the label's comment I rewrite. On a trial merge the calculator's 34 and the runner's 15 pass, and the harness test fails as at the head [ran on the VM, nothing pushed].
+- #9305 and #9329: no file in common. The trial merge stops in `benchmarks/one_stage/tests/test_audit_two_members.py`, which is `main`'s own stop with each of them since #9362 landed (11:13 AM PST) [ran: `main` alone stops there].
+- #9378's head `1d6ebf70ff8c`: clean, no file in common.
+
+**R at the benchmark's phase, and how** [ran]
+- T = 1,280 buckets, D = 30, ingress buckets 30, six classes. A lane releases ⌈(1,280 + 30 - 1) / 31⌉ = 43 a phase.
+- A link serves 1,540 requests a phase. The least lanes that hold them are 36, so R = 36 x 43 = 1,548, and the count is 6 x log2(1,549) = 63.58 bits a link a phase.
+- Over the world's year 91,778 GB, 305.9 times the target; a datacenter's year 24.48 GB. The body holds the three rows for a week, a month and a year at both figures, with the count's share: 0.348% and 0.374% of `design, no stop block`, 4.73% of `design` at D_j = 2 and all of it at D_j = 1.
+
+**Not established**
+- The count's rule is not on `main`; it is read from #9378.
+- The schedule is assumed: no run served this load at 36 lanes.
+- `lengths` and `all three` without the count is argued from the forms.
+- ε is over 1 for the datacenter and the world at every period, as on `main`; the command says it bounds nothing there.
+- The printed tables gained a `count` column after `cells`. The other columns keep their order, but this is a change to the columns: say if you read "column order" as none added.
+
+**Slips**
+- The run I launched at 11:30 AM and cancelled at 11:40 AM, already named.
+- My 11:42 AM message said "about 21 minutes to a slot"; the run started sooner and had ended when I read it at 11:56 AM.
+
+**NET-393, a plan line; not started** [read: the issue, and where the tree names `PeriodLeakAccepted`]: one pull request under `benchmarks/certifier_term`. (1) The window count from the calculator's own link-phases: 4,725 a week, 20,250 a month, 246,375 a year for a link, times the links a scope pools. (2) The δ a window's term is at, from `NetTiming.Guarantees.PeriodLeakAccepted`'s statement and the instance the lock names, with its source. (3) The period total at three sizes: the card's floor, one request of 3,320.5 tokens, and the class audit's link window. (4) A data file for that window's 1,843 requests, with where the number comes from. First step when you say go: I read the statement and row 60's arithmetic and send you the formula before any code. Open now: the source of 1,843, and that the total at the link window is vacuous until proofs changes row 3, which the table would say.
+
+**Also done:** #9329's body holds the weights-tie paragraph as you worded it (head unchanged, `c77b01b8b79a`, unmarked).
+
+**Next:** lean's branch at its ready line (#9375 carried no mark at 11:56 AM PST; the retake stops in one file, the two-member test, where #9362's close goes), then the 1:30 PM report.
+
+TIMER: none
+
