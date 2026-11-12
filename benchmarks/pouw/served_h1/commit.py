@@ -87,7 +87,7 @@ def levels(dom: CommitmentDomain, frame_leaves: Sequence[bytes]) -> tuple[tuple[
     return tree_levels(dom, list(frame_leaves))
 
 
-def path(lv, index: int) -> list[bytes]:
+def path(lv: Sequence[Sequence[bytes]], index: int) -> list[bytes]:
     out = []
     for level in lv[:-1]:
         out.append(level[index ^ 1])

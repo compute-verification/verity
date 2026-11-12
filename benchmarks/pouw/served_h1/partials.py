@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import ctypes as C
 from collections import defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -228,7 +229,8 @@ def _live_by_k(win: Calls, ats: list[_At]) -> dict[int, list[int]]:
     return by_k
 
 
-def gpu_batches(win: Calls, leaves: list[Leaf], kernel: Kernel, chunk: int | None = None, device=None):
+def gpu_batches(win: Calls, leaves: list[Leaf], kernel: Kernel, chunk: int | None = None,
+                device: torch.device | str | None = None) -> Iterator[tuple[list[int], torch.Tensor, torch.Tensor]]:
     """The live leaves on `kernel`, `chunk` of one K at a time (2^30 / (64 K) by default: a GiB of gathered operands), on
     `device` (the B tensors' by default), their seeds from `kh_seeds_at`: yields (indices into `leaves`, receipts (n, W),
     records (n, 32, W)), int32 on the device; a dead leaf is in no batch (its partials are zero)."""
@@ -246,7 +248,7 @@ def gpu_batches(win: Calls, leaves: list[Leaf], kernel: Kernel, chunk: int | Non
 
 
 def lane_partials_many(win: Calls, leaves: list[Leaf], backend: str = "cpu", kernel: Kernel | None = None,
-                       chunk: int | None = None, device=None) -> list[np.ndarray]:
+                       chunk: int | None = None, device: torch.device | str | None = None) -> list[np.ndarray]:
     """Each leaf's lane partials, (32, W) uint32 (the module docstring's lane and word order), in `leaves`' order: the
     live leaves of each K batched, `chunk` at a time (cpu: 2^20 / K; gpu: `gpu_batches`), on `backend` ("cpu", or "gpu":
     `kernel` on `device`, the B tensors' by default)."""
@@ -270,7 +272,7 @@ def lane_partials_many(win: Calls, leaves: list[Leaf], backend: str = "cpu", ker
 
 
 def lane_partials(win: Calls, leaf: Leaf, backend: str = "cpu", kernel: Kernel | None = None,
-                  device=None) -> np.ndarray:
+                  device: torch.device | str | None = None) -> np.ndarray:
     """Leaf `leaf`'s 32 lane partials, (32, W) uint32: row l lane l = 4 g + q, word 2 s its chains' y after set s and
     2 s + 1 their z (the module docstring); their XOR over rows is the leaf's receipt."""
     return lane_partials_many(win, [leaf], backend, kernel, device=device)[0]
