@@ -34,6 +34,8 @@ from circuit_check import units as UN
 OUT = Path(os.environ["OUT"])
 which = sys.argv[1]
 traced = "traced" in sys.argv[2:]
+noprof = "noprof" in sys.argv[2:]
+skip_apart = "skip-apart" in sys.argv[2:]
 tag = which + ("-traced" if traced else "")
 rec: dict = {"which": which, "traced": traced}
 
@@ -75,18 +77,23 @@ print(tag, "setup", rec["setup_s"], "s", flush=True)
 
 e = UN.Entry(units, kind, label, UN.key(units, 0), roots)
 t, c = time.time(), cpu()
-if traced:
+if skip_apart:
+    rec["apart"] = "skipped"
+else:
+  if traced:
     CC.warm()
-kept, dropped, peaks, _ = UN.built_apart([e], 1, described=True, pinned=TG.pinned(),
-                                         side=[] if traced else None, strict=True)
-rec["apart"] = {"wall_s": round(time.time() - t, 1), "child_cpu_s": e.seconds, "peak_gb_past_start": peaks,
-                "parent_cpu_s": round(cpu() - c, 1), "nodes": len(e.nodes)}
-print(tag, "apart", rec["apart"], flush=True)
+  kept, dropped, peaks, _ = UN.built_apart([e], 1, described=True, pinned=TG.pinned(),
+                                           side=[] if traced else None, strict=True)
+  rec["apart"] = {"wall_s": round(time.time() - t, 1), "child_cpu_s": e.seconds, "peak_gb_past_start": peaks,
+                  "parent_cpu_s": round(cpu() - c, 1), "nodes": len(e.nodes)}
+  print(tag, "apart", rec["apart"], flush=True)
 dump()
 if traced:
     sys.exit(0)
 
 pr = cProfile.Profile()
+if noprof:
+    pr.enable = pr.disable = (lambda: None)
 phases = {}
 t, c = time.time(), cpu()
 pr.enable()
@@ -109,7 +116,7 @@ phases["reach_described"] = (round(time.time() - t, 1), round(cpu() - c, 1))
 rec["build_profiled"] = {"phases_wall_cpu_s": phases, "maxrss_gb": cli._maxrss_gb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),
                          "gates": {fid: n.get("g") for fid, n in nodes.items() if "DsaPositionsMerge" in fid}}
 print(tag, "build", rec["build_profiled"], flush=True)
-top(pr, f"{which}-build")
+noprof or top(pr, f"{which}-build")
 dump()
 
 from verity.circuits.defs import bind
@@ -119,14 +126,17 @@ fn = bind(R.DsaPositionsMerge if which == "v1" else R.DsaPositionsMergeV2, M=8, 
 rec["check_target"] = fn.id
 rec["check_target_is_root_object"] = any(fn is r for r in roots) or any(fn is o for o in objs.values())
 pr = cProfile.Profile()
+if noprof:
+    pr.enable = pr.disable = (lambda: None)
 t, c = time.time(), cpu()
 pr.enable()
 res = CK.check_definition(fn, CK.Options(), memo={}, pins=CK.load_pins())
 pr.disable()
 rec["check_profiled"] = {"wall_s": round(time.time() - t, 1), "cpu_s": round(cpu() - c, 1),
-                         "failures": [f.get("name") if isinstance(f, dict) else str(f) for f in res.get("failures", [])],
+                         "failures": [f.get("name") if isinstance(f, dict) else str(f) for f in res.get("failures", [])], "maxrss_gb": cli._maxrss_gb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),
                          "seconds_by_check": res.get("seconds_by_check"),
                          "keys": sorted(res)[:60]}
 print(tag, "check", rec["check_profiled"], flush=True)
-top(pr, f"{which}-check")
+noprof or top(pr, f"{which}-check")
+rec["check_result"] = {k: (v if not isinstance(v, (list, dict)) else json.dumps(v, default=str)[:3000]) for k, v in res.items()}
 dump()
