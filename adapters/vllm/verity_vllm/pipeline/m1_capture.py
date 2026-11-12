@@ -32,8 +32,12 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 from verity_vllm.log import init_logger
+
+if TYPE_CHECKING:
+    from verity_vllm.protocols import Composition
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
 
@@ -61,7 +65,8 @@ def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     import numpy as np
     import torch
 
-    from verity_vllm.acquire.plan import analytic_table_of_buffer   # the one by-name recognition of the two analytic-table buffers
+    # the one by-name recognition of the two analytic-table buffers
+    from verity_vllm.acquire.plan import analytic_table_of_buffer
 
     buf = None
     for name, b in engine.model.named_buffers():
@@ -165,7 +170,7 @@ def adapter_revision(args: Options) -> str:
         return "unknown"
 
 
-def capture_protocols(wl: dict, args: Options, model: object) -> tuple[object | None, list[str]]:
+def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Composition | None, list[str]]:
     """The target's executors (PoUW) and their entries. Installed after the warm-up as in the Commit, they serve both arms, so the
     observed run executes what the Commit serves and records each executed call as its executor's own op (`protocol_options.at_capture`)."""
     from verity_vllm import protocols as PO
@@ -258,22 +263,22 @@ def main(args: Options) -> None:
         cap.install()
         logger.info("[m1] observer installed: %s roots, profile_id=%s, reenter impls=%s", len(cap.roots), header.profile_id,
                     header.notes.get("reenter_impls"))
-        acq_inst, acq_sink = None, None
-        if acq_docs.plan is not None:
+        plan = acq_docs.plan
+        if plan is not None:
             from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
 
             acq_sink = OccurrenceSink()
-            acq_inst = install_from_plan(acq_docs.plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
+            acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
             logger.info("[m1] acquisition plan hooks installed beside the observer: %s sites (%s deferred to their sources: taps / "
                         "registered inputs / prescribed)", len(acq_inst.installed), len(acq_inst.deferred))
         t0 = time.perf_counter()
         tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
         run_s = time.perf_counter() - t0
-        if acq_inst is not None:
+        if plan is not None:
             acq_inst.remove()                                  # before cap.close() restores the runner's sample(): the wraps unwind in order
             obs = acq_sink.to_json()
-            obs["plan_digest"] = acq_docs.plan.digest
-            obs["installed"] = [list(k) for k in acq_inst.keys()]
+            obs["plan_digest"] = plan.digest
+            obs["installed"] = list(map(list, acq_inst.keys()))
             (out / "acquisition_observed.json").write_text(json.dumps(obs, indent=1) + "\n")
             logger.info("[m1] acquisition observed: %s occurrences over %s sites -> %s", sum(s["occurrences"] for s in obs["sites"]),
                         len(obs["sites"]), out / "acquisition_observed.json")
@@ -324,7 +329,7 @@ def main(args: Options) -> None:
         _served = len(gen)
         _cap = int(r["max_tokens"])
         _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
-        _executed = (None if (_eos_stop and _lag is None) else (_served + _lag if _eos_stop else _served))
+        _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
         doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
                                 "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
                                 # realized lengths and schedule (D87): every run artifact records them
