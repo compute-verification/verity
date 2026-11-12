@@ -34,17 +34,17 @@ the unsound work at δ (Lean `audit_closure`, `accountable_compute`).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from fractions import Fraction
-from decimal import ROUND_CEILING, Decimal, localcontext
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
+from decimal import ROUND_CEILING, Decimal, localcontext
+from fractions import Fraction
 from typing import Protocol
 
-from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.commitments import domains
 from verity.commitments.randomness import Key
-
 from verity.protocols.pouw.verifier.protocol import DomainError
+from verity.protocols.spot.verifier.profile import Stratified, Stratum
+
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import ProofBlock, units
