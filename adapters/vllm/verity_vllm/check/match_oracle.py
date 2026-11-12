@@ -218,16 +218,17 @@ class MatchOracle:
 
     # ------------------------------------------------------------------ promoted members: the Value's producer, not the hint's prefix
     @staticmethod
-    def _view_bytes_range(view: dict | None) -> tuple[int, int, int] | None:
+    def _view_bytes_range(view: Any) -> tuple[int, int, int] | None:
         """(alloc, byte lo, byte hi) the storage range a fold view spans (contiguous: offset..offset+numel; strided: the span), or None
-        when there is no view, it names no allocation or offset, or its dtype has no itemsize."""
-        if not isinstance(view, dict) or view.get("alloc") is None or view.get("offset") is None:
+        when there is no view, its allocation, offset, shape or strides cannot be read, or its dtype has no itemsize: such a view is skipped."""
+        try:
+            alloc, off = int(view["alloc"]), int(view["offset"])
+            shape, strides = list(view.get("shape") or []), list(view.get("strides") or [])
+            isz = _ITEMSIZE.get(str(view.get("dtype")))
+        except (KeyError, TypeError, ValueError):
             return None
-        isz = _ITEMSIZE.get(str(view.get("dtype")))
         if isz is None:
             return None
-        alloc, off = int(view["alloc"]), int(view["offset"])
-        shape, strides = list(view.get("shape") or []), list(view.get("strides") or [])
         numel = _prod(shape) if shape else 1
         span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
         return alloc, off * isz, (off + span) * isz
