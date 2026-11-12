@@ -224,7 +224,7 @@ def _rules(scheme) -> tuple[Callable[[bytes, int], list[int]], Callable[[Sequenc
 
 
 def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
-                 ops) -> str | None:
+                 ops: C.Ops | None) -> str | None:
     """The tile rule on an opened tile whose openings and digest have passed: None, or the reason it fails (its rows,
     `rows_failure`, then its inert-work bound, `cap_failure`)."""
     return (rows_failure(scheme, record, tile, a_rows, b_rows, ops)
@@ -232,7 +232,7 @@ def check_opened(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
 
 
 def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Sequence[bytes], b_rows: Sequence[bytes],
-                 ops) -> str | None:
+                 ops: C.Ops | None) -> str | None:
     """`check_opened`'s rows: None, or the reason one of the tile's rows fails its declaration."""
     k = record.matmul.shape.k
     parse, passes = _rules(scheme)
@@ -276,7 +276,8 @@ def rows_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, a_rows: Seque
     return None
 
 
-def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) -> str | None:
+def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops: C.Ops | None, tol: float | Fraction = 0
+                ) -> str | None:
     """`check_opened`'s inert-work bound on the tile's credited words: None, or the reason the tile's inert work or (under a row-bounded
     format) a credited row's is over its bound.  The hidden path's is `circuit.cap`'s (`cap.served`)."""
     k = record.matmul.shape.k
@@ -295,7 +296,7 @@ def cap_failure(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, tol=0) ->
     return None
 
 
-def row_cap(scheme) -> bool:
+def row_cap(scheme: C.PearlC) -> bool:
     """Whether the scheme's hashing format bounds every credited row's inert work as well as the tile's (`HashFormat.row_cap`,
     -h3's): (C2) of `TTOutRowSeed.lean`, `pearlCTilesDevRev1RowCap`, each row's inert work over the tile's credited columns at
     most ρ times its cells' share of the credit, or `row_cap_multiple`·ρ (`pearlCTilesDevRev1RowCapAt`)."""
@@ -303,7 +304,7 @@ def row_cap(scheme) -> bool:
     return hashing in HASH_FORMATS and HASH_FORMATS[hashing].row_cap
 
 
-def row_cap_multiple(scheme, k: int) -> Fraction:
+def row_cap_multiple(scheme: C.PearlC, k: int) -> Fraction:
     """A credited row's inert-work bound at depth ``k`` over the tile's ρ: the scheme's `row_cap_at(k)`/ρ, 4 at Pearl-C's census ks
     (`pearl_c.CENSUS_ROW_CAP`), and 1 for a scheme without one."""
     at = getattr(scheme, "row_cap_at", None)

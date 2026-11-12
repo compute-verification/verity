@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import accumulate
 from math import lcm
+from typing import Any
 
 from verity.protocols.pouw.verifier.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
                                               Workload, activation_binding, commit_rows, hm96_salt, opened_value, rows_domain,
@@ -80,7 +81,7 @@ class TileOpening:
     leaf: Opening
 
 
-def reference_kernel(scheme: PoUWScheme, ctx: Context, noise, a: Sequence[bytes], b: Sequence[bytes],
+def reference_kernel(scheme: PoUWScheme, ctx: Context, noise: Any, a: Sequence[bytes], b: Sequence[bytes],
                      tiles: Sequence[Tile]) -> list[tuple[bytes, list[list]]]:
     """One matmul through the scheme's reference, tile by tile: ``[(digest, useful tile)]``."""
     out = []
