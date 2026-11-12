@@ -151,7 +151,8 @@ def test_the_binding_maps_partition_entry_is_the_manifests_partition_or_nothing(
     """`verity_vllm.commit.partition.partition_entry`: no manifest, a manifest without a `query` header and a header without a
     partition give no entry; a header that names one gives it, whatever its query."""
     part = partition_of(SHA_A)
-    for man in (None, {}, {"query": None}, {"query": {}}, _man(), _man(query=Q_MODULE_BODY_ID), {"query": {"partition": None}}):
+    blank: list[dict | None] = [None, {}, {"query": None}, {"query": {}}, _man(), _man(query=Q_MODULE_BODY_ID), {"query": {"partition": None}}]
+    for man in blank:
         assert partition_entry(man) == {}
     assert partition_entry(_man(part)) == {"partition": part} == partition_entry({"query": {"partition": part}})
 

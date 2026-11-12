@@ -3,6 +3,8 @@ holds empty.  A classification that states no request or family counts none ther
 step that declares no member is dropped, and a linkage that states no horizon links no step."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from tests.records.test_commit_binding import EOS, _binding
@@ -34,7 +36,8 @@ def test_the_facts_read_the_programs_stop_rule_as_declared():
     for stop in ({}, {"eos": None}):
         f = EP.executed_prefix_facts(epr, None, None, {}, stop, served_tokens=served)["r0"]
         assert f["eos_declared"] is None and f["eos_ids"] is None and f["lag"] == -1
-    for empty in ([], ()):
+    empties: list[Any] = [[], ()]
+    for empty in empties:
         f = EP.executed_prefix_facts(epr, None, None, {}, {"eos": empty}, served_tokens=served)["r0"]
         assert f["eos_declared"] is False and f["eos_ids"] == []
     f = EP.executed_prefix_facts(epr, None, None, {}, {"eos": [EOS, 3], "declared_lag": 1}, served_tokens=served)["r0"]
@@ -66,7 +69,8 @@ def test_a_linkage_that_states_no_horizon_for_the_request_does_not_link_its_pref
 def test_a_binding_map_without_entries_commits_no_row_past_the_stop():
     none = {"ok": True, "entries_n": 0, "requests": {}, "steps_past_by_request": {}, "padding_entries_n": 0, "padded_record": False,
             "padding_inside_prefix": {}, "error": None}
-    for bmap in ({}, {"entries": None}, {"entries": []}):
+    bmaps: list[dict[str, Any]] = [{}, {"entries": None}, {"entries": []}]
+    for bmap in bmaps:
         assert EP.rows_past_the_stop(bmap, {"r0": [0, 1]}) == none
 
 
@@ -86,10 +90,11 @@ def test_a_leaf_without_an_identity_is_no_requests_row():
 
 def test_an_engine_step_that_declares_no_member_is_dropped():
     assert EP.restrict_engine_steps(None, {"r0": [0]}) == ([], {"members_dropped": 0, "steps_dropped": 0, "steps_changed": 0})
-    steps = [{"engine_step": 0}, {"engine_step": 1, "members": None}, {"engine_step": 2, "members": []},
-             {"engine_step": 3, "members": [{"request_id": "r0", "rows": 2}, {"request_id": "r1", "rows": 3}], "rows": 5, "n_seq": 2},
-             {"engine_step": 4, "members": [{"request_id": "r0", "rows": 2}], "rows": 2, "n_seq": 1},
-             {"engine_step": 5, "members": [{"request_id": "r1", "rows": 1}], "rows": 1, "n_seq": 1}]
+    steps: list[dict[str, Any]] = [
+        {"engine_step": 0}, {"engine_step": 1, "members": None}, {"engine_step": 2, "members": []},
+        {"engine_step": 3, "members": [{"request_id": "r0", "rows": 2}, {"request_id": "r1", "rows": 3}], "rows": 5, "n_seq": 2},
+        {"engine_step": 4, "members": [{"request_id": "r0", "rows": 2}], "rows": 2, "n_seq": 1},
+        {"engine_step": 5, "members": [{"request_id": "r1", "rows": 1}], "rows": 1, "n_seq": 1}]
     out, counts = EP.restrict_engine_steps(steps, {"r0": [3], "r1": [3, 5]})
     assert out == [steps[3], steps[5]] and counts == {"members_dropped": 1, "steps_dropped": 4, "steps_changed": 0}
     out, counts = EP.restrict_engine_steps(steps[3:], {"r0": [4], "r1": [3, 5]})
@@ -125,14 +130,19 @@ def _reconciled(**over) -> dict:
 def test_a_classification_that_states_nothing_reconciles_with_one_that_counts_nothing():
     """A population block that is applied and states no request, total, kind or batch-level cell agrees with a Commit that classified
     nothing, whether the Commit's classification and its prefix record are absent, null inside or empty."""
-    for commit_class in (None, {}, {"by_family": None, "kind_by_family": None}, {"by_family": {}, "kind_by_family": {}}):
-        for epr in (None, {}, {"requests": None}, {"requests": {}}):
-            for population in ({"applied": True}, {"applied": True, "by_request": None, "totals": None, "kind_by_family": None, "batch_level": None},
-                               {"applied": True, "by_request": {}, "totals": {}, "kind_by_family": {}, "batch_level": {}},
-                               {"applied": True, "totals": {"by_family": None}}, {"applied": True, "totals": {"by_family": {}}}):
+    classes: list[dict[str, Any] | None] = [None, {}, {"by_family": None, "kind_by_family": None}, {"by_family": {}, "kind_by_family": {}}]
+    prefixes: list[dict[str, Any] | None] = [None, {}, {"requests": None}, {"requests": {}}]
+    populations: list[dict[str, Any]] = [
+        {"applied": True}, {"applied": True, "by_request": None, "totals": None, "kind_by_family": None, "batch_level": None},
+        {"applied": True, "by_request": {}, "totals": {}, "kind_by_family": {}, "batch_level": {}},
+        {"applied": True, "totals": {"by_family": None}}, {"applied": True, "totals": {"by_family": {}}}]
+    for commit_class in classes:
+        for epr in prefixes:
+            for population in populations:
                 assert EP.reconcile_not_executed(commit_class, population, epr) == _reconciled()
-    for population in (None, {}):
-        got = EP.reconcile_not_executed(None, population, None)
+    absent: list[dict[str, Any] | None] = [None, {}]
+    for no_block in absent:
+        got = EP.reconcile_not_executed(None, no_block, None)
         assert got["ok"] is False and "total" not in got and "no not_executed_by_rule block" in got["problems"][0]
 
 
@@ -158,7 +168,9 @@ def test_a_request_is_reconciled_on_the_populations_n_exec():
 def test_a_row_family_the_populations_totals_do_not_name_excluded_none(totals, n_ex):
     """A family the Commit classified is a row family unless its `kind_by_family` says otherwise, and the population excluded none of
     it where its totals leave the family out or state no `N_excluded`."""
-    for kinds in ({}, {"kind_by_family": None}, {"kind_by_family": {}}, {"kind_by_family": {"other": "batch-level"}}, {"kind_by_family": {"rows": "row"}}):
+    named: list[dict[str, Any]] = [{}, {"kind_by_family": None}, {"kind_by_family": {}}, {"kind_by_family": {"other": "batch-level"}},
+                                   {"kind_by_family": {"rows": "row"}}]
+    for kinds in named:
         got = EP.reconcile_not_executed({"by_family": {"rows": 4}, **kinds}, {"applied": True, "totals": totals}, None)
         assert got["by_family"] == {"rows": {"commit": 4, "population": n_ex, "equal": n_ex == 4}} and got["ok"] is (n_ex == 4)
         assert got["outside_population_reach"] == {}
