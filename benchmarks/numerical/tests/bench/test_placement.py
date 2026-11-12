@@ -13,7 +13,7 @@ import pytest
 from verity_numerical.bench import cell as C
 from verity_numerical.bench import placement as PL
 
-from test_cell import BF16, FLOCK, SEPARATE, _cell, _doc, _real_runs  # noqa: E402
+from test_cell import BF16, FLOCK, SEPARATE, _cell, _doc, _real_runs
 
 REMOTE_PROBE = PL.remote_probe
 
@@ -249,6 +249,7 @@ def test_s1_the_probe_reads_the_hypervisor_flag(monkeypatch):
     ({"link__peer": "pod-w.runpod.internal:7400"}, "the link must be RunPod's global network"),      # another pod's name
     ({"link__peer": "10.65.0.12:7400"}, "the link must be RunPod's global network"),                 # an address, not the name
     ({"link__peer_ip": "100.64.0.3", "rtt__target_ip": "100.64.0.3"}, "resolving into 10.0.0.0/8"),
+    ({"link__peer_ip": "pod-v", "rtt__target_ip": "pod-v"}, "resolving into 10.0.0.0/8"),             # no address at all
     ({"link__peer_ip": "172.24.0.3", "rtt__target_ip": "172.24.0.3"}, "host bridge"),
     ({"link__peer_ip": "127.0.0.1", "rtt__target_ip": "127.0.0.1"}, "host bridge"),
     ({"link__peer": f"{IP}:7400", "link__peer_ip": IP, "rtt__target_ip": IP}, f"its own public IP {IP}"),   # dialling the shared IP
@@ -271,7 +272,11 @@ def test_s4_a_shared_ip_needs_a_tcp_connect_rtt_on_the_links_route(over):
 
 
 def test_s4_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, probes):
-    slow_session = lambda d: [m.update(value=5.0) for m in d["measurements"] if m["name"] == "net.rtt_ms"]
+    def slow_session(d):
+        for m in d["measurements"]:
+            if m["name"] == "net.rtt_ms":
+                m.update(value=5.0)
+
     fast = {"link": {**PROBES["vy-flock-h100"]["link"], "rtt": {**RTT, "median_ms": 0.03, "min_ms": 0.02}}}
     p, v = _nat_runs(tmp_path, fast, mutate=slow_session)
     res = C.register(_nat_cell(), str(p), str(v), tmp_path / "work", dry_run=True)
@@ -427,6 +432,7 @@ def test_the_co_resident_pair_is_still_refused():
     a = PL.assess({**CORESIDENT["prover"], **metal, "machine_id": "m-a"}, {**CORESIDENT["verifier"], **metal, "machine_id": "m-b"}, bridge)
     assert any("share boot_id k" in x for x in a["problems"]) and any("host bridge" in x for x in a["problems"])
     assert PL.is_host_bridge("172.24.0.3") and PL.is_host_bridge("127.0.0.1") and not PL.is_host_bridge("10.65.0.12")
+    assert PL.is_global_net("10.65.0.12") and not any(PL.is_global_net(x) for x in ("172.24.0.3", "fd00::1", "pod-v", "", None))
 
 
 def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):

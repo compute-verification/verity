@@ -9,53 +9,7 @@ public import Flock.JsonParse
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open Flock
-
-def parseHex128 (s : String) : Option F128 := do
-  if s.length != 32 then none
-  let v ← (String.toNat? ("0x" ++ s)) <|> (s.foldl (fun acc c => acc.bind fun n =>
-      let d := if c.isDigit then some (c.toNat - 48) else if 'a' ≤ c && c ≤ 'f' then some (c.toNat - 87) else none
-      d.map (fun d => n * 16 + d)) (some 0))
-  pure ⟨(v % 2^64).toUInt64, (v / 2^64).toUInt64⟩
-
-def fieldTest (path : String) : IO UInt32 := do
-  let lines ← IO.FS.lines path
-  let mut bad := 0
-  for l in lines do
-    match (l.splitOn " ").map parseHex128 with
-    | [some a, some b, some p, some i] =>
-      if a * b != p || F128.inv a != i then bad := bad + 1
-    | _ => bad := bad + 1
-  IO.println s!"field-test: {lines.size} cases, {bad} failures; phi8(2) = {(phi8 2).toHex}"
-  return (if bad == 0 then 0 else 1)
-
-def bytesOfHex (s : String) : ByteArray := match unhex s with | .ok b => b | .error _ => ByteArray.empty
-
-def hashTest (path : String) : IO UInt32 := do
-  let lines ← IO.FS.lines path
-  let mut bad := 0
-  for l in lines do
-    match l.splitOn " " with
-    | [kind, key, msg, want] =>
-      let m := bytesOfHex msg
-      let got := match kind with
-        | "sha256" => Sha256.hash m
-        | "sha512" => Sha512.hash m
-        | "blake3" => Blake3.hash m
-        | _ => Blake3.keyedHash (bytesOfHex key) m
-      if hexOf got != want then
-        bad := bad + 1
-        IO.println s!"MISMATCH {kind} len={m.size}"
-    | _ => bad := bad + 1
-  IO.println s!"hash-test: {lines.size} cases, {bad} failures"
-  return (if bad == 0 then 0 else 1)
-
-def compCheck (path : String) : IO UInt32 := do
-  let b ← IO.FS.readBinFile path
-  let t0 ← IO.monoMsNow
-  match Comp.load Blake3Row.spec b with
-  | .ok c => IO.println s!"comp-check: ok, D_b3 {hexOf c.digest} ({(← IO.monoMsNow) - t0} ms)"; return 0
-  | .error e => IO.println s!"comp-check: {e}"; return 1
+open Flock Flock.SelfTest
 
 def argOf (args : List String) (k : String) : Option String :=
   match args.dropWhile (· != k) with
@@ -904,8 +858,8 @@ whose circuit links sets up only with the verifier's own program of it, `--rec-i
 as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
-sample; one verdict line per session, in order,
-naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
+sample; one verdict line per session, in order, naming with `--program` the verifier's own program's digest: as `program_sha512`
+only when it is META's `program_sha512`, else as `program_handed_sha512` with a `program_note` (`ProvedScope.programFields`),
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
@@ -932,7 +886,8 @@ over an inner session whose record (`--rec-inner-session`) holds no sample (`Rec
 holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
 a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
+cannot know what it verifies; it compares nothing), or with one that is not META's under `verity/partition/v1`
+(`ProvedScope.programBound`, in every mode), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
@@ -969,8 +924,12 @@ outputs (at hidden outputs with `hm96-sha512/v1` leaves) at up to `Tags.MAX_TABL
 verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.programP`), which `flock_verify_sound`'s
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`.
-With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts. -/
-def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 := do
+With `upstream` (`agree`, below) it prints `agree`'s lines in place of verdicts.
+`readers` gives the program's digest and readings from the bytes `--program` names (`ProgramRead.Readers`), and is all the
+call takes besides its arguments: `verify` reads its own program once (`verifyCmd`), and a member of `verify-members`
+reads through the kept program's readers (`verifyMember`), which are the same functions (`verifyMember_eq`). -/
+def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List String) (upstream : Option Lean.Json := none) :
+    IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
@@ -1111,20 +1070,20 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program parsed once, for its digest and the three readers below: each is what it is with the program read anew
-  -- (`ProvedScope.programDigestOf_read`, `Registered.checkProgramBy_read`, `buildSessionBy_read`, `…checkCoverBy_read`)
-  let read := ProgramRead.of (program.getD ByteArray.empty)
+  -- the program's digest and readings as `readers` gives them, for the verdict and the three readers below: each is
+  -- what it is with the program read anew (`ProgramRead.readers_of`, `buildSessionBy_read`, `…checkProgramBy_read`)
+  let read := readers (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
-        Registered.checkProgramBy read.descAt program registered.isSome
+        Registered.checkProgramBy read.desc program registered.isSome
         RecSetup.checkInner recInner recCoins recBound
         RecLinkPart.checkShape recInner recLinks
         RecBudget.regs recInner registered
         RecBudget.statements recInner
-        let r ← buildSessionBy read.descAt read.progAt parsed tags circuitB pubB compB coins tables count draw partition
+        let r ← buildSessionBy read.desc read.prog parsed tags circuitB pubB compB coins tables count draw partition
           program work stratified closure registered publicInputs (identifier.map Prod.snd)
         if let some own := registered then r.2.forM fun (st : Stmt) => Registered.checkComplete st.c own
-        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.progAt st.c program partition registered params
+        r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.prog st.c program partition registered params
         r.2.forM fun (st : Stmt) => KnownRead.check st.c known
         RecSetup.checks recInner recCommits stmtTags tables r.2 circuitB partition program registered recPart
           recBindings recRows
@@ -1143,7 +1102,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind fun b => ProvedScope.programDigestOf (read.jsonAt b)
+  let handed := program.map read.digest  -- `some none`: bytes that are no descriptor
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
@@ -1191,7 +1150,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
     -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
     -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
-    -- the program,
+    -- the program, then one whose program is not the one META binds under verity/partition/v1,
     -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
     -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
     -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
@@ -1206,6 +1165,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
+      ProvedScope.programBound parsed handed
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
@@ -1216,7 +1176,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
-      (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
+      ProvedScope.programFields parsed handed ++
       -- the public file's header and the registered reads it checked the session against, by their digests, the
       -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
       -- the session to
@@ -1240,6 +1200,37 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     all := all && ok
     IO.eprintln s!"{dir}: {(← IO.monoMsNow) - t1} ms"
   return (if all then 0 else 1)
+
+/-- `verify`: `verifyCmdBy` reading its own program, once a call (`ProgramRead.of`). -/
+def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UInt32 :=
+  verifyCmdBy (fun program => (ProgramRead.of program).readers) args upstream
+
+/-- One member of `verify-members`: `verify` on the member's argument list `args`, its program read through `kept` where
+its bytes are `kept`'s, compared in full, and through a read of its own where they are not (`ProgramRead.orOf`), so a
+member with another program reads it once, as `verify` does. It takes the kept program and that member's arguments and
+nothing else: no other member's arguments, files, sessions, coins, tables, registered reads or verdict reach it, and all
+it reads of `kept` is that read's readers, which return on every program what the readers anew return. -/
+def verifyMember (kept : ProgramRead) (args : List String) : IO UInt32 :=
+  verifyCmdBy (fun program => (kept.orOf program).readers) args
+
+/-- **A member's check is `verify`**: whatever program is kept, `verifyMember` on a member's arguments is `verifyCmd` on
+them, the same action: the same files read, the same lines printed, the same exit status. -/
+theorem verifyMember_eq (kept : ByteArray) : verifyMember (ProgramRead.of kept) = fun args => verifyCmd args := by
+  have h : (fun program : ByteArray => ((ProgramRead.of kept).orOf program).readers)
+      = fun program => (ProgramRead.of program).readers :=
+    funext fun program => (ProgramRead.readers_orOf kept program).trans (ProgramRead.readers_of program).symm
+  funext args
+  exact congrArg (fun readers => verifyCmdBy readers args) h
+
+/-- `verify-members [--archive DIR] --program F`, the members' argument lists on standard input (`Flock.VerifyMembers`):
+`verify` for each member of a run in turn, the run's registered program `F` read once, as `verify` reads its own
+(`programInput`), and kept for every member (`verifyMember`). Exit 2 before any member when `F` is not given or cannot
+be read. -/
+def verifyMembersCmd (args : List String) : IO UInt32 := do
+  match ← programInput args with
+  | .ok (some program) => VerifyMembers.run (verifyMember (ProgramRead.of program))
+  | .ok none => IO.eprintln VerifyMembers.USAGE; return 2
+  | .error e => IO.eprintln e; return 2
 
 /-- `agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...`: the agreement check's entry
 (`verity/ml/flock/verifier/agree.py`, `check`'s `lean-agreement` job), and never a verdict. It runs `verify`'s checks and
@@ -1977,6 +1968,7 @@ def main (args : List String) : IO UInt32 := do
   | "draw-test" :: path :: rest => drawTest path rest
   | "statement" :: rest => statementCmd rest
   | "verify" :: rest => verifyCmd rest
+  | "verify-members" :: rest => verifyMembersCmd rest
   | "agree" :: rest => agreeCmd rest
   | "ks-form" :: rest => ksFormCmd rest
   | "rec-inner" :: rest => recInnerCmd rest

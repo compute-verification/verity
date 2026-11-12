@@ -6,6 +6,8 @@ peel's own cost, the reference A (B + F) without U (bonly), and every arm; the g
 python3 lptable.py BENCH.jsonl GATE.jsonl > table.md
 """
 
+from __future__ import annotations
+
 import json
 import math
 import re
@@ -43,16 +45,19 @@ PARTS = [("U's expansion alone (genU; the routes run it inside B's pass)", [("ge
          ("duo 32 on A, B alone, no tail (cduo)", [("cduo", 1)])]
 
 
-def gate_verdicts(path):
+def gate_verdicts(path: str) -> dict[str, list[bool]]:
+    """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
-def arm_gate(name, checks):
+def arm_gate(name: str, checks: dict[str, list[bool]]) -> str:
+    """The gate's verdict for one arm: pass, FAIL or unchecked, over every check the arm rests on, at every gate shape."""
     keys = [k for k in checks if re.fullmatch(rf"(U|R|XA|XB|PA|PB|G|cover)_{re.escape(name)}", k)]
     if not keys:
         return "unchecked"
@@ -60,18 +65,22 @@ def arm_gate(name, checks):
     return "pass" if all(k in checks and all(checks[k]) for k in keys) else "FAIL"
 
 
-def value(arms, parts):
+def value(arms: dict[str, dict], parts: list[tuple[str, int]]) -> float | None:
+    """The signed sum of the parts' times over plain's; None when a part was not timed."""
     if any(a not in arms for a, _ in parts):
         return None
     return sum(s * arms[a]["ms"] for a, s in parts) / arms["plain"]["ms"]
 
 
-def geo(vs):
+def geo(vs: list[float | None]) -> float | None:
+    """The geometric mean; None of none, or when a value is missing or not positive."""
     return math.exp(sum(math.log(v) for v in vs) / len(vs)) if vs and all(v and v > 0 for v in vs) else None
 
 
-def main(bench, gate):
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+def main(bench: str, gate: str) -> None:
+    """Print the table of one bench file and one gate file."""
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})
     verdict = {a: arm_gate(a, checks) for a in names}
