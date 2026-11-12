@@ -227,6 +227,7 @@
   },
   "Nci.Cut.ReadsOn": {
    "owner": "@training",
+   "digest": "ac338d8619c91ca188425f3651a449aa956fc0aed68320475a7dea1263fe423b",
    "why": "The blocks the count is over: each block of G reads at most k gates outside θ, all the blocks at most T between them, and the squares of what G's blocks read sum to at most S."
   },
   "Nci.Cut.ValuesInjective": {
@@ -17583,13 +17584,43 @@
    "unfolded_hash": "e2469f7e62238584eb95c4cfe189d7706edb89ccb575a7603de3e5be72c1e4ec"
   },
   "Nci.Cut.SecurityProofs.HECharged": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.HECharged : Nci.Cut.Guarantees.HECharged"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"],
+    "domain": ["Nci.Cut.NoSharedPair", "Nci.Cut.ReadsOn", "Nci.Cut.ValuesInjective"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ec7bb2245b82e18b2419724d6a531648c426a191887c9eeee30c886e903a5254",
+   "unfolded_hash": "fde9e7ab5e2d6b0d4951f4035daea2f844d0695c135094e83f8cb9770223eff5"
   },
   "Nci.Cut.SecurityProofs.HECharged_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.HECharged_honest : Nci.Cut.Guarantees.HECharged_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "a319bbc4054b8c823f5aede00ff66433b7f59d3b6b425e2b0f1a6487d3213471",
+   "unfolded_hash": "45d97fd705171ef5804114f841ab8f683a05b0bf635a4b548ef8c358a163d1cd"
   },
   "Nci.Cut.SecurityProofs.HECharged_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Cut.SecurityProofs.HECharged_nontrivial : Nci.Cut.Guarantees.HECharged_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Nci.Cut.Assumptions.Exports", "Nci.Cut.Assumptions.Hardness"]
+   },
+   "type_hash": "2b6b5bfa70e63731edfe684533f6ebdb04a3d019bc045c88d4c51a91636deda0",
+   "unfolded_hash": "361518e550fdd1c9561db3ce2766c84719435e4a01ca2dfede464f77028b6a25"
   },
   "Nci.Cut.SecurityProofs.HEShared": {
    "owner": "@training",
@@ -28893,11 +28924,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV2": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28906,11 +28937,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28926,10 +28957,10 @@
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -37126,7 +37157,7 @@
    }
   },
   "Definitions.Nci.Cut": {
-   "digest": "5bc749d65cdae8efbedab2a0e397bb01d3de8d9a94e89d230873142a7634959b",
+   "digest": "55b02185e0f0db143a6b1db1002ed51030bfc424e0a85fe322f9d05cf0982bd4",
    "definitions": {
     "Nci.Cut.Arrays": "111c92d12e00ac259139b85416c77ad9033a63a45e5f4a7a197c6cce64836ef1",
     "Nci.Cut.Connected": "f376395d2816f45c794d5533b4a860f26558264de891f052c4c87e31fdf0ca16",
@@ -37141,6 +37172,7 @@
     "Nci.Cut.Matmul.y": "245e901e786c807ef33e015fc94259a973b84fb40fccde75856aadc676fba9d8",
     "Nci.Cut.NoSharedPair": "edf10dcc2cffac840222ebbf36dbd8337aee14933243ad99695e0ab6f31214b1",
     "Nci.Cut.ReadsAtMost": "cbd09eb6c29f2035f8f306634a0e4bc34f1a33c731cb6697a11cd8f972d2cf06",
+    "Nci.Cut.ReadsOn": "ac338d8619c91ca188425f3651a449aa956fc0aed68320475a7dea1263fe423b",
     "Nci.Cut.Separates": "30a4a308dd39102114453ac7e34cd7feec3a6514e144b89bfb36a0f3e9181792",
     "Nci.Cut.ValuesInjective": "379541f687acf8cc5048159a958e0b31a92a647beb56237022b8aec67cefa275",
     "Nci.Cut.Work": "556b1adf8b123b455a1a6a01a227be55f65d85e491c1b2c7fa6ef62b9ec237b2",
@@ -37154,6 +37186,7 @@
     "Nci.Cut.Work.bY": "683e4346a9cda2926adcb8151ec1b0ef79220501f7280f1a8894d56dbab448b5",
     "Nci.Cut.Work.clear": "6eccca274d21492c014f6ce55abd6754e823cac87805ca33d604ad3919d5d209",
     "Nci.Cut.Work.fed": "d2776f5b68a9c806d3dfc1f01fae21095f5eae8208ee4130d2cc53e9c2a61600",
+    "Nci.Cut.Work.inside": "6223bf210ee003c89b3da36480f2276d349639f15b5fbcf78bfad5ba4153fa06",
     "Nci.Cut.Work.mac": "1c0901fb51260d0ae3fbb0b9595086daa4fbc07b1741be5d3f0bffb1cea1853d",
     "Nci.Cut.Work.out": "23bd397bf6663fb179a359c86f663ab22c730e722a317bff4dfb2d67cee24201",
     "Nci.Cut.Work.pi": "104f194737b32030e1653521810f26e6ea71053a562cd182f2b6b01d96ebba95",
@@ -37167,7 +37200,8 @@
     "Nci.Cut.piMax": "2e11f95385c333a19b460f1ff7e7e9147fec0b578b251e43e634f956e52e78a6",
     "Nci.Cut.shareF": "6900782ecb2604d04d58fe92c60030e8fd6c855e39910206065191039427b2d9",
     "Nci.Cut.unregisteredInputs": "baa92f22fb562c3125bffeda4f6150a140ecfde565dd117c40639878f10f9542",
-    "Nci.Cut.workHE": "656d364c522f2d9e91357a2ae45b47ffb34895e52ff70a5a37ef1738fe9ca9be"
+    "Nci.Cut.workHE": "656d364c522f2d9e91357a2ae45b47ffb34895e52ff70a5a37ef1738fe9ca9be",
+    "Nci.Cut.workHEOn": "714f2f8ee20fa930eebc1327c8b8b020cc92e7f590cae3a05e21c5faa3f68bc8"
    }
   },
   "Definitions.Nci.Cut.Toy": {
@@ -37361,7 +37395,7 @@
    }
   },
   "Definitions.Nci.Guarantees.Cut": {
-   "digest": "4d7b5390d7c6460b88aa56d547943c384f8af0782e49c4a0c67ff468f1a8cd1c",
+   "digest": "513dc1abf4b0f93ea8a8fed1ea7ced3b2d798631a7128566cbcac6bc3f360058",
    "definitions": {
     "Nci.Cut.Guarantees.Bound": "74763e1454cb634ca1df4dd740c3345de3da725e4da53c82b6caf7127fb14402",
     "Nci.Cut.Guarantees.Bound_nontrivial": "9fbdfc34dea5df398097f1b603c87b8b6231c1d07ca788f83853dd657cd2c9a6",
@@ -37370,6 +37404,9 @@
     "Nci.Cut.Guarantees.CountHE_nontrivial": "5ddc5aa48716c5bf812b6f8ec4b829564c81e5606657075a333444cc8b44a839",
     "Nci.Cut.Guarantees.Cut_honest": "4dcce269159a7881f70628dadeab07649d1fd4856c6338b7f97c15957ac6acbd",
     "Nci.Cut.Guarantees.HE": "520dcc6a7a40c4d112461f09e19fe6b9601f2b18658bd89e85ccdbea43c1bccb",
+    "Nci.Cut.Guarantees.HECharged": "16caae876a59853d8e5dcacc30cb6ccf4edba35bb98d3ac69b82b7fc62e85940",
+    "Nci.Cut.Guarantees.HECharged_honest": "f7738011b772a5e925a403e26533fb2414f5df7d30510347113b6da0ac2d701b",
+    "Nci.Cut.Guarantees.HECharged_nontrivial": "c9199806cd5abd862ec1d3cb66dee7cf99e493a3d89dc0aedd3c27325bad1e7d",
     "Nci.Cut.Guarantees.HEShared": "3cd34406f8cf581977990eeae3a9cb1402bd70e20fe1f0520e3578b3715340b1",
     "Nci.Cut.Guarantees.HEShared_nontrivial": "1a122ac7eeec7792c42ceb48f9d8c39830f7277b33bb20a9fca9bcfdcb0c1e73",
     "Nci.Cut.Guarantees.HE_nontrivial": "6d4eaf546cee8af517dc3225385f03fee23f021ed6fed0c961cea31899f906bb",
