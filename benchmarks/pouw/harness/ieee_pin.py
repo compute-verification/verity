@@ -37,14 +37,15 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
 
 
 def _gate():
-    """The SASS gate, from its file and under the name every file that loads it gives it, so a process holds one."""
+    """The SASS gate under the name every file that loads it gives it, so a process holds one: the tree's, or the copy
+    beside this file where the two were copied out of the tree."""
     name = "pouw_harness_sass_gate"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ROOT / "benchmarks/pouw/harness/sass_gate.py")
+        tree = HERE.parent.parent.parent / "benchmarks/pouw/harness/sass_gate.py"
+        spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
         sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sys.modules[name])
     return sys.modules[name]

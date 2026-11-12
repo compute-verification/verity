@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import ieee_pin as IP
@@ -58,6 +60,18 @@ def test_a_run_that_differs_skips_or_sees_no_subnormals_fails(run, why):
 def test_a_control_must_differ_somewhere():
     assert "exact everywhere" in IP.judge_run(good_run(), control=True)[0]
     assert IP.judge_run(with_check(good_run(), "host_div", bad=9), control=True) == []
+
+
+def test_copied_out_of_the_tree_beside_the_gate_it_holds_that_copy(tmp_path):
+    """The script and the gate also run copied beside a build (`settings.STANDALONE`): there the gate is the file beside
+    the script, as it is the tree's inside the tree."""
+    assert Path(SG.__file__) == Path(IP.__file__).with_name("sass_gate.py")
+    for name in ("ieee_pin.py", "sass_gate.py", "sass_pins.json"):
+        shutil.copy(Path(IP.__file__).with_name(name), tmp_path / name)
+    got = subprocess.run([sys.executable, "-c", "import ieee_pin as I; print(I.SG.__file__, I.SG.PINS)"], cwd=tmp_path,
+                         capture_output=True, text=True)
+    here = tmp_path.resolve()
+    assert got.stdout.split() == [str(here / "sass_gate.py"), str(here / "sass_pins.json")], got.stderr
 
 
 def test_every_shipped_toolkit_names_a_run_of_these_builds():
