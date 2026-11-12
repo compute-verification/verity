@@ -1,10 +1,11 @@
 """vLLM at its serving settings, replayed: what one served job shows, as the settings it ran with and three lines (README.md).
 
-    prod_repro.py arms
+    prod_repro.py arms [--model ID] [--out OUT]
     prod_repro.py replay-env --ours ARM --kept DIR
     prod_repro.py replay-ran --ours ARM --kept DIR [--private DIR] --out OUT
-    prod_repro.py report OUT --stock ARM --ours ARM [--again ARM] --load NAME [--replayed PASS] [--rep 1] [--replay DIR]
-                         [--expect-replay] [--advice-trace DIR [--advice-stops ID,...]] [--target PERCENT] [--json]
+    prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] --load NAME [--replayed PASS] [--rep 1]
+                         [--replay DIR] [--expect-replay] [--advice-trace DIR [--advice-stops ID,...]]
+                         [--target PERCENT] [--json]
 
 ``report`` reads a finished job's out/ as the serving cost benchmark leaves it (`benchmarks/serve_tax`: a directory an
 arm, and its replay's), prints the report and writes it to OUT/prod_repro.json and OUT/prod_repro.txt:
@@ -33,8 +34,10 @@ was served, naming each differing request and its first position, and where a re
 (``--expect-replay``) and the tokens line is not measured; 0 otherwise: any other line that is not measured is not a
 failure, and the last line counts the lines that are measured.
 
-``arms`` prints the three arms a job serves by default: the arms at vLLM's published serving settings where the
-benchmark has them (`PROD`), else stock compiled vLLM, stock again and the step record (`TODAY`).
+``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
+(`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
+(`TODAY`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
+named.
 
 ``replay-env`` prints, a ``NAME=VALUE`` a line, what the replay of ``--ours``'s window runs under beside the job's
 own environment so that its engine is the served one's (`replay_env`: the arm's own vLLM general plugins and
@@ -64,8 +67,8 @@ import replay as R  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
 import serve_tax as S  # noqa: E402
 
 SCHEMA = "verity-bench/prod-repro/v0"
-#: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings where
-#: `serve_tax.ARMS` has them
+#: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings
+#: (`default_arms`), else `TODAY`
 PROD = ("prod", "prod-again", "prod-record")
 TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
@@ -102,8 +105,14 @@ TOPK, TOPK_LOG = "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG"
 REPLAY_ENGINE = "replay_engine.json"
 
 
-def default_arms() -> tuple[str, str, str]:
-    return PROD if all(a in S.ARMS for a in PROD) else TODAY
+def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[str, str, str]:
+    """The arms of a job that names none: `PROD` where the benchmark has them and holds vLLM's recipe for the model (it
+    refuses an arm at the published settings for a model with none), else `TODAY`. An earlier job's ``out`` is read as
+    `PROD` where it holds that set's arm of ours."""
+    if out is not None:
+        return PROD if (out / PROD[2]).is_dir() else TODAY
+    model = S.MODELS.get(model_id)
+    return PROD if all(a in S.ARMS for a in PROD) and model is not None and getattr(model, "published", ()) else TODAY
 
 
 def not_measured(why: str, **more: object) -> dict:
@@ -870,7 +879,9 @@ def text(r: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
+    q = sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
+    q.add_argument("--model", help="the model the job serves, as the benchmark names it")
+    q.add_argument("--out", type=Path, help="an earlier job's out/, read again: the arms it is read as")
     for name, what in (("replay-env", "what the replay of an arm's window runs under beside the job's environment, NAME=VALUE a line"),
                        ("replay-ran", "write OUT/replay_engine.json: what the replay's engine ran under")):
         q = sub.add_parser(name, help=what)
@@ -880,10 +891,9 @@ def main(argv: list[str] | None = None) -> int:
     q.add_argument("--out", type=Path, required=True)
     p = sub.add_parser("report", help="the settings and the three lines of a finished job's out/")
     p.add_argument("out", type=Path)
-    stock, again, ours = default_arms()
-    p.add_argument("--stock", default=stock)
-    p.add_argument("--again", default=again, help="stock in a second server lifetime, the noise floor ('' for none)")
-    p.add_argument("--ours", default=ours)
+    p.add_argument("--stock", help="the arms default to the three OUT is read as (default_arms)")
+    p.add_argument("--again", help="stock in a second server lifetime, the noise floor ('' for none)")
+    p.add_argument("--ours")
     p.add_argument("--load", required=True)
     p.add_argument("--replayed", metavar="PASS",
                    help="the pass of ours the replay re-ran, as the benchmark names it (default: the load; by vLLM's "
@@ -898,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="print the JSON object alone")
     a = ap.parse_args(argv)
     if a.cmd == "arms":
-        print(" ".join(default_arms()))
+        print(" ".join(default_arms(a.model, a.out)))
         return 0
     if a.cmd == "replay-env":
         env = replay_env(a.ours, a.kept, os.environ.get("PYTHONPATH", ""))
@@ -911,8 +921,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "replay-ran":
         (a.out / REPLAY_ENGINE).write_text(json.dumps(replay_ran(a.ours, a.kept, a.private), indent=1))
         return 0
-    r = report(a.out, a.stock, a.ours, a.again or None, a.load, a.rep, a.replay, a.target, a.replayed, a.expect_replay,
-               a.advice_trace, a.advice_stops)
+    stock, again, ours = default_arms(out=a.out)
+    r = report(a.out, a.stock or stock, a.ours or ours, (again if a.again is None else a.again) or None, a.load, a.rep,
+               a.replay, a.target, a.replayed, a.expect_replay, a.advice_trace, a.advice_stops)
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))
     (a.out / "prod_repro.txt").write_text(text(r))

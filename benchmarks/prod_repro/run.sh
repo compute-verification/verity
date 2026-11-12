@@ -13,8 +13,9 @@
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
-# settings where the benchmark has them, else stock compiled vLLM, stock again and the step record (prod_repro.py
-# arms), each a server lifetime of its own; --again none serves stock once, and the cost then has no noise floor. By
+# settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
+# stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
+# once, and the cost then has no noise floor. By
 # default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
 # prompts behind one of eight shared prefixes) arriving at RATE a second, faster than the engine serves, each rep from
 # an empty prefix cache; then the replay re-runs rep 1 of ours under its recorded schedule, in the mode it was served
@@ -61,7 +62,7 @@ case $CLIENT in corpus|vllm-bench) ;; *) echo "prod_repro: --client corpus or vl
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # as serve_tax/run.sh finds it
 VENV=${VENV:-$venv}
 [ -x "$VENV/bin/python" ] && PY=$VENV/bin/python || PY=python3
-arms=($("$PY" "$here/prod_repro.py" arms)) || exit 2
+arms=($("$PY" "$here/prod_repro.py" arms --model "${MODEL_ID:-moonlight}" ${REPORT:+--out "$REPORT"})) || exit 2
 [ "${AGAIN-}" != none ] || AGAIN=
 STOCK=${STOCK:-${arms[0]}}; AGAIN=${AGAIN-${arms[1]}}; OURS=${OURS:-${arms[2]}}
 served="$STOCK${AGAIN:+ $AGAIN} $OURS"

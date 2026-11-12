@@ -436,8 +436,9 @@ def result(tok: float) -> dict:
 
 
 def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | None = None) -> None:
-    """An arm's directory as `serve_tax.py run` leaves it under vLLM's client; with ``ids``, rep 1 of that pass also
-    holds what the replay reads: each request's ids in client.jsonl's form, beside the arm's step trace and the plan."""
+    """An arm's directory as `serve_tax.py run` leaves it under vLLM's client, which keeps no request's ids; with
+    ``ids``, the arm's server kept them for rep 1 of that pass (a line a request, gzipped as the runner leaves them),
+    beside its step trace."""
     d = out / name
     d.mkdir(parents=True)
     (d / "meta.json").write_text(json.dumps({
@@ -455,9 +456,10 @@ def bench_arm(out: Path, name: str, passes: dict[str, list[float]], ids: str | N
                 {"tag": tag, "rate": None, "concurrency": int(p.rpartition("@")[2]), "unfinished": 0, "t0_unix": 1000.0,
                  "wall_s": 105.0}))
             if (p, i) == (ids, 1):
-                (d / p / "rep-1" / "client.jsonl").write_text("".join(json.dumps(
-                    {"id": f"{tag}-{k:05d}", "i": k, "status": 200, "output_ids": [7, k]}) + "\n" for k in range(2)))
                 step_trace(out, d, tag, {"enable_prefix_caching": True, "max_model_len": 4096})
+                with gzip.open(d / "server" / "ids.9.jsonl.gz", "wt") as f:
+                    f.write("".join(json.dumps({"id": rid(tag, k), "prompt_ids": [k, k + 1], "output_ids": [7, k]}) + "\n"
+                                    for k in range(2)))
 
 
 def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_replayed(tmp_path: Path):
@@ -662,13 +664,22 @@ def test_the_advice_line_is_the_readers_split_of_the_certified_serves_trace(tmp_
             f"{tmp_path / 'no_reader.py'}); the trace is {trace}\n") in txt
 
 
-def test_the_arms_are_the_published_settings_arms_once_the_benchmark_has_them(monkeypatch: pytest.MonkeyPatch):
-    assert P.default_arms() == (P.PROD if set(P.PROD) <= set(S.ARMS) else P.TODAY)
-    assert all(a in S.ARMS for a in P.TODAY)
-    monkeypatch.setattr(S, "ARMS", {**S.ARMS, **dict.fromkeys(P.PROD, S.ARMS["compiled"])})
-    assert P.default_arms() == ("prod", "prod-again", "prod-record")
+def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
+    assert all(a in S.ARMS for a in P.PROD + P.TODAY) and all(S.ARMS[a].published for a in P.PROD)
+    # the benchmark refuses an arm at the published settings for a model with no recipe: such a job serves the others
+    assert P.default_arms("glm53") == ("prod", "prod-again", "prod-record") and S.MODELS["glm53"].published
+    assert P.default_arms("moonlight") == P.default_arms("no-model") == P.default_arms() == ("compiled", "compiled-again", "record")
+    with pytest.raises(SystemExit, match="holds no recipe for moonlight"):
+        S.published_context("prod", "moonlight", None)
+    assert P.main(["arms", "--model", "glm53"]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
     monkeypatch.setattr(S, "ARMS", {k: v for k, v in S.ARMS.items() if k != "prod-record"})
-    assert P.default_arms() == ("compiled", "compiled-again", "record")
+    assert P.default_arms("glm53") == P.TODAY
+    # an earlier job's out/ is read as the arms it served
+    assert P.default_arms("glm53", tmp_path) == P.TODAY
+    (tmp_path / "prod-record").mkdir()
+    assert P.default_arms("moonlight", tmp_path) == P.PROD
+    assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
 
 
 # --------------------------------------------------------------------------------------------------------- the runner
@@ -841,6 +852,9 @@ def test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run(tm
     replayed(out)
     p = bash(script, "--report", str(out), "--load", LOAD, *ARMS)
     assert p.returncode == 0 and p.stdout == (out / "prod_repro.txt").read_text() and "tokens: reproduced" in p.stdout
+    # with no arm named, an earlier job is read as the arms it served
+    assert bash(script, "--report", str(out), "--load", LOAD).stdout == p.stdout
+    assert P.main(["report", str(out), "--load", LOAD]) == 0 and (out / "prod_repro.txt").read_text() == p.stdout
     for argv, said in ((("--report", str(out)), "--report OUT --load NAME"), (("--sample", "3"), "unknown flag --sample"),
                        (("--load",), "--load takes a value"), (("--client", "curl"), "--client corpus or vllm-bench"),
                        (("--sampled",), "--sampled is a pass of vLLM's client"), ((), "run this under research run")):
