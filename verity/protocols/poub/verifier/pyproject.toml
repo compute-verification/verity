@@ -6,7 +6,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # What the tests import of `verity`: the audit's codec, receipts and record, on the commitments, the randomness and the
 # profile; its coins on the one challenger, local and as a service.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifier/one_stage/link_points.py",
+          "verity/__init__.py", "verity/errors.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/reporting.py",
           "verity/protocols/spot/verifier/__init__.py",
@@ -17,11 +18,13 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/protocols/spot/verifier/one_stage/draw.py",
           "verity/protocols/spot/verifier/one_stage/registration.py",
           "verity/protocols/spot/verifier/one_stage/verdict.py",
-          "verity/ml/__init__.py", "verity/circuits", "verity/commitments",
+          "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
+          # the core's monitoring periods, which `monitoring` reads through PoUS's `wipe_monitoring`
+          "verity/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/pous",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+          "verity/protocols/pous/prover",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
           "verity/configuration/wire", "verity/configuration/deploy",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and

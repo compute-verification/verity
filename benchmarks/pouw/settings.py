@@ -53,8 +53,9 @@ REGISTRY = Registry(
     S("PEARLC_ONE_COMMIT", not_zero, True, VALUE, "sm90: every call's A commitment launches one pd_commit variant; 0 launches "
                                                   "the shape's"),
     S("PEARLC_PDL", not_zero, True, VALUE, "sm90: the PDL kernels launch with programmatic stream serialization; 0 plainly"),
-    S("PEARLC_BF16_ROWS", not_zero, True, VALUE, "sm90: a split pipeline's pd_commit reads a call's BF16 rows in its FP32 "
-                                                 "words' place; 0 says no"),
+    S("PEARLC_BF16_ROWS", one, False, VALUE, "sm90: 1 has a split pipeline's pd_commit read a call's BF16 rows in its FP32 "
+                                             "words' place; off, as a whole capture deferring A's tree and forking its "
+                                             "scales races on them"),
     S("PEARLC_RS_FAST_NT", int, 128, VALUE, "hash_fast.cuh's segment kernels' block, as the cubin was built"),
     S("PEARLC_SHA", str, "fast", VALUE, "the SHA-512 kernels: fast (hash_fast.cuh's segments and folds) or ref"),
     S("PEARLC_CHAIN", str, "pl", VALUE, "sm90: the GEMM chain (run.py's CHAINS)"),
@@ -119,7 +120,6 @@ REGISTRY = Registry(
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
-    S("POUW_LIBCUDA", str, "libcuda.so.1", WHERE, f"the CUDA driver gemm_rate's torch_rate.py loads its stamp cubin through: {LIB}"),
     S("POUW_TIER", str, "2a", VALUE, "the evidence tier verify.py records a variant at (ledger.TIERS)"),
     S("POUW_LEDGER_PUBLISH", one, False, WHERE, "1: verify.py publishes the variant's record to the ledger"),
     S("VERITY_BENCH_CUBIN", str, None, WHERE, "the cubin `verity bench overhead run --cubin ART` sent (verity_bench's "

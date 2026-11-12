@@ -283,11 +283,11 @@ def kOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ slackExp * (2 * L.nOut x +
 /-- The inner wait stops at `k_in = 2^j·(2·n_in + 1)` accepted runs. -/
 def kIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ slackExp * (2 * L.nIn x + 1)
 
-/-- The outer wait gives up after `K_out = 2^128·k_out` reruns. -/
-def capOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 128 * L.kOut x
+/-- The outer wait gives up after `K_out = 2^192·k_out` reruns (as `Sampling.Deploy.cap`). -/
+def capOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 192 * L.kOut x
 
-/-- The inner wait gives up after `K_in = 2^128·k_in` reruns. -/
-def capIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 128 * L.kIn x
+/-- The inner wait gives up after `K_in = 2^192·k_in` reruns. -/
+def capIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 192 * L.kIn x
 
 /-- Session `u`'s view of a run. -/
 def view (L : Compiled Coin A) (x : Msg) (u : ℕ) (v : Seen) : Seen := ((L.session x u v).map Prod.snd).getD ⟨[], .rej⟩
@@ -609,6 +609,29 @@ noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily :
           ((L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2).eval H (run H P L.V x q.1)).2.1 +
           ((L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2).eval H (run H P L.V x q.1)).2.1 }
 
+/-- **`B_conf` declared at `T` a run**: `Bconf`'s tape, runs, extractor's coins and outcome, its cost `T` for each of
+its two runs and for each rerun of the prover their extractions make, plus the extractions' own SHA-512 calls (the
+openings they check, `A`'s own), as `Sampling.BextAt` declares `B_ext`'s. `T` is the budget for one run's whole SHA-512
+work, which the reader computes from the prover's time: it bounds both parties' calls in every run the finder makes,
+`pLog.length + vLog.length ≤ T`, the prover's hashing outside the oracle included, where `Bconf` counts those calls as
+the runs log them. -/
+noncomputable def BconfAt (H : Msg → Msg) (L : Compiled Coin A) (T : ℕ) : FinderFamily := fun Ω _ _ P x =>
+  match L.parse x with
+  | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+  | some s =>
+    { S := Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x)
+      ne := ⟨(Classical.arbitrary _, (fun _ => default, Classical.arbitrary _),
+        (fun _ => default, Classical.arbitrary _))⟩
+      out := fun q =>
+        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2) ++
+          ownLog H (run H P L.V x q.1) (L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2))
+      cost := fun q =>
+        T + T +
+          (ownLog H (run H P L.V x q.1) (L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2)).length +
+          (ownLog H (run H P L.V x q.1) (L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2)).length +
+          T * (((L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2).eval H (run H P L.V x q.1)).2.2 +
+            ((L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2).eval H (run H P L.V x q.1)).2.2) }
+
 /-- **The committed form's error**: `ε_reg = κ_s + √(k(x)·γ_s·Pr[B]) + N·√Pr[B_conf] + Pr[B_conf]`, the sessions'
 knowledge error at the sampled proof block a selection picks, and the committed trace's binding, `N` the program's
 gates (the rewinding lemma's positions, each run opening at most `N`). -/
@@ -616,6 +639,20 @@ noncomputable def εreg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : 
     (P : Prover Ω) : ℝ :=
   L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + L.nG x * Real.sqrt ((Bconf H L Ω P x).Pr H) +
     (Bconf H L Ω P x).Pr H
+
+/-- **`B_conf`'s expected cost at the budget `T`**: `c_T = 2T·(1 + n_sess·e_s) + 2·n_PU·openCalls`, `T` for each of its
+two runs and for each of their extractions' expected reruns, one `E^rep` per session, and their own calls, the opening
+checks' (`BconfAt`). -/
+noncomputable def bconfCost (L : Compiled Coin A) (x : Msg) (T : ℕ) : ℝ :=
+  2 * T * (1 + L.nSess x * L.es x) + 2 * ((L.nPU x : ℝ) * L.openCalls x)
+
+/-- **The committed form's error at the budget `T`**: `ε_reg` with `Pr[B_conf]` read at `B_conf` declared at `T`
+(`BconfAt`), whose expected cost is at most `c_T` (`bconfCost`):
+`κ_s + √(k(x)·γ_s·Pr[B]) + N·√(c_T/2^256) + c_T/2^256`. -/
+noncomputable def εregAt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (T : ℕ) : ℝ :=
+  L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + L.nG x * Real.sqrt (L.bconfCost x T / 2 ^ (256 : ℝ)) +
+    L.bconfCost x T / 2 ^ (256 : ℝ)
 
 /-- **KS, the committed form** (the registered form of `Claims.Sampling`'s period bounds, generic), on the statements in
 scope, at every prover: the run accepts with a sampled proof block in the committed trace's incorrect set (`Freg`, which
@@ -633,6 +670,43 @@ def KSReg (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
       ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
         Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
           L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εreg H x P
+
+/-- **KS, the committed form, read at a time budget**: `KSReg`'s two bounds at every prover and every budget `T` on one
+run's SHA-512 work where `ExpectedCR` holds at `B_conf` declared at `T` (`BconfAt`), with `Pr[B_conf]` read at that
+finder's expected cost bound `c_T` (`εregAt`). -/
+def KSRegAt (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ), ExpectedCR H (BconfAt H L T Ω P x) →
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εregAt H x P T ∧
+      ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εregAt H x P T
+
+/-- **`B_conf`'s cost on every coin at the budget `T`**: `q_T = 2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, as `c_T`
+(`bconfCost`) with each session's reruns at their most, `ρ_s`, rather than their expectation (`BconfAt`). -/
+noncomputable def bconfCostStrict (L : Compiled Coin A) (x : Msg) (T : ℕ) : ℝ :=
+  2 * T * (1 + (L.nSess x : ℝ) * L.ρs x) + 2 * ((L.nPU x : ℝ) * L.openCalls x)
+
+/-- **The committed form's error at the budget `T`, at the strict birthday bound**: `ε_reg` with `Pr[B_conf]` read at
+`q_T²/2^513`, `q_T` the cost of `B_conf` declared at `T` on every coin (`bconfCostStrict`):
+`κ_s + √(k(x)·γ_s·Pr[B]) + N·√(q_T²/2^513) + q_T²/2^513`. -/
+noncomputable def εregSB (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (T : ℕ) : ℝ :=
+  L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+    L.nG x * Real.sqrt (L.bconfCostStrict x T ^ 2 / 2 ^ (513 : ℝ)) + L.bconfCostStrict x T ^ 2 / 2 ^ (513 : ℝ)
+
+/-- **KS, the committed form, read at a time budget and the strict birthday bound**: `KSRegAt` with `StrictBirthday`
+in place of `ExpectedCR` at `B_conf` declared at `T` (`BconfAt`), and `Pr[B_conf]` read at that finder's cost on every
+coin, `q_T` (`εregSB`). Its binding terms are finite only where every session's `E^rep` is truncated well below
+`2^256` (`ρ_s`). -/
+def KSRegAtSB (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ),
+    StrictBirthday H (BconfAt H L T Ω P x) →
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εregSB H x P T ∧
+      ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εregSB H x P T
 
 /-! ### Completeness -/
 
@@ -863,6 +937,20 @@ prover's time rather than at the calls the oracle logs (a corollary of `Compiler
 def CompilerKSAt : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSAt H
+
+/-- **The committed form read at a time budget**: as `CompilerKSReg`, with the opening checks' count, `KSRegAt`, its
+binding terms at a budget the reader computes from the prover's time rather than at the calls the oracle logs (a
+corollary of `CompilerKSReg` and `B_conf`'s expected cost at the contract). -/
+def CompilerKSRegAt : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSRegAt H
+
+/-- **The committed form read at a time budget and the strict birthday bound**: as `CompilerKSRegAt`, `KSRegAtSB`,
+its binding terms at `B_conf`'s cost on every coin rather than its expectation (a corollary of `CompilerKSReg` and that
+cost at the contract). -/
+def CompilerKSRegAtSB : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSRegAtSB H
 
 /-- **Efficiency**: the compiled extractor's reruns and own calls, at the contract, from the opening checks' count. -/
 def CompilerEfficient : Prop :=

@@ -32,7 +32,7 @@ Arms:
     exact-eager  served_h1's engine without the option: `engine.build.build_engine` on the int8-exact profile (int8_exact=all),
                  as SERVE-H1 runs it (eager, batch-invariant)
     exact        the int8-exact linears (`verity_int8::row_quant` + `verity_int8::scaled_mm`, whose CUDA bodies are
-                 `engine.int8_fused`'s two Triton kernels, as `engine.int8_ops` registers them) compiled with CUDA graphs,
+                 `engine.int8_fused`'s `row_quant` and `product`, as `engine.int8_ops` registers them) compiled with CUDA graphs,
                  attention vLLM's: today's served y in a compiled engine (built here, outside `build_engine`, which runs
                  int8_exact eagerly only; both ops are custom ops, opaque to Inductor)
     exact-fused  the same engine as exact, under the name the dither arms' ratios (gamma_*_vs_exact_fused) and the

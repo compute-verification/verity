@@ -18,6 +18,7 @@ from verity.protocols.pouw.verifier.window import k_prime
 from verity.protocols.spot.verifier.profile import IntegrityProfile, Stratified, Stratum
 from verity.protocols.spot.verifier.consumers import location_bits
 from verity.protocols.spot.optimize import Objective, certify
+from verity.commitments.windows.interface import K_MAX
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
@@ -58,7 +59,7 @@ def test_the_partition_is_families_table_within_the_cap():
         assert t.chunks * D.TILE_CHUNK_MACS == D.TILE_OUTPUTS * k_of(t)
         assert t.cap * t.chunks <= 2 ** (35 - t.k_log) * t.groups and (t.cap + 1) * t.chunks > 2 ** (35 - t.k_log)
     assert [(t.cap, t.groups) for t in tiles] == [(2, 1), (1, 2)]
-    assert max(t.k_log for t in fs) <= D.K_LOG_MAX
+    assert max(t.k_log for t in fs) <= K_MAX
     assert all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs if not t.chunks)
     one, week = D.candidates(), D.candidates(blocks=7)
     by_c = {t.id: t for t in fs}
@@ -85,14 +86,13 @@ def test_the_partition_is_families_table_within_the_cap():
     assert sum(d["ands_share"] for d in g["definitions"].values()) == pytest.approx(1)
 
 
-def test_the_risk_is_cores_where_core_computes_it():
-    for s in (Stratum("a", 400, 30), Stratum("b", 2 ** 40, 300), Stratum("c", 2 ** 20, 20_000)):
+def test_the_risk_is_cores_remembered():
+    for s in (Stratum("a", 400, 30), Stratum("b", 2 ** 40, 300), Stratum("c", 2 ** 20, 20_000), Stratum("d", 2 ** 60, 3),
+              Stratum("e", 2 ** 57, 20_000)):
         memo = D._Memo(s.name, s.size, s.k)
-        for m in (0, 1, 17, s.size - s.k, s.size - s.k + 1):
-            assert memo._risk(m) == s._risk(m)
+        for m in (0, 1, 17, 10 ** 6, s.size - s.k, s.size - s.k + 1):
+            assert memo._risk(m) == s._risk(m) == memo._risk(m)
     huge = Stratum("d", 2 ** 60, 3)
-    with pytest.raises(ValueError):
-        huge._risk(huge.size - 3)
     exact = Stratified((huge,)).rho({"d": huge.size - 3})
     assert D._Memo("d", huge.size, 3)._risk(huge.size - 3) == pytest.approx(exact, rel=1e-12)
     wide = D._Memo("e", 2 ** 57, 20_000)

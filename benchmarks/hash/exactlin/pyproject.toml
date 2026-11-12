@@ -1,6 +1,5 @@
 # The int8-exact linear's benches. Not a package: its benches run on GPU hosts, per their headers, on the integration's
-# kernels (verity_vllm.engine.int8_fused); tensor_util.py's analysis of an nsys export runs here as a suite on a synthetic
-# export, beside the check that exactlin.py's three helpers are int8_fused's.
+# kernels (verity_vllm.engine.int8_fused). The suite here is the check that exactlin.py's three helpers are int8_fused's.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

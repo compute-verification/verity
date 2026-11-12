@@ -21,6 +21,8 @@ from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
+from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
@@ -304,6 +306,8 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
         sh = alone.shapes[(u.m16, n, k)]
         assert meta[G.REC * j + G.KEYS_AT:G.REC * j + G.KEYS_AT + G.KEY_BYTES] == PPD._bytes(sh.keys[:G.KEY_BYTES]), j
     a, b = run.cur, alone.cur
+    for p in (a, b):
+        joined(p.writes)                                      # the files are written behind the calls: the pass's end joins them
     assert a.matmuls == b.matmuls == [Matmul(j, Shape(u.m16, k, n), ws[u.pos]) for j, u in enumerate(us)]
     assert (a.tiles, a.flag_rows) == (b.tiles, b.flag_rows) == (sum(u.tiles for u in us), sum(counts))
     assert a.records == b.records and [f["rows"]["bytes"] for f in a.files] == [f["rows"]["bytes"] for f in b.files]
@@ -315,6 +319,26 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
     run.gemm(3, x[:5], weights[3], None)
     bt = next(p[1] for name, *_, p, _ in dev.log if name == "gemm_pearlc_d")
     assert bt == g.stacked["bt"].data_ptr() + ws.index(3) * n * k
+
+
+def test_a_retained_grouped_calls_units_commit_the_rows_of_y_it_returns(tmp_path):
+    """Each unit of a retained grouped call commits its real rows of y (`served_y`): the rows of the y the call returns for
+    the unit's rows of x, taken at its rows of A, not its padding rows.  The recording device runs no GEMM, so the call's y
+    buffer is filled with a word a row before a second call of the same counts."""
+    ws, counts, n, k = (1, 3, 0), [3, 300, 20], 128, 1024
+    x = torch.randn(sum(counts), k).to(torch.bfloat16)
+    run, _ = device_run(4, n, k, tmp_path / "grouped")
+    PG.gemm_grouped(run, ws, x, counts)
+    g, us = run._groups[ws], G.units(counts, n, R.PD_MAX_ROWS)
+    g.b["y"][:2 * g.rows * n].view(torch.int16).view(g.rows, n)[:] = torch.arange(1, g.rows + 1, dtype=torch.int16)[:, None]
+    y = PG.gemm_grouped(run, ws, x, counts)
+    joined(run.cur.writes)
+    files, mms = run.cur.files[len(us):], run.cur.matmuls[len(us):]
+    assert len(files) == len(us) and len({bytes(r.numpy().tobytes()) for r in y.view(torch.int16)}) == len(y)
+    for u, f, mm in zip(us, files, mms, strict=True):
+        got = (tmp_path / "grouped" / f["y"]["rows"]["path"]).read_bytes()
+        assert got == y[u.src:u.src + u.m].contiguous().view(torch.uint8).numpy().tobytes() and len(got) == 2 * u.m * n
+        assert f["y"]["root"] == SY.commit_y(got, n, run.salt, mm.index, run.salt_key)[0].hex()
 
 
 @pytest.mark.parametrize("schedule", ["deferred", "deferred-caller", "deferred-a"])
@@ -383,11 +407,14 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
     assert len(g.calls) == len(g.sets) == (2 if split else 1)
 
 
-def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path):
+def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
     """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
-    serial schedule: their manifests differ in the schedule they ran under alone, which it doesn't count, and a changed A
-    rows file it does."""
+    serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
+    count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
+    ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
     C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    empty = torch.empty
+    monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024
     x = torch.randn(sum(counts), k).to(torch.bfloat16)
     run, weights = device_run(4, n, k, tmp_path / "grouped", "deferred-a")
@@ -398,7 +425,7 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     run.end_pass()
     alone.end_pass()
     a, b = (json.loads((tmp_path / d / "manifest.json").read_text()) for d in ("alone", "grouped"))
-    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"]
+    assert [kk for kk in a if a[kk] != b.get(kk)] == ["schedule"] and all("y" in u for u in b["matmuls"])
     assert C._same(tmp_path / "alone", tmp_path / "grouped") == []
     rows = tmp_path / "grouped" / b["matmuls"][1]["rows"]["path"]
     rows.write_bytes(bytes(c ^ 1 for c in rows.read_bytes()))

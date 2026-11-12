@@ -37,17 +37,18 @@ structure ProofBlock where
   deriving BEq, Inhabited, Repr
 
 /-- The claims' partition over the verifier's: its classes, each its strata, each its proof blocks, in slot order. -/
-structure Layout where
+structure SlotOrder where
   classes : Array (Array (Array ProofBlock))
   deriving BEq, Inhabited, Repr
 
 /-- The proof blocks, slot by slot. -/
-def Layout.blocks (l : Layout) : Array ProofBlock := l.classes.flatten.flatten
+def SlotOrder.blocks (l : SlotOrder) : Array ProofBlock := l.classes.flatten.flatten
 
 /-- Unit `u`'s slot: the proof block that is it. -/
-def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.blocks.findIdx? (·.unit == some u)
+def SlotOrder.slotOf (l : SlotOrder) (u : Nat) : Option Nat := l.blocks.findIdx? (·.unit == some u)
 
-/-- The gates of the root's input nodes (`TemplateQuery.isInput`), in gate order. -/
+/-- The gates of the root's input nodes (`Desc.isInputNode`: a node whose callee is a primitive with an input id), in gate
+order. A call of a composite is a query's to place, whatever its id, and none of its gates is here. -/
 def inputGates (d : Desc) : Array Nat := Id.run do
   let some root := d.def? d.root | return #[]
   let mut out := #[]
@@ -55,13 +56,30 @@ def inputGates (d : Desc) : Array Nat := Id.run do
   for x in root.nodes do
     let tid := d.callees.getD x.fn ""
     let n := x.members * d.gates tid
-    if Flock.TemplateQuery.isInput tid then out := out ++ (Array.range n).map (at_ + ·)
+    if d.isInputNode x then out := out ++ (Array.range n).map (at_ + ·)
     at_ := at_ + n
   return out
 
+/-- `inputGates` with each root callee's gates read off `Partition.gTable`, computed once. -/
+def inputGatesFast (d : Desc) : Array Nat := Id.run do
+  let some root := d.def? d.root | return #[]
+  let G := Partition.gTable d
+  let mut out := #[]
+  let mut at_ := 0
+  for x in root.nodes do
+    let tid := d.callees.getD x.fn ""
+    let n := x.members * Partition.look d G tid
+    if d.isInputNode x then out := out ++ (Array.range n).map (at_ + ·)
+    at_ := at_ + n
+  return out
+
+@[csimp] theorem inputGates_eq_inputGatesFast : @inputGates = @inputGatesFast := by
+  funext d
+  simp only [inputGates, inputGatesFast, Partition.look_gTable]
+
 /-- The claims' partition over the verifier's own program `p` under `query` (`Partition.evaluate`): the population's
 strata, then the input class. An error where the query doesn't apply. -/
-def layout (p : Program) (query : Json) : V Layout := do
+def layout (p : Program) (query : Json) : V SlotOrder := do
   let rs ← Partition.evaluate p query
   let gs ← Partition.unitGates p query
   let strata := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))
@@ -73,7 +91,7 @@ def layout (p : Program) (query : Json) : V Layout := do
   return { classes := #[pop, if inputs.isEmpty then #[] else #[inputs]] }
 
 /-- A layout's population: its first class's proof blocks, in slot order. -/
-def popOf (l : Layout) : List ProofBlock := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
+def popOf (l : SlotOrder) : List ProofBlock := ((l.classes.toList.headD #[]).toList.map Array.toList).flatten
 
 /-- **The population is the registration's `n` units, in order**: the layout of `p` under `query` is defined, and its
 population is `n` proof blocks with slot `u` unit `u`. The run refuses a registration whose program and query fail it
@@ -85,13 +103,13 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
 
 /-- **The checked slots** (`Deploy.checked`) of a sample that proves the units `proved`: every proof block among them and
 every input slot, in slot order. An input slot listed here is opened only where a sampled proof block reads its row. -/
-def checked (l : Layout) (proved : Array Nat) : Array Nat :=
+def checked (l : SlotOrder) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.all proved.contains).map (·.2)
 
 /-- **The challenger's sample in the claims' slots**: the layout of `p` under `query`, and the slots of the units
 `Select.select`'s sample on the coins `src` proves. An error where either is. -/
 def select (rule : Select.Rule) (p : Program) (query : Json) (table : Option Json) (cm : Option (Array (Int × Array Int)))
-    (src : ByteArray) : V (Layout × Array Nat) := do
+    (src : ByteArray) : V (SlotOrder × Array Nat) := do
   let l ← layout p query
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
@@ -100,6 +118,6 @@ def ProofBlock.toJson (b : ProofBlock) : Json :=
   Json.mkObj [("unit", (b.unit.map Lean.toJson).getD .null),
     ("pus", Json.arr #[Json.arr #[Lean.toJson b.gates.1, Lean.toJson b.gates.2]])]
 
-def Layout.toJson (l : Layout) : Json := Json.arr (l.classes.map fun c => Json.arr (c.map fun s => Json.arr (s.map (·.toJson))))
+def SlotOrder.toJson (l : SlotOrder) : Json := Json.arr (l.classes.map fun c => Json.arr (c.map fun s => Json.arr (s.map (·.toJson))))
 
 end Spot.Slots

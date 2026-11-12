@@ -29,7 +29,8 @@ BINDINGS = {
     "challenger": {"pouw": {"gate": "gate-command", "peer": "peer-1", "key-sha512": KEY}},
     "memory-challenger": {"pous": {"host": "auditor-1", "address": "192.0.2.1:7000", "command": "start-side",
                                    "key-sha512": KEY},
-                          "wipe": {"host": "auditor-1", "address": "192.0.2.1:7001", "command": "start-wipe"}},
+                          "wipe": {"host": "auditor-1", "address": "192.0.2.1:7001", "command": "start-wipe",
+                                   "key-sha512": "1" * 128}},
     "bandwidth-verifier": {"bandwidth": {"address": "192.0.2.2:7002"}},
     "network-certifier": {"certifier": {"gate": "user@gate-1"}},
 }
@@ -98,10 +99,11 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert hooks["POUS_ARGS"].startswith("--rounds 320 --challenger-host auditor-1 --challenger-address 192.0.2.1:7000")
     assert hooks["SERVE_ARGS"] == "--remote-verifier 192.0.2.2:7002"
-    assert (hooks["WIPE_CHALLENGER"], hooks["WIPE_ADDRESS"], hooks["WIPE_COMMAND"]) == (
-        "auditor-1", "192.0.2.1:7001", "start-wipe")
+    assert (hooks["WIPE_CHALLENGER"], hooks["WIPE_ADDRESS"], hooks["WIPE_COMMAND"], hooks["WIPE_KEY_SHA512"]) == (
+        "auditor-1", "192.0.2.1:7001", "start-wipe", "1" * 128)
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
     assert hooks["CERTIFIER_FRONT"].endswith("--gate user@gate-1") and "PP_CHALLENGER" not in hooks
+    assert hooks["DEVELOPMENT"] == "1"
 
 
 def test_a_dry_run_without_bindings_names_every_one_it_lacks(capsys):
@@ -123,7 +125,7 @@ def test_the_live_challenger_is_bound_only_when_given(tmp_path, capsys):
     rc, got, _ = dry(capsys, "--bindings", bindings(tmp_path, tables))
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert rc == 0 and (hooks["PP_CHALLENGER"], hooks["PP_PEER"]) == ("gate:user@gate-1", "peer-1")
-    assert "PP_CHALLENGER_KEY" not in hooks
+    assert "PP_CHALLENGER_KEY" not in hooks and "DEVELOPMENT" not in hooks
 
 
 def test_a_binding_the_file_lacks_is_refused(tmp_path, capsys):
@@ -185,7 +187,7 @@ def stand_in(tmp: Path, name: str, body: str) -> str:
 
 
 RUNNER = """mkdir -p "$OUT"
-env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z]+)=' \
+env | grep -E '^(REPO|REV|SLOTS|LOAD|V3C_LAW|POUS_CMD|POUS_ARGS|SERVE_ARGS|WIPE_[A-Z0-9_]+|H1_[A-Z0-9_]+|CERTIFIER_[A-Z]+)=' \
   | sort > "$OUT/hooks.txt"
 """
 
@@ -201,6 +203,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4" and hooks["V3C_LAW"] == "subset:1"
     assert {"WIPE_CMD", "SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)
+    assert hooks["WIPE_KEY_SHA512"] == "1" * 128
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "auditor-1" not in json.dumps(json.loads((state / "run.json").read_text()))
 

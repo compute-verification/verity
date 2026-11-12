@@ -5,7 +5,8 @@ stock vLLM, through the vLLM integration (`adapters/vllm`). It owns specs, runs,
 integration owns the engine pin (`config.VLLM`), the hooks (`adapters/vllm/verity_vllm/engine/hooks.py`) and the add-on
 interface (`adapters/vllm/verity_vllm/protocols/interface.py`), and the harness uses those like any other caller. This
 file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
-point is timed, metrics, results, dispatch and resume, settings, and the two tables `served-table` and `breakdown` render.
+point is timed, metrics, results, dispatch and resume, a steady-state spec (the second schema `plan`, `run` and `check`
+take), settings, the two tables `served-table` and `breakdown` render, and the kit benchmarks' runners share.
 `benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
@@ -22,11 +23,16 @@ verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by 
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
+verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
+                                            # labelled records (`verity bench prove`, benchmarks/prove/README.md)
+verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on one kept proof, as the record `prove`
+                                                # reads (`verity bench prove lean-verify`, the same README)
 ~~~
 
 ## Specs
 
-A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`): the preset (model and revision, precision, GPU,
+A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`; a steady-state spec is the other schema, in
+its own section below): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
 `benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
 which never enter identity). Loading is strict: an unknown key (an engine setting outside `presets.ENGINE_SETTINGS`
@@ -104,7 +110,9 @@ export their paths, say), are part of the resolved spec and so of every point's 
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
      compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
-     tokens its own gate saw from the same engine (`"against": "gate"`).
+     tokens its own gate saw from the same engine (`"against": "gate"`), unless its own gate says its tokens carry each
+     pass's coins (`per_pass_tokens`: Pearl-C's, each call's noise seeded by its index across the epoch, so no two of
+     one engine's runs agree); then, as in `blocks`, its `arm-closing` gate alone holds its timed reps.
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
@@ -185,7 +193,8 @@ find it the same way, and its command takes one of the node's GPU slots (`/works
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
 GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
-share). A preempted direct point is a failed run, which the
+share): a node joins the tuple once it has that slots file, so a node without one is refused here, before any run, and
+not by the slot at a point's start. A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
@@ -203,6 +212,94 @@ the commit's source tree (git must know the commit), and when a point isn't ther
 attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
 before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points other machines
 ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the catalog alone.
+
+## A steady-state spec
+
+`plan`, `run` and `check` take a second schema, told from the first by the file's `schema`: a steady-state spec
+(`verity-bench/steady-spec/v0`, `verity_bench.steady_spec`), the proof server's rate at steady state. A point is one
+staged block type at K provers with C cores on one card, timed by `benchmarks/one_stage/server_rate.py`. The spec says
+the `workload` whose steady-state record its rows belong to, the `card`, the `cores` (C), the timed `sessions` and the
+sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
+`[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
+(`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
+counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement staged
+already: a directory on the node, or one of an artifact in the store (`art:ID/DIR`). Loading is as strict as a vLLM
+spec's.
+
+**Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
+times. Where a row's sessions file in bursts, its `period` says the
+sessions a prover's filings repeat over (a burst is `period` times the provers), and the point times the next count
+whose rated window is a whole number of bursts and a multiple of three of them: a window, or a third of one, that cuts
+a burst reads the burst's phase and not the rate. The period is declared, not read off the run's first sessions, so
+the count is fixed before the run and is part of the point; `plan` shows it (`sessions`), and the node side writes the
+`period` in the row, where the `level` check reads it and cuts the window at whole bursts (`steady.burst_parts`).
+
+**Identity.** A point's identity is a digest of what its time depends on, and nothing else: its row's `type`, `n`,
+`pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda_toolkit`,
+`env` and `setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
+(`verity/protocols/flock/prover`, `verity/protocols/flock/pod`; no tests, no Markdown), of the timing script and of the
+setup script. It names no commit, so a commit that changes none of those times no point again, and neither does an edit
+to another row, to `admission`, to `staged` or to the spec's name. The driver and the toolkit are the spec's because
+the node can't be asked before the run: the node side reads both on the node, refuses a node whose versions aren't the
+spec's, and writes what it read in the row (`versions`). The toolkit's version is `cuda_toolkit`, in the spec and in the
+row: `cuda` is the kit's name, in its host stamp, for the newest CUDA the driver serves, which is another number.
+
+**A passed point** is a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and that passes the
+ten checks of `verity_bench.steady` against the files of the run that measured it (`steady_spec.point_why`); a row
+of a run of the point itself also holds the point's timed and warm sessions, its period and the versions. `plan` and
+`check` recompute that from each run's files in the store, by the rules of the checkout they run from; a verdict a
+run wrote of itself is never read. A point's passing run is the newest of: a run of the point (the tool
+`verity_bench.tool:STEADY_POINT` with the point's `identity`, at any commit) that ran to its end from a clean tree; or
+a row of the workload's steady-state record (`prove_records`' `flock-steady`: a labelled run, or a run a labelled art
+names), timed outside the harness. A labelled run is judged on its own row, or, where one labelled art holds its rows as
+completed after the run, on the art's (`steady_plan.completed_rows`, `completed`): the art names that one run in its
+`runs`, isn't superseded, and carries how each field it added was derived from the run's own records
+(`derivation.json`); each of its rows is one row of the run, keeps every field of it and changes only the fields the
+derivation names for that row. An art that changes anything else isn't taken, two standing arts that complete one run
+complete it for neither, and the run then counts on its own row, with the reason. So a run from before the timing
+script wrote a field counts on its completed row, and one whose own row lacks the field and that has no such art is
+"cannot tell". A point without a passing run is timed again, and `plan` and `check` say why each run that could have
+been it isn't (`why`), a run of the record whose rows can't be read among them. The lookup pulls the remote's labels of
+runs and arts, the targets a record's labels are on, and its attempts started since the spec's file was added, and
+says on stderr when it starts and what it pulled.
+
+**Run.** `verity-bench run SPEC --direct NODE` launches each point without a passing run as one recorded run on NODE
+through one of its GPU slots, which gives the run its cores, by the harness's one dispatch and its one slot run
+(`jobs.dispatch`, `jobs.slot_run`); a steady-state spec has no queued form. The job is
+`benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
+`python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
+`VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
+harness run under), with the CUDA toolkit the prover was built with first on `PATH`.
+`benchmarks/harness/setup/flock_prover.sh` is that setup for this tree's prover: it builds it with the prover's own
+build script, which keeps the binary on the node by a hash of its sources, makes the Python, and exports a scratch on
+the node's disk. A point whose row names its statement in the store is launched with a read-only key to it
+(`research run --store-read`). The node side:
+
+1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
+   an environment that isn't the spec's, a node that can't run `gpu-lease` (the kit's lease calls it by its bare name:
+   the refusal names the tree's script to put on the node's path), a run whose CPUs aren't exactly the spec's `cores`,
+   and a statement (staged there, copied from `staged` on the node, or fetched from `staged` in the store) whose
+   circuit isn't the row's `pin` or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
+   in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,
+   as is a disk with less free than the statement twice, and the node's own store keeps no copy;
+2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
+   `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
+   CPUs (gpu-lease's `--on`) where the node says which those are, and of any card where it doesn't; `out/point.json`
+   says which (`lease_on`). The lease declares no cores (gpu-lease's `--cores`): gpu-lease counts a lease that declares
+   none by the CPUs its processes may run on, which are the slot's, and the check `no_throttling` says whether the
+   machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
+   the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
+   that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
+   row;
+3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
+   files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
+   point's rate is the result's one measurement, appended by the kit's writer (`kit.Writer`) under the host stamp the
+   timed step ran under.
+
+It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
+TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,
+the staged statement with it. Each is a run without a passed point, as is one that was preempted or that waited for a
+slot past its bound, so the next `run` launches the point again.
 
 ## Settings
 
@@ -258,6 +355,40 @@ to it: the top-up's contention, `(audit-spans − audit-spans-no-topup) − (pla
 per output token, since the top-up runs beside the step and is in no span; each decode part and the prefill steps from
 the top-up-off spans arms; and the time outside every span. The credited lines' difference, spans off, is beside it as
 the audit's cost (the marks are in the spans arms' time). Then each spans arm's step by part, decode and prefill apart.
+
+## The kit
+
+`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: four calls, each written once, on the
+standard library and `verity_bench.settings` alone, so a runner imports it without vLLM or torch.
+
+- **`kit.lease(gpus, minutes)`:** the `gpu-lease` argv a job's command follows: the wait for its GPUs, held for its bound.
+- **`kit.host_stamp()`:** where a number was measured, as one dict: `card`, each GPU's `uuid` with its SM and memory
+  clocks (`sm_mhz`, `mem_mhz`), `driver`, `cuda`, `node` and `commit`. The GPUs are the job's lease's, else every GPU of
+  the host. With no GPU, `card` is `none` and `why` says how it knows.
+- **`kit.paired(arm, stock, confidence=0.95)`:** an arm's cost over stock's from matched repetitions: the median `ratio`
+  of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
+  exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
+  six at 0.95), with its `half_width` as a share of the ratio (None where the ratio is 0).
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None)`:**
+  appends one measurement to the run's result, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with
+  its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed
+  from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry holds
+  only where given. Under a research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, where
+  `research` reads it, whatever `out` is; outside one it is `out/result.json`.
+  **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
+  (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
+  `evidence`, a list of the files it stands on, as paths relative to the result's directory.
+  **`kit.writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)`** add the result's other three
+  keys: `workload_fingerprint` (the fields, beside `source_sha` from `RESEARCH_SOURCE_SHA`), and one file each, relative
+  to the result's directory and named once, in `measurement_files` or `artifacts`. The first writes all three keys; a
+  result that uses none holds none.
+
+A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
+verdict of record or a seal, so the writer refuses a value that isn't a number, a `why` beside a value, a verdict with no
+target, and a verdict in a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure,
+rejection). A validation is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed`
+and nothing else, which is the whole guard, and its detail says in the gates' own words what passed or failed. A result
+holds one run's measurements, one a name, and one validation.
 
 ## Out of scope here
 

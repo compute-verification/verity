@@ -16,6 +16,12 @@ script are the edges the check counts closed by the export (`EXPORT_CUTS`), and 
 every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the export doesn't
 copy.
 
+A Lean lock (`lean-audit.json`) states only what the copied files hold (`tools/verity/lean/public_lock.py`): an entry stays
+only if a copied file declares the name it is under, is its module, or lies under its module prefix, and none carries an
+owner, an issue or a due date. An entry that lists witnesses goes with a witness the export doesn't copy. The export fails,
+naming them, on a kept entry that cites what it doesn't copy (a guarantee's premise), and on a lock it wrote that still
+names what no copied file has.
+
 A fetched fixture (an entry of `fixtures/artifacts.json` git doesn't track) that `public_boundary.toml`'s `fixtures` names
 ships as tracked files: the export fetches it into the checkout (`research data fetch-fixtures`) and copies its bytes, so the
 public tree's tests read it with no store. Each of its files must fit a tracked file (`tests/test_repository.py`'s
@@ -25,6 +31,11 @@ can't read in DEST.
 The report gives:
 
 * what the export copied, rewrote, and cut, and the fetched fixtures it shipped and couldn't;
+* per Lean lock, the entries it kept and dropped by section, the dropped names no tracked file declares, the entries that
+  went with a witness it doesn't copy, the kept names a file it leaves out declares too, and what the text of a kept
+  entry still holds, each with its section, entry, kind and text: the lane-text sites, and the declarations, modules and
+  paths the export leaves out that it spells. The export rewords neither, and refuses: the lock they come from is
+  reworded. The report holds only those a `[[residue]]` entry of the boundary covers (`known`), which the export ships;
 * per area of the tree, the leftovers a reader of the public tree shouldn't meet, by kind, over whole files: the lane-text
   lint's kinds (`tests/lint/test_repo_lane_text.py`: Linear, Slack, Notion and PR ids and links, agent ids, run and `art:`
   ids, lane handles, dates, names) and agents' branches;
@@ -70,6 +81,12 @@ LANE_TEXT = _load("public_export_lane_text", PB.ROOT / "tests" / "lint" / "test_
 REPOSITORY = _load("public_export_repository", PB.ROOT / "tests" / "test_repository.py")
 #: check's fixture fetch environment (`fetch_env`: a `research run`'s custody key)
 SUITES = _load("public_export_suites", HERE / "suites.py")
+#: the names a `.lean` file declares (`lean_declared`)
+MOVE = _load("public_export_move_check", HERE / "move_check.py")
+#: a lock as the export ships it (`public`), and what one names that the copied files lack (`missing`)
+PUBLIC_LOCK = _load("public_export_public_lock", PB.ROOT / "tools" / "verity" / "lean" / "public_lock.py")
+#: the layout the Lean check writes a lock in (`text`)
+LEAN_CHECK = _load("public_export_lean_check", PB.ROOT / "tools" / "verity" / "lean" / "check.py")
 #: what the lane-text lint doesn't look for: agents' branches
 EXTRA = (("branch", re.compile(r"(?<![\w/-])cursor/[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{4}\b")),)
 SCRUB_MAX_BYTES = 4 << 20
@@ -440,6 +457,131 @@ def rewrite_path_list(text: str, f: str, tracked: set[str], copied: set[str]) ->
     return new, dropped
 
 
+LOCK = "lean-audit.json"
+
+
+def _above(names) -> set[str]:
+    """Each of ``names`` and every dotted prefix of it."""
+    return {".".join(parts[:i]) for n in names for parts in [n.split(".")] for i in range(1, len(parts) + 1)}
+
+
+def _under(files) -> set[str]:
+    """Each of ``files`` and every directory above it."""
+    return {"/".join(parts[:i]) for f in files for parts in [f.split("/")] for i in range(1, len(parts) + 1)}
+
+
+class Held:
+    """What the copied files hold of the tree's Lean, for the names a lock states (`public_lock`'s kinds).
+
+    A declaration is held when a copied `.lean` file declares it (`move_check.lean_declared`, a name as written or in
+    full, `_root_.N` declaring `N`), and a namespace when one declares a name at or under it. A constant is a held
+    declaration, or a name no tracked file declares that sits right below a held one: Lean names a `where` function, a
+    structure's `mk` and a type's `rec` below the declaration they come from, and no file spells them. A module is held
+    when a copied file is that module, in some Lake package (`Tree.lake`'s reading of module names), and a prefix when
+    one is it or lies under it. An import is held as a prefix is, and also when the tree tracks no module at or under
+    it, so a dependency's stays. A package is held when its lakefile is copied. A name that a copied file and a file
+    the export leaves out both declare is held, and the report names it (`lock_report`'s `also_withheld`)."""
+
+    def __init__(self, tree, copied: set[str]):
+        declared = {f: {n.removeprefix("_root_.") for n in MOVE.lean_declared(tree.text(f))}
+                    for f in tree.files if f.endswith(".lean")}
+        self.copied = copied
+        self.declared = {n for f, names in declared.items() if f in copied for n in names}
+        self.withheld = {n for f, names in declared.items() if f not in copied for n in names}
+        self.tracked = self.declared | self.withheld
+        self.namespaces = _above(self.declared)
+        modules = tree.lake[0]
+        self.modules = {m for m, f in modules.items() if f in copied}
+        self.prefixes = _above(self.modules)
+        self.tracked_prefixes = _above(modules)
+        self.paths = _under(tree.files) - _under(copied)
+
+    def has(self, here: str, kind: str, name: str) -> bool:
+        """Whether the copied files hold ``name``, of ``kind``, for the lock of the package at ``here``."""
+        L = PUBLIC_LOCK
+        if kind == L.DECLARATION:
+            return name in self.declared
+        if kind == L.CONSTANT:
+            return name in self.declared or name not in self.tracked and name.rpartition(".")[0] in self.declared
+        if kind == L.NAMESPACE:
+            return name in self.namespaces
+        if kind == L.MODULE:
+            return name in self.modules
+        if kind == L.PREFIX:
+            return name in self.prefixes
+        if kind == L.IMPORT:
+            return name in self.prefixes or name not in self.tracked_prefixes
+        if kind == L.PACKAGE:
+            return _norm(here, name, "lakefile.toml") in self.copied
+        raise ValueError(f"public_export: a lock's name of a kind it doesn't know: {kind}")
+
+    def spelled(self, text: str) -> list[tuple[str, str]]:
+        """(kind, token) of what ``text`` spells that only the files the export leaves out have: a dotted name one of
+        them declares and no copied file does (`declaration`), a dotted module prefix with no copied module at or under
+        it (`module`), and a tracked file or directory the export copies nothing of (`path`)."""
+        out = []
+        for name in PUBLIC_LOCK.names(text):
+            if name in self.withheld and name not in self.declared:
+                out.append(("declaration", name))
+            elif name in self.tracked_prefixes and name not in self.prefixes:
+                out.append(("module", name))
+        return out + [("path", p) for p in PUBLIC_LOCK.paths(text) if p in self.paths]
+
+    def undeclared(self, kind: str, name: str) -> bool:
+        """Whether no tracked file declares ``name`` or is it: an entry the tree outgrew, or one the scanner can't find."""
+        L = PUBLIC_LOCK
+        return kind != L.PACKAGE and name not in (self.tracked_prefixes if kind in (L.MODULE, L.PREFIX, L.IMPORT)
+                                                  else self.tracked)
+
+
+def rewrite_lock(text: str, here: str, held: Held) -> tuple[str, list[tuple[str, str]]]:
+    """A Lean lock without what the export doesn't hold, and each (section, name) dropped (`public_lock.public`): an entry
+    named after a declaration, a namespace, a module or a package the copied files lack, an entry with a witness they
+    lack, and every `owner`, `issue` and `due`. The lock is laid out as the Lean check writes one, so the rest of it reads
+    as it did."""
+    lock = json.loads(text)
+    out, dropped = PUBLIC_LOCK.public(lock, lambda kind, name: held.has(here, kind, name))
+    if out == lock:
+        return text, []
+    new = LEAN_CHECK.text(out)
+    if json.loads(new) != out:
+        raise ValueError(f"public_export: {_norm(here, LOCK)}: the lock's layout doesn't read back as the lock it lays out")
+    return new, [(path, name) for path, names in dropped.items() for name in names]
+
+
+def lane_text(text: str) -> list[tuple[str, str]]:
+    """(kind, text) of each leftover (`scrub`'s kinds) in ``text``."""
+    return [(kind, what) for _, found in LANE_TEXT.found_in([(1, text)]) for kind, _, what in [found.partition(": ")]] + \
+        [(kind, m.group()) for kind, pattern in EXTRA for m in pattern.finditer(text)]
+
+
+def lock_report(old: dict, new: dict, dropped: list[tuple[str, str]], held: Held) -> dict:
+    """What the export did to one lock: per section the entries kept and dropped, how many lane fields it removed, the
+    dropped names no tracked file declares, the entries that went with a witness the export doesn't copy, the kept
+    declarations a file the export leaves out declares too, and what the text it kept still holds, each as (section,
+    entry, kind, text) with its count per section (`public_lock.leftovers`): the lane text (`lane_text`), and the
+    declarations, modules and paths the export leaves out that a kept string spells (`Held.spelled`). Neither is
+    removed here: the lock they come from is reworded, and `export` refuses those no known residue covers (`known`)."""
+    kinds = dict(PUBLIC_LOCK.ENTRIES)
+    sites, spelled = PUBLIC_LOCK.leftovers(new, lane_text), PUBLIC_LOCK.leftovers(new, held.spelled)
+    both = {f"{where}: {name}" for where, kind, name in PUBLIC_LOCK.named(new)
+            if kind == PUBLIC_LOCK.DECLARATION and name in held.withheld}
+    return {"kept": PUBLIC_LOCK.counts(new), "dropped": dict(Counter(path for path, _ in dropped)),
+            "lane_fields": len(list(PUBLIC_LOCK.lane_fields(old))),
+            "undeclared": sorted(f"{path}: {name}" for path, name in dropped
+                                 if path in kinds and held.undeclared(kinds[path], name)),
+            "witness_withheld": sorted({f"{path}: {name}" for path, name in dropped if path not in kinds}),
+            "also_withheld": sorted(both),
+            "sites": dict(Counter(section for section, *_ in sites)), "site_list": [list(s) for s in sites],
+            "spelled": dict(Counter(section for section, *_ in spelled)), "spelled_list": [list(s) for s in spelled]}
+
+
+def known(boundary, f: str, text: str) -> bool:
+    """Whether the boundary lists ``text`` in ``f`` as known residue: a `[[residue]]` entry whose paths hold the file and
+    whose pattern matches the text."""
+    return any(r.paths.fullmatch(f) and r.pattern.search(text) for r in boundary.residue)
+
+
 def fetch(root: Path, paths: list[str], log: Path) -> str:
     """Fetch the registry entries at ``paths`` into ``root`` (`research data fetch-fixtures`, in check's environment for it,
     which reaches the store through a `research run`'s custody key), its output in ``log``; the paths still missing or stale,
@@ -486,8 +628,10 @@ def written(judgment, shipped: dict[str, list[str]]) -> list[str]:
 
 
 def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) -> dict:
-    """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests and its lists
-    of the tree's paths, and commit it as a new repository's one commit."""
+    """Copy ``judgment``'s public set and the ``shipped`` fixtures' files into ``dest``, rewrite its manifests, its lists
+    of the tree's paths and its Lean locks, and commit it as a new repository's one commit. `ValueError`, before the
+    commit, when a lock's kept text still holds lane text or names what the export leaves out, and the boundary lists it
+    under no known residue (`public_lock.refusal`)."""
     copied = set(judgment.public)
     for f in written(judgment, shipped):
         (dest / f).parent.mkdir(parents=True, exist_ok=True)
@@ -499,23 +643,38 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
                 if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported}
     rewrites: dict[str, list[tuple[str, str]]] = {}
     targets: dict[str, dict] = {}
+    locks: dict[str, dict] = {}
     tracked = set(tree.files)
+    held = Held(tree, copied) if any(f.rpartition("/")[2] == LOCK for f in copied) else None
     for f in sorted(copied):
         name, here = f.rpartition("/")[2], os.path.dirname(f)
         listed = path_list(f) is not None
-        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml") and not listed:
+        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml", LOCK) and not listed:
             continue
         old = (dest / f).read_text(encoding="utf-8")
         new, dropped = (rewrite_path_list(old, f, tracked, copied) if listed
                         else rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
+                        else rewrite_lock(old, here, held) if name == LOCK
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required,
                                                lambda m, f=f: tree._module(m, f)))
-        if dropped:
+        if dropped or (name == LOCK and new != old):
             (dest / f).write_text(new, encoding="utf-8")
+        if dropped:
             rewrites[f] = dropped
         if name == "lakefile.toml":
             targets[here or "."] = lean_targets(new, here, tomllib.loads(old), copied)
+        if name == LOCK:
+            wrote = json.loads((dest / f).read_text(encoding="utf-8"))
+            if left := PUBLIC_LOCK.missing(wrote, lambda kind, n, here=here: held.has(here, kind, n)):
+                raise ValueError(f"public_export: {f}, as the export wrote it, still names what no copied file has: "
+                                 + "; ".join(left[:PUBLIC_LOCK.SHOWN])
+                                 + (f"; and {len(left) - PUBLIC_LOCK.SHOWN} more" if len(left) > PUBLIC_LOCK.SHOWN else ""))
+            locks[f] = lock_report(json.loads(old), wrote, dropped, held) | {"bytes": [len(old.encode()), len(new.encode())]}
+    if left := [(f, *row) for f, lock in locks.items() for row in lock["site_list"] + lock["spelled_list"]
+                if not known(boundary, f, row[3])]:
+        raise ValueError(PUBLIC_LOCK.refusal(left))
+
     def dropped(e) -> bool:
         if e.kind == "lake require":
             return ("require", e.what) in rewrites.get(e.source, [])
@@ -536,7 +695,8 @@ def export(tree, boundary, judgment, dest: Path, shipped: dict[str, list[str]]) 
     subprocess.run([*git, "commit", "-q", "-m", "The public monorepo"], cwd=dest, check=True)
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=dest, capture_output=True, text=True, check=True).stdout.strip()
     return {"copied": len(copied), "rewrites": {f: [f"{k} {v}" for k, v in d] for f, d in rewrites.items()},
-            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "symlinks_not_copied": symlinks, "commit": head}
+            "edges_cut": [str(e) for e in cut], "lean_targets": targets, "locks": locks, "symlinks_not_copied": symlinks,
+            "commit": head}
 
 
 def scrub(dest: Path, files: list[str]) -> dict:
@@ -773,6 +933,17 @@ def main(argv: list[str] | None = None) -> int:
           "public test reading one fails in DEST:")
     for p in unshipped:
         print(f"  {p}")
+    print(f"Lean locks: {len(report['locks'])}, each stating only what the export holds:")
+    for f, lock in report["locks"].items():
+        more = [f"{n} {what}" for n, what in ((len(lock["undeclared"]), "dropped names no tracked file declares"),
+                                              (len(lock["witness_withheld"]), "entries gone with a witness it doesn't copy"),
+                                              (lock["lane_fields"], "lane fields removed"),
+                                              (len(lock["also_withheld"]), "kept names a file left out declares too"),
+                                              (sum(lock["sites"].values()), f"leftovers in kept entries {lock['sites']}"),
+                                              (sum(lock["spelled"].values()),
+                                               f"names and paths it leaves out spelled in kept entries {lock['spelled']}")) if n]
+        print(f"  {f}: {lock['bytes'][0]} to {lock['bytes'][1]} bytes; entries kept {sum(lock['kept'].values())}, dropped "
+              f"{sum(lock['dropped'].values())}" + "".join(f"; {m}" for m in more))
     lt = report["lean_targets"]
     print(f"Lake packages: {len(lt)}, {sum(len(t['modules']) for t in lt.values())} modules to build; root files the export "
           f"lacks: {[f'{p}: {r}' for p, t in lt.items() for r in t['missing_roots']]}")

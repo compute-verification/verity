@@ -59,9 +59,15 @@ SKETCH_OUTSIDE = 2 ** 20
 """F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
 own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
 on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
-one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
-since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
-option if that slack is ever cut.  Provisional, under the sketch's random-oracle assumption."""
+one operator's fleet.  What it costs the memory line, at 16 rows and a session of 2,118 one-pass windows over
+97,517,568 blocks in 226.9 s, 48 openings a window: `ledger.delta_parts` returns δs = 2^-31.59 at F = 2^20 and 2^-51.59
+at F = 1, beside the windows' profile δ 2^-40.00, the sample's rejection 2^-47.37, AuditRO's slack 2^-55.95 (2^-67 a
+pass, `audit.SLACK_LOG2`), the coin commitment's hiding 2^-179.95 (for all but a 2^-64 fraction of keys) and the
+receipts' binding 2^-164.86 (2^-184.86 at F = 1).  Their sum, `ledger.memory`'s `Line.delta`, is 2^-31.59 at F = 2^20,
+where δs is its largest part, and 2^-39.99 at F = 1, where the profile δ is, so F = 2^20 costs that line 8.40 bits.
+64 rows bring δs there to 2^-129.94 at F = 2^20 (`sketch_failure` at `rows=64`), at the pass cost `PROTOCOL.md` §4
+states under "The rows".  `tests/test_sketch_reading.py` holds each of these numbers to the function named beside it.
+F = 2^20 is provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
@@ -443,6 +449,8 @@ def _pct(x: float) -> str:
 
 
 def _grid() -> None:
+    from . import ledger  # here, not above: ledger imports this module
+
     gap, jitter = 50 * US, _ns(0.05)
     print(f"# receipts: {DEFAULT} by default, of the block alone; {', '.join(k for k in KINDS if k != DEFAULT)} kept for "
           "comparison.  The schedule and openings below are the same under either kind, with no tile evidence unless "
@@ -466,7 +474,8 @@ def _grid() -> None:
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-40: s = {s} from the window's coin ({s / t_s:.0f} a second, "
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-40 (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+          f"coin ({s / t_s:.0f} a second, "
           f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
           "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
@@ -490,7 +499,8 @@ def _grid() -> None:
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
           f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
           f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
-          "stated ceiling, δ = 2^-40, g = 50 µs, J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
+          f"stated ceiling, δ = 2^-40 (it reads {ledger.DELTA_FORM}), g = 50 µs, J = 0.05 ms.  Over every tier, the "
+          "store is GB a GPU of each GPU's HBM "
           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
     print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "

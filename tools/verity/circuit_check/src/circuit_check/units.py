@@ -415,8 +415,7 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
         found = sorted(CC._dir(cache, e.key).glob("*.json"))
     for p in found:
         try:
-            with CC.internal():
-                rec = json.loads(p.read_text())
+            rec = CC.read(p)
             if rec.get("key") != e.key:
                 continue
             reads = rec["reads"]
@@ -428,7 +427,8 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
             return {**got, "seconds": _took(p)}, reads
-        except (OSError, KeyError, TypeError, AttributeError, ValueError):
+        except (OSError, KeyError, TypeError, AttributeError, ValueError) as x:
+            CC._miss(p, x)
             continue
     return None
 
@@ -679,7 +679,7 @@ def store_roots(cache: Path, repo: Path, plan: Plan) -> str | None:
 
 def owners(plan: Plan) -> dict[str, str]:
     """`sidecars.owner` of each Definition a loaded module binds at its top level, by id, as a full build has it before its
-    checks: in a process forked from this one that imports every module of `sidecars.PACKAGES` a binding's build imported (its
+    checks: in a process forked from this one that imports every module of `sidecars.packages` a binding's build imported (its
     reads' ``modules``, its record's or its process's), so this process imports none of them, as it builds no body.  Where two
     Definitions of one id are bound, the first owner by name.  `Stale` when one of them doesn't import there."""
     import importlib
@@ -687,7 +687,8 @@ def owners(plan: Plan) -> dict[str, str]:
 
     from . import sidecars as SC
 
-    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in SC.PACKAGES})
+    tops = SC.packages()
+    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in tops})
     sys.stdout.flush()
     sys.stderr.flush()
     with CC.internal():
@@ -1025,15 +1026,19 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
             took = CC._dir(cache, e.key) / f"{eid}.seconds"
             # a temporary name of this writer's own, as `cache.store` writes an entry
             tmp = took.with_name(f".{took.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
-            tmp.write_text(f"{e.seconds}\n")
-            os.replace(tmp, took)
+            try:
+                tmp.write_text(f"{e.seconds}\n")
+                os.replace(tmp, took)
+            except FileNotFoundError as x:             # the version's directory went (`cache.expire`)
+                CC.LOST.append(f"{took.parent.name}: {x!r}")
     return n
 
 
 def held(cache: Path, entries: list[Entry]) -> int:
-    """The bytes ``entries``' records and the catalog's roots record take in ``cache``: what a run from a copy of it copies."""
+    """The bytes ``entries``' records and the catalog's roots record take in ``cache``, with the read records they share
+    (`cache.held`): what a run from a copy of it copies."""
     with CC.internal():
-        return sum(p.stat().st_size for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
+        return CC.held(p for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
 
 
 def made_entries() -> list[Entry]:

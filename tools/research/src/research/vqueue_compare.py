@@ -59,7 +59,7 @@ from typing import Callable, Iterable
 from .digest import REVERT_SUBJECT
 from .merge import REVERTS
 from .queue import STALL, queue_commit
-from .queue_stats import _hours, p90, ts
+from .queue_stats import _hours, pct, ts
 from .vqueue import FAIL, ON_MAIN, PASS
 
 #: the loop's decision log on the control pod
@@ -437,7 +437,7 @@ def store_labels(root: str | None) -> Labels:
 # ---- the comparison -------------------------------------------------------------------------------------------------------------
 
 def _stats(hours: list[float]) -> dict:
-    return {"n": len(hours), "p50_h": statistics.median(hours), "p90_h": p90(hours)} if hours else {"n": 0}
+    return {"n": len(hours), "p50_h": statistics.median(hours), "p90_h": pct(hours, 0.9)} if hours else {"n": 0}
 
 
 def _failed(e: Entry) -> list[dict]:

@@ -1,30 +1,33 @@
 # PoUS's benchmarks and their tests. Not a package: the drivers run on a GPU pod (torch/Triton), their CPU reference
 # invariants run here as a suite (`uv run tools/verity/check/suites.py benchmarks/pous`), so `check` keeps them pinned.
 [tool.pytest.ini_options]
-testpaths = ["tests", "fast_decode/tests"]
+testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_pous_harness.py",
+    "tests/test_pous_onsite_cases.py",
     "tests/test_pous_p2_bandwidth.py",
     "tests/test_pous_p2v1.py",
     "tests/test_pous_served_case.py",
+    "tests/test_pous_served_piece_sh.py",
     "tests/test_pous_served_wipe.py",
 ]
 # tests/ checks the harness against PoUS itself (verity.protocols.pous.verifier) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pous", "verity/protocols/interface",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifier/one_stage/link_points.py",
+          "verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py", "verity/protocols/pous",
+          "verity/protocols/interface", "verity/protocols/pous/prover",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
-          "verity/core/devices/__init__.py",
           "verity/protocols/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
-          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
+          "verity/periods/__init__.py", "verity/commitments", "verity/commitments/crypto",
+          "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
@@ -44,6 +47,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's leg
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
+          "verity/periods", "benchmarks/census/deployments.json",
           "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/audit.py",
           "verity/protocols/pouw/verifier/coins.py", "verity/protocols/pouw/verifier/core_check.py",
           "verity/protocols/spot/verifier/one_stage/registration.py",
@@ -57,7 +61,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # (`deploy.stream.Side`) and the challenger's parties run on
           "verity/configuration/deploy", "verity/configuration/wire",
           "verity/configuration/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
-          "verity/protocols/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py"]
+          "verity/protocols/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+          # p2_v1/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
+          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py",
+          "verity/definitions/circuits/census.py", "verity/definitions/circuits/requirement.py",
+          # the P2 store's default weights generator (`p2_v1/store.py`'s `GENERATOR`), which its test lays out and commits
+          "benchmarks/torch_gpu/p2_stage/served_weights.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

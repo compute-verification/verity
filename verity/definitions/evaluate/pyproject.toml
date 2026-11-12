@@ -18,13 +18,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_difftest.py"]
-# `lake build` reads this package and Flock's verifier (verity/protocols/flock/verifier), which it requires by path; the Python
+# `lake build` reads this package and the base packages (verity/circuits/base and circuits), which it requires by
+# path, with the difftest harness; the Python
 # reference is verity.circuits, with the word primitives the vLLM integration registers (its registry package, and the
 # package's own `__init__`s it imports through), the row primitives' vectors `security` pins, the vLLM integration's
 # `store_io`, through which the GPU captures held in the evidence store are fetched (and what the store CLI it starts reads of
 # the `research` package), and the L40S captures of SiLU and RoPE the benchmarks hold. The tests build
 # `verity-evaluate` themselves, from those sources, and so declare no `artifacts`; `check` runs them after its Lean steps
-# (`AFTER_LEAN`), since that build writes into the verifier's `.lake`.
+# (`AFTER_LEAN`), since that build writes into the base packages' `.lake`, as the verifier's does.
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/program/__init__.py",
           "verity/definitions/registry", "security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
           "adapters/vllm/tests/regression/store_io.py",
@@ -34,6 +35,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+          "tools/research/src/research/treelock.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/silumul-v1-i8192",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/rope-head-d64",

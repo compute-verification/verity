@@ -54,8 +54,10 @@ property `valid` of the whole run, not of the inputs alone.
   `chk`, and which hold one set of values, only at committed gates of proof blocks of no class sampled `all`, give step `t`
   one egress row. The check's own proof blocks are sampled `all`, so no incorrect set holds their gates.
 * `CheckedWitness`, a scope: an accepted run whose extracted witness has no proof block sampled `all` incorrect has a
-  `valid` trace run, the incorrect proof blocks' committed gates held at the trace's values (`heldAdv`), except with
-  probability `εchk` (`PrCheckMiss`).
+  `valid` run, except with probability `εchk` (`PrCheckMiss`). Which run is its parameter `runs`: the run the leak
+  relation it is used with accepts at. `traceRun` is the trace's run, the incorrect proof blocks' committed gates held
+  at the trace's values (`heldAdv`), which `RLeakChecked` accepts at. A check that holds on one run need not hold on
+  another: the two differ wherever they hold a committed gate at different values.
 * `PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes` and `PeriodLeaksChecked`: a monitoring period's inputs, as
   `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
 -/
@@ -105,29 +107,36 @@ def RLeakChecked (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg →
       Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o → o.length = k s → (∀ y ∈ o, y.jitter < Dj) →
         o ∈ AccSeqsChecked s.prog P s.design (lay s) (k s) (As s (traceVal s.prog (w.val H Cm s))) (valid s) δ op Dj
 
+/-- **The trace's run** at the witness `w`: `C` on the trace's committed values, the incorrect proof blocks' committed
+gates held at them (`heldAdv`), `false` where the trace opens nothing. It is the run `RLeakChecked` accepts at, where
+the trace's transfer gates carry the observations. -/
+def traceRun (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition) (w : Wit) :
+    Set (ℕ → Bool) :=
+  {valOver s.prog (traceVal s.prog (w.val H Cm s)) (heldAdv s.prog Pt (faulty H Cm s Pt w) (w.val H Cm s))}
+
 section Claim
 
 open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- **The check's miss**: `Pr[run = acc ∧ E^{P*}(x) = w]`, `E` the compiled sampled verifier's extractor, at a witness
-`w` whose statement parses and has a partition, whose incorrect set holds no proof block of a class sampled `all`, and
-whose trace run (`C` on the trace's committed values, the incorrect proof blocks' committed gates held at them,
-`heldAdv`) is not `valid`. -/
-noncomputable def PrCheckMiss (H : Msg → Msg) (D : Compiled Coin A) (valid : AuditStatement → (ℕ → Bool) → Prop)
+/-- **The check's miss on the runs `runs`**: `Pr[run = acc ∧ E^{P*}(x) = w]`, `E` the compiled sampled verifier's
+extractor, at a witness `w` whose statement `s` parses and has a partition `Pt`, whose incorrect set holds no proof
+block of a class sampled `all`, and one of whose runs `runs s Pt w` is not `valid`. `runs s Pt w` holds the run the
+check is held to at `w`, or none where that run is not defined. -/
+noncomputable def PrCheckMiss (H : Msg → Msg) (D : Compiled Coin A)
+    (runs : AuditStatement → Partition → Wit → Set (ℕ → Bool)) (valid : AuditStatement → (ℕ → Bool) → Prop)
     (x : Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) : ℝ :=
   Pr fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x =>
     (run H P D.V x r.1 r.2.1).out = .acc ∧ ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧
       D.parse x = some s ∧ D.partition s = some Pt ∧ Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt) ∧
-      ¬valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
-        (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
+      ∃ ρ ∈ runs s Pt w, ¬valid s ρ
 
-/-- **The check holds on the trace's run at `x`**, a scope: at every prover, the check misses with probability at most
-`εchk x` (`PrCheckMiss`). -/
-def CheckedWitness (H : Msg → Msg) (D : Compiled Coin A) (valid : AuditStatement → (ℕ → Bool) → Prop)
-    (εchk : Msg → ℝ) (x : Msg) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), PrCheckMiss H D valid x P ≤ εchk x
+/-- **The check holds on the runs `runs` at `x`**, a scope: at every prover, the check misses on them with probability
+at most `εchk x` (`PrCheckMiss`). -/
+def CheckedWitness (H : Msg → Msg) (D : Compiled Coin A) (runs : AuditStatement → Partition → Wit → Set (ℕ → Bool))
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (x : Msg) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), PrCheckMiss H D runs valid x P ≤ εchk x
 
 end Claim
 

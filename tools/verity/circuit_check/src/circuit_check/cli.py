@@ -15,10 +15,9 @@
     circuit-check --all --catalog-units --cache DIR --binding NAME --slice S/X.json S/shared.json
                                                                     NAME's targets from its slice alone (`units.sliced`)
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
-    circuit-check --all --catalog-units --cache DIR --update-reads  what every catalog binding read, added to reads/ (`READS`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
+    circuit-check --structural split/ SparseMlaHeadEnd_v1{...}       a split (struct_slots), its nets wired to lookup slots
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
-    circuit-check --batch                                           batch invariance of the v0 registration's templates
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
 ``"mode": "by-calls"`` and names the target each callee relies on.  A family a sidecar registers over a range of statics
@@ -37,8 +36,7 @@ under ``unchecked`` by check, with counts, a line before the last counts the tar
 (a by-calls root's callees' verdicts only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
 bindings' records give no task list, its ``--slice`` is not of this tree or the catalog has no binding of that name; its
-report holds the binding's read set and what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which
-``--update-reads`` adds there.
+report holds what the binding's run read (``reads``: `run`).
 
 Named targets run in parallel, one worker per core (`default_jobs`), and a target whose every input is unchanged is reused
 from check's own cache (`default_cache`; ``--no-cache`` checks it now).  Each target's line, and the run's last, say where
@@ -71,18 +69,6 @@ from . import targets as TG
 from . import units as UN
 
 REPO = Path(__file__).resolve().parents[5]
-#: each catalog binding's read set as a task keyed on declared inputs declares it (what its runs' ``reads`` held, each way it
-#: ran, which ``--update-reads`` adds here: `update_reads`), its ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond ``registries``' (`cache.registry_inputs`)
-#: when its ``registry`` is true, which then are its inputs too, and beyond ``loaded``, the probes every binding's are
-#: (`_read_sets`).  ``registries.json`` holds ``registries``; ``loaded.json``, ``loaded``; ``bindings.json``
-#: holds each path once, in the one of its ``groups`` that exactly the bindings whose sets hold it share, and ``bindings``, by
-#: name, each one's other fields and the places of its groups as ranges (``"groups": "0-3,7"``; `grouped`, `expanded`).
-#: What its run reads of the catalog, every binding's record and the roots record (`units.plan`), or its slice and the shared
-#: part (`units.sliced`), comes from what it is given, each record holding the reads it is held to, so none of it is declared
-#: here.  Outside this package, so no target's key
-#: (`cache.version`) holds it
-READS = Path(__file__).resolve().parents[2] / "reads"
-READS_SCHEMA = "circuit-check-reads/v1"
 
 
 def _options(a: argparse.Namespace) -> CK.Options:
@@ -708,7 +694,7 @@ def _binding_of(plan: UN.Plan, kind: str, label: str) -> set[str]:
 def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call: bool | None = None, log=print, jobs: int = 1,
         cache: Path | None = None, mem_gb: int | None = None, progress: Path | None = None, isolate: bool | None = None,
         fork: bool = False, mem_file: Path | None = None, units: bool = False, shard: tuple[int, int] | None = None,
-        binding: str | None = None, read_sets: bool = False, sliced: tuple[dict, dict] | None = None) -> dict:
+        binding: str | None = None, sliced: tuple[dict, dict] | None = None) -> dict:
     """Every target's checks, in target order.  Isolated (``isolate``; by default when ``jobs`` > 1), each target is checked in a
     process of its own (a `CONSTRUCTED` family's members in batches, `_batched`), up to ``jobs`` at once (`parallel`): forked
     from a process that holds the task list, each check with its own memo, so a target's check never reuses what another's
@@ -769,9 +755,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     owners handed down are the shared part's: no other binding's record is read, and `units.Stale` (refused) where the slice
     is not of this tree.
 
-    With ``binding``, or ``read_sets`` and the bindings' records (``--update-reads``: every binding's), the report's ``reads``
-    holds each catalog binding checked with its read set (`_read_sets`), and ``undeclared`` what each read beyond what `READS`
-    declares of it: what a task keyed on that declaration would have read undeclared.
+    With ``binding`` and the bindings' records, the report's ``reads`` holds the binding with its read set (`_read_sets`): what
+    a task keyed on declared inputs checks its run read against.
 
     The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
     from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
@@ -783,12 +768,12 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     listed, group = None, None
     if tracing and everything and not specs:
         TG.load_registries()
-        group = CC.registry_inputs(REPO) if binding is not None or read_sets else None
+        group = CC.registry_inputs(REPO) if binding is not None else None
         listed = CC.key({"target": ["task-list", "--all"], "as_call": as_call,
                          "options": {k: getattr(opts, k) for k in opts.__dataclass_fields__}, "pinned": sorted(TG.pinned()),
                          **({"shard": list(shard)} if shard is not None else {}),
                          **({"binding": binding} if binding is not None else {})})
-        if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None and (binding is not None or not read_sets):
+        if (hit := CC.lookup(cache, listed, REPO, moved=False)) is not None:
             ids = [tuple(t) for t in hit[0]["targets"]]
             idx = list(range(len(ids))) if shard is None else SH.mine(ids, shard)
             got = [CC.lookup(cache, hit[0]["keys"][i], REPO, moved=False) for i in idx]
@@ -801,6 +786,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                     rep["shard"] = SH.manifest(shard, ids, idx, request)
                 if group is not None:
                     rep.update(_read_sets(cache, {binding: idx}, ids, hit[0]["keys"], group))
+                rep["cache"]["unread"] = CC.unread()
                 return rep
     keep = None if shard is None else (lambda kind, label: SH.shard_of(kind, label, shard[1]) == shard[0])
     units = units and listed is not None and (fork or not isolated)
@@ -882,17 +868,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if shard is not None:
         rep["shard"] = SH.manifest(shard, ids, only, request)
     if group is not None and plan is not None:
-        rep.update(_read_sets(cache, {binding: only} if binding is not None else _by_binding(plan, ids), ids, keys, group))
+        rep.update(_read_sets(cache, {binding: only}, ids, keys, group))
+    if "cache" in rep:
+        rep["cache"]["unread"] = CC.unread()
     return rep
-
-
-def _by_binding(plan: UN.Plan, ids: list[tuple[str, str]]) -> dict[str, list[int]]:
-    """Every catalog binding with the places in the list ``ids`` of the targets ``--binding`` checks under it (`_binding_of`)."""
-    out: dict[str, list[int]] = {SH.binding(e.units): [] for e in plan.entries}
-    for i, (kind, label) in enumerate(ids):
-        for name in _binding_of(plan, kind, label):
-            out.setdefault(name, []).append(i)
-    return out
 
 
 def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, str]], keys: list[dict], group: dict) -> dict:
@@ -902,11 +881,7 @@ def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, st
     modules whose source `inspect` looked for (``present``); ``incomplete``, by binding, its targets with no entry to take
     reads from (a check that raised, the tracer missed or the tree changed under).  Those modules' paths, but the files a set
     holds, are ``loaded``, every binding's: torch's import asks for the source of every module the process loaded, so which
-    a target holds is what its process loaded before it, which the run's mode and the order of its checks decide.
-    And ``undeclared``: by binding, what its read set and theirs hold beyond what `READS` declares of it (`cache.undeclared`),
-    with ``loaded``, what it holds beyond ``loaded`` there, ``unrecorded``, its targets with no entry, and ``registries``, what
-    the registries' hold beyond theirs there, which every binding's run reports: a module they import anew changes what any
-    binding reads of them, and only a binding that runs can say so."""
+    a target holds is what its process loaded before it, which the run's mode and the order of its checks decide."""
     sets: dict[str, dict] = {}
     loaded: dict[str, set[str]] = {}
     missing: dict[str, list[str]] = {}
@@ -924,138 +899,15 @@ def _read_sets(cache: Path, names: dict[str, list[int]], ids: list[tuple[str, st
         if d["registry"]:
             d.update({k: sorted(set(d[k]) - set(group[k])) for k in CC.DECLARED})
         sets[name] = d
-    have = _reads_file()
-    drift = CC.undeclared(group, have["registries"])
-    undeclared = {}
-    for name, d in sets.items():
-        was = _whole(have["bindings"].get(name), have["registries"])
-        u = CC.undeclared(_whole(d, group), was)
-        if beyond := sorted(loaded[name] - set(have["loaded"]) - {p for k in CC.DECLARED for p in (was or {}).get(k, ())}):
-            u["loaded"] = beyond
-        if name in missing:
-            u["unrecorded"] = missing[name]
-        if drift:
-            u["registries"] = drift
-        if u:
-            undeclared[name] = u
     return {"reads": {"registries": group, "loaded": sorted(set().union(*loaded.values())), "bindings": sets,
-                      **({"incomplete": missing} if missing else {})},
-            "undeclared": undeclared}
+                      **({"incomplete": missing} if missing else {})}}
 
 
-def _whole(d: dict | None, registries: dict) -> dict | None:
-    """Read set ``d`` (`READS`'s) with ``registries``' paths when it reads the registries."""
-    if d is None or not d.get("registry"):
+def _whole(d: dict, registries: dict) -> dict:
+    """Read set ``d`` (`cache.declared`'s) with ``registries``' paths when it reads the registries."""
+    if not d.get("registry"):
         return d
     return {**d, **{k: sorted({*d.get(k, ()), *registries.get(k, ())}) for k in CC.DECLARED}}
-
-
-def _reads_file() -> dict:
-    """`READS`, or none declared when there is none, each binding's read set whole (`expanded`)."""
-    got: dict = {}
-    with CC.internal():
-        for part in ("registries.json", "loaded.json", "bindings.json"):
-            if (p := READS / part).is_file():
-                got.update(json.loads(p.read_text()))
-    return expanded(got)
-
-
-def _ranges(places: list[int]) -> str:
-    """Ascending ``places`` as ranges, ``"0-3,7"`` for 0, 1, 2, 3 and 7 (`_places` reads them)."""
-    runs: list[list[int]] = []
-    for i in places:
-        if runs and runs[-1][1] == i - 1:
-            runs[-1][1] = i
-        else:
-            runs.append([i, i])
-    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
-
-
-def _places(ranges: str) -> list[int]:
-    """`_ranges`' ``ranges`` as the places they hold."""
-    out: list[int] = []
-    for run in filter(None, ranges.split(",")):
-        a, _, b = run.partition("-")
-        out.extend(range(int(a), int(b or a) + 1))
-    return out
-
-
-def grouped(bindings: dict[str, dict]) -> dict:
-    """``bindings.json``'s ``groups`` and ``bindings`` for the read sets ``bindings``: each path once, in the group of exactly the
-    bindings whose sets hold it, and each binding with its other fields and the places of its groups (`_ranges`); `expanded`
-    gives the sets back.  A path most bindings read is written once, not once a binding, and the groups go in the order of
-    their bindings (those of the first binding by name first, and so on), so a binding's places are few ranges."""
-    members: dict[tuple[str, str], list[str]] = {}
-    for n, d in sorted(bindings.items()):
-        for k in CC.DECLARED:
-            for p in d.get(k, ()):
-                members.setdefault((k, p), []).append(n)
-    by: dict[tuple[str, ...], list[tuple[str, str]]] = {}
-    for kp, ns in members.items():
-        by.setdefault(tuple(ns), []).append(kp)
-    names = sorted(bindings)
-    order = sorted(by, key=lambda ns: [n not in ns for n in names])
-    groups = [{k: sorted(p for kk, p in by[ns] if kk == k) for k in CC.DECLARED if any(kk == k for kk, _ in by[ns])}
-              for ns in order]
-    refs: dict[str, list[int]] = {n: [] for n in bindings}
-    for i, ns in enumerate(order):
-        for n in ns:
-            refs[n].append(i)
-    return {"groups": groups, "bindings": {n: {"groups": _ranges(refs[n]), **{k: v for k, v in d.items() if k not in CC.DECLARED}}
-                                           for n, d in sorted(bindings.items())}}
-
-
-def expanded(got: dict) -> dict:
-    """`READS`' ``registries``, ``loaded`` and ``bindings.json``'s (`grouped`), ``got``, as ``registries``, ``loaded`` and each
-    binding's read set whole: its groups' paths, by kind."""
-    groups = got.get("groups", [])
-    return {"registries": got.get("registries", {}), "loaded": got.get("loaded", []),
-            "bindings": {n: {**{k: v for k, v in d.items() if k != "groups"},
-                             **{k: sorted({p for i in _places(d.get("groups", "")) for p in groups[i].get(k, ())})
-                                for k in CC.DECLARED}}
-                         for n, d in got.get("bindings", {}).items()}}
-
-
-def _joined(a: dict | None, b: dict) -> dict:
-    """Read sets ``a`` and ``b`` as one: each kind's paths of either, ``registry`` where either reads the registries."""
-    if a is None:
-        return b
-    out = {**a, **b, **{k: sorted({*a.get(k, ()), *b.get(k, ())}) for k in CC.DECLARED},
-           "registry": bool(a.get("registry") or b.get("registry"))}
-    if libs := sorted({*a.get("untracked", ()), *b.get("untracked", ())}):
-        out["untracked"] = libs
-    return out
-
-
-def _probed(d: dict) -> dict:
-    """Read set ``d`` with its probes as `cache.probed` declares them now, but those its files hold."""
-    return {**d, "probes": sorted(CC.probed(REPO, d.get("probes", ())) - set(d.get("files", ())))}
-
-
-def update_reads(rep: dict, every: bool) -> list[str]:
-    """`READS` with what each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for read, added to
-    what it declares, and ``registries`` and ``loaded`` as declared and as now, both: what a binding's run reads depends on
-    how it runs (``--binding`` makes only its own binding's roots, so a target reads what making another binding's roots
-    reads where it makes them), so a declaration holds every way it ran.  With ``every`` (a run of every binding) a binding
-    the catalog no longer has is dropped.  Each probe is written as `cache.probed` declares it now, those `READS` held already
-    too.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
-    new, have = rep["reads"], _reads_file()
-    incomplete = sorted(new.get("incomplete", {}))
-    done = {n: _joined(have["bindings"].get(n), d) for n, d in new["bindings"].items() if n not in incomplete}
-    if every:
-        bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
-    else:
-        bindings = {**have["bindings"], **done}
-    bindings = {n: _probed(d) for n, d in bindings.items()}
-    regs = _probed({k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED})
-    loaded = sorted(CC.probed(REPO, {*have["loaded"], *new["loaded"]}))
-    READS.mkdir(parents=True, exist_ok=True)
-    for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
-                      ("bindings.json", grouped(bindings))):
-        tmp = READS / f".{part}.{os.getpid()}"
-        tmp.write_text(json.dumps({"schema": READS_SCHEMA, **got}, indent=1, sort_keys=True) + "\n")
-        os.replace(tmp, READS / part)
-    return incomplete
 
 
 def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None, slices: Path | None = None) -> dict:
@@ -1160,10 +1012,12 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 stats["errors"].append(r["target"])
             elif untraced:
                 stats["untraced"].append({"target": r["target"], "because": untraced[:3]})
-            elif CC.store(cache, keys[i], REPO, got, r, worker) is None:
-                stats["changed"].append(r["target"])
             else:
-                stats["stored"] += 1
+                lost = len(CC.LOST)
+                if CC.store(cache, keys[i], REPO, got, r, worker) is not None:
+                    stats["stored"] += 1
+                elif len(CC.LOST) == lost:
+                    stats["changed"].append(r["target"])
         if log:
             across = (r.get("partition") or {}).get("recomputed_across")
             qc = (r.get("partition") or {}).get("q_call") or {}
@@ -1256,7 +1110,7 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
     rep["peaks"] = heaviest(rep["targets"])
     if caches := [m["cache"] for m in manifests if m.get("cache") is not None]:
         rep["cache"] = {"hits": sum(c["hits"] for c in caches), "stored": sum(c["stored"] for c in caches),
-                        **{k: [x for c in caches for x in c[k]] for k in ("untraced", "errors", "changed")},
+                        **{k: [x for c in caches for x in c[k]] for k in ("untraced", "errors", "changed", "unread")},
                         "task_list": [c.get("task_list") for c in caches] if all(c.get("task_list") for c in caches) else None,
                         "shards": caches}
     rep["combined"] = {"shards": len(manifests), "list": manifests[0]["list"],
@@ -1466,41 +1320,6 @@ def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if any(t["failures"] for t in rep["targets"]) else 0
 
 
-#: the frozen v0 registration ``--batch`` checks: the engine profile's role and the row-id device token
-BATCH_REGISTRATION = ("LLAMA32_1B", "rtxpro6000")
-
-
-def batch(templates: Callable[[], list] | None = None) -> dict:
-    """``--batch``'s report: batch invariance (`verity_vllm.check.batch`: (a) separable, (b) shape-invariant) of each template
-    ``templates()`` gives, by default every one a request-major compilation of `BATCH_REGISTRATION` calls
-    (`verity_vllm.program.predict.batch.templates`), each verdict held to the one declared beside it."""
-    from verity_vllm.check import batch as BI
-    if templates is None:
-        from verity_vllm.program.predict import batch as PB
-
-        def templates() -> list:
-            return PB.templates(PB.registered_phi(*BATCH_REGISTRATION))
-    t0 = time.time()
-    vs = BI.check(templates())
-    return {"schema": "verity-circuit-check/batch/v1", "verdicts": [v.to_json() for v in vs], "table": BI.report(vs),
-            "seconds": round(time.time() - t0, 1)}
-
-
-def _batch_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
-    if a.all or a.targets:
-        ap.error("--batch checks the v0 registration's templates: give no target")
-    rep = batch()
-    print(rep["table"])
-    bad = [v for v in rep["verdicts"] if not v["ok"]]
-    for v in bad:
-        print(f"FAIL {v['template']}: declared {v['expect']}, got {v['got']}")
-    if a.out:
-        a.out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
-    print(f"circuit-check --batch: {len(rep['verdicts'])} template(s), {len(bad)} not as declared, {rep['seconds']} s"
-          + (f", report {a.out}" if a.out else ""))
-    return 1 if bad else 0
-
-
 #: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
 #: registries, which build there whatever else they build on first use
 PREBUILD = ("import json\n"
@@ -1593,16 +1412,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bindings", action="store_true",
                     help="with --all --cache DIR: every catalog binding's name with the targets --binding checks under it, "
                          "from the bindings' records, and no target checked (`bindings`)")
-    ap.add_argument("--update-reads", action="store_true",
-                    help=f"with --all --catalog-units --cache DIR: add what each catalog binding checked read (with --binding, "
-                         f"NAME's; else every one's) to its read set in {os.path.relpath(READS, REPO)} (review the diff; remove it "
-                         "to start over); exit 1 when a target has no entry to take its reads from")
     ap.add_argument("--combine", type=Path, nargs="+", metavar="DIR",
                     help="the report, summary and exit status the unsharded run gives, from the --shard-dir of every shard 1..N "
                          "of one run; refused (exit 2) unless they ran exactly the whole list's targets, each once")
     ap.add_argument("-q", "--quiet", action="store_true")
-    ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl",
-                    help="hold this flock-ir-tmpl template to the one target's flat lowering instead of running the property "
+    ap.add_argument("--structural", type=Path, metavar="UNIT.tmpl|DIR",
+                    help="hold this flock-ir-tmpl template, or the split in this directory (its nets wired to lookup slots, "
+                         "circuit_check.structural_slots), to the one target's flat lowering instead of running the property "
                          "checks (circuit_check.structural): accepted by construction, else on every input, else on random ones")
     ap.add_argument("--exhaustive-bits", type=int, default=ST.EXHAUSTIVE_BITS,
                     help="with --structural: evaluate on every input when the template has at most this many input bits")
@@ -1611,18 +1427,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ambient", action="store_true",
                     help="lower each target in a plain and a perturbed interpreter instead of running the property checks "
                          "(circuit_check.ambient): one text, and no read of the environment, a clock or an unseeded draw")
-    ap.add_argument("--batch", action="store_true",
-                    help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
-                         "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine, a.records_only, a.bindings))) > 1:
-        ap.error("--structural, --ambient, --batch, --combine, --records-only and --bindings are six modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.combine, a.records_only, a.bindings))) > 1:
+        ap.error("--structural, --ambient, --combine, --records-only and --bindings are five modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
         return _ambient_main(a, ap)
-    if a.batch:
-        return _batch_main(a, ap)
     if a.combine:
         return _combine_main(a, ap)
     if a.jobs is not None and a.jobs < 0:
@@ -1642,11 +1453,6 @@ def main(argv: list[str] | None = None) -> int:
                                   or a.update_pins or a.shard or a.records_only):
         ap.error("--binding checks one catalog binding's targets from the bindings' records: give --all, --catalog-units and "
                  "--cache DIR, and no target, --no-cache, --update-pins, --shard or --records-only")
-    if a.update_reads and (a.targets or not a.all or not a.catalog_units or a.cache is None or a.no_cache or a.update_pins
-                           or a.shard or a.records_only or a.bindings):
-        ap.error("--update-reads writes the read sets of the catalog bindings a run checks from their records: give --all, "
-                 "--catalog-units and --cache DIR, and no target, --no-cache, --update-pins, --shard, --records-only or "
-                 "--bindings")
     if a.ranges is not None:
         try:
             a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
@@ -1673,6 +1479,9 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
+        if (ex := CC.expire(cache))["gone"] or ex["left"]:
+            print(f"circuit-check: {len(ex['gone'])} checker version(s) no run used for {CC.EXPIRE_S // 3600} hours removed "
+                  f"from {cache}" + (f"; left: {ex['left'][:3]}" if ex["left"] else ""), file=sys.stderr)
         if (why := prebuild(log=None if a.quiet else print)) is not None:
             print(f"circuit-check: refused: {why}", file=sys.stderr)
             return 2
@@ -1689,7 +1498,7 @@ def main(argv: list[str] | None = None) -> int:
         rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
                   log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, cache=cache,
                   mem_gb=a.mem_gb, mem_file=a.mem_gb_file, isolate=True, fork=True, progress=progress,
-                  units=a.catalog_units, shard=shard, binding=a.binding, read_sets=a.update_reads, sliced=sliced)
+                  units=a.catalog_units, shard=shard, binding=a.binding, sliced=sliced)
     except UN.Stale as e:
         if a.binding is None:
             raise
@@ -1701,26 +1510,11 @@ def main(argv: list[str] | None = None) -> int:
     _cache_lines(rep)
     if a.update_pins:
         update_pins(rep)
-    unread = 0
-    if a.update_reads:
-        if "reads" not in rep:
-            print("circuit-check --update-reads: no read set: the bindings' records gave no task list (run --records-only "
-                  "first)", file=sys.stderr)
-            return 2
-        incomplete = update_reads(rep, every=a.binding is None)
-        print(f"circuit-check --update-reads: {len(rep['reads']['bindings']) - len(incomplete)} binding(s)' read sets in "
-              f"{os.path.relpath(READS, REPO)}" + (f"; left as they were, a target with no entry: {', '.join(incomplete[:8])}"
-                                              if incomplete else ""))
-        unread = 1 if incomplete else 0
-    elif a.binding is not None and (beyond := rep.get("undeclared", {}).get(a.binding)):
-        print(f"circuit-check --binding {a.binding}: read beyond what {os.path.relpath(READS, REPO)} declares of it "
-              f"({', '.join(sorted(beyond))}; the report's undeclared): run it again with --update-reads and commit "
-              f"{os.path.relpath(READS, REPO)}", file=sys.stderr)
     if a.binding is not None:
-        return max(unread, verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
-                                   what=f"binding {a.binding}: {len(rep['targets'])} target(s)"))
+        return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
+                       what=f"binding {a.binding}: {len(rep['targets'])} target(s)")
     if shard is None:
-        return max(unread, verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings))
+        return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings)
     SH.write(a.shard_dir, rep, wall_s=round(wall, 1), prologue_s=rep.get("prologue_s"), jobs=jobs)
     m = rep["shard"]
     print(f"circuit-check: shard {m['shard']}/{m['shards']}'s records and manifest are in {a.shard_dir}")
@@ -1743,11 +1537,14 @@ def _bindings_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
 
 
 def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
-    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored."""
+    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored, or lost it to its version's
+    removal (`cache.expire`), which costs a later run the records and fails nothing."""
     t0 = time.time()
     rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb, slices=a.slices)
     rep["seconds"] = round(time.time() - t0, 1)
-    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]):
+    if CC.LOST:
+        rep["lost"] = list(CC.LOST)
+    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]) and not CC.LOST:
         rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1) + "\n")
@@ -1757,7 +1554,8 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
              if "bytes" in rep else "")
           + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
-             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else "")
+          + (f"; {len(rep['lost'])} lost: their checker version was removed while they were stored" if "lost" in rep else ""))
     return 1 if "why" in rep else 0
 
 
@@ -1791,6 +1589,8 @@ def _cache_lines(rep: dict) -> None:
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
               f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran"
               + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
+        for line in c.get("unread", ()):
+            print(f"circuit-check: unread entry {line}")
 
 
 def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:

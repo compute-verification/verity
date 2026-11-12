@@ -1,17 +1,21 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-system's (pinned from Flock's commit strings)."""
+system's (pinned from Flock's commit strings), and an appended block's payload in the witness is its block decoded. The
+opening unit's compression is pinned as the commitments' own."""
 
 from __future__ import annotations
 
 import copy
 import hashlib
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
+from verity.commitments import gates
 from verity.protocols.poub.verifier import audit, codec, coins, opening as O, receipts
 from verity.protocols.poub.verifier.receipts import Plan
 
@@ -31,22 +35,22 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> O.Store:
+def store() -> audit.Store:
     payloads = [payload(j) for j in range(N)]
     salt = Entropy(b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(N)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return O.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def window(store: O.Store) -> SimpleNamespace:
-    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call, so
-    the same draws over any store of the same registration."""
+def window(store: audit.Store) -> SimpleNamespace:
+    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call,
+    so the same draws over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()
-    s = O.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
-                  clock=clock)
+    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1),
+                       not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}
     for i in range(N // L):
@@ -91,6 +95,20 @@ def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
     assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
 
 
+def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
+    """The witness's payload of an appended block (`audit.Store.payload`) is its append's while it awaits its coin, then
+    its block decoded under its digest and that coin: the store keeps no second copy."""
+    st = audit.Store(store.registration, store.payloads, store.salts)
+    m = [payload(N + u) for u in range(2)]
+    a = st.append(m, [Entropy(b"append salts")(receipts.SALT_BYTES) for _ in m])
+    assert [st.payload(a.first + u) for u in range(2)] == m
+    st.encode(a.first, hashlib.sha512(b"an append's coin").digest()[:coins.COIN_BYTES])
+    assert not st.pending and [st.payload(a.first + u) for u in range(2)] == m
+    st.blocks[a.first] = hashlib.shake_256(b"a lost appended block").digest(codec.BLOCK_BYTES)
+    with pytest.raises(ValueError, match=f"block {a.first} decodes to no payload"):
+        st.payload(a.first)
+
+
 def test_a_window_with_no_draws_is_malformed(store) -> None:
     """A window whose draws are empty (none a session makes) is `malformed` at `decide`, as at `verify`."""
     w = window(store)
@@ -112,3 +130,14 @@ def test_the_plan_link_and_the_public_rows(store) -> None:
     for key in O.public(d, seed, S, w.c3.values):
         off = dict(a, **{key: [a[key][0] ^ 1, *a[key][1:]]})
         assert O.check(d, off, seed, S, w.c3.values, salt, bc) == "malformed", key
+
+
+def test_the_opening_units_compression_is_pinned_as_the_commitments_own() -> None:
+    """`RowCompress_v1`, the opening unit's SHA-512 compression, has the AND rows and the type circuit-check pins for
+    `Sha512Compress_v1` (`verity.commitments.gates`' `lms` pins), the rows the sampling planner prices a compression at
+    (`optimize.SHA512_ROWS`): both lower `compress_gadget`."""
+    here = Path(__file__).resolve().parents[1] / "commitments" / "gates"
+    unit = json.loads((here / "block_check.circuit-check.json").read_text())["definitions"]
+    shared = json.loads(Path(gates.__file__).with_name("lms.circuit-check.json").read_text())["definitions"]
+    row, compress = unit["RowCompress_v1"], shared["Sha512Compress_v1"]
+    assert (row["and"], row["type"]) == (compress["and"], compress["type"])

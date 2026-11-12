@@ -235,6 +235,25 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
 
 
+def test_a_suites_bound_stretches_for_fewer_workers_than_it_was_measured_on(tmp_path, monkeypatch):
+    """verity-vllm's 14,400 s holds for the 5 workers its 10,000 s was measured on; a whole check on an 11-core slot ran it on 3
+    and killed it at 14,400 s, short of the 16,700 s 3 workers take. Its bound follows the workers it gets, never below its own."""
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "timeout_s = 14400\ntimeout_workers = 5\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.timeout_workers == 5
+    assert [S.bound(suite, n) for n in (3, 2, 5, 16)] == [24000.0, 36000.0, 14400.0, 14400.0]
+    assert S.bound(S.Suite("x", "x", (), ()), 2) == S.SUITE_TIMEOUT_S, "undeclared: the fixed bound, whatever the workers"
+    for bad in ("timeout_s = 60\ntimeout_workers = 0\n", "timeout_s = 60\ntimeout_workers = 2.5\n", "timeout_workers = 5\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="timeout_workers"):
+            S.discover()
+
+
 def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
     """verity-flock's tests run the verifier's binaries, which no plan builds (`check.py --plan` left the suite unkeyed): built by
     check's lean-build, or this runner's `lean_build`, before the suite runs, they are keyed by the verifier's sources, so a
@@ -276,7 +295,7 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 4)
     meminfo = tmp_path / "meminfo"
-    for gb, want in ((13, 1), (20, 2), (64, 4), (1, 1)):
+    for gb, want in ((6, 1), (10, 2), (64, 4), (1, 1)):
         meminfo.write_text(f"MemTotal:       99999999 kB\nMemAvailable:   {gb << 20} kB\n")
         assert S.default_jobs(meminfo, 1e9) == want
     assert S.default_jobs(tmp_path / "absent", 1e9) == 4
@@ -289,11 +308,11 @@ def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_h
     monkeypatch.setattr(S, "cpus", lambda: 32)
     meminfo = tmp_path / "meminfo"
     meminfo.write_text(f"MemAvailable:   {1500 << 20} kB\n")
-    assert S.default_jobs(meminfo, 16.0) == 1
-    assert S.default_jobs(meminfo, 100.0) == 11
-    assert S.default_jobs(tmp_path / "absent", 40.0) == 4
+    assert S.default_jobs(meminfo, 16.0) == 3
+    assert S.default_jobs(meminfo, 100.0) == 22
+    assert S.default_jobs(tmp_path / "absent", 40.0) == 8
     monkeypatch.setattr(S, "slot_mem_gb", lambda: 20.0)
-    assert S.default_jobs(meminfo) == 2
+    assert S.default_jobs(meminfo) == 4
 
 
 def test_a_research_run_reservation_bounds_the_run_where_no_cgroup_caps_it(tmp_path, monkeypatch):
@@ -487,6 +506,45 @@ def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_
     pkgs = S.members()
     assert [s.name for s in S.touched(S.discover(), pkgs, S.merge_base(main), S.worktree(), S.locked())] == ["a"]
     assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
+
+
+def test_changed_quick_takes_whole_the_test_modules_the_change_reaches(tmp_path, monkeypatch):
+    """The quick tier keeps the slow tests of each test module the change adds or modifies and of each that imports one, or a
+    changed helper, by name through its suite's test files: a slow test that calls a helper the change moved fails before the
+    mark, not first in the full check. A change to the code under test or to a conftest takes none."""
+    _workspace(tmp_path)
+    tests = tmp_path / "a" / "tests"
+    files = {"helper.py": "X = 1\n", "conftest.py": "",
+             "test_uses_helper.py": "from helper import X\n\ndef test_x():\n    assert X\n",
+             "test_shared.py": "def shared():\n    return 1\n\ndef test_shared():\n    pass\n",
+             "test_imports_shared.py": "from test_shared import shared\n\ndef test_it():\n    assert shared()\n",
+             "test_alone.py": "def test_alone():\n    pass\n"}
+    for name, text in files.items():
+        (tests / name).write_text(text)
+    (tmp_path / "a" / "a.py").write_text("A = 1\n")
+    (tmp_path / "b" / "tests" / "test_b.py").write_text("def test_b():\n    pass\n")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    S = _suites(monkeypatch, tmp_path)
+    base = _git(tmp_path, "rev-parse", "HEAD")
+
+    def whole():
+        suites, pkgs = S.discover(), S.members()
+        cuts = {s: S.dropped(s, S.inputs_of(s, pkgs)) for s in suites}
+        return {s.name: ms for s, ms in S.taken_whole(suites, base, S.worktree(), cuts).items()}
+
+    (tmp_path / "a" / "a.py").write_text("A = 2\n")
+    (tests / "conftest.py").write_text("# every module's\n")
+    assert whole() == {}
+    (tests / "test_shared.py").write_text(files["test_shared.py"] + "\n")
+    assert whole() == {"a": ["a/tests/test_imports_shared.py", "a/tests/test_shared.py"]}
+    (tests / "helper.py").write_text("X = 2\n")
+    (tests / "test_new.py").write_text("def test_new():\n    pass\n")
+    (tmp_path / "b" / "tests" / "test_b.py").unlink()
+    assert whole() == {"a": ["a/tests/test_imports_shared.py", "a/tests/test_new.py", "a/tests/test_shared.py",
+                             "a/tests/test_uses_helper.py"]}, "a deleted module runs nowhere"
+    assert S.whole_args(S.discover()[0], whole()["a"][:1], ["-x"]) == ["-m", "not slow or verity_whole",
+                                                                       "--verity-whole=tests/test_imports_shared.py", "-x"]
 
 
 def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
@@ -962,18 +1020,40 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact_cache_off(tmp_path):
+    """`--fresh` compiles what it tests (`UNCACHED_ENV`): its `lake build` of the verifier and the tests of a suite that runs
+    Lake get Lake's local artifact cache off, where Lake would unpack what an earlier build on the node left there instead of
+    compiling it. Without `--fresh` both keep the caller's."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
+                                          "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
+    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / ".gitignore").write_text(".lake/\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "verifier")
+    lake, said = tmp_path / "home" / ".elan" / "bin" / "lake", tmp_path / "lake-said"   # ELAN puts $HOME/.elan/bin first
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f'#!/bin/sh\necho "$1 ${{LAKE_ARTIFACT_CACHE-unset}}" >> {said}\n')
+    lake.chmod(0o755)
+    for args, want in (((), "true"), (("--fresh",), "false")):
+        p = _run_suite(root, tmp_path, *args, extra={"HOME": str(tmp_path / "home"), "LAKE_ARTIFACT_CACHE": "true", "WANT": want})
+        assert p.returncode == 0 and "passed  verity-flock" in p.stdout, p.stdout + p.stderr
+    assert said.read_text().splitlines() == ["build true", "build false"]
+
+
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
     """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
-    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, and the
-    store is required; with none, neither."""
+    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, the
+    store is required and the vLLM reference regression runs; with none, none of the three."""
     root = tmp_path / "tree"
     run = tmp_path / "research" / "runs" / "r1"
     custody = tmp_path / "research" / "requests" / "r1" / "custody"
     run.mkdir(parents=True)
     custody.mkdir(parents=True)
     test = ("import os\n\ndef test_env():\n"
-            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED')) == (os.environ['WANT_C'] or None, "
-            "os.environ['WANT_R'] or None)\n")
+            "    assert (os.environ.get('CHECK_STORE_CUSTODY'), os.environ.get('VERITY_STORE_REQUIRED'), os.environ.get('VERITY_REGRESSION'))"
+            " == (os.environ['WANT_C'] or None, os.environ['WANT_R'] or None, os.environ['WANT_R'] or None)\n")
     _env_workspace(root, {"pkg": test})
     extra = {"RESEARCH_RUN_ID": "r1", "RESEARCH_RUN_DIR": str(run), "WANT_C": "", "WANT_R": ""}
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
@@ -1038,6 +1118,31 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
     p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
     p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_each_test_process_starts_with_onednn_held_off_amx_unless_the_caller_names_the_variable(tmp_path, monkeypatch):
+    """oneDNN reads its ISA cap once, at a process's first primitive, so a cap set by a suite's own code comes too late for
+    whatever ran a primitive before it. The runner puts it in the environment the suite's process starts with: the suite's
+    conftest sees it as it is imported, ahead of every test module, and a test sees the same. A value the caller's environment
+    names stays, and `research run` gives its jobs the same name and value."""
+    from research import result
+
+    S = _suites(monkeypatch, tmp_path)
+    name, cap = S.ONEDNN_ISA
+    assert (name, cap) == result.ONEDNN_ISA == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": f"import os\n\nAT_IMPORT = os.environ.get({name!r})\n\n\ndef test_env(conftest_saw):\n"
+                                 f"    now, want = os.environ.get({name!r}), os.environ['WANT']\n"
+                                 "    assert conftest_saw == AT_IMPORT == now == want\n"})
+    (root / "pkg" / "tests" / "conftest.py").write_text(f"import os\n\nimport pytest\n\nAT_IMPORT = os.environ.get({name!r})\n\n\n"
+                                                        "@pytest.fixture\ndef conftest_saw():\n    return AT_IMPORT\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "conftest")
+    monkeypatch.delenv(name, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": cap})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "AVX2", name: "AVX2"})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
@@ -1150,6 +1255,24 @@ def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
     assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
 
 
+def test_a_suite_on_fewer_workers_than_its_bound_holds_for_runs_to_the_stretched_bound(tmp_path):
+    """The run applies `bound` with the workers the suite got: the hanging suite declares 0.25 s on 4 workers, runs on 1, and is
+    killed at 1 s."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.25\ntimeout_workers = 4\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts")
+    assert p.returncode == 1 and "TIMED OUT: still running after 1 s, so its process group was killed" in p.stdout, p.stdout
+
+
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
     S = _suites(monkeypatch, tmp_path)
     n = S.oom_kills()
@@ -1187,6 +1310,45 @@ def test_a_failed_suite_keeps_its_passes_and_a_sibling_fix_reuses_them(tmp_path)
     (tests / "test_effect.py").write_text("import os\nos.environ['PKG_FLAG'] = '2'\n\ndef test_effect():\n    pass\n")
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "7 passed" in p.stdout and _reused(tmp_path) == [], p.stdout
+
+
+def test_the_quick_tier_runs_the_slow_tests_the_change_reaches_and_keys_each_module_as_its_selection(tmp_path):
+    """`--changed --quick`, the quick tier's run: the slow test of a module the change reaches runs and its failure fails the run,
+    while another module's slow test stays out and its quick pass from an earlier `--quick` is reused. A module taken whole keeps
+    its passes as a full run would, so the full run after it reuses them; keyed on the files taken whole, no other run would."""
+    import json
+
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+                                                 'markers = ["slow: slow"]\n\n[tool.verity.tests]\nparallel = true\n')
+    body = "import pytest\n\ndef shared():\n    return 1\n\ndef test_quick():\n    pass\n\n@pytest.mark.slow\ndef test_slow():\n    assert {}\n"
+    (tests / "test_a.py").write_text(body.format("True"))
+    (tests / "test_b.py").write_text(body.format("True"))
+    (tests / "test_c.py").write_text("import pytest\nfrom test_a import shared\n\ndef test_quick():\n    assert shared()\n\n"
+                                     "@pytest.mark.slow\ndef test_slow():\n    pass\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "base")
+    base = _git(root, "rev-parse", "HEAD")
+    p = _run_suite(root, tmp_path, "--quick")
+    assert p.returncode == 0 and "3 passed" in p.stdout, p.stdout
+
+    (tests / "test_a.py").write_text(body.format("False"))
+    out = tmp_path / "out.json"
+    p = _run_suite(root, tmp_path, "--changed", base, "--quick", "--json", str(out))
+    assert ("pkg: 2 test modules the change reaches run whole, slow tests included: pkg/tests/test_a.py, pkg/tests/test_c.py"
+            in p.stdout), p.stdout
+    [r] = json.loads(out.read_text())
+    assert p.returncode == 1 and r["failed_tests"] == ["tests/test_a.py::test_slow"], p.stdout
+    assert (r["counts"]["passed"], r["reused"]) == (3, 1) and _reused(tmp_path) == ["tests/test_b.py::test_quick"], p.stdout
+
+    (tests / "test_a.py").write_text(body.format("1"))
+    assert _run_suite(root, tmp_path, "--changed", base, "--quick").returncode == 0
+    p = _run_suite(root, tmp_path)
+    assert p.returncode == 0 and "2 passed, 4 reused" in p.stdout, p.stdout
+    assert _reused(tmp_path) == [f"tests/test_{m}.py::test_{t}" for m in "ac" for t in ("quick", "slow")]
 
 
 def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(tmp_path):
@@ -1950,7 +2112,7 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
     heavy = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
     assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
-    assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 350 // S.TEST_PROCESS_GB, \
+    assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 100, 350) == 350 // S.TEST_PROCESS_GB, \
         "no worker_gb: TEST_PROCESS_GB each (pous_check's undeclared workers can reach 11 GB)"
 
 
@@ -1958,7 +2120,7 @@ def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(
     """Two parallel suites side by side, each sized to all of --mem-gb, would together reach twice it (circuit_check's 53
     workers and flock's 30 reached 800 GB)."""
     S = _suites(monkeypatch, tmp_path)
-    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(20, 4) == 0 and S.wide_gb(None, 4) is None
+    assert S.wide_gb(480, 4) == 480 - 4 * S.TEST_PROCESS_GB and S.wide_gb(16, 4) == 0 and S.wide_gb(None, 4) is None
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
     assert S.wide_workers(flock, 69, S.wide_gb(480, 4)) == (480 - 4 * S.TEST_PROCESS_GB) // 16
     assert S.worker_gb(flock) == 16 and S.worker_gb(S.Suite("light", "l", (), (), parallel=True)) == S.TEST_PROCESS_GB
@@ -1981,7 +2143,7 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
     """A 16 GiB agent-test job on 48 CPUs would start 44 test processes if only the parallel suites' workers were sized
     against memory, and the OOM killer took the whole scope."""
     S = _suites(monkeypatch, tmp_path)
-    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
+    assert S.serial_slots([5.0] * 48, 0, 48, 16) == 3, "16 GiB holds three processes at TEST_PROCESS_GB"
     assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
     assert S.serial_slots([100.0] * 40, 1, 32, 1000) == 31 and S.serial_slots([100.0] * 40, 1, 32, None) == 31
     assert S.serial_slots([100.0] * 40, 1, 32, 2) == 1, "even a job smaller than one process runs its suites, one at a time"
@@ -1989,14 +2151,14 @@ def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_p
 
 
 def test_the_suites_in_one_process_leave_the_parallel_suites_half_the_memory(tmp_path, monkeypatch):
-    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 16 serial lanes at
-    TEST_PROCESS_GB took 144 of a 150 GB check's GB for the whole run, and flock ran on one 16 GB worker. Half of 150 GB holds
-    8 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
+    """A parallel suite's workers are fixed when it starts, which is before the one-process suites finish: 32 serial lanes at
+    TEST_PROCESS_GB would take 144 of a 150 GB check's GB for the whole run, and flock would run on one 16 GB worker. Half of
+    150 GB holds 16 serial lanes (72 GB), so flock gets 78 // 16 = 4 workers, and the two together still fit in --mem-gb."""
     S = _suites(monkeypatch, tmp_path)
     flock = S.Suite("flock", "f", (), (), parallel=True, worker_gb=16)
-    assert S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90) == 16
-    r = S.serial_slots([100.0] * 8 + [50.0] * 16, 4, 90, 150)
-    assert r == 8 and S.wide_gb(150, r) == 150 - 8 * S.TEST_PROCESS_GB
+    assert S.serial_slots([100.0] * 8 + [50.0] * 48, 4, 90) == 32
+    r = S.serial_slots([100.0] * 8 + [50.0] * 48, 4, 90, 150)
+    assert r == 16 and S.wide_gb(150, r) == 150 - 16 * S.TEST_PROCESS_GB
     assert S.wide_workers(flock, 90 - r, S.wide_gb(150, r)) == 4 and S.wide_workers(flock, 74, S.wide_gb(150, r)) == 4
     assert r * S.TEST_PROCESS_GB + 4 * 16 <= 150
     assert S.serial_slots([5.0] * 48, 0, 48, 150) == 150 // S.TEST_PROCESS_GB, "with no parallel suite they may take all of it"
@@ -2016,6 +2178,86 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    big, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("big", "a", "b"))
+    heavy = S.Suite("heavy", "h", (), (), parallel=True, worker_gb=16)
+    [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
+    assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
+    assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
+    assert [(x.suites, x.procs) for x in S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None)] == [([big], 6), ([a, b], 1)], \
+        "a suite never timed runs in the rest's lane, counted at nothing"
+    assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
+    assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
+    assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
+    assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
+        "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def _line_end(S, lanes, cost) -> float:
+    """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
+    ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""
+    return max(sum(cost(s, S.wide_workers(s, lane.procs, lane.gb)) for s in lane.suites) for lane in lanes)
+
+
+def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_path, monkeypatch):
+    """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for verity/definitions, whose one
+    long test bounds it, beside circuit_check, which its workers' count bounds. One after another on 16 processes the line
+    lasts the sum of the suites; in two lanes on twice the processes, each about as many as it had alone, it ends near the
+    longer of the longest suite's seconds and the rest's, and before the line of one lane on all 32."""
+    S = _suites(monkeypatch, tmp_path)
+    work = {"cc": (16_000, 100), "defs": (3_200, 600), "pouw": (3_200, 50), "ops": (1_600, 20)}
+    suites = [S.Suite(n, n, (), (), parallel=True) for n in work]
+
+    def cost(s, n: int) -> float:
+        total, longest = work[s.name]
+        return max(longest, total / n)
+
+    seconds = [cost(s, 16) for s in suites]
+    big, rest = seconds[0], sum(seconds[1:])
+    lanes = S.wide_lanes(suites, seconds, 32, None)
+    assert [x.suites for x in lanes] == [suites[:1], suites[1:]]
+    end = _line_end(S, lanes, cost)
+    assert end <= 1.05 * max(big, rest) and end < _line_end(S, [S.Lane(suites, 32, None)], cost) < sum(seconds)
+    gb = 32 * S.TEST_PROCESS_GB
+    held = S.wide_lanes(suites, seconds, 64, gb)
+    assert sum(x.gb for x in held) == gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
+                                                 for x in held for s in x.suites), "each lane's workers fit its share of the GB"
+    assert _line_end(S, held, cost) <= 1.05 * max(big, rest), "the memory bounds the workers as the processes did"
+
+
+def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
+    """End to end: three parallel suites whose recorded seconds put the longest beside the other two, on 4 of 6 processes and 2,
+    pass as the same suites under the same keys as in one lane (no recorded seconds)."""
+    import json
+
+    root = tmp_path / "tree"
+    test = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
+    _env_workspace(root, {"big": test, "mid": test, "small": test})
+    for name in ("big", "mid", "small"):
+        f = root / name / "pyproject.toml"
+        f.write_text(f.read_text() + "\n[tool.verity.tests]\nparallel = true\n")
+    _git(root, "commit", "-qam", "all three are parallel")
+    (tmp_path / "cache").mkdir()
+
+    def line(durations: dict | None) -> tuple[str, list[tuple]]:
+        (tmp_path / "cache" / "durations.json").unlink(missing_ok=True)
+        if durations:
+            (tmp_path / "cache" / "durations.json").write_text(json.dumps(durations))
+        out = tmp_path / "out.json"
+        p = _run_suite(root, tmp_path, "--fresh", "--jobs", "6", "--json", str(out))
+        assert p.returncode == 0, p.stdout + p.stderr
+        return p.stdout, sorted((r["name"], r["status"], r["key"], r["counts"]) for r in json.loads(out.read_text()))
+
+    out, one = line(None)
+    assert "beside" not in out and all(re.search(rf"passed  {n} .* on 6 workers", out) for n in ("big", "mid", "small")), out
+    out, two = line({"big": 100.0, "mid": 30.0, "small": 20.0})
+    assert "suites: big on 4 processes beside 2 parallel suites one at a time on 2" in out, out
+    assert re.search(r"passed  big .* on 4 workers", out) and all(re.search(rf"passed  {n} .* on 2 workers", out)
+                                                                   for n in ("mid", "small")), out
+    assert two == one and [r[1] for r in one] == ["passed"] * 3
 
 
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):

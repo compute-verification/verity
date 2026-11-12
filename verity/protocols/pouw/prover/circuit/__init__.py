@@ -13,7 +13,7 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
-* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Flock/Draw.lean`'s work sampling design), and the tile checks' layout.
+* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
@@ -41,6 +41,16 @@
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), for the public m that dense credit counts.
+* `lead`: the lead's sampled unit (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
+  most 32 k32 steps, its committed words against the call's data and the certifier's coin feed at the layout of
+  `security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold, which reads A_i · B_j back
+  exactly within 2^22 and serves verity_int8's epilogue on it. Its window: the registration record, the instance
+  positions and domains, where a unit's words and A rows are committed, and the verifier's refusals of the certifier's
+  record (`PouwCheck/Opening.lean` is its Lean reader).
+* `window_statement`: an execution phase's statement on its committed entry rows (`PouwWindowStatement`,
+  `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
+  calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
+  the pass's public one and the calls' pass tiles in order.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

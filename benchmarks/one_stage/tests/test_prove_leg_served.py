@@ -119,19 +119,6 @@ def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabular
     assert (info["layout"], m.reads, len(m.out_rows)) == ("window", "inline", 2)
 
 
-def test_an_unstaged_unit_is_sized_and_recorded_blocked_never_staged(monkeypatch, tmp_path):
-    """`defs` sizes an ``UNSTAGED`` unit and records its reason as the blocker without staging it: lowered whole,
-    `EmbeddingRead_v1` passes a node's memory."""
-    def staged(*_a, **_k):
-        raise AssertionError("staged")
-
-    monkeypatch.setattr(L, "sized", lambda fn: {"est_ands": 1, "refused_block": False})
-    monkeypatch.setattr(L, "prove_served", staged)
-    rec = L.defs(["embedding-read:1b:300"], object(), tmp_path, True, 0, 10**9)["embedding-read:1b:300"]
-    assert rec["blocker"] == f"not staged: {L.UNSTAGED['EmbeddingRead_v1']}" and "error" not in rec
-    assert L.defs_ok(rec)
-
-
 @pytest.mark.parametrize("shape,want", [("rope:1b:8", "inline"), ("attention-v19:1b:256:block", "slots"),
                                         ("attention-v20:8b:256:end", "slots")])
 def test_a_served_member_reads_its_tables_as_its_template_does_unless_told(shape, want):
@@ -161,3 +148,36 @@ def test_a_served_members_reads_reach_its_stager(monkeypatch, tmp_path, reads):
     with pytest.raises(Built):
         L.stage(m, 0, {"partition": "p", "program": "q"}, tmp_path, b"k" * 32, {})
     assert seen["reads"] == reads
+
+
+def test_a_structural_leg_stages_struct_lowers_template_else_flat_saying_why(monkeypatch, tmp_path):
+    """With a layout (``Tools.structural``), a member's stager is `struct_lower`'s template at it; where struct_lower
+    refuses the Definition, or the member's reads are in lookup slots, it is the flat statement at the member's reads, and
+    the reason is the member's. Without ``tmpl_unit``, which places a templated unit for its prover, no layout is taken."""
+    from verity_flock import class_statement as CS
+
+    calls, refuse = [], {"on": False}
+
+    def stager(*_a, **kw):
+        calls.append(kw)
+        if kw.get("structural") and refuse["on"]:
+            raise NotImplementedError("an assertion is not laid out")
+        return kw
+
+    monkeypatch.setattr(CS, "UnitStager", stager)
+    bound = {"partition": "p", "program": "q"}
+    inline, _ = L.served_member("rope:1b:8", 0, reads="inline")
+    slots, _ = L.served_member("rope:1b:8", 0, reads="slots")
+    for member, on, n, why in ((inline, False, 1, None), (inline, True, 2, "struct_lower: an assertion is not laid out"),
+                               (slots, False, 1, "its reads are in slots, and a templated statement's are inline")):
+        calls.clear()
+        refuse["on"] = on
+        st, got = L._stager(member, tmp_path, bound, "iv/hybrid/4")
+        assert (len(calls), got, st) == (n, why, calls[-1]) and st["bind"] == bound
+        assert (st.get("layout"), st.get("structural"), st.get("reads")) == \
+            (("iv/hybrid/4", True, None) if why is None else (None, None, member.reads))
+    calls.clear()
+    st, got = L._stager(inline, tmp_path, bound, None)
+    assert (len(calls), got, st.get("layout"), st["reads"]) == (1, None, None, "inline")
+    with pytest.raises(ValueError, match="come together"):
+        L.Tools("flock-circuit", "flock-verify", structural="iv/hybrid/4")

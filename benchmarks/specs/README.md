@@ -9,6 +9,9 @@ every key a spec may hold, how a point is timed, and what a result says. This fi
   else `stock`, else its first arm.
 - A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
   and traffic shapes, every request sampled greedily. A spec names one by its id.
+- A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
+  row with its staged statement's pin, timed at each of its prover counts on one card with the spec's cores. Its points
+  run only with `--direct NODE`.
 
 ~~~text
 verity-bench plan SPEC     # each point's identity, and its passing run if it has one
@@ -47,6 +50,9 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
 - `llama31-8b-1gpu-pearl-c-whole-served-h200`: the whole-step arm on one H200, against compiled stock FP8.
+- `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
+  on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32, 8,192 tokens a step
+  (`served_pearlplus.sh`'s step).
 
 ## PoUS's bandwidth audit
 
@@ -55,9 +61,16 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
 
+## The proof server at steady state
+
+- `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
+  two and four provers on one H200 with ten cores, each statement fetched from the store.
+
 ## Sweeps
 
 - `quick`: batches 8 and 32, 512-token prompts, mixed traffic.
 - `b32`: batch 32 alone, 512-token prompts, mixed traffic.
 - `width`: batches 1, 8 and 32, 512-token prompts, mixed traffic.
 - `full`: batches 1, 8, 32 and 128, 512- and 8,192-token prompts, decode-heavy, prefill-heavy and mixed traffic.
+- `prefill`: batch 32 alone, 1,024-token prompts, prefill-heavy traffic, one output token each: `served_pearlplus.sh`'s
+  load (`verity-bench vllm --sweep prefill`).

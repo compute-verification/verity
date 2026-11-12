@@ -1,10 +1,10 @@
 """Advice v1: `decode(encode(a)) == a` on the replay's step traces and a trace-corpus trace, under the uniform codebook
 and a fitted one; the engine's arrival order is sent as its deviations from the warden's release order and recovered
-from the advice's rows; the hits past the pool bound are sent and held to the replay's; the KV pool is the
-registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries the
-decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak bound's
-`hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
-(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a shortened
+from the advice's rows; every hit is the replay's block pool's, past the pool bound too, and none is sent; the KV pool is
+the registration's, never the string's; each value is charged to A5's window, and the certifier's state chain carries
+the decisions charged before their step's window; the strings are prefix-free (so the charge meets the sampled leak
+bound's `hAs`); and `decode` is total, refusing by name everything but a canonical string. REDTEAM's phase 7 probes of v1
+(prefix-freeness on long strings, totality on adversarial frames, the pool field, what the book changes, a sent
 shortfall) are among them."""
 
 from __future__ import annotations
@@ -204,23 +204,23 @@ def test_the_batch_order_is_recovered_from_later_steps(smallkv):
     assert got.advice == adv and list(got.arrival) == _ordinals(t, rec)
 
 
-def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
-    """Past the pool bound every lookup's shortfall is sent and charged, nonzero where the replay evicted; any other
-    shortfall (one more, one fewer, a shortened one), or one hit more or fewer, is refused."""
+def test_every_hit_is_the_replays_past_the_bound_too(smallkv):
+    """Past the pool bound, where the replay evicts, every hit is still its block pool's: the residual sends none and
+    the string decodes back to the advice. Under a book with room for hits, a string that sends one, a shortfall of 0
+    or 1 block at any window, is refused by name."""
     t, rec, adv, reg = smallkv
+    life = sum(-(-(q.prompt_len + q.output_len) // t.engine.block_size) for q in adv.requests)
+    assert life > t.engine.num_gpu_blocks - 1 and any(x.cache_hit for st in adv.steps for x in st.rows)
     wins = V.residual(adv, rec, reg)
-    hits = [h for w in wins for h in w.hits]
-    assert len(hits) > sum(len(st.new) for st in t.steps) and min(hits) == 0 < max(hits)
-    assert _string(wins, reg, rec) == V.encode(adv, rec, reg)
-    w = next(k for k, x in enumerate(wins) if x.hits)
-    s = next((k, j) for k, x in enumerate(wins) for j, h in enumerate(x.hits) if h)
-    short = list(wins[s[0]].hits)
-    short[s[1]] -= 1
-    for at, changed in ((w, (wins[w].hits[0] + 1,) + wins[w].hits[1:]), (w, wins[w].hits[1:]),
-                        (w, wins[w].hits + (0,)), (s[0], tuple(short))):
-        bad = wins[:at] + [dataclasses.replace(wins[at], hits=changed)] + wins[at + 1:]
-        with pytest.raises(V.AdviceCodeError, match="replay's residual"):
-            V.decode(_string(bad, reg, rec), rec, reg)
+    assert not any(w.hits or w.resumes or w.lag for w in wins)
+    data = V.encode(adv, rec, reg)
+    assert _string(wins, reg, rec) == data and V.decode(data, rec, reg) == adv
+    roomy = dataclasses.replace(reg, book=CV.Book.uniform(dataclasses.replace(V.CAPS, hits=1 << 12)))
+    assert V.decode(_string(wins, roomy, rec), rec, roomy) == adv
+    for at, h in product((0, len(wins) - 1), (0, 1)):
+        bad = wins[:at] + [dataclasses.replace(wins[at], hits=(h,))] + wins[at + 1:]
+        with pytest.raises(V.AdviceCodeError, match="a window sends hits, resumes or lag bits"):
+            V.decode(_string(bad, roomy, rec), rec, roomy)
 
 
 def test_the_pool_is_registered_never_sent(smallkv):
@@ -255,8 +255,9 @@ def test_the_book_changes_only_the_length():
     assert len(charges) == 2
 
 
-def test_no_hit_is_sent_while_the_bound_holds():
-    """Sync scheduling with every request's blocks inside the pool: each hit is derived, at 0 bits."""
+def test_no_hit_is_sent_whether_or_not_the_bound_holds():
+    """Sync scheduling with every request's blocks inside the pool, where the walk derives each hit as the longest
+    cached prefix; and async scheduling, which the bound never covers: no hit is sent either way."""
     rec, reg = _tiny(2)
     reg = dataclasses.replace(reg, engine=dataclasses.replace(reg.engine, enable_prefix_caching=True))
     order = V.release_order(rec)
@@ -265,7 +266,9 @@ def test_no_hit_is_sent_while_the_bound_holds():
     assert V.decode(V.encode(adv, rec, reg), rec, reg) == adv
     assert not any(w.hits for w in V.residual(adv, rec, reg))
     t, rec, reg, adv = case("async-prefix-cache", T=20)
-    assert t.engine.async_scheduling and sum(len(w.hits) for w in V.residual(adv, rec, reg)) > len(rec.requests)
+    assert t.engine.async_scheduling and any(x.cache_hit for st in adv.steps for x in st.rows)
+    assert not any(w.hits for w in V.residual(adv, rec, reg))
+    assert V.decode(V.encode(adv, rec, reg), rec, reg) == adv
 
 
 @pytest.mark.parametrize("name", CASES)
@@ -353,7 +356,6 @@ def test_the_corpus_table(tmp_path, capsys):
     (row,) = json.loads(out.read_text())["rows"]
     assert row["held_out"]["round_trip"] and row["uniform"]["round_trip"]
     assert row["held_out"]["bits"] == sum(row["held_out"]["by_window"].values()) < row["v0"] // 10
-    assert row["hits_sent"] > row["hits_short"] > 0
     assert row["order_entries"] == row["inversions"] == 0 <= row["held_out"]["order_bits"] < row["windows"] * 8
     assert "| smallkv | " in capsys.readouterr().out
 
@@ -366,7 +368,7 @@ def _tiny(windows: int):
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
     reqs = tuple(V.Request(f"u{k}", (10 + k,) * 6, 4, (5, 5, EOS), end, (end, end, end + 1))
                  for k, end in enumerate((0, 0, 3 * (windows - 1))))
-    history = [[CV.Window(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
+    history = [[CV.Advice(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
     caps = CV.Caps(arrived=7, hits=1, hit_units=1, resumes=1, order=1, order_len=1, gap=1, index=1, lag=1)
     return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps), send_lengths=False)
 

@@ -34,6 +34,7 @@ from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
 
 import r2_population as R2
 
@@ -255,6 +256,27 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     return (json.loads(recs[-1].read_text()) if recs else None), live
 
 
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    from verity_flock import circuit as FC
+
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
+
+
 def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
     f = out / f"{name}.cases.json"
     f.write_text(json.dumps(cases))
@@ -286,15 +308,18 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
                 flags: Sequence[str] = ()) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
+    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds; `zk`, a `--zk`
+    session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more of
+    `verify`'s (a plain session's ``--coins tree --stratified K``). ``st["archived"]``, a dict a run's members share: a
+    circuit file archived once, by its file's
     identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
     Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
-    holds each statement to."""
+    holds each statement to. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's
+    environment sets its own."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -303,6 +328,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     part = [str(st["partition_file"])] if st.get("partition_file") else []
     prog = [str(st["program_file"])] if st.get("program_file") else []
     reads = [str(st["registered_file"])] if st.get("registered_file") else []
+    iface = [str(st["interface_file"])] if reads and st.get("interface_file") else []
     circuit, held = st["dir"] / "circuit.txt", st.get("archived")
     s = circuit.stat()
     ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
@@ -312,7 +338,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
         if not (archive / "sha512" / pre[0]).exists():
             os.link(pre[1], archive / "sha512" / pre[0])
     p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
+             *prog, *reads, *iface], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
     if pre is not None:
         keys["circuit.txt"] = pre[0]
@@ -321,10 +347,11 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
+    bound += ["--interface", keys.get(Path(iface[0]).name, "")] if iface else []
     t = time.time()
     p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
              "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
-            out / f"{log}.log")
+            out / f"{log}.log", env=verifier_env())
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),

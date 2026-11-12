@@ -99,7 +99,7 @@ assumptions.
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
   it takes the token kind's cap from the named assumption `training-token-work`.
 
-The rest of this section is the argument they are read in, from what makes training hard to the slowdown.
+The rest of this section is the argument they are read in.
 
 This is a conditional argument, not yet a proved theorem. It separates a learning hypothesis from enforcement.
 Coverage says that sufficiently cheap successful methods require a minimum weighted count of analysed computation.
@@ -143,7 +143,7 @@ The numbers come from the slowdown calculator (`verity/protocols/inference_only/
 
 ### Objects
 
-- **Time.** A **tick** is one step of the one clock (`OneClock`, a premise stated in prose, not yet in Lean). A **monitoring period** J is a span
+- **Time.** A **tick** is one step of the one clock (`OneClock`, a premise in prose, not yet in Lean). A **monitoring period** J is a span
   of consecutive ticks, |J| long; every other span is a block's.
 - **Hardware.** Leaves L are devices; a location X is a set of leaves. The **site** is the registered hardware, public;
   hardware outside it is unregistered. Φ_X is X's **capacity**, work a tick at its rated peak (the site entry: SKU,
@@ -296,12 +296,11 @@ information are different situations even when a codec gives them the same lengt
 #### Structure: how much the held values support
 
 **Dependency** (`Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`): a **consumer** is something a block
-finishes, such as a use j (one token's input to one layer at one step, `Consumers.ofUses`) or an output accumulating many
-products (a weight's gradient over tokens, `Consumers.ofOutputs`). It has an upstream region A_j holding no registered
-gate, and required gates G_j ⊆ A_j, at least g of them. The **upstream certificate**, checkable on a named circuit, says
-every required gate reaches, inside A_j, a gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0
-(`Nci.Capability.Consumers.OverlapWeights`) sum to at most 1 over the regions holding any one gate: disjoint regions take
-1 each, overlapping ones less. Then:
+finishes, such as a use j (`Consumers.ofUses`) or an output accumulating many products (a weight's gradient over tokens,
+`Consumers.ofOutputs`). It has an upstream region A_j holding no registered gate, and required gates G_j ⊆ A_j, at least
+g of them. The **upstream certificate**, checkable on a named circuit, says every required gate reaches, inside A_j, a
+gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0 (`Nci.Capability.Consumers.OverlapWeights`) sum to
+at most 1 over the regions holding any one gate: disjoint regions take 1 each, overlapping ones less. Then:
 
 - **import or recompute** (`Nci.Guarantees.ImportOrRecompute`): each served use either spends an imported gate of its
   region or contains G_j, so the served weight is at most k plus the weight of the recomputed uses;
@@ -362,7 +361,7 @@ hardware.
 acceptance, the run lies in 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p (`Verity.Soundness`; the subprotocols' guarantees are the table under "The
 guarantees to read first"):
 
-- **sampled proofs:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
+- **SPOT:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
   with each class's block size the faulty share φ;
 - **PoUW:** Φ_D ≥ (1 − φ)·Φ_cred − Φ_gap − Φ_bk, with each credited gate a distinct gate of A;
 - **the inference-only policy:** every 𝓘_j is a (c, k)-partition;
@@ -390,12 +389,12 @@ at peak, ζ̄ = ζ_ref/MFU₀.
 The **slowdown** ρ(𝒢, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
 reaches the target with probability above η, and **fleet-time** elapsed time times Φ, registered and unregistered.
 
-**Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1,
-the plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the
-sum by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to
-one to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform
-cap q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered hardware included,
-not doing correct credited work of the registered circuit (1 − f is the part that does),
+**Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1, the
+plain count). The good blocks do at most Σ_I q_I (part 2), and the remainder at most Q_rem (part 3). Replacing the sum
+by (q/c)·Φ_D·|J| needs the accounting to show that the qualifying blocks have exactly c gates and correspond one to one
+to credited actual computation; until that is proved, Σ_I q_I is the safer form. With that conversion and a uniform cap
+q, and f = 1 − Φ_D/Φ the **free share**: the part of the whole fleet's capacity, unregistered hardware included, not
+doing correct credited work of the registered circuit,
 
 $$ \Omega_* \;\le\; \Big(\frac{q}{c}\,\Phi_D + \bar\zeta\,(\Phi - \Phi_D)\Big)\,|J|
    \quad\Longrightarrow\quad
@@ -460,7 +459,7 @@ None of these is assumed silently; each would restate the conclusion:
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
+| SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
 | The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
@@ -472,22 +471,22 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
-  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
-  its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
-  without proof, are declared in `Definitions/Assumptions.lean` or a module under it; a premise declared elsewhere is
-  open (The lock).
-- `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
-  runs, one `Properties.<Protocol>` module per protocol.
-- `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
-  guarantee, and the lemmas behind them.
+Each tree's README has its import rule, which the lock's `layers` and `trees` hold, and its areas:
+[`Definitions/`](Definitions/README.md) (package `security`), the spec; [`Properties/`](Properties/README.md)
+(`security_properties`), statements about the code's Lean functions; and [`Proofs/`](Proofs/README.md)
+(`security_proofs`), every proof.
 
-What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
-`security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
-ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import, and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
-guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
+## What outside code may do
+
+Outside code may run the Lean check on the packages, read a file here as data (a lock, or Lean a test holds its Python
+to) and build or run Lean in a package's Lake environment. No outside package requires them
+(`tests/test_lean_packages.py`), and a generated file is written only by the generator its header names. Today:
+
+- Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
+- The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
+- Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
+  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
 
 ## The lock
 
@@ -520,21 +519,21 @@ with each changed definition's source; nothing waits on it, and a guarantee that
 
 **Protocol soundness** is one theorem (Start here, item 4), the union bound over a composite's subprotocols at its
 compiled verifier: `Verity.soundness_of_subprotocols` at onsite's seven and `Verity.remote_soundness_of_subprotocols` at
-remote's three, each subprotocol's target a hypothesis until its own proof discharges it. Start at
-`Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
+remote's three. Start at `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it
+and what it rests on.
 
-The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
-conditions it places on its inputs and setup are left out (the lock lists them).
+The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names
+the statement's named assumptions, not the conditions on its inputs and setup (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
+| SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
-| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
-| Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
+| PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
+| Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. This guarantee, in its own form, is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -548,9 +547,9 @@ policy and the one-stage audit commit to one record and every window of the peri
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,
 PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
-- **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
+- **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
-  `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. Remote's sampled proofs' one-stage form is
+  `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. At remote, SPOT's one-stage form is
   v2, which runs `flock-verify --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
   verdicts as evidence, is refused); where v2 accepts, its session is in V3's and V5's events
   (`Verity.Sampled.checkBlobs_event`), and only V5's has a coupling.
@@ -571,17 +570,17 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
-  (`verity/protocols/poub/verifier`), which proves the bits a node read from its registered store. It is a
-  different protocol from the remote composite, and a subprotocol of onsite only.
+  (`verity/protocols/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
+  of onsite only.
 
 ## Building and checking
 
 With the toolchain `lean-toolchain` pins:
 
 ~~~text
-lake build                                    # in security/: the spec
-lake build                                    # in security/Properties/, then security/Proofs/ (fetches ArkLib)
-python3 tools/verity/lean/check.py Security   # from the repository root
+lake build   # in security/: the spec
+lake build   # in security/Properties/, then security/Proofs/ (fetches ArkLib)
+python3 tools/verity/lean/check.py security/   # from the repository root
 ~~~
 
 The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.

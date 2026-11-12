@@ -1,12 +1,15 @@
-"""The quick tier at one checkout, as facts and a verdict: each Lake package `--lean` names built first (with the PATH's `lake`, else
-elan's; with neither it refuses; in a check slot, from the slot's warm `.lake`: `build`), then CMD (`suites.py --quick`) with
-`--changed BASE`, under a node's umask and off the lowest core (`confined`).  `tier` gathers the facts; `judge` reads them
-as the refusal `research queue ready` prints, or None for a pass, the same way wherever the tier ran.
+"""The quick tier at one checkout (a PR's head merged onto `main`'s tip, as `research queue ready` makes it), as facts and a
+verdict: each Lake package `--lean` names built first (with the PATH's `lake`, else elan's; with neither it refuses; in a check
+slot, from the slot's warm `.lake`: `build`), then CMD (`suites.py --quick`) with `--changed BASE`, under a node's umask and off
+the lowest core (`confined`).  `tier` gathers the facts; `judge` reads them as the refusal `research queue ready` prints, or
+None for a pass, the same way wherever the tier ran.
 
-    python3 quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...
+    python3 quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] -- CMD...
 
-runs it in the working directory inside a `research run`, in the environment check.py gives its steps there (`run_env`: the store
-required, through the run's custody key), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
+runs it in the working directory inside a `research run` (``--merged``: the PR head that HEAD, SHA, merges onto BASE;
+``--lean-audit``: a command, shell-quoted, run after the builds and before CMD as `AUDIT --base BASE --out DIR`: `lean_audit`), in
+the environment check.py gives its steps there (`run_env`: the store required, through the run's custody key, and the vLLM
+reference regression run), and writes the facts to `$RESEARCH_RUN_DIR/result.json` (kind `quick-tier/v1`, under
 `tier`), with the suites' report and logs under `$RESEARCH_RUN_DIR/out/`.  `research queue ready --on MACHINE` sends this file with
 the run, so the machine runs the caller's version whatever the PR's tree holds.  Stdlib only and no import from `research`: it runs
 from the run's inputs under the machine's `python3`.
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -25,8 +29,8 @@ SUITES = "tools/verity/check/suites.py"
 #: variables that would point the tier's Python at the caller's tree or environment instead of the checkout's own
 CALLER_ENV = ("PYTHONPATH", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")
 ROW_KEYS = ("name", "suite", "status", "failed_tests", "beyond_tests", "log")
-#: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV and STORE_REQUIRED_ENV), never inherited
-CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
+#: what check.py sets for its steps inside a recorded run (its CUSTODY_ENV, STORE_REQUIRED_ENV and REGRESSION_ENV), never inherited
+CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED", "VERITY_REGRESSION"
 #: what a machine's runner gives every run besides `RESEARCH_*` (remote.py), which check.py's steps don't get either
 RUNNER_ENV = ("PYTHONPYCACHEPREFIX",)
 
@@ -41,9 +45,11 @@ def run_env(environ, run_dir: str, run_id: str) -> dict:
     run's bytecode would not go to its own root's cache); the evidence store required (a
     store-backed test that can't reach it fails instead of skipping) and reached through the run's custody dir, `<root>/requests/<run
     id>/custody/` beside `<root>/runs/<run id>/`, when it holds the key (on a machine the workload's environment holds no store
-    credential); and a git identity for the tests that commit in throwaway repositories."""
-    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in (CUSTODY_ENV, STORE_REQUIRED_ENV, *RUNNER_ENV)}
-    out[STORE_REQUIRED_ENV] = "1"
+    credential); the vLLM reference regression run (VERITY_REGRESSION=1, without which it skips); and a git identity for the tests
+    that commit in throwaway repositories."""
+    owned = (CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV, *RUNNER_ENV)
+    out = {k: v for k, v in environ.items() if not k.startswith("RESEARCH_") and k not in owned}
+    out[STORE_REQUIRED_ENV] = out[REGRESSION_ENV] = "1"
     custody = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (custody / "store.toml").is_file() and (custody / "cred.json").is_file():
         out[CUSTODY_ENV] = str(custody)
@@ -109,15 +115,18 @@ def confined() -> None:
         os.sched_setaffinity(0, cores - {min(cores)})
 
 
-def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None) -> dict:
-    """The facts of one run of the tier in ``tree``: the commit checked out there, what differs from it before anything runs (each
-    kept `.venv` and `.lake` aside), each Lean build's exit, and CMD's exit and report (`out/suites.json`, logs in `out/logs/`).  It
-    stops at the first fact that refuses.  `lake` is the PATH's, else elan's in `~/.elan/bin` (put first on the PATH, as check.py
-    does); a `--lean` package with neither is an error, since without the build its tests skip."""
+def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(), env: dict | None = None,
+         merged: str | None = None, audit: list[str] | None = None) -> dict:
+    """The facts of one run of the tier in ``tree``: the commit checked out there (given ``merged``, that it is the merge of that
+    head onto ``base``, as `research queue ready` merges a PR's head onto `main`'s tip), what differs from it before anything runs
+    (each kept `.venv` and `.lake` aside), each Lean build's exit, the Lean audit's (given ``audit``: `lean_audit`), and CMD's
+    exit and report (`out/suites.json`, logs in `out/logs/`).  It stops at the first fact that refuses.  `lake` is the PATH's,
+    else elan's in `~/.elan/bin` (put first on the PATH, as check.py does); a `--lean` package with neither is an error, since
+    without the build its tests skip."""
     env = {k: v for k, v in (os.environ if env is None else env).items() if k not in CALLER_ENV}
     logs = out / "logs"
-    doc = {"kind": KIND, "head": None, "base": base, "dirty": [], "lean": [], "changed": True, "rc": None, "rows": None,
-           "logs": str(logs), "error": None}
+    doc = {"kind": KIND, "head": None, "merged": None, "base": base, "dirty": [], "lean": [], "audit": None, "changed": True,
+           "rc": None, "rows": None, "logs": str(logs), "error": None}
     r = _git(tree, "rev-parse", "HEAD")
     if r.returncode:
         doc["error"] = f"{tree} isn't a git checkout ({(r.stderr or r.stdout).strip()[-200:]})"
@@ -125,6 +134,11 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
     doc["head"] = r.stdout.strip()
     if doc["head"] != head:
         return doc
+    if merged is not None:
+        if _git(tree, "rev-parse", f"{head}^1", f"{head}^2").stdout.split() != [base, merged]:
+            doc["error"] = f"{head[:12]} isn't {merged[:12]} merged onto {base[:12]}"
+            return doc
+        doc["merged"] = merged
     kept = [":(exclude).venv", *(f":(exclude){d}/.lake" for d in lean)]
     doc["dirty"] = _git(tree, "status", "--porcelain", "--", ".", *kept).stdout.splitlines()
     if doc["dirty"]:
@@ -141,6 +155,10 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
             doc["lean"].append(build(lake, tree / d, d, env))
             if doc["lean"][-1]["rc"]:
                 return doc
+    if audit:
+        doc["audit"] = lean_audit(audit, tree, base, out / "lean-audit", env)
+        if doc["audit"]["rc"]:
+            return doc
     runner = tree / SUITES
     if runner.is_file() and '"--changed"' not in runner.read_text():
         print(f"quick tier: {head[:12]}'s suites.py predates --changed, so every suite runs (merge main into the branch to run only "
@@ -162,6 +180,22 @@ def tier(tree: Path, out: Path, head: str, base: str, command: list[str], lean=(
     return doc
 
 
+def lean_audit(command: list[str], tree: Path, base: str, out: Path, env: dict) -> dict:
+    """The Lean audit of the change from ``base`` on ``tree`` (`--lean-audit`): COMMAND --base BASE --out OUT from the checkout's
+    root, its output passed through, and its exit and last line, which says why when it failed."""
+    out.mkdir(parents=True, exist_ok=True)
+    last = ""
+    try:
+        with subprocess.Popen([*command, "--base", base, "--out", str(out)], cwd=tree, env=env, preexec_fn=confined, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
+            for line in p.stdout:
+                print(line, end="", flush=True)
+                last = line.strip() or last
+    except FileNotFoundError as e:
+        return {"command": command, "rc": 127, "last": f"can't run it here ({e})"}
+    return {"command": command, "rc": p.returncode, "last": last[-300:]}
+
+
 def judge(doc, head: str, output: str = "its output is above", covers=None) -> str | None:
     """None when ``doc``, `tier`'s facts, show the tier passed at ``head``; else what failed, for the refusal.  ``output``: where the
     builds' and the suites' output is.  ``covers``, given a failed suite's row, says whether drive's policy allows its failure
@@ -179,6 +213,8 @@ def judge(doc, head: str, output: str = "its output is above", covers=None) -> s
         b = b if isinstance(b, dict) else {"dir": b}
         if b.get("rc") != 0:
             return f"`lake build` in {b.get('dir')} exited {b.get('rc')} ({output})"
+    if isinstance(a := doc.get("audit"), dict) and a.get("rc") != 0:
+        return f"the Lean audit on the merge exited {a.get('rc')}: {a.get('last') or output}"
     rc = doc.get("rc")
     if type(rc) is not int:
         return "it reported no exit for `suites.py`"
@@ -197,23 +233,26 @@ def judge(doc, head: str, output: str = "its output is above", covers=None) -> s
 
 
 def main(argv: list[str]) -> int:
-    usage = "usage: quick_tier.py --head SHA --base SHA [--lean DIR ...] -- CMD...  (inside a `research run`)"
+    usage = ("usage: quick_tier.py --head SHA --base SHA [--merged SHA] [--lean DIR ...] [--lean-audit AUDIT] -- CMD...  "
+             "(inside a `research run`)")
     if "--" not in argv:
         print(usage, file=sys.stderr)
         return 2
     opts, command = argv[:argv.index("--")], argv[argv.index("--") + 1:]
     pairs = list(zip(opts[::2], opts[1::2]))
     run_dir, rid = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
-    if len(opts) % 2 or {k for k, _ in pairs} - {"--head", "--base", "--lean"} or not command or not run_dir or not rid:
+    keys = {"--head", "--base", "--merged", "--lean", "--lean-audit"}
+    if len(opts) % 2 or {k for k, _ in pairs} - keys or not command or not run_dir or not rid:
         print(usage, file=sys.stderr)
         return 2
-    head, base = dict(pairs).get("--head"), dict(pairs).get("--base")
+    head, base, merged, audit = (dict(pairs).get(k) for k in ("--head", "--base", "--merged", "--lean-audit"))
     if not head or not base:
         print(usage, file=sys.stderr)
         return 2
     lean = [v for k, v in pairs if k == "--lean"]
     d = Path(run_dir)
-    doc = tier(Path.cwd(), d / "out", head, base, command, lean, run_env(os.environ, run_dir, rid))
+    doc = tier(Path.cwd(), d / "out", head, base, command, lean, run_env(os.environ, run_dir, rid), merged,
+               shlex.split(audit) if audit else None)
     why = judge(doc, head, "its output is in this run's log")
     result = {"schema": "research/result/v0.1", "kind": KIND, "run_id": rid,
               "workload_fingerprint": {"head": doc["head"], "base": base, "command": command, "lean": lean},

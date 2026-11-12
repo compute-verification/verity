@@ -1,7 +1,7 @@
 # opcode_probe: an instruction's rate as a price row, gated first
 
 A probe times one instruction class in one loop on sm_120 and writes its price row in the ACCEL model's census schema
-(`../machine_model/`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
+(`../../machine_model/`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
 before anything is timed, and a probe that doesn't pass writes no row. A probe declared known-invalid must be refused,
 by the check it names, or nothing is timed at all.
 

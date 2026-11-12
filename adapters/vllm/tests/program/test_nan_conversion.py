@@ -18,21 +18,14 @@ from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.definitions.registry import b1
-from verity_vllm.program.frontend import conformance as CF
 from verity.definitions.registry import prims as P
 
 from verity.definitions.silicon.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
 
-REPO = Path(__file__).resolve().parents[2]
-MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.json"))
+CAPTURES = Path(__file__).resolve().parents[4] / "verity/definitions/ops/tests/fixtures/tc-total-2026-09-07"
+DEVICES = ("4090", "a100")
 
-#: `Serve_v1{C=B0,LP=32,STEPS=7}`: its digest under the v0 codec and the earlier builder, which the NaN record was written under (no
-#: bound definition changes it); the builder fix B.1 and the v1 codec (the defaults) give the same program the digest
-#: `2d483c89d14d215f…`, certified equivalent by the v0/v1 correspondence record. The NaN record keeps the digest it was written under.
-B0_DIGEST = "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d"
-B0_DIGEST_V1 = "2d483c89d14d215f49305ab3db7b1dd6370bdecc4449f56ca36bd8c6ac4aae30"
-#: the same program after the re-baseline re-key: only the k16 step's id moved (AmpereBF16TcDot16_v1 -> core's _v2), so the descriptor is
-#: B0_DIGEST_V1's with that id substituted, byte for byte
+#: `Serve_v1{C=B0,LP=32,STEPS=7}`'s digest under the v1 codec, with the k16 step's id re-keyed to core's `AmpereBF16TcDot16_v2`
 B0_DIGEST_TC_V2 = "9f74dc8e427111532cda0e1311eca470575ebfc18d544354d0a0d97e25667ec870d0eca262689eb4ec7f5fdbc3f8066b5425fe1da377c46a8809312f44e87865"
 
 NAN_WORDS = [0x7FC00000, 0xFFC00000, 0x7FC00001, 0x7FFFFFFF, 0xFFFFFFFF, 0x7F800001, 0xFF800001, 0x7FBFFFFF,
@@ -53,9 +46,9 @@ def test_the_two_registered_conversions_are_the_two_family_versions():
             assert P.F32ToBf16Rn.evaluate(x) == P.F2fpBf16.evaluate(x), hex(x)
 
 
-@pytest.mark.parametrize("path", MEASURED, ids=lambda p: p.parent.name)
-def test_f2fp_matches_every_measured_cvt_word(path: Path):
-    record = json.loads(path.read_text())
+@pytest.mark.parametrize("device", DEVICES)
+def test_f2fp_matches_every_measured_cvt_word(device: str):
+    record = json.loads((CAPTURES / device / "cvt_special.json").read_text())
     assert record["n_nondeterministic"] == 0 and len(record["words"]) == 4403
     nan = 0
     for entry in record["words"]:
@@ -79,32 +72,3 @@ def test_production_binds_the_hardware_conversion_and_the_b0_digest_is_unchanged
     small = Program(bind(b1.Serve, C=b1.B1_CONFIG, LP=2, STEPS=1))
     ids_b1 = set(encode_program(small)["definitions"])
     assert "F2fpBf16_v1" in ids_b1 and "F32ToBf16Rn_v1" not in ids_b1
-
-
-def test_conformance_record_names_the_evidence():
-    rec = CF.record()
-    defs = rec["definitions"]
-    assert defs["F2fpBf16_v1"]["status"] == "exact-model-tested"
-    assert "cvt_special" in defs["F2fpBf16_v1"]["conformance"]
-    assert defs["F32ToBf16Rn_v1"]["status"] == "exact-model-tested"
-    nan = rec["nan_canonicalisation"]
-    assert nan["production_conversion"] == "F2fpBf16_v1" and nan["nan_word"] == "0x7FFF"
-    assert "cvt_special.json" in nan["source"]
-    assert nan["interface_family"]["F2fpBf16_v1"].startswith("veritor.tc-ampere-bf16@2")
-    assert "not bound by B0/B1" in nan["not_bound"]["F32ToBf16Rn_v1"]
-    assert nan["program_digests_unchanged"]["B0"] == B0_DIGEST
-    assert nan["recorded_traces_finite"]["B0"]["nan_words"] == 0 and nan["recorded_traces_finite"]["B1"]["nan_words"] == 0
-    assert nan["source"].startswith("measured")
-
-
-def test_scan_records_match_the_conformance_record():
-    """The two store scans (the B0 and B1 files under the test's ``data/`` scan directory) are what the record states."""
-    root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"
-    stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
-    for config in ("B0", "B1"):
-        scan = json.loads((root / f"{config}.json").read_text())
-        t = scan["totals"]
-        assert t["bfloat16/leaves"] == stated[config]["bf16_leaves"]
-        assert t["bfloat16/words"] == stated[config]["bf16_words"]
-        assert t["bfloat16/nan_words"] == 0 and t["bfloat16/inf_words"] == 0
-        assert scan["leaves_with_nan"] == 0 and scan["distinct_nan_words"] == {}

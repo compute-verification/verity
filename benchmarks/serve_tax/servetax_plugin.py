@@ -10,9 +10,14 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
-  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_rows.BoundaryWindows`), each window's finished
-  requests committed by size class as the window closes, under ``boundary/``, each class's public part in
-  ``boundary.PID.jsonl``.
+  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
+  requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
+  directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
+  directory for what never leaves the node (``private``/boundary/), and under ``out`` only where none is named. With
+  ``tables`` in it (``private``, ``layers``, ``capacity``, ``timeout_s``), each span's latent history tables too: rank 0
+  of Model Runner V2 reads each step's rows (`_tables_runner`) and builds each class's tables once the window assigns
+  its slots, keeping their rows and salts under the ``private`` it names, never under ``out`` or the run's directory. An
+  engine whose cache can't hold the tables' row is refused as it starts, when the runner binds its caches (`_tables_guard`);
 
 and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
 ``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
@@ -292,6 +297,75 @@ def _kv_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: C
     return execute_model
 
 
+def _public(cfg: Mapping[str, Any]) -> tuple[Path, ...]:
+    """The directories whose files leave the node: the serve's records and the run's own."""
+    from verity_config.settings import SHARED
+
+    return tuple(Path(p) for p in (cfg["out"], SHARED.RESEARCH_RUN_DIR) if p)
+
+
+def _tp_rank() -> int:
+    from vllm.distributed import get_tensor_model_parallel_rank
+
+    return get_tensor_model_parallel_rank()
+
+
+def rank0_tables(runner: Any, cfg: Mapping[str, Any]) -> tuple[Any, Any, Any]:
+    """Rank 0's history tables on ``runner``: its step hook at the configured layers, the channel to the boundary
+    commitment and the builder that answers it on the runner's device, keeping each table's rows and salts."""
+    from verity_vllm.pipeline import boundary_tables as BT
+
+    tc, public = cfg["boundary_rows"]["tables"], _public(cfg)
+    hook = BT.StepHook(runner.model, layers=BT.layers_of(tc["layers"]))
+    keep = BT.Kept.of(tc, *public)
+    return hook, BT.Channel.of(tc, *public), BT.Builder(hook.latents, device=runner.device, keep=keep)
+
+
+def _tables_guard(initialize: Callable[..., Any], cfg: Mapping[str, Any],
+                  rank: Callable[[], int] = _tp_rank) -> Callable[..., Any]:
+    """Model Runner V2's ``initialize_kv_cache``, then, on rank 0, the history tables' guard on the caches it bound
+    (`boundary_tables.StepHook`'s: an MLA cache that doesn't hold the tables' row, a configured layer that is no MLA
+    layer). A refusal stops the engine as it starts, before it serves a request."""
+    def initialize_kv_cache(self: Any, *args: Any, **kwargs: Any) -> Any:
+        out = initialize(self, *args, **kwargs)
+        if getattr(self, "kv_caches", None) and rank() == 0:
+            from verity_vllm.pipeline import boundary_tables as BT
+
+            BT.StepHook(self.model, layers=BT.layers_of(cfg["boundary_rows"]["tables"]["layers"]))
+        return out
+    return initialize_kv_cache
+
+
+def _tables_runner(execute: Callable[..., Any], cfg: Mapping[str, Any], capturing: Callable[[], bool] | None = None,
+                   rank: Callable[[], int] = _tp_rank, start: bool = True) -> Callable[..., Any]:
+    """Model Runner V2's ``execute_model``, then, on rank 0, `boundary_tables.StepHook.after` on the step. Its tables
+    start at the first step with a KV cache outside a capture and a dummy run, as the edge's do, with the builder
+    answering the boundary commitment's channel on a thread of its own (``start``). A step whose tables can't start
+    raises, and so does every step after it: no step is served with the tables off."""
+    state: dict[str, Any] = {}
+    if capturing is None:
+        import torch
+
+        capturing = torch.cuda.is_current_stream_capturing
+
+    def execute_model(self: Any, scheduler_output: Any, *args: Any, **kwargs: Any) -> Any:
+        out = execute(self, scheduler_output, *args, **kwargs)
+        if kwargs.get("dummy_run") or not getattr(self, "kv_caches", None) or capturing():
+            return out
+        if "hook" not in state:
+            if rank() != 0:
+                state["hook"] = None
+            else:
+                hook, channel, builder = rank0_tables(self, cfg)
+                started = {"stop": channel.start(builder)} if start else {}
+                state.update(hook=hook, channel=channel, builder=builder, **started)
+        if state["hook"] is not None:
+            state["hook"].after(self, scheduler_output)
+        return out
+    execute_model.state = state  # type: ignore[attr-defined]
+    return execute_model
+
+
 def _lines(path: Path) -> Callable[[dict], None]:
     path.parent.mkdir(parents=True, exist_ok=True)
     fh = path.open("a")
@@ -562,10 +636,13 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         atexit.register(tc.stop)
         done.append(tc)
     if cfg.get("boundary_rows"):
-        from verity_vllm.pipeline import boundary_rows as BR
+        from verity_vllm.pipeline.boundary_windows import BoundaryWindows
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
-        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], out / "boundary", sink).install(sched, hooks))
+        kept = Path(cfg["private"]) if cfg.get("private") else out
+        released = release_key if cfg.get("release_order") else None
+        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, released, public=_public(cfg))
+                    .install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests
         gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
@@ -647,6 +724,11 @@ def register() -> None:
             runner = getattr(importlib.import_module(name), "GPUModelRunner", None)
             if runner is not None:
                 hooks.wrap(runner, "execute_model", lambda execute: _kv_runner(execute, cfg))
+    if (cfg.get("boundary_rows") or {}).get("tables"):
+        from vllm.v1.worker.gpu.model_runner import GPUModelRunner
+
+        hooks.wrap(GPUModelRunner, "initialize_kv_cache", lambda initialize: _tables_guard(initialize, cfg))
+        hooks.wrap(GPUModelRunner, "execute_model", lambda execute: _tables_runner(execute, cfg))
     if cfg.get("edges_s") or cfg.get("every_s"):
         import boundary as B
         from vllm.v1.engine.core import EngineCore

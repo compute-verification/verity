@@ -81,16 +81,15 @@ window: two rows, the charging proof block's two reads (each a frame-v3 path of 
 ## The whole window (`window_charge`)
 
 `ChargeCount_v1{N}` codes `code_v1`'s four other counts (n_hits, n_resumes, n_order, n_lag) as 0 (`ZERO_COUNTS`), so it
-charges only a window that sends decisions alone. Advice v1 sends two of them:
-- **n_hits** counts the hits sent past the pool bound: one shortfall, in hit units, for each lookup the replay reads.
-- **n_order** counts the order entries: one for each arrival that deviates from release order, under the client's
-  ingress.
+charges only a window that sends decisions alone. Advice v1 sends one of them, **n_order**, the order entries: one for
+each arrival that deviates from release order, under the client's ingress.
 
-The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so the
-advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O, L}` charges
-the whole window: its decisions and both counts with their values, as one `window_code` segment with one count and one
-finish, then its length terms' plain tail. With H = O = L = 0 its charge, counts and run are `ChargeCount_v1{N}`'s; the
-tests check this on the fixture's windows and on random ones.
+The other three are always 0 under v1. Every hit is the replay's block pool's, past the pool bound too, the replay
+derives preemptions and the certified O forces each lag row, so the advice code (`advice_code.codec`) refuses a window
+that sends hits, resumes or lag bits. `ChargeCount_v2{N, H, O, L}` charges the whole window: its decisions and the
+hits' and order entries' counts with their values, as one `window_code` segment with one count and one finish, then its
+length terms' plain tail. With H = O = L = 0 its charge, counts and run are `ChargeCount_v1{N}`'s; the tests check this
+on the fixture's windows and on random ones.
 
 **The symbols**, in `window_code.code_window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
 counted by `ArithCountStep_v1{18, BIN, 20}`:
@@ -208,19 +207,23 @@ and the window difftest holds them to it: the certifier program's `NetworkCertif
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
-**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
-hits and no order entries. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
-length terms. `CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) charges them with
+**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its
+windows send no order entries, and v1's windows send no hits. A session where the pool's eviction changed a hit is
+outside the class: the slice's cache never evicts, so its rows aren't the served ones and ``rows`` refuses. Such a
+session needs a pool slice (`CompileSlice_v2` on, `compile_slice_v2`), and no pool slice charges the length terms yet.
+`CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no length terms.
+`CompileSlice_v7` (`compile_slice_v7`, the served windows' slice except under the certified tick) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
 max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
 certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
 certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits passes at a lower
-charge until then. A class whose windows send hits, order entries or length terms does the following:
+charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the arrivals the replay
+loads. A class whose windows send order entries or length terms (or a code's that sends hits) does the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
   `replay-charge`'s.
-- Its `hen`, `oen` and `qen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each lookup past the pool
-  bound, an order slot for each arrival out of release order, a length slot for each request whose body lands in the
+- Its `hen`, `oen` and `qen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each hit the code sends
+  (none under v1), an order slot for each arrival out of release order, a length slot for each request whose body lands in the
   window, enabled slots first, never the prover's. Its `mt` are the certified max_tokens. Nothing reads a disabled
   slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover chose would
   pass log2(C(H, h) · C(O, o) · C(L, l)) bits and those values uncharged

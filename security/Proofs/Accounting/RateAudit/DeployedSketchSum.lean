@@ -576,7 +576,7 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
             pr (fun _ : SketchStore N m × Passes => False) :=
           pr_mono fun _ hx => (hx.1 hr).elim
         _ ≤ (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
-          rw [Rate.Horizon.pr_false]
+          rw [Rate.Pooled.pr_false]
           exact bot_le
 
 end SketchDeployedWindow

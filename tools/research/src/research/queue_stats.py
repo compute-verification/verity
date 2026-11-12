@@ -135,9 +135,10 @@ def spans(row: dict) -> dict[str, float | None]:
             "check": _hours(row["took"], row["verdict"]), "land": _hours(row["verdict"], row["landed"])}
 
 
-def p90(vals: list[float]) -> float:
+def pct(vals: list[float], q: float) -> float:
+    """The nearest-rank ``q`` quantile of ``vals`` (not empty)."""
     vals = sorted(vals)
-    return vals[min(len(vals) - 1, round(0.9 * (len(vals) - 1)))]
+    return vals[min(len(vals) - 1, round(q * (len(vals) - 1)))]
 
 
 def summary(rs: list[dict]) -> dict:
@@ -145,7 +146,7 @@ def summary(rs: list[dict]) -> dict:
     all_spans = [spans(r) for r in rs]
     for k in ("total", *STEPS):
         vals = [s[k] for s in all_spans if s[k] is not None]
-        out["steps"][k] = ({"n": len(vals), "median_h": statistics.median(vals), "p90_h": p90(vals), "pr_h": sum(vals)}
+        out["steps"][k] = ({"n": len(vals), "median_h": statistics.median(vals), "p90_h": pct(vals, 0.9), "pr_h": sum(vals)}
                            if vals else {"n": 0})
     trains = [r["trains"] for r in rs]
     out["trains_median"] = statistics.median(trains) if trains else None

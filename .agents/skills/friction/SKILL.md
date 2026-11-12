@@ -12,7 +12,12 @@ description: >
 # Friction
 
 When something gets in your way (a wrong command, a clumsy step, a check that fails late, a missing abstraction), take the
-first of these that applies.
+first of sections 1 to 4 that applies. Four habits:
+
+- **Fix the kind, not the case:** make the incident's kind impossible or loud.
+- **Twice by hand makes a tool:** a `research` command, or a line in one.
+- **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
+- **Look ahead:** rehearse what will stall next, before it does.
 
 Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell,
 since a long-lived tool shell can lose the injected secrets. A `git push` refused for a lapsed GitHub token: hand over a
@@ -46,7 +51,7 @@ in-flight files, or deletes others' work. If `AGENTS.md`, the owning skill or a 
 follow it. Otherwise ask the owner of what the change touches, or your coordinator when owners disagree or you can't tell
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
 recommendation in a few lines, and prepare the change meanwhile. Nothing waits on Daniel: a claim (what a guarantee says
-or rests on) goes to him decided provisionally, and a click only he can make gets a workaround where one exists
+or rests on) is the lane's to decide, and a click only he can make gets a workaround where one exists
 (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
@@ -103,7 +108,7 @@ What an agent may change:
 - Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
-- Close an old PR without asking when every commit on it is already in another open PR.
+- Close your own lane's PRs whenever you want; nobody asks first.
 - Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
@@ -127,48 +132,49 @@ Keys and access:
   (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
   shared nodes, with no ask and no wait. Daniel only clicks what needs an account he holds (the GitHub organization's
   admin, billing, the Nebius and Cloudflare consoles).
-- The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
-  so stopping a machine never waits on an agent VM.
-- Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
-  control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
-  branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+- The control pod's watchers hold a Nebius key that only reads, so nothing outside a Nebius machine stops it at its
+  deadline yet: its owner stops it.
+- Workers' PRs go through `research queue open|edit` and a GitHub App on the control pod with pull-requests write only
+  (no contents), whose token no worker holds; the tool refuses a PR whose head branch isn't the caller's lane's.
 - A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
   infra only the public half, and infra registers it under that lane.
 
 Landing:
 
-- The vLLM integration's lint ratchets are no-growth: no change adds an
-  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`adapters/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `adapters/vllm`, no
-  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
-  retirement. The ratchet gate counts them, with no allowlist.
-- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
-  after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
-  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
-  the PR's base). No new swallowing handler: re-raise, record, or test first.
+- Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
+  feature PR owes none. `adapters/vllm/tools/ratchet_gate.py` states the rules (the adapter's ratchets and `noqa`
+  count, `tests/lint/`'s lists) and judges each candidate's merges off the merge gate, ringing a failed merge's lane,
+  never reverting. Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
+  goes through the area's settings registry, and a swallowing handler re-raises, records or narrows.
 
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
-  PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
-  credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
-  served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's)
+  also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of
+  exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
+  outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
+- A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
+  What the theorems give at an operating point (a sampling design, δ, a datacenter's size) is a separate result computed
+  from the bounds; no demo is sized up to show one.
+- Network accounting is two things for each execution block. First, its consistency with the network certificates: its
+  committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
+  from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
+  network certifier mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
+- `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
-  are never θ (drops `NciCheck.Baseline`'s output provenance).
+  are never θ.
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  the protocol's properties into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
@@ -176,14 +182,14 @@ Protocols and claims:
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
+  bound on `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit), with the
+  claims resting on it listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
@@ -195,10 +201,7 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- Sampling is one design, two-stage in general: serving commits the replay blocks' boundaries, the first stage samples
-  replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
-  Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
-  (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
+- Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
@@ -213,6 +216,5 @@ Protocols and claims:
 
 ## Before you finish
 
-- Each fix you made is in a PR description.
 - Each question you asked has its ruling recorded as a rule, or is still open in your checkpoint or report.
 - Each friction note is a few lines, names its ids, and carries `severity: incident` only when something was lost.

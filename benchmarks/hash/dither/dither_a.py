@@ -7,7 +7,7 @@ z/y records under round s's root before coin s (the receipts need no z of their 
 -so's -ab/-abn and -ov arms; form=beside, receipts beside the served GEMM, for the row z tables or no z, and for every
 arm outside the statement's order (-so), which this module's arms all are.
 
-Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): int8_fused's quantizer, which also stores
+Serving stream, per int8-exact linear (`dithera::mm`, one op opaque to Inductor): a row quantizer, which also stores
 the call's live rows and scales (rows < m, unless the step's flags say no-write) into the execution phase's A slot
 (`exactlin_quant_rows_dithera`); then int8_fused's GEMM at its config for the call (`int8_fused.pick`), whose
 epilogue stores z = X W^T into the execution phase's z slot (rows < m; rows m to T zero, from extra row tiles past M) beside
@@ -157,7 +157,8 @@ M32 = DO.M32
 @triton.jit
 def exactlin_quant_rows_dithera(x_ptr, q_ptr, s_ptr, slot_ptr, scale_ptr, S_ptr, K, stride_x, stride_q,
                                 BLOCK_K: tl.constexpr):
-    # int8_fused's exactlin_quant_rows' body, unchanged
+    # `int8_exact.quantize_rows` a row, each quotient one div.rn; int8_fused's `_quant_tile` takes the same quotient by a
+    # reciprocal and two corrections
     row = tl.program_id(0).to(tl.int64)
     offs = tl.arange(0, BLOCK_K)
     mask = offs < K

@@ -40,7 +40,11 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
     statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
-    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires.
+    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires. The round
+    names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
+    them through and both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's
+    acceptance rests on a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block
+    (`period_case.UNWIRED`).
 
     Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,
     and the Lean verifier's checks of the stream's registration, sample and run. It catches what no cheaper test
@@ -82,6 +86,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     with sz.challenger(a, at, tmp_path) as coins:
         res = sz.audit(M, av, at, pg, "honest", members, dict(at.trees), tmp_path / "honest", 0, k, coins)
     assert "refused" not in res["draw"], res["draw"].get("refused")
+    tied = list(sz.lane_kinds(setup.cls))
+    assert res["checks_before_draw"]["registration"] and res["rests_on_period_check"] == tied, res.get("checks")
     assert (coins.published or {}).get("error") is None, coins.published.get("error")
 
     units, bases = res["draw"]["units"], {m["name"]: (m["base"], m["n"]) for m in members}

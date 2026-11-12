@@ -21,13 +21,14 @@ untraced = [
     "tests/test_difftest.py",
     "tests/test_harm_bound.py",
     "tests/test_history_difftest.py",
+    "tests/test_second_wires_difftest.py",
     "tests/test_wires_difftest.py",
 ]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface, the difftest
 # harness's Lean, Flock's verifier library and the LMS verifier; the tests import the harness's Python and the
 # reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
 # commitments' domains, and LMS for the challenger's signed record).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/protocols",
-          "verity/core", "verity/protocols/flock/verifier",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols",
+          "verity/protocols/flock/verifier",
           "verity/circuits", "verity/claims", "verity/commitments", "verity/definitions", "verity/difftest", "verity/configuration/__init__.py", "verity/configuration/wire", "verity/hardware/__init__.py", "verity/hardware/record.py", "verity/hardware/site",
           "verity"]

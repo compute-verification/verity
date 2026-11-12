@@ -447,6 +447,7 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
         U.layout()
 
 
+@pytest.mark.slow
 def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as

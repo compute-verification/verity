@@ -12,7 +12,6 @@ inputs = [
   # the output bits an incorrect proof block injects are the widest public size class of a block's outputs (tiers.py
   # reads verity.circuits.partition_v2, which imports its package)
   "verity/__init__.py",
-  "verity/ml/__init__.py",
   "verity/circuits",
   "security/lean-audit.json",
   "security/Definitions/Nci/Assumptions/Layered.lean",
@@ -31,8 +30,6 @@ inputs = [
   "verity/protocols/inference_only/rho/data",
   "verity/__init__.py",
   "verity/errors.py",
-  "verity/core/__init__.py",
-  "verity/core/protocols/__init__.py",
   "verity/protocols/reporting.py",
   "verity/protocols/spot/verifier/profile.py",
           "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/definitions/ops/__init__.py", "verity/protocols/inference_only/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/definitions/ops/boolean/__init__.py", "verity/protocols/inference_only/rho/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/spot/verifier/__init__.py", "verity/protocols/pouw/prover/circuit/__init__.py"]

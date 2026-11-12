@@ -15,9 +15,10 @@ gates' records into its output keeps no gate run's witness/. On the certifier-on
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check
 let through as negatives; d1's K is all_protocols' monitoring-period count over the compute audits' samples and free
 inputs and the network's own terms. Given no N2 summary the report is the scan's alone, its verdict `scan accepted`
-(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier, and `scan refused` (exit 1)
-on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On certifier/v0's
-period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
+(exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier (`scan
+accepted on the period check` when the honest round's registration let a tied value through), and `scan refused`
+(exit 1) on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On
+certifier/v0's period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
 block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
 session and key, execution phases the chain certified under N2's own registrations, the report's compute audits) and the
 verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
@@ -107,6 +108,7 @@ def test_certs_accepts_the_kept_files(honest):
     got = cr.certs(honest, honest / "client")
     assert got["verdict"] == "accepted", got.get("why")
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
+    assert got["window_buckets"] == json.loads((honest / "calibration.json").read_text())["grid"]["window_buckets"]
     assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
     assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
     assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
@@ -274,7 +276,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) holds 57 of 337")
 
 
-def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path):
+def test_report_merges_runs_and_counts_a_negative_that_escaped_the_sample(tmp_path):
     ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
     steps = _steps(tmp_path, ok)
     draw = {"selection": "sampled", "law": "subset:2", "k": 2, "population": 4}
@@ -445,6 +447,15 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
     assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
 
+    put({"audit": {**rnd(True)["audit"], "rests_on_period_check": ["prog"]}}, rnd(False))
+    rc, got = run("tied")
+    scan = got["steps"]["scan"]
+    assert rc == 0 and got["verdict"] == f"scan {cr.RESTS}" == "scan accepted on the period check"
+    assert scan["verdict"] == cr.RESTS and scan["rests_on_period_check"] == ["prog"] and "refuses" in scan["why"]
+    assert scan["rounds"]["honest"]["rests_on_period_check"] == ["prog"] and got["why"]["scan"].startswith(cr.RESTS)
+    md = (tmp_path / "tied" / "report.md").read_text()
+    assert f"Verdict: **scan {cr.RESTS}**" in md and f"| scan | {cr.RESTS} |" in md and "| scan | accepted |" not in md
+
     put(rnd(True), rnd(True))
     rc, got = run("forged-accepted")
     assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "scan refused"
@@ -505,14 +516,16 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
-    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
-    assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
+    assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter_per_block"]) == (2, 32)
+    assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 46_870_000}
+    assert doc["weights"]["label"] == "GLM-5.3 in FP4" and "GLM-5.3 in FP4" in cr.leak_markdown(doc)
+    assert any("leak_bounds.at_link_rate" in c and "not the scope's K" in c for c in doc["conditions"])
     json.dumps(doc)
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
-    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap) + 32)
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
@@ -604,15 +617,20 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
         cr.audit_of(tmp_path)
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
-    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 96, 0)
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
+    assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 96) and "jitter" not in audit
+    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)], "window_buckets": 60}
     assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
                                                                                         "cells": 0}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
     d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
+    import leak_bounds as lb
+    assert (d1["K"]["audits"][0]["steps"], k["terms"]["jitter"], k["jitter_term"]) == (180, 180, lb.JITTER)
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
+    unbucketed = {k: v for k, v in cert.items() if k != "window_buckets"}
+    open_ = cr.d1_terms(unbucketed, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])["K"]["open"]
+    assert "window_buckets" in open_
     assert cr.free_inputs(circuit, PIN, PIN) == 4 * (8 + 16)
 
 
@@ -738,7 +756,7 @@ def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the
         assert (got["free"], got["inputs"]["registered"], got["held"]) == (4 * (256 + 4096), 0, [])
         assert got["drawn"] == held["drawn"]
     network = {"advice": 8, "syncs": 0, "cells": 0}
-    before, after = (cr.pooled_k([a], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
+    before, after = (cr.pooled_k([a | {"jitter": 0}], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
     assert before["K"] - after["K"] == 4 * 4096 and after["terms"]["free"] == 4 * 256
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},
                                                             "window": {**window, "circuit": "00" * 64}}))

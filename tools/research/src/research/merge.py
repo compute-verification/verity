@@ -20,8 +20,8 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
-ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`) is required of no
+check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
 there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -123,7 +123,8 @@ REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: slot.py's options (`SLOT_FLAGS`, `SLOT_OPTS`), each at most once and in any order, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
-#: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
+#: slot.py's options a recorded check may carry: which slot it waits for, and how long, never what it runs (not `--budget-gb`,
+#: which changes how much CMD starts at once)
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
@@ -216,8 +217,8 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
     those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
-    can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    can't be read.  A job off the gate runs after landing, in drive's after-landing run, whose red names its culprit; no check
+    needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)
@@ -513,7 +514,7 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `drive.evidence` reads a running check), or None when it can't be read.
+    (`research status RID --json --also NAME...`, as `landing.evidence` reads a running check), or None when it can't be read.
     ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
@@ -547,17 +548,22 @@ def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]
     return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
 
 
+def lean_report(store, rid: str, fetch=fetch_run):
+    """Run ``rid``'s Lean report (`AUDIT`, parsed), read from its files in the store, else from its run dir on its node
+    (``fetch``); None when neither has it to read.  Raises when it is listed and can't be read or parsed."""
+    if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
+        with tempfile.TemporaryDirectory() as d:
+            return json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
+    if (got := fetch(rid, [AUDIT])) is not None:
+        return json.loads((got[0] / AUDIT).read_text())
+    return None
+
+
 def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
-    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`), read from its files in the
-    store, else from its run dir on its node (``fetch``); empty when it has none or its report can't be read: drive tells
-    them and puts them in the lock commit, and nothing waits on them."""
+    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`, `lean_report`); empty when it
+    has none or its report can't be read: drive tells them and puts them in the lock commit, and nothing waits on them."""
     try:
-        audit = None
-        if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
-            with tempfile.TemporaryDirectory() as d:
-                audit = json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
-        elif (got := fetch(rid, [AUDIT])) is not None:
-            audit = json.loads((got[0] / AUDIT).read_text())
+        audit = lean_report(store, rid, fetch)
         warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
         return [str(w) for w in warned] if isinstance(warned, list) else []
     except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)
@@ -1564,8 +1570,10 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
     closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
-    ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    ``limit`` of each, the longest idle first, each logged by name.  Each push leases the tip it saw, so a branch pushed to
+    meanwhile is kept.  Drive sweeps with ``into`` its landing branch (`Queue.into`: `checked` under drive.toml's
+    `land_into`), since `main` lags it by hours; a revert on `checked` then leaves its PR's branch deleted, and the PR's head
+    ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
@@ -1711,11 +1719,16 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
-    None when ``repo`` can't make one."""
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
+    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
+    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    from .settings import train_trees
+
+    if root := train_trees():
+        os.makedirs(root, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         return None

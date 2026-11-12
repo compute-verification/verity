@@ -29,6 +29,8 @@ KINDS: dict[str, str] = {
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
     "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
                         "once the day is over: the usage record's second copy, off the control pod; payload file",
+    "goals-dump/v1": "the Goals page as `research goals show --json` prints it, the list of its goals: what `research velocity` "
+                     "compares two of; meta {taken (UTC, YYYYMMDDTHHMMZ), what, by}; payload file goals-<taken>.json",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",
@@ -100,16 +102,19 @@ KINDS: dict[str, str] = {
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
                            "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
                            "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
-    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
-                            "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
-                            "match_ok?}; refs.build = the vllm-build/v1 consumed",
+    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, global_match.json, versions.json (never the raw "
+                            "capture planes, nor the token records, which hold the requests' and served token ids and stay on the "
+                            "node); meta {row, program_digest, match_ok?}; refs.build = the vllm-build/v1 consumed",
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
-                       "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+                       "commit_summary.json (compat), never a C2 replay's facts of record (sampled_replay*.json, served tokens), "
+                       "which stay on the node; meta {row, verdict, ...}; refs.build, refs.match",
     "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
-                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
-    "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
-                             "telemetry; meta {row, stage}",
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
+                           "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
+                           "requests and served tokens, opened weights) and stays on the node",
+    "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
+                             "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
     "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
                           "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
@@ -154,7 +159,7 @@ KINDS: dict[str, str] = {
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
-    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (archive/examples/h200/m3bundle.py build), what "
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step, what "
                           "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
                           "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
                           "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "

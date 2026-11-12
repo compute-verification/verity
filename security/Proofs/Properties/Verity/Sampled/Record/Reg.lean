@@ -7,7 +7,7 @@ import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.String.Search
 import all Init.Data.String.Slice
-public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.VBridge.Family.UnitName
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Pouw.Period.Sort
 public import Std.Data.String.ToNat
@@ -45,7 +45,7 @@ open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm p
   throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok)
 open private split1 digits from Spot.Select
 
-theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
+theorem strataSizes_slotPartition (l : _root_.Spot.Slots.SlotOrder) :
     strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) =
       (l.classes.toList.headD #[]).toList.map Array.size := by
   unfold _root_.Properties.Spot.slotPartition strataSizes
@@ -54,7 +54,7 @@ theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
 
 /-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
 class of the registration's layout `l`, and the input class, at most one stratum. -/
-theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.Layout}
+theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.SlotOrder}
     (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
     ∃ pop ins, (partSlots A).classes = [pop, ins] ∧ ins.length ≤ 1 ∧
@@ -156,7 +156,7 @@ theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
 /-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
 `l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
 theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
-    {l : _root_.Spot.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
+    {l : _root_.Spot.Slots.SlotOrder} (h : Flock.Bridge.PopMatches desc q n)
     (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
     (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok p q _ hl

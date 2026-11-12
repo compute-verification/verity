@@ -1,6 +1,9 @@
 # The interface every core protocol implements: its parameters, commitment and evidence read from canonical bytes, one
-# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. Each protocol's package requires
-# this one and C-Flock's verifier (for its canonical JSON, bytes and hashes); none needs Mathlib.
+# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. It requires the base package
+# (`core_base`: canonical JSON, bytes and hashes), the commitments' (`core_commitments`: the sampling designs a profile
+# records) and the difftest harness's Lean, and nothing else. Each protocol's package requires this one; none needs
+# Mathlib. It also holds the code's ticks, spans and monitoring period (`CoreProtocol.Period`), whose difftest port
+# `core-periods-difftest` serves through the difftest harness's Lean.
 name = "core_protocol"
 defaultTargets = ["CoreProtocol", "core-protocol-example", "core-registration"]
 
@@ -10,11 +13,24 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../flock/verifier"
+name = "core_base"
+path = "../../circuits/base"
+
+[[require]]
+name = "core_commitments"
+path = "../../commitments/lean"
+
+[[require]]
+name = "verity_difftest"
+path = "../../difftest/lean"
 
 [[lean_lib]]
 name = "CoreProtocol"
+
+# Not a default target: the difftest harness builds it by name (`verity_difftest.build`).
+[[lean_exe]]
+name = "core-periods-difftest"
+root = "CoreProtocol.PeriodDifftestMain"
 
 [[lean_exe]]
 name = "core-protocol-example"
