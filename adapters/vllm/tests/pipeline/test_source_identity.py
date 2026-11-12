@@ -347,7 +347,6 @@ def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_port
 
 @pytest.mark.parametrize("argv", [[PY, "-m", "verity_vllm.pipeline.cli", "row", "run", "some-row", "ROLE", "org/repo", "rev"],
                                   ["bash", "verity_vllm/ops/canary.sh", "r18-test"],
-                                  ["bash", "verity_vllm/ops/compiled_commit.sh", "some-row", "ROLE"],
                                   ["bash", "verity_vllm/ops/stoch_negatives.sh", "some-row", "ROLE", "unused-out"]])
 def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, argv):
     other = tmp_path / "other"
@@ -359,7 +358,7 @@ def test_runners_refuse_a_foreign_verity_tree_before_doing_anything(tmp_path, ar
     assert not list(tmp_path.glob("**/stages.txt"))
 
 
-@pytest.mark.parametrize("script", ["canary.sh", "compiled_commit.sh", "stoch_negatives.sh"])
+@pytest.mark.parametrize("script", ["canary.sh", "stoch_negatives.sh"])
 def test_runner_scripts_export_verity_tree_from_their_own_tree_and_have_no_default_path(script):
     text = (INTEGRATION / "verity_vllm" / "ops" / script).read_text()
     assert 'cd "${VERITY_TREE:-' not in text and 'export VERITY_TREE=$TREE_SELF' in text

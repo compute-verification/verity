@@ -386,7 +386,7 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
         doc = KI.collect(ind, KI.triton_cache_dir())
         gk = dict(doc["summary"])
         gk["inductor_cache_dir"] = ind
-        gk["per_process_cache_dir"] = settings.raw(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / compiled_commit.sh
+        gk["per_process_cache_dir"] = settings.raw(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / ops/served_commit.sh
         gk["pieces"] = [{"path": w["path"], "norm_sha256": w["norm_sha256"], "call_sha256": w["call_sha256"], "kernels": len(w["kernels"]),
                          "launches": w["launches"], "extern_calls": w["extern_calls"]} for w in doc["wrappers"]]
         gk["kernels"] = doc["kernels"]
