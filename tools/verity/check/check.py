@@ -1953,8 +1953,10 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     suites = [py, str(ROOT / "tools" / "verity" / "check" / "suites.py")]
     slot_gb = slot_mem_gb()
     with_cc = only is None or "circuit-check" in names
-    # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
-    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
+    # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved; beside
+    # circuit-check alone the other half is circuit-check's (`cc_mem_gb`), and alone in the slot pytest has all of it
+    tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // (
+        2 if with_lean or with_cc else 1)
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
     lean = lean_steps(out, cache, urls, regenerate, bookkeeping, agreement_urls)
