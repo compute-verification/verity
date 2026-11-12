@@ -216,11 +216,3 @@ def test_a_rank_holds_the_session_before_its_draw_ends_and_no_tree_is_drawn_once
         draws.tree(SPEC, bytes(32))
     with pytest.raises(C.CoinError, match="the challenger's session is not open"):
         draws.layout()
-
-
-def test_a_local_sessions_key_is_at_the_deployed_parameters_only_when_asked(monkeypatch, tmp_path):
-    """`A5_LOCAL_KEY` is ``deployed`` or unset: anything else is refused before a key is made."""
-    (tmp_path / "main.txt").write_text("c81c31e6d51f9c481cdead96221d65ad6d7afd2c\n")
-    monkeypatch.setenv(AC.LOCAL_KEY, "small")
-    with pytest.raises(SystemExit, match="A5_LOCAL_KEY is deployed"):
-        AC.start("local", WINDOW, [0], tmp_path / "challenger", tmp_path / "main.txt")

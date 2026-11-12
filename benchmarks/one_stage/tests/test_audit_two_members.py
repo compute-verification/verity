@@ -17,7 +17,7 @@ and verified by the Lean verifier. Nothing on that path is replaced.
   there after its evidence before the next session starts. The audit then writes its case in v2's per-member form
   with the challenger's key, the window's root and the coins, and v2 refuses it for its form alone
   (`members.ALL_PASSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
-  (`A5_LOCAL_KEY=deployed`), over the machine's cores.
+  (``--deployed-key``), over the machine's cores.
 * **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
@@ -175,7 +175,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     before the per-member form's refusal and answers `MULTI_REFUSED`, with exit 1; with one proof file of the first
     session changed after its closing round, it refuses the session's coins as the driver's check of the log does."""
     window = _window(tmp_path / "window")
-    rc, row, out, said = _audit(tmp_path, window, binaries, more={"FLOCK_CHALLENGER": "1", "A5_LOCAL_KEY": "deployed"})
+    rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
     assert row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": True for v in (*VERDICTS, "challenger") for k in (0, 1)}
