@@ -18,7 +18,7 @@ from verity.protocols.poub.verifier.receipts import Plan
 from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 8
-CAP = 256
+SCHEDULE_CAP = 256
 """The cap on its schedule's bits that a test session commits before its coins (`Params.schedule_cap`): above
 `HONEST_SCHEDULE`'s 200, so a ledger crediting the schedule's own bits instead would show."""
 NODE = b"node-under-test"
@@ -60,11 +60,11 @@ class Run:
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
-    parameters commit `schedule_cap` (`CAP` by default) on its schedule's bits."""
+    parameters commit `schedule_cap` (`SCHEDULE_CAP` by default) on its schedule's bits."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
                  samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
-                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = CAP) -> None:
+                 deferred: bool = False, appends: int = coins.APPENDS, schedule_cap: int | None = SCHEDULE_CAP) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
                         window_ns=10, codec=reg.codec, lifetime=lifetime, deferred=deferred,
@@ -135,7 +135,7 @@ class Run:
         return out
 
 
-def honest_session(schedule_cap: int | None = CAP) -> Run:
+def honest_session(schedule_cap: int | None = SCHEDULE_CAP) -> Run:
     """Window 0: a pass over the registered store; 4 pages appended (8 … 11) and read; one of them and a registered
     block released and dropped from the plan.  Window 1: 2 more pages (12, 13) read with the rest, then a pass sent
     whole."""
@@ -215,7 +215,8 @@ def test_the_ledger_credits_post_seed_receipts_only_on_the_property_s_verdict(ho
     assert set(none.to_json()["terms"]) == set(audit.LEDGER_SOURCES) and "carrier" in audit.LEDGER_SOURCES
     assert none.steering is None and none.to_json()["steering_bits"] is None
     held = audit.ledger(rec, **common, credit_post_seed=Verdict(True, 3 * 4096), schedule=scheduled)
-    assert HONEST_SCHEDULE.bits == 200 and held.steering == scheduled.cap == CAP == held.to_json()["steering_bits"]
+    assert HONEST_SCHEDULE.bits == 200
+    assert held.steering == scheduled.cap == SCHEDULE_CAP == held.to_json()["steering_bits"]
     assert held.timing == pytest.approx(1 - 54 * 4096 / whole)
     assert held.carrier == pytest.approx((0 + 3 + 3 + 3 + 3) * 4096 / whole)
     assert held.sample == none.sample and held.counting == none.counting
