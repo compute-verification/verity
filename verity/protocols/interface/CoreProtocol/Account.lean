@@ -35,12 +35,14 @@ at each reading of the registration its capacity can be read at: the capacity, t
 and the other, which follows.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
-  their spans (`Steps`) and the spans share no step: a verified amount is the largest total over answers whose spans are
-  pairwise disjoint, or the largest single amount of an answer that names none, whichever is more. A free amount is its
-  answers' summed plus the capacity of the ticks no certified answer's span covers, each tick's cover counted once:
-  the named spans' steps, or the longest span that names none.
+  their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
+  over answers of one series whose spans are pairwise disjoint, or the largest single amount of an answer that names
+  none, whichever is more. A free amount is its answers' summed plus the capacity of the ticks no certified answer's
+  span covers, each tick's cover counted once: one series' named spans' steps, or the longest span that names none.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
-  the least verified (or the most free) of its sessions at their errors summed and counts them (`Row.sessions`).
+  the least verified (or the most free) of its sessions and counts them (`Row.sessions`).
+* A period's error, of a flow and of a moment alike, is its answers' errors as the amount's `Pool` says: summed, or
+  the one answer's that states it once for the period.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
