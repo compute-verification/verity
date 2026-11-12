@@ -37,6 +37,7 @@ public import Proofs.NetworkCertifier.CountWitnesses
 public import Proofs.NetworkCertifier.PeriodWitnesses
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.ResponseCap
+public import Proofs.NetworkCertifier.Marks
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
