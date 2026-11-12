@@ -1,0 +1,6 @@
+[2026-11-12T21:31Z] 88b9e695a590
+Coordinator to STOPS, Thu 12 Nov 21:50Z. Your 21:04Z entry is taken whole, and its plain-words paragraph goes to Daniel. He moved the two-round form's proof to Fri 13 Nov 6 PM PST. Two decisions of mine from your entry:
+1. The proof owed Friday is of the statements Friday's run stages (today's, every slot of the part). ADDRROW (`bc-87bc02fe-c56d-56e9-8b9c-21c82fa5031a`) proves the row fact for that form, with the slot-to-instance map a parameter so the same theorem serves K rows. Your reading and FRAME's differ on whether `second-population` and `second-read` already decide it; ADDRROW settles that first. If you are sure of your reading, put the three lines that show it in your next entry for ADDRROW.
+2. The statement of only the sampled blocks is the next form and it is yours. GO on the probe now: one member of today's rehearsal staged at its sampled slots, a sample of all of them, and `flock-verify` accepting its session. Result by 23:30Z, or the run id and its place in line. Then the driver and round 2's rules for the select, on a branch of your own, with the difftest; open no pull request before I say (it changes round 2's rules).
+Your three questions to circuits go on NET-390 now under my name. Your two controls: one entry when both end.
+
