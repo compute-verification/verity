@@ -59,19 +59,24 @@ def test_what_any_process_reads_outside_the_inputs_fails_the_suite(tmp_path, mon
 def test_a_program_a_shared_fixture_starts_is_every_using_module_s(tmp_path, monkeypatch, workers):
     """A session fixture is set up once, for the first test that needs it, but the graph runs each test file alone, so each file
     whose tests use it starts its program: the program counts for every module whose tests use the fixture, and fails one its
-    suite's `untraced` doesn't name."""
+    suite's `untraced` doesn't name.  A module's own fixture of that name, and a function fixture, which each test sets up
+    itself, count only where they start it."""
     if workers > 1:
         pytest.importorskip("xdist")
     S, _ = _suite(tmp_path, monkeypatch, reads_outside=False)
     tests = tmp_path / "pkg" / "tests"
     (tests / "test_reads.py").unlink()
     (tests / "conftest.py").write_text("import subprocess\n\nimport pytest\n\n\n@pytest.fixture(scope='session')\ndef shell():\n"
-                                       "    subprocess.run(['sh', '-c', ':'], check=True)\n")
-    for name in ("test_one.py", "test_two.py"):
-        (tests / name).write_text("def test_it(shell):\n    pass\n")
+                                       "    subprocess.run(['sh', '-c', ':'], check=True)\n\n\n@pytest.fixture\ndef here(request):\n"
+                                       "    if request.module.__name__ == 'test_one':\n"
+                                       "        subprocess.run(['sh', '-c', ':'], check=True)\n")
+    (tests / "test_one.py").write_text("def test_it(shell, here):\n    pass\n")
+    (tests / "test_two.py").write_text("def test_it(shell):\n    pass\n")
+    (tests / "test_own.py").write_text("import pytest\n\n\n@pytest.fixture(scope='module')\ndef shell():\n    pass\n\n\n"
+                                       "def test_it(shell, here):\n    pass\n")
     (tests / "test_none.py").write_text("def test_it():\n    pass\n")
     r = S.run(S.Suite("pkg", "pkg", (), (), untraced=("tests/test_one.py",)), ["pkg"], [], tmp_path / "logs", workers)
-    assert (r.status, r.counts["passed"]) == ("failed", 3), r.log.read_text()
+    assert (r.status, r.counts["passed"]) == ("failed", 4), r.log.read_text()
     assert r.undeclared == {"pkg/tests/test_two.py": ["sh"]} and sorted(r.untraced) == ["pkg/tests/test_one.py", "pkg/tests/test_two.py"]
 
 
