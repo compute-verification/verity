@@ -19,15 +19,6 @@ def _probes(xs: np.ndarray, probe: int, seed: int) -> np.ndarray:
     return xs[np.concatenate(([0, len(xs) - 1], pick))]
 
 
-def _same(a, b) -> np.ndarray:
-    if isinstance(a, tuple):
-        out = np.ones(np.broadcast_shapes(*(x.shape for x in a)), dtype=bool)
-        for x, y in zip(a, b, strict=True):
-            out &= x == y
-        return out
-    return np.asarray(a) == np.asarray(b)
-
-
 def meet(left, right) -> list[tuple[int, int]]:
     """Every (i, j) with left[i] == right[j], rows compared whole (1-D arrays: entries), sorted. Sort-merge, so the cost is
     that of sorting the two sides, not their product."""

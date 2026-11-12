@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# A served H1 window's live units (live@<s>) through sampled proofs: each round's statement proved by Flock --zk
+# A served H1 window's live units (live@<s>) through SPOT: each round's statement proved by Flock --zk
 # and verified by the Lean verifier against the verifier's own live Program, partition and registered reads (live.py's
 # docstring has the checks). On a node that holds the window's dump (or reads it, --send) (`pouw_h1_gpu --commit --live-dump DIR`):
 #   research run --on MACHINE --project verity --source . --cwd source --mem-gb 128 \
 #     --declared-output 'out/*' --env H1_LIVE=/workspace/research/runs/RUN/prover -- bash benchmarks/pouw/h1_prove/live.sh
-#   1. hidden_zk/job.sh's builds (flock-circuit, the Lean flock-verify, a venv)
+#   1. hidden_zk/job.sh's builds (flock-circuit, the Lean verifier, a venv)
 #   2. per window under H1_LIVE (each directory holding a window.json): live.py prepare (the verifier's files, the
 #      openings checked, each round staged), one loopback --zk session per S line of its plan, each prover under the
-#      firewall unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json;
+#      ZK server unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json;
 #      then the honest rounds' circuit, public files and sessions copied to H1_KEEP/<window> (default the run dir's
 #      live-proofs/, outside out/) and live.py evidence over them: out/<window>/live-evidence.json, credit's live evidence
 # env: H1_LIVE (a dump DIR, or one window's, or a .tgz of either: --send it, then H1_LIVE=inputs/NAME.tgz; relative: the

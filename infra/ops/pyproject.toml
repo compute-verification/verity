@@ -40,6 +40,8 @@ untraced = [
 # watch's relay (infra/control) is tested here too, with research.slack.
 inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/registry.json",
           "infra/control/agent_watch_relay.py", "infra/control/agent_watch_timers.json", "infra/control/agent_watch_nodes.json",
+          # the pod's wrapper of the watch, held here to handing it its credentials file as a path
+          "infra/control/agent_watch.sh",
           "tools/research/src/research/slack.py", "tools/research/src/research/linear.py",
           "tools/research/src/research/goals.py",
           "tools/research/src/research/vocabulary.py", "tests/test_retired_terms.py",

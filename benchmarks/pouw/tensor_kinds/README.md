@@ -7,7 +7,7 @@ bound over its programs. A form's issue price an output slot is `a / slots`, rea
 instruction counts are read from each kernel's SASS, so a program counts what ptxas emitted. Timings only; clocks are
 read, never set.
 
-The ACCEL model reads it: `../machine_model/data/forms.toml` takes its forms from `KIND` in `tensor_kinds.py` and names
+The ACCEL model reads it: `../../machine_model/data/forms.toml` takes its forms from `KIND` in `tensor_kinds.py` and names
 these runs as its source, `tensor_kinds.py refit` prints the model's joint issue rows, and `sm80.py census` writes
 sm_80's device files.
 
