@@ -26,6 +26,10 @@ root, exe, open files, maps, command line, environment: `evict.live_texts`) is r
   second build, not a broken wheel.  Only the buckets in `UV_SDISTS` are touched: their layout was read in uv's source, and
   a bucket of another version is reported, not guessed at.  The wheels the shards linked (`archive-v0`) stay: only
   `uv cache prune` tells which of them nothing links.
+* **the store's lock files** (`evict_locks`): `<store>/locks/<name>.lock`, one empty file per key ever fetched
+  (`fetchset.lock`).  One goes while this pass holds its flock, taken without waiting, once it is `LOCK_KEEP_S` old; the
+  taker checks that the path still names the file it locked and takes the lock again if not, so no fetch runs beside
+  another on an unlinked file.
 """
 from __future__ import annotations
 
@@ -41,6 +45,7 @@ from . import evict as EV
 from .evict import Unestablished
 
 UV_KEEP_S = 48 * 3600        # a shard or build directory written this recently may belong to a build under way or a tree in use
+LOCK_KEEP_S = 3600           # a lock file made this recently belongs to fetches of one tree that are still taking it in turn
 BUDGET_S = 4 * 60            # no removal of a pass starts after this long: with evict_src's, they stay inside the unit's `timeout 3000`
 SCAN_S = 60                  # what live processes name is read again before a removal once the last reading is this old
 LISTED = 20                  # how many paths a report names of those deleted, and of those kept with a reason to act on
@@ -288,3 +293,39 @@ def evict_uv(cache: Path, *, dry_run: bool = False, keep_s: float = UV_KEEP_S, b
         p.stay(ed, f"unknown: {ed.parent.name} is not a bucket whose layout this pass knows ({', '.join(UV_SDISTS)}): its {n} "
                    f"shards stay", n)
     return p.end(error)
+
+
+# ---- the store's lock files ------------------------------------------------------------------------------------------------------------
+
+def evict_locks(store_root: Path, *, dry_run: bool = False, keep_s: float = LOCK_KEEP_S, budget_s: float = BUDGET_S,
+                now: float | None = None, clock: Callable[[], float] = time.monotonic,
+                log: Callable[[str], None] | None = None) -> dict[str, Any]:
+    """Unlink the lock files under `<store_root>/locks` (`fetchset.lock`'s: `<name>.lock`, empty) made more than `keep_s` ago, each
+    while this pass holds its flock: one that is held stays.  Only a file named as the store names its locks
+    (`fetchset.LOCK_NAME`) goes: another program's lock file, whose takers may not check what they hold, stays."""
+    from . import fetchset
+
+    d = Path(store_root) / "locks"
+    p = _Pass("locks", d, dry_run, budget_s, now, clock, log)
+    try:
+        paths = [d / n for n in EV._entries(d) if n.endswith(".lock")]
+    except Unestablished as e:
+        return p.end(str(e))
+
+    def one(path: Path) -> None:
+        st = os.lstat(path)
+        if not stat.S_ISREG(st.st_mode) or not fetchset.LOCK_NAME.fullmatch(path.name[:-len(".lock")]):
+            return p.stay(path, "unknown: it is not a regular file named like one of the store's lock files")
+        if (age := p.now() - st.st_mtime) < keep_s:
+            return p.stay(path, f"recent: made {_age(age)} ago (within {keep_s / 3600:g} h)")
+        lock = _take(path)
+        try:
+            if os.fstat(lock).st_size:
+                return p.stay(path, "unknown: it is not empty, and the store's lock files hold no data")
+            if not dry_run:
+                os.unlink(path)
+            p.gone(path, 1, 0)
+        finally:
+            os.close(lock)
+
+    return p.end(p.each(paths, one))

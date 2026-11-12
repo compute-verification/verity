@@ -1,14 +1,17 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
-build directories.
+build directories, and the store's lock files.
 Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
 ended, a name or layout the pass does not know.  Every path is under `tmp_path`, /proc is a directory there, and time is the
 `now` and `clock` each pass is given."""
 import fcntl
 import os
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from research.store import fetchset
 from research.store import leftovers as L
 
 NOW = 2_000_000_000.0
@@ -267,3 +270,127 @@ def test_a_uv_pass_that_cannot_read_the_processes_removes_nothing(cache, tmp_pat
     rep = uv(cache, tmp_path / "no-proc")
     assert rep["error"].startswith(f"2: cannot list {tmp_path / 'no-proc'}") and rep["deleted"] == 0
     assert rep["kept_by"] == {"unestablished": 2} and snapshot(cache) == before
+
+
+# ---- the store's lock files ------------------------------------------------------------------------------------------------------------
+
+def key(n: int) -> str:
+    return f"blob-{n:064x}"
+
+
+def lock_file(store: Path, name: str, hours: float = 2) -> Path:
+    (store / "locks").mkdir(parents=True, exist_ok=True)
+    p = store / "locks" / f"{name}.lock"
+    p.write_text("")
+    age(p, hours)
+    return p
+
+
+def locks(store: Path, **kw):
+    return L.evict_locks(store, now=kw.pop("now", NOW), clock=kw.pop("clock", lambda: 0.0), **kw)
+
+
+def test_a_free_lock_file_over_an_hour_old_goes_and_the_rest_stay(tmp_path):
+    store = tmp_path / "store"
+    gone, recent, busy = lock_file(store, key(1)), lock_file(store, key(2), 0.9), lock_file(store, key(3))
+    data, theirs = lock_file(store, key(4)), lock_file(store, "check-d")
+    data.write_text("held by 7")
+    age(data, 2)
+    (store / "locks" / f"{key(5)}.lock").mkdir()
+    (store / "locks" / "slots").write_text("a\n")
+    fd = held(busy)
+    try:
+        rep = locks(store)
+    finally:
+        os.close(fd)
+    assert rep["error"] is None and rep["found"] == 6 and rep["deleted_first"] == [str(gone)] and rep["deleted_inodes"] == 1
+    assert rep["kept_by"] == {"2": 1, "recent": 1, "unknown": 3}
+    assert sorted(p.name for p in (store / "locks").iterdir()) == sorted(
+        [recent.name, busy.name, data.name, theirs.name, f"{key(5)}.lock", "slots"])
+    why = {k["path"]: k["why"] for k in rep["kept_first"]}
+    assert why[str(busy)] == f"2: its lock is held ({busy.name})"
+    assert why[str(data)] == "unknown: it is not empty, and the store's lock files hold no data"
+    assert why[str(theirs)] == "unknown: it is not a regular file named like one of the store's lock files", \
+        "another program's lock file, whose takers do not check what they hold"
+
+
+def test_a_lock_dry_run_removes_nothing_and_the_time_limit_stops_the_pass(tmp_path):
+    store = tmp_path / "store"
+    files = [lock_file(store, key(n)) for n in range(3)]
+    rep = locks(store, dry_run=True)
+    assert rep["deleted"] == 3 and rep["deleted_first"] == [str(f) for f in files] and all(f.exists() for f in files)
+    t = [0.0]
+    rep = locks(store, clock=lambda: t[0], budget_s=240, log=after_first("locks: deleted ", t, 241.0))
+    assert rep["deleted"] == 1 and rep["kept_by"] == {"budget": 2} and [f.exists() for f in files] == [False, True, True]
+    assert locks(tmp_path / "no-store")["found"] == 0
+
+
+def test_a_lock_file_replaced_while_the_pass_took_it_stays(tmp_path, monkeypatch):
+    """The pass unlinks only the file it holds the lock of: one that another pass unlinked, and a fetch made anew, between this
+    pass's open and its lock is not the file it holds."""
+    store = tmp_path / "store"
+    path = lock_file(store, key(1))
+
+    def replaced(fd, op):
+        path.unlink()
+        path.write_text("")
+        age(path, 2)
+        return fcntl.flock(fd, op)
+
+    monkeypatch.setattr(L, "fcntl", SimpleNamespace(flock=replaced, LOCK_EX=fcntl.LOCK_EX, LOCK_NB=fcntl.LOCK_NB))
+    rep = locks(store)
+    assert rep["deleted"] == 0 and path.exists()
+    assert rep["kept_first"] == [{"path": str(path), "why": f"2: its lock file was replaced while this pass took it ({path.name})"}]
+
+
+def test_a_fetch_that_waited_on_a_lock_file_unlinked_meanwhile_takes_the_lock_on_the_file_the_path_names(tmp_path, monkeypatch):
+    """The race an unlink opens: a taker that waited on the old file would hold its lock beside the holder of a new file of the
+    same name.  The pass holds the lock, a fetch opens the file and waits, the pass unlinks the file, another opener makes and
+    locks a new one, and the pass lets go: the fetch must not enter its block until it holds the lock on the new file."""
+    store = SimpleNamespace(root=tmp_path / "store")
+    path = lock_file(store.root, key(1))
+    waiting, moved, entered = threading.Event(), threading.Event(), threading.Event()
+    calls, seen = [], {}
+
+    def flock(f, op):
+        calls.append(os.fstat(f.fileno()).st_ino)
+        (waiting if len(calls) == 1 else moved).set()
+        return fcntl.flock(f, op)
+
+    def fetch():
+        try:
+            with fetchset.lock(store, key(1)):
+                entered.set()
+                moved.set()
+                seen.update(ino=os.stat(path).st_ino, locked=not is_free(path))
+        except BaseException as e:      # noqa: BLE001  shown by the assertion below
+            seen["error"] = e
+            moved.set()
+
+    monkeypatch.setattr(fetchset, "fcntl", SimpleNamespace(flock=flock, LOCK_EX=fcntl.LOCK_EX))
+    evictor = L._take(path)
+    old = os.fstat(evictor).st_ino
+    t = threading.Thread(target=fetch)
+    t.start()
+    waiting.wait()                      # the fetch has the old file open and asks for its lock
+    os.unlink(path)
+    other = os.open(path, os.O_RDWR | os.O_CREAT, 0o666)
+    fcntl.flock(other, fcntl.LOCK_EX)
+    new = os.fstat(other).st_ino
+    os.close(evictor)                   # the fetch now holds the lock of the unlinked file
+    moved.wait()                        # it asks again, or (without the check) it is inside its block
+    in_block_beside_the_other_holder = entered.is_set()
+    os.close(other)
+    t.join()
+    assert "error" not in seen, seen
+    assert not in_block_beside_the_other_holder, "the fetch ran its block on an unlinked lock file while another opener held the new one"
+    assert calls == [old, new] and seen == {"ino": new, "locked": True}
+
+
+def test_a_fetch_takes_a_lock_the_pass_removed_as_one_it_never_had(tmp_path):
+    store = SimpleNamespace(root=tmp_path / "store")
+    path = lock_file(store.root, key(1))
+    assert locks(store.root)["deleted"] == 1 and not path.exists()
+    with fetchset.lock(store, key(1)):
+        assert not is_free(path)
+    assert is_free(path) and fetchset.LOCK_NAME.fullmatch(key(1)) and fetchset.LOCK_NAME.fullmatch("entry-" + "ab" * 32)
