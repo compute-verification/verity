@@ -69,6 +69,10 @@ prover's development verifier (`PEARL_CREDIT`).
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
+An ``--out`` that already holds an audit record (``window/audit.json``) is one audit's: ``audit`` refuses to start on it
+(`held_record`) and changes nothing under it. Nothing resamples, and an attempt that wrote no record of its own would
+leave the earlier one for `served_integrity.answer`; a second attempt on a registration takes a new serve directory.
+
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
 the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit's time quoted with the cache
@@ -815,6 +819,16 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
+def held_record(out: Path) -> str | None:
+    """Why no audit starts under ``out``, or None: it holds an audit record (``window/audit.json``), an earlier
+    audit's, which a second attempt must neither replace (nothing resamples) nor leave beside a summary of its own."""
+    rec = out / "window" / "audit.json"
+    if not rec.exists():
+        return None
+    return (f"{rec} is an earlier audit's record, so no audit starts here and nothing under {out} was changed: nothing "
+            "resamples, and a second attempt on a registration is a new serve directory (a new --out)")
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -822,6 +836,9 @@ def audit(a: argparse.Namespace) -> int:
     import a5_coins as AC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
+    if why := held_record(out):
+        print(f"records_audit.py audit: {why}", file=sys.stderr)
+        return 1
     out.mkdir(parents=True, exist_ok=True)
     law = D.parse_law(a.law)
     try:
