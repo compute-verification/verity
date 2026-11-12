@@ -28,9 +28,11 @@ The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue
 `AGENT_GUARD_PUSH_REMOTES` names others in their place). The registry is the VM's own and names a branch without its
 repository. The typed rule reads a push's words as git does (options anywhere, by any prefix, with their values; git's
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
-and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd`, `popd` or `source` anywhere in the
-command, run or not, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, leaves the push unplaced
-(`git -C <checkout> push ...` places it): such a push that names no branch is refused for that, with the push it accepts
+and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd` or `popd` anywhere in the command, run
+or not, leaves the push unplaced unless its own `-C` is absolute (`cd /tmp && git -C /abs/checkout push ...` runs in
+`/abs/checkout` wherever the shell is; a relative `-C` or one through `$` does not). A `source` or `.`, which can change
+what git reads as well as where it runs, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, leaves it
+unplaced whatever its `-C`. An unplaced push that names no branch is refused for that, with the push it accepts
 (`git -C <checkout> push -u origin HEAD`, or the branch by name). The branch-switch rule refuses a switch it can't place. It judges as a push
 to the queue's repositories one it can't place, or whose first word is neither a remote, a URL nor a path, an option git
 doesn't know, or git configuration set elsewhere in the command. It can't see what earlier commands left in the shell (an

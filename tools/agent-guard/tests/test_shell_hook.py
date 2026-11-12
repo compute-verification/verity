@@ -888,7 +888,18 @@ UNFOLLOWED_CDS = [
     "cd {T} | true; git push origin main", "case x in x) cd {T};; esac; git push origin main", "C=cd; $C {T}; git push origin main",
     "git push origin main; cd {T}", "popd; git push origin main", ". ./env.sh; git push origin main",
     "cd {T} && git push origin main", "cd {T}; git push --repo=origin", "(cd {T} && git push origin main)",
-    "cd {T} && git push origin HEAD:main", "cd {T} && git -C {T} push origin main",
+    "cd {T} && git push origin HEAD:main", "cd {T} && git -C . push origin main", "cd {T}/.. && git -C ../.. push origin main",
+    "cd {T} && git -C ~ push origin main", "source ./env.sh && git -C {T} push origin main", ". ./env.sh; git -C {T} push origin main",
+    "C=cd; $C /tmp; git -C {T} push origin main", "cd /tmp && GIT_DIR={T}/.git git -C {T} push origin main",
+    "cd /tmp && git --git-dir={T}/.git -C {T} push origin main",
+]
+#: and commands whose git names its checkout by an absolute `-C`: it runs there wherever a `cd`, `pushd` or `popd` leaves the shell
+ABSOLUTE_C = [
+    "cd {T} && git -C {T} push origin main", "cd /tmp && git -C {T} push origin main", "cd /tmp; git -C {T} push origin HEAD:main",
+    "pushd /tmp && git -C {T} push origin main && popd", "(cd /tmp && git -C {T} push origin main)", "popd; git -C {T} push origin main",
+    "false && cd /tmp; git -C {T} push origin main", "cd /tmp && git -C /nowhere -C {T} push origin main",
+    "cd /tmp && git -C {T}/.. -C {T} push origin main", "cd /tmp && git -c x.y=z -C {T} push -o x origin main",
+    "bash -c 'cd /tmp && git -C {T} push origin main'", "tmux send-keys -t w 'cd /tmp && git -C {T} push origin main' C-m",
 ]
 
 
@@ -902,6 +913,81 @@ def test_a_cd_anywhere_in_the_command_leaves_a_push_unplaced(clones, form):
         out = clones(form.replace("{T}", target), clone)
         assert out["permission"] == "deny" and "with no `cd` in the command, `git -C <checkout> push" in out["agent_message"], (
             form, clone, out)
+
+
+@pytest.mark.parametrize("form", ABSOLUTE_C)
+def test_an_absolute_git_C_places_a_push_whatever_cd_the_command_holds(clones, form):
+    """`cd /tmp && git -C /abs/checkout push ...` was refused as unplaced, though git runs in `/abs/checkout` wherever the shell
+    is. It is now judged as the push it is: of the notes' `main` it passes from any clone, of verity's it is refused as `main`'s,
+    with no word about a `cd`."""
+    for clone in ("verity", "infra", "notes"):
+        assert clones(form.replace("{T}", "{N}"), clone) == {"permission": "allow"}, (form, clone)
+        out = clones(form.replace("{T}", "{V}"), clone)
+        assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, clone, out)
+        assert "The guard judged it as a push to verity or infra" not in out["agent_message"], (form, clone, out)
+
+
+def test_an_absolute_git_C_places_the_checkout_a_push_or_switch_runs_in(tmp_path):
+    """The push an agent types from a tool shell that starts elsewhere, `cd /tmp && git -C WT push -u origin HEAD`, pushes WT's
+    branch: placed by its absolute `-C`, it is held to that branch's owner like any other, and a branch switch to WT's owner.
+    A relative `-C`, a `source`, a `.`, a command or a `-C` the shell names only later, and a repository named by `GIT_DIR` or
+    `--git-dir` leave it unplaced, as before."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
+    ws, wt, origin = tmp_path / "ws", tmp_path / "wt", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)],
+                 ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "worktree", "add", "-q", str(wt), "-b", "mine"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent="bc-worker", cwd=ws):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent, "cwd": str(cwd)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                             env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    assert ask("git status", "bc-coord", ws) == {"permission": "allow"}
+    assert ask("git status", "bc-worker", wt) == {"permission": "allow"}
+    placed = [f"cd /tmp && git -C {wt} push -u origin HEAD", f"cd {wt} && git -C {wt} push", f"cd /tmp; git -C {wt} push origin @",
+              f"pushd /tmp && git -C {wt} push -u origin HEAD && popd", f"(cd /tmp && git -C {wt} push -u origin HEAD)",
+              f"cd /tmp && git -C {ws} -C {wt} push -u origin HEAD", f"cd /tmp && git -C {wt} -C . push -u origin HEAD",
+              f"bash -c 'cd /tmp && git -C {wt} push -u origin HEAD'",
+              f"tmux send-keys -t w 'cd /tmp && git -C {wt} push -u origin HEAD' C-m"]
+    for command in placed:
+        for cwd in (ws, wt, tmp_path):
+            assert ask(command, cwd=cwd) == {"permission": "allow"}, (command, cwd)
+        out = ask(command, "bc-coord")
+        assert out["permission"] == "deny" and "branch mine belongs to agent bc-worker" in out["agent_message"], (command, out)
+        out = ask(command.replace(str(wt), str(ws)))                   # the same push of the coordinator's checkout: `main`'s
+        assert out["permission"] == "deny" and out["agent_message"].startswith(
+            "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): this push would update `main`"), (command, out)
+
+    unplaced = [(f"cd {wt} && git push -u origin HEAD", "a `cd`"), (f"cd {tmp_path} && git -C wt push -u origin HEAD", "a `cd`"),
+                (f"cd {wt}/.. && git -C ./wt push -u origin HEAD", "a `cd`"), ("cd /tmp && git -C ~ push -u origin HEAD", "a `cd`"),
+                (f"pushd {tmp_path} && git -C wt push -u origin HEAD", "a `pushd`"),
+                (f"source ./env.sh && git -C {wt} push -u origin HEAD", "a `source` in it, which can change what git reads"),
+                (f". ./env.sh; git -C {wt} push -u origin HEAD", "runs `.`, which may move it to another directory or change"),
+                (f"C=cd; $C /tmp; git -C {wt} push -u origin HEAD", "runs `$C`"),
+                (f"cd /tmp && GIT_DIR={ws}/.git git -C {wt} push -u origin HEAD", "the command sets `GIT_DIR`"),
+                (f"cd /tmp && git --git-dir={ws}/.git -C {wt} push -u origin HEAD", "names its repository with `--git-dir`")]
+    for command, why in unplaced:
+        out = ask(command, cwd=wt)
+        assert out["permission"] == "deny" and "the guard can't tell which checkout this push runs in" in out["agent_message"], (
+            command, out)
+        assert why in out["agent_message"], (command, out)
+        assert "by its absolute path or with no `cd` in the command, `git -C <checkout> push -u origin HEAD`" in out["agent_message"]
+    out = ask(f"D={wt}; cd /tmp && git -C $D push -u origin HEAD", cwd=wt)
+    assert out["permission"] == "deny" and "expands only after the guard has read it" in out["agent_message"], out
+
+    for command in (f"cd /tmp && git -C {wt} switch -c x", f"pushd /tmp; git -C {wt} checkout -b y", f"(cd /tmp && git -C {wt} switch mine)"):
+        assert ask(command) == {"permission": "allow"}, command
+        out = ask(command, "bc-coord", wt)
+        assert out["permission"] == "deny" and f"{wt} is agent bc-worker's checkout" in out["agent_message"], (command, out)
+    for command in (f"cd {tmp_path} && git -C wt switch -c z", f"source ./env.sh; git -C {wt} switch -c z",
+                    f"cd /tmp && git --git-dir={ws}/.git -C {wt} switch -c z"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "can't tell whose checkout" in out["agent_message"], (command, out)
+        assert "by its absolute path or with no `cd` in the command: `git -C <checkout> " in out["agent_message"], out
 
 
 def test_a_push_whose_branch_the_guard_cant_tell_is_told_so_and_what_it_accepts(clones):
