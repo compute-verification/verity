@@ -327,7 +327,7 @@ CONTROL = Path(__file__).parent / "fixtures" / "control"
 #: the control: `verity bench prove`'s table it prices row (ii) at, and the planner's inputs of the plan it must give
 CONTROL_SHA256 = {"bench_prices.json": "f2badd5ecdf36530b918b34782fec63466b8586cd6df55e46c43af442af9604c",
                   "plan_inputs.json": "cb8f1733d189228657f96342c359a8b230078c8760066b443559862bd44d0c80"}
-#: the budget the control's plan is drawn at
+#: the control's plan's budget
 PLAN_BETA = 0.05544106123672309
 
 
