@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 import research.queue as Q
-from research.queue import path_rows
+from research.queue import map_kind, path_rows
 from research.vqueue import PASS, Advance, Build, Commit, Drop, Ready, RecordsRun, Snapshot, _moves_last, decide
 from test_vqueue import MAIN, SEEDS, World, cand, lean, pr, snap, ticks, waiting
 from research.executor import Executor
@@ -244,6 +244,20 @@ def test_path_rows_are_the_map_rows_whose_old_and_new_words_are_paths_words_in_i
     assert path_rows('words_in = ["x"]\n[words]\n"p/q" = "r/s"\n') == [("p/q", "r/s")]
 
 
+def test_a_map_s_kind_is_read_from_its_tables_as_stage_py_reads_it():
+    """`[words]` or `[[words_in]]` (with a `[words]`, which may be empty) make a word map, `[paths]` a path map; both, neither,
+    or `[[words_in]]` alone is refused, and a map that doesn't parse raises as `tomllib` does."""
+    words_in = '[[words_in]]\nglob = "*.md"\n[words_in.words]\n"a" = "b"\n'
+    assert [map_kind(t) for t in ('[words]\n"a" = "b"\n', "[words]\n" + words_in, '[paths]\n"a/" = "b/"\n[rewrite]\nexclude = []\n')
+            ] == ["words", "words", "paths"]
+    for text in ('[words]\n"a" = "b"\n[paths]\n"a/" = "b/"\n', "[words]\n[paths]\n[rewrite]\nexclude = []\n", words_in):
+        with pytest.raises(ValueError) as e:
+            map_kind(text)
+        assert not isinstance(e.value, tomllib.TOMLDecodeError), text
+    with pytest.raises(tomllib.TOMLDecodeError):
+        map_kind("[paths\n")
+
+
 # ---- the loop -----------------------------------------------------------------------------------------------------------------
 
 #: `rename.py` as the loop runs it: each path row of the map's `[words]` moves the files under it, and every row's word is
@@ -268,6 +282,35 @@ for f in sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.pa
     (root / new).write_text(text)
 '''
 
+#: `layout.py` as the loop runs it: each call's arguments appended to LOG; while FAIL exists it stops as `layout.py` does on a
+#: Lake path the move leaves naming no package; else each `[paths]` row moves the files under it, and every row's old path is
+#: rewritten in every file outside `tools/`
+LAYOUT_STUB = '''import argparse, json, pathlib, sys, tomllib
+a = argparse.ArgumentParser()
+a.add_argument("--map")
+a.add_argument("--root")
+a.add_argument("--no-lock", action="store_true")
+x = a.parse_args()
+with pathlib.Path(LOG).open("a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+if pathlib.Path(FAIL).exists():
+    sys.exit("lean/a/lakefile.toml: its requirement's path ../b names no Lake package after the move")
+root = pathlib.Path(x.root)
+paths = tomllib.loads((root / x.map).read_text())["paths"]
+for f in sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.parts and p.parts[len(root.parts)] != "tools"):
+    rel = new = f.relative_to(root).as_posix()
+    for o, n in paths.items():
+        if new.startswith(o):
+            new = n + new[len(o):]
+    text = f.read_text()
+    for o, n in paths.items():
+        text = text.replace(o, n)
+    f.unlink()
+    (root / new).parent.mkdir(parents=True, exist_ok=True)
+    (root / new).write_text(text)
+'''
+LAYOUT = "tools/move/layout.py"
+
 #: `move_check.py --json`: each call's arguments appended to LOG; while REFUSE exists, a refusal, or as it says, no report
 #: (`garbage`, or JSON that isn't one: `list`), a report certifying the move with a refusal's exit (`exit`) or one not certifying it with exit 0 (`zero`)
 CHECK = """import json, pathlib, sys
@@ -290,21 +333,28 @@ sys.exit(0 if mode is None else 1)
 
 
 class Moved:
-    """``env``'s `main` with the stub scripts and the map moving `old/` to `new/` (and the word `oldword`), and `old/a.txt`;
-    `log` lists each `move_check.py` call's arguments, and `refuse` makes it refuse while it exists."""
+    """``env``'s `main` with the stub scripts and the map moving `old/` to `new/` (a word map, which also renames the word
+    `oldword`; or with ``paths`` a path map), and `old/a.txt`; `log` lists each `move_check.py` call's arguments, and `refuse`
+    makes it refuse while it exists; `layouts` lists each `layout.py` call's, and `layout_fails` makes it fail while it
+    exists."""
 
-    def __init__(self, env: Env, map_on_main: bool = True):
+    def __init__(self, env: Env, map_on_main: bool = True, paths: bool = False):
         self.env, self.log, self.refuse = env, env.tmp / "move_check.log", env.tmp / "move_check.refuse"
+        self.layout_log, self.layout_fails = env.tmp / "layout.log", env.tmp / "layout.fails"
         check = CHECK.replace("LOG", repr(str(self.log))).replace("REFUSE", repr(str(self.refuse)))
-        files = {Q.RENAME: RENAME, Q.MOVE_CHECK: check, "old/a.txt": "oldword in old/a.txt\n"}
+        layout = LAYOUT_STUB.replace("LOG", repr(str(self.layout_log))).replace("FAIL", repr(str(self.layout_fails)))
+        files = {Q.RENAME: RENAME, LAYOUT: layout, Q.MOVE_CHECK: check, "old/a.txt": "oldword in old/a.txt\n"}
         if map_on_main:
-            files[MAP] = '[words]\n"old/" = "new/"\n"oldword" = "newword"\n'
+            files[MAP] = '[paths]\n"old/" = "new/"\n' if paths else '[words]\n"old/" = "new/"\n"oldword" = "newword"\n'
         self.main = _main_to(env, files)
         self.closed: list[tuple[int, str]] = []
         env.o.gh.close = lambda n, comment: self.closed.append((n, comment)) or env.o.gh.prs.pop(n)
 
     def calls(self) -> list[list[str]]:
         return [json.loads(x) for x in self.log.read_text().splitlines()] if self.log.is_file() else []
+
+    def layouts(self) -> list[list[str]]:
+        return [json.loads(x) for x in self.layout_log.read_text().splitlines()] if self.layout_log.is_file() else []
 
     def move(self, n: int, verdict: bool) -> str:
         head = _move(self.env, n, {"old/a.txt": None, "new/a.txt": "newword in new/a.txt\n"})
@@ -636,3 +686,109 @@ def test_under_signed_verdicts_a_move_on_its_mark_whose_regeneration_rewrites_a_
     assert skip["why"].startswith("it came on its mark alone, and its move regenerated on ") and (
         f"it changes {guard}, and under drive.toml's `signed_verdicts`" in skip["why"]), skip
     assert skip["text"].endswith("It lands with a land verdict."), skip
+
+
+# ---- a path map, a word map's rerun as before, and a map no script can run -------------------------------------------------
+
+
+def test_a_certified_path_move_lands_on_its_mark_alone_regenerated_by_layout_py_with_its_layout_move_line(env):
+    """A move PR whose map is a path map (`[paths]`) is regenerated on its batch's tip by `main`'s `layout.py --map MAP
+    --no-lock`, never `rename.py`, and committed with `Layout-move: MAP --no-lock`: the line by which `move_check.py` reads the
+    map's rows (so it is given no `--map` row), `restack.py` reruns the move, and the queue finds a move `main` landed.
+    Certified, it lands on its mark alone, its certificate in the build line, and its PR is closed."""
+    m = Moved(env, paths=True)
+    head = m.move(1, verdict=False)
+    loop = env.loop(policy)
+    (built,) = _builds(loop.tick())
+    sha, tip = built["sha"], m.main
+    assert (built["members"], built["heads"], _git(env.o.origin, "rev-parse", f"{sha}^")) == ([1], [head], tip), built
+    assert "new/a.txt" in _files(env, sha) and "old/a.txt" not in _files(env, sha)
+    assert _git(env.o.origin, "show", f"{sha}:new/a.txt") == "oldword in new/a.txt"
+    (call,) = m.layouts()
+    assert call[:4] == ["--map", MAP, "--no-lock", "--root"] and m.calls() == [[tip, sha, "--json"]], (call, m.calls())
+    body = _show(env, sha)
+    assert f"`python3 {LAYOUT} --map {MAP} --no-lock` at the root of {tip}, regenerated by the queue for #1" in body, body
+    assert body.endswith(f"PR: #1\nHead: {head}\nOwner: lane-1\nLayout-move: {MAP} --no-lock") and "\nMove: " not in body, body
+    assert Q.move_of(env.o.origin, sha) == MAP and [c for c, _ in Q.moves_between(env.o.origin, sha, tip)] == [sha]
+    (move,) = built["moves"]
+    assert (move["map"], move["commit"], move["on_mark"], move["certificate"]["certified"]) == (MAP, sha, True, True), move
+    _passes(env, sha)
+    assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
+    assert [n for n, _ in m.closed] == [1] and MAP in m.closed[0][1]
+
+
+@pytest.mark.parametrize("where", ["layout", "check"])
+def test_a_path_move_layout_py_or_move_check_py_refuses_on_its_tip_is_left_out_by_name_and_the_rest_built(env, where):
+    """A path move `layout.py` stops on (here, as on a Lake requirement's path the move leaves naming no package) or
+    `move_check.py` doesn't certify, taken on its mark alone, is left out with what refused it and the fix, its owner told
+    what lands it; the batch's other members are built without it."""
+    m = Moved(env, paths=True)
+    (m.layout_fails if where == "layout" else m.refuse).touch()
+    head = m.move(1, verdict=False)
+    two = env.put(2, {"b.txt": "2\n"})
+    recs = env.loop(policy).tick()
+    (skip,) = [r for r in recs if r["action"] == "skip"]
+    (built,) = _builds(recs)
+    assert (skip["number"], skip["heads"], built["members"], built["heads"], "moves" in built) == (1, [head], [2], [two], False)
+    why = skip["why"]
+    if where == "layout":
+        assert f"`{LAYOUT} --map {MAP} --no-lock` failed on " in why and "(exit 1): lean/a/lakefile.toml: its requirement's " \
+               "path ../b names no Lake package after the move: fix what it names" in why and m.calls() == [], why
+    else:
+        assert "isn't certified (`tools/verity/check/move_check.py " in why and "--map rows" not in why, why
+        assert "exit 1): move-check: refused: new/a.txt: an edit no row explains" in why, why
+    assert skip["text"].endswith("It lands with a land verdict, or on its mark once a candidate on a later `main` certifies "
+                                 "its move."), skip
+
+
+def test_a_word_move_is_regenerated_as_before_by_rename_py_with_its_move_line_given_its_path_rows(env):
+    """A word map's move runs `rename.py`, never `layout.py`, and its commit's message is the one the queue wrote before path
+    maps: `Move: MAP` its last line; `move_check.py` gets the map's path rows."""
+    m = Moved(env)
+    head = m.move(1, verdict=False)
+    (built,) = _builds(env.loop(policy).tick())
+    sha, tip = built["sha"], m.main
+    assert _show(env, sha) == (
+        f"Queue: #1 change 1\n\n`python3 {Q.RENAME} --map {MAP}` at the root of {tip}, regenerated by the queue for #1 and "
+        f"certified by `{Q.MOVE_CHECK} {tip[:12]} HEAD`, both as `main` {tip[:12]} has them.\n\nPR: #1\nHead: {head}\n"
+        f"Owner: lane-1\nMove: {MAP}")
+    assert m.layouts() == [] and m.calls() == [[tip, sha, "--map=old/=new/", "--json"]]
+
+
+@pytest.mark.parametrize("text, said", [
+    ('[words]\n"old/" = "new/"\n\n[paths]\n"old/" = "new/"\n', "has both [words] and [paths]: a map is a word map (rename.py) or "
+                                                             "a path map (layout.py), and a move that needs both is two move PRs"),
+    ('[rewrite]\nexclude = []\n', "has neither [words], [[words_in]] nor [paths]"),
+    ('[[words_in]]\nglob = "*.md"\n[words_in.words]\n"old/" = "new/"\n', "has [[words_in]] but no [words]: give it an empty"),
+    ('[paths\n"old/" = "new/"\n', "doesn't parse ("),
+])
+def test_a_move_whose_map_is_both_kinds_or_neither_or_doesnt_parse_on_its_tip_is_refused_before_anything_runs(env, text, said):
+    m = Moved(env, paths=True)
+    m.move(1, verdict=False)
+    env.put(2, {MAP: text})
+    recs = env.loop(policy).tick()
+    (skip,) = [r for r in recs if r["action"] == "skip"]
+    assert f"its map {MAP} at " in skip["why"] and said in skip["why"], skip["why"]
+    assert skip["why"].endswith("fix the map, then mark the move again") and m.calls() == [] and m.layouts() == [], skip
+
+
+@pytest.mark.parametrize("verdict", [False, True])
+def test_a_move_pr_naming_two_maps_is_refused_and_with_a_land_verdict_merged_by_its_head(env, verdict):
+    """The queue regenerates one map a move PR: a body naming two is never regenerated by its first alone, which would land
+    without the second's move.  On its mark alone it is left out, saying so; with a land verdict its head is merged."""
+    Moved(env)
+    second = "tools/move/y_map.toml"
+    _main_to(env, {second: '[paths]\n"new/" = "lib/new/"\n'})
+    head = env.o.change({"old/a.txt": None, "lib/new/a.txt": "newword in lib/new/a.txt\n"})
+    env.o.gh.put(1, head, body=f"Lane `lane-1`.\nMove: {MAP}\nMove: {second}\n")
+    if not verdict:
+        env.labels.verdicts[1, head] = []
+    recs = env.loop(policy).tick()
+    if verdict:
+        (built,) = _builds(recs)
+        assert (built["members"], built["heads"], "moves" in built) == ([1], [head], False), built
+        return
+    (skip,) = [r for r in recs if r["action"] == "skip"]
+    assert not _builds(recs) and skip["why"] == (
+        f"it came on its mark alone, and its body names 2 maps ({MAP}, {second}), and the queue regenerates a move PR's one "
+        "map: open a move PR for each map, marking each once the one before it has landed"), skip
