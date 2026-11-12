@@ -28,6 +28,8 @@ from verity.circuits.program import Program
 from verity.protocols.spot.verifier.one_stage import verifier as V
 from verity.protocols.spot.verifier.one_stage.verdict import Verdict
 
+import a0
+
 PURE = ("check", "check_public", "select", "audit_record")
 
 
@@ -43,8 +45,7 @@ class _Sha512:
 def _answered(got: Any) -> bool:
     """Whether the Lean answered `got`, a check's verdict, a select's `(draw, verdict)` or an audit record."""
     v = got[1] if isinstance(got, tuple) else got
-    side = (v.verifiers if isinstance(v, Verdict) else v.get("verifiers")) or {}
-    return "refused" not in (side.get("lean") or {})
+    return a0.lean_answered(v.verifiers if isinstance(v, Verdict) else v.get("verifiers"))
 
 
 class Memo:

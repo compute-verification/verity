@@ -1083,27 +1083,27 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
         fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
         v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a))
-        neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg["registration-partition-mismatch (R2)"] = a0.negative(v)
         other = CS.expected_ports(replace(mine, run="00" * 32))
         v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
-        neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg["domains-bound-to-another-run-root (R3)"] = a0.negative(v)
         first = members[0]["m"].key
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
         v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
-        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg["public-body-not-the-registered-leaf-layer (R4)"] = a0.negative(v)
         if hist is not None:
             name = min(hist["registered"])
             root = hist["registered"][name]
             wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
-            neg["history-root-not-its-writers-strings"] = {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}
+            neg["history-root-not-its-writers-strings"] = a0.history_negative(v)
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
-        neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg["draw-outside-the-partition"] = a0.negative(v)
         neg.update(wiring_negatives(mine.members, publics))
         if proved:
             v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
-            neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
+            neg["proved-set-short-of-the-draw"] = a0.negative(v)
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
                                            tie(a)))
         neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
@@ -1150,15 +1150,15 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
     neg: dict[str, dict] = {}
     left = [u for u in proved if u != gates[0]]
     v = V.check_proved(draw, left, len(left))
-    neg["transfer-gate-unit-left-out-of-the-proved-set"] = {"refused": not v.ok, "codes": list(v.codes), "unit": gates[0]}
+    neg["transfer-gate-unit-left-out-of-the-proved-set"] = {**a0.negative(v), "unit": gates[0]}
     drawn = set(draw["units"])
     if rest := [u for u in range(draw["population"]) if u not in drawn]:
         v = V.check_draw({**draw, "units": sorted(drawn - {gates[0]} | {rest[0]})}, rec, drawn_law)
-        neg["draw-trading-a-transfer-gate-unit-for-another (check_draw)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg["draw-trading-a-transfer-gate-unit-for-another (check_draw)"] = a0.negative(v)
     sampled = {t: {"work": 1, "floor": 1} if t in transfer_gates else w for t, w in (mine.work_table or {}).items()}
     v = V.check({**rec, "law": D.derive(mine.program, mine.query, mine.law, sampled)}, mine.program, mine.query, mine.law, CS.SCHEME,
                 want, leaf_layer=leaf_layer, work_table=mine.work_table, **(tied or {}))
-    neg["registration-drawing-the-transfer-gates-as-the-rest (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    neg["registration-drawing-the-transfer-gates-as-the-rest (R1)"] = a0.negative(v)
     return neg
 
 
@@ -1500,7 +1500,7 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
         src = SRT.source(w, theirs, theirs_held)
         v = V.check(rec, theirs.program, theirs.query, theirs.law, CS.SCHEME, CS.expected_ports(theirs), leaf_layer=CS.leaf_layer(publics),
                     work_table=theirs.work_table)
-        neg["advice-that-disagrees (source, R2)"] = {"refused": not (src["ok"] and v.ok), "codes": src["codes"] + list(v.codes),
+        neg["advice-that-disagrees (source, R2)"] = {"refused": not src["ok"] or a0.negative(v)["refused"], "codes": src["codes"] + list(v.codes),
                                                      "population": {"registered": rec.get("population"), "of_the_advice": theirs.population}}
     if a.other_windows:
         od, first = Path(a.other_windows) / f"rank{r}", mine.members[0]
@@ -1510,7 +1510,7 @@ def advice_negatives(a: argparse.Namespace, r: int, compiler: AW.Traced, mine: C
         registered = {x["port"]: x["root"] for x in rec["roots"]}
         roots = json.loads((od / "window.json").read_text())["members"][0]["frame_v3"]["roots"]
         roots_ok = all(registered.get(first.port(p)) == root for p, root in roots.items())
-        neg["unit-committed-under-other-advice (R4, roots)"] = {"refused": not (v.ok and roots_ok),
+        neg["unit-committed-under-other-advice (R4, roots)"] = {"refused": not roots_ok or a0.negative(v)["refused"],
                                                                 "codes": list(v.codes) + ([] if roots_ok else ["roots"])}
     return neg
 

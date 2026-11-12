@@ -2,13 +2,15 @@
 root from its writer's public bodies, which the leaf layer binds (`ml.windows.history.params`), and accepts the root the
 window registers, in a5's check before the draw (`verifier.check`) and in its stream's registration, the run of record's
 (`a5.registering`); that root with a bit flipped (a5's negative) and the root over the same rows in another order are
-refused by both, `registration.HISTORY`."""
+refused by both, `registration.HISTORY`. On the same window, a5's negatives that the verifier decides are refused while
+the Lean answers and none is under a Lean that can't run."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +28,7 @@ from verity.commitments.windows import history as HW, interface as I, rows as CS
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
@@ -35,6 +38,9 @@ LAW = "stratified:2"
 #: the stream's rate, whose law over the window's four units is `LAW` (`service.params_law`)
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
+SESSION = "5e" * 64
+#: the verdict of record on the window's one session, as an audit record takes it
+VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
 
 
 def _window(d: Path, n: int = 4):
@@ -93,3 +99,61 @@ def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers
         with pytest.raises(S.Refused) as e:
             register(bad)
         assert e.value.verdict.codes == (R.HISTORY,)
+
+
+def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[str, dict]]:
+    """a5's negatives that the verifier decides, of each of their five kinds, on the window with one input altered as
+    a5 alters it: the registration held to ports bound to another run (R3) and to a leaf layer over a changed public
+    body (R4), the history root with a bit flipped, a sample naming a unit outside the partition, a proved set short of
+    the sample, and the audit record's own (`a0.audit_negatives`), on the record of two units sampled and proved.
+    -> (whether that record accepts, each negative's row)."""
+    leaf, want = CS.leaf_layer(publics), CS.expected_ports(mine)
+    hist = HW.params(doc, mine, publics, HW.pins(doc, I.registered_roots(rec["window"])))
+
+    def check(ports: dict = want, leaf_layer: str = leaf, history: dict | None = None) -> V.Verdict:
+        return V.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, ports, leaf_layer=leaf_layer,
+                       work_table=mine.work_table, history=history)
+
+    first = mine.members[0].key
+    flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+    root = hist["registered"]["latent"]
+    wrong = {**hist, "registered": {"latent": root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+    n, design = rec["population"], rec["law"]
+    sample = {**design, "population": n, "units": [0, 1]}
+    registered = {r["port"]: r["root"] for r in rec["roots"]}
+    record = V.audit_record(rec, R.receipt(rec, "verifier-test", received="0"), sample, design, sample["units"], 2,
+                            {"statement": "stub"}, VERDICTS, 0.5, sessions=[SESSION], session_roots=registered)
+    return record["accepted"], {
+        "R3": a0.negative(check(ports=CS.expected_ports(replace(mine, run="00" * 64)))),
+        "R4": a0.negative(check(leaf_layer=CS.leaf_layer(flipped))),
+        "history-root": a0.history_negative(check(history=wrong)),
+        "sample": a0.negative(V.check_draw({**sample, "units": [0, n]}, rec, design)),
+        "proved": a0.negative(V.check_proved(sample, sample["units"][1:], 1)),
+        **a0.audit_negatives(record, design, 0.5, registered)}
+
+
+def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatch):
+    """While the Lean answers, the window's record accepts and each negative is refused: the registration's, the
+    sample's and the proved set's by the code both verifiers give, the history root's as `registration.HISTORY` with the
+    Lean's reason the Python's, the record's with the two agreeing. Under a Lean that can't run the verifier fails the
+    same checks, the honest record's too, and still names the history root's refusal `registration.HISTORY`; no negative
+    is refused, a verdict's row saying what stood in the Lean's place, so a5's audit, which passes only with every
+    negative refused, fails."""
+    mine, doc, rec, publics, _ = _window(tmp_path / "w")
+    accepted, rows = _negatives(mine, doc, rec, publics)
+    assert accepted and len(rows) == 8 and all(r["refused"] for r in rows.values()), rows
+    assert (rows["R3"]["codes"], rows["R4"]["codes"]) == (["R3-domain"], ["R4-leaf-layer"]), rows
+    assert rows["history-root"] == {"refused": True, "codes": [R.HISTORY]}
+    assert all(V.DISAGREE not in rows[k]["codes"] for k in ("sample", "proved")), rows
+    assert all(r["agree"] for r in rows.values() if "agree" in r), rows
+
+    def cannot_run(fn, value):
+        raise V.LeanError("the Lean cannot run")
+    monkeypatch.setattr(V._server, "call", cannot_run)
+    said = {"refused": "the Lean cannot run"}
+    accepted, dead = _negatives(mine, doc, rec, publics)
+    assert not accepted and dead.keys() == rows.keys() and not any(r["refused"] for r in dead.values()), dead
+    for k in ("R3", "R4", "sample", "proved"):
+        assert dead[k] == {"refused": False, "codes": [V.DISAGREE], "lean": said}, dead[k]
+    assert dead["history-root"]["codes"] == [R.HISTORY] and dead["history-root"]["reasons"]["lean"] == said["refused"]
+    assert not any(r["agree"] for r in dead.values() if "agree" in r), dead

@@ -35,6 +35,7 @@ from verity_flock.input_sets import InputSet
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.spot.verifier.one_stage.verdict import Verdict
 
 import r2_population as R2
 
@@ -378,6 +379,34 @@ def lean_read_no_proof(v: dict) -> bool:
     return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
+def lean_answered(verifiers: dict | None) -> bool:
+    """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
+    writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
+    fails its check either way."""
+    return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
+
+
+def negative(v: Verdict) -> dict:
+    """A negative's row from the verifier's verdict `v` on its altered input: refused only where the check failed and
+    the Lean answered (`lean_answered`). Under a Lean that could not run the verifier fails every check, the honest
+    input's too, so that failure refuses no negative: the row then carries what the verifier wrote in the Lean's place
+    (``lean``), and the audit fails."""
+    answered = lean_answered(v.verifiers)
+    return {"refused": not v.ok and answered, "codes": list(v.codes),
+            **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
+
+
+def history_negative(v: Verdict) -> dict:
+    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
+    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
+    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
+    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
+    carries both (``reasons``)."""
+    why = v.detail.get(R.HISTORY) or {}
+    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
+    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
+
+
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
     """Lean's sample check refused case `i` by `code` (U1, U3), not for a sample it could not read."""
     return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
@@ -418,16 +447,16 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`); `agree`
-    is whether the Lean and the Python decided it alike."""
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
+    where the Lean answered (`lean_answered`); `agree` is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
                 verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})
-        return {"refused": not r["accepted"] and r["profile"] is None, "failed": [k for k, c in r["checks"].items() if not c["ok"]],
-                "agree": r["verifiers"]["agree"]}
+        return {"refused": not r["accepted"] and r["profile"] is None and lean_answered(r["verifiers"]),
+                "failed": [k for k, c in r["checks"].items() if not c["ok"]], "agree": r["verifiers"]["agree"]}
 
     vs = base["verdicts"]
     port = next(iter(session_roots), None)
