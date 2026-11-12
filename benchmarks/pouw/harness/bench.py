@@ -916,11 +916,9 @@ def summarize(per: dict, items: list[dict]) -> dict:
     return out
 
 
-def w_ratio(value: str, mkn: int) -> str | None:
-    try:
-        return str(Fraction(value) / mkn)
-    except (ValueError, ZeroDivisionError):
-        return None
+def w_ratio(value: str, mkn: int) -> str:
+    """An arm's work over the shape's MACs, exact. `Work` gives `value` as an exact string, so one that isn't raises."""
+    return str(Fraction(value) / mkn)
 
 
 def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first: bool, args, kernels, lt_ws) -> dict:
