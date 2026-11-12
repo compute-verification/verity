@@ -68935,3 +68935,14 @@ Two things I would take but do not ask for. The refused line could go down the c
 - I did not read `verity_flock.proof_server`, the challenger's log code or `60-circuit.sh`.
 
 Jobs 2 and 3 are not done; they follow in my next entry.
+
+## 03:09Z KEPT: #9090, one question now decided by reading: a member whose circuit binds another partition or program than the process's flags is refused by its own Lean loop, not served on the first member's flags
+
+This replaces the first item under "What I could not decide by reading" in my entry above. The line to post is unchanged.
+
+- [read `verity/protocols/flock/verifier/Flock/HmRow.lean`:1292-1303] A circuit file's META binds its partition's digest and its program's SHA-512. `checkPartition` holds the partition object the verifier was given against them. Another object throws "the circuit's partition digest is not the verifier's partition object's". An object over another program throws "the partition object is over another program than META's program_sha512". A circuit that binds a partition and is given no object throws too.
+- [read `verity/protocols/flock/verifier/Flock/Firewall/Hello.lean`:106-121, 136-139] The loop reads `--partition` and `--program` once at its start and sets the statement up on them with the member's own circuit file. A setup that throws gives no `Hello` text: `setup: WHY`.
+- So in a stream, a member whose circuit binds another partition or program than `FC_FIREWALL_HELLO_ARGS` names is refused by its own loop when its statement is set up [derived]. I expect that to be at its `Hello`, before anything of it reaches the auditor, and its record to say not accepted [guess: I did not read `State.sendHello`].
+- Two members with different circuit files that bind the same partition and program are both served. That is the case vLLM's test and its three-member window run.
+- Not covered by this check: a circuit under the provisional unit cover, which binds no partition object [read `HmRow.lean`:1288-1290].
+- The sentence I ask for in `PROTOCOL.md` §10.4 stays: the flags are the process's, so one stream serves one partition and one program. It can now add that a member of another is refused by its loop.
