@@ -88,7 +88,8 @@ theorem designAt_of_lawAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Veri
   cases hder'
   obtain rfl : Properties.Spot.SecurityProofs.lawObj v.law derived = lawJ := Except.ok.inj hlo
   unfold Flock.Bridge.designAt Flock.Bridge.drawnLaw
-  rw [hp, Trees.ok_bind, hder, Trees.ok_bind, hfl, Trees.ok_bind, hg] <;> rfl
+  rw [hp, Trees.ok_bind, hder, Trees.ok_bind, hfl, Trees.ok_bind, hg]
+  rfl
 
 /-- **What v2's check computes on the parameters `θ`, the circuit file `cf` and the public file `pf`**, at its
 parameters `p`, the circuit file's parse `D`, the public file loaded at the circuit's empty input ports (`pub`) and at
@@ -199,7 +200,7 @@ theorem formCheck : ∃ draw, Flock.KsScope.check (zkTags W.I) W.I.circuitFile W
   exact h
 
 /-- What `ksScoped_files` reads off the form check. -/
-theorem scoped : W.I.tags.typed = false ∧ FlockSoundness.Built W.D.unroll.unit ∧
+theorem scope : W.I.tags.typed = false ∧ FlockSoundness.Built W.D.unroll.unit ∧
     FlockSoundness.Discharge.Layout.scopeOkH W.D.unroll = true ∧ TagsOkZHJ W.I := by
   obtain ⟨draw, h⟩ := W.formCheck
   obtain ⟨ht, hU, hs, hT, -⟩ := Flock.Bridge.ksScoped_files W.checks.parse W.checks.loadOut h
@@ -208,7 +209,7 @@ theorem scoped : W.I.tags.typed = false ∧ FlockSoundness.Built W.D.unroll.unit
 /-- No two of the circuit's ports have one published domain (`v5Files_of_checksStmt`). -/
 theorem dup : Flock.PortRoots.dupId W.D.unroll W.pub = false := by
   obtain ⟨draw, h⟩ := W.checks.form
-  exact (Flock.Bridge.v5Files_of_checksStmt ((zkTags_typed W.I).trans W.scoped.1)
+  exact (Flock.Bridge.v5Files_of_checksStmt ((zkTags_typed W.I).trans W.scope.1)
     (Flock.Desc.parseStmt_of_parse W.checks.parse) W.checks.loadIn W.checks.popIn W.checks.ports h).1
 
 /-- The sampling design v2 samples under from the registration. -/
@@ -233,16 +234,16 @@ noncomputable def live (B : SessionBound) : Live where
   n := W.n
   I := W.I
   own := none
-  ht := W.scoped.1
+  ht := W.scope.1
   D := W.D
   hD := W.checks.parse
-  hU := W.scoped.2.1
+  hU := W.scope.2.1
   hpi := W.checks.noInputs
   pub := W.pub
   hpub := W.checks.loadIn
   pubO := W.pubO
   hpubO := W.checks.loadOut
-  hscope := W.scoped.2.2.1
+  hscope := W.scope.2.2.1
   hdup := W.dup
   hn := W.checks.popIn
   hnO := W.checks.popOut
@@ -260,7 +261,7 @@ noncomputable def live (B : SessionBound) : Live where
   Lb := deployedLb
   src := deployedSrc
   hA3 := uniformRandomBytes_deployed
-  hTags := W.scoped.2.2.2
+  hTags := W.scope.2.2.2
   k := B.k
   Rw := B.Rw
   M := B.M

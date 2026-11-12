@@ -223,7 +223,8 @@ theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Para
   obtain ⟨y⟩ := hy ⟨0, nTab_pos _⟩
   have hk : Flock.Bridge.lawK
       (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) = kd := by
-    rw [designAt_of_lawAt hdesc hlaw] <;> rfl
+    rw [designAt_of_lawAt hdesc hlaw]
+    rfl
   have hy' : Nonempty (DrawSetupZHJP (inputsJ (inputsAt p cf pf) 0) none
       (mPtsOf c.g (Flock.Bridge.lawK
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) /
