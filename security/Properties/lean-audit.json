@@ -1193,6 +1193,14 @@
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts": {
+   "honest": ["Pous.Component.SecurityProofs.wipeAccepts_honest"],
+   "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_nontrivial"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_complete": {
+   "honest": ["Pous.Component.SecurityProofs.wipeAccepts_honest"],
+   "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1333,12 +1341,7 @@
    "type_hash": "5352d76b5127b71a69055d8fcbec89fb2c610ef636bce7be7fc5f56bae480cd3",
    "unfolded_hash": "3cbb1c96f16acc603bf7cc1fa8f88e1d6f77b5149c19f71d7ed1d42d1c9fd5de"
   },
-  "Pous.Component.SecurityProofs.wipeAccepts": {
-   "type_hash": "4d618aa961b5a75a729863911c1a74a6814ce6e7b6f25377db57255a3822f06a",
-   "unfolded_hash": "2ce60c55a14ed4346bab0d9c60ef0290d5e8602ecb148ed0a20e5d9fdea6eeee"
-  },
   "Pous.Component.SecurityProofs.wipeAccepts_by": "ac58b689636e0d20bd6762b4bc1d74cdaab80e83e47008fc243e140e639364ce",
-  "Pous.Component.SecurityProofs.wipeAccepts_complete": "512194c71d7ab9ea466852fe314d7cbc69530028b4f45f8471329223b5f9b90f",
   "Pous.Component.SecurityProofs.wipeAccepts_fails": "bd724c9b075b560f379cd86659ac6fe4fc3312c2280f631d26995143f62ff7c5",
   "Pous.Component.SecurityProofs.wipeAccepts_meets": "2d86adbf1b0e618863617c0c79ba56b0969ae3131084736a7c151e36e1ad428f",
   "Pous.Component.SecurityProofs.wipeDigest": {
@@ -3457,6 +3460,15 @@
     "reads": []
    },
    "type_hash": "2d86adbf1b0e618863617c0c79ba56b0969ae3131084736a7c151e36e1ad428f"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Pous.Component.SecurityProofs.wipeDigest": {
    "owner": "@memory-accounting",
