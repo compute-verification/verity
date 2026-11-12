@@ -209,24 +209,20 @@ def gpu_phase(outdir: Path, scratch: str | None, min_driver: int, want_cc: str, 
                            "cases": []}
     print(f"[ds-mla-write] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])}", flush=True)
     if doc["gate"]["ok"]:
-        try:
-            import triton
-            import vllm
-            from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
+        import triton
+        import vllm
+        from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-            doc["versions"] = {"vllm": vllm.__version__, "triton": triton.__version__}
-            with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
-                for case, o in operands(20261112).items():
-                    rec = case_words(outdir, case, o)
-                    doc["cases"].append(rec)
-                    print(f"[ds-mla-write] {case} tokens={rec['tokens']} slotted={rec['slotted']} {json.dumps(rec['checks'])}",
-                          flush=True)
-        except Exception as e:  # noqa: BLE001
-            doc["errors"]["gpu"] = DS._error(e)
-            print(f"[ds-mla-write] gpu ERROR {doc['errors']['gpu']}", flush=True)
+        doc["versions"] = {"vllm": vllm.__version__, "triton": triton.__version__}
+        with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
+            for case, o in operands(20261112).items():
+                rec = case_words(outdir, case, o)
+                doc["cases"].append(rec)
+                print(f"[ds-mla-write] {case} tokens={rec['tokens']} slotted={rec['slotted']} {json.dumps(rec['checks'])}",
+                      flush=True)
         try:
             doc["ptx"] = ptx(work / "triton_cache", outdir)
-        except Exception as e:  # noqa: BLE001
+        except OSError as e:
             doc["errors"]["ptx"] = DS._error(e)
             doc["ptx"] = {"ok": False}
         print(f"[ds-mla-write] ptx ok={doc['ptx'].get('ok')} "
@@ -261,13 +257,6 @@ def corners(rows: np.ndarray) -> dict[str, int]:
     return {"floor_empty": int(((s == FLT_MIN) & empty).sum()), "floor_subnormal": int(((s == FLT_MIN) & ~empty).sum()),
             "scale_inf": int((s == 0x7F800000).sum()), "nan_in_finite_tile": int((finite & (s != FLT_MIN) & nan).sum()),
             "nan_byte": int((mag == 0x7F).sum()), "neg_zero_byte": int((q == 0x80).sum()), "max_448": int((mag == 0x7E).any(axis=2).sum())}
-
-
-def compare(job: dict[str, Any]) -> dict[str, Any]:
-    try:
-        return _compare(job)
-    except Exception as e:  # noqa: BLE001
-        return {k: job[k] for k in ("case", "span")} | {"error": DS._error(e)}
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
@@ -343,10 +332,7 @@ def compare_phase(outdir: Path, workers: int) -> int:
             for c in gpu["cases"] for r0, r1 in DS._chunks(c["tokens"], CHUNK)]
     print(f"[ds-mla-write] comparing {len(jobs)} jobs on {workers} workers", flush=True)
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"), initializer=_worker_init) as ex:
-        for res in ex.map(compare, jobs):
-            if "error" in res:
-                doc["errors"][f"compare/{res['case']}/{res['span'][0]}"] = res["error"]
-                continue
+        for res in ex.map(_compare, jobs):
             doc["comparisons"].append(res)
     doc["summary"] = summary(doc)
     for case, s in doc["summary"].items():
