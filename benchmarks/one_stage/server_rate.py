@@ -12,7 +12,10 @@
 * **The statement version**: fast100's, or with ``--wide-leaf`` the wide level-0 leaf's (`flock-circuit --wide-leaf`),
   which every prover and verifier of the row then carries; the row says which (``wide_leaf``), and its Lean verdict is
   asked under the version's own statement name (`WIDE_LEAF`). The two versions of a staged statement are two rows,
-  each run of the script one version.
+  each run of the script one version. A row is held to the version its sessions ran: each finished session's
+  ``identity.profile`` (`PROFILES`) is counted in the row's ``profile`` beside the one the row asked for, and one that
+  differs voids the row, either way. A `flock-circuit` that does not know ``--wide-leaf`` ignores it and proves
+  fast100's statement, accepted.
 * **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
   the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones (at least 8 K) with K (ahead + 2)
   outstanding.
@@ -47,9 +50,9 @@ provers on the rest (`ProofServer`'s placement). Either way a row keeps it (``ve
 seconds a statement over the timed sessions beside the provers' (``verifier_cpu_s_per_statement``).
 
 A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
-server's processes exited nonzero, or a prover's log reports the device out of memory: it has no rate
-(``statements_per_s`` is null), ``void`` lists the reasons, and a ``VOID`` line says so. The run exits 1 when any row is
-void or failed.
+server's processes exited nonzero, a prover's log reports the device out of memory, or a finished session ran another
+statement version than the row's: it has no rate (``statements_per_s`` is null), ``void`` lists the reasons, and a
+``VOID`` line says so. The run exits 1 when any row is void or failed.
 """
 from __future__ import annotations
 
@@ -76,6 +79,8 @@ from verity_flock.proof_server import ProofServer, Statement
 STATEMENT_ID = "verity/flock-circuit"
 #: what the wide level-0 leaf's version adds to a statement's name, flat or templated, for the Lean verifier
 WIDE_LEAF = "+wide-leaf"
+#: the profile a session's identity names under each statement version (`flock-circuit`'s ``identity``), by ``--wide-leaf``
+PROFILES = {False: "fast100", True: "fast100-wide-leaf"}
 #: flock-circuit's statement shape: m = k_log + nbl is at most 35 (`a6.M_MAX`)
 M_MAX = 35
 #: the rule that decides a row's ``flat``, kept in the row's ``cache``
@@ -250,6 +255,20 @@ def void_reasons(refused: int, sessions: int, exits: dict[str, int], out: Path) 
     if oom := sorted(p.stem for p in out.glob("prover-*.log") if DEVICE_OOM.search(p.read_text(errors="replace"))):
         why.append("out of device memory: " + ", ".join(oom))
     return why
+
+
+def version_reasons(asked: str, ran: dict[str, int]) -> list[str]:
+    """Why a row's sessions are not the row's statement version (empty when they are): ``ran`` counts the finished
+    sessions by the profile their identity names ("none" for a record that names none), ``asked`` is the row's. It holds
+    both ways: a wide-leaf row over fast100 sessions, and a fast100 row over wide-leaf ones."""
+    other = {p: c for p, c in ran.items() if p != asked}
+    if not other:
+        return []
+    why = (f"{sum(other.values())} of {sum(ran.values())} finished sessions ran another statement version than the row's "
+           f"{asked!r}: " + ", ".join(f"{c} at {p!r}" for p, c in sorted(other.items())))
+    if asked == PROFILES[True] and PROFILES[False] in other:
+        why += "; a flock-circuit that does not know --wide-leaf ignores it: build the prover from a tree whose flock-circuit has it"
+    return [why]
 
 
 def throttled() -> dict:
@@ -447,6 +466,9 @@ def one(a, dev: str, t: str, K: int) -> dict:
             except Exception as e:  # noqa: BLE001 -- a failed verdict is recorded, not raised
                 rec["lean"].append({"label": s.label, "error": str(e)[:400]})
         lean.close()
+    # read before the records are thinned below: what each finished session says it ran
+    ran = Counter(str(((r["s"].live or {}).get("identity") or {}).get("profile") or "none") for r in done if r["s"].live)
+    rec["profile"] = {"asked": PROFILES[a.wide_leaf], "ran": dict(sorted(ran.items()))}
     with open(out / "sessions.jsonl", "w") as f:
         for r in done:
             live = {k: v for k, v in (r["s"].live or {}).items() if k not in ("verdict", "buckets", "roots", "unit_draw", "identity")}
@@ -455,7 +477,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                                 "prover": r["s"].prover, "error": r["error"], "live": live}, default=str) + "\n")
     with open(out / "device.tsv", "w") as f:
         f.writelines(f"{x - t_start:.3f}\t{u:g}\t{m:g}\n" for x, u, m in gpu.samples)
-    if why := void_reasons(len(bad), len(done), rec["exits"], out):
+    if why := void_reasons(len(bad), len(done), rec["exits"], out) + version_reasons(rec["profile"]["asked"], rec["profile"]["ran"]):
         rec |= {"void": why, "statements_per_s": None}
     return rec
 

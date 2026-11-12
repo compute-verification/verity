@@ -7,7 +7,8 @@ verifier's mean seconds over the window, and whether the provers' statement cach
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
 row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
 that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
-own statement."""
+own statement. A row whose sessions ran another statement version than it asked for (a prover that ignores
+``--wide-leaf``, or one that runs the wide leaf unasked) or name none is void."""
 from __future__ import annotations
 
 import json
@@ -26,10 +27,10 @@ FILED0 = 1_800_000_000  # the first session's filing time, UTC seconds
 
 
 class Session:
-    def __init__(self, label: str, prover: str, d: Path, accepted: bool, cache: dict, verify_s: float) -> None:
+    def __init__(self, label: str, prover: str, d: Path, accepted: bool, cache: dict, verify_s: float, profile: str) -> None:
         self.label, self.prover, self.dir, self.accepted = label, prover, d, accepted
         self.live = ({"accepted": True, "e2e_s": 2.0, "prove_total_s": 1.5, "stmt_cache": cache} if accepted
-                     else {"accepted": False, "why": "R7: no proof"})
+                     else {"accepted": False, "why": "R7: no proof"}) | {"identity": {"profile": profile} if profile else {}}
         self.served = {"accepted": accepted, "verify_s": verify_s}
 
     def result(self) -> None:
@@ -39,10 +40,13 @@ class Session:
 class Server:
     """K provers that file session i at FILED0 + i, refuse the sessions in ``refuse``, write ``log`` to the first prover's
     log and close with ``exits``. A prover builds a statement at its sessions in ``built`` and finds it in its cache at
-    the others; session i's verifier takes i / 8 seconds."""
+    the others; session i's verifier takes i / 8 seconds. Every session's identity names ``profile``: by default the
+    version the server was made with (``wide_leaf``), as a prover that knows ``--wide-leaf`` does; "" names none."""
 
-    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", built=(0,)) -> None:
+    def __init__(self, out: Path, provers: int, refuse=(), exits=None, log: str = "", built=(0,), wide_leaf: bool = False,
+                 profile: str | None = None) -> None:
         self.out, self.k, self.refuse, self.built = out, provers, set(refuse), set(built)
+        self.profile = SR.PROFILES[wide_leaf] if profile is None else profile
         self.exits = exits or {**{f"prover-gpu0-{j}": 0 for j in range(provers)}, "verifier-t": 0}
         (out / "prover-gpu0-0.log").write_text("LIVE\t{}\n" + log)
 
@@ -57,7 +61,7 @@ class Server:
         os.utime(d, (FILED0 + i, FILED0 + i))
         mine = range(i % self.k, i + 1, self.k)
         cache = {"lookups": len(mine), "held": sum(1 for j in mine if j in self.built)}
-        return Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8)
+        return Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8, self.profile)
 
     def close(self) -> dict[str, int]:
         return dict(self.exits)
@@ -91,7 +95,7 @@ def stand_ins(monkeypatch, tmp_path: Path, tmpl_unit: Path | None = None, made: 
     def proof_server(binary, out, *, provers, **kw) -> Server:
         if made is not None:
             made.append(kw)
-        return Server(Path(out), provers, **server)
+        return Server(Path(out), provers, wide_leaf=kw.get("wide_leaf", False), **server)
 
     monkeypatch.setattr(SR, "ProofServer", proof_server)
 
@@ -261,6 +265,36 @@ def test_a_row_runs_one_statement_version_and_says_which(monkeypatch, tmp_path, 
     made: list[dict] = []
     rc, row = run(monkeypatch, tmp_path, *(["--wide-leaf"] if wide else []), made=made)
     assert (rc, row["wide_leaf"], [kw["wide_leaf"] for kw in made]) == (0, wide, [wide])
+    asked = "fast100-wide-leaf" if wide else "fast100"
+    assert (row["profile"], "void" in row) == ({"asked": asked, "ran": {asked: 9}}, False)
+
+
+@pytest.mark.parametrize("wide", [True, False])
+def test_a_row_whose_sessions_ran_the_other_statement_version_is_void(monkeypatch, tmp_path, capsys, wide):
+    """A prover that ignores ``--wide-leaf`` proves fast100's statement and is accepted, and one that runs the wide
+    leaf unasked is accepted too: either way every session's identity names the other version's profile, and the row
+    has no rate."""
+    asked, ran = ("fast100-wide-leaf", "fast100") if wide else ("fast100", "fast100-wide-leaf")
+    rc, row = run(monkeypatch, tmp_path, *(["--wide-leaf"] if wide else []), profile=ran)
+    assert (rc, row["statements_per_s"], row["accepted"], row["profile"]) == (1, None, 9, {"asked": asked, "ran": {ran: 9}})
+    [why] = row["void"]
+    assert why.startswith(f"9 of 9 finished sessions ran another statement version than the row's {asked!r}: 9 at {ran!r}")
+    assert ("does not know --wide-leaf" in why) is wide
+    assert f"VOID t K=1: {why}" in capsys.readouterr().out
+
+
+def test_a_row_whose_sessions_name_no_profile_is_void(monkeypatch, tmp_path):
+    rc, row = run(monkeypatch, tmp_path, profile="")
+    assert (rc, row["statements_per_s"], row["profile"]["ran"]) == (1, None, {"none": 9})
+    assert row["void"] == ["9 of 9 finished sessions ran another statement version than the row's 'fast100': 9 at 'none'"]
+
+
+def test_version_reasons_count_each_other_profile():
+    assert SR.version_reasons("fast100", {"fast100": 7}) == []
+    assert SR.version_reasons("fast100", {}) == []
+    [why] = SR.version_reasons("fast100-wide-leaf", {"fast100-wide-leaf": 4, "fast100": 2, "none": 1})
+    assert why.startswith("3 of 7 finished sessions ran another statement version than the row's 'fast100-wide-leaf': "
+                          "2 at 'fast100', 1 at 'none'; a flock-circuit that does not know --wide-leaf ignores it")
 
 
 @pytest.mark.parametrize("tmpl", [False, True])
