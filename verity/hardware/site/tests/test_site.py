@@ -260,8 +260,10 @@ def test_a_sheet_from_its_card_file() -> None:
 
 
 def test_a_sheet_reads_the_memory_a_program_gets() -> None:
-    """A card file's second reading of device memory is not the sheet's: its `mem` is `store.dram`."""
-    more = {"dram_installed": _entry(24 << 30)}
+    """A card file's second reading of device memory and the caches only a run found are not the sheet's: its `mem`
+    is `store.dram`, and its `chip` the registers', shared memory's and L2's."""
+    more = {"dram_installed": _entry(24 << 30), "l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576),
+            "const_l0": _entry(12288)}
     assert Sheet.of_file({**CARD_FILE, "store": {**CARD_FILE["store"], **more}}) == Sheet.of_file(CARD_FILE)
 
 

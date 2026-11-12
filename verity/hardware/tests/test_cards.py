@@ -70,9 +70,10 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
         "measures it")
 
 
-#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM that no document gives
-#: for another's, so a card without the measurement has no entry rather than an invented one.
-MEASURED_ONLY = {"host": {"disk.read"}}
+#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM, or of one card's
+#: caches, that no document gives for another's, so a card without the measurement has no entry rather than an
+#: invented one.
+MEASURED_ONLY = {"gpu": {"store.l15", "store.l1i", "store.l0i", "store.const_l0"}, "host": {"disk.read"}}
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -121,6 +122,17 @@ def test_the_memory_on_the_board_bounds_the_memory_a_program_gets(sku: str) -> N
     installed = value(card, "store.dram_installed")
     assert card["store"]["dram_installed"]["mark"] == "ceiling" and card["store"]["dram_installed"]["unit"] == "B"
     assert 0 < value(card, "store.dram") <= installed and installed % 2 ** 30 == 0
+
+
+def test_the_caches_a_run_found_are_one_cards() -> None:
+    """The caches an SM serves code and constants from are on the one card a run swept, each in bytes an SM, and the
+    two counted once a warp scheduler are whole multiples of `rate.issue`'s schedulers."""
+    found = MEASURED_ONLY["gpu"]
+    have = {sku: {key for key in entries(load(sku)) if key in found} for sku in skus("gpu")}
+    assert have == {"b200-sxm-180gb": set(), "h200-sxm-141gb": set(), "rtx-pro-6000-server": found}
+    card = load("rtx-pro-6000-server")
+    assert {entries(card)[key]["unit"] for key in found} == {"B/SM"}
+    assert [value(card, f"store.{k}") / value(card, "rate.issue") for k in ("l0i", "const_l0")] == [6144, 3072]
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
@@ -194,7 +206,8 @@ def test_the_quoted_numbers() -> None:
 def test_the_second_readings() -> None:
     """The second reading of each device's memory and of each host's DRAM, pinned so that a change to one is
     deliberate: the memory on a GPU's board beside the memory a program gets, and a host's channels at the fastest
-    memory its processor takes beside the figures PoUB's timing mirrors, which stay where they were."""
+    memory its processor takes beside the figures PoUB's timing mirrors, which stay where they were; and the caches a
+    run found on the RTX PRO 6000."""
     gib = 2 ** 30
     boards = {"rtx-pro-6000-server": (96, 96), "h200-sxm-141gb": (141, 144), "b200-sxm-180gb": (180, 192)}
     for sku, (dram, installed) in boards.items():
@@ -203,6 +216,8 @@ def test_the_second_readings() -> None:
     second = ("memory.speed_max", "memory.bandwidth_max", "memory.write_max")
     assert [float(value(load("xeon-6776p-2s"), k)) for k in second] == [8800, 1.1264e12, 1.1264e12]
     assert [float(value(load("xeon-platinum-8468-2s"), k)) for k in second] == [4800, 6.144e11, 6.144e11]
+    caches = ("store.l15", "store.l1i", "store.l0i", "store.const_l0")
+    assert [value(load("rtx-pro-6000-server"), k) for k in caches] == [147_456, 65_536, 24_576, 12_288]
 
 
 def test_the_rates_readers_quote() -> None:
