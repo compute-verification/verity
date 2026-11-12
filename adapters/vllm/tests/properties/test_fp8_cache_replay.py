@@ -140,7 +140,7 @@ def doc(tmp_path, tag: str, fmt: str, flip: tuple[str, int, int] | None = None, 
     eng = NS(vllm_config=NS(cache_config=NS(cache_dtype=fmt, block_size=BLOCK)))
     steps = [{k: i for k in X.STEP_KEYS} for i in range(rows.steps)]
     return ({"steps": steps, "tokens": tokens or {"a": [5, 6, 7], "b": [8]}, "rows": digests, "chosen": X.chosen(eng, runner),
-             "empty_schedules": 0, "routes": {"top-k": rows.steps}}, tmp_path / f"{tag}.npz")
+             "empty_schedules": 0, "routes": {"top-k": rows.steps}, "topk": None}, tmp_path / f"{tag}.npz")
 
 
 def test_a_replay_equals_its_serve_only_with_every_step_token_and_row_byte_on_the_same_engine(tmp_path):
@@ -204,8 +204,19 @@ def test_routes_count_each_decision_by_what_it_reads_and_a_write_kernels_ptx_is_
     assert X.keep_ptx(cache, tmp_path / "ptx" / "c", seen) == [] and not (tmp_path / "ptx" / "c").exists()
 
 
-def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_half(tmp_path):
+def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_half(tmp_path, monkeypatch):
     plan = X.plan(7)
+    # without a canonical top-k no prompt reaches the indexer's top-k, and the rest of the plan keeps its shape
+    short = X.plan(7, long=False)
+    assert max(len(r["prompt_ids"]) for r in short) <= 610 and [r["id"] for r in short] == [r["id"] for r in plan]
+    assert X.canonical_topk() is None
+
+    def wrapped():
+        pass
+
+    wrapped.dsa_topk_canon = canon = object()
+    monkeypatch.setattr(torch.ops._C, X.TOPK_OPS[2], wrapped, raising=False)
+    assert X.canonical_topk() is canon
     assert plan == X.plan(7) and len(plan) == X.REQUESTS and len({r["id"] for r in plan}) == X.REQUESTS
     shared = [r for i, r in enumerate(plan) if i % 3 == 2]
     assert len(shared) == 4 and len({tuple(r["prompt_ids"][:200]) for r in shared}) == 1

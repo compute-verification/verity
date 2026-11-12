@@ -12,21 +12,24 @@ Each arm of `ARMS` is one cache format, as a launch line names it (``auto`` is t
 its own:
 
 - ``--phase serve``: an engine with the arm's cache format under the step trace (`verity_vllm.engine.step_trace.StepTrace`).
-  The requests of `plan` (greedy and sampled, each under its own seed, some sharing a cached prefix, one longer than the
-  indexer's top-k, more than fit one batch) arrive between engine iterations. After each step's forward, `Rows` reads at
+  The requests of `plan` (greedy and sampled, each under its own seed, some sharing a cached prefix, more than fit one
+  batch, and where the process's top-k is canonical one longer than the indexer's top-k: `LONG`) arrive between engine
+  iterations. After each step's forward, `Rows` reads at
   every layer with a KV cache the rows the step wrote: the layer's cache at the step's slots. The phase writes the trace, each
   request's tokens, a digest of each request's rows at each layer, what the engine chose (`chosen`: the cache format its
   config holds once built, each layer's attention backend, cache dtype and row bytes, and each backend's read path) and how
   its first attention layer attended (`Routes`).
 - ``--phase replay``: an engine built from the trace's header, each request put back before the step the trace says it
   arrived before; the scheduler decides the rest. It writes the same. ``--cache named`` gives the engine the cache format
-  the served engine's config held instead, for a tree whose header does not carry the format.
+  the served engine's config held instead, for a tree whose header does not carry the format. It refuses a process whose
+  top-k is not the serve's.
 
 What of ours meets the engine is recorded with the serve (``ours``): whether the trace's header holds the cache format, what
 the history tables' guard (`verity_vllm.pipeline.boundary_tables.mla_layers`) says of the model, and, where the guard passes,
 the tables' own step hook beside `Rows`: every block of rows it reads must be `Rows`' bytes.
 
-Without ``--phase`` it runs the serve and the replay of each of ``--runs`` (`RUNS`: weights and arm), compares each replay
+Without ``--phase`` it runs the serve and the replay of each of ``--runs`` (`RUNS`: weights and arm, and ``:fast`` for a run
+on vLLM's own top-k whatever the environment asks for, whose plan then holds no long prompt), compares each replay
 with its serve (steps, prefix-cache hits, tokens, rows), writes OUT/fp8_cache_replay.json and exits 0 only if every serve took
 a prefix-cache hit, every arm but ``auto`` held byte rows, and every replay from the header equals its serve. Where the header
 holds no cache format and the arm's is not ``auto``, the replay from the header runs another engine than the served one; the
@@ -34,9 +37,11 @@ run then replays once more with ``--cache named`` and reports both, and still fa
 rest go on. The rows' bytes stay in a scratch directory, removed at the end; OUT holds digests, and under each run's ``ptx/``
 the PTX Triton compiled for vLLM's fused norm, RoPE and cache write (`keep_ptx`) when that run's serve was the first to need it.
 
-In the pod venv, on one idle card, from the tree's root:
+In the pod venv, on one idle card, from the tree's root, with the DSA top-k plugin's site on the path for the long prompt:
 
-    PYTHONHASHSEED=0 $PY adapters/vllm/tests/properties/fp8_cache_replay_gpu.py --out DIR [--runs dummy:auto,dummy:fp8,...]
+    $PY benchmarks/dsa_topk/dsa_topk.py site SITE
+    export PYTHONHASHSEED=0 PYTHONPATH=SITE VERITY_DSA_TOPK=canonical
+    $PY adapters/vllm/tests/properties/fp8_cache_replay_gpu.py --out DIR [--runs dummy:auto,dummy:fp8,...]
 """
 from __future__ import annotations
 
@@ -73,8 +78,12 @@ RUNS = "dummy:auto,dummy:fp8,scaled:fp8,scaled:auto"
 SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
          "enable_prefix_caching": True, "async_scheduling": None, "block_size": None, "num_gpu_blocks": 8192}
 REQUESTS = 12
-#: a prompt longer than GLM-5.3's ``index_topk`` (2048), so that its last steps attend a strict subset of its cached rows
+#: a prompt longer than GLM-5.3's ``index_topk`` (2048), so that its last steps attend a strict subset of its cached rows.
+#: vLLM's kernels write that subset in an order that varies run to run, and the attention sums in that order, so a row
+#: past 2048 keys replays only where the top-k is canonical (`canonical_topk`): the plan holds this prompt only there
 LONG = 2200
+#: vLLM's indexer top-k ops (``torch.ops._C``), which the DSA top-k plugin wraps
+TOPK_OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "cooperative_topk")
 #: vLLM's Triton kernel that norms a token's latent, rotates its RoPE part and writes its cache row, quantising it for an
 #: FP8 cache
 WRITE_KERNEL = "_fused_norm_rope_kernel"
@@ -91,8 +100,19 @@ def stand_in(where: Path) -> None:
     (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
 
 
-def plan(default_seed: int) -> list[dict[str, Any]]:
-    """The requests, the same in every arm: its id, the engine iteration it arrives before, its prompt and its sampling."""
+def canonical_topk() -> Any:
+    """The DSA top-k plugin's device pass where this process's indexer top-k is the canonical one, else None: the plugin's
+    wrappers on ``torch.ops._C``, which vLLM loads with the engine where the plugin's site is on the path and
+    ``VERITY_DSA_TOPK=canonical``. Its ``record()`` counts the calls and the rows it rewrote."""
+    import torch
+
+    return next((c for n in TOPK_OPS
+                 if (c := getattr(getattr(torch.ops._C, n, None), "__dict__", {}).get("dsa_topk_canon")) is not None), None)
+
+
+def plan(default_seed: int, long: bool = True) -> list[dict[str, Any]]:
+    """The requests, the same in every arm: its id, the engine iteration it arrives before, its prompt and its sampling.
+    ``long``: whether one prompt is `LONG`."""
     rng = random.Random(0)
 
     def ids(n: int) -> list[int]:
@@ -101,7 +121,7 @@ def plan(default_seed: int) -> list[dict[str, Any]]:
     shared = ids(200)
     out = []
     for i in range(REQUESTS):
-        n = LONG if i == 4 else rng.choice((24, 70, 150, 330, 610))
+        n = LONG if i == 4 and long else rng.choice((24, 70, 150, 330, 610))
         prompt = shared + ids(max(n - len(shared), 8)) if i % 3 == 2 else ids(n)
         sampling: dict[str, Any] = {"temperature": 0.0, "seed": default_seed}
         if i % 2:
@@ -347,22 +367,30 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     env.apply_engine(None)
     out = Path(a.dir)
-    reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED)}
-    if a.phase == "serve":
+    served = None if a.phase == "serve" else json.loads((out / "serve.json").read_text())
+    if served is None:
         cfg = {**SERVE, **({"kv_cache_dtype": ARMS[a.arm]} if ARMS[a.arm] else {})}
-        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
         (out / "trace.jsonl").unlink(missing_ok=True)
     else:
         recs = load(out / "trace.jsonl")
         cfg = dict(recs[0]["config"])
         if a.cache == "named":
-            cfg["kv_cache_dtype"] = json.loads((out / "serve.json").read_text())["chosen"]["cache_dtype"]
-        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
-               for r in recs if r["kind"] == "arrive"]
+            cfg["kv_cache_dtype"] = served["chosen"]["cache_dtype"]
     model = Path(tempfile.mkdtemp(prefix="fp8-cache-stand-in-"))
     stand_in(model)
     eng = engine(model, cfg, eager=not a.compiled)
     runner = handle.model_runner(eng)
+    canon = canonical_topk()
+    canonical = canon is not None
+    if served is not None and canonical != served["canonical_topk"]:
+        raise SystemExit(f"fp8-cache-replay: the serve's top-k was {'' if served['canonical_topk'] else 'not '}canonical "
+                         f"and this process's is {'' if canonical else 'not '}: replay under the serve's environment")
+    reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED, long=canonical)}
+    if served is None:
+        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
+    else:
+        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
+               for r in recs if r["kind"] == "arrive"]
     redrawn = rescale(runner) if a.weights == "scaled" else None
     trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
     said, hook = ours(runner, trace.records[0]["config"])
@@ -434,7 +462,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
            "device": {"name": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0))},
            "vllm": __import__("vllm").__version__, "redrawn": redrawn, "steps": steps, "tokens": tokens, "rows": digests,
            "rows_skipped": rows.skipped, "sampling": {rid: r["sampling"] for rid, r in reqs.items()},
-           "empty_schedules": sum(empty.values()), "routes": routes.count}
+           "empty_schedules": sum(empty.values()), "routes": routes.count, "canonical_topk": canonical,
+           "topk": canon.record() if canonical else None}
     (out / f"{a.phase}{'-named' if a.cache == 'named' else ''}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
 
@@ -446,7 +475,7 @@ def summary(doc: dict[str, Any]) -> dict[str, Any]:
         k = f"{x['module']}/{x['backend'] or x['impl']} {x['kv_cache_dtype']} {x['dtype']} {x['row_bytes']} B"
         kinds[k] = kinds.get(k, 0) + 1
     return {"cache_dtype": doc["chosen"]["cache_dtype"], "block_size": doc["chosen"]["block_size"], "layers": kinds,
-            "builders": doc["chosen"]["builders"], "routes": doc["routes"],
+            "builders": doc["chosen"]["builders"], "routes": doc["routes"], "topk": doc["topk"],
             "cache_hits": {rid: n for s in doc["steps"] for rid, n in s["cache_hit"].items()}, "steps": len(doc["steps"]),
             "tokens": sum(map(len, doc["tokens"].values())), "distinct_tokens": len({t for ids in doc["tokens"].values() for t in ids}),
             "rows": sum(x["positions"] for by in doc["rows"].values() for x in by.values()), "rows_skipped": doc["rows_skipped"]}
@@ -495,7 +524,8 @@ def compare(serve: dict[str, Any], replay: dict[str, Any], files: tuple[Path, Pa
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--runs", default=RUNS, help="WEIGHTS:ARM,... (dummy or scaled; an arm of ARMS)")
+    ap.add_argument("--runs", default=RUNS, help="WEIGHTS:ARM[:fast],... (dummy or scaled; an arm of ARMS; fast: vLLM's own "
+                    "top-k, whatever the environment asks for)")
     ap.add_argument("--weights", choices=("dummy", "scaled"), default="dummy")
     ap.add_argument("--compiled", action="store_true", help="vLLM's defaults (torch.compile, CUDA graphs) instead of eager")
     ap.add_argument("--phase", choices=("serve", "replay"))
@@ -515,11 +545,11 @@ def main() -> int:
     report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
     ok = True
     runs = [tuple(r.split(":")) for r in a.runs.split(",")]
-    unknown = [r for r in runs if len(r) != 2 or r[0] not in ("dummy", "scaled") or r[1] not in ARMS]
+    unknown = [r for r in runs if len(r) < 2 or r[0] not in ("dummy", "scaled") or r[1] not in ARMS or r[2:] not in ((), ("fast",))]
     if unknown:
-        raise SystemExit(f"fp8-cache-replay: --runs names {unknown}: WEIGHTS:ARM, dummy or scaled, an arm of {list(ARMS)}")
+        raise SystemExit(f"fp8-cache-replay: --runs names {unknown}: WEIGHTS:ARM[:fast], dummy or scaled, an arm of {list(ARMS)}")
 
-    def phase(d: Path, weights: str, arm: str, name: str, cache: str) -> tuple[int, Path]:
+    def phase(d: Path, weights: str, arm: str, name: str, cache: str, env: dict[str, str]) -> tuple[int, Path]:
         tag = name if cache == "header" else f"{name}-{cache}"
         rows = scratch / f"{d.name}-{tag}.npz"
         argv = [sys.executable, __file__, "--out", str(out), "--phase", name, "--cache", cache, "--arm", arm, "--dir", str(d),
@@ -531,12 +561,13 @@ def main() -> int:
         return rc, rows
 
     try:
-        for weights, arm in runs:
-            d = out / f"{weights}-{arm}"
+        for weights, arm, *fast in runs:
+            d = out / "-".join((weights, arm, *fast))
             d.mkdir(parents=True, exist_ok=True)
             entry: dict[str, Any] = {"kv_cache_dtype": ARMS[arm]}
             report["runs"][d.name] = entry
-            rc, served_rows = phase(d, weights, arm, "serve", "header")
+            run_env = {k: v for k, v in env.items() if not (fast and k == "VERITY_DSA_TOPK")}
+            rc, served_rows = phase(d, weights, arm, "serve", "header", run_env)
             entry["serve"] = {"rc": rc}
             entry["write_ptx"] = keep_ptx(scratch / "triton", d / "ptx", ptx_seen)
             if rc:
@@ -545,14 +576,14 @@ def main() -> int:
             else:
                 serve = json.loads((d / "serve.json").read_text())
                 entry.update(config=serve["config"], redrawn=serve["redrawn"], ours=serve["ours"], served=summary(serve),
-                             device=serve["device"], vllm=serve["vllm"])
+                             device=serve["device"], vllm=serve["vllm"], canonical_topk=serve["canonical_topk"])
                 mla = [x for x in serve["chosen"]["layers"] if x["mla"]]
                 entry["byte_rows"] = bool(mla) and all(x["dtype"] == "uint8" for x in mla)
                 ok = ok and bool(entry["served"]["cache_hits"]) and (arm == "auto" or entry["byte_rows"])
                 named = ARMS[arm] is not None and serve["config"].get("kv_cache_dtype") is None
                 for cache in ("header", "named") if named else ("header",):
                     key = "replay" if cache == "header" else "replay_named"
-                    rc, replayed_rows = phase(d, weights, arm, "replay", cache)
+                    rc, replayed_rows = phase(d, weights, arm, "replay", cache, run_env)
                     entry[key] = {"rc": rc}
                     if rc:
                         entry[key]["log_tail"] = (d / f"{'replay' if cache == 'header' else 'replay-named'}.log").read_text(
