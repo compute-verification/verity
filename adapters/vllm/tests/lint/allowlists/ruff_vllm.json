@@ -513,7 +513,6 @@
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "UP034", "symbol": "stamp_of_record_set", "detail": "Avoid extraneous parentheses"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "UP034", "symbol": "weights_of_record", "detail": "Avoid extraneous parentheses"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "UP037", "symbol": "live_param_digests", "detail": "Remove quotes from type annotation"},
-    {"file": "verity_vllm/commit/binding.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commit/challenge.py", "kind": "UP047", "symbol": "stratum_picks", "detail": "Generic function `stratum_picks` should use type parameters"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
