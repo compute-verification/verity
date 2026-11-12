@@ -271,7 +271,7 @@ def test_a_manifest_that_states_no_request_takes_them_from_the_tokens(tmp_path, 
 
 
 @pytest.mark.parametrize("timing", [{}, {"timing": None}, {"timing": {}}, {"timing": {"engine_steps": None}}])
-def test_a_control_run_that_states_no_engine_steps_expects_the_largest_cap(tmp_path, timing):
+def test_a_control_run_that_states_no_engine_steps_expects_the_largest_max_tokens(tmp_path, timing):
     requests = [{"request_id": "a", "max_tokens": 4}, {"request_id": "b"}, {"request_id": "c", "max_tokens": 5}]
     assert run_of(tmp_path, control_tokens={"requests": requests, **timing}).expected_steps() == 5
     assert G.RunArtifacts(tmp_path / "empty", manifest={}).expected_steps() is None
