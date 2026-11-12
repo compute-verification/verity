@@ -6507,7 +6507,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},
-         ["second-header", "second-read"]),
+         ["second-wires"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}]},
          ["second-wires"]),
         ({**wired, "wires": None}, ["second-wires"]),
@@ -6525,6 +6525,20 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
+    """A wire whose writer's port a link names reads an output the replay block returns: the boundary record commits
+    that output and the interior record's port is what the reader is held to, two entries nothing holds to each other.
+    The design fails `second-wires`, its links derived, alike in both."""
+    pair, triple = SECOND_MIXED.templates
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    per, n = BOUNDARY.ports[BX]["leaves"] // BOUNDARY.population, wired["rows"][0]["per"]
+    case = {**wired, "links": [{"template": pair, "port": "out", "value": BX}],
+            "rows": [*wired["rows"], {"template": pair, "port": "out", "per": per, "runs": _runs(n, per)}]}
+    got = second_statements(copy.deepcopy(case))
+    assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), got
+    assert "second-wires" in got["codes"] and "second-links" not in got["codes"], got
 
 
 def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):

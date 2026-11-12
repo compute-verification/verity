@@ -20,20 +20,12 @@ open Verity.Accel.NaiveStrassen
 /-- The check passes. A pure kernel check (`decide +kernel`). -/
 theorem checkAll_eq_true : checkAll = true := by decide +kernel
 
-/-- Theorem 1 on the four instances to depth `thmL = 12`, from the one table. -/
-theorem naiveBeatsStrassen_all :
-    NaiveBeatsStrassen h200Sheet thmL ∧ NaiveBeatsStrassen h200Measured thmL ∧
-      NaiveBeatsStrassen rtx6000Sheet thmL ∧ NaiveBeatsStrassen rtx6000Measured thmL :=
-  ⟨beats_of_check checkAll_eq_true dom_h200Sheet, beats_of_check checkAll_eq_true dom_h200Measured,
-    beats_of_check checkAll_eq_true dom_rtx6000Sheet, beats_of_check checkAll_eq_true dom_rtx6000Measured⟩
+/-- Theorem 1 to depth `thmL = 12` on every table the sheet dominates, from the one table. -/
+theorem naiveBeatsStrassen_of_dom {fs : List Atom} (hD : Dom fs) : NaiveBeatsStrassen fs thmL :=
+  beats_of_check checkAll_eq_true hD
 
-/-- The size form on the four instances at `c = 4096`, from the one table. -/
-theorem naiveBeatsStrassenUpTo_all :
-    NaiveBeatsStrassenUpTo h200Sheet 4096 ∧ NaiveBeatsStrassenUpTo h200Measured 4096 ∧
-      NaiveBeatsStrassenUpTo rtx6000Sheet 4096 ∧ NaiveBeatsStrassenUpTo rtx6000Measured 4096 :=
-  ⟨upTo_of_check checkAll_eq_true dom_h200Sheet (by decide),
-    upTo_of_check checkAll_eq_true dom_h200Measured (by decide),
-    upTo_of_check checkAll_eq_true dom_rtx6000Sheet (by decide),
-    upTo_of_check checkAll_eq_true dom_rtx6000Measured (by decide)⟩
+/-- The size form at `c = 4096` on every table the sheet dominates, from the one table. -/
+theorem naiveBeatsStrassenUpTo_of_dom {fs : List Atom} (hD : Dom fs) : NaiveBeatsStrassenUpTo fs 4096 :=
+  upTo_of_check checkAll_eq_true hD (weight_pos_of_dom hD)
 
 end Verity.Accel.NaiveStrassen.Packed

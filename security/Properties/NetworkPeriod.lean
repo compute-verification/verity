@@ -32,9 +32,10 @@ though an incorrect proof block's outputs would reach the egress; `RowsTiedSampl
 unsampled. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot entries,
 the entries port of a `SlotEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. Beside them, their nontrivial lemmas' objects:
-`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf`, the properties of any period check, and `acceptAllRows`, a
-check that accepts every period.
+alters one of the scan's transitions is no Program's input. `RowsCapPublished` says an accepted period's public names
+its schedule's response cap. Beside them, their nontrivial lemmas' objects:
+`RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsCapPublishedOf`, the properties of any period check,
+and `acceptAllRows`, a check that accepts every period.
 -/
 
 @[expose] public section
@@ -126,9 +127,35 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
       ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateTied p.audits s c.audits reg = true
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsTiedSampledOf`, `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsTiedSampled`, `RowsProgWired` and
-`RowsStateTied` to say something. -/
+`RowsTiedSampledOf`, `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsCapPublishedOf` must fail at for `RowsTiedSampled`,
+`RowsProgWired`, `RowsStateTied` and `RowsCapPublished` to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+
+/-- The public `pub` publishes the response cap of the period's schedule (`Form.maxTokensCap`): the rows form's
+`max_tokens_cap`, none when its schedule has none and in the clock form. -/
+def CapPublished (p : Params) (pub : Public) : Prop := pub.maxTokensCap = p.form.maxTokensCap
+
+/-- **The period check publishes its schedule's response cap.** If the check accepts a period, its public's
+`max_tokens_cap` is the cap of the schedule the parameters name (`CapPublished`), the schedule whose digest every
+link-window's registrations bind (`rowsCheck`): a reader of the public, the communication audit's charge, reads the cap
+the network certifier held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
+schedule has none. -/
+def RowsCapPublished : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → CapPublished p pub
+
+/-- `RowsCapPublished` of any period check. -/
+def RowsCapPublishedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → CapPublished p pub
+
+/-- A rows-form schedule of one slot, one lane and a window of one step, with a response cap of 4. -/
+def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, some 4⟩
+
+/-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
+period `RowsCapPublished`'s witnesses are stated at. -/
+def cappedPeriod : Params :=
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0⟩, 0⟩
 
 end Properties.NetworkPeriod
