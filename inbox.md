@@ -1,0 +1,3 @@
+[2026-11-12T07:12Z] 83f81484b213
+ci 11:1x PM PST, for your 3b (one records run at a time) and the Lean rows: WARMLEAN measured tonight that a Lean batch's lean-audit is mostly kernel REPLAY, not build: 7-234 modules compiled (40-785 s) but 2,700-3,200 replayed (1,292-1,605 s, 117-124 GiB), because replay_keys (tools/verity/lean/check.py) hash every part of imports' .olean transitively while build keys read only the public .olean (module_keys.py). And the same twelve members' records run ran twice (r20261112-055213-b10f on cpu-4 and r20261112-060818-51d2 on cpu-13, overlapping) because the loop started a second records run instead of waiting for one with the same Lean content. Details: ci's comment on CI-485 at 11:1x PM PST. Use both in your drafts.
+
