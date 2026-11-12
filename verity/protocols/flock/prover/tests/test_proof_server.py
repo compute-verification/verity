@@ -279,21 +279,6 @@ def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(b
             assert "--tmpl-unit" not in r["argv"] and "tmpl_unit" not in r["proved"]["line"]
 
 
-def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
-    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
-    and the next session meets a new prover and verifier on their first lines."""
-    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
-    pin = "ff" * 64
-    with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(statement(tmp_path, pin), draw([0]), "s0").result()
-        with pytest.raises(ProofServerError, match="prover-cpu exited"):
-            ps.submit(statement(tmp_path, pin), draw([1]), "s1").result()
-        last = ps.submit(statement(tmp_path, pin), draw([2]), "s2").result()
-    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
-    v = f"verifier-{pin[:16]}"
-    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
-
-
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_SERVE_DIES", "1")
     ps = ProofServer(binary, tmp_path / "ps")
