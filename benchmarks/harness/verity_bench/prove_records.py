@@ -16,10 +16,22 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
 report and an art that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
-failed or was skipped). A row is a steady-state
-measurement when every session it ran was accepted and none refused, it isn't void, every process exited 0 and its
-statement cache's hit rate was flat (`row_why`, and `report_why` for a report); one that isn't, or that lacks a field, is named with its reason on its
-block type's row. A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
+failed or was skipped).
+
+A row is a steady-state measurement when it passes six checks of the proof server's steady-state rules
+(`verity_bench.steady`) and holds what prices it (`unpriced`). The six are `CHECKS`, the rules' own `accepted`,
+`exits`, `not_void`, `flat`, `no_throttling` and `every_prover_warmed`: every session it ran was accepted, none refused
+and each filed by its verifier, every process exited 0, it has a rate, its statement cache's hit rate was flat, its
+CPUs were never throttled, and each of its provers finished a warm session and filed one in the window. This reader
+states none of them itself, so it and the harness give one answer on each. Only a pass counts: a row that fails a
+check, or whose fields can't show it ("cannot tell"), prices nothing, and is named on its block type's row with each
+check it didn't pass, the check's answer and its reason, in the rules' words, then with what it lacks to be priced
+(`row_why`). The rules' four other checks are no condition here: three read a run's other files (its lease and card,
+the card at its start and end, its window's sessions), and `one_numa_node` reads `cores.numa_nodes`, which a row may
+lack. A labelled row is priced whatever they say (`steady.verdict` gives all ten, from the row and its run's files).
+`report_why` judges a report.
+
+A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
 the stated host CPU cores a card (`--cores`): from the rows whose provers held that many, else from those that held
 the fewest above it, named on the type's row and counted in the totals; a row timed at fewer cores prices nothing. A
 row's cores are its `cores`, a count or a mapping with one as its `count` (`row_cores`); where a run's row states
@@ -41,7 +53,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, overhead_records
+from verity_bench import jobs, overhead_records, steady
 from verity_bench import overhead as O
 from verity_bench import prove as P
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
@@ -51,7 +63,7 @@ CENSUS_FILE = "census.json"
 CARD_SCHEMA = "spot-card/v1"
 PLAN_FILE = "mix.json"
 #: the proof server's rate in a run's files: `benchmarks/one_stage/server_rate.py`'s rows, one a staged type and prover count
-RATES = "out/rate/rate.json"
+RATES = steady.RATES
 #: the same rows in an art that holds them itself: its one run's, as completed or corrected after the run
 ART_RATES = "rate.json"
 #: the host a run timed its rows on, in the run's files: its `HOST_CORES_FIELD` is the CPU cores the run's provers held
@@ -60,12 +72,14 @@ HOST, HOST_CORES_FIELD = "out/host.json", "cpus_used"
 #: a proof server's report in the files of a run from before `RATES`, the staged types it proved beside it, and its K
 #: (`server-kK`) the provers it ran; read only where a run holds no `RATES`
 REPORTS, TYPES = "*/server-k*/server.json", "types.json"
-#: what a row holds for the command to read it, by the script's names (`stage.word`, the census type it was staged for,
-#: names its block type, and `stage.definition`, the form staged, where it has no `stage.word`; `void`,
-#: the reasons a row has no rate, is there only when it has none, `verify_s` only where the verifier was timed, and
-#: `cores`, the CPU cores its provers held for its card, only on a row that states them: `row_cores`)
-ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "refused_n", "exits", "flat", "gpus",
-              "stage.k_log", "stage.blocks", "stage.full")
+#: the checks of the proof server's steady-state rules (`steady.CHECKS`) a row is held to here, each the rules' own
+#: function of the row, in the rules' order: every check of theirs that reads the row alone, but `one_numa_node`
+CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no_throttling, steady.every_prover_warmed)
+#: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
+#: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
+#: `stage.word`; `verify_s` is there only where the verifier was timed, and `cores`, the CPU cores its provers held for
+#: its card, only on a row that states them: `row_cores`)
+PRICE_FIELDS = ("gpus", "stage.k_log", "stage.blocks", "stage.full")
 #: what `prove.HOST_CORES` is, as the table says it of the default
 HOST_CORES_ARE = ", node A's share: the cores its provider gives a card"
 #: each fleet's assumed serving MFU
@@ -180,40 +194,39 @@ def _count(x: Any) -> bool:
     return isinstance(x, int) and not isinstance(x, bool) and x > 0
 
 
-def row_why(row: Mapping[str, Any]) -> str | None:
-    """Why a `RATES` row isn't a steady-state measurement, or None when it is one: a field it lacks, by name; a session
-    it ran (its provers' warm ones and its timed ones) not accepted, or refused; a void row, with the script's reasons;
-    a process that exited nonzero; a statement cache whose hit rate wasn't flat; or no rate to price."""
+def judged(row: Mapping[str, Any]) -> steady.RowVerdict:
+    """A `RATES` row's answers on `CHECKS`, as the proof server's steady-state rules give them: a pass, a fail, or
+    "cannot tell" where the row's fields don't show it. Only a row that passed them all is a steady-state measurement
+    here."""
 
-    if lacks := [name for name in ROW_FIELDS if _field(row, name) is _ABSENT]:
+    return steady.RowVerdict(row.get("type"), row.get("provers"), tuple(check(row) for check in CHECKS))
+
+
+def unpriced(row: Mapping[str, Any]) -> str | None:
+    """Why a row's rate can't be priced whatever `CHECKS` say of it, or None when it can: a field of `PRICE_FIELDS` it
+    lacks, by name; a prover count, a statement's blocks or the GPUs its provers held that aren't one; or verifier's
+    seconds or cores that aren't what a row states them as."""
+
+    if lacks := [name for name in PRICE_FIELDS if _field(row, name) is _ABSENT]:
         return "its row lacks " + ", ".join(f"`{name}`" for name in lacks)
-    stage = row["stage"]
-    if not (_count(row["provers"]) and _count(stage["blocks"]) and _count(stage["full"]) and stage["blocks"] <= stage["full"]):
-        return (f"its `provers` ({row['provers']}), `stage.blocks` ({stage['blocks']}) and `stage.full` ({stage['full']}) "
+    stage, provers, gpus = row["stage"], row.get("provers"), row["gpus"]
+    if not (_count(provers) and _count(stage["blocks"]) and _count(stage["full"]) and stage["blocks"] <= stage["full"]):
+        return (f"its `provers` ({provers}), `stage.blocks` ({stage['blocks']}) and `stage.full` ({stage['full']}) "
                 "aren't a prover count and a statement's blocks of a full one's")
-    if not all(isinstance(row[name], int) for name in ("warm", "sessions", "accepted", "refused_n")):
-        return "its `warm`, `sessions`, `accepted` and `refused_n` aren't counts of sessions"
-    ran = row["provers"] * row["warm"] + row["sessions"]
-    if row["accepted"] != ran:
-        return f"{row['accepted']} of its {ran} sessions accepted"
-    if row["refused_n"] != 0:
-        return f"{row['refused_n']} sessions refused"
-    if void := row.get("void"):
-        return "void: " + ("; ".join(map(str, void)) if isinstance(void, list) else str(void))
-    exits = row["exits"]
-    codes = exits if isinstance(exits, Mapping) else dict(enumerate(exits))
-    if bad := [f"{name} rc {rc}" for name, rc in codes.items() if rc != 0]:
-        return "exited nonzero: " + ", ".join(bad)
-    if row["flat"] is not True:
-        return "its statement cache's hit rate wasn't flat"
-    rate, gpus = row["statements_per_s"], row["gpus"]
-    if not (isinstance(rate, (int, float)) and rate > 0 and isinstance(gpus, (int, float)) and gpus > 0):
-        return f"no rate to price: `statements_per_s` is {rate} on `gpus` {gpus}"
+    if not (isinstance(gpus, (int, float)) and gpus > 0):
+        return f"no rate to price: `statements_per_s` is {row.get('statements_per_s')} on `gpus` {gpus}"
     if not isinstance(row.get("verify_s"), (int, float, type(None))):
         return "its `verify_s` isn't a statement's seconds"
     if row_cores(row) is None:
         return f"its `cores` ({row['cores']}) isn't a count of CPU cores, or a mapping whose `count` is one"
     return None
+
+
+def row_why(row: Mapping[str, Any]) -> str | None:
+    """Why a `RATES` row isn't a steady-state measurement the table prices, or None when it is one: each check of
+    `CHECKS` it didn't pass, with its answer and its reason (`judged`), then why it can't be priced (`unpriced`)."""
+
+    return "; ".join(why for why in (judged(row).why, unpriced(row)) if why) or None
 
 
 def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int | None:
@@ -321,15 +334,15 @@ def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED
     return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
 
 
-def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list[str]]]:
+def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[P.Steady], list[str]]]:
     """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
     and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
     those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
     one run in `runs`, which the rows are ordered by and which isn't read. Any other art stands for the runs its meta
-    names. A superseded target gives nothing."""
+    names. A superseded target gives nothing, unless `superseded` asks for its rows anyway (for their staged names)."""
 
-    if superseded := _superseded(store, target):
-        return {target: ([], [f"superseded by {', '.join(superseded)}"])}
+    if not superseded and (by := _superseded(store, target)):
+        return {target: ([], [f"superseded by {', '.join(by)}"])}
     if not target.startswith("art:"):
         return {target: rates(store, target)}
     manifest = store.get_manifest(target)
@@ -337,7 +350,7 @@ def steady_rows(store: Any, target: str) -> dict[str, tuple[list[P.Steady], list
         return {target: ([], [f"its meta names no `runs`: the run its `{ART_RATES}` is of, or the runs it stands for"])}
     runs = [run for run, _ in record_runs(store, [target])]
     if manifest.payload is None or not store.listing(target, [ART_RATES]):
-        return {run: found for named in runs for run, found in steady_rows(store, named).items()}
+        return {run: found for named in runs for run, found in steady_rows(store, named, superseded).items()}
     if len(runs) != 1:
         return {target: ([], [f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
                               "one run's, so each run's go in an art of their own"])}
@@ -365,7 +378,9 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
         if found:
             steady += found
             runs.append(target)
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores)
+    aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
+                      if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
+    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases))
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
     count = f"{provers} prover{'' if provers == 1 else 's'}"
@@ -604,7 +619,7 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
     if doc["unread"]:
-        lines += ["", "Unread (steady-state rows of record whose staged Definition is no block type of this census under "
+        lines += ["", "Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
                   "its cut; they are in no figure above):", ""]
         lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "
