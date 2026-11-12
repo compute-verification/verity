@@ -204,16 +204,17 @@ def test_evaluate_is_the_unrolled_templates_values_or_refuses_on_random_template
         try:
             want = _unrolled(t, lanes, _OUT, 8)
         except AssertionError:
-            continue
-        try:
-            got = [int(v) for v in T.evaluate(t, lanes[:, None])[:, 0]]
-        except ValueError:
-            verdict = "refused"
+            verdict = "not unrollable"
         else:
-            verdict = "agreed"
-            if got != want:
-                differ.append(i)
-                verdict = "differed"
+            try:
+                got = [int(v) for v in T.evaluate(t, lanes[:, None])[:, 0]]
+            except ValueError:
+                verdict = "refused"
+            else:
+                verdict = "agreed"
+                if got != want:
+                    differ.append(i)
+                    verdict = "differed"
         for s in _shapes(t) | {""}:
             seen[f"{verdict} {s}".strip()] = seen.get(f"{verdict} {s}".strip(), 0) + 1
     assert not differ, (differ[:5], seen)
