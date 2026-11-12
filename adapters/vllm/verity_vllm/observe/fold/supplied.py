@@ -13,6 +13,8 @@ from verity.circuits.types import RecordType, Type, Value
 
 from verity_vllm.observe.fold.resolver import Supplied
 
+__all__ = ["program_registered_values"]
+
 
 class SuppliedInputs:
     def __init__(self) -> None:

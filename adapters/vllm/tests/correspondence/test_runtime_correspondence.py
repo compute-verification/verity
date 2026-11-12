@@ -20,6 +20,7 @@ import pytest
 import torch
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
+from verity.definitions.registry import b1
 
 from verity_vllm.correspondence.runtime import (
     JSON_SCHEMA,
@@ -54,7 +55,6 @@ def _tp_rank_program(rank=(2, 0), n=3):
 
 
 def _serve_program(**over):
-    from verity.definitions.registry import b1
     C = dict(b1.B0_CONFIG)
     C.update(NL=2, V=64, MAX_POS=64)
     C.update(over)

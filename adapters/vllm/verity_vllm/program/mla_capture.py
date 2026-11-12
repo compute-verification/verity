@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -397,7 +398,7 @@ def _check_key(d: Path, key: str, tmin: int | None, tmax: int | None) -> tuple[i
 
 
 def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None,
-               tmin: int | None = None, skip: set[str] = frozenset(), fresh: bool = False) -> dict:
+               tmin: int | None = None, skip: Collection[str] = frozenset(), fresh: bool = False) -> dict:
     """The Boolean Definitions on bits (`verity.circuits.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
     `mla.TritonMlaDecodeHead` against `o` of every one-split decode row with tmin <= T <= tmax (one evaluation per distinct
     T), `mla.MlaBmm` against `c` and `mla.MoeSharedCombine` against `out` (one evaluation per case). The keys not in `skip`

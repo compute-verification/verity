@@ -159,7 +159,7 @@ def test_the_decode_reads_the_row_back():
     for i in range(3):
         got = np.asarray(evaluate(row, _flat(nope[i]), _flat(scale[i, :-1]), _flat(rope[i]), 1), dtype=np.uint16)
         assert np.array_equal(got[DN:], rope[i])
-        unit = np.repeat(2.0 ** (scale[i, :-1].astype(np.int64) - 127), QT)
+        unit: np.ndarray = np.repeat(2.0 ** (scale[i, :-1].astype(np.int64) - 127), QT)
         assert (np.abs(_bf16_f64(got[:DN]) - q[i]) <= np.maximum(np.abs(q[i]) * 2.0 ** -4, unit * 2.0 ** -10)).all()
 
 

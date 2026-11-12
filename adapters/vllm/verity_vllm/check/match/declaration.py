@@ -233,7 +233,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         # the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
         # must carry the same value -- an edited block cannot make G6 consume another lag than the Program's
         static_lag = workload_lag_static(desc)
-        claimed = (art.get("lag") or {}).get("value") if isinstance(art.get("lag"), dict) else None
+        claimed = art["lag"].get("value") if isinstance(art.get("lag"), dict) else None
         if static_lag is not None or claimed is not None:
             if static_lag is None or claimed is None or int(static_lag) != int(claimed):
                 raise ValueError(f"{artifact_path}: lag.value {claimed!r} != the Program's Workload_v1 `lag` static {static_lag!r} (descriptor "
@@ -278,7 +278,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                      "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": (r.get("component") or {}).get("program_digest"),
                                    "specialization": (r.get("component") or {}).get("specialization")},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
-                     "programmed_steps": (chron.get(rid) or {}).get("programmed_steps"),
+                     "programmed_steps": chron[rid].get("programmed_steps") if rid in chron else None,
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
     return {"schema": GP_SCHEMA, "builder": f"gprog GP-01 {art.get('schema')} workload_fn={art.get('workload_fn')}", "workload_digest": art.get("workload_digest"),
             "workload": {"path": wl_path, "sha256": art.get("manifest_digest"), "n_requests": len(reqs)},
@@ -310,14 +310,14 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
     OWN attestation (RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json, all locations agreeing)
     -- never guessed: a lag-0 record must carry the flag too, else it is indistinguishable from a lag-1 record with a deleted
     step. Returns (rows, source) with rows None when the record does not attest the flag (GM-01 refuses by name)."""
-    vals = (facts.get("values") or {}).get("async_scheduling")
+    vals = facts["values"].get("async_scheduling")
     if not vals:
         return None, "not attested"
     v = vals[0]
     if isinstance(v, bool):
-        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join((facts.get('sources') or {}).get('async_scheduling', []))})"
+        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
     return None, f"async_scheduling={v!r} is not a boolean"
 
 
@@ -461,7 +461,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
-    for src, err in (facts.get("unreadable") or {}).items():
+    for src, err in facts.get("unreadable", {}).items():   # stated only when a location is there and cannot be read
         c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (an older artifact): the record's engine conditions cannot be "
@@ -484,7 +484,7 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
     from verity_vllm.pipeline.global_program import compilation_facts
-    decl_comp = (app.get("engine") or {}).get("compilation") if app.get("engine") else None
+    decl_comp = app["engine"].get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)
         res["execution"]["declared_compilation"] = decl
@@ -569,7 +569,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         m_s, h_s = manifest_sampling(wl), dict((header.get("workload") or {}).get("sampling") or {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
-        for conf in m_s.get("conflict") or []:
+        for conf in m_s.get("conflict", []):   # stated only when the manifest's sources disagree
             c.fail(f"manifest of record is not one sampling declaration -- {conf}")
         for k in ("variant", "temperature", "top_p", "top_k"):
             mv, hv = m_s.get(k), h_s.get(k)
@@ -585,7 +585,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             if h is None or (rv is None and h.get("variant") is None):
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
-            for conf in (r_s.get("conflict") or []) if rv is not None else []:
+            for conf in r_s.get("conflict", []) if rv is not None else []:
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed
