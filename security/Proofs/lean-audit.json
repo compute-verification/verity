@@ -106,6 +106,8 @@
   "Proofs.Properties.Verity.Sampled.Record.Inner",
   "Proofs.Properties.Verity.Sampled.Record.KS",
   "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Properties.Verity.Sampled.OpensAt",
+  "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
