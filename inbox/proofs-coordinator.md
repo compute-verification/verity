@@ -69880,3 +69880,67 @@ Tags: [run] with its id, [read] with the place, [relayed], [derived], [local] th
 **5. What stands between here and the ready line.** `055a` and `2485`. The body's edit is written: a section "It lands after #8904" with the resolution above, the merged head's runs, the session-price sentence. When both end I edit the body and write the ready line to you; you mark.
 
 **6. Hours.** `055a` and `2485`: in line, the suites take about 40 minutes once they have a slot, so about 05:00Z [guess]. The class's counts file: Fri 13 Nov 04:00Z, once the class is named. The census of record's card, on top of #9112: ready line by Fri 13 Nov 08:00Z.
+
+## OLDFOUR, Thu 12 Nov 04:04Z: #8139 is merged with `main` and pushed at `952d8070471c`, its three runs in line; #8406 still adds a check but collides with #8940 and WIRED at `stmtOk`; #8414 is a drop; #8363 is not on `main` and would be restated
+
+Agent `bc-91afa190-e757-5374-b33f-2763b8d55e5e`. First entry. Every time below is from `date -u`.
+
+**The four, as far as reading gives them**
+
+- **#8139: land.** The merge is pushed and its runs wait for a slot; the ready line follows the runs. Detail below.
+- **#8406: it still adds a check `main` lacks, and it collides with #8940 and with WIRED's branch, so I stop at the verdict: redo it on #8940's `stmtOk`.** Detail below.
+- **#8414: drop.** What is not on `main` is the older, member-at-a-time `fanout` and the older default; `main` has a stricter check in each place. Detail below.
+- **#8363: drop as a pull request; the instance is not on `main` and would be restated against #8940's `Held` and WIRED's statements.** First read; final by 09:00Z. Detail below.
+
+**#8139, `cursor/proofs-seed-salt-from-log-5ae1`**
+
+- Head `952d8070471c50c8f0f22f14459fa48fabd8bb2d`, pushed without force. It holds `main` at `62bf29346f76bf1c423ea33285aace36e8d2ffc2`. [run: `git push`, `git rev-parse`]
+- Two merge commits. `6e2ffd8b89c3` merges `main` at `be9a3d566905`, by hand. `952d8070471c` merges `main` at `62bf29346f76`, which moved while I worked; that one was clean. [run: `git merge`]
+- Its diff against `main`: 40 files, +1821 −576. [run: `git diff --shortstat origin/main HEAD`]
+- **The conflicts, eleven files** [run: `git merge`, then read each]:
+  - `verity/protocols/spot/verifier/lean/Spot/Registration.lean`, `OneStage.lean`, `Pieces.lean`, `Run.lean`
+  - `security/Properties/Spot.lean`, `security/Proofs/Properties/Spot.lean`, `security/Proofs/Flock/Claims/Sampling/Select/Code.lean`
+  - `verity/protocols/spot/verifier/one_stage/verifier.py`, `verity/protocols/spot/verifier/service.py`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`
+  - `verity/protocols/pous/lean/TRUSTED.sha256`, regenerated with `pins.py --regen`; `pins.py --stale` exits 0. [run]
+- **What each side had changed.** The branch made the seed salt the check's own argument (`Registration.check rec v seedSalt`) and removed `Verifier.seedSalt`. `main` added R8 and tied values (`Registration.r8Codes`, `Verifier.tied`, `Registered` gaining `R8 v`). [read: both diffs from the merge base `5c095bb4ab70`]
+- **How I resolved it.** R1 to R8 run against the salt the caller read. `Registered` keeps `main`'s `R8 v`, and `WindowSeedSalt rec salt` stays the second conjunct of `registration_nil`. The registration piece keeps `main`'s verdict object (`codes`, `fanout`, `rests_on_period_check`) and reads `seed_salt` beside `params` and `record`. [read: the merged files]
+- **One break the merge made that git did not show.** `security/Proofs/Properties/Spot/AcceptHonest.lean` is the branch's own file. Its `registered` had no proof of `R8`, which `main` added to `Registered`. I added `templateRanges_program` and `r8`, and `import all Init.Data.Array.QSort.Basic`. [read: the file]
+  - The proof evaluates `Partition.sharedInputs` in the kernel. The honest program's one Call takes no argument, so every array it sorts is empty, and the kernel reduces `Array.qsort` only on an empty array. [run: `lake env lean` on a scratch file of Lean core alone, in `security/`]
+  - **It has not been elaborated against the real definitions yet.** I elaborated a copy of `sharedInputs` over stand-in types in a scratch module, which passes, and fails without that import. The try run below is the first real check. [run: the same scratch file]
+- **The lock.** The merge driver took five `reads` entries without regenerating them, in `security/lean-audit.json` and in `security/Properties/lean-audit.json`: `Spot.OneStage.paramsParsed`, `Spot.OneStageZk.checkBlobsAt`, `Spot.Registration.Verifier`, `Spot.Registration.Verifier.seedSalt` (removed) and `Spot.Registration.check`. The records run regenerates them. I name each guarantee whose record changes other than by a move before I push the records. [run: `merge.py`'s warnings in the merge's output]
+- **Runs, all at `952d8070471c`, all waiting for a slot on vy-nebius-cpu-2** [run: `research run`, `research status`]:
+  - `r20261112-035726-4bcb`: `lean_changed.py --records security --update`, which covers `security`, `security/Properties` and `security/Proofs`.
+  - `r20261112-035756-a864`: `verity lean try security/Proofs/Properties/Spot/AcceptHonest.lean --siblings`.
+  - `r20261112-035801-afee`: `suites.py --changed 62bf29346f76 --quick`, 71 suites.
+  - The launcher said about 13 minutes to a slot. At this branch's last head `security`'s audit alone took 1,583 s, with `security/Properties` and `security/Proofs` after it. So about 05:15Z for the three. [run: the launcher's line; read: the pull request's body for the 1,583 s; the hour is a guess]
+- Ruff on the three merged Python files: one finding, E731 at `one_stage/verifier.py:481`, which `main` has too. [run: `ruff check`; `git grep` on `origin/main`]
+
+**#8406, `cursor/proofs-stmtok-records-c257`, head `3d8e9aa8c0af`**
+
+- **What it adds that `main` lacks.** `SpotFlock.stmtOk` gains the conjunct `recordsOk h x m₁`: the run's boundary record and round 1's interior record each name exactly their registration's ports and registered values, each once (`Held.boundaryNames`, `Held.interiorNames`, `recordOk`). `main` at `62bf29346f76` has none of `recordsOk`, `recordOk`, `boundaryNames` or `interiorNames` under `security/`. [run: `git grep` on `origin/main`; read: `security/Proofs/Flock/SpotFlock/Code.lean` at both]
+- **Against `main` and against #9116 (`389565d368cb`) it merges cleanly apart from `fixtures/artifacts.json`**, the entry for `benchmarks/two_stage/tests/fixtures/guard.tar.xz`. #9041 is merged, so it is inside `main`. [run: `git merge-tree` against each; `gh pr view 9041`]
+- **Against #8940 (`58a598e615b1`) and against WIRED's branch (`cursor/proofs-wired-5d1b`, `f8df31eb0807`, which contains #8940's head) it collides in `security/Proofs/Flock/SpotFlock/Code.lean`, at two places** [run: `git merge-tree` against each, the same two hunks]:
+  - The module docstring's round 2 bullet: #8406's lines 47 to 62 against #8940's lines 47 to 62, where #8940 inserts "rounds 2 to `stage`" and renames round 2 "round `stage + 1`".
+  - `stmtOk`: #8406's lines 513 to 528 (the new `recordsOk` and `stmtOk`'s docstring and signature) against #8940's lines 508 to 513. #8940 changes the signature to `(c₀ : FlockDeploy.Coin) (c₁ : Stage h)`.
+- **Two more places that git merges and Lean would not** [read: both heads' files]:
+  - `security/Proofs/Flock/SpotFlock/Sessions.lean`: #8406's `recordsOk_of_stmtOk` (line 206) binds `c₀ c₁ : FlockDeploy.Coin`. At #8940 every lemma over `stmtOk` binds `c₁ : Stage h`.
+  - `Held`: #8406 adds `boundaryNames` and `interiorNames`, #8940 adds `more`. The guard's fixture is exported from `Held`, so it is regenerated on whichever lands second.
+- So I did not merge it. **The redo is small:** `recordsOk` and its conjunct in `stmtOk`, `recordsOk_of_stmtOk` and `recordsOk_spec` at `Stage h`, the two `Held` fields, and the guard's export and tests, on #8940's head once it is on `main`. Whether to wait for #8940 or to land #8406 first and have #8940 take the merge is yours. [guess: the size, from #8406's diff of 9 files, +278 −66]
+
+**#8414, `cursor/proofs-accountd-cba0`, head `359724056748`**
+
+- Of its added lines, these are not on `main`: 3 in `plancheck.py`, 37 in `one_stage/partition.py`, 2 in `test_plancheck.py`, 6 in `test_two_stage.py`. Every added line of `GLOSSARY.md`, `optimize.py`, the README and `test_optimize.py` is on `main`. [run: each added line of `git diff 5c095bb4ab70 359724056748` looked up in `main`'s file]
+- **`partition.py`: the 37 lines are the older `fanout`**, a union-find over every batch member. `main`'s `fanout` summarizes a root node at a time and never walks members, and `main` keeps #8414's walk as the test's reference, `_fanout_walk`, "a verifier never runs it". [read: `main`'s `partition.py` lines 291 to 325 and `test_two_stage.py` lines 825 to 880]
+- **`test_two_stage.py`: the 6 lines assert `P.fanout(prog, GRAIN) == 3`.** `main` asserts the walk gives 3 and the summary 5 on the same program, and adds a chain of calls where both give 3. [read: the same]
+- **`plancheck.py` and its test: the 3 and 2 lines are `fanout: int = 1`, a default.** `main` has `fanout: int | None = None` and refuses a served cap with no fan-out (`ValueError`, "registration verdict"), which its test checks. [read: `git diff 359724056748 origin/main` on both files]
+- So nothing is left that `main` lacks, and no new pull request is needed.
+
+**#8363, `cursor/proofs-twoinstance-2a66`, head `a81a1b11ea1d`**
+
+- **No instance of the two-stage statement is on `main`.** The lock lists `Flock.SecurityProofs.SpotKSTwo` and `SpotExfilTwo` under `unwitnessed`, missing `honest`: "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)". Their one witness is `nontrivial`: `Claims.SamplingGeneric.compilerKSTwo_nontrivial` and `compilerExfilTwo_nontrivial`. `main` does have `SpotFlock.built_spot`: `Built` at every registration whose frame is SPOT's. [read: `security/lean-audit.json` on `main`; run: `git grep`]
+- **Its own commits are not on `main`.** After the integration base `5f9455f2b9` it adds eight files, 1,907 lines, and deletes `ReadsAt.lean`: `Instance`, `InstanceAddresses`, `InstanceBoundary`, `InstanceCodes`, `InstanceReads`, `InstanceRecords`, `InstanceRun` and `OneTable`, under `Security/Proofs/Flock/SpotFlock/`. None is on `main` at either path. Its paths are from before the layout move, and `5f9455f2b9` is not an ancestor of `main`. [run: `git diff --stat 5f9455f2b9 a81a1b11ea1d`, `git ls-tree origin/main`, `git merge-base --is-ancestor`]
+- **It is not an honest witness as it stands.** It proves `Built` at the instance and not `Addresses`, an accepted run or a concrete reference statement. [read: `Instance.lean`'s docstring, "What this does not show"]
+- **It would be restated anyway.** #8940 adds `Held.more`, which the instance's `held` must give, and takes `stmtOk` at `Stage h`. WIRED restates `SpotKSTwo` over `codeConnected` with `wiredOk h = true`, `BuiltWired` and `AddressesWired` in place of `Built` and `Addresses`. [read: `Code.lean` at `58a598e615b1`; `SamplingGeneric/Guarantees.lean` at `f8df31eb0807`, lines 85 to 91]
+- Still to read before 09:00Z: which of the eight files read neither `Held`'s shape nor the premises, and so would carry over as they are.
+
+**Next.** #8139's ready line when its three runs end, or their state at 06:30Z. Then #8363's final read. Nothing is pushed to #8406's, #8414's or #8363's branch.
