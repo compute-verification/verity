@@ -1,8 +1,8 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
 from a rank that shipped no acquisitions, a window whose details state no tie to the Commit, a call with no tables,
-commitments that name no session, a manifest row with no tables, a window's record with no commitment object, a slot
-of a round the round log does not hold, and an engine that holds no executor in its own process; and of a round the
-log names by no number."""
+commitments that name no session, a manifest row with no tables, a window's record with no commitment, a slot of a
+round the round log does not hold, and an engine that holds no executor in its own process; and of a round the log
+names by no number."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -186,9 +186,10 @@ def _refusal(why: str) -> tuple[None, tuple[str, str]]:
     return None, ("draw", f"the window's draw coin is malformed ({why})")
 
 
-@pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": "a root"}])
-def test_a_record_with_no_commitment_object_is_refused_at_its_sampling_coin(record):
-    assert _sampled(record) == _refusal("the window's record carries no commitment object")
+@pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
+def test_a_record_with_no_commitment_is_refused_at_its_sampling_coin_as_one_whose_commitment_states_no_sample(record):
+    assert _sampled(record) == _refusal(OPENING_FORM)
 
 
 @pytest.mark.parametrize("sample", [..., None, {}, {"coin": {}}])
