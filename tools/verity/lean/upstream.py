@@ -17,6 +17,8 @@ lemma that an upstream theorem could discharge or replace:
 
 A hit is an upstream theorem whose statement mentions every constant under `mentions`. Matching is on what statements are
 about, not on names or citations: names move, and a proof can arrive as a different theorem with a different constant.
+A statement over the package's own definitions has no entry, since no upstream theorem can mention them, and neither has
+one about a single number, whose entry could mention only `Nat.Prime` and would match every theorem about primes.
 
 - The no-build pass reads each `scan` package's sources with `git show`, at the revision `lake-manifest.json` pins or at
   `--rev`. It matches the constants' last components as words in each theorem's statement, comments aside, and takes proved
@@ -27,7 +29,11 @@ about, not on names or citations: names move, and a proof can arrive as a differ
 
 A proved hit not under its entry's `ack` is new. Someone should check whether it discharges the assumption or replaces the
 hand proof, then acknowledge it. Exit 1 when a hit is new, 0 otherwise. `check.py` runs the no-build pass at the pinned
-revisions, so a bump that brings a new proof about a watched statement fails until it is acknowledged.
+revisions, so a bump that brings a new proof about a watched statement fails until it is acknowledged. The `ack` list
+says what has been looked at, not what was used. Run the exact pass (`--lean`) at a bump; its first run builds all of
+ArkLib. `upstream.py PKG --fetch --rev origin/main` shows what upstream has proved since the pinned revision, and a
+weekly `research run` of it tells us when a bump would gain something (`tool.py`). A document's "status upstream" line
+cites this output instead of asserting a status.
 """
 from __future__ import annotations
 

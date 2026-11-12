@@ -13,7 +13,14 @@
 #      (127.0.0.1:46580, through the research key) unless one answers;
 #   2. ships this checkout's git-visible files to /workspace/research/trees/$VY_LANE on the host (`research pods sync`):
 #      jobs run from there (SRC), not from an upload;
-#   3. runs `sky jobs launch` with the R2 credentials as secrets (from this environment) and prints the job's queue line.
+#   3. runs `sky jobs launch` with the store's endpoint, its bucket and a key minted for this job as secrets, and prints the job's
+#      queue line.
+# The job's key is minted here from the store's key pair in this environment (`research data mint-credential --job`): read only
+# for store-fetch, and for every other template one that writes but can neither delete nor copy. It lasts VY_STORE_TTL (default
+# 24h, at most 7d) from the submission, the wait in the queue included. The pair itself goes to no job this script submits: with
+# no pair here, or only a temporary key, the script refuses (exit 5). The pair also leaves this script's environment before its
+# first `sky` call: the SkyPilot client sends AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN from its environment
+# to an API server it reaches on 127.0.0.1:46580, whatever --secret names.
 # config-run's two tasks: VY_ROW_CLASS=small|dense|long|moe|b64|tp2 (its header's table), or VY_BUILD_MEMORY / VY_GPU_MEMORY
 # in GB per cell, which win over the class.
 # VY_LANE defaults to this checkout's branch name. KUBECONFIG is unset: the SkyPilot client forwards it to the server.
@@ -69,6 +76,14 @@ if [ "${#missing[@]}" -gt 0 ]; then
   echo "  sudo apt-get install -y rsync openssh-client git python3 curl   # and uv: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
   exit 2
 fi
+case $template in store-fetch) access=fetch ;; *) access=push ;; esac
+minted=$(research data mint-credential --job "$access" --ttl "${VY_STORE_TTL:-24h}" --env) || {
+  echo "submit.sh: no store key for the job. Minting one needs the store's own key pair in this shell (R2_ENDPOINT, R2_BUCKET," >&2
+  echo "  AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and no AWS_SESSION_TOKEN) and a VY_STORE_TTL of at most 7d" >&2
+  exit 5
+}
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+echo "submit.sh: $name gets ${minted##*# }" >&2
 tunnel() {
   # the ssh tunnel to the API server, (re)opened unless it answers. A dropped tunnel whose ssh still holds the port is closed
   # first (ExitOnForwardFailure would refuse the new one), and keepalives end a dead connection within ~45 s
@@ -90,7 +105,7 @@ sky api info 2>/dev/null | grep -q "$endpoint" || sky api login -e "$endpoint" >
 dest=/workspace/research/trees/$lane
 research pods sync "$machine" "$repo" --dest "$dest"
 secrets=()
-for s in R2_ENDPOINT R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do secrets+=(--secret "$s"); done
+for s in R2_ENDPOINT R2_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN; do secrets+=(--secret "$s"); done
 if [ -n "${VY_ROW_CLASS:-}${VY_BUILD_MEMORY:-}${VY_GPU_MEMORY:-}${VY_REPLAY_MEMORY:-}" ]; then   # config-run: its tasks' memory (and TP2's GPUs)
   rendered=$(mktemp --suffix=.yaml)
   python3 - "$yaml" "${VY_ROW_CLASS:-}" "${VY_BUILD_MEMORY:-}" "${VY_GPU_MEMORY:-}" "${VY_REPLAY_MEMORY:-}" > "$rendered" <<'PY'
@@ -153,5 +168,8 @@ if why:
 WAITING
 rm -f "$wl"
 tunnel    # the sync can take minutes, long enough for a tunnel to drop
-sky jobs launch -y -d -n "$name" "$yaml" --infra "ssh/$pool" --env "SRC=$dest" "${secrets[@]}" "$@"
+(
+  eval "$minted"    # the job's key, in the launch's environment alone
+  sky jobs launch -y -d -n "$name" "$yaml" --infra "ssh/$pool" --env "SRC=$dest" "${secrets[@]}" "$@"
+)
 sky jobs queue 2>/dev/null | awk -v n="$name" 'NR <= 3 || $0 ~ n' | head -6

@@ -39,7 +39,7 @@ names them first (`st_get_bind`, `lift_lets`, `extract_lets`) and splits each `i
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.types Desc.callees
-  liftV at_ paramsOf buildNode natJ? from Flock.Program
+  liftV at_ paramsOf buildNode natJ? from Circuits.Program
 
 theorem inv_congr {s s' : DecState} (e1 : DecState.defs s' = DecState.defs s)
     (e2 : DecState.index s' = DecState.index s) (h : Inv s) : Inv s' := by

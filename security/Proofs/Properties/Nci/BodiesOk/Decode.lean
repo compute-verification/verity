@@ -37,7 +37,7 @@ of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc liftV at_ paramsOf
-  from Flock.Program
+  from Circuits.Program
 
 abbrev DM := StateT DecState (Except String)
 

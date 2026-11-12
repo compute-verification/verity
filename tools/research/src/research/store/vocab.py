@@ -85,6 +85,7 @@ KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superse
 KERNEL_REASON = "kernel_reason"
 UNIT_LOWERING = "unit_lowering"
 COMPILE_COST = "compile_cost"
+TRAINING_SLOWDOWN = "training-slowdown"               # on a training-slowdown job's run and its run record: the job
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -367,6 +368,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "guard pass|fail|n/a, approach, commit branch@sha}"),
     _k(COMPILE_COST, GROUP_RESULT, TEXT, "on a `benchmarks/compile_cost` run, by its lane: its record, a JSON object (--value-json) "
        "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
+    _k(TRAINING_SLOWDOWN, GROUP_RESULT, TEXT, "on a training-slowdown job's run (when it is queued) and its run record (once "
+       "the run ends with one), by `verity bench training-slowdown`: the job, as DIGEST/SEED/SPLIT, its attack config's "
+       "digest (benchmarks/training_slowdown/training_slowdown/config.py), its seed and its held-out split; the command's "
+       "only state", pattern=r"[0-9a-f]{64}/\d+/(search|final)"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
