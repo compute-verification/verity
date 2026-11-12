@@ -110,7 +110,8 @@ onsite pieces. The report's ``composed`` gives that verdict with its reason (`sa
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, each δ of the block
 record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside
-it); PoUW's development piece reads ``development run, credits nothing`` with core's refusal of the window's credit.
+it, `error_said`); PoUW's development piece reads ``development run, credits nothing`` with core's refusal of the
+window's credit.
 Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
@@ -947,9 +948,7 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
     (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
-    established. Where its error leaves terms out (the bandwidth audit's ``named_terms``) the error is said with them
-    beside it, in the terms' own words (`block_record.error_form`, which for PoUB's is its ledger's ``DELTA_FORM``): in
-    the clause that says it is not established, and in a clause of its own where it is established at every δ."""
+    established."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
     place = profile.get("placement") if isinstance(profile, Mapping) else None
@@ -960,18 +959,23 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
         outside = (profile.get("outside") or {}).get("bytes") or {}
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
-    if leg:
-        from verity_e2e_demo import block_record as BR
+    return out + (error_said(leg) if leg else [])
 
-        at, error, named = (leg.get(k) for k in ("at", "error", "named_terms"))
-        error = BR.error_form(_ratio(Fraction(error), BR.DELTAS), named)
-        no = [d for d, x in at.items() if not x["holds"]]
-        if no:
-            out.append(f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with "
-                       f"{error}")
-        elif named:
-            out.append(f"its error reads {error}")
-    return out
+
+def error_said(entry: Mapping[str, Any]) -> list[str]:
+    """What an accepted subprotocol's block record entry says of its error: each δ of the record's at which its quantity
+    is not established, with the error the run established it at. Where the error leaves terms out (the bandwidth
+    audit's ``named_terms``) it is said with them beside it, in the terms' own words (`block_record.error_form`, which
+    for PoUB's is its ledger's ``DELTA_FORM`` with the error for δ): there, and in a clause of its own where the
+    quantity is established at every δ."""
+    from verity_e2e_demo import block_record as BR
+
+    named = entry.get("named_terms")
+    error = BR.error_form(_ratio(Fraction(entry["error"]), BR.DELTAS), named)
+    no = [d for d, x in entry["at"].items() if not x["holds"]]
+    if no:
+        return [f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with {error}"]
+    return [f"its error reads {error}"] if named else []
 
 
 def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str,

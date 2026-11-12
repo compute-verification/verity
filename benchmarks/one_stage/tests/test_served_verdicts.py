@@ -53,9 +53,9 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-from verity.protocols.poub.verifier import ledger
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

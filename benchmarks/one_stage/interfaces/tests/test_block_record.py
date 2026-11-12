@@ -14,8 +14,8 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from verity.protocols.poub.verifier import ledger
 from verity_e2e_demo import block_record as R
+from verity.protocols.poub.verifier import ledger
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
