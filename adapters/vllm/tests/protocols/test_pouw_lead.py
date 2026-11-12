@@ -13,10 +13,10 @@ import hashlib
 
 import numpy as np
 import pytest
-
-from tests.protocols._needs_torch import torch
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.serving import PassCommitment
+
+from tests.protocols._needs_torch import torch
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_exact as E
@@ -73,8 +73,10 @@ class Backend:
 
     variant = "stand-in"
 
-    def __init__(self, log: list | None = None):
-        self.loaded, self.log, self.words = [], [] if log is None else log, []
+    def __init__(self, log: list[tuple] | None = None):
+        self.loaded: list[int] = []
+        self.log: list[tuple] = [] if log is None else log
+        self.words: list[bytes] = []
 
     def load(self, w, layer):
         self.loaded.append(w)
@@ -176,10 +178,10 @@ def test_own_auditor_coins_are_not_added_under_the_lead():
 def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_its_coins():
     """C3's order: the key's leaf, then the link's salt, sampled once it holds that leaf, the weights' root and the
     window's call count; then each call's root(A_j) under the window, its coins and its kernel."""
-    log = []
+    log: list[tuple] = []
     backend, layer = Backend(log), Linear(24, 1)
     run = PL.LeadRun(ENTRY, backend, Link(log), W, 4, key=_keys())
-    assert run.window is None and run.record is None
+    assert all(v is None for v in (run.window, run.record))
     x = _x(5, 2)
     xq, s_a = E.quantize_rows(x)
     y = run.call(3, layer, xq, s_a)
@@ -198,7 +200,7 @@ def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_
 
 
 def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
-    log = []
+    log: list[tuple] = []
     link = Link(log)
     run = PL.LeadRun(ENTRY, Backend(log), link, W, 2, key=_keys(), rank=1, world=2)
     assert run.end_pass() is None
@@ -219,7 +221,8 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     assert out.activation_roots == sha(record.a_roots) and out.transcript_root == record.words_root
     assert out.records_root == sha([key_leaf(window.key), (2).to_bytes(8, "big"), *map(R.header, record.calls)])
     assert run.commits["passes"] == [out.to_json()] and run.commits["calls"] == 2 and run.details["passes"] == 1
-    assert run.end_pass() is out and run.window is None
+    again, open_window = run.end_pass(), run.window
+    assert again is out and open_window is None
     run.call(0, layers[0], *E.quantize_rows(_x(2, 9)))
     assert run.window.index == run.record.pass_index == 1 and run.window.key != window.key
     assert run.window.salt == link.windows[1].salt != link.windows[0].salt
@@ -230,7 +233,7 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
 
 
 def test_a_window_past_its_call_count_is_refused_and_never_published():
-    log = []
+    log: list[tuple] = []
     run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, 2, key=_keys())
     for w in range(2):
         run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
@@ -247,7 +250,7 @@ def test_a_window_the_link_refuses_commits_no_call():
         def open(self, *a):
             super().open(*a)
             raise F.FeedError("no salt")
-    log = []
+    log: list[tuple] = []
     run = PL.LeadRun(ENTRY, Backend(log), Closed(log), W, 2, key=_keys())
     with pytest.raises(F.FeedError, match="no salt"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
@@ -272,7 +275,7 @@ def test_a_call_the_link_refuses_gets_no_kernel():
         def release(self, call, root):
             super().release(call, root)
             raise F.FeedError("refused")
-    log = []
+    log: list[tuple] = []
     run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, 2, key=_keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
@@ -292,7 +295,7 @@ class Runner:
 
 
 def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_arm(monkeypatch):
-    log = []
+    log: list[tuple] = []
     monkeypatch.setattr(PP, "model_runners", lambda: (Runner,))
     monkeypatch.setattr(F, "InProcessCertifier", lambda: Link(log))
     model = Model(Linear(64, 1), Linear(64, 2), Linear(40, 3))

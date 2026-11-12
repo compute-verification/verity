@@ -14,32 +14,33 @@ import json
 import random
 from fractions import Fraction
 from types import SimpleNamespace
+from typing import Any
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity.circuits.refs import runs  # noqa: E402
+from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
 from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
 from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
 from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
 from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
 from verity.protocols.spot.device import challenger as LC  # noqa: E402
 from verity.protocols.spot.device import remote as R  # noqa: E402
 from verity.protocols.spot.device.challenger import CoinError, LiveRecord  # noqa: E402
-from verity.circuits.refs import runs  # noqa: E402
+
+from tests.protocols import challenger_host as CH  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
+from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-
-from tests.protocols import challenger_host as CH  # noqa: E402
 
 K = 64
 ROW = K * PH.I8_BITS
@@ -68,6 +69,12 @@ class Int8Arm:
 
 
 class Linear:
+    #: a router's, as vLLM's linear holds them
+    quant_config: object
+    output_size: int
+    #: the layer's method: the int8 arm, or what a test puts in its place
+    quant_method: Any
+
     def __init__(self, n, seed):
         g = torch.Generator().manual_seed(seed)
         self.weight = torch.randint(-127, 128, (n, K), generator=g, dtype=torch.int8)
@@ -314,7 +321,7 @@ def test_z_is_the_exact_product_on_each_units_cells():
     w = rng.integers(-127, 128, (40, K), dtype=np.int8)
     y = xq.astype(np.int64) @ w.astype(np.int64).T
     call = PH.Call(0, 0, 0, "q", 33, K, 40, 0, 64)
-    full = np.zeros((64, 64), np.int64)
+    full: np.ndarray = np.zeros((64, 64), np.int64)
     full[:33, :40] = y
     for n, u in enumerate(call.compiled().units):
         z = call.z(y.astype(np.int32), n)
@@ -462,10 +469,11 @@ def engine(monkeypatch):
     """`verity_vllm.LLM`'s engine build replaced by a toy int8_exact model and a stand-in vLLM whose model runner is
     ``engine["runner"]``; the in-process coins' entropy is seeded."""
     from verity.protocols.pouw.verifier import verifier
+
     from verity_vllm.engine import vllm_adapter as va
     rng = random.Random(1)
     monkeypatch.setattr(verifier, "coins", rng.randbytes)
-    got = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
+    got: dict[str, Any] = {"runner": Runner(), "model": Model(Linear(32, 1), Linear(40, 2)), "builds": 0}
 
     def build_engine(checkpoints, **kw):
         got["builds"] += 1
@@ -513,8 +521,8 @@ def test_llm_refuses_h1_by_name_when_its_engine_cant_supply_the_runner(engine, m
     """Fail-closed: H1 without its public parameters is refused before any engine is built; an engine without an
     in-process model runner is refused naming the entry and the settings it couldn't supply; and an adapter that names a
     setting it then doesn't fill is refused by the install's own refusals.  None leaves a hook behind."""
-    from verity_vllm import protocols as PO
     from verity_vllm import llm as L
+    from verity_vllm import protocols as PO
     with pytest.raises(PO.Refused, match=r"'rows' \(T"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols=_entry(), protocols_config={"pouw": {"admission": "per-round"}})
     assert engine["builds"] == 0
@@ -956,9 +964,11 @@ def test_the_batch_order_is_model_runner_v2s():
 AUDITOR = "vy-challenger-1:7811"
 #: where a window's sample session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
 DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
+#: the challenge phase `_host` serves unless told another
+_FIRST_SESSION = CH.session_id(1)
 
 
-def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=CH.session_id(1),
+def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=_FIRST_SESSION,
           leaves=None, ledger=None, gated=True, reserved=True):
     """A challenger host serving one challenge phase over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the
@@ -1193,6 +1203,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     H1's layout (salt and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first
     coin."""
     from verity.protocols.pouw.verifier.audit import salt_of
+
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     salt_only = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(1))

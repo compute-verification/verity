@@ -41,6 +41,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from verity_vllm.engine.hooks import Hooks
 
+__all__ = ["Context", "Option", "Target"]
+
 #: Where a composition runs: ``serve`` is `verity_vllm.LLM`; ``capture`` is a row's Match capture (its executors only, so the
 #: observed run executes what the Commit serves); ``commit`` is the Commit stage of a row.
 STAGES = ("serve", "capture", "commit")
@@ -69,10 +71,12 @@ class Context:
         return next((e.partition(":")[2] for e in self.enabled if e.partition(":")[0] == name), None)
 
     def settings_of(self, name: str) -> Mapping[str, Any]:
-        return self.settings.get(name) or {}
+        """Protocol ``name``'s settings: none when the config has no entry for it."""
+        return self.settings.get(name, {})
 
     def filled_of(self, name: str) -> tuple[str, ...]:
-        return tuple(self.filled.get(name) or ())
+        """The settings of ``name`` the built engine will supply: none when it names none."""
+        return tuple(self.filled.get(name, ()))
 
 
 @dataclass(frozen=True)
