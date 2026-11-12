@@ -45,7 +45,6 @@
     {"file": "verity_vllm/acquire/served.py", "kind": "E731", "symbol": "probe_routes", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_structure", "detail": "Do not catch blind exception: `Exception`", "count": 2},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_subcircuits", "detail": "Do not catch blind exception: `Exception`"},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.types.Array` imported but unused"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "RUF100", "symbol": "_Footprint.__init__", "detail": "Unused `noqa` directive (non-enabled: `SIM115`)"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "BLE001", "symbol": "_selections", "detail": "Do not catch blind exception: `Exception`", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 15},

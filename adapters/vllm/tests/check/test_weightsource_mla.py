@@ -118,3 +118,28 @@ def test_mla_moe_fields_read_their_own_layer(tmp_path):
     for lo, hi, name in _field_intervals(wt, ""):
         if name.startswith(("dense_layers[", "layers[")):
             assert ws.words(lo, hi).size == hi - lo, name
+
+
+def test_a_top_field_is_its_checkpoint_tensors_and_cos_sin_is_the_fixture(tmp_path):
+    """`embed`, `norm` and `lm_head` are their checkpoint tensors' words. `cos_sin` names no checkpoint tensor: it is the fixture's
+    words, under the base tables and under the GPT-NeoX family's (a `config` whose `NORM` is `layernorm`), whose `norm_b` is read too."""
+    cos_sin = tmp_path / "cos_sin.npy"
+    fixture: np.ndarray = np.arange(MAX_POS * DR, dtype=np.uint16) + 7
+    np.save(cos_sin, fixture)
+    wt = _mla_weights_type()
+    words = _write(tmp_path / "base.safetensors", _tensors())
+    ws = WeightSource(wt, [tmp_path / "base.safetensors"], cos_sin)
+    for field, tensor in (("embed", "model.embed_tokens.weight"), ("norm", "model.norm.weight"), ("lm_head", "lm_head.weight")):
+        np.testing.assert_array_equal(ws._field_words(field), words[tensor], err_msg=field)
+    np.testing.assert_array_equal(ws._field_words("cos_sin"), fixture)
+    with pytest.raises(KeyError, match="^'norm_b'$"):
+        ws._field_words("norm_b")
+
+    neox = {"gpt_neox.embed_in.weight": ("BF16", [V, H]), "gpt_neox.final_layer_norm.weight": ("BF16", [H]),
+            "gpt_neox.final_layer_norm.bias": ("BF16", [H]), "embed_out.weight": ("BF16", [V, H])}
+    words = _write(tmp_path / "neox.safetensors", neox)
+    ws = WeightSource(wt, [tmp_path / "neox.safetensors"], cos_sin, config={"NORM": "layernorm"})
+    for field, tensor in (("embed", "gpt_neox.embed_in.weight"), ("norm", "gpt_neox.final_layer_norm.weight"),
+                          ("norm_b", "gpt_neox.final_layer_norm.bias"), ("lm_head", "embed_out.weight")):
+        np.testing.assert_array_equal(ws._field_words(field), words[tensor], err_msg=field)
+    np.testing.assert_array_equal(ws._field_words("cos_sin"), fixture)
