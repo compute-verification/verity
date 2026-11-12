@@ -50,7 +50,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
         return refuse(f"top_k = {sampling.get('top_k')}: vLLM's top-k path (`_topk_topp_kernel` / `_apply_topk_topp`) has no exact Definition; "
                       f"only the p-only split pipeline (`_apply_topp_split`) is modelled (TopPMask_v1{{V}})", missing=["TopKMask"])
     if not sampling.get("seeded", False):
-        return refuse("the policy has no explicit per-request seed: vLLM draws a random seed when `SamplingParams.seed` is None "
+        return refuse("the policy has no explicit per-request seed: vLLM picks a random seed when `SamplingParams.seed` is None "
                       "(SamplingStates.add_request), so the RNG stream is not a declared input and the sampled token is not reproducible "
                       "from the manifest — declare `seed` per request (sweep `sampling_seeds`)", missing=["declared seed"])
     reqs = []
