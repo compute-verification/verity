@@ -12,6 +12,12 @@ PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to
 - `receipt_conform.py`: the checks, and `python receipt_conform.py` to run them on the reference and the header.
 - `conform_host.cpp`: the header's host driver the checks build.
 
+The directory is not a package. A caller puts it on `sys.path` and imports `receipt_folds` (the steps, key rules and
+schedules) or `receipt_conform` (the checks), taking the names each module's `__all__` lists; a kernel includes
+`receipt_folds.cuh` by relative path. `receipt_folds` imports the standard library alone, and `receipt_conform` imports
+the workspace only where `e2e_definitions` evaluates E2E's Definitions (`verity.circuits`). Neither reads the environment, and
+nothing under `verity/` imports them: they are a definition and its checks, not code a prover or verifier runs.
+
 ## The folds
 
 All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d1, d2, d3): rows (g, g + 8) by columns
