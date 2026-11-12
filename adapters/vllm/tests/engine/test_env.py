@@ -91,7 +91,9 @@ def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
             elif isinstance(n, ast.ImportFrom) and n.module:
                 used |= {n.module, *(f"{n.module}.{a.name}" for a in n.names)}
             elif isinstance(n, ast.Call):
-                used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
+                called = getattr(n.func, "attr", getattr(n.func, "id", None))
+                if called is not None:
+                    used.add(called)
         assert not used & pinning, (p.name, sorted(used & pinning))
 
 
@@ -204,10 +206,11 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
     environ = {k: v for k, v in os.environ.items() if k not in runner}
     if plugin:
         loaded = sys.modules.get("verity_suite_guard")
-        if loaded is None:
+        if loaded is None or loaded.__file__ is None:
             pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
-        guard = Path(loaded.__file__).parent
-        environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
+        else:
+            guard = Path(loaded.__file__).parent
+            environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
     r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
                         *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
                        capture_output=True, text=True)

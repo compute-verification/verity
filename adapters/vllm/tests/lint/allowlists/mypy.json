@@ -11,7 +11,6 @@
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Layer", "detail": ""},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Model", "detail": ""},
     {"file": "tests/engine/fake_scheduler.py", "kind": "var-annotated", "symbol": "FakeScheduler.schedule", "detail": ""},
-    {"file": "tests/engine/test_env.py", "kind": "arg-type", "symbol": "test_a_capture_at_served_defaults_never_pins_a_switch_back", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "assignment", "symbol": "<module>", "detail": ""},
     {"file": "tests/lint/_imports.py", "kind": "attr-defined", "symbol": "edges", "detail": ""},
     {"file": "tests/lint/test_p09_layering.py", "kind": "assignment", "symbol": "file_violations", "detail": ""},
