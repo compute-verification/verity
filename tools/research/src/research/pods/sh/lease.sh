@@ -142,14 +142,14 @@ lease_extend() {
   if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_FILE ($cur): taken as missing" >&2; fi
   [ "$st" = 0 ] || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
-  cap=$(lease_cap); st=$?
+  latest=$(lease_cap); st=$?
   if [ "$st" = 2 ]; then
-    echo "lease: cannot read $LEASE_DEADLINE_FILE ($cap): taken as a deadline of 0, so nothing is extended" >&2
-    cap=$(( 0 - LEASE_DEADLINE_MARGIN_S ))
+    echo "lease: cannot read $LEASE_DEADLINE_FILE ($latest): taken as a deadline of 0, so nothing is extended" >&2
+    latest=$(( 0 - LEASE_DEADLINE_MARGIN_S ))
   fi
   if [ "$st" != 1 ]; then
-    if [ "$cur" -gt "$cap" ]; then cur=0; want=$cap; fi
-    if [ "$want" -ge "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
+    if [ "$cur" -gt "$latest" ]; then cur=0; want=$latest; fi
+    if [ "$want" -ge "$latest" ]; then want=$latest; by="$by(clamped-to-deadline)"; fi
   fi
   if [ "$want" -gt "$cur" ]; then
     mkdir -p "$(dirname "$LEASE_FILE")" || return 1
@@ -210,7 +210,7 @@ lease_loop() {
     if [ -n "$exp" ]; then shown=$(lease_iso "$exp"); else shown="unknown (no lease file, no RESEARCH_LEASE_EXPIRES)"; fi
     lease_say "armed: pod ${me:-?}, expiry $shown, grace ${LEASE_GRACE_S}s"
   fi
-  cap=""; since=""
+  latest=""; since=""
   while :; do
     now=$(lease_now)
     bad=""; blind=0
@@ -219,9 +219,9 @@ lease_loop() {
     elif [ "$st" = 2 ]; then bad="$LEASE_FILE ($e)"; [ -n "$exp" ] || blind=1
     fi
     c=$(lease_cap); st=$?
-    if [ "$st" = 0 ]; then cap=$c
-    elif [ "$st" = 1 ]; then cap=""
-    else bad="${bad:+$bad and }$LEASE_DEADLINE_FILE ($c)"; [ -n "$cap" ] || blind=1
+    if [ "$st" = 0 ]; then latest=$c
+    elif [ "$st" = 1 ]; then latest=""
+    else bad="${bad:+$bad and }$LEASE_DEADLINE_FILE ($c)"; [ -n "$latest" ] || blind=1
     fi
     if [ "$blind" = 1 ]; then [ -n "$since" ] || since=$now; else since=""; fi
     if [ -n "$since" ]; then
@@ -232,7 +232,7 @@ lease_loop() {
     fi
     due=""
     if [ -n "$exp" ] && [ "$now" -ge $((exp + LEASE_GRACE_S)) ]; then due=lease; fi
-    if [ -n "$cap" ] && [ "$now" -ge "$cap" ]; then due=lease; exp=$cap; fi
+    if [ -n "$latest" ] && [ "$now" -ge "$latest" ]; then due=lease; exp=$latest; fi
     if [ -z "$due" ] && [ -n "$since" ] && [ "$now" -ge $((since + LEASE_GRACE_S)) ]; then due=unread; fi
     if [ -n "$due" ]; then
       if [ "$due" = lease ]; then why="lease expired $(lease_iso "$exp")"; else why="read errors with nothing to keep since $(lease_iso "$since")"; fi

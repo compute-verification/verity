@@ -289,7 +289,7 @@ def test_a_lease_that_cannot_be_read_ends_a_machine_with_no_expiry_to_keep_only_
 def test_a_deadline_that_cannot_be_read_is_not_a_deadline_of_0_and_the_deadline_last_read_still_ends_the_machine(tmp_path, stepped):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW))
     lease_sh(env, "extend", str(30 * 86400), "create")
-    deadline, cap = tmp_path / "deadline", NOW + 10_000 - 300
+    deadline, end = tmp_path / "deadline", NOW + 10_000 - 300
     deadline.write_text(f"{NOW + 10_000} 2027-01-15T10:46:40Z launch\n")
     loop = stepped()
     assert loop.tick(NOW) == "slept"
@@ -297,8 +297,8 @@ def test_a_deadline_that_cannot_be_read_is_not_a_deadline_of_0_and_the_deadline_
     assert loop.tick(NOW + 60) == "slept", "a deadline that cannot be read is no deadline of 0"
     said = lease_log(tmp_path).splitlines()[-1]
     assert f"cannot read {deadline} (" in said and said.endswith("not an expiry; keeping what was last read"), said
-    assert loop.tick(cap - 1) == "slept"
-    assert loop.tick(cap) == f"terminated {POD}", "the deadline last read holds, with no grace"
+    assert loop.tick(end - 1) == "slept"
+    assert loop.tick(end) == f"terminated {POD}", "the deadline last read holds, with no grace"
 
 
 def test_a_deadline_never_read_that_cannot_be_read_ends_the_machine_only_once_that_has_lasted_the_grace(tmp_path, stepped):
