@@ -50,8 +50,8 @@ SUITES_DISK_GB = 60
 #: starts and the job declaration and policy they read, with the Slack registry the declaration checks its handles against
 #: (`tests/test_build.py` holds this list to what an audit hook sees it open)
 CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "common.py", "declaration.py", "live.py",
-                                                     "policy.toml", "settings.py", "shards.py", "slot.py", "spans.py",
-                                                     "suites.py", "verdicts.py")),
+                                                     "policy.toml", "records.py", "settings.py", "shards.py", "slot.py",
+                                                     "spans.py", "suites.py", "verdicts.py")),
                ".agents/skills/using-slack/registry.json")
 
 
