@@ -266,4 +266,27 @@ theorem stmtOk_of_check : StmtOkOfCheck := by
     exact ⟨⟨hR t ht, hSc t ht⟩,
       readsOk_of_check h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hP hc t (by omega)⟩
 
+/-- **A passing round 2, template by template**: the interior record's order and names are the model's, and where the
+templates' names are distinct, each template `t` has a statement at position `t` that names it and passes the model's
+code check against its part. -/
+theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondStage.Own} {ss : Array Json}
+    {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
+    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
+      Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true ∧
+      ∀ t < h.ms.length, ∃ S, Spot.SecondStage.Stmt.ofJson? (ss.getD t .null) = some S ∧
+        S.template = h.names.getD t "" ∧ codesOk h (ownOf h st rec draw c₀) t S = true := by
+  refine ⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc,
+    fun t ht => ?_⟩
+  have hts : t < ss.size := by
+    rw [count_of_check h own ss st rec draw c₀ hA hN hc]
+    exact ht
+  obtain ⟨-, -, ps, hp, -, -, hst, -, -⟩ := Spot.SecondStage.check_ok hc
+  obtain rfl := parts_of_check hA hp
+  obtain ⟨s, -, hs, -, -, hi, -⟩ := hst t hts
+  have hg : ss.getD t .null = ss.toList.getD t .null := by
+    simp [List.getD_eq_getElem?_getD]
+  refine ⟨s, by rw [hg]; exact hs, (partsAt_template hi).2.symm, ?_⟩
+  exact codesOk_of_check h own ss st rec draw c₀ hA hc t hts s hs
+
 end SpotFlock.RunsAs
