@@ -70,7 +70,7 @@ def describe(tc, n: Counter) -> list[dict]:
     for tid, c in sorted(n.items(), key=lambda kv: (-kv[1], kv[0])):
         f = tc._fns.get(tid)
         d = getattr(f, "defn", f)
-        rows.append({"id": tid, "n": int(c), "family": getattr(f, "base_id", None) or getattr(f, "id", None),
+        rows.append({"id": tid, "def_id": getattr(f, "id", None), "n": int(c), "family": getattr(f, "base_id", None) or getattr(f, "id", None),
                      "spec_base": spec_base(tid), "name": getattr(d, "name", None), "version": getattr(d, "version", None),
                      "bindings": {k: (descriptor_id(v) if hasattr(v, "signature") else v)
                                   for k, v in (getattr(f, "bindings", None) or {}).items()},
@@ -142,15 +142,29 @@ try:
         for key in d:
             by_fam.setdefault(spec_base(key.partition("/")[0]), []).append([kind, key])
     disc = SC.discover()
+    from verity.definitions.boolean import boolean_version
+
+    def pinned_at(fid: str) -> list:
+        return [k for k in pins if k in TG.PINNED_KINDS and fid in pins[k]]
+
     for tid in IDS:
         f = fns[tid]
-        fam = spec_base(tid)
+        fid = f.id
+        fam = spec_base(fid)
         try:
             mod = SC.owner(f)
         except Exception as e:  # noqa: BLE001
             mod = f"error: {err(e)}"
-        pins_out[tid] = {"exact": [k for k in pins if tid in pins[k]],
-                         "family": [x for x in by_fam.get(fam, []) if x[1] != tid],
+        try:
+            bv = boolean_version(f)
+            bv = {"id": bv.id, "descriptor": descriptor_id(bv), "same": bv.id == fid, "pins": pinned_at(bv.id),
+                  "family_pins": [x for x in by_fam.get(spec_base(bv.id), []) if x[1] != bv.id][:20]}
+        except Exception as e:  # noqa: BLE001
+            bv = {"error": err(e)}
+        pins_out[tid] = {"def_id": fid, "exact": pinned_at(fid), "exact_any_kind": [k for k in pins if fid in pins[k]],
+                         "family": [x for x in by_fam.get(fam, []) if x[1] != fid and x[0] in TG.PINNED_KINDS],
+                         "family_units": [x for x in by_fam.get(fam, []) if x[0] not in TG.PINNED_KINDS],
+                         "boolean_version": bv,
                          "owner": mod, "sidecar_py": str(disc.get(mod, {}).get("py")) if isinstance(mod, str) else None,
                          "sidecar_json": str(disc.get(mod, {}).get("json")) if isinstance(mod, str) else None}
     put("pins.json", {"kinds": {k: len(v) for k, v in pins.items()}, "templates": pins_out})
@@ -261,7 +275,15 @@ try:
     roots = TG.binding_roots()
     ids = sorted({r.id for r in roots})
     fams = sorted({TG.family(r) for r in roots})
-    put("roots.json", {"roots": len(roots), "ids": ids, "families": fams, "root_errors": TG.ROOT_ERRORS[:50]})
+    idset, famset = set(ids), set(fams)
+    per = {}
+    for tid in IDS:
+        f = fns[tid]
+        bv = (pins_out.get(tid, {}).get("boolean_version") or {}).get("id")
+        per[tid] = {"def_id": f.id, "root": f.id in idset, "family_root": TG.family(f) in famset,
+                    "boolean_root": bv in idset if bv else None,
+                    "boolean_family_root": (spec_base(bv) in famset) if bv else None}
+    put("roots.json", {"roots": len(roots), "ids": ids, "families": fams, "root_errors": TG.ROOT_ERRORS[:50], "templates": per})
 except BaseException as e:  # noqa: BLE001
     put("roots.json", {"error": err(e), "trace": traceback.format_exc()[-3000:]})
 say("done")
