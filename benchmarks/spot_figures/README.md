@@ -113,7 +113,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     measured, the only line with skipped work). (A) replayed alone, which needs batch-invariant kernels, is a dotted
     comparison at one machine's registration that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
-    line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
+    line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
+    head's key block as its scores unit and its values units on column blocks), a cost model's lines and not a bound
+    while no unit writes the key rows those units each commit. A new configuration, such as another cut, is a new
+    entry with its own line.
   - A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block, or of a
     registration's (`optimize.two_stage_design`'s `registration`): a registration spans the census window on one
     machine, on a 64-machine pod (`POD`) or on all of the census datacenter's machines (`REGISTRATIONS`). A statement's
