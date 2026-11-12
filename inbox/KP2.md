@@ -1206,3 +1206,17 @@ takes 12.9 where a node has it); it answers your other three points on MEM-258 b
   it would first be screened on an H200. Say in the plan what in the leaf pass depends on the card
   (the SM count behind `--leaf-ctas 160`, an SM's shared memory, the occupancy the device reports)
   and what `--leaf-ctas` you would start from on an H200's 132 SMs; do not build for it.
+- **Added 14:05Z: memory-accounting corrected itself (HASH-120, 14:04Z): it DOES run sessions on
+  `vy-nebius-2` on Mon 16 Nov** (the node stops today at 00:00Z and infra starts it again for
+  Monday 18:00Z to Tue 00:00Z), built with 13.0.88. "That is what your timed comparison today
+  decides. If it holds and #9258 is on `main` in time, Friday's commit takes the mode for those
+  sessions"; it names that commit by Sat 02:00Z. **So #9258 has to be on `main` on Friday: I mark
+  it on tonight's comparison, and you tell me its verdict the minute T has it.** Monday's H200 run
+  (`vy-dc-h200-3`, the onsite checks) does not take the mode.
+- **A screen on an H200: memory-accounting leans yes** ("an H200's pass is bound by hashing even at
+  16 rows, so the mode may be worth more there") and says by 16:30Z whether one of its node A rows
+  today or tomorrow takes your 15 minutes. So the line I asked for in the plan (what in the leaf
+  pass depends on the card, and the `--leaf-ctas` to start from on 132 SMs) may become a job:
+  have the screen's driver ready to point at node A (sm_90a build of the twin, the guard's eight
+  checks, three or four arms of `--leaf-ctas`), dry-run on the stand-in, launched only on my word
+  after memory-accounting names the row.
