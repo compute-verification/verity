@@ -314,7 +314,8 @@ class LeanVerify:
     """A statement the Lean verifier accepted, as a `lean-verify` record holds it: the staged Definition (by its id),
     its `blocks` blocks of 2^k_log witness bits each where a full statement holds `full`, each run's wall seconds (a
     run is one process of the Lean verifier's `verify`: the statement read and set up, and the one session verified), the bytes
-    of the session's proof files, the run that measured it and its host as the report words it."""
+    of the session's proof files, the run that measured it, its host as the report words it, and what the accept holds
+    (`label`, the record's own words: on the provisional unit cover the verifier compares no Program with the circuit)."""
 
     definition: str
     k_log: int
@@ -324,6 +325,7 @@ class LeanVerify:
     proof_bytes: int
     run: str
     host: str
+    label: str
 
     @property
     def bits(self) -> int:
@@ -650,7 +652,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     timed = {v.definition: v for v in table.lean}
     lean = [{"block": r.block, "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total),
              "k_log": v.k_log, "blocks": v.blocks, "full": v.full, "seconds": list(v.seconds),
-             "statement_seconds": v.statement_seconds, "proof_bytes": v.proof_bytes, "run": v.run, "host": v.host}
+             "statement_seconds": v.statement_seconds, "proof_bytes": v.proof_bytes, "run": v.run, "host": v.host,
+             "label": v.label}
             for r in table.rows if (v := timed.get(definition_id(r.block)))]
     steady = sources[0]["time_share"] or 0.0
     macs = None if any(r.macs is None for r in table.rows) else sum(r.per_token * r.macs for r in table.rows)

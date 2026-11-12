@@ -502,7 +502,7 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
 
 def lean(definition: str, run: str, seconds: tuple[float, ...], size: int, *, k_log: int = 20, blocks: int = 8,
          full: int = 8) -> P.LeanVerify:
-    return P.LeanVerify(definition, k_log, blocks, full, seconds, size, run, "node-a (64 cores, a CPU)")
+    return P.LeanVerify(definition, k_log, blocks, full, seconds, size, run, "node-a (64 cores, a CPU)", L.COVER_LABEL)
 
 
 def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scaled_to_the_rest():
@@ -534,7 +534,8 @@ def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scale
     share = 2.0 * by[GEMM64].seconds / table.gpu_seconds_per_token()
     assert t["lean_verify"] == [{"block": GEMM64, "time_share": share, "k_log": 20, "blocks": 8, "full": 8,
                                  "seconds": [40.0, 16.0, 24.0], "statement_seconds": 24.0, "proof_bytes": 4000,
-                                 "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)"}]
+                                 "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)",
+                                     "label": L.COVER_LABEL}]
     row = next(r for r in doc["rows"] if r["block"] == GEMM32)
     assert (row["lean_verifier_seconds"], row["proof_bytes"], row["lean_source"]) == (1.5, 250.0, P.LEAN_SCALED)
     assert t["verifier_seconds_per_token"] == {"value": 1.0, "block_types": 1, "block_share": 2.0 / 4.25}
@@ -1369,7 +1370,8 @@ def lean_record(run: str, *, word: str | None = RMSNORM, seconds: tuple[float, .
         runs[-1] |= {"rc": 1, "accepted": False, "why": why}
     return {"schema": L.SCHEMA, "run": run,
             "block": {"word": word, "definition": "Staged_v2{N=1}", "k_log": 27, "blocks": 256, "full": 256} | block,
-            "proof": {"bytes": size}, "verifier": {"repeat": len(seconds), "runs": runs}, "accepted": not why, "host": dict(LEAN_HOST)}
+            "proof": {"bytes": size}, "verifier": {"repeat": len(seconds), "runs": runs}, "accepted": not why,
+            "label": None if why else L.COVER_LABEL, "host": dict(LEAN_HOST)}
 
 
 def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD) -> str:
@@ -1406,7 +1408,7 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     assert seconds["measured_share"] == pytest.approx(own["per_token"] * 520.0 / 256 / seconds["value"])
     assert t["lean_verify"] == [{"block": RMSNORM, "time_share": own["time_share"], "k_log": 27, "blocks": 256, "full": 256,
                                  "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
-                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)"}]
+                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL}]
     assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
                                  "what": "the Lean verifier (its `verify`) on one statement of each of 1 block "
                                          "type(s); every other type's Lean verifier seconds and proof bytes are scaled "
@@ -1420,7 +1422,8 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     assert lines["- Lean verifier seconds"] == (
         f"- Lean verifier seconds per token: {R._n(seconds['value'])}, modeled, not measured. Measured: one block type, "
         f"`{RMSNORM}` ({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full "
-        "statement), which the Lean verifier's `verify` accepted in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
+        "statement): accepted on the provisional unit cover, units as stated, the Program not held to the circuit, by the "
+        "Lean verifier's `verify` in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
         f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Scaled: the "
         f"other 149 block types, {1 - seconds['measured_share']:.1%} of this figure, each at the measured statement's "
         f"seconds a witness bit times its 2^k_log bits: {P.LEAN_SECONDS_BASIS}.")
@@ -1448,8 +1451,8 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     doc = R.build("flock", "glm53", store=s.fresh("third"), root=REPO)
     assert [x["run"] for x in doc["totals"]["lean_verify"]] == [newer] and doc["inputs"][-1]["targets"] == [newer, run]
     assert doc["totals"]["lean_verifier_seconds_per_token"]["value"] == pytest.approx(2 * 300.0 / 520.0 * seconds["value"])
-    assert ("in its statement of 128 blocks of 2^27 witness bits each (128/256 of a full statement), which the Lean "
-            "verifier's `verify` accepted in 300 s (one run; a run is one process") in R.render(doc)
+    assert (f"in its statement of 128 blocks of 2^27 witness bits each (128/256 of a full statement): {L.COVER_LABEL}, by "
+            "the Lean verifier's `verify` in 300 s (one run; a run is one process") in R.render(doc)
 
 
 def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_figures_stay_not_measured(tmp_path):
@@ -1496,6 +1499,9 @@ def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_f
     assert R.lean_verify(lean_record(runs[0], seconds=(0.0,)), runs[0]).endswith("aren't a statement's blocks, bytes and seconds")
     assert R.lean_verify(lean_record(runs[0], word=None, definition=None), runs[0]) == (
         "its record names no block type (`block.word`, `block.definition`)")
+    # an accept the record doesn't qualify is printed by no line
+    assert R.lean_verify({k: v for k, v in lean_record(runs[0]).items() if k != "label"}, runs[0]) == "its record lacks `label`"
+    assert R.lean_verify(lean_record(runs[0]) | {"label": None}, runs[0]) == "its `label` (None) doesn't say what its accept holds"
     assert R.lean_verify([], runs[0]) == "its `out/lean-verify.json` isn't a `verity-bench/lean-verify/v1` record"
 
 
@@ -1527,8 +1533,9 @@ class Verifier:
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
 
 
-#: a made-up program descriptor, whose `annotations` are in no digest, and a made-up partition object
-PROGRAM = {"schema": "made-up", "definitions": {"Staged_v2{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
+#: a made-up program descriptor of the census type `RMSNORM`, whose `annotations` are in no digest, and a made-up
+#: partition object
+PROGRAM = {"schema": "made-up", "program_fn": RMSNORM, "definitions": {"Staged_v1{N=1}": [1, 2]}, "annotations": {"theta": [3]}}
 PARTITION = {"format": "made-up", "program": "p", "query": {"name": "Q_made_up", "version": 1, "params": {"X": 16}}}
 #: the program's file, spelled as no canonical form is
 PROGRAM_FILE = json.dumps(PROGRAM, indent=1).encode()
@@ -1538,27 +1545,29 @@ def _sha512(prefix: bytes, obj: object) -> str:
     return hashlib.sha512(prefix + json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-#: what a circuit binds for them: the program's digest over the descriptor without `annotations`, the partition's
-#: over the object after its rule and a zero byte
+#: the program's digest as the verifier computes it, over the descriptor without `annotations`, and what a unit
+#: statement's circuit states as `program_sha512`: the digest of its `program_digests`, which no program file has
 PROGRAM_SHA512 = _sha512(b"", {k: v for k, v in PROGRAM.items() if k != "annotations"})
+UNIT_SHA512 = _sha512(b"", {"unit/made-up": hashlib.sha256(b"the staged Definition's id and the row layout").hexdigest()})
 
 
 def circuit_text(rule: str = L.PARTITION_V1, size: int = 4000) -> bytes:
-    """A circuit file of `size` bytes whose second line binds `PROGRAM` and, under `rule`, `PARTITION`."""
+    """A circuit file of `size` bytes whose second line states a unit's `program_sha512` and binds, under `rule`,
+    `PARTITION`."""
 
-    meta = {"k_log": 27, "program_sha512": PROGRAM_SHA512,
+    meta = {"k_log": 27, "program_sha512": UNIT_SHA512,
             "partition": {"rule": rule, "digest": _sha512(rule.encode() + b"\0", PARTITION)}}
     head = b"flock-circuit unit/made-up\nMETA " + json.dumps(meta).encode() + b"\n"
     return head + b"x" * (size - len(head))
 
 
-def kept_proof(tmp: Path, *, stage: dict | None = None) -> Path:
-    """A kept proof's tree: a staged statement's files and one session's two proof files."""
+def kept_proof(tmp: Path, *, stage: dict | None = None, rule: str = L.PARTITION_COVER) -> Path:
+    """A kept proof's tree: a staged statement's files, its circuit under `rule`, and one session's two proof files."""
 
     tree = tmp / "proof"
     (tree / "stage").mkdir(parents=True)
     (tree / "session").mkdir()
-    for name, data in (("circuit.txt", circuit_text()), ("pub-256.bin", b"x" * 64), ("program.json", PROGRAM_FILE)):
+    for name, data in (("circuit.txt", circuit_text(rule)), ("pub-256.bin", b"x" * 64), ("program-word.json", PROGRAM_FILE)):
         (tree / "stage" / name).write_bytes(data)
     if stage is not None:
         (tree / "stage" / "stage.json").write_text(json.dumps(stage))
@@ -1585,21 +1594,24 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     doc = json.loads((out / L.RECORD).read_text())
     put, *verifies = verifier.calls
     archive = put[2]
-    assert put[:2] == [VERIFIER, "archive-put"] and [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"]
+    assert put[:2] == [VERIFIER, "archive-put"] and [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program-word.json"]
     assert not Path(archive).exists()                                # the verifier's archive is scratch, outside the record
     assert verifies == 3 * [[VERIFIER, "verify", "--statement", "verity/flock-circuit", "--archive", archive,
-                             "--circuit", "key-circuit.txt", "--public", "key-pub-256.bin", "--program", "key-program.json",
+                             "--circuit", "key-circuit.txt", "--public", "key-pub-256.bin", "--program", "key-program-word.json",
                              "--zk", "--session", str(tree / "session")]]
     assert doc["schema"] == L.SCHEMA and doc["accepted"] is True and doc["host"] == LEAN_HOST
     assert doc["block"] == {"word": RMSNORM, "definition": "Staged_v2{N=1}", "k_log": 27, "blocks": 256, "full": 256}
     assert doc["proof"] == {"files": [{"name": "circuit.rep0.bin", "bytes": 300}, {"name": "circuit.rep1.bin", "bytes": 200}],
                             "bytes": 500, "record_bytes": 2}
     assert doc["statement"]["files"] == [{"name": "circuit.txt", "bytes": 4000}, {"name": "pub-256.bin", "bytes": 64},
-                                         {"name": "program.json", "bytes": len(PROGRAM_FILE)}]
+                                         {"name": "program-word.json", "bytes": len(PROGRAM_FILE)}]
     assert (doc["statement"]["zk"], doc["statement"]["circuit_sha512"]) == (True, "key-circuit.txt")
+    # what the circuit states, and the program handed: its digest is not the circuit's, and nothing holds it to the circuit
     assert doc["statement"]["bound"] == {
-        "program_sha512": PROGRAM_SHA512, "held": ["program"], "withheld": [],
-        "partition": {"rule": L.PARTITION_V1, "digest": _sha512(L.PARTITION_V1.encode() + b"\0", PARTITION)}}
+        "program_sha512": UNIT_SHA512, "held": [], "withheld": [],
+        "partition": {"rule": L.PARTITION_COVER, "digest": _sha512(L.PARTITION_COVER.encode() + b"\0", PARTITION)}}
+    assert doc["statement"]["program"] == {"sha512": PROGRAM_SHA512, "fn": RMSNORM} and PROGRAM_SHA512 != UNIT_SHA512
+    assert doc["label"] == "accepted on the provisional unit cover, units as stated, the Program not held to the circuit"
     v = doc["verifier"]
     assert (v["archive_put_s"], v["repeat"], [r["wall_s"] for r in v["runs"]]) == (0.25, 3, [12.5, 10.0, 11.0])
     assert v["command"][:2] == ["lean-verifier", "verify"]                 # the executable by its file's name, not its path
@@ -1611,7 +1623,7 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     # the record is the one `prove` reads
     read = R.lean_verify(doc, "r20261110-000000-0001")
     assert read == P.LeanVerify(P.definition_id(RMSNORM), 27, 256, 256, (12.5, 10.0, 11.0), 500, "r20261110-000000-0001",
-                                "cpu-node-0 (64 cores, A CPU 9000)")
+                                "cpu-node-0 (64 cores, A CPU 9000)", L.COVER_LABEL)
     assert read.statement_seconds == 11.0 and read.bits == 2**35
 
 
@@ -1642,7 +1654,7 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
         L.add_arguments(parser)
         return L.measure(parser.parse_args(["--lean", VERIFIER, "--proof", str(tree), "--repeat", "1", *argv]), tmp_path / "out")
 
-    tree = kept_proof(tmp_path)
+    tree = kept_proof(tmp_path, rule=L.PARTITION_V1)
     verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 3)
     with pytest.raises(ValueError, match="no block type: the proof holds no stage.json"):
         measured()
@@ -1653,7 +1665,8 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
     doc = measured("--definition", "Staged_v2{N=1}", "--k-log", "30", "--blocks", "16", "--plain", "--verify-arg=--coins",
                    "--verify-arg=tree")
     assert doc["block"] == {"word": None, "definition": "Staged_v2{N=1}", "k_log": 30, "blocks": 16, "full": 32}
-    assert verifier.calls[-1][-6:] == ["--program", "key-program.json", "--coins", "tree", "--session", str(tree / "session")]
+    assert verifier.calls[-1][-6:] == ["--program", "key-program-word.json", "--coins", "tree", "--session", str(tree / "session")]
+    assert doc["label"] == f"accepted as a plain session, the circuit's partition under {L.PARTITION_V1}"
     assert R.lean_verify(doc, "r1").definition == "Staged_v2{N=1}"
 
     # a name two files carry is refused, and its flag says which; partition.json and registered.json go where present
@@ -1664,7 +1677,12 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
         measured("--definition", "D", "--k-log", "30", "--blocks", "16")
     doc = measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
     assert "--partition" in verifier.calls[-1] and [f["name"] for f in doc["statement"]["files"]] == [
-        "circuit.txt", "pub-256.bin", "partition.json", "program.json"]
+        "circuit.txt", "pub-256.bin", "partition.json", "program-word.json"]
+    assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
+    (tree / "other" / "program.json").write_text("{}")
+    with pytest.raises(ValueError, match=r"2 paths under .* are named `program\*.json` .*: say which with --program"):
+        measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
+    (tree / "other" / "program.json").unlink()
 
     (tree / "session" / "circuit.rep0.bin").unlink()
     (tree / "session" / "circuit.rep1.bin").unlink()
@@ -1676,11 +1694,13 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
         measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
 
 
-def test_the_lean_verifiers_runner_holds_the_program_and_the_partition_to_the_circuit_before_any_verifier(tmp_path, monkeypatch):
-    """The circuit's second line binds a program and a partition. A program or partition file that isn't the bound
-    object, or that the circuit binds nothing for, ends the command before any verifier process starts; the bound
-    ones pass however their files spell them. Under the provisional cover the verifier takes no partition object, so
-    the bound cover is checked and not handed to it. The circuit is held to `stage.json`'s `circuit_sha512`."""
+def test_the_lean_verifiers_runner_holds_the_partition_and_the_circuit_and_labels_what_an_accept_holds(tmp_path, monkeypatch):
+    """The circuit's second line binds a partition, and states a `program_sha512` that is no program file's digest.
+    A partition file that isn't the bound object, or that the circuit binds nothing for, ends the command before any
+    verifier process starts; under the provisional cover the verifier takes no partition object, so the bound cover is
+    checked and not handed to it. The program is held to nothing the circuit states: the record says which was handed,
+    and only one that names another Definition than `stage.json`'s `word` is refused. An accept on the provisional
+    cover is labelled as holding no Program to the circuit. The circuit is held to `stage.json`'s `circuit_sha512`."""
 
     def measured(*argv: str) -> dict:
         parser = argparse.ArgumentParser()
@@ -1694,23 +1714,33 @@ def test_the_lean_verifiers_runner_holds_the_program_and_the_partition_to_the_ci
             measured()
         assert len(verifier.calls) == calls                                  # no verifier process, archive-put included
 
-    tree = kept_proof(tmp_path)
-    program, partition, circuit = (tree / "stage" / n for n in ("program.json", "partition.json", "circuit.txt"))
-    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 5)
+    tree = kept_proof(tmp_path, rule=L.PARTITION_V1)
+    program, partition, circuit, stage = (tree / "stage" / n for n in ("program-word.json", "partition.json", "circuit.txt", "stage.json"))
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 7)
 
-    # a program made again that isn't the bound one, and one that is no JSON
-    program.write_text(json.dumps(PROGRAM | {"schema": "another"}))
-    refused(rf"program\.json is not the program the circuit binds: its digest .* is {_sha512(b'', {'schema': 'another', 'definitions': PROGRAM['definitions']})}, "
-            rf"and .*circuit\.txt binds program_sha512 {PROGRAM_SHA512}: no verifier was started")
+    # the program: any descriptor is handed on, since the circuit's `program_sha512` is no digest of it; the record
+    # says which, by the digest the verifier computes (annotations in none) and the Definition it names
+    other = {"schema": "another", "definitions": PROGRAM["definitions"]}
+    program.write_text(json.dumps(other | {"annotations": {"theta": [9, 9]}}, separators=(",", ":")))
+    doc = measured()
+    assert doc["statement"]["program"] == {"sha512": _sha512(b"", other), "fn": None} and doc["statement"]["bound"]["held"] == []
+    assert verifier.calls[-1][verifier.calls[-1].index("--program") + 1] == "key-program-word.json"
     program.write_text("not a descriptor")
-    refused(r"program\.json \(--program\) is not JSON .*: no verifier was started")
-    program.write_text(json.dumps(PROGRAM | {"annotations": {"theta": [9, 9]}}, separators=(",", ":")))   # annotations are in no digest
-    assert measured()["statement"]["bound"]["held"] == ["program"]
+    refused(r"program-word\.json \(--program\) is not JSON .*: no verifier was started")
+    # the stage's word is the Definition the program names, or the command ends: the verifier would accept either
+    stage.write_text(json.dumps({"word": "Another_v1{N=2}"}))
+    program.write_bytes(PROGRAM_FILE)
+    refused(r"program-word\.json is the program of another Definition than the statement's: its `program_fn` is RMSNorm.*, and "
+            r".*stage\.json names the `word` Another_v1\{N=2\}: no verifier was started")
+    stage.write_text(json.dumps({"word": RMSNORM}))
+    assert measured()["statement"]["program"] == {"sha512": PROGRAM_SHA512, "fn": RMSNORM}
+    stage.unlink()
 
     # the bound partition object goes to the verifier; another is refused
     partition.write_text(json.dumps(PARTITION, indent=2))
     doc = measured()
-    assert doc["statement"]["bound"]["held"] == ["program", "partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert doc["statement"]["bound"]["held"] == ["partition"] and doc["statement"]["bound"]["withheld"] == []
+    assert doc["label"] == f"accepted at --zk, the circuit's partition under {L.PARTITION_V1}"
     assert verifier.calls[-1][verifier.calls[-1].index("--partition") + 1] == "key-partition.json"
     partition.write_text(json.dumps(PARTITION | {"program": "q"}))
     refused(rf"partition\.json is not the partition the circuit binds: its digest under {L.PARTITION_V1} is .*: no verifier was started")
@@ -1721,11 +1751,14 @@ def test_the_lean_verifiers_runner_holds_the_program_and_the_partition_to_the_ci
     partition.write_text(json.dumps(PARTITION))
     doc = measured()
     put, verify = verifier.calls[-2:]
-    assert [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"] and "--partition" not in verify
-    assert [x["name"] for x in doc["statement"]["files"]] == ["circuit.txt", "pub-256.bin", "program.json"]
+    assert [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program-word.json"] and "--partition" not in verify
+    assert [x["name"] for x in doc["statement"]["files"]] == ["circuit.txt", "pub-256.bin", "program-word.json"]
     assert doc["statement"]["bound"] == {
-        "program_sha512": PROGRAM_SHA512, "held": ["program", "partition"], "withheld": ["partition"],
+        "program_sha512": UNIT_SHA512, "held": ["partition"], "withheld": ["partition"],
         "partition": {"rule": L.PARTITION_COVER, "digest": _sha512(L.PARTITION_COVER.encode() + b"\0", PARTITION)}}
+    # the label of an accept there, word for word; a plain session's accept is not that one
+    assert doc["label"] == L.COVER_LABEL == "accepted on the provisional unit cover, units as stated, the Program not held to the circuit"
+    assert measured("--plain")["label"] == f"accepted as a plain session, the circuit's partition under {L.PARTITION_COVER}"
 
     # the circuit is the one stage.json names
     (tree / "stage" / "stage.json").write_text(json.dumps({"circuit_sha512": "key-circuit.txt"}))
@@ -1739,11 +1772,11 @@ def test_the_lean_verifiers_runner_holds_the_program_and_the_partition_to_the_ci
     # a circuit that binds nothing holds no file to it
     (tree / "stage" / "stage.json").unlink()
     circuit.write_bytes(b"x" * 4000)
-    refused(r"circuit\.txt binds no program \(its second line states no `program_sha512`\), so nothing holds .*program\.json to it")
-    program.unlink()
     refused(r"circuit\.txt binds no partition under a rule this command hashes \(its rule is None; ")
     partition.unlink()
-    assert measured()["statement"]["bound"] == {"program_sha512": None, "partition": None, "held": [], "withheld": []}
+    doc = measured()
+    assert doc["statement"]["bound"] == {"program_sha512": None, "partition": None, "held": [], "withheld": []}
+    assert doc["label"] == "accepted at --zk, the circuit's partition under no rule"
     circuit.write_bytes(b"flock-circuit unit/made-up\nMETA {not json\n")
     refused(r"circuit\.txt: its second line is not `META` and a JSON object")
     assert verifier.verdicts == []
@@ -1812,7 +1845,8 @@ def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_tab
     lean_ran(s, tmp_path, "r20261110-000000-0001", json.loads((out_dir / L.RECORD).read_text()))
     code, out = run("--system", "flock", "--workload", "glm53")
     assert code == 0 and ", modeled, not measured. Measured: one block type, `RMSNormFusedCudaVector8_v1{" in out
-    assert "which the Lean verifier's `verify` accepted in 9 s (one run;" in out and "per token: not measured" not in out
+    assert (": accepted on the provisional unit cover, units as stated, the Program not held to the circuit, by the Lean "
+            "verifier's `verify` in 9 s (one run;") in out and "per token: not measured" not in out
     code, out = run("--system", "flock", "--workload", "glm53", "--json")
     t = json.loads(out)["totals"]
     assert (t["lean_verifier_seconds_per_token"]["status"], t["proof_bytes_per_token"]["status"]) == ("modeled", "modeled")

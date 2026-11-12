@@ -12,7 +12,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
 | `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
-| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds and its proof's bytes (`prove.LeanVerify`, `lean_verify`) |
+| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
@@ -80,7 +80,7 @@ HOST_CORES_ARE = ", node A's share: the cores its provider gives a card"
 #: the Lean verifier's record in a run's files, as `verity bench prove lean-verify` writes it under the run's `$OUT`
 LEAN_RECORD = "out/" + L.RECORD
 #: what a `lean-verify` record holds for the command to read it
-LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "verifier.runs", "accepted", "host.node",
+LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "verifier.runs", "accepted", "label", "host.node",
                "host.cores", "host.cpu_model")
 #: each fleet's assumed serving MFU
 FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
@@ -399,7 +399,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
 
 def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
     """A `lean-verify` record as the statement it measured, or why it measures nothing: another schema, a field it
-    lacks, a run the Lean verifier refused (the refusal is the record's result, and prices nothing), or figures that
+    lacks (its `label` among them: an accept the record doesn't qualify is printed by no line), a run the Lean verifier refused (the refusal is the record's result, and prices nothing), or figures that
     aren't a statement's."""
 
     if not isinstance(doc, Mapping) or doc.get("schema") != L.SCHEMA:
@@ -413,6 +413,8 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
         return f"the Lean verifier refused its statement: {refused[0].get('why')}"
     if doc["accepted"] is not True:
         return f"the Lean verifier ran {len(runs)} of the {doc['verifier'].get('repeat')} runs it set out to"
+    if not (isinstance(doc["label"], str) and doc["label"].startswith("accepted")):
+        return f"its `label` ({doc['label']!r}) doesn't say what its accept holds"
     word, definition = block.get("word"), block.get("definition")
     if not isinstance(word, str) and not isinstance(definition, str):
         return "its record names no block type (`block.word`, `block.definition`)"
@@ -425,7 +427,7 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
     host = doc["host"]
     return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
                         block["full"], tuple(seconds), doc["proof"]["bytes"], run,
-                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})")
+                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"])
 
 
 def lean_run(store: Any, run: str) -> P.LeanVerify | str:
@@ -625,7 +627,8 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     """The Lean verifier's seconds and the proof's bytes a served token, a line each: `not measured` with no statement
     measured, else the figure with its status, what was measured (the block type with its share of the proving time,
     its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and what was scaled (the
-    block types, their share of the figure, and the basis)."""
+    block types, their share of the figure, and the basis). The seconds' line says what the accept holds in the
+    record's own words (its `label`)."""
 
     t = doc["totals"]
     seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
@@ -654,8 +657,8 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
         return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{scaled}{bare}"
 
     return [line("Lean verifier seconds", seconds,
-                 f"{block}, which the Lean verifier's `verify` accepted in {_n(m['statement_seconds'])} s ({runs}; a run is one "
-                 f"process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
+                 f"{block}: {m['label']}, by the Lean verifier's `verify` in {_n(m['statement_seconds'])} s ({runs}; a run is "
+                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
             line("proof bytes", size,
                  f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes")]
 

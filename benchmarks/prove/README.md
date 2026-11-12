@@ -152,22 +152,31 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE [--repeat 3] [--out 
 
 VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/flock/verifier`. TREE
 holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and the
-statement it was proved on (`circuit.txt`, the public file, and `program.json`, `partition.json` and `registered.json`
-where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,
+statement it was proved on (`circuit.txt`, the public file, and the verifier's program (`program*.json`),
+`partition.json` and `registered.json` where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,
 as `benchmarks/one_stage/a0.py` runs the verifier, so its seconds hold the verifier reading the statement, setting it
 up and verifying the session. The command runs it `--repeat` times and records each run's seconds, the proof files'
-bytes, the block type and the host (node, cores, CPU model). A run the verifier refuses ends the command: the record
+bytes, the block type, the host (node, cores, CPU model) and the label of an accept. A run the verifier refuses ends the command: the record
 says refused, with the verifier's reason, and nothing is run again.
 
-The program and the partition are held to the circuit before the verifier starts. The circuit's second line binds a
-program (`program_sha512`) and a partition (a rule and a digest). The command hashes the program file as the verifier
-does, over the descriptor's canonical JSON without `annotations`, and the partition file under the bound rule, and ends
-with the two digests when a file isn't the bound object or the circuit binds nothing for it, so a file made again that
-is another object is never the reason the verifier refuses. At `--zk` the verifier itself holds the program to the
-circuit only through a `verity/partition/v1` object, so under the provisional rule (`flock-circuit/unit-cover/v0`) this
-check is the one that does. Under that rule the verifier takes no partition object and refuses a session given one: a
-partition file that is the bound cover is checked and not handed to it, and the record says so (`statement.bound`). The
-circuit is held to `stage.json`'s `circuit_sha512` where it states one.
+The partition and the circuit are held before the verifier starts, and the program is not held to the circuit. The
+circuit's second line binds a partition (a rule and a digest). The command hashes a partition file under the bound rule
+and ends with the two digests when the file isn't the bound object or the circuit binds nothing for it. Under the
+provisional rule (`flock-circuit/unit-cover/v0`) the verifier takes no partition object and refuses a session given
+one: a partition file that is the bound cover is checked and not handed to it, and the record says so
+(`statement.bound`). The circuit is held to `stage.json`'s `circuit_sha512` where it states one. The second line's
+`program_sha512` is no digest of a program file on a unit statement: the stager writes there the SHA-512 of the unit's
+name with a SHA-256 over the staged Definition's id and the row layout, which a program descriptor doesn't hold. So the
+command compares no program with it. It records which program was handed (`statement.program`: its digest as the
+verifier computes it and the Definition it names) and ends only when that Definition isn't `stage.json`'s `word`, a
+comparison of two names.
+
+**What an accept holds is the record's `label`,** and the table prints it word for word with the seconds. At `--zk`
+on a circuit under the provisional rule the verifier takes the units as the circuit states them and compares no
+Program with the circuit, so it accepts the same session with another computation's Program. An accept there is
+labelled "accepted on the provisional unit cover, units as stated, the Program not held to the circuit": it is about
+the circuit file, and doesn't say the verifier knows what the statement computes. Any other accept is labelled by its
+partition rule alone.
 
 As a research run, from a clone on a CPU node. `lean_verify.sh` fetches the proof's art (kind `flock-proof/v1`: the
 session directory and what of its statement the art holds) and, with `--with ART PATH`, each file the statement keeps
