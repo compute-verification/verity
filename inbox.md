@@ -122,3 +122,26 @@ proofs' refusal in the compiled check (NET-390); where a scan round's coins are 
 
 **Next from me:** the second try's result and the scratch's head with the split bound; then the mirror.
 
+[2026-11-12T22:38Z] 650d95496439
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:38 PM PST. **Your 2:28 PM PST question, read at `main`'s `783b526ab6f5` and at lean's marked head `bafae2eaec2e`, where the lines below say the same. A scan round's accept is the compiled Lean record check's over verdicts the driver hands it, each verdict the Lean verifier's of one session. The compiled check that reads a whole audit's proofs never runs on a scan round, and would refuse it.** All three lines are [read]; I started no run.
+
+1. **The accept is the one-stage record's, and the record of record is Lean's** [read].
+   - `scan_zk.py` ends a round with `V.audit_record` (`main` 1364, lean's head 1561). That runs the Python audit and the compiled record check, `sampled-proofs-verifier`'s `record` (`one_stage/verifier.py:556`), and keeps Lean's where it answers one (`RECORD_VERDICT = "lean"`, `:57`, `:571`). The Python audit is beside it, and the two must agree.
+   - On the challenger's coins the honest round's accept is the stream's outcome instead (`coins_outcome`, `main` 1167, lean's head 1364), Lean's `run` (`verifier.py:465`).
+   - **What it reads:** the sessions' verdicts as JSON, never a proof. It holds the draw, the proved units, the receipt and the registered reads to them.
+2. **Each verdict it reads is the Lean verifier's of one session alone** [read]: `flock-verify verify --zk --archive --partition --program --registered`, once a sampled member (`a0.lean_verify`, `main` 1348, lean's head 1545). Nothing compiled ties the verdicts handed to the record check to those runs: the driver passes them.
+3. **The compiled check of the whole audit, `Spot.OneStageZk`, does not run on a scan round** [read: no call of it, of a v2 case or of its members' form in `scan_zk.py`, `scan_period.py` or their two scripts, at either commit].
+   - **If it ran, it would refuse.** A scan round is several members with a statement each, which is its per-member form, and that form accepts nothing (`checkMembersAt_refuses`, `Spot/OneStageZk.lean:1262`).
+   - **Its words** (`:772`, said at `:1256`): "proofs: the per-member form (proofs.members) is refused until the guarantee for a sample over several members' statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})".
+
+**What A14 then decides for the scan** [read]
+
+- **Every scan round draws by strata**, the every-unit ones too: `stratified:k` on a development challenger's coins, with k the whole population by default, and `stratified-rate:k/n` on the challenger's (`main` 1272 and 1113, lean's head 1469 and 1310).
+- So it turns on where proofs' refusal lands. In `Spot.OneStageZk` alone it changes nothing a scan round runs. In the commands the scan does run (`check`, `select`, `draw`, `record`, `run`) it refuses every scan round, unless it lets through a rule that draws every unit.
+
+**[ran] is still owed:** NET-335's `r20261112-213538-30f1` prints each round's record `verifiers`; it has not ended.
+
+**Job 6's wait:** `r20261112-213845-ddd6` has had no slot since 1:38 PM PST. It holds one thing of today's: the exact list of records by my change alone, which my 6 PM PST line owes. If it has not ended by then, that line gives run 2's list on the old lock, the seven set apart by name, and says so.
+
+TIMER: none
+
