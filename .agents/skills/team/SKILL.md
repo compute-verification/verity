@@ -81,9 +81,10 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,
   several are bisected, and in the same tick the candidate and those above it are built again without them; a PR held,
   ejected or unmarked leaves the same way, taking no other PR out. A failure above the lowest candidate waits for its
-  base's check unless only its own PRs meet it. A failure of the machines is retried and rung to @infra; a red off the
-  gate (circuit-check, ratchet-gate) holds nothing. Only the loop moves `main`: GitHub's rulesets let only its App push
-  it. Citations and tables read only `main`'s commits.
+  base's check unless only its own PRs meet it. A failure of the machines (a timeout, a kill, a full disk) is no red and
+  blames no PR: it is retried on other machines and rung to @infra, and only one that persists from runs that started the
+  candidate's steps splits it, ejecting nobody; a red off the gate (circuit-check, ratchet-gate) holds nothing. Only the
+  loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
