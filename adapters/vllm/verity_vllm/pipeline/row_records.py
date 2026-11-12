@@ -16,28 +16,9 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
+from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.target_family import declared_profile
-
-
-def read_json(path: str) -> Any:
-    """The JSON document at ``path``."""
-    with open(path) as f:
-        return json.load(f)
-
-
-def write_json(doc: Any, path: str) -> None:
-    """``doc`` as the JSON document at ``path``, the way a stage's summary is written."""
-    with open(path, "w") as f:
-        json.dump(doc, f, indent=1, default=str)
-
-
-def load_json(path: str) -> Any:
-    """The JSON document at ``path``, None when it is absent or unreadable."""
-    try:
-        return read_json(path)
-    except (OSError, ValueError):
-        return None
 
 
 def tail(path: str, n: int = 300) -> str:
@@ -58,13 +39,15 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     stochastic row's request Program carries the split count of the request its shape identifies, so its default shape
     is the first declared request's (prompt_len, max_tokens - 1), and it snapshots every engine step (the sampler value
     check is complete only over every sampled row); greedy rows keep the envelope and snapshot the two X-09 steps."""
-    w = read_json(wl); s = w["sweep"]
+    w = read_json(wl)
+    s = w["sweep"]
     lp, t = max(s["input_lengths"]), max(s["output_caps"]) - 1
     sp = s.get("sampling_params") or {}
     snap = "0,1"
     if float(sp.get("temperature", 0) or 0) > 0 and w.get("requests"):
         r0 = w["requests"][0]
-        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])); t = int(r0["max_tokens"]) - 1
+        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or []))
+        t = int(r0["max_tokens"]) - 1
         snap = "all"
     ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
@@ -83,7 +66,8 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
 def request_shapes(wl: str) -> set[tuple[int, ...]]:
     """Every distinct (prompt length, cap - 1) of the manifest's requests, with the cached prefix C of a request vLLM's prefix cache
     serves from row C (`program.prefix_plan.shape`): the shapes the workload Program composes."""
-    w = read_json(wl); s = w["sweep"]
+    w = read_json(wl)
+    s = w["sweep"]
     cached = PP.cached_of(w) if PP.prefix_caching(w) else [0] * len(s["input_lengths"])
     return {PP.shape(int(p), int(c) - 1, k) for p, c, k in zip(s["input_lengths"], s["output_caps"], cached)}
 
@@ -345,7 +329,8 @@ def fold_steps(d: str, default: int) -> int:
 
 def is_stochastic(wl: str) -> bool:
     """The workload's sampling variant has temperature > 0."""
-    w = read_json(wl); v = str((w.get("sampling") or {}).get("variant", "greedy"))
+    w = read_json(wl)
+    v = str((w.get("sampling") or {}).get("variant", "greedy"))
     p = (w.get("variants") or {}).get(v) or {"temperature": 0.0}
     return float(p.get("temperature", 0.0)) > 0.0
 
@@ -470,7 +455,8 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
 
 def match_line(d: str) -> str:
     """The Match stage's stages.txt detail, from ``match_summary.json``."""
-    s = read_json(f"{d}/match_summary.json"); g = s.get("global_match") or {}
+    s = read_json(f"{d}/match_summary.json")
+    g = s.get("global_match") or {}
     return " ".join(map(str, ("verdict", s["compare_verdict"], "global", g.get("verdict"), g.get("failed_checks") or "", g.get("within_step_criterion") or "",
                               "concurrency", (g.get("achieved_concurrency") or {}).get("observed_max"), "tokens_equal",
                               s["control_vs_instrumented_tokens_equal"], "fold", s["fold_ok"])))
@@ -569,7 +555,8 @@ def program_digest_of_record(d: str, batch: int) -> str:
         return (b.get("request") or {}).get("program_digest") or ""
     wp = f"{d}/build_workload/workload_program.json"
     if os.path.exists(wp):
-        w = read_json(wp); wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
+        w = read_json(wp)
+        wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
     comps = sorted(v["program_digest"] for k, v in b.items() if k.startswith("build_request_LP") and isinstance(v, dict) and v.get("program_digest"))
     return wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode()).hexdigest() if comps else "")
 
@@ -678,7 +665,8 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     ``max_num_seqs`` requests, longer than ``max_model_len``, and FlashAttention's varlen kernel then faults (an illegal memory access
     on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
     vLLM does the same, and passes at 288)."""
-    w = read_json(wl); s = w["sweep"]
+    w = read_json(wl)
+    s = w["sweep"]
     cfg = RowConfig.of(w)
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
@@ -700,16 +688,19 @@ def tp_world(wl: str) -> int:
 def tp_build_summary(b: str, world: int) -> str:
     """PASS | FAIL; writes ``build_summary.json`` beside ``b`` (per rank: step + request Programs, each with its construction, the AOT
     Build's or the trace's, + GP-01)."""
-    out: dict[str, Any] = {"tp": {"world": world}, "ranks": {}}; ok = True
+    out: dict[str, Any] = {"tp": {"world": world}, "ranks": {}}
+    ok = True
     for r in range(world):
-        rd = f"{b}/rank{r}"; rk: dict[str, Any] = {}
+        rd = f"{b}/rank{r}"
+        rk: dict[str, Any] = {}
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
             res: dict[str, Any] = read_json(f"{p}/result.json") if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
                                        "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
                                        "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
-        wp = f"{rd}/build_workload/workload_program.json"; W = read_json(wp) if os.path.exists(wp) else {}
+        wp = f"{rd}/build_workload/workload_program.json"
+        W = read_json(wp) if os.path.exists(wp) else {}
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}
         ok &= bool(W.get("workload_digest"))
         out["ranks"][f"rank{r}"] = rk
