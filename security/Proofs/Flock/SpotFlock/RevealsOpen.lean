@@ -173,10 +173,10 @@ theorem hpos_spot {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List Flo
 /-- **The deployed code's checked proof blocks are its registration's**, on the bytes of the two stages' coins. -/
 theorem code_checked_sub (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
     ∀ u ∈ (code h).checked x r, u ∈ h.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-      (src (r (order h x).first)) (src (r (order h x).second)) := by
+      (src (r (order h x).first)) (stageSrc (stageCoins h x r)) := by
   intro u hu
   change u ∈ ((reg h x).map fun g => g.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-    (src (r (order h x).first)) (src (r (order h x).second))).getD [] at hu
+    (src (r (order h x).first)) (stageSrc (stageCoins h x r))).getD [] at hu
   cases hd : decode x with
   | none => simp [reg, hd] at hu
   | some _ => simpa [reg, hd] using hu
@@ -186,7 +186,7 @@ the always-checked blocks' needs plus each drawn block's. -/
 theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
     {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
-      (src (r (order h x).second)) = .ok (draw, n)) :
+      (stageSrc (stageCoins h x r)) = .ok (draw, n)) :
     (((code h).checked x r).toFinset.biUnion needs).card ≤
       ∑ v ∈ (Finset.range (SamplingDeploy.units ((base h).atOrder (order h)) x)).filter
           (fun v => h.reg.always v = true), (needs v).card +
@@ -201,7 +201,7 @@ block needs. -/
 theorem code_card_biUnion_le_mul (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
     {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
-      (src (r (order h x).second)) = .ok (draw, n))
+      (stageSrc (stageCoins h x r)) = .ok (draw, n))
     (hal : ∀ v, h.reg.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
     (((code h).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M :=
   (Finset.card_le_card (Finset.biUnion_subset_biUnion_of_subset_left needs fun u hu =>

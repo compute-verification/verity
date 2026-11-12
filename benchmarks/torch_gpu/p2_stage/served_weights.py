@@ -61,15 +61,15 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import registered as REG
-from verity.commitments import hm96
-from verity.commitments.hm96 import batch as hm96_batch
-from verity.commitments.identity import identity_digest_sha512
-from verity.commitments.merkle import merkle_depth
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
-from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.commitments import hm96
 from verity.commitments.crypto import chacha20
+from verity.commitments.hm96 import batch as hm96_batch
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.protocols.spot.verifier.one_stage import registered as REG
 
 FORMAT = "verity/seeded-weights/v1"
 MANIFEST = "verity/seeded-weights/manifest/v1"
@@ -359,7 +359,7 @@ def salts(salt_key: bytes, index: int, first: int, n: int) -> bytes:
     return chacha20.keystream(_salt_key(salt_key), index, _SALT_BLOCKS * first, _SALT_BLOCKS * n)
 
 
-def domain(t: Tensor, r: Reader):
+def domain(t: Tensor, r: Reader) -> CommitmentDomain:
     """`t`'s domain under reader `r`, held across windows (no window root)."""
     b = r.word_bits(t.name)
     return REG.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
