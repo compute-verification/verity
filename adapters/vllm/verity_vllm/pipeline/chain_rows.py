@@ -15,12 +15,14 @@ head's places (`plan`) in order:
 
 A key block is served as its scores unit and its values units instead where the partition names those templates (the cut at
 ``cols`` = G, a width of `serving_templates.values_widths`): ``SparseMlaHeadScoresCols_v1{NVIS,FIRST,G}``, the block's running
-max, lanes and bf16 probabilities, and per column block c = 0 .. DV / G - 1 a ``SparseMlaHeadValues_v1{NVIS,FIRST,G}``, the
-block's O on columns [cG, (c + 1)G).  Such a chain ends on each column block: at NS = 1 in ``SparseMlaHeadEnd_v1{DV=G}``, at
+max, lanes and bf16 probabilities, and per column block c = 0 .. DV / G - 1 a ``SparseMlaHeadValues_v1{NVIS,FIRST,G,C=c}``,
+the block's O on columns [cG, (c + 1)G).  Such a chain ends on each column block: at NS = 1 in ``SparseMlaHeadEnd_v1{DV=G}``, at
 NS > 1 each split in ``SparseMlaSplitEnd_v1{DV=G}`` and the splits in ``SparseMlaCombine_v1{NSPLIT,DV=G}``.  A head's places
 are those of its whole key blocks (`plan`), then each width's (`places`).  Their key rows are a row's, not a head's: per key
-block and column block c = 0 .. (DV + DR) / G - 1 of its key rows one ``SparseMlaHeadKeysWire_v1{NVIS,W=G}`` (`key_places`),
-whose output row every head's scores unit (its ``kv<c>``) and values unit of column block c (its ``kv``) read.
+block and column block c = 0 .. (DV + DR) / G - 1 of its key rows one ``SparseMlaHeadKeysWire_v1{NVIS,W=G,C=c}``
+(`key_places`), whose output row every head's scores unit (its ``kv<c>``) and values unit of column block c (its ``kv``) read.
+A values unit's and a writer's template name its column block: a scores unit's key ports are each another column block's
+writers' tree, since no two ports of a statement may be one tree, and a values member reads one writer member's.
 
 A template's units go row by row, then head, then its places in that order (`positions`); a key rows' writer's row by row,
 then its places.
@@ -236,19 +238,29 @@ def _key(tp: Template, DV: int) -> tuple:
     return hit
 
 
+def _col(tp: Template) -> int | None:
+    """The column block a values unit's or a key rows' writer's template names (its ``C``); None for any other."""
+    from verity_vllm.query.program_view import spec_statics
+
+    return int(spec_statics(tp.word)["C"]) if kind(tp) in ("values", "keys") else None
+
+
 @cache
-def _positions(key: tuple, T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[int, ...]:
-    return tuple(j for j, p in enumerate((_key_places if key[0] == "keys" else _places)(T, NS, BN, DV, DR)) if p.key == key)
+def _positions(key: tuple, col: int | None, T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[int, ...]:
+    return tuple(j for j, p in enumerate((_key_places if key[0] == "keys" else _places)(T, NS, BN, DV, DR))
+                 if p.key == key and col in (None, p.col))
 
 
 def positions(tp: Template, statics: dict[str, Any]) -> list[int]:
     """The places j in each head's chain (`places`) of a row of ``statics`` that template ``tp`` holds, or a key rows'
-    writer's in the row's (`key_places`); refused when it holds none (a first block template whose NVIS is not a split's
-    first visited block's key count, a combine of other splits, a unit of a width that is none of the row's)."""
-    key = _key(tp, int(statics["DV"]))
-    out = list(_positions(key, *_statics(statics)))
+    writer's in the row's (`key_places`), a values unit's or a writer's those of its column block; refused when it holds none
+    (a first block template whose NVIS is not a split's first visited block's key count, a combine of other splits, a unit of a
+    width that is none of the row's, a column block past the row's)."""
+    key, col = _key(tp, int(statics["DV"])), _col(tp)
+    out = list(_positions(key, col, *_statics(statics)))
     if not out:
-        raise ValueError(f"{tp.id}: a row of T={statics['T']} keys in NS={statics.get('NS', 1)} splits holds no unit {key} of it")
+        raise ValueError(f"{tp.id}: a row of T={statics['T']} keys in NS={statics.get('NS', 1)} splits holds no unit {key}"
+                         f"{'' if col is None else f' of column block {col}'} of it")
     return out
 
 

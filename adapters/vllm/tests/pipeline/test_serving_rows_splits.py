@@ -111,18 +111,18 @@ def scores(nvis: int | None = None, S: dict = TOY, boolean: bool = False, G: int
                          else bind(M.SparseMlaHeadScoresCols, **at, **st, G=G or S["DV"] // 2, DOT=FA3["DOT"]))
 
 
-def keys(nvis: int | None = None, S: dict = TOY, boolean: bool = False, G: int | None = None) -> str:
-    """The writer of a column block of ``G`` columns (half the row's DV by default) of a key block's key rows at ``nvis`` keys,
-    or with None at BN."""
-    at = {"NVIS": nvis or S["BN"], "W": G or S["DV"] // 2}
+def keys(nvis: int | None = None, S: dict = TOY, boolean: bool = False, G: int | None = None, C: int = 0) -> str:
+    """The writer of column block ``C`` of ``G`` columns (half the row's DV by default) of a key block's key rows at ``nvis``
+    keys, or with None at BN."""
+    at = {"NVIS": nvis or S["BN"], "W": G or S["DV"] // 2, "C": C}
     return descriptor_id(bind(BM.SparseMlaHeadKeysWireV2, **at) if boolean else bind(M.SparseMlaHeadKeysWire, **at))
 
 
-def values(nvis: int | None = None, S: dict = TOY, boolean: bool = False, G: int | None = None) -> str:
-    """The values template of `scores`' block on ``G`` columns (half the row's by default)."""
+def values(nvis: int | None = None, S: dict = TOY, boolean: bool = False, G: int | None = None, C: int = 0) -> str:
+    """The values template of `scores`' block on column block ``C`` of ``G`` columns (half the row's by default)."""
     at = {"NVIS": S["BN"], "FIRST": False} if nvis is None else {"NVIS": nvis, "FIRST": True}
-    return descriptor_id(bind(BM.SparseMlaHeadValuesV2, **at, BN=S["BN"], G=G or S["DV"] // 2, DOT=BOOL["DOT"]) if boolean
-                         else bind(M.SparseMlaHeadValues, **at, BN=S["BN"], G=G or S["DV"] // 2, DOT=FA3["DOT"]))
+    return descriptor_id(bind(BM.SparseMlaHeadValuesV2, **at, BN=S["BN"], G=G or S["DV"] // 2, C=C, DOT=BOOL["DOT"]) if boolean
+                         else bind(M.SparseMlaHeadValues, **at, BN=S["BN"], G=G or S["DV"] // 2, C=C, DOT=FA3["DOT"]))
 
 
 def split_end(S: dict = TOY, G: int | None = None) -> str:
@@ -144,21 +144,33 @@ BLOCKS = {0: (0, 0, (16, 32)), 1: (0, 1, (0, 16)), 3: (1, 0, (32, 40))}
 #: circuit to take a compression before its last block, and a combine of 16 columns has none; and at DR = 32, so its key rows
 #: are three column blocks of 32
 HALF = {**TOY, "DV": 64, "DR": 32}
+def chain_units(S: dict, boolean: bool = False, G: int | None = None, combine: str | None = None) -> list[str]:
+    """A TOY-shaped row's templates with each key block its scores unit and its values units on ``G`` columns (half the row's
+    DV by default): the scores of split 0's 16-key first block, of the full block after it and of split 1's 8-key first block,
+    each one's values on column block 0, a split's end on a column block, the two-split combine of one (``combine``), the
+    writers of column block 0 of the 16-key and 8-key blocks' key rows, then the values on each later column block and the
+    writers of each later column block."""
+    G = G or S["DV"] // 2
+    return [*(scores(n, S, boolean, G) for n in (16, None, 8)), *(values(n, S, boolean, G) for n in (16, None, 8)),
+            split_end(S, G), combine or comb(2, S, G=G), *(keys(n, S, boolean, G) for n in (16, 8)),
+            *(values(n, S, boolean, G, c) for c in range(1, S["DV"] // G) for n in (16, None, 8)),
+            *(keys(n, S, boolean, G, c) for c in range(1, (S["DV"] + S["DR"]) // G) for n in (16, 8))]
+
+
 #: ``HALF``'s row with each key block its scores unit and its values units on 32 columns: the scores of split 0's 16-key first
-#: block, of the full block after it and of split 1's 8-key first block, each one's values, a split's end on a column block,
-#: the two-split combine of one, and the writers of the 16-key and 8-key blocks' key rows, a column block of 32 each
-UNITS = [scores(16, HALF), scores(None, HALF), scores(8, HALF), values(16, HALF), values(None, HALF), values(8, HALF),
-         split_end(HALF), comb(2, HALF, G=32), keys(16, HALF), keys(8, HALF)]
-UNITS_CHUNK = dict(zip(UNITS, (3, 4, 4, 3, 4, 4, 5, 4, 4, 4)))
+#: block, of the full block after it and of split 1's 8-key first block, each one's values on column block 0, a split's end on
+#: a column block, the two-split combine of one, the writers of column block 0 of the 16-key and 8-key blocks' key rows, of 32
+#: columns, then the values on column block 1 and the writers of column blocks 1 and 2
+UNITS = chain_units(HALF)
+UNITS_CHUNK = dict(zip(UNITS, (3, 4, 4, 3, 4, 4, 5, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4)))
 #: ``UNITS`` with each scores, values and key rows' unit its Boolean body
-UNITS_BITS = [scores(16, HALF, True), scores(None, HALF, True), scores(8, HALF, True), values(16, HALF, True),
-              values(None, HALF, True), values(8, HALF, True), *UNITS[6:8], keys(16, HALF, True), keys(8, HALF, True)]
+UNITS_BITS = chain_units(HALF, True)
 UNITS_BITS_CHUNK = dict(zip(UNITS_BITS, UNITS_CHUNK.values()))
 #: ``UNITS``' places in a head's chain (`chain_rows.places`), past the six of its whole key blocks: the scores units, then per
 #: scores unit its values units on column blocks 0 and 1, each split's ends on them, and the combines; a key rows' writer's in
 #: its row (`chain_rows.key_places`): split 0's column blocks 0, 1 and 2, each its blocks in visit order, then split 1's
-UNITS_PLACES = dict(zip(UNITS, ([6], [7], [8], [9, 10], [11, 12], [13, 14], [15, 16, 17, 18], [19, 20], [0, 1, 2, 3, 4, 5],
-                                [6, 7, 8])))
+UNITS_PLACES = dict(zip(UNITS, ([6], [7], [8], [9], [11], [13], [15, 16, 17, 18], [19, 20], [0, 1], [6], [10], [12], [14],
+                                [2, 3], [7], [4, 5], [8])))
 
 
 class Served:
@@ -494,18 +506,22 @@ def test_a_split_row_also_holds_each_key_block_as_its_scores_and_values_units():
     reads EX2 in lookup slots, the rest inline; the Boolean bodies are flat."""
     assert [values_widths(dv, dr) for dv, dr in ((512, 64), (512, 16), (64, 32), (32, 16), (16, 16))] == [
         [64, 32, 16], [16], [32, 16], [16], []]
-    assert SRW.unit_templates(row())[6:] == (
-        (scores(16), 2), (values(16), 4), (keys(16), 6), (scores(8), 2), (values(8), 4), (keys(8), 3), (scores(), 2),
-        (values(), 4), (split_end(), 8), (comb(2, G=16), 4))
-    assert SRW.unit_templates(row(HALF))[6:16] == tuple(zip([UNITS[j] for j in (0, 3, 8, 2, 5, 9, 1, 4, 6, 7)],
-                                                            (2, 4, 6, 2, 4, 3, 2, 4, 8, 4)))
+    def block_of(nvis, n, nk, **at):
+        return ((scores(nvis, **at), n), *((values(nvis, C=c, **at), n) for c in range(2)),
+                *((keys(nvis, C=c, **at), nk) for c in range(3)))
+
+    assert SRW.unit_templates(row())[6:] == (*block_of(16, 2, 2), *block_of(8, 2, 1), *block_of(None, 2, 2)[:3],
+                                             (split_end(), 8), (comb(2, G=16), 4))
+    assert SRW.unit_templates(row(HALF))[6:23] == tuple(zip([UNITS[j] for j in (0, 3, 10, 8, 13, 15, 2, 5, 12, 9, 14, 16, 1, 4,
+                                                                                11, 6, 7)],
+                                                            (2,) * 9 + (1,) * 3 + (2,) * 3 + (8, 4)))
     served = dict(SRW.unit_templates(SERVED)[12:])
-    assert len(served) == 3 * 7 + 2 and comb(5, GLM) not in served
-    assert [served[t] for t in (scores(64, GLM, G=64), scores(16, GLM, G=64), values(64, GLM, G=64), values(16, GLM, G=64),
-                                keys(64, GLM, G=64), keys(16, GLM, G=64), keys(64, GLM, G=16), split_end(GLM, 64),
-                                split_end(GLM, 32), comb(5, GLM, G=32))] == [32, 8, 256, 64, 36, 9, 144, 320, 640, 128]
-    assert dict(SRW.unit_templates(row(NS=1))[4:]) == {scores(8): 2, values(8): 4, keys(8): 3, scores(): 4, values(): 8,
-                                                       keys(16): 6, descriptor_id(bind(M.SparseMlaHeadEnd, DV=16, INV=FA3["INV"])): 4}
+    assert len(served) == sum(2 + 2 * 512 // g + 2 * 576 // g + 1 for g in (64, 32, 16)) + 2 and comb(5, GLM) not in served
+    assert [served[t] for t in (scores(64, GLM, G=64), scores(16, GLM, G=64), values(64, GLM, G=64, C=7),
+                                values(16, GLM, G=64), keys(64, GLM, G=64, C=8), keys(16, GLM, G=64), keys(64, GLM, G=16, C=35),
+                                split_end(GLM, 64), split_end(GLM, 32), comb(5, GLM, G=32))] == [32, 8, 32, 8, 4, 1, 4, 320, 640, 128]
+    assert dict(SRW.unit_templates(row(NS=1))[4:]) == {
+        **dict(block_of(8, 2, 1)), **dict(block_of(None, 4, 2)), descriptor_id(bind(M.SparseMlaHeadEnd, DV=16, INV=FA3["INV"])): 4}
     assert CH.places(HALF)[:6] == CH.plan(HALF) and len(CH.places(HALF)) == 6 + (3 + 6 + 4 + 2) + (3 + 12 + 8 + 4)
     blocks = [[(16, (16, 32)), (16, (0, 16))], [(8, (32, 40))]]
     assert [(p.key, p.split, p.block, p.keys, p.col) for p in CH.key_places(HALF)[:9]] == [
@@ -525,9 +541,10 @@ def test_a_split_row_also_holds_each_key_block_as_its_scores_and_values_units():
                                                          for sp in range(2))) for c in range(2))]
     assert {t: CH.positions(SRW.template(t), HALF) for t in UNITS} == UNITS_PLACES
     assert [(SRW.template(t).layout, SRW.template(t).word, CR.reads(SRW.template(t)), CH.kind(SRW.template(t))) for t in UNITS] == [
-        ("chain", t, r, k) for t, r, k in zip(UNITS, ("slots", "slots", *("inline",) * 8),
-                                              ("scores",) * 3 + ("values",) * 3 + ("split", "combine", "keys", "keys"))]
-    assert [CH.units(SRW.template(t), HALF) for t in (UNITS[0], UNITS[8], UNITS[9])] == [2, 6, 3]
+        ("chain", t, r, k) for t, r, k in zip(UNITS, ("slots", "slots", *("inline",) * 15),
+                                              ("scores",) * 3 + ("values",) * 3 + ("split", "combine", "keys", "keys")
+                                              + ("values",) * 3 + ("keys",) * 4)]
+    assert [CH.units(SRW.template(t), HALF) for t in (UNITS[0], UNITS[8], UNITS[9], UNITS[16])] == [2, 2, 1, 1]
     assert [(SRW.template(t).word, CR.reads(SRW.template(t))) for t in UNITS_BITS] == [(t, "inline") for t in UNITS]
     assert [descriptor_id(BB.boolean_version(SRW.template(t).fn)) for t in UNITS[:6] + UNITS[8:]] == UNITS_BITS[:6] + UNITS_BITS[8:]
     assert CR.unit_rows(SRW.template(UNITS[4])) == (
@@ -535,8 +552,10 @@ def test_a_split_row_also_holds_each_key_block_as_its_scores_and_values_units():
         [(V2, (0,))])
     assert [p for p, *_ in CR.unit_rows(SRW.template(UNITS[1]))[0]] == [f"in{g}" for g in range(7)]
     assert CR.unit_rows(SRW.template(UNITS[8])) == ([("in0", V2, 16 * 16 * 32, ["kv"])], [(V2, (0,))])
-    for t, key in ((values(16, HALF, G=8), "('values', 16, True, 8)"), (scores(4, HALF), "('scores', 4, True, 32)"),
-                   (keys(4, HALF), "('keys', 4, 32)"), (comb(3, HALF, G=32), "('combine', 3, 32)"),
+    for t, key in ((values(16, HALF, G=8), "('values', 16, True, 8) of column block 0"),
+                   (values(16, HALF, C=2), "('values', 16, True, 32) of column block 2"),
+                   (scores(4, HALF), "('scores', 4, True, 32)"), (keys(4, HALF), "('keys', 4, 32) of column block 0"),
+                   (keys(16, HALF, C=3), "('keys', 16, 32) of column block 3"), (comb(3, HALF, G=32), "('combine', 3, 32)"),
                    (split_end(HALF, 8), "('split', 8)")):
         with pytest.raises(ValueError, match=re.escape(f"a row of T=40 keys in NS=2 splits holds no unit {key} of it")):
             CH.positions(SRW.template(t), spec_statics(row(HALF)))
@@ -574,7 +593,7 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
             assert all(len(x) == 1 for x in mine.values())
             assert m.tables == tuple((p, mine[p][0][0].n if p in mine else m.n) for p, _w in m.rows)
     later = [m.key for m in ms if m.template == UNITS[4]]
-    assert later == [f"{UNITS[4]}/c{j}" for j in range(len(later))] and len(later) > 2 * 2 * 2 // UNITS_CHUNK[UNITS[4]]
+    assert later == [f"{UNITS[4]}/c{j}" for j in range(len(later))] and len(later) > 2 * 2 // UNITS_CHUNK[UNITS[4]]
     WI.validate(ms)
     s = Served(row(HALF))
     for left, why in ((UNITS[0], "block 0 (visit order)'s scores are the output of a scores template"),
@@ -626,7 +645,7 @@ def test_the_scores_and_values_units_read_the_twin_s_and_their_combines_are_the_
                 assert [g["outs"][x][i].tolist() for x in ("o0", "o1")] == [words(mm[h]), words(ll[h])]
                 assert g["outs"]["o2"][i].tolist() == np.asarray(pb[h], dtype=np.uint16).tolist()
                 assert (rescale is None) == ("o3" not in g["outs"]) and (rescale is None or g["outs"]["o3"][i].tolist() == words(rescale[h]))
-            elif m.template in UNITS[3:6]:
+            elif CH.kind(SRW.template(m.template)) == "values":
                 assert g["rows"]["in1"][i].tolist() == kv[:, 32 * c:32 * (c + 1)].reshape(-1).tolist()
                 assert g["outs"]["o0"][i].tolist() == words(tw[p][sp][k][2][h, 32 * c:32 * (c + 1)])
     assert np.concatenate([ws[m.port("o0")].reshape(-1) for m in ms if m.template == UNITS[7]]).tolist() == s.y.tolist()
@@ -653,15 +672,14 @@ def test_a_combine_of_64_columns_reads_each_split_s_end_from_the_unit_the_partit
     s = Served(row(WIDE), n=1)
     ends, c2 = [cols(0, WIDE), cols(1, WIDE)], comb(2, WIDE)
     whole = [block(16, WIDE), block(None, WIDE), block(8, WIDE), *ends, c2]
-    tmpls = [scores(16, WIDE), scores(None, WIDE), scores(8, WIDE), values(16, WIDE), values(None, WIDE), values(8, WIDE),
-             split_end(WIDE), c2, keys(16, WIDE), keys(8, WIDE)]
+    tmpls = chain_units(WIDE, combine=c2)
     assert CH.positions(SRW.template(c2), WIDE) == [7, 8] and CH.plan(WIDE)[7].reads[0] == ("lse", 0, "o1", 2)
     assert [CH.places(WIDE)[j].reads for j in (7, 8)] == [
         tuple((x, sp, o, ((2, 5)[sp] + c, 18 + 2 * sp + c)) for x, o in (("lse", "o1"), ("o", "o0")) for sp in range(2))
         for c in range(2)]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 64))
-    places = dict(zip(tmpls, ([9], [10], [11], [12, 13], [14, 15], [16, 17], [18, 19, 20, 21], [7, 8], [0, 1, 2, 3, 4, 5],
-                              [6, 7, 8])))
+    places = dict(zip(tmpls, ([9], [10], [11], [12], [14], [16], [18, 19, 20, 21], [7, 8], [0, 1], [6], [13], [15], [17],
+                              [2, 3], [7], [4, 5], [8])))
     assert {t: CH.positions(SRW.template(t), WIDE) for t in tmpls} == places
     unit = units(ms, tmpls, places)
     (m,) = [m for m in ms if m.template == c2]
@@ -700,10 +718,12 @@ def test_a_row_at_ns_1_in_scores_and_values_units_ends_on_each_column_block():
     unit of its column block's O, and the ends' outputs, column block by column block, are the served row."""
     s = Served(row(HALF, NS=1), n=1)
     e = descriptor_id(bind(M.SparseMlaHeadEnd, DV=32, INV=FA3["INV"]))
-    tmpls = [scores(8, HALF), scores(None, HALF), values(8, HALF), values(None, HALF), e, keys(8, HALF), keys(None, HALF)]
-    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end", "keys", "keys"]
+    tmpls = [scores(8, HALF), scores(None, HALF), values(8, HALF), values(None, HALF), e, keys(8, HALF), keys(None, HALF),
+             values(8, HALF, C=1), values(None, HALF, C=1), *(keys(n, HALF, C=c) for c in (1, 2) for n in (8, None))]
+    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end", "keys", "keys", "values",
+                                                         "values", "keys", "keys", "keys", "keys"]
     assert {t: CH.positions(SRW.template(t), {**HALF, "NS": 1}) for t in tmpls} == dict(zip(tmpls, (
-        [4], [5, 6], [7, 8], [9, 10, 11, 12], [13, 14], [0, 3, 6], [1, 2, 4, 5, 7, 8])))
+        [4], [5, 6], [7], [9, 11], [13, 14], [0], [1, 2], [8], [10, 12], [3], [4, 5], [6], [7, 8])))
     assert [CH.places({**HALF, "NS": 1})[j].reads for j in (13, 14)] == [(("l", None, "o1", 6), ("o", None, "o0", 11 + c)) for c in range(2)]
     ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
     got = read(s, ms, tmpls)
@@ -719,18 +739,23 @@ def test_a_row_at_the_served_statics_reads_and_wires_its_789_units_in_columns_of
     holds too, each read row wired to its writer and every wired row its writer's output, the combines' outputs the served
     row."""
     s = Served(SERVED, n=1, seed=16)
-    tmpls = [scores(64, GLM, G=64), scores(16, GLM, G=64), values(64, GLM, G=64), values(16, GLM, G=64), split_end(GLM, 64),
-             comb(5, GLM), keys(64, GLM, G=64), keys(16, GLM, G=64)]
+    tmpls = served_units()
     ms = members(s, tmpls, dict.fromkeys(tmpls, 512))
-    assert [(m.template, m.n) for m in ms] == list(zip(tmpls, (32, 8, 256, 64, 320, 64, 36, 9)))
-    assert committed(ms, read(s, ms, tmpls))[ms[5].port("o0")].reshape(-1).tolist() == s.y.tolist()
+    assert [(m.template, m.n) for m in ms] == list(zip(tmpls, (32, 8, *(32,) * 8, *(8,) * 8, 320, 64, *(4,) * 9, *(1,) * 9)))
+    (c,) = [m for m in ms if m.template == comb(5, GLM)]
+    assert committed(ms, read(s, ms, tmpls))[c.port("o0")].reshape(-1).tolist() == s.y.tolist()
 
 
-#: what a partition names to serve step 16's rows in scores and values units of 64 columns: each key block's scores unit,
-#: values units and key rows' writers their Boolean bodies, a split's end on a column block and the combine served beside
-#: whole key blocks too
-SERVED_UNITS = [scores(64, GLM, True, 64), scores(16, GLM, True, 64), values(64, GLM, True, 64), values(16, GLM, True, 64),
-                split_end(GLM, 64), comb(5, GLM), keys(64, GLM, True, 64), keys(16, GLM, True, 64)]
+def served_units(boolean: bool = False) -> list[str]:
+    """What a partition names to serve step 16's rows in scores and values units of 64 columns: each key block's scores unit,
+    values units (one template a column block) and key rows' writers (one a column block), their Boolean bodies with
+    ``boolean``, a split's end on a column block and the combine served beside whole key blocks too."""
+    return [scores(64, GLM, boolean, 64), scores(16, GLM, boolean, 64), *(values(n, GLM, boolean, 64, c) for n in (64, 16)
+                                                                          for c in range(8)),
+            split_end(GLM, 64), comb(5, GLM), *(keys(n, GLM, boolean, 64, c) for n in (64, 16) for c in range(9))]
+
+
+SERVED_UNITS = served_units(True)
 
 
 def test_every_served_scores_and_values_unit_composes_and_verify_zk_takes_it():
@@ -747,7 +772,7 @@ def test_every_served_scores_and_values_unit_composes_and_verify_zk_takes_it():
         ret = tp.fn.signature()[1]
         assert all(sum(f.leaf_widths()) % 16 == 0 for f in (field_types(ret) if isinstance(ret, Tuple) else (ret,))), t
         floors.append(IF.check_proof_block(tp.fn))
-    assert floors == [26, 25, 23, 22, 22, 22, 24, 22]
+    assert floors == [26, 25, *(23,) * 8, *(22,) * 8, 22, 22, *(24,) * 9, *(22,) * 9]
 
 
 def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
@@ -762,7 +787,7 @@ def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     assert WI.check(w.members, publics) == {}
     held = [(m, p) for m in w.members if not m.wired_trees for p, _o, _ws in m.wired]
-    assert len({m.template for m, _p in held}) == 6 and all(m.port(p) not in c.roots and w.held(m, p) in c.roots for m, p in held)
+    assert len({m.template for m, _p in held}) == 9 and all(m.port(p) not in c.roots and w.held(m, p) in c.roots for m, p in held)
     j = next(j for j, m in enumerate(w.members) if m.template == UNITS[4])
     m = w.members[j]
     (p, o, ws), *rest = m.wired
@@ -856,8 +881,9 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
 def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
     """A scores or values unit's key rows are its reference into its writer member's table (its public body, which the leaf
     layer binds).  Head 0's values unit of split 0's first block, on column block 0, with its reference to the next row of
-    the table, another key block's, or to the row of the writer of column block 1 of its own key block: the wiring check on
-    the sample refuses it when the sample holds that unit, and not when it holds only the member's other units."""
+    the table, another key block's, or with its port wired to the writer of column block 1 of its own key block, a member
+    of another template: the wiring check on the sample refuses it when the sample holds that unit, and not when it holds
+    only the member's other units."""
     s = Served(row(HALF))
     w = window(s, UNITS, UNITS_CHUNK)
     c = CS.commit(w, CH.held_rows(w, [g for g, _e in read(s, w.members, UNITS)]), salt_key=bytes(32))
@@ -868,7 +894,7 @@ def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_ta
     m = next(m for m in w.members if m.base <= u < m.base + m.n)
     wm = next(x for x in w.members if x.port("o0") == w.held(m, "in1"))
     i, names = u - m.base, [q for q, _ in m.all_rows]
-    assert wm.base + w.held_leaves(m, "in1")[i] == writer[(0, 0, 0)] and wm.base <= writer[(0, 0, 1)] < wm.base + wm.n
+    assert wm.base + w.held_leaves(m, "in1")[i] == writer[(0, 0, 0)] and not wm.base <= writer[(0, 0, 1)] < wm.base + wm.n
 
     def ref(r: int) -> dict[str, bytes]:
         at = WI.BC_BYTES * sum(dict(m.tables).get(q, m.n) for q in names) + 4 * (i * len(names) + names.index("in1"))
@@ -878,10 +904,13 @@ def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_ta
 
     on_sample = WI.check_drawn
     assert on_sample(w.members, ref(writer[(0, 0, 0)] - wm.base), [u]) == {}
-    for r in ((writer[(0, 0, 0)] - wm.base + 1) % wm.n, writer[(0, 0, 1)] - wm.base):
-        got = on_sample(w.members, ref(r), [u])
-        assert list(got) == [m.key] and got[m.key].endswith(f" in1 strings are not the o0 strings of the {wm.key} units that wrote them")
-        assert on_sample(w.members, ref(r), [x for x in range(m.base, m.base + m.n) if x != u]) == {}
+    w1 = next(x for x in w.members if x.base <= writer[(0, 0, 1)] < x.base + x.n)
+    rewired = [replace(x, wired=tuple((q, o, tuple(writer[(0, 0, 1)] if k == i else v for k, v in enumerate(ws)) if q == "in1"
+                                       else ws) for q, o, ws in x.wired)) if x is m else x for x in w.members]
+    for ms, bodies, who in ((w.members, ref((writer[(0, 0, 0)] - wm.base + 1) % wm.n), wm), (rewired, publics, w1)):
+        got = on_sample(ms, bodies, [u])
+        assert list(got) == [m.key] and got[m.key].endswith(f" in1 strings are not the o0 strings of the {who.key} units that wrote them")
+        assert on_sample(ms, bodies, [x for x in range(m.base, m.base + m.n) if x != u]) == {}
 
 
 def test_a_key_rows_writer_whose_return_is_not_its_input_is_refused_by_its_definition():
@@ -890,7 +919,7 @@ def test_a_key_rows_writer_whose_return_is_not_its_input_is_refused_by_its_defin
     s = Served(row(HALF))
     ms = members(s, UNITS, UNITS_CHUNK)
     got = [(m, g) for m, (g, _e) in zip(ms, read(s, ms, UNITS)) if is_keys(m.template)]
-    assert {m.template for m, _g in got} == {UNITS[8], UNITS[9]}
+    assert {m.template for m, _g in got} == set(filter(is_keys, UNITS)) and len(got) == 6
     for m, g in got:
         assert np.array_equal(g["rows"]["in0"], g["outs"]["o0"])
         stager(m.template).reference_check(g["rows"], g["outs"])

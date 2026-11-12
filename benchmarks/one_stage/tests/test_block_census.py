@@ -75,9 +75,10 @@ def test_a_chain_rows_slot_is_its_key_blocks_as_scores_and_values_units_of_64_co
     assert B.CHAIN_COLS == 64 and sorted(ways, key=str) == [16, 32, 64, None]
     assert B.slots(CHAIN_ROW, units) == [[ways[64], ways[None]]]
     assert [(u["spec"].split("{")[0], u["n"]) for u in ways[64]] == [
-        ("SparseMlaHeadScoresCols_v1", 32), ("SparseMlaHeadValues_v1", 256), ("SparseMlaHeadKeysWire_v1", 36),
-        ("SparseMlaHeadScoresCols_v1", 8), ("SparseMlaHeadValues_v1", 64), ("SparseMlaHeadKeysWire_v1", 9),
+        ("SparseMlaHeadScoresCols_v1", 32), *[("SparseMlaHeadValues_v1", 32)] * 8, *[("SparseMlaHeadKeysWire_v1", 4)] * 9,
+        ("SparseMlaHeadScoresCols_v1", 8), *[("SparseMlaHeadValues_v1", 8)] * 8, *[("SparseMlaHeadKeysWire_v1", 1)] * 9,
         ("SparseMlaSplitEnd_v1", 320), ("SparseMlaCombine_v1", 64)]
+    assert [u["spec"].split(",C=")[1] for u in ways[64][1:18]] == [f"{c}}}" for c in (*range(8), *range(9))]
     assert B.slots(CHAIN_ROW, ways[None]) == [[ways[None]]]                         # a census sized before the units existed
 
 

@@ -5,6 +5,8 @@ column block's writer `SparseMlaHeadKeysWire_v1` the identity, at no AND, whose 
 leaves unsatisfied; the Boolean versions to their word views; and at the served statics each one Flock block."""
 from __future__ import annotations
 
+import re
+
 import numpy as np
 import pytest
 
@@ -67,7 +69,7 @@ _BITS = dict(DR=16, DV=32, BN=16, DOT=BM.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)
 
 @pytest.mark.parametrize("target", [bind(BM.SparseMlaHeadScoresColsV2, NVIS=5, FIRST=True, G=16, **_BITS),
                                     bind(BM.SparseMlaHeadScoresColsV2, NVIS=16, FIRST=False, G=16, **_BITS),
-                                    bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=16)],
+                                    bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=16, C=2)],
                          ids=lambda t: t.id)
 def test_boolean_agrees_with_its_word_view(target) -> None:
     word = TR.word_of(target)
@@ -82,19 +84,22 @@ def test_boolean_agrees_with_its_word_view(target) -> None:
 
 def test_the_writer_returns_its_input_at_no_and_and_a_return_other_than_its_input_is_refused() -> None:
     """The writer is the identity on its words (word and Boolean), its gates its 2 NVIS W primitive calls (one a word on
-    bits), none an AND; and its flat unit (`class_statement.unit_lowering`, as `UnitStager` stages it), honest, satisfies every
+    bits), none an AND, the same gates on every column block it names; and its flat unit (`class_statement.unit_lowering`, as `UnitStager` stages it), honest, satisfies every
     row, while a returned bit flipped after witness generation (`ir_lower.evaluate_layout`'s ``flip``) leaves its lane
     unsatisfied: a writer whose return is not its input is refused by its Definition."""
     from verity_flock import class_statement as CL
     from verity_flock import ir_lower as IL
 
     kv = _planted(np.random.default_rng(5), _bf16(np.random.default_rng(6), (8, 16, 32)), BF16_SPECIALS, 0.05)
-    word, boo = bind(M.SparseMlaHeadKeysWire, NVIS=16, W=32), bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32)
+    word, boo = bind(M.SparseMlaHeadKeysWire, NVIS=16, W=32, C=0), bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32, C=0)
     assert np.array_equal(np.asarray(E.evaluate_batch(word, kv)).reshape(kv.shape), kv)
     assert np.array_equal(np.asarray(BS.evaluate_words(boo, kv)).astype(kv.dtype).reshape(kv.shape), kv)
     assert (word.gates, boo.gates) == (2 * 16 * 32, 16 * 32)
+    assert bind(BM.SparseMlaHeadKeysWireV2, NVIS=16, W=32, C=5).body.gates == boo.body.gates
     for d in (M.SparseMlaHeadKeysWire, BM.SparseMlaHeadKeysWireV2):
-        low, _ow = CL.unit_lowering(bind(d, NVIS=2, W=16), "w", [("kv", ["kv"])])
+        with pytest.raises(ValueError, match=re.escape("SparseMlaHeadKeysWire: NVIS=2 and W=16 must be >= 1 and C=-1 >= 0")):
+            bind(d, NVIS=2, W=16, C=-1).signature()
+        low, _ow = CL.unit_lowering(bind(d, NVIS=2, W=16, C=1), "w", [("kv", ["kv"])])
         words = [[int(x)] for x in kv.reshape(-1)[:32]]
         outs, ok = IL.evaluate_layout(low.layout, words, 1)
         _o, flipped = IL.evaluate_layout(low.layout, words, 1, flip=(low.layout.out_port_cols[3], 0))
@@ -113,5 +118,5 @@ def test_the_scores_on_column_blocks_and_the_writers_at_the_served_statics_are_o
         scores = FC.unit_block(bind(BM.SparseMlaHeadScoresV2, NVIS=64, FIRST=first, **S))
         assert FC.past_block(cols) is None and cols["k_log"] == scores["k_log"] == 27
     for nvis, k_log in ((64, 24), (16, 22)):
-        keys = FC.unit_block(bind(BM.SparseMlaHeadKeysWireV2, NVIS=nvis, W=64))
+        keys = FC.unit_block(bind(BM.SparseMlaHeadKeysWireV2, NVIS=nvis, W=64, C=0))
         assert FC.past_block(keys) is None and keys["k_log"] == k_log, (nvis, keys)

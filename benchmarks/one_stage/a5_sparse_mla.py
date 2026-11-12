@@ -18,7 +18,8 @@ run exits 0 only when the outcome is accepted and every negative refused. ``--ou
 its values units on 32 columns, the fixture's ``UNITS_BITS``: per key block and column block of 32 of its key rows the Boolean
 ``SparseMlaHeadKeysWire_v2`` that writes it, and per head and key block the Boolean ``SparseMlaHeadScoresCols_v2`` and two
 ``SparseMlaHeadValues_v2``, which read their key rows from those writers' committed rows (no tree of their own,
-`chain_rows.held_rows`), each values unit's probabilities (and past a split's first block its rescale and the O before)
+`chain_rows.held_rows`; a column block's writers are a template of their own, and so are the values units that read them,
+since no two ports of a statement may be one tree), each values unit's probabilities (and past a split's first block its rescale and the O before)
 wired to the unit that wrote them, each split's end on a column block and the two-split combine of one. It stands in for
 step 16's rows as the served partition (``glm53_sparse_mla_tp8_step16.json``) names them: at T = 272, per row, forty-five key
 rows' writers on 64 columns, and per head, five scores units, forty values units and forty split ends on 64 columns, and

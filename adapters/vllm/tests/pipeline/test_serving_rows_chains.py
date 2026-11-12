@@ -189,20 +189,26 @@ def test_a_chain_row_also_holds_each_key_block_as_its_scores_and_values_units():
     its committed outputs, and the ends' outputs, column block by column block, are the served row."""
     st = {x: TOY[x] for x in ("DR", "DV", "BN", "SCALE")}
     first, later = {"NVIS": 8, "FIRST": True}, {"NVIS": 16, "FIRST": False}
+    def values(c):
+        return [descriptor_id(bind(M.SparseMlaHeadValues, **x, BN=16, G=16, DOT=FA3["DOT"], C=c)) for x in (first, later)]
+
+    def writers(c):
+        return [descriptor_id(bind(M.SparseMlaHeadKeysWire, NVIS=n, W=16, C=c)) for n in (8, 16)]
+
     tmpls = [descriptor_id(bind(M.SparseMlaHeadScoresCols, **first, **st, DOT=FA3["DOT"], G=16)),
-             descriptor_id(bind(M.SparseMlaHeadScoresCols, **later, **st, DOT=FA3["DOT"], G=16)),
-             descriptor_id(bind(M.SparseMlaHeadValues, **first, BN=16, G=16, DOT=FA3["DOT"])),
-             descriptor_id(bind(M.SparseMlaHeadValues, **later, BN=16, G=16, DOT=FA3["DOT"])), end(NARROW),
-             descriptor_id(bind(M.SparseMlaHeadKeysWire, NVIS=8, W=16)), descriptor_id(bind(M.SparseMlaHeadKeysWire, NVIS=16, W=16))]
-    assert SRW.unit_templates(row())[4:] == tuple(zip([tmpls[j] for j in (0, 2, 5, 1, 3, 6, 4)], (2, 4, 3, 4, 8, 6, 4)))
-    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end", "keys", "keys"]
-    assert [CR.reads(SRW.template(t)) for t in tmpls] == ["inline", "slots", "inline", "inline", "inline", "inline", "inline"]
+             descriptor_id(bind(M.SparseMlaHeadScoresCols, **later, **st, DOT=FA3["DOT"], G=16)), *values(0), end(NARROW),
+             *writers(0), *values(1), *writers(1), *writers(2)]
+    assert SRW.unit_templates(row())[4:] == tuple(zip([tmpls[j] for j in (0, 2, 7, 5, 9, 11, 1, 3, 8, 6, 10, 12, 4)],
+                                                      (2, 2, 2, 1, 1, 1, 4, 4, 4, 2, 2, 2, 4)))
+    assert [CH.kind(SRW.template(t)) for t in tmpls] == ["scores", "scores", "values", "values", "end", "keys", "keys", "values",
+                                                         "values", "keys", "keys", "keys", "keys"]
+    assert [CR.reads(SRW.template(t)) for t in tmpls] == ["inline", "slots", *("inline",) * 11]
     assert {t: CH.positions(SRW.template(t), TOY) for t in tmpls} == dict(zip(tmpls, (
-        [4], [5, 6], [7, 8], [9, 10, 11, 12], [13, 14], [0, 3, 6], [1, 2, 4, 5, 7, 8])))
+        [4], [5, 6], [7], [9, 11], [13, 14], [0], [1, 2], [8], [10, 12], [3], [4, 5], [6], [7, 8])))
     assert [CH.places(TOY)[j].reads for j in (13, 14)] == [(("l", None, "o1", 6), ("o", None, "o0", 11 + c)) for c in range(2)]
     s = Served(n=2)
     ms = members(s, tmpls, dict.fromkeys(tmpls, 16))
-    assert {t: sum(m.n for m in ms if m.template == t) for t in tmpls} == dict(zip(tmpls, (4, 8, 8, 16, 8, 6, 12)))
+    assert {t: sum(m.n for m in ms if m.template == t) for t in tmpls} == dict(zip(tmpls, (4, 8, 4, 8, 8, 2, 4, 4, 8, 2, 4, 2, 4)))
     assert all(m.wired_trees == (CH.kind(SRW.template(m.template)) not in ("scores", "values")) for m in ms)
     got = read(s, ms, tmpls)
     ws = {m.port(q): a for m, (g, _e) in zip(ms, got) for part_ in ("rows", "outs") for q, a in g[part_].items()}

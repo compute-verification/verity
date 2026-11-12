@@ -8,8 +8,8 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaHeadBlock_v3{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   the same function written as Calls; ``opt_in``
     SparseMlaHeadScores_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  the block up to P, written as Calls
     SparseMlaHeadScoresCols_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE,G}  the same on its key rows' column blocks side by side
-    SparseMlaHeadKeysWire_v2{NVIS,W}                       its input, through casts that are wires: no AND
-    SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G}            the block's P V steps on G columns of O, written as Calls
+    SparseMlaHeadKeysWire_v2{NVIS,W,C}                     its input, through casts that are wires: no AND
+    SparseMlaHeadValues_v2{NVIS,FIRST,BN,DOT,G,C}          the block's P V steps on G columns of O, written as Calls
     SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
 
@@ -237,7 +237,7 @@ def _head_keys_wire(B, S, kv):
     return B.batch(BSC.U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
 
 
-SparseMlaHeadKeysWireV2 = EW.on_bits("SparseMlaHeadKeysWire", 2, ["NVIS", "W"], lambda S: M._head_keys_type(S, BF16),
+SparseMlaHeadKeysWireV2 = EW.on_bits("SparseMlaHeadKeysWire", 2, ["NVIS", "W", "C"], lambda S: M._head_keys_type(S, BF16),
                                      _head_keys_wire, M.SparseMlaHeadKeysWire)
 
 
@@ -265,7 +265,7 @@ def _head_values_calls(B, S, pb, kv, rescale=None, o_prev=None):
     return o
 
 
-SparseMlaHeadValuesV2 = EW.on_bits("SparseMlaHeadValues", 2, ["NVIS", "FIRST", "BN", "DOT", "G"],
+SparseMlaHeadValuesV2 = EW.on_bits("SparseMlaHeadValues", 2, ["NVIS", "FIRST", "BN", "DOT", "G", "C"],
                                    lambda S: M._head_values_type(S, BF16, F32), _head_values_calls, M.SparseMlaHeadValues,
                                    lifted=_LIFTED)
 

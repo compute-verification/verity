@@ -21,7 +21,7 @@ def _glm53_served_roots() -> list[Any]:
     # scores and O on 64, and the head's end on a column block
     cut = [bind(boolean_sparse_mla.SparseMlaHeadScoresV2, NVIS=nvis, FIRST=first, **S)
            for nvis, first in ((64, False), (64, True), (16, True))]
-    cut += [bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=g)
+    cut += [bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=nvis, FIRST=first, BN=S["BN"], DOT=S["DOT"], G=g, C=0)
             for nvis, first, g in ((64, False, 128), (64, False, 64), (64, False, 32), (64, True, 128), (64, True, 64),
                                    (16, True, 64))]
     cut.append(bind(boolean_sparse_mla.SparseMlaHeadEndV2, DV=64, INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"]))
@@ -29,7 +29,7 @@ def _glm53_served_roots() -> list[Any]:
     # and the writer of a column block of a 64-key block and of a 16-key one
     cut += [bind(boolean_sparse_mla.SparseMlaHeadScoresColsV2, NVIS=nvis, FIRST=first, G=64, **S)
             for nvis, first in ((64, False), (64, True), (16, True))]
-    cut += [bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=nvis, W=64) for nvis in (64, 16)]
+    cut += [bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=nvis, W=64, C=0) for nvis in (64, 16)]
     return [bind(boolean_sparse_mla.SparseMlaHeadBlockV3, NVIS=nvis, FIRST=first, **S)
             for nvis, first in ((64, False), (64, True), (16, True))] + cut
 
@@ -67,11 +67,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SparseMlaHeadScoresCols_v2/later", lambda: bind(boolean_sparse_mla.SparseMlaHeadScoresColsV2, DR=16, DV=16, NVIS=16,
                                                           FIRST=False, BN=16, DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"],
                                                           SCALE=0.0625, G=16)),
-        ("SparseMlaHeadKeysWire_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=16, W=16)),
+        ("SparseMlaHeadKeysWire_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadKeysWireV2, NVIS=16, W=16, C=0)),
         ("SparseMlaHeadValues_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=5, FIRST=True, BN=16,
-                                                DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], G=4)),
+                                                DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], G=4, C=0)),
         ("SparseMlaHeadValues_v2/later", lambda: bind(boolean_sparse_mla.SparseMlaHeadValuesV2, NVIS=16, FIRST=False, BN=16,
-                                                      DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], G=8)),
+                                                      DOT=boolean_sparse_mla.SPARSE_MLA_GLM53["DOT"], G=8, C=1)),
         ("SparseMlaHeadEnd_v2", lambda: bind(boolean_sparse_mla.SparseMlaHeadEndV2, DV=16,
                                              INV=boolean_sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v2", lambda: bind(boolean_sparse_mla.SparseMlaV2, T=5, NH=2, DR=16, DV=16, BN=16, SCALE=0.0625,
