@@ -196,3 +196,12 @@ NET-398, #9491, the two-word head: da3d23abb3d7 on cursor/na-request-words-3c9e 
 - Scratch D re-merged, no conflict: dd12feb3cfe0, its three suites launched once as r20261112-225144-6b97.
 - The three earlier runs [read]: at b8a31eda4d85 1434 passed 1 skipped, 85 passed, 621 passed, and repository 352 passed; scratch D at c17072a00619 1489 passed 1 skipped, 91 passed, 686 passed. All exit 0.
 
+[2026-11-12T22:56Z] 02322d97e3dd
+POLICYROWS: the three probes (NET-405), Thu 12 Nov 2:59 PM PST. No code written yet.
+
+1. `registered.formats`. The evidence store keeps no `window/circuit.json` [read: the run records of the Pearl+-tied serves r20261112-054533-9240 and r20261106-165116-614b hold its counts only]. The 27 MB record is in the serve's directory on a node (owner @vllm); I did not open it. That it holds `formats` is [argued]: the serve's head 9317967dbfba writes a format for every held value (`window_circuit.py:776`), and its CUT line counts 256 Pearl+ values. [read] `RecordText.lean:279-280` takes exactly `params, tables, reads, roots, openings`, or those with `values`. So `values` passes; `formats` is refused as `inputs`, and so is `histories`; nothing else in 203-280 turns on the cut. [ran] The Python reference on generated case 600 (served shape, `main` 41752650197): complies as generated and with `values`; with `formats` added it gives `{"error": "inputs"}`.
+
+2. [ran the diff] New: `registered.formats`. Gone: `blocks.server`, `blocks.server_time`, `blocks.transfers`; `Blocks.of` takes exactly `format, proof, inference`. Renamed: none (the class `Opening` is `TableOpening`; its key stays `openings`). One value changes: a statement's row schema for a port reading a formatted value. `gridsOf` reads only `blocks.inference`, so only `formats` bites.
+
+3. [read] Yes. `interface.py:1549`: a member is at most `cap` of a template's units from its base. `flock_inputs.py:69-71`: those are the file's `indices`, one instance each. `Spot/FilePart.lean:133`: `m = upv * (constPos - nIn + 1)`. Rows are units times `m`, `units_per_vu` once, inside `m`. Not covered: a file with a stage tail, which Lean refuses.
+
