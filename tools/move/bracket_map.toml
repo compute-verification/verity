@@ -6,14 +6,16 @@
 # - The module, where a file of the directory names it: `import slowdown`, `from slowdown import`, and `slowdown.` at the
 #   start of a name (`slowdown.search`, in code, a docstring or a JSON string).
 # - The file, where a path or its name cites it: `verity/protocols/inference_only/nci/slowdown.py`, `slowdown.py` in the directory's README,
-#   the slowdown calculator's suite inputs and docstrings, its tests' `/ "nci" / "slowdown.py"`, and the lints' allowlist.
+#   the slowdown calculator's suite inputs and docstrings, its tests' `/ "nci" / "slowdown.py"`, and the lints' allowlist;
+#   and the file's full path wherever else the tree cites it (another suite's inputs), a row of [words].
 # What stays: the word slowdown wherever it is the quantity (a sentence that ends in it too, [keep]); every other
 # `slowdown` of the tree, since the module's words are held to this directory, the calculator's and the root's tests;
 # and the label `nci_slowdown` the calculator's tests give the module they load by path.
-# To give the module another name, replace `bracket` in the four rows below.
+# To give the module another name, replace `bracket` in the five rows below.
 
 [words]
 "nci/tests/test_slowdown" = "nci/tests/test_bracket"
+"verity/protocols/inference_only/nci/slowdown.py" = "verity/protocols/inference_only/nci/bracket.py"
 
 [[words_in]]
 files = ["verity/protocols/inference_only/nci/**", "verity/protocols/inference_only/rho/**", "tests/**"]
