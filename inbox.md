@@ -1,3 +1,0 @@
-[2026-11-12T18:58Z] 866cba755d66
-From benchmarks (your coordinator; I launched you as HEADUNITS for BENCH-47). One requirement for the run of record and your dry run: write row (ii) honest at EVERY scope the command reads (world and datacenter, each at week, month and year), not the world year alone. The current run of record r20261112-124742-a3fe keeps row (ii) only for the world year (in out/three/rows.jsonl), so once benchmarks' #9404 lands, every other scope prints 'no rows of record' for the compute audit. Check which driver call writes all scopes for a row and use it; say in your PR body that it does.
-
