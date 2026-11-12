@@ -58,8 +58,10 @@ BETA, BEYOND = 400, 100
 
 @pytest.fixture(autouse=True)
 def stamped(monkeypatch):
-    """The kit's writer under a run of its own, stamping with `STAMP` rather than asking the host."""
+    """The kit's writer under a run of its own and with no run directory, so that the result is the given directory's,
+    stamping with `STAMP` rather than asking the host."""
     monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(kit, "host_stamp", lambda: dict(STAMP))
 
 
