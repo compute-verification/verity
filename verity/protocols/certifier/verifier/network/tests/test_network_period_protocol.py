@@ -25,6 +25,7 @@ import period_case as PC
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
+from verity.protocols.certifier.verifier import scan_ok
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import Certificate
 from verity.protocols.certifier.verifier.schedule import SyncSet
@@ -123,6 +124,7 @@ ROWS_REFUSALS = {
     "rows-prog-untied": ("is no compute audit's output",) * 2,
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
+    "rows-ok-unheld": (PC.UNOK,) * 2,
 }
 
 
@@ -132,8 +134,9 @@ def test_the_rows_form_refuses_what_it_must(server):
     another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
     cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, and a scan whose state is not its wired audit's
-    `SCAN_STATE`: Lean and the mirror each refuse every one at that check."""
+    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
+    `SCAN_STATE`, and a scan whose ok bits are not at the schedule's constants: Lean and the mirror each refuse every
+    one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)
@@ -201,6 +204,66 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
+
+
+def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
+    """A scan proof block's public word is its ok bit, and a member's ok rows are committed under public salts, so the
+    rows form computes each member's root from the schedule's T and refuses, in Lean and in the mirror and by name,
+    each way a link-window's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
+    root (a tree with a row that is not the ok row, or under other salts), domain or leaf count, with no entry or
+    under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
+    member at another schedule's constants, a root or domain that is no string, and the entries by value under
+    `registered`; and a mirror that skips the comparison accepts what Lean refuses."""
+    unok = PC.UNOKS
+    for u in unok:
+        monkeypatch.setattr(PC, "UNOKS", (u,))
+        for n in range(3):
+            case = build("rows-ok-unheld", n, small=n % 2 == 0)
+            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNOKS", unok)
+    monkeypatch.setattr(scan_ok, "held", lambda consts, reg: True)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-ok-unheld", n, small=True), server, PC.UNOK)
+
+
+def ok_entries(case: dict) -> list[dict[str, tuple]]:
+    """Each link-window's scan's registration's ok entries, by port: (domain, root, leaves)."""
+    return [{e["port"]: (e.get("domain"), e.get("root"), e.get("leaves")) for e in reg.get("roots", [])
+             if scan_ok.ok_port(e.get("port"))}
+            for reg in json.loads(bytes.fromhex(case["commitment"]))["windows"]]
+
+
+def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
+    """At T = 3 the scan's `ingress-0` and `last` are one proof block of the ingress template each, so their ok bits
+    are at one frame domain and one root under two ports (`rows-ok-equal`): Lean accepts the period with the mirror's
+    public, each port held to its own constant. At that schedule each way of naming another (`PC.UNOKS`) is refused
+    by both, by name, a registration that names one of the two ports and not the other among them: a root another
+    member is at stands for no member but its own."""
+    twins = ("ingress-0/o0", "last/o0")
+    for n in range(4):
+        case = build("rows-ok-equal", n, small=n % 2 == 0)
+        assert case["params"]["schedule"]["window"] == PC.EQUAL_T
+        for at in ok_entries(case):
+            assert sorted(at) == ["egress-0/o0", "first/o0", *twins]
+            assert at[twins[0]] == at[twins[1]] and len(set(at.values())) == 3, at
+        out = reference(case)
+        assert out["verdict"] == ACCEPT, (n, out)
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+    real, unok, one_twin = PC._small_schedule, PC.UNOKS, 0
+    monkeypatch.setattr(PC, "_small_schedule", lambda r, small, capped=False, T=None: real(r, small, capped, PC.EQUAL_T))
+    for u in unok:
+        monkeypatch.setattr(PC, "UNOKS", (u,))
+        for n in range(8 if u == "missing" else 2):
+            case = build("rows-ok-unheld", n, small=n % 2 == 0)
+            assert case["params"]["schedule"]["window"] == PC.EQUAL_T
+            one_twin += any(len(set(twins) & set(at)) == 1 and len(at) == 3 for at in ok_entries(case))
+            assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
+    assert one_twin, "no case named one of the two ports at one root and not the other"
 
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):

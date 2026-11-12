@@ -162,10 +162,12 @@ protocols = [
     "verity/protocols/inference_only/verifier/nci",
     "verity/protocols/certifier/verifier/network/tests/test_{inference_only_protocol,nci_*}.py",
     # the network certifier's period check, which reads a scan's layout with the inference-only policy's check
-    # (`NciCheck.Desc`): the check, the library root, which imports it, its executable (`network-period`), its Python
-    # mirror, and the tests that run that executable
-    "verity/protocols/certifier/verifier/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean}",
+    # (`NciCheck.Desc`): the check, the scan's ok bits' constants it computes (`NetworkCheck.ScanOk`, which reads the
+    # table of domain separators), the library root, which imports them, its executable (`network-period`), its Python
+    # mirror, and the tests that run that executable or read that mirror
+    "verity/protocols/certifier/verifier/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean,/ScanOk.lean}",
     "verity/protocols/certifier/verifier/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_period_ok_cost.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
     "security/*/{Nci,NciDesc}{,.lean}",
