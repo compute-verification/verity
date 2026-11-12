@@ -116,7 +116,7 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
 def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, monkeypatch, capsys):
     """Counts by template (``--k COUNTS.json``, `Rule.k` a map): a class whose inlined check calls PAIR and SWAP samples
     three of a sampled span's eight PAIR instances and one of its four SWAP instances, the rule carried through
-    ``stage1.json`` to the replay side's stream. A file is read alone or as a counts record's ``k``; one that names a
+    the hand-off to the replay side's stream. A file is read alone or as a counts record's ``k``; one that names a
     template twice, gives a count that is no whole number of at least one, misses one of the check's templates or names
     another is refused by name, and the command refuses it, and a class that is not the check's, before it opens a
     challenger session. The command lays each class out under the verifier's own stop rule (``--stop``) as it holds
@@ -136,9 +136,9 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
     got = TS.first(c.public(), BOTH, rule, FC.Challenger("first"))
     assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
-    stage1 = json.loads(json.dumps(got.stage1()))
-    assert stage1["rule"]["k"] == ks
-    again = TS.resume(stage1, BOTH, FC.Challenger("second"))
+    handoff = json.loads(json.dumps(got.stage1()))
+    assert handoff["rule"]["k"] == ks
+    again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
     _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
     assert second.law == S.second_law(again.draw.units, (2 * N_RHO, N_RHO), (3, 1))
