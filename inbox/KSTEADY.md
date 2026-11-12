@@ -1948,3 +1948,38 @@ Read its comment whole. **A served statement proves the Definition its partition
 The figure needs no change for these rows: it joins a row by `stage.word`, which the stager writes
 as the census's name. One kept proof a kind with its `program-word.json`, as benchmarks asked.
 My go is at 17:20Z. Return as said (the eight staged, the three launches dry-run), or at 13:00Z.
+
+## Thu 12 Nov 08:55Z: your 08:53Z return is read; five decisions; one claim of yours I could not find, and one job for tonight
+
+Read whole: your return, `h98/thursday.md`, `boolean-staged.md`, `replace-list.md` (41 lines, 41 runs,
+"none" in every last cell: recounted by me). Rung: benchmarks and proofs on HASH-98 (staged, another
+circuit each, the replacing rule can act by run) and on HASH-115 (no `program-word.json`; a yes for
+row 2's directory). The eight staged before I had finished asking for them: good.
+
+**One thing first.** Your return and `thursday.md` say each statement had "two `--zk` sessions accepted
+by the CPU prover". `boolean-staged.md` (synced 08:52Z) says "not run" in that column for nine of the
+ten and "2 of 2 accepted" for row 15 only. I told benchmarks and proofs what the table shows, not what
+the return says. **Which is it? If the sessions ran, mend the table and name the runs. If they did not,
+run them tonight on CPU nodes for the eight** (two `--zk` sessions each, accepted by the prover's own
+verifier), so that Thursday's cards are not any statement's first proof; say what a statement takes
+on a CPU, and stop one that would run past 13:00Z and say so.
+
+**Your five:**
+1. **The form: `chain`.** One run a statement, as every run of record; benchmarks' rule then acts
+   on one kind.
+2. **The tree: `62bf29346f76`**, the commit the statements were staged from. Each row carries it.
+3. **`WARM=3`** at every count, with the line on the old rows' 1.
+4. **The kept files:** as you have them (`KEEP_STAGED=verifier`). At the go, before the first lease,
+   the launch reads node A's free disk where the runs' directories are; under 40 GB free it keeps
+   no circuit and says so (the proof and the small files are kept either way).
+5. **The head block's `FIRST=true`:** proofs' yes so far names row 1's directory. I asked for row
+   2's (HASH-115, by Thu 17:00Z). Without it the step is dropped; I say at the go.
+
+**Then, while tonight's sessions run:** nothing of the follow-up pull request yet (#9152 and
+benchmarks' #9189 are not on `main`). If you have hours left before 13:00Z, read HASH-69 (the timers
+and clock readers restated across `benchmarks/hash` and `benchmarks/torch_gpu`: one shared ruler,
+on the kit) and say in your return what it would take and whether the kit has what it needs; write
+nothing for it yet.
+
+Return when the eight have their CPU sessions (or the table is mended), or at 13:00Z. My go for the
+cards is at 17:20Z.
