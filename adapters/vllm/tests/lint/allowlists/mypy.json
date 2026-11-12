@@ -872,7 +872,6 @@
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "assignment", "symbol": "main", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 3},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "assignment", "symbol": "main", "detail": "", "count": 2},
-    {"file": "verity_vllm/acquire/h1_commit.py", "kind": "assignment", "symbol": "RankCommit.h1rank_commit", "detail": ""},
     {"file": "verity_vllm/acquire/install.py", "kind": "assignment", "symbol": "apply_plan_to_committer", "detail": ""},
     {"file": "verity_vllm/acquire/served.py", "kind": "assignment", "symbol": "wire", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/served.py", "kind": "dict-item", "symbol": "wire", "detail": ""},
