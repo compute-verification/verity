@@ -1047,6 +1047,40 @@ def test_the_runner_serves_ours_alone_and_takes_the_benchmarks_missing_cost_as_n
     assert started(run_dir)["ARMS"] == "record"
 
 
+def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Path):
+    script, run_dir, earlier = runner(tmp_path), tmp_path / "run", tmp_path / "earlier/out"
+    bench_arm(earlier, "prod-record", {"chat@16": [299.0]}, ids="chat@16", argv=("--max-model-len", "262144"))
+    argv = ("--client", "vllm-bench", "--model", "glm53", "--replay-of", str(earlier), "--load", "chat=16", "--replay", "chat@16")
+    # the benchmark's runner is given no arms, the pass and ours's directory, copied into this job's out/; where it
+    # leaves no replay (the stand-in replays nothing) the job fails for the replay it asked for
+    p = bash(script, *argv, run_dir=run_dir)
+    s = started(run_dir)
+    assert (s["argv"], s["ARMS"], s["CLIENT"], s["MODEL_ID"]) == ("", "unset", "corpus", "glm53"), p.stdout + p.stderr
+    assert (s["REPLAY"], s["REPLAY_FROM"], s["REPLAY_MODES"]) == ("chat@16", str(run_dir / "out/prod-record"), "compiled")
+    assert (run_dir / "out/prod-record/meta.json").read_bytes() == (earlier / "prod-record/meta.json").read_bytes()
+    assert p.returncode == 1 and p.stdout.endswith("FAILED: a replay was asked for and the tokens line is not measured\n")
+    # with the replay the runner leaves, the report is of ours alone: the tokens, and no cost
+    replayed(run_dir / "out", "prod-record", load="chat@16", served_under=TOPK_UNDER)
+    p = bash(script, *argv, run_dir=run_dir)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "prod_repro: load chat; stock not served, stock again not served, ours prod-record; run r-1" in p.stdout
+    assert "tokens: reproduced: 2 requests replayed" in p.stdout
+    assert "cost: not measured: no stock arm was served: the job serves prod-record alone\n" in p.stdout
+    # a replay that fails is the job's failure, whatever --stock says
+    shutil.rmtree(run_dir / "out/replay-compiled")
+    p = bash(script, *argv, "--stock", "none", run_dir=run_dir, STAND_IN_RC="1")
+    assert p.returncode == 1 and "the job's exit is the report's" not in p.stdout
+    # what it refuses: no pass named, an out/ without ours, and a job directory that holds another job's arm
+    p = bash(script, "--model", "glm53", "--replay-of", str(earlier), "--load", "chat=16", run_dir=tmp_path / "other")
+    assert p.returncode == 2 and "--replay-of OUT --load NAME --replay PASS" in p.stdout
+    p = bash(script, "--model", "glm53", "--replay-of", str(tmp_path), "--load", "chat=16", "--replay", "chat@16", run_dir=tmp_path / "other")
+    assert p.returncode == 2 and f"--replay-of {tmp_path} holds no prod-record/meta.json" in p.stdout
+    meta = earlier / "prod-record/meta.json"
+    meta.write_text(json.dumps(json.loads(meta.read_text()) | {"run_id": "r-2"}))
+    p = bash(script, *argv, run_dir=run_dir)
+    assert p.returncode == 2 and "is there already and is not" in p.stdout
+
+
 def test_the_runner_reads_an_earlier_job_again_and_refuses_what_it_cannot_run(tmp_path: Path):
     script = runner(tmp_path)
     out = job(tmp_path)

@@ -19,6 +19,7 @@ verity bench prod_repro [--model moonlight] [--stock ARM] [--again ARM|none] [--
 verity bench prod_repro --client vllm-bench --load NAME[=RUNG+RUNG...] [--reps 6] [--replay NAME@RUNG]
                         [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] ...
 verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
+verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
 ~~~
 
@@ -53,6 +54,9 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   serves all the same and keeps no counters of the top-k.
 - **The third form** reads an earlier job's `out/` again and needs no GPU; where it names no arm, the job is read as
   the arms it served.
+- **The fourth form** serves nothing: it copies ours's directory from an earlier job's `out/` into this job's and
+  re-runs the replay of the named pass from it, under a lease taken for the replay alone. Its report is of ours alone,
+  with the tokens line and no cost.
 - `ADVICE_TRACE` names the trace directory of a certified serve, which the advice line is read from; no arm of the
   job is one. `ADVICE_STOPS` are the registered stop ids it is read under, EOS first; without it they are the
   `eos_token_id` of the served checkpoint's `generation_config.json`.

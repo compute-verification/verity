@@ -9,6 +9,7 @@
 #     [--pass-prompts NAME=N] [--sampled] [--stop-at TIME] [--model ...] [--stock ...] ...
 #   verity bench prod_repro --report OUT --load NAME [--replay PASS] [--stock ARM] [--again ARM|none] [--ours ARM]
 #     [--target 1]
+#   verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] [--ours ARM]
 #   ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...   # the advice line, of a certified serve's trace
 # The serve, the load and the replay are the serving cost benchmark's (benchmarks/serve_tax/run.sh, whose header says
 # what a node needs and what its other variables do: they pass through, among them C4, PLAN_FILE, PRIVATE, VENV,
@@ -33,6 +34,9 @@
 # OUT/topk_counters.json.
 # The advice line reads the trace directory of a certified serve (ADVICE_TRACE, under the stop ids ADVICE_STOPS, else
 # the served checkpoint's own): no arm of this job is one.
+# The --replay-of form serves nothing: it copies ours's directory from an earlier job's out/ into this job's and
+# re-runs the replay of the named pass from it, under a lease the benchmark's runner takes for the replay alone; its
+# report is of ours alone, with no cost.
 # The --report form reads an earlier job's out/ and needs no GPU. Every form ends with the report (prod_repro.py
 # report), written to OUT/prod_repro.{json,txt}, which says how far each arm and the replay got, also where the job is
 # ended early (SIGTERM: the runner's children stop, and the report is of what was served and replayed by then); the
@@ -42,7 +46,7 @@
 set -uo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 tax=$here/../serve_tax
-CLIENT=corpus; REPORT=; REPLAYED=
+CLIENT=corpus; REPORT=; REPLAYED=; REPLAY_OF=
 while [ $# -gt 0 ]; do
   flag=$1; shift
   [ "$flag" != --sampled ] || { SAMPLED=1; continue; }
@@ -51,10 +55,10 @@ while [ $# -gt 0 ]; do
     --model) MODEL_ID=$1 ;; --stock) STOCK=$1 ;; --again) AGAIN=$1 ;; --ours) OURS=$1 ;; --load) LOAD=$1 ;;
     --rate) RATE=$1 ;; --requests) REQUESTS=$1 ;; --span-s) SPAN_S=$1 ;; --reps) REPS=$1 ;;
     --max-model-len) MAX_MODEL_LEN=$1 ;; --target) TARGET=$1 ;; --client) CLIENT=$1 ;; --report) REPORT=$1 ;;
-    --replay) REPLAYED=$1 ;; --pass-prompts) PASS_PROMPTS=$1 ;; --stop-at) STOP_AT=$1 ;;
+    --replay) REPLAYED=$1 ;; --pass-prompts) PASS_PROMPTS=$1 ;; --stop-at) STOP_AT=$1 ;; --replay-of) REPLAY_OF=$1 ;;
     *) echo "prod_repro: unknown flag $flag (--model, --stock, --again, --ours, --load, --rate, --requests, --span-s," \
             "--reps, --replay PASS|none, --pass-prompts NAME=N, --sampled, --stop-at TIME, --max-model-len, --target," \
-            "--client corpus|vllm-bench, --report OUT)"; exit 2 ;;
+            "--client corpus|vllm-bench, --report OUT, --replay-of OUT)"; exit 2 ;;
   esac
   shift
 done
@@ -95,6 +99,22 @@ replays() {
 }
 # SIGTERM (the job's time ending) reaches the runner and its arm too, which stop; this script goes on to the report
 termed=0; trap 'termed=1' TERM
+if [ -n "$REPLAY_OF" ]; then
+  # no arm is served: the benchmark's runner replays alone where it is given no arms and the directory of an arm that
+  # kept each request's ids, which here is the earlier job's, copied so that this job's out/ holds what its report reads
+  [ -n "${LOAD:-}" ] && [ -n "$REPLAYED" ] && [ "$REPLAYED" != none ] || {
+    echo "prod_repro: --replay-of OUT --load NAME --replay PASS: the load the earlier job served and the pass of it to re-run"; exit 2; }
+  [ -f "$REPLAY_OF/$OURS/meta.json" ] || {
+    echo "prod_repro: --replay-of $REPLAY_OF holds no $OURS/meta.json: name the out/ of a job that served $OURS"; exit 2; }
+  if [ -e "$OUT/$OURS" ]; then
+    cmp -s "$REPLAY_OF/$OURS/meta.json" "$OUT/$OURS/meta.json" || {
+      echo "prod_repro: $OUT/$OURS is there already and is not $REPLAY_OF's: --replay-of is a job of its own"; exit 2; }
+  else
+    mkdir -p "$OUT" && cp -r "$REPLAY_OF/$OURS" "$OUT/$OURS" || { echo "prod_repro: could not copy $REPLAY_OF/$OURS into $OUT"; exit 2; }
+  fi
+  STOCK=; AGAIN=; alone=0
+  ( unset ARMS LOADS; export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES; bash "$tax/run.sh" ); rc=$?
+else
 case $CLIENT in
   corpus)
     LOAD=${LOAD:-burst}; REPLAYED=${REPLAYED:-$LOAD}; replays
@@ -106,6 +126,7 @@ case $CLIENT in
     REPLAYED=${REPLAYED:-none}; replays
     bash "$tax/run.sh" --model "$MODEL_ID" --arms "$served" --loads "$LOAD" --reps "${REPS:-6}"; rc=$? ;;
 esac
+fi
 # with no stock arm, the benchmark's runner under vLLM's client still ends on its own cost step, which then has
 # nothing to be over and fails after everything else: where ours served its load without an error, the job's exit is
 # the report's, which fails where the replay did not end or differs
