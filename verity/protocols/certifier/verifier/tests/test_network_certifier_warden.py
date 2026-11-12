@@ -15,7 +15,7 @@ import socket
 
 import pytest
 
-from verity.protocols.certifier.verifier import active, io_tie as IT
+from verity.protocols.certifier.verifier import active, io_tie as IT, pacer, warden as warden_module
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
 from verity.protocols.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
@@ -407,9 +407,99 @@ def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
 
 
+class EarlyClock(VirtualClock):
+    """A clock on which a tick's first wait ends at once, before its time, and the wait after it runs its length."""
+
+    def __init__(self, now: float) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+        self.early = False
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+            self.early = not self.early
+        await super().sleep(0 if delay > 0 and self.early else delay)
+
+
+def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boundary():
+    """A wait may end before its time (a timer against another clock, a signal). A tick runs once the clock reads
+    its boundary and never before: here every tick's first wait ends at once, and the tick still runs only after the
+    clock is moved to its boundary, on time, with every record complete."""
+
+    async def go():
+        clock = EarlyClock(-TAU / 2)
+        warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(warden.run())
+        before, after = [], []
+
+        async def settle(seen: list[int]) -> None:
+            for _ in range(4):  # the loop runs whatever is ready: a tick that the clock's reading lets run runs here
+                await clock.sleep(0)
+            seen.append(warden.ticks)
+
+        for t in range(PARAMS.window):
+            await settle(before)
+            clock.advance(t * TAU)
+            await settle(after)
+        clock.advance(PARAMS.window * TAU)
+        await running
+        return warden, before, after, clock
+
+    warden, before, after, clock = asyncio.run(go())
+    assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
+    assert warden.lateness == [0.0] * PARAMS.window and len(clock.waits) == 2 * PARAMS.window
+    assert [(r.link, r.status.reason) for r in warden.records] == [("requests", None), ("responses", None), ("fails", None)]
+
+
+def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
+    """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
+    raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
+    read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network certifier's own clock, and every tick runs at
+    its boundary or after it, inside the slack."""
+    now, asked, waits = [-0.35], [], []
+
+    def read(clock_id):
+        asked.append(clock_id)
+        return now[0]
+
+    async def short(delay, clock):
+        waits.append(clock)
+        now[0] += delay / 2 if len(waits) % 2 else delay
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", read)
+    monkeypatch.setattr(warden_module, "precise_sleep", short)
+    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    assert warden.clock is pacer.raw_clock
+    asyncio.run(warden.run())
+    assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is warden.clock for clock in waits)
+    assert warden.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
+    assert 0 <= min(warden.lateness) and max(warden.lateness) < warden.slack
+    assert [(r.link, r.status.reason) for r in warden.records] == [("requests", None), ("responses", None), ("fails", None)]
+
+
+def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
+    """Where the host's raw clock can't be read, the run refuses by name before a wait, a tick or its pacer: it has
+    no other clock to run on."""
+
+    def refuse(clock_id):
+        raise OSError(22, "Invalid argument")
+
+    waits = []
+
+    async def sleep(delay):
+        waits.append(delay)
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
+    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
+    with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
+        asyncio.run(warden.run())
+    assert (warden.ticks, warden.lateness, waits, warden._pacer, warden.records) == (0, [], [], None, [])
+
+
 def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
-    injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
+    injected clock a bucket's time (origin 0, on the host's raw clock, the pacer's) has long passed when its tick hands it, so
     each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
     (`monitor-unavailable`) from the next bucket on: each grid is the unpaced run's up to that bucket, then padding. Each
     window's records are published as its buckets' releases are in. Each connection's last part closes the pacer's

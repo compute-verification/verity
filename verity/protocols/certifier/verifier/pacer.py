@@ -6,8 +6,9 @@ The loop that runs a grid's ticks also reads the link and every server connectio
 the prover chooses, moves when the tick runs, and a bucket written on the loop leaves when its tick does. A thread of the
 same process would wait on the same interpreter lock. The pacer waits on neither: the proxy (`active.Proxy(paced=…)`)
 or the network certifier (`warden.Warden(paced=…)`) hands it each bucket's bytes with its time once the tick has made
-them (`Pacer.hand`), and it releases them at that time on the host's monotonic clock, waiting in `poll` until `SPIN_S`
-before it and spinning on the clock for the rest. A bucket is parts, each for one link, a socket the pacer holds by its
+them (`Pacer.hand`), and it releases them at that time on the handing process's clock, which its starter names
+(`CLOCKS`: the proxy's is the host's monotonic clock, the network certifier's the host's raw one, `raw_clock`),
+waiting in `poll` until `SPIN_S` before it and spinning on the clock for the rest. A bucket is parts, each for one link, a socket the pacer holds by its
 key: the proxy's one link, or each of the network certifier's client connections (`Pacer.start`'s links, then each
 `Pacer.add` passes over a Unix socket of its own).
 
@@ -40,10 +41,10 @@ import struct
 import sys
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-#: a bucket handed to the pacer: its index (u64be), its time (f64be, the host's monotonic clock) and its parts (u32be)
+#: a bucket handed to the pacer: its index (u64be), its time (f64be, on the pacer's clock) and its parts (u32be)
 HEAD = struct.Struct(">QdI")
 #: a part of a bucket: its link's key (u32be), its length (u32be) and whether the link closes after it (u8)
 PART = struct.Struct(">II?")
@@ -56,6 +57,26 @@ REPORT = struct.Struct(">Q?ddd?")
 READY = b"\x01"
 #: how long before a bucket's time the pacer stops waiting in `poll` and spins on the clock: a wait ends a little late
 SPIN_S = 0.002
+
+
+class ClockRefused(Exception):
+    """The host gives no raw monotonic clock, so the network certifier does not start: it runs on no other clock."""
+
+
+def raw_clock() -> float:
+    """The network certifier's clock, in seconds: the host's raw monotonic clock (`CLOCK_MONOTONIC_RAW`), the count of
+    the host's oscillator, which no time service steers or steps, so its rate against true time is the hardware's
+    alone. The network certifier's ticks, its origin and its pacer's releases all read it and nothing else: a tick is
+    late or in time by this clock. Raises `ClockRefused` where the host has none."""
+    try:
+        return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+    except (AttributeError, OSError) as e:
+        raise ClockRefused(f"this host gives no raw monotonic clock ({type(e).__name__}), and the network certifier "
+                           "runs on no other") from None
+
+
+#: the clocks a pacer's starter names, each the clock the starter gives its buckets' times on
+CLOCKS = {"monotonic": time.monotonic, "raw": raw_clock}
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,14 +103,17 @@ class Pacer:
         self.waiting: deque[tuple[int, float]] = deque()
 
     @classmethod
-    async def start(cls, links: Mapping[int, int] | None = None, *, backlog: int = 0) -> Pacer:
+    async def start(cls, links: Mapping[int, int] | None = None, *, backlog: int = 0,
+                    clock: str = "monotonic") -> Pacer:
         """A pacer on `links`, each a socket's fd by its key; with `backlog`, a link holding more unwritten bytes than
-        that is closed."""
+        that is closed. `clock` names the clock the buckets' times are on (`CLOCKS`)."""
+        if clock not in CLOCKS:
+            raise ValueError(f"a pacer's clock is one of {sorted(CLOCKS)}, not {clock!r}")
         links = dict(links or {})
         ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", __name__, str(theirs.fileno()), str(backlog),
+                sys.executable, "-m", __name__, str(theirs.fileno()), str(backlog), clock,
                 *(f"{key}={fd}" for key, fd in links.items()), stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE, pass_fds=(theirs.fileno(), *links.values()))
         except BaseException:
@@ -107,8 +131,8 @@ class Pacer:
         socket.send_fds(self.channel, [KEY.pack(key)], [fd])
 
     def hand(self, t: int, due: float, parts: Sequence[tuple[int, bytes, bool]]) -> None:
-        """Bucket `t`, to be released at `due` on the host's monotonic clock: each part its link's key, its bytes and
-        whether the link closes once they are written."""
+        """Bucket `t`, to be released at `due` on the pacer's clock: each part its link's key, its bytes and whether
+        the link closes once they are written."""
         out = [HEAD.pack(t, due, len(parts))]
         for key, data, last in parts:
             out += [PART.pack(key, len(data), last), data]
@@ -179,8 +203,8 @@ class _Links:
     """The pacer's links by key, each with its pending bytes: [the part's bytes not yet written, its bucket, whether
     the link closes after it]."""
 
-    def __init__(self, fds: dict[int, int], backlog: int) -> None:
-        self.fds, self.backlog = fds, backlog
+    def __init__(self, fds: dict[int, int], backlog: int, clock: Callable[[], float]) -> None:
+        self.fds, self.backlog, self.clock = fds, backlog, clock
         self.pending: dict[int, deque[list]] = {key: deque() for key in fds}
         self.held: dict[int, int] = dict.fromkeys(fds, 0)
         self.closed: set[int] = set()
@@ -215,7 +239,7 @@ class _Links:
             part[0] = part[0][n:]
             if not part[0]:
                 pending.popleft()
-                _done(part[1])
+                _done(part[1], self.clock)
                 if part[2]:
                     self.close(key)
                     return
@@ -223,7 +247,7 @@ class _Links:
     def close(self, key: int) -> None:
         for _, bucket, _ in self.pending.pop(key):
             bucket.written = False
-            _done(bucket)
+            _done(bucket, self.clock)
         del self.held[key]
         os.close(self.fds.pop(key))
         self.closed.add(key)
@@ -241,10 +265,10 @@ def _ready(fd: int) -> bool:
     return bool(poller.poll(0))
 
 
-def _done(bucket: _Bucket) -> None:
+def _done(bucket: _Bucket, clock: Callable[[], float]) -> None:
     bucket.left -= 1
     if not bucket.left:
-        bucket.end = time.monotonic()
+        bucket.end = clock()
 
 
 def _report(bucket: _Bucket, ended: bool) -> None:
@@ -263,24 +287,29 @@ def _receive(channel: socket.socket, links: _Links) -> bool:
 
 
 def main(argv: list[str]) -> int:
+    """The pacer's process: `argv` is its channel's fd, its backlog, its clock's name (`CLOCKS`) and each first link
+    as KEY=FD. Every time it reads is on that one clock, read once here before it reports ready, so a pacer whose
+    clock the host doesn't give never starts."""
     channel: socket.socket | None = socket.socket(fileno=int(argv[0]))
-    links = _Links({int(key): int(fd) for key, fd in (a.split("=") for a in argv[2:])}, int(argv[1]))
+    clock = CLOCKS[argv[2]]
+    clock()
+    links = _Links({int(key): int(fd) for key, fd in (a.split("=") for a in argv[3:])}, int(argv[1]), clock)
     gc.disable()
     data, queue, flight, reading = bytearray(), deque(), deque(), True
     os.write(1, READY)
     while reading or queue or flight:
-        now = time.monotonic()
+        now = clock()
         if queue and queue[0].due - now <= SPIN_S:
             bucket = queue.popleft()
-            while time.monotonic() < bucket.due:
+            while clock() < bucket.due:
                 pass
-            bucket.start = time.monotonic()
+            bucket.start = clock()
             keys = [key for key, part, last in bucket.parts if links.put(key, part, bucket, last)]
             for key in dict.fromkeys(keys):
                 if key in links.fds:
                     links.flush(key)
             if not keys:
-                bucket.end = time.monotonic()
+                bucket.end = clock()
             flight.append(bucket)
             _report(bucket, False)
         else:
@@ -303,7 +332,7 @@ def main(argv: list[str]) -> int:
                     data += chunk
                     buckets, used = _parse(data)
                     del data[:used]
-                    arrived = time.monotonic()
+                    arrived = clock()
                     for t, due, parts in buckets:
                         for key, _, _ in parts:
                             while key not in links.fds and key not in links.closed and channel is not None:

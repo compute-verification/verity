@@ -108,11 +108,16 @@ whether and where a connection fails, chooses one of at most (cells + 1) outcome
 (with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
+**The clock.** The network certifier has one clock, the host's raw monotonic clock (`pacer.raw_clock`), which no time
+service steers: `origin` is a reading of it, a tick runs once it reads the tick's boundary and never before, a tick's
+lateness is read on it, and the pacer releases on it. Where the host gives no raw clock the network certifier does
+not start (`pacer.ClockRefused`): it runs on no other.
+
 **The pacer** (`Warden(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, and the
 loop reads every server, so when a server writes within a bucket, which the prover chooses, moves when the bucket
 reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live connection's cells as a
 part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it at `origin` + t·τ +
-`paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's socket reaches the
+`paced` on the network certifier's clock, a time fixed before the bucket is made; each connection's socket reaches the
 pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached the pacer after its
 time, or whose release started more than `slack` after it, faults every grid's window `monitor-unavailable`, as a late
 tick does. A window's three records are published once every bucket of it that was handed is released, or by the
@@ -160,7 +165,7 @@ from verity.protocols.certifier.verifier.active import (DATA, HEADER, ID_DIGITS,
                                                    decode_frame, encode_frame, id_request_max_tokens, precise_sleep)
 from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
 from verity.protocols.certifier.verifier.io_tie import parse_cell
-from verity.protocols.certifier.verifier.pacer import Pacer, Report
+from verity.protocols.certifier.verifier.pacer import Pacer, Report, raw_clock
 from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
@@ -471,7 +476,9 @@ def _pad(c: _Connection, cell_bytes: int) -> bytes:
 class Warden:
     """The active network certifier (the module docstring): `handle(reader, writer)` serves one client connection,
     `run()` ticks the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts
-    whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair.
+    whatever is still served or queued. `connect()` opens a server connection, a (reader, writer) pair. `clock` is the
+    host's raw clock (the module docstring's "The clock") unless a caller that drives the run injects its own, and
+    `sleep` waits against `clock`.
 
     - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
       default they are kept in `records`), and `withhold(record, params)` in its place those of a window in which a
@@ -491,14 +498,14 @@ class Warden:
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
     - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
-      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
+      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's raw clock,
       `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
       bucket's `pacer.Report` once its writes end;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
-                 windows: int, clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], Awaitable[None]] = precise_sleep,
+                 windows: int, clock: Callable[[], float] = raw_clock,
+                 sleep: Callable[[float], Awaitable[None]] | None = None,
                  publish: Callable[[Record, GridParams], None] | None = None,
                  withhold: Callable[[Record, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
@@ -526,7 +533,8 @@ class Warden:
         self._watermark_unsent = bytearray()
         self._watermark_lines: deque[tuple[int, int, list[_Connection]]] = deque()
         self.params, self.connect = params, connect
-        self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
+        self.origin, self.windows, self.clock, self.slack = origin, windows, clock, slack
+        self.sleep = sleep if sleep is not None else (lambda delay: precise_sleep(delay, self.clock))
         self.egress = Certifier(egress_link, params.grid)
         self.ingress = Certifier(ingress_link, params.grid)
         self.fails = Certifier(fails_link, params.fails_grid)
@@ -578,15 +586,17 @@ class Warden:
     async def run(self) -> None:
         tau = self.params.bucket_ms / 1000
         reports = None
+        self.clock()  # a clock that can't be read refuses here, before the pacer starts or a tick runs
         if self.paced is not None:
-            self._pacer = await Pacer.start(backlog=WRITE_BACKLOG)
+            self._pacer = await Pacer.start(backlog=WRITE_BACKLOG, clock="raw")
             reports = asyncio.create_task(self._reports(self._pacer))
         opening = asyncio.create_task(self._open_watermark()) if self.watermark is not None else None
         try:
             for t in range(self.windows * self.params.window):
                 deadline = self.origin + t * tau
                 await self.sleep(deadline - self.clock())
-                late = self.clock() - deadline
+                while (late := self.clock() - deadline) < 0:  # a wait that ended early: no tick runs before its time
+                    await self.sleep(-late)
                 self.lateness.append(late)
                 if late > self.slack:
                     for grid in (self.ingress, self.egress, self.fails):
