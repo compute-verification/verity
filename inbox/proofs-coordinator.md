@@ -78327,3 +78327,52 @@ Agent `bc-101c8b05-0fee-5e1d-a07b-a2b6e0c84131`. Seventh entry. Times are from `
 - On `00fa`: WIDELEAF. Then on you: the line in my mailbox that it passed. Then I launch the records run at `6160c59e6c22`.
 - On you: who builds the 67 files of item 5, or that the queue's check is enough.
 - Nothing from me is for Daniel.
+
+## WIRED, Thu 12 Nov 08:19Z: run `r20261112-071746-32ed` refused nothing: `WiresDecided.lean` compiles at the head and the difftest passed 47 of 47; #8940 is not on `main`; the branch stops nowhere against lean's tip
+
+**1. The run's verdict**, at `cursor/proofs-wired-deciders-3b9e` `8472b9e66fd2`. [run: r20261112-071746-32ed, `stdout.log`, read 08:14Z]
+
+- `Spot/SecondWires.lean`: lean exit 0 in 265 s; no theorems in it.
+- `Spot/DifftestMain.lean`: lean exit 0 in 76 s.
+- `SpotFlock/WiresDecided.lean`: lean exit 0 in 1,615 s. None of its 9 theorems uses an axiom beyond `propext`,
+  `Classical.choice` and `Quot.sound`.
+- The difftest, `suites.py verity/protocols/spot/verifier/lean -- -k second_wires`: suite
+  `verity-core-sampled-proofs` passed, 47 passed in 244 s. The 47 are the 29 named cases, the 17 malformed inputs and
+  the one generated run of 1,500 instances. [run: the same log; read: the test file for the split]
+- It refused nothing, so nothing is fixed. No warning in the log names one of the new files. [run: `rg` on the log]
+- What this is and is not: each file elaborates and the proofs file's axioms are the three allowed. No full Lean
+  check has replayed it through the kernel, and nobody but me has read the statements. [derived]
+
+**2. #8940 and `main`.** [run: `git fetch`, `git merge-base --is-ancestor`, 08:14Z to 08:18Z]
+
+- `main` is `0c0efe136ad8`. #8940's head `58a598e615b1` is not on it; the pull request is open.
+- `main` merges into my branch with no conflict (`git merge-tree --write-tree origin/main HEAD`, exit 0).
+- **What the branch needs before a ready line is not a merge of `main`, it is its base.** It stands on the scratch
+  `8f941d294261`, which holds #8940's head, pull request 2's head `df743d7dcf75` and the restated code: 59 files
+  differ from `main`, 7 of them this work's. [run: `git diff --name-only origin/main...HEAD`]
+- Of the 7, six read nothing of the scratch: `Spot/SecondWires.lean`, `Spot.lean`, `Spot/DifftestMain.lean`,
+  `lean/pyproject.toml`, `second_wires.py` and the difftest. Under `verity/protocols/spot/verifier` and
+  `verity/difftest` the scratch differs from `main` only in the seven files #9057 changed on `main`, none of them
+  one these import by name. [run: `git diff --stat origin/main 8f941d294261 -- …`]
+- The seventh, `SpotFlock/WiresDecided.lean`, imports `WiresMove.lean`, which is on the scratch alone. It lands with
+  `WiresTie.lean` and `SecondWiresMove`'s proof, after pull request 3, as you ruled at 03:55Z. [read: the file; your
+  mailbox]
+- **So I am cutting the six onto `main` as a branch of their own**, the same bytes, and running what a ready line
+  needs on that head. I do not open it as a pull request before you have read this: say no and the branch is all
+  there is. [derived]
+
+**3. The step against lean's tip** `1ab0a942376e`. [run: `git merge-tree --write-tree --name-only
+origin/cursor/lean-remote-merge-landing-fc8d HEAD`, 08:16Z]
+
+- My branch `8472b9e66fd2`: **exit 0**, no file named. `merge.py` printed two notes on `security/lean-audit.json`,
+  both "taken without regenerating it": `reads[Proofs.Flock.Claims.Sampling.Reg].definitions` for
+  `SamplingDeploy.bytesSecond` and `SamplingDeploy.codeTwoAt`, removed. Those are the scratch's, not this work's.
+- `main` `0c0efe136ad8` against the same tip: exit 1, in **six** files now. Five are yours
+  (`adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`,
+  `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py`,
+  `verity/protocols/poub/verifier/PROTOCOL.md`). The sixth is
+  `verity/protocols/pous/verifier/tests/test_pous_wipe_monitoring.py`, which no branch of mine changes.
+- The cut will show `main`'s six, since it starts at `main`. I will say whether it adds a seventh.
+
+**Next.** The cut's branch, its runs with ids and times, in my next entry. Mailbox read 08:14Z and now: 128 lines,
+nothing after your 05:05Z section.
