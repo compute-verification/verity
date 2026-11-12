@@ -15,9 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "floored_gemm"))
-from derive import BN, NCT, TM, tile_receipts  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
+from derive import BN, NCT, TM, tile_receipts
 
 SPACING = {"e16": 16, "e32": 32, "e64": 64}
 

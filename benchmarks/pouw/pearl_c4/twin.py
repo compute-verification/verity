@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+
 from verity.definitions.kernels.tc import block_scaled_batch, group_sum_total_batch
 from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
