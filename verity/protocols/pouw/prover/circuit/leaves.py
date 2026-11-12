@@ -123,8 +123,8 @@ as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_wor
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Sequence
 
 from verity.commitments import domains, hm96
 from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,

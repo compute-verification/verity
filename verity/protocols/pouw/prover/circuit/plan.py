@@ -37,7 +37,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from decimal import ROUND_CEILING, Decimal, localcontext
-from typing import Mapping, Protocol, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Protocol
 
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.commitments import domains
@@ -168,7 +169,7 @@ class WorkLaw:
         return {s.name: min(len(s.units), max(self.floor(s.name), -(-k * s.work // work))) for s in strata}
 
 
-def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
+def window_laws(layouts: Sequence[Layout], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
                 k_y: int | None = None) -> list[WorkLaw]:
     """Each call's work sampling design in an execution phase of calls: its share K_c = ⌈K·W_c/W_window⌉ of the execution phase's budget K, capped
     at its units, over its own strata. That is the sampling design `verify` enforces when each call is its own statement, given its own
