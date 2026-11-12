@@ -546,12 +546,14 @@ def test_the_slowdown_scan_reads_each_form():
     spelling and a word that only holds the letters don't; outside it only the calculator's old path counts, and a record
     of a move keeps it."""
     home = SLOWDOWN_HOME[0]
+    # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
+    old = home.removesuffix("slowdown/") + "rho/"
     toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
                            'x = search(*case)["rho"]  # a rhombus, a throw\n'),
-           "b.py": "rho = coins()  # ρ, Flock's; see verity/protocols/inference_only/rho/README.md\n",
+           "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
            "c.py": "# inference_only/rho_notes is another path\n",
-           "tools/move/old_map.toml": '"verity/protocols/inference_only/rho/" = "verity/protocols/inference_only/slowdown/"\n',
-           MOVE_RECORDS[1]: '{"verity/protocols/inference_only/rho/run.py": "verity/protocols/inference_only/slowdown/run.py"}\n'}
+           "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
+           MOVE_RECORDS[1]: f'{{"{old}run.py": "{home}run.py"}}\n'}
     found, used = slowdown_offenders(list(toy), read=toy.get)
     assert found == [("b.py", 1, "inference_only/rho"), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
                      (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
