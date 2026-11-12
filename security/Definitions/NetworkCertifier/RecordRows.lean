@@ -24,6 +24,10 @@ Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the 
 frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
 `S = lanes·r`).
 
+**The deployed format** (`cellRows`) is `warden.py`'s frames of `B` bytes: a kind u8, the connection's ordinal u32, the
+payload's length u32, the payload and zero fill, the `c`-th of `N` connections at ordinal `c + 1`. It is well formed
+(`RowsFormat.Wf`) when `B` and `N` are under 2^32.
+
 **What the Python records add.** A connection the network certifier fails for its client's sake (a malformed cell, or
 ingress past its bound) fails at once, before `adm c + D` too; `certifierLane` fails a lane only at a late cell or a late
 end, so such a lane is not one `certifierCode` gives. A lane whose server sends past `egress_cells` cells fails at the last
@@ -116,5 +120,49 @@ end RowsFormat
 /-- `fxQueue`: 3 connections; the Python network certifier's egress record, buckets 0 … 9 (every later bucket empty). -/
 def fxQueueSched : CertifierSchedule (Fin 3) :=
   { r := 2, D := 3, adm := ![1, 2, 6], cells := ![6, 2, 2] }
+
+/-! ## The deployed rows format -/
+
+/-- A cell's content in the network certifier's frames of `P` payload bytes (`warden.py`): `DATA`'s bytes, or a
+direction's last `0 … P` of them, `END`'s (`last`). -/
+structure FrameCell (P : ℕ) where
+  last : Bool
+  payload : List (Fin 256)
+  fits : payload.length ≤ P
+
+/-- `x`'s low `w` bits, the most significant first. -/
+def bitsBE (w x : ℕ) : List Bool :=
+  List.ofFn fun i : Fin w => x.testBit (w - 1 - i)
+
+/-- A frame's kind (`warden.py`: `PAD` 0, `DATA` 1, `END` 32, `FAIL` 33) and its payload. -/
+def frameKind {P : ℕ} : CellView (FrameCell P) → ℕ × List (Fin 256)
+  | .data x => (if x.last then 32 else 1, x.payload)
+  | .pad => (0, [])
+  | .fail => (33, [])
+
+/-- **The network certifier's frame** of `B` bytes for connection `c` (`active.encode_frame`), as bits: its kind u8,
+its connection's ordinal u32, `c + 1` (0 is a refusal's), its payload's length u32, the payload, and zero fill to `B`
+bytes, past the 9-byte header. -/
+def cellFrame {N : ℕ} (B : ℕ) (x : Fin N × CellView (FrameCell (B - 9))) : List Bool :=
+  bitsBE 8 (frameKind x.2).1 ++ bitsBE 32 (x.1.val + 1) ++ bitsBE 32 (frameKind x.2).2.length ++
+    (frameKind x.2).2.flatMap (fun b => bitsBE 8 b.val) ++
+    List.replicate (8 * (B - 9 - (frameKind x.2).2.length)) false
+
+open Classical in
+/-- **The deployed rows format** (`warden_rows.py`'s rows of `warden.py`'s frames): `N` connections in ordinal order,
+the `c`-th at ordinal `c + 1`; a frame is `B` bytes (`cellFrame`), and reads as the connection and cell whose frame it
+is, and as nothing else; on the egress link `link`, `T` buckets a window, with the network certifier's jitter classes
+and statuses. -/
+noncomputable def cellRows {L K : ℕ} (B N : ℕ) (link : Fin L) (T : ℕ)
+    (jitter : CertifierSchedule (Fin N) → (Fin N → Arrivals (FrameCell (B - 9))) → ℕ → ℕ)
+    (status : CertifierSchedule (Fin N) → (Fin N → Arrivals (FrameCell (B - 9))) → ℕ → Fin K → Status) :
+    RowsFormat (Fin N) (FrameCell (B - 9)) L K where
+  conns := List.finRange N
+  enc := cellFrame B
+  dec f := if h : ∃ x, cellFrame B x = f then some (Classical.choose h) else none
+  link := link
+  T := T
+  jitter := jitter
+  status := status
 
 end NetTiming
