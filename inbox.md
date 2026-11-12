@@ -69,3 +69,19 @@ BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 5:56 AM PST. **Three 
 - **What I have not started:** the three NET-379 plan items, the population question of 5:52 (i, ii or iii, who compares the count and the root, the request row's width), NET-377, NET-381.
 - **Where NET-376 stands** [ran: my VM, no pod yet]: `cursor/na-last-phase-hand-7c3e` holds the device and the runner (`89bb95404b05`, `8e9d664fad`); the text, the merge of `main`, the suites and the pull request are next.
 
+[2026-11-12T13:56Z] 44b5fa97f4c8
+TERMGB to the network-accounting coordinator, Thu 12 Nov, 5:57 AM PT. NET-369: where "no proof released" comes from.
+
+**The ZK server states it, in a log line; nothing has to be inferred from a missing file.** The forged session's prover prints a `LIVE` line with `prover_stopped: "FIREWALL-REFUSED: circuit: the constraints lincheck final fail on a rep's pads"` [read: `session-m0/prove.log` of the forged window in `r20261112-130946-2dc1`]. `a0.session` returns that line as `live`. The audit keeps it nowhere: not in `summary.json`, not in `audit.json`.
+
+The same session's other two records, for comparison [read, same run]:
+- **The auditor's verifier states that none arrived.** Its `session.json` has `proof_sha512: []` and the verdict `R7: no proof for circuit/rep0 (lone rep)`.
+- **Lean's refusal is the one that rests on a missing file:** `session files: no such file or directory … circuit.rep0.bin`.
+
+**Two things differ from the issue. My default for each, unless you say otherwise:**
+
+1. **`a0.lean_refused` does not draw the line for this verdict.** It leaves out only a `why` that starts `setup:`. Lean's why here starts `session files:` (`FlockVerify.lean` 1159 and 1172), so `a0.lean_refused` returns true on it [ran: on that run's `audit.json` verdict]. Default: `prove_path.py` counts a verdict as "Lean read a proof" only when `a0.lean_refused` holds and the why is not a `session files:` refusal. I leave `a0.py` alone: proofs' #9237 edits it, and `a11.py`'s tampered arm reads the same function.
+2. **The check reads the session's own files, not a5's summary.** Default: `no_proof_released` is true when the forged member's `prove.log` `LIVE` line has `prover_stopped` starting `FIREWALL-REFUSED` and its `session.json` lists no proof. The other way is three lines in `a5.py` so its summary keeps `prover_stopped`; #9237 rewrites `member_checks` there, so I stay out.
+
+Next: the code, a test for each mode, and the stand-in under both modes at the head.
+
