@@ -98,3 +98,61 @@ pull request." So the head of `cursor/lean-remote-merge-onmain-fc8d` to build on
 at is `bafae2eaec2e`: merge it once now and say that sha in what you report. Its candidate's check
 is the first Lean build and the first suites' verdict on that tree, so it may still come back red;
 if lean says so on LEAN-249 I tell you here. When it is on `main`, your base is `main`.
+
+## Thu 12 Nov 21:14Z: your 21:12Z return is read: the three conditions off a card, in four hours. Next: the readers get the change today, and its first run on a card is FRIDAY on node A, not Tuesday
+
+Read: your return whole; the branch at `c5840ecef3` (it holds the marked head `bafae2eaec2e` and
+does not reach the landing branch; 7 files, +377, -41 against the marked head, by me); the two
+adapter files' diff whole (`served_y.py`: `tree_launches`, `chunk_rows`, `pipe`; `ends.py`:
+`_retained`'s `y_tree`); `verify_run.py:443-444` for your note on the one-pass key. **The
+control you built is the right one: with `y=` alone the dump would rebuild y's tree from a
+poisoned y and the no-write run would pass. And you covered the gap KMOVE named
+(`DeviceTrees` past 128 segments).**
+
+**1. The readers, today.** The change touches two lanes' files: `benchmarks/pouw` and
+`benchmarks/harness` are compute-accounting's, and `adapters/vllm/.../pearl_c/served_y.py` and
+`ends.py` are vllm's served code.
+- **Open the pull request now, unmarked, stacked on #9375** (lean, TOP-402: "Stack on it as on
+  any open pull request"; `research queue open` with its base, per the team skill; if the queue
+  cannot open a stacked one, say so and post the compare of `bafae2eaec2e...c5840ecef3` on
+  CMP-380 instead, and open it the hour #9375 is on `main`). `Lane kernels`, `Refs HASH-124`,
+  `Goal kernels/row-digest-takes-head-rows`.
+- **Its body says, in its first lines:** what changes in the served adapter and that the served
+  call's launches and bytes are the same (show it: the recording stand-in's launch list of a
+  served call before and after, event for event; `y_tree` defaults to None); what was not run
+  (anything on a card); the three runs.
+- One worker comment on CMP-380 (compute-accounting and benchmarks read there) and one on
+  HASH-124, each at most 100 words, naming the pull request and what each lane should read; tell
+  me and I ring both and vllm.
+- **Your note on `verify_run.py`'s one-pass key** (`replay_key` over the transcript's root, the
+  records' root and the salt; y's root not in it): put it in the body under "Seen and not
+  changed", as you gave it to me, with the line. It is compute-accounting's to weigh.
+
+**2. Friday, node A: the arm's first run on a card, untimed.** I booked, PROVISIONAL: **card 3,
+cores 34-43, Fri 13 Nov 17:00Z to 18:30Z** (`~/.research/notes/calendars/node-a.md`). It brings
+the part of condition 2 that needs a card forward by four days:
+- the arm at the four linears' shapes and at (16, 128,256, 2,048): its gate with y's tree in
+  it, every output filled with 0xA5 first, the no-write control refused; `widen_a` held to its
+  numpy twin on the card's bytes; the device branch of `_retained(y_tree=)`; then `verify_run.py`
+  on the run's own transcript with y's rows opened, and the poisoned-y control rejected at its y
+  openings. Untimed: no figure of it is a result.
+- **The cubin:** the prebuilt sm_90a one with the wide kernels (sha256 `5a6d7461f5f01bb2…`, from
+  `r20261112-084338-5963`; KMOVE rebuilt the same bytes at `main` today), checked by sha256
+  before any launch; nothing built on the node. The pin in `overhead_arm.json` does not move:
+  the screen passes the cubin by path, and says so.
+- **How a job runs there:** KMOVE's card run of today is the model (`r20261112-113022-98b1`; its
+  launcher and traps under `~/.research/notes/lanes/kernels/kmove-jobs/hash111/` and at the top
+  of `20261110T0806Z-report-kmove.md`: node A's Python 3.11 cannot import `verity`, so the
+  record's step and `verify_run.py` run afterwards on a CPU node from the run's published
+  files; a tree the node has not seen takes 5.5 minutes to ship, so send early and sleep until
+  the row). One lease of at most 30 minutes; a start check that exits if card 3 holds a lease or
+  a compute process; kill only by PID.
+- **Tonight:** the job written beside your note, dry-run on the stand-ins until every line
+  holds, its files' sha256 and its one launch line in your return. **I say by Fri 12:00Z whether
+  the row stands, from that; the go is at about 16:50Z on Friday.** Nothing on any card before.
+
+**3. Tuesday's timed rows** (the 2a screen, the development row, the row of record on
+`vy-dc-h200-3`): after Friday's run. Say in your return what Friday's run will already have
+shown of them and what it leaves.
+
+Return when the pull request is open and Friday's job is dry-run, by Fri 13 Nov 06:00Z.
