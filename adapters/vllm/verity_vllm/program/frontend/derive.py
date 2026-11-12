@@ -35,7 +35,8 @@ from __future__ import annotations
 import hashlib
 import operator
 from dataclasses import dataclass
-from typing import Any, Callable, NoReturn, Sequence
+from typing import Any, NoReturn
+from collections.abc import Callable, Sequence
 
 import torch
 
@@ -264,7 +265,7 @@ class Ctx:
     def module_path(self, node) -> str | None:
         if node is None or not isinstance(node, torch.fx.Node):
             return None
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return None
         _path, cls = list(stack.values())[-1]
@@ -272,7 +273,7 @@ class Ctx:
         return f"{path or '<root>'} ({cls.__name__ if isinstance(cls, type) else str(cls).rsplit('.', 1)[-1]})"
 
     def module_class(self, node) -> str | None:
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return None
         _, cls = list(stack.values())[-1]
@@ -289,7 +290,7 @@ class Ctx:
         from `...mlp.experts`), a duplicate registration replaced by the first (`...mlp.shared_experts.act_fn`, the collector's name).
         A ROOTED duplicate stays under the duplicate name (C1 coverage FAILS it as missing, never a silent merge); an unrooted
         entry under NO registered path keeps its bare name and is COUNTED in `unresolved_module_paths` (provenance)."""
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         if not stack:
             return ""
         entries = [str(p or "") for p, _c in stack.values()]
@@ -550,7 +551,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     prov["mutation_effects"] = ctx.mutation_effects
     prov["returned_inputs"] = ctx.returned_inputs
     prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
-    if ctx.registered_values:
+    if ctx.registered_inputs is not None:
         prov["supplied"] = ctx.registered_inputs.layout()
     if ctx.run_inputs is not None:
         prov["run_inputs"] = ctx.run_inputs.layout()
@@ -564,7 +565,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()},
                                                  **({} if corr_doc is None else {_CORR: corr_doc}), **holes},
-                           registered=ctx.registered_inputs.names if ctx.registered_values else (),
+                           registered=ctx.registered_inputs.names if ctx.registered_inputs is not None else (),
                            theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
@@ -665,7 +666,7 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
     leaves: list[WeightLeaf] = []
     by_id: dict[int, int] = {}
     fqn_to_leaf: dict[str, int] = {}
-    items = [(n, p, "parameter") for n, p in module.named_parameters(remove_duplicate=False)]
+    items: list[tuple[str, torch.Tensor, str]] = [(n, p, "parameter") for n, p in module.named_parameters(remove_duplicate=False)]
     items += [(n, b, "buffer") for n, b in module.named_buffers(remove_duplicate=False)]
     for fqn, t, kind in items:
         key = id(t)
@@ -855,9 +856,7 @@ def _translate_node(ctx: Ctx, node) -> None:
         base = ctx.val(node.args[0])
         if isinstance(base, _LiftedConstant):
             _refuse_constant(ctx, node, base)
-        if isinstance(base, (list, tuple)):
-            ctx.define(node, base[node.args[1]], view_of=node.args[0])
-        elif isinstance(base, Coll):
+        if isinstance(base, (list, tuple, Coll)):
             ctx.define(node, base[node.args[1]], view_of=node.args[0])
         elif isinstance(base, StaticIndex):
             ctx.define(node, StaticIndex(base.tensor[node.args[1]]), view_of=node.args[0])

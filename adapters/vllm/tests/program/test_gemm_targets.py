@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile, profile_mismatches
 from verity_vllm.program.frontend import gemm_targets as GT
+from verity_vllm.program.frontend.target_profile import (
+    DEFAULT_TARGET,
+    TargetProfile,
+    profile_mismatches,
+)
 
 AMPERE_TP = TargetProfile(compute_capability=(8, 0), num_sms=108)
 HOPPER_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
@@ -53,7 +57,10 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
     the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
     Definition is Hopper's `Gemm_v2`."""
     from verity.definitions.silicon.instructions import INSTRUCTIONS
-    from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
+    from verity.definitions.silicon.models import (
+        HOPPER_BF16_M16N8K16,
+        HOPPER_BF16_WGMMA_K16,
+    )
 
     bw = GT.REGISTERED["blackwell_consumer"]
     assert bw.compute_capabilities == ((12, 0),) and bw.vllm_arch_family is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None
@@ -78,6 +85,7 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
     `Attention_v3`; a declared FA3 is refused by name."""
     from verity.definitions.registry import b1
+
     from verity_vllm.program.frontend import targets as TG
 
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2
@@ -177,7 +185,9 @@ def test_ada_table_pins_every_vllm_key_verbatim():
     for (n, k) in ((75968, 2048), (2560, 2048), (128, 2048), (5120, 2048)):
         assert ada.launch_config(2, n, k)[3] == "default[ada]"
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT
+        from vllm.model_executor.determinism.batch_invariant_configs import (
+            _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT,
+        )
     except Exception:  # noqa: BLE001
         pytest.skip("pinned vLLM not importable here: the verbatim check runs on the construction/capture hosts")
     vt = VT["ada"]
@@ -212,8 +222,8 @@ def test_profile_mismatches_checks_the_applied_family():
 # -- Bet A: the GEMM rule's pins follow the registry (needs torch) ----------------------------------------------------------
 
 torch = pytest.importorskip("torch")
-from verity_vllm.program.frontend.rules import vllm_bindings as VB  # noqa: E402
 from tests.program.test_vllm_bindings_pins import _gemm_meta  # noqa: E402
+from verity_vllm.program.frontend.rules import vllm_bindings as VB  # noqa: E402
 
 
 @pytest.fixture

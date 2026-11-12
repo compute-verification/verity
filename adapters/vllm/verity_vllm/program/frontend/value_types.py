@@ -4,13 +4,15 @@ numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import torch
-
 from verity.circuits.refs import Coll, Refs, concat
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.errors import FrontendError
 
 WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16, torch.uint16: 16, torch.bfloat16: 16,

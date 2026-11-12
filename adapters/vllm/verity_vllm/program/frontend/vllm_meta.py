@@ -140,7 +140,10 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
     if _DIST_READY:
         return "already"
     from vllm.config import set_current_vllm_config
-    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
+    from vllm.distributed import (
+        ensure_model_parallel_initialized,
+        init_distributed_environment,
+    )
     with set_current_vllm_config(vllm_config):
         for attempt in range(_PORT_TRIES):
             try:
@@ -244,7 +247,9 @@ class GreedyRequest(nn.Module):
         self.model, self.LP, self.T = model, LP, T
 
     def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
             hidden = self.model(ids, positions)
@@ -278,7 +283,9 @@ class ChunkedGreedyRequest(GreedyRequest):
                              f"launches of at least one")
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         a = 0
         for j, n in enumerate(self.chunks):
             with launch_region(j, "tokens"):
@@ -399,7 +406,9 @@ class StochasticRequest(nn.Module):
         self.S = int(S)
 
     def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            launch_region,
+        )
         from verity_vllm.program.frontend.rules.vllm_iface import iface
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
@@ -459,7 +468,7 @@ def registered_policy_splits(sampling: dict) -> int:
     if g.get("num_sms") is None:
         raise ValueError(f"sampling.splits {S!r}: the policy's geometry declares no num_sms, so it has no registered split count")
     want = registered_splits(int(g["num_sms"]))
-    if type(S) is not int or S != want:
+    if type(S) is not int or want != S:
         raise ValueError(f"sampling.splits {S!r} is not the registered split count registered_splits({int(g['num_sms'])}) = {want}, "
                          f"the S the served engine pins")
     return S

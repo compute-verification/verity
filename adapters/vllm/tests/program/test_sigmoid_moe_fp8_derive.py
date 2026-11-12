@@ -23,9 +23,16 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.fp8_moe_rows import (
+    moe_expert_fp8_block_row,
+    silu_mul_fp8_block_quant_rows,
+)
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import fp8_moe
+from verity.definitions.registry import moe as MOE
+
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -35,10 +42,6 @@ from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.targets import wgmma_tile
-from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import fp8_moe
-from verity.definitions.registry import moe as MOE
 
 F8 = torch.float8_e4m3fn
 PROF = dict(mode="profile", profile="b1-eager-v3")

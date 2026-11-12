@@ -13,9 +13,9 @@ from __future__ import annotations
 import numpy as np
 import torch
 import torch.nn as nn
+from verity.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend.derive import derive_report
-from verity.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager")
 BF = torch.bfloat16

@@ -28,32 +28,57 @@ from __future__ import annotations
 
 import inspect
 import warnings
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import torch
 from torch.utils import _pytree as pytree
-
 from verity.circuits.codec import descriptor_id, program_digest
-from verity.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition,
-                    SpecializedDefinition, _static_key)
+from verity.circuits.defs import (
+    REGISTRY,
+    Builder,
+    CompositeDefinition,
+    FunctionDefinition,
+    PrimitiveDefinition,
+    SpecializedDefinition,
+    _static_key,
+)
 from verity.circuits.defs import bind as ir_bind
-from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Coll
 from verity.circuits.liveness import DeadGateReport
 from verity.circuits.liveness import dead_gates as _dead_gates
-from verity.circuits.types import Array, Tuple as TupleT, Type
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array, Type
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.correspond import compare_bodies
 from verity_vllm.program.frontend.errors import DeadGateWarning, FrontendError
 from verity_vllm.program.frontend.graph_translate import _guard, _Spec, _translate
 from verity_vllm.program.frontend.minted_ops import _DEPTH, _emit, _tracing
 from verity_vllm.program.frontend.program_identity import check_identity
-from verity_vllm.program.frontend.provenance import MODULE_WEIGHTS_RULE, RuleApplication, registry_version
-from verity_vllm.program.frontend.schemas import _check_deferred, _schema, _type_of_schema, _unify
-from verity_vllm.program.frontend.value_types import is_tensor_type, shape_of, tensors_of, type_of
+from verity_vllm.program.frontend.provenance import (
+    MODULE_WEIGHTS_RULE,
+    RuleApplication,
+    registry_version,
+)
+from verity_vllm.program.frontend.schemas import (
+    _check_deferred,
+    _schema,
+    _type_of_schema,
+    _unify,
+)
+
 # Imported from here by modules that open PRs edit; they move to `value_types` and `strided_views` after those land.
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type  # noqa: F401
-from verity_vllm.program.frontend.value_types import type_of_tensor, width_of  # noqa: F401
+from verity_vllm.program.frontend.value_types import (  # noqa: F401
+    is_tensor_type,
+    shape_of,
+    tensors_of,
+    type_of,
+    type_of_tensor,
+    width_of,
+)
 
 FRONTEND_VERSION = "verity_vllm.program.frontend.torch_frontend/2026-09-07.fe2"
 
@@ -69,7 +94,7 @@ class _Callable:
         """(fn definition, declared parameter types, return type) for these argument types and statics."""
         raise NotImplementedError
 
-    def bind(self, **statics) -> "Bound":
+    def bind(self, **statics) -> Bound:
         return Bound(self, statics)
 
     def __call__(self, *args, name: str = "", **kwargs):
@@ -397,7 +422,7 @@ class Ops:
     def roles(self) -> dict[str, _Callable]:
         return dict(self._roles)
 
-    def with_roles(self, **roles: _Callable) -> "Ops":
+    def with_roles(self, **roles: _Callable) -> Ops:
         return Ops(self._registry, **{**self._roles, **roles})
 
     def const(self, w: int, bits: int, name: str = ""):

@@ -8,8 +8,17 @@ import json
 
 import pytest
 
-from verity_vllm.program.frontend.target_profile import (ApplicabilityError, ArtifactIdentity, TargetProfile, canonical_bytes, check_reuse, load_artifact,
-                                               parse_target_arg, profile_mismatches, reuse_mismatches)
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    canonical_bytes,
+    check_reuse,
+    load_artifact,
+    parse_target_arg,
+    profile_mismatches,
+    reuse_mismatches,
+)
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)
 CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha256": "ab" * 32}
@@ -32,6 +41,22 @@ def test_default_profile_is_the_admitted_sm89_record_and_canonical():
     assert p.capability_str == "8.9" and p.sm_arch == "sm_89"
     assert p.canonical() == canonical_bytes(p.to_json()) and TargetProfile.from_json(json.loads(p.canonical())) == p
     assert TargetProfile(compute_capability=[8, 9]) == p  # list vs tuple canonicalise to the same profile
+
+
+def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_list():
+    """The bytes an artifact's identity hashes: a tuple is a list and a set its sorted list at any depth, keys are sorted and
+    kept as JSON writes them, and what JSON cannot hold is a TypeError."""
+    obj = {"b": (1, [2, {"z": frozenset({3, 1, 2})}]), "a": {"y", "x"}, 3: None, "é": 1.5, "t": ((0, 5), {(1, 2), (0, 7)})}
+    plain = {"b": [1, [2, {"z": [1, 2, 3]}]], "a": ["x", "y"], "3": None, "é": 1.5, "t": [[0, 5], [[0, 7], [1, 2]]]}
+    with pytest.raises(TypeError):
+        canonical_bytes(obj)  # an int key beside str keys has no order
+    del obj[3], plain["3"]
+    want = b'{"a":["x","y"],"b":[1,[2,{"z":[1,2,3]}]],"t":[[0,5],[[0,7],[1,2]]],"\\u00e9":1.5}'
+    assert canonical_bytes(obj) == canonical_bytes(plain) == want
+    assert canonical_bytes({2: "b", 10: "a"}) == b'{"2":"b","10":"a"}'  # sorted as the ints they are
+    for bad in (object(), {"a": object()}, [{1, "a"}], {(1, 2): 3}):
+        with pytest.raises(TypeError):
+            canonical_bytes(bad)
 
 
 def test_profile_rejects_unknown_and_invalid_fields():
@@ -257,6 +282,7 @@ def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
 def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypatch):
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(moe_backend="triton")
     monkeypatch.setattr(B.torch.cuda, "get_device_properties",
@@ -291,6 +317,7 @@ def test_an_engine_whose_attention_carries_no_fa_version_is_no_fa_version_questi
     layers: the engine is judged on its device and kernels; a FlashAttention impl at another version is still a mismatch."""
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(compute_capability=(9, 0), num_sms=132)
     monkeypatch.setattr(B.torch.cuda, "get_device_properties", lambda i: types.SimpleNamespace(major=9, minor=0, multi_processor_count=132))
