@@ -26,6 +26,12 @@ FULL_DUMPS = {"X": ("X", np.int8), "PA": ("PA", np.int8), "Wp": ("Wp", np.int8),
               "O_fx1": ("Y_c_fx1", np.int32), "R_fx1": ("R_c_fx1", np.uint32)}
 HALF_DUMPS = {"X": ("X", np.int8), "PA": ("PA", np.int8), "Wp": ("Wp", np.int8), "PB": ("PB", np.int8),
               "O": ("Y_h", np.int32), "R": ("R_h", np.uint32)}
+#: floored_gemm/fgemm.cu's key_mul(1, 32 j), j = 0 .. 31: mix32(0xA0000000 + 2 (16 + 32 j)) | 1. Written out, so the
+#: keys a gate directory is made with are not the ones the judge under test binds
+FX1_KEY = (0x647DC62B, 0xDDEEABEF, 0x54C8DC17, 0xB07020F7, 0x027AEF5F, 0x859151DF, 0xAE776B81, 0xB1A33B77,
+           0x07D80027, 0x834F6FD3, 0x7BA58CE1, 0x589DA773, 0x40BC2F31, 0xEE4B213F, 0x20C581D7, 0xC5F2BCCF,
+           0xC5A846F3, 0x44DE23DD, 0x2FFECFD3, 0x786228E9, 0x53AD659F, 0x63DA4E8B, 0xCD90C4EB, 0x2231DD93,
+           0x7852EF93, 0xBC7C7457, 0xE6C89781, 0x5A8E8A7F, 0x5C20233B, 0xD48D2535, 0xB4FA689B, 0x3DA91697)
 
 
 def u32(a: np.ndarray) -> np.ndarray:
@@ -34,15 +40,15 @@ def u32(a: np.ndarray) -> np.ndarray:
 
 def fx1_keys(drop: tuple[int, int] | None = None) -> np.ndarray:
     """fx1's multiplier of each word of a tile: word e of tile position t = 4 mi + ni sits at row 32 wm + 16 mi + g +
-    8 (e >> 1), column 32 wn + 8 ni + 2 q + (e & 1), and is multiplied by key_mul(1, (4 t + e) 32); drop leaves one
-    multiply out."""
+    8 (e >> 1), column 32 wn + 8 ni + 2 q + (e & 1), and is multiplied by key_mul(1, (4 t + e) 32), `FX1_KEY`'s word
+    4 t + e; drop leaves one multiply out."""
     K = np.zeros((T, T), np.uint64)
     for mi in range(2):
         for ni in range(4):
             for e in range(4):
                 rows = [32 * wm + 16 * mi + g + 8 * (e >> 1) for wm in range(4) for g in range(8)]
                 cols = [32 * wn + 8 * ni + 2 * q + (e & 1) for wn in range(4) for q in range(4)]
-                K[np.ix_(rows, cols)] = 1 if drop == (4 * mi + ni, e) else C.key_mul(1, 32 * (4 * (4 * mi + ni) + e))
+                K[np.ix_(rows, cols)] = 1 if drop == (4 * mi + ni, e) else FX1_KEY[4 * (4 * mi + ni) + e]
     return K
 
 

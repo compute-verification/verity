@@ -2,37 +2,12 @@
 table of the tensor-core receipts, and diff.py's own checks of its layout and its fold against ref.py."""
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 
+import diff
 import numpy as np
-
-FG = Path(__file__).resolve().parents[1] / "floored_gemm"
-
-
-def load(name: str, *siblings: str):
-    """floored_gemm's NAME.py, with the siblings it imports by name bound to floored_gemm's for the import only (another
-    module of the suite may have imported a different `ref` or `table`)."""
-    def one(stem: str):
-        spec = importlib.util.spec_from_file_location(f"floored_gemm_{stem}", FG / f"{stem}.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod
-
-    saved = {s: sys.modules.get(s) for s in siblings}
-    try:
-        for s in siblings:
-            sys.modules[s] = one(s)
-        return one(name)
-    finally:
-        for s, mod in saved.items():
-            if mod is None:
-                sys.modules.pop(s, None)
-            else:
-                sys.modules[s] = mod
-
+import sass_mix
+import tb_table
 
 SASS = """
 \t\tFunction : gemm_duo
@@ -47,7 +22,6 @@ SASS = """
 
 
 def test_sass_mix_counts_a_kernel_s_opcodes(tmp_path, capsys):
-    sass_mix = load("sass_mix")
     (tmp_path / "fgemm.sass").write_text(SASS)
     assert sass_mix.main(str(tmp_path / "fgemm.sass")) == 0
     assert json.loads(capsys.readouterr().out) == {
@@ -58,7 +32,6 @@ def test_sass_mix_counts_a_kernel_s_opcodes(tmp_path, capsys):
 
 
 def test_tb_table_of_a_run(tmp_path, capsys, monkeypatch):
-    tb_table = load("tb_table", "table")
     ms = {"lt": 1.0, "b": 1.2, "c": 1.5, "t4": 1.8, "t4g": 1.1, "g0": 1.0}
     row = {"shape": "o", "m": 8192, "n": 4096, "k": 4096, "tile": "t0",
            "arms": {a: {"ms": v, "eta": 0.5 / v, "mhz": 2000.0} for a, v in ms.items()}}
@@ -75,7 +48,6 @@ def test_tb_table_of_a_run(tmp_path, capsys, monkeypatch):
 
 
 def test_diff_holds_its_layout_and_fold_to_ref():
-    diff = load("diff", "ref")
     diff.check_slots()
     diff.check_sim()
     assert diff.dbytes(np.array([255]), 1, (0, 1)).tolist() == [[-255, 1]]
