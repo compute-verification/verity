@@ -771,6 +771,7 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     signs_le := deployment.signs_le fun _ => []
     forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
     computed := fun _ _ _ _ _ => ∅
+    macs := fun _ _ _ _ _ => 0
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
