@@ -23,7 +23,16 @@ from pathlib import Path
 import pytest
 
 from tests.engine.moe_scope_cut import cut, write
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Note, StepEnd, StepStart, TritonLaunch, ViewDesc, views_in
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Note,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 from verity_vllm.observe.fold.resolve_log import resolve_log
 from verity_vllm.observe.fold.resolver import Compute, Group, Transparent
 from verity_vllm.observe.log import LogWriter, read_log

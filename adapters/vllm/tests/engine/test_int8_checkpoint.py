@@ -13,12 +13,16 @@ import numpy as np
 import pytest
 import torch
 
+from tests.engine import ppl_oracle as O
+from tests.engine.test_fp8_checkpoint import (
+    _base_checkpoint,
+    _bf16,
+    _one_tensor_base,
+    _write_base_shard,
+)
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
 from verity_vllm.program import model as M
-
-from tests.engine import ppl_oracle as O
-from tests.engine.test_fp8_checkpoint import _base_checkpoint, _bf16, _one_tensor_base, _write_base_shard
 
 FLOOR = np.float32(np.float32(1e-30) / np.float32(127))                          # an all-zero row's scale (steps.py's clamp)
 
@@ -110,8 +114,8 @@ def test_recipe_container_and_config(tmp_path):
     for kept in ("model.layers.0.self_attn.q_proj.bias", "model.layers.0.self_attn.rotary_emb.inv_freq", "lm_head.weight",
                  "model.embed_tokens.weight"):
         assert names[kept][0] not in ("I8",) and kept + "_scale" not in names
-    q = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
-    s = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
+    q: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight"], dtype=np.int8).reshape(128, 256)
+    s: np.ndarray = np.frombuffer(data["model.layers.0.mlp.down_proj.weight_scale"], dtype="<f4").reshape(128, 1)
     w = (_bf16(128 * 256, 7, 0.05).reshape(128, 256).astype(np.uint32) << 16).view(np.float32)
     assert np.array_equal(q, I.quantize(w, I.channel_scales(w))) and np.array_equal(s, I.channel_scales(w))
     cfg = json.loads((out / "config.json").read_text())
@@ -144,6 +148,14 @@ def test_base_entry_refuses_another_recipe():
     entry = {"role": "X_INT8", "recipe": {"id": F.RECIPE, "base_repo": "o/m", "base_revision": "0" * 40}}
     with pytest.raises(F.UsageError, match="is not 'verity-int8-channel127/v1'"):
         F.base_entry(entry, [], I.INT8)
+
+
+@pytest.mark.parametrize("entry", [{"role": "X"}, {"role": "X", "recipe": None}, {"role": "X", "recipe": {}}])
+def test_an_entry_without_a_recipe_is_refused_by_its_role(entry):
+    with pytest.raises(F.UsageError, match="^X: recipe None is not 'verity-int8-channel127/v1'$"):
+        F.base_entry(entry, [], I.INT8)
+    with pytest.raises(F.UsageError, match="^X: recipe None is none of the int8 recipes "):
+        I.recipe_of(entry)
 
 
 # ---------------------------------------------------------------- v2: the LM head too
