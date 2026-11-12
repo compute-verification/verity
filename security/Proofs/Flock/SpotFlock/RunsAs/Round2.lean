@@ -259,6 +259,20 @@ theorem inputsFailure_none {own : Spot.SecondStage.Own} (hR : RegistersNone own.
   · intro he
     simp at he
 
+/-- **A round-1 record that registers no value passes `InputsNone`.** -/
+theorem inputsNone_of_registersNone {own : Spot.SecondStage.Own} (hR : RegistersNone own.interior) :
+    InputsNone own :=
+  inputsFailure_none (own := core own) hR
+
+/-- **`InputsNone` in the running verifier's terms**: `second-inputs` passing once the verifier's own values and reads
+are emptied, which is all of `core` that `inputsFailure` reads. -/
+theorem inputsNone_of_emptied {own : Spot.SecondStage.Own}
+    (hI : Spot.SecondStage.inputsFailure { own with fixed := #[], supplied := #[], reads := #[] } = none) :
+    InputsNone own := by
+  first
+  | exact hI
+  | (unfold InputsNone core Spot.SecondStage.inputsFailure at *; exact hI)
+
 theorem readsOk_of_check : ReadsOkOfCheck := by
   intro h own ss x m₁ m₂ c₀ c₁ st rec draw hx hm₁ hd hA hS hRN hP hc t ht
   obtain ⟨xs, hxs, hlen, hw⟩ := hS
@@ -277,7 +291,10 @@ theorem readsOk_of_check : ReadsOkOfCheck := by
   simp only [Bool.and_eq_true]
   refine ⟨⟨⟨⟨⟨interiorOrder_of_check h own ss st rec draw c₀ hA hc, namesOk_of_check h own ss st rec draw c₀ hA hc⟩,
     ?_⟩, designOk_of_check hA hc⟩, ?_⟩, hP t htm w hdw'⟩
-  · simp [inputsFailure_none (own := ownOf h st rec draw c₀) hRN]
+  · have hI : Spot.SecondStage.inputsFailure (ownOf h st rec draw c₀) = none := by
+      rw [← show core own = ownOf h st rec draw c₀ from hA]
+      exact hRN
+    simp [hI]
   rw [hjw, hs]
   exact codesOk_of_check h own ss st rec draw c₀ hA hc t ht s hs
 

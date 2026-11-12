@@ -20,8 +20,9 @@ is a premise here, named for what it says:
   statement reading as a member's). It reads only the auditor's copies, never the run.
 * `RecordsHeld`: the run's records name their registrations' names (`recordsOk`), which `Run.run`'s registration
   step checks, not round 2.
-* `RegistersNone`: round 1's record registers no value. The model refuses every registered value
-  (`SecondStage.inputsFailure` at `ownOf`), where round 2 passes those the verifier holds.
+* `InputsNone`: round 2's `second-inputs` passes with nothing the verifier holds of its own. The model reads
+  `SecondStage.inputsFailure` at `ownOf`, which holds none of the verifier's values or reads, where round 2 passes
+  those; a record that registers no value (`RegistersNone`) has it.
 * `NamesDistinct`: the templates' names are distinct. Round 2 takes the statements by position and finds a statement's
   part by its template's name, so with two parts of one name it passes a run with fewer statements than parts.
 * `RoundsHeld`, `ScopeHeld`, `PinHeld`: each session statement has its template's reference statement's rounds, is in
@@ -80,6 +81,12 @@ read's row (`second-inputs`). So the model's clause follows from round 2's only 
 def RegistersNone (rec : Json) : Prop :=
   ∀ es, Spot.getD rec "registered" = .arr es → ∀ e ∈ es, ∀ v, Spot.getD e "value" ≠ .str v
 
+/-- **Round 2's `second-inputs` passes with nothing the verifier holds of its own** (`inputsFailure` at `core own`:
+no value it pinned or fills, no read): round 1's record registers no value a replay block's input reads but the
+verifier's own or an opened row (`RegistersNone` gives it, `inputsNone_of_registersNone`). The model's `readsOk` reads
+this clause at `ownOf`, which holds none of them. -/
+def InputsNone (own : Spot.SecondStage.Own) : Prop := Spot.SecondStage.inputsFailure (core own) = none
+
 /-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
 def RoundsHeld (h : Held) (m₂ : Msg) : Prop :=
   ∀ t < h.ms.length, (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t
@@ -129,7 +136,7 @@ def ReadsOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → RegistersNone rec → PinHeld h m₂ →
+      StmtsAre h m₂ ss → InputsNone own → PinHeld h m₂ →
         (Spot.SecondStage.check true own (some ss)).codes = #[] →
         ∀ t < ss.size, readsOk h t x m₁ (stmtAt h m₂ t) c₀ c₁ = true
 
@@ -138,7 +145,7 @@ def StmtOkAtOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
+      StmtsAre h m₂ ss → InputsNone own → TwoHolds h → RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ →
         (Spot.SecondStage.check true own (some ss)).codes = #[] →
           ∀ t < ss.size, stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true
 
@@ -147,7 +154,7 @@ def StmtOkOfCheck : Prop :=
   ∀ (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (st : Roots) (rec draw : Json),
     decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
-      StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
+      StmtsAre h m₂ ss → InputsNone own → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
         RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
           stmtOk h x m₁ m₂ c₀ c₁ = true
 
