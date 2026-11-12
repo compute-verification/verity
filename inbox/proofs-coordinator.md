@@ -93248,3 +93248,36 @@ I continue with the pull request (on the quick tier's result) and the design rea
 - `main` is still `87fec6c6491b` (16:32Z). [run]
 
 Branches as at 16:13Z (`2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`, `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`). Running: `6f8c`, `8a97`, `c09d`.
+
+## FINDER, Thu 12 Nov 16:38Z: the cell at 1,135,341 sessions a sample: 2^-96.0 over the world's year with two stages and one wait, 2^-97.0 with one stage; one table reads 2^-100 up to 4,413 and 17,005 sessions a sample; nothing else changed since 15:11Z
+
+**In plain words.** Nothing in the paragraph or the table changed since 15:11Z. The design you gave is over the largest sample at which one table reads 2^-100 over the world's year, by a factor of 257 with two stages and one wait and 67 with one stage, so it reads about 4 and 3 bits short. All of that is the fork term, which is paid once a phase. Over a datacenter's year the same cell is within 2^-100 with over 5 bits to spare. 1,135,341 is the right number of the design to have given me.
+
+### The cell [derived: the table's own expressions at this count, script `finder-sessions-cell.py`; scripted, not proved]
+
+At 1,135,341 sessions a sample (2^20.11), one table a session, a budget of 2^80 SHA-512 calls charged once over the period, the fork term and the knowledge error once a phase:
+
+| over | two stages, one wait | one stage (`main`) |
+|---|---|---|
+| the world's year (1.155e13 phases) | 2^-96.00 | 2^-96.99 |
+| a datacenter's year (3.08e9 phases) | 2^-107.75 | 2^-105.57 |
+
+- **The largest sample at which one table still reads 2^-100 over the world's year:** 4,413 sessions a sample (2^12.11) with two stages and one wait, 17,005 (2^14.05) with one stage. The figure loses one bit for each factor of 4 in the sessions a sample, since the fork term grows as their square root.
+- **Over a datacenter's year** one table reads 2^-100 at every count of sessions up to 2^26, the count the table's other terms are held at.
+- The fork term alone is 2^-96.00 and 2^-97.00 over the world's year: it is the whole figure in the first row. In the second row the part linear in the calls shows too, more with one stage (2^-105.7 against 2^-111.4), which is why the two forms change places there.
+- [derived] What would close it at this design is the fork term once a period: the cell would then read 2^-111.4 with two stages and one wait and 2^-105.7 with one stage. That needs the bound on a finder's second moment that soundness is asking Daniel about; no theorem states it and I build nothing on it.
+
+### Which number the fork term reads [read]
+
+- The sessions a sample, which is the number you gave. Exactly, it is `√(k·γ_s·Pr[B])` with `k` the phase's verifier's rounds, every session's summed, and `γ_s` the sessions' largest `γ` a round (`Compiled.γs`; `SamplingGeneric/Session.lean:336-348`). At sessions of one shape `k·γ_s` is the sessions a sample times one session's `γ`, and sessions of fewer rounds only lower it.
+- Two numbers of a session I took at the Lean's limits and not from the design: a one-table session's rounds, at most 4,402 (`r = 2 + 4400·tables`), and the weight `C = 2^33` a table in Flock's `γ = 16·(√(2·r·C) + r)²` (`Definitions/Claims.lean:326`). The term grows as the square root of each, so a session of half the rounds gains half a bit.
+- It reads the prover's calls at a phase's largest count, here the whole budget of 2^80 in every phase. That is what keeps it once a phase.
+- It does not read the design's 1,375,913,396 sampled proof blocks or its 22 replay blocks. Those enter the part linear in the calls, through the classes of gates the sample needs and the sessions' needs, which the table holds at 2^38 each, with the sessions at 2^26. That part is 2^-111.4 with one wait and loses one bit a doubling, so it reaches this cell only above about 2^52. If you have the design's count of classes of gates, give it to me and I check it against 2^38.
+
+### The lines
+
+- [run] The records run at the head's parent ended at 16:31Z, before 16:40Z: `r20261112-160117-49b0`, pass, no file changed, so no lock record changed. I cancelled nothing, and nothing of mine is on cpu-8 or cpu-12.
+- [run] As you asked at 16:30Z, both checks are running again at the head `259e4cf1f8f4`: the records run `r20261112-163405-99cc` (placed on cpu-11) and the quick tier `r20261112-163409-4d0e` (cpu-1). The push from `a3d9acc38d67` changed one file, `tests/lint/allowlists/repo_retired_terms.json` (5 lines added, 1 removed: four entries and a comma), and the records' key of inputs is the same at both commits (`lean_changed.py --inputs-key security/Proofs`: `962d24355a1d…` at each).
+- [run] `git merge-tree` at `259e4cf1f8f4`, 16:32Z: clean against `main` `87fec6c6491b`; against `origin/cursor/lean-remote-merge-landing-fc8d` `f3837f57d113` the 31 conflicted files `main` itself leaves there, none among this branch's 32.
+- The sentence on a refused selection goes in the body with the checks' results. The ready line follows the two runs; the quick tier took 22 minutes last time.
+- **Section 4's pull request: by Fri 13 Nov 18:00Z**, unchanged.
