@@ -4071,9 +4071,6 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
-   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
-   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
-   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
@@ -4089,6 +4086,9 @@
    "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
    "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
    "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo",
+   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
+   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
+   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerKSRegX": "Claims.SamplingGeneric.compilerKSRegX",
    "Claims.SamplingGeneric.CompilerKSRegTwoX": "Claims.SamplingGeneric.compilerKSRegTwoX",
    "Claims.SamplingGeneric.CompilerMissTwoX": "Claims.SamplingGeneric.compilerMissTwoX",
@@ -4309,18 +4309,6 @@
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
-  "Claims.SamplingGeneric.compilerKSRegTwo": {
-   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerMissTwo": {
-   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerHeadlineTwo": {
-   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
-  },
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
@@ -4530,6 +4518,10 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -4614,10 +4606,6 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
   },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
-  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
   },
@@ -4646,6 +4634,18 @@
   "WeightSecurity.SecurityProofs.TheftFaulted": {
    "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
   },
   "Claims.SamplingGeneric.compilerKSRegX": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
@@ -27424,6 +27424,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -27434,10 +27438,6 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
-   },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
