@@ -288,13 +288,18 @@ class Sheet:
         """The sheet a card file gives (`verity.hardware.cards.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
         and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
         its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
-        the bandwidth a ceiling rounded up, and the stores' sizes exact."""
+        the bandwidth a ceiling rounded up, and the stores' sizes exact. Device memory is `store.dram_installed`, the
+        memory on the board: a sheet's `mem` bounds what a device holds from above, so of the card's two readings it
+        takes the larger, and a card file with no such entry is refused."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
         sms, store = v(card["sm"]["count"]), card["store"]
         chip = (32 * sms * (v(store["reg"]) + v(store["reg_extra"])) + 8 * (sms * v(store["smem"]) + v(store["l2"])))
-        mem = v(store["dram"])
+        if "dram_installed" not in store:
+            raise Malformed(f"card {card['sku']}: its store has no dram_installed, the memory on the board, which a "
+                            "sheet's mem reads; state it in the card file, at or above store.dram")
+        mem = v(store["dram_installed"])
         if chip.denominator != 1 or mem.denominator != 1:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
         clock = v(card["clock"]["sm"]) * 10 ** 6

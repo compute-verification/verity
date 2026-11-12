@@ -111,9 +111,9 @@ A file has `device` (`sku`, the GPU card, and `count`, how many of it the node c
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
 `bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
 kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
-no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
-peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own once it
-has a figure for the node.
+no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole. A node file holds no rate,
+clock or peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own
+once it has a figure for the node.
 
 `nodes.load(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
 card of its kind. `nodes.kinds()` lists the files. `Registration.node_entry(node, card, host)`, in the Site

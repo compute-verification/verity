@@ -236,16 +236,23 @@ def _entry(v: object) -> dict[str, object]:
 CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _entry(1530)},
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
-                       "dram": _entry(16 << 30)}}
-"""A card file's table as `verity.hardware.cards.load(sku)` returns it, with the entries `Sheet.of_file` reads."""
+                       "dram": _entry(12 << 30), "dram_installed": _entry(16 << 30)}}
+"""A card file's table as `verity.hardware.cards.load(sku)` returns it, with the entries `Sheet.of_file` reads and the
+memory a program gets (`store.dram`), which it does not."""
 
 
-def test_a_sheet_reads_the_memory_a_program_gets() -> None:
-    """A card file's second reading of device memory and the caches only a run found are not the sheet's: its `mem`
-    is `store.dram`, and its `chip` the registers', shared memory's and L2's."""
-    more = {"dram_installed": _entry(24 << 30), "l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576),
-            "const_l0": _entry(12288)}
-    assert Sheet.of_file({**CARD_FILE, "store": {**CARD_FILE["store"], **more}}) == Sheet.of_file(CARD_FILE)
+def test_a_sheet_reads_the_memory_on_the_board() -> None:
+    """Of a card file's two readings of device memory a sheet's `mem` is the larger, `store.dram_installed`: the
+    memory a program gets (`store.dram`) does not move it, and a card file that states no memory on the board gives
+    no sheet. The caches only a run found are not the sheet's: its `chip` is the registers', shared memory's and
+    L2's."""
+    store = CARD_FILE["store"]
+    assert Sheet.of_file(CARD_FILE).mem == 16 << 30
+    assert Sheet.of_file({**CARD_FILE, "store": {**store, "dram": _entry(16 << 30)}}) == Sheet.of_file(CARD_FILE)
+    more = {"l15": _entry(147456), "l1i": _entry(65536), "l0i": _entry(24576), "const_l0": _entry(12288)}
+    assert Sheet.of_file({**CARD_FILE, "store": {**store, **more}}) == Sheet.of_file(CARD_FILE)
+    with pytest.raises(Malformed, match="dram_installed"):
+        Sheet.of_file({**CARD_FILE, "store": {k: e for k, e in store.items() if k != "dram_installed"}})
 
 
 def test_a_sheet_from_its_card_file() -> None:
