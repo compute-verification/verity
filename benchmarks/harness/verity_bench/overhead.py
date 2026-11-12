@@ -1,6 +1,6 @@
 """`verity bench overhead`'s rules: the cards, the operating points' rule, the prover overhead γ and its interval, and what
-γ means per monitoring period. Standard library only: the node's sweep (`overhead_node`) and the store side
-(`overhead_records`) both read it.
+γ means per monitoring period. Standard library only, and loadable alone by its path, but for γ's pairing, which is the
+harness kit's (`kit.paired`): the node's sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
 
 **The operating points** belong to a card, a model and a precision. Over one layer of the model's linears (`MODELS`), the
 fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Gpu.libraries`, the precision's
@@ -14,7 +14,7 @@ The sweep (`next_ms`) takes every power of two from 1 to `M_MAX`, then bisects e
 until the bracket is one step wide; C and L are always multiples of `GRID`.
 
 **γ** (`layer_gamma`) is a scheme's (`SCHEMES`) cost over the stock arm's for the summed layer, less one: the median of the
-reps' paired ratios, with a 95% interval from the ratios' order statistics (`interval`; the 6th and 15th of 20). The
+reps' paired ratios, with a 95% interval from the ratios' order statistics (`kit.paired`; the 6th and 15th of 20). The
 numerator is the scheme's busy SM-time (SMs Active over a traced pass, `nsys`) and the host CPU core-seconds it spends above
 stock's at the card's weight (`host_cost`, from the timed pass); the denominator is the stock arm's busy SM-time. The stock
 arm is each linear's fastest kernel of the scheme's scaling by wall time, with the least-SM-time kernel's γ beside it; the
@@ -289,39 +289,6 @@ def sweep_times(results: Sequence[Mapping], model: str = KERNEL_MODEL,
 # ---- γ ------------------------------------------------------------------------------------------------------------------------
 
 
-def interval(n: int, confidence: float = 0.95) -> tuple[int, int] | None:
-    """The 1-based order statistics (l, u) whose span covers the median with at least `confidence`: the largest l with
-    P(Binomial(n, 1/2) < l) at most (1 - confidence) / 2, and u = n + 1 - l (the 6th and 15th of 20); None when n reps
-    can't bound the median at `confidence`."""
-
-    tail, l, cdf = (1 - confidence) / 2, 0, 0.0
-    while l < n:
-        nxt = cdf + math.comb(n, l) / 2**n
-        if nxt > tail:
-            break
-        cdf, l = nxt, l + 1
-    return (l, n + 1 - l) if l else None
-
-
-def paired(scheme: Sequence[float], stock: Sequence[float]) -> dict:
-    """γ from paired reps (rep i of the scheme beside rep i of stock, each its busy SM-time): the median ratio less one, its
-    95% interval and the interval's half-width as a share of the median ratio."""
-
-    if len(scheme) != len(stock) or not scheme:
-        raise ValueError(f"γ pairs reps one for one: {len(scheme)} scheme reps beside {len(stock)} stock reps")
-    if any(s <= 0 for s in stock):
-        raise ValueError("a stock rep took no SM-time")
-    ratios = sorted(a / b for a, b in zip(scheme, stock, strict=True))
-    median = statistics.median(ratios)
-    out: dict = {"gamma": median - 1, "ratio": median, "n": len(ratios), "ratios": ratios, "ci95": None, "half_width": None}
-    if (bounds := interval(len(ratios))) is None:
-        return out
-    lo, hi = bounds
-    out["ci95"] = [ratios[lo - 1] - 1, ratios[hi - 1] - 1]
-    out["half_width"] = max(median - ratios[lo - 1], ratios[hi - 1] - median) / median
-    return out
-
-
 def of_record_why(gamma: Mapping) -> str | None:
     """Why a γ isn't a figure of record (too few reps, an interval too wide), or None."""
 
@@ -437,6 +404,9 @@ def layer_gamma(result: Mapping, busy: Mapping[str, Mapping], card: Gpu, m: int,
     def pair(a: list[tuple], b: list[tuple], field: str = "sm_s") -> dict | None:
         """a's `field` SM-time and its host CPU above b's, over b's `field` SM-time, rep by rep."""
 
+        # imported here, so the rules above load alone by this file's path, with no package beside them
+        from verity_bench.kit import paired
+
         if not a or not whole(b):
             return None
         sa, sb, ca, cb = series(a, field), series(b, field), series(a, "cpu_sm_s"), series(b, "cpu_sm_s")
@@ -517,3 +487,13 @@ def periods(gamma: float, gpus: int, window_s: float, world_flop_per_year: float
                 "world_flop": world, "world_gates": world * gates_per_flop}
 
     return {"share": share, "window": at(window_s / 3600)} | {name: at(hours) for name, hours in PERIODS_H.items()}
+
+
+
+def paired(scheme: Sequence[float], stock: Sequence[float], confidence: float = 0.95) -> dict:
+    """`kit.paired` by this module's name, which serving cost's `benchmarks/serve_tax` calls and checks until it calls
+    `kit.paired`. The kit is imported on the call, so this file still loads alone by its path."""
+
+    from verity_bench import kit
+
+    return kit.paired(scheme, stock, confidence)
