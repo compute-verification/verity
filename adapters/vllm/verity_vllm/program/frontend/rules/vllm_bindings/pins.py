@@ -130,8 +130,8 @@ def tuned_gemm_table_sha256() -> str | None:
     table-less target (Ampere: default tiling for every shape) or an unregistered one."""
     try:
         return active_gemm_target().table_sha256()
-    except Exception as e:  # noqa: BLE001 — an unregistered target, or an observation that answers for none: no table
-        logger.debug_once("the active target gives no tuned GEMM table (%s)", type(e).__name__)
+    except Exception:  # an unregistered target, or an observation that answers for none: no table
+        logger.debug("the active target gives no tuned GEMM table", exc_info=True)
         return None
 
 

@@ -49,8 +49,8 @@ class _KvWrite:
 def _vllm_op(name: str) -> set:
     try:
         return {getattr(torch.ops.vllm, name).default}
-    except Exception as e:  # noqa: BLE001 — vLLM has registered no such op here (laptop): the rule has no targets
-        logger.debug_once("a lookup in torch.ops.vllm raised %s: no rule targets the op", type(e).__name__)
+    except Exception:  # vLLM has registered no such op here (laptop): the rule has no targets
+        logger.debug("a lookup in torch.ops.vllm raised: no rule targets the op", exc_info=True)
         return set()
 
 
