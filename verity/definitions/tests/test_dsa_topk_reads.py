@@ -4,7 +4,7 @@
   positions) on masks of no member to every key, and its first count slots are the members' positions, ascending, whenever it
   has at most K; `DsaPositionsMerge_v1` is `merge` on lists with words past their counts, counts past K and lists that fill K;
 * `DsaPositionsMerge_v1`, each block's list and count its own port, is gate for gate the merge over one port of the lists
-  and one of the counts, at small statics and at the served one (M 8, K 2,048);
+  and one of the counts, at small statics and, with ``VERITY_ML_DEFINITIONS_SLOW`` set, at the served one (M 8, K 2,048);
 * `DsaPositionsChunk_v1` and then `DsaPositionsSlot_v1` over its chunk give the merge's element j for every j on the merge's
   own outputs, 0 where it is N or more and at an index out of range, at small statics and the served ones on random rows;
 * the units composed over a row's blocks (each on the outputs before it) give the rows network's order over the whole row
@@ -27,6 +27,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity import settings
 from verity.circuits import evaluation as E
 from verity.circuits.boolean.trace import Traced, trace
 from verity.circuits.defs import bind
@@ -125,11 +126,7 @@ def test_the_merge_is_merge(M_, K) -> None:
         assert g == R.merge(li, c, K), (li, c, g)
 
 
-@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16),
-                                  pytest.param(8, SERVED_TOPK, marks=pytest.mark.slow, id="served")])
-def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
-    """Against the merge over one port of the M blocks' lists and one of their counts.  The served binding (8 blocks, 2,048
-    slots, 12-bit shifts) is about 6M ANDs; it is the one the long row calls, and no smaller binding's trace is its trace."""
+def _ports_are_one_port(M_: int, K: int) -> None:
     S = SimpleNamespace(M=M_, K=K)
     params, ret = R._merge_sig(S)
     assert [n for n, _ in params] == [f"pos_{b}" for b in range(M_)] + [f"count_{b}" for b in range(M_)]
@@ -137,6 +134,22 @@ def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K)
     split = _digest(trace(R._merge(S), [t for _, t in params], ret))
     one = _digest(trace(R._merge(S), [Array(M_, Array(K, R.I32)), Array(M_, R.I32)], ret))
     assert split == one
+
+
+@pytest.mark.parametrize("M_,K", [(1, 4), (3, 4), (4, 3), (8, 16)])
+def test_the_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate(M_, K) -> None:
+    """Against the merge over one port of the M blocks' lists and one of their counts.  These cases hold the property in
+    `check`: both traces run one builder over the same input words and differ only in how ports group them, which 8 blocks of
+    16 slots already cover, while circuit-check holds the served binding's trace to its digest pin."""
+    _ports_are_one_port(M_, K)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not settings.VERITY_ML_DEFINITIONS_SLOW,
+                    reason="VERITY_ML_DEFINITIONS_SLOW=1 runs it (about 14 minutes on a node: two traces of about 6M ANDs)")
+def test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate() -> None:
+    """The same at the served binding (8 blocks, 2,048 slots, 12-bit shifts), the one the long row calls."""
+    _ports_are_one_port(8, SERVED_TOPK)
 
 
 def _chunk(K: int, W: int, slots: np.ndarray, cs: list[int]) -> list[list[int]]:
