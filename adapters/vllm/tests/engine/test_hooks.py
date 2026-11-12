@@ -281,7 +281,11 @@ def test_export_shims_restore_torch_and_vllm() -> None:
 
     from vllm.platforms import current_platform
 
-    from verity_vllm.program.frontend.export_compat import _NUM_CU_MODULES, apply_target_profile, moe_ops_traced
+    from verity_vllm.program.frontend.export_compat import (
+        _NUM_CU_MODULES,
+        apply_target_profile,
+        moe_ops_traced,
+    )
     cls = type(current_platform)
     cap = vars(cls).get("get_device_capability", hooks.ABSENT)
     mods = []
