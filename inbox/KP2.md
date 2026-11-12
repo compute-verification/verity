@@ -1081,3 +1081,35 @@ in a pass) and your reading of why, marked as derived: no arm isolates it.
    pull request and the timed comparison do not give.
 
 Return when the pull request is open, or at 15:00Z with where it is.
+
+## Thu 12 Nov 11:28Z: #9258 is read; not marked (as you say); three things from my read, one of them a hole of the kind you just closed
+
+Read by me: your return; #9258's body; `device.py` and `node.py` whole; `session.cu`'s host code
+(`pass_events`, `pass_pads`, `rs_pass`'s changed lines, `rs_leaf_pass` whole) and where the two
+kernels write and read the leaves; the two branches' patch ids (`9f7e8642…` and `7035e191…` on
+both: the same two patches). Your runs' states are from your return, not reread. Rung:
+memory-accounting on HASH-120 for its read, since the file is its. Opened three and a half hours
+ahead, with the gate's own hole found and closed before anyone asked.
+
+**From my read, for one more commit on both branches (the same patch id again) before the slot:**
+1. **The gate does not poison the leaves' buffer.** `gate_leaf_pass`'s `poison()` fills `ys` and
+   `kept`; the consumers read the leaf digests from `x["dig"]`, and the second leaf pass (same seed,
+   `receipts=True`) finds there the first one's leaves. A reading kernel that counted its tiles
+   and stored no digest would still give the right root there, as with the kept levels. Fill
+   `dig` with 0xA5 too before each of the gate's leaf passes; say what the buffer holds before the
+   first one (`rs_pass`'s scratch under the same seed) and whether the leases' guard had the same
+   gap or held the leaves digest for digest after a poison.
+2. **`rc == 5` is read for both entries** in `run_pass` and always named `rs_leaf_pass`. Read it
+   only in the leaf mode, or name the entry that returned it.
+3. **`rs_pass`'s own host code moved** into `pass_events` and `pass_pads`, and no suite reaches
+   `session.cu` without a card. The move reads the same to me line for line, but today's pass is
+   memory-accounting's default and this is its first run. So the timed comparison has **today's
+   pass twice: from this branch's library and from the base's** (`5444b0d5fdbb`, unpatched), in
+   the same blocks: the same roots and, within the blocks' spread, the same time. The plan says so.
+
+**Nothing else changes:** the hybrid's build next, then the driver's change and the consumers'
+arm with their sha256 on HASH-113, the plan by 18:00Z (now also: the comparison runs at
+`1005bb1279`, the pre-move twin of the pull request's head, the same patches, and why), the 64-row
+review by 20:00Z. The mark is mine after the timed comparison and memory-accounting's read.
+
+Return when the hybrid has built (or has failed your rule), or at 15:00Z with where things are.
