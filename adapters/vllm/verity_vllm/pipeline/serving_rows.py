@@ -260,6 +260,9 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     tp = template(t)
     if tp.layout in ("row", "part"):
         return 1
+    if tp.layout == "bits":
+        raise ValueError(f"{t}: a bits template's rows are its ports' bits (chunk_rows.unit_rows), which no reader of a served "
+                         f"row gives: its units are a replay block's, staged from the replay")
     S = d["statics"]
     if tp.layout in READERS:
         return int(READERS[tp.layout][0](tp, S))
@@ -347,24 +350,6 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
-def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
-    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
-    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
-    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
-    for a, b, k, rank in segs:
-        at = a
-        while at < b:
-            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
-                chunks.append((at, [], []))
-            take = min(b - at, first.n - sum(chunks[-1][2]))
-            chunks[-1][1].append((k, rank))
-            chunks[-1][2].append(take)
-            at += take
-    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
-                    links=tuple(links), link_units=tuple(units))
-            for j, (base, links, units) in enumerate(chunks)]
-
-
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
@@ -398,7 +383,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
         if m.template not in segs:
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
-            out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
+            out += S8.one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
     made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
                  for k in order)
     RTB.check_order(made)
