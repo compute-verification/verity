@@ -150,7 +150,9 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
     srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
     name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s), cc=CC)["template"] == "ADD_NORM")
     cfg = T.launch_config(configs, src)
-    store = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src).group(1)
+    stored = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src)
+    assert stored is not None
+    store = stored.group(1)
     twice = (src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*bf16', 'out_ptr2': '*bf16'", 1)
              .replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1).replace(store, store + store.replace("out_ptr1", "out_ptr2"), 1))
     one, two = T.recognize(name, src, cfg, cc=CC), T.recognize(name, twice, cfg, cc=CC)

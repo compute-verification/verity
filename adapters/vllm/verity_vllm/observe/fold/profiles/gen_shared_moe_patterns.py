@@ -219,10 +219,11 @@ def scope_gate(node: TreeNode, ctx: StepContext, gate: TreeNode | None, before: 
     M = hidden.shape[0]
     if not isinstance(scores, ViewDesc):
         return unsupported(node, f"{router}'s scores are not a view", scores=repr(scores))
+    w: ViewDesc | None
     if gate is not None:
         tier, at = GATE_CUBLAS, gate
         a = bound_args(gate)
-        x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), (gate.output_views() or [None])[0]
+        x, wt, y = a.get("self", a.get("arg0")), a.get("mat2", a.get("arg1")), next(iter(gate.output_views()), None)
         if not (isinstance(x, ViewDesc) and isinstance(wt, ViewDesc) and isinstance(y, ViewDesc)) or not _same(x, hidden):
             return unsupported(node, "the in-scope mm is not the gate over hidden_states", args={k: repr(v) for k, v in a.items()})
         try:
@@ -390,7 +391,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
     def _gate(self, node, ctx, sc: _Scope, hidden: ViewDesc, hint) -> tuple[int, Compute] | Unsupported:
         """The router gate: the in-scope `aten.mm.dtype` (cuBLAS), or, with no mm, the cuteDSL kernel bound by the empty it fills."""
         C, ra = self.config, bound_args(sc.router)
-        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra.get("bias")), hidden, hint,
+        return scope_gate(node, ctx, sc.gate, sc.mms[0], K_ROUTER_OP, ra.get("scores"), _weight_root(ctx, ra["bias"]), hidden, hint,
                           C["NUM_EXPERTS"], C["H"], self.gate_spec, self.name)
 
     def _routed(self, node, ctx, sc: _Scope, hidden: ViewDesc, outs, hint) -> list[tuple[int, Any]] | Unsupported:

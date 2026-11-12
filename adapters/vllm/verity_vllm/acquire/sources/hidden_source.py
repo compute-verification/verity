@@ -153,7 +153,7 @@ class HiddenM1Source:
         self.bufs: dict[tuple[int, int, int, int, int], Any] = {}
         self.launch = 0
         self.launches_in_step = 0
-        self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": 8 if self.v8 else 7, "hdims": [hd for hd in (64, 96, 128, 256) if self.hdims & (1 << (hd // 32))],
                       "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
@@ -228,7 +228,6 @@ class HiddenM1Source:
 
     def _wrapper(self):
         me = self
-        torch = self.torch
 
         def varlen_fwd(q, k, v, out, cu_seqlens_q, cu_seqlens_k, seqused_k, leftpad_k, block_table, alibi_slopes, max_seqlen_q, max_seqlen_k,
                        dropout_p, softmax_scale, zero_tensors, causal, window_left, window_right, softcap, return_softmax, num_splits, gen):
@@ -264,7 +263,8 @@ class HiddenM1Source:
                 me.c.x03_expected = getattr(me.c, "x03_expected", 0) + 1
                 me.c.errors.append(f"fa2 launch {me.launch}: skipped by the kernel (declared tile BN={BN} D={D}, HB={HB} M={M} NB={NB}, "
                                    f"num_splits={int(num_splits)}); stream not bound"[:300])
-                me.launch += 1; me.launches_in_step += 1
+                me.launch += 1
+                me.launches_in_step += 1
                 return res
             # acquire the stream (D2D snapshot into the arena on the compute stream, ordered after the kernel, before the next launch reuses buf)
             me.c._acquire(stream_name(me.launches_in_step, HB, M, NB, BN, D), buf, job)
@@ -352,7 +352,7 @@ class HiddenM1SourceFA3(HiddenM1Source):
         self.bufs = {}
         self.launch = 0
         self.launches_in_step = 0
-        self.stats = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "geometries": {}, "set_tap_s": 0.0, "skipped": None, "so_sha256": None,
                       "tap_layout": int(self.ns.verity_tap_layout_version()), "hdims": [hd for hd in (64, 128) if self.hdims & (1 << (hd // 32))],
                       "backend": "fa3", "tiles": {}, "row3": tap_row3(self.ns), "ms": tap_ms(self.src)}
         self.ms = self.stats["ms"]
@@ -423,7 +423,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
                 me.c.x03_expected = getattr(me.c, "x03_expected", 0) + 1
                 me.c.errors.append(f"fa3 launch {me.launch}: skipped by the kernel (declared tile kBlockM={kBM} BN={BN} D={D}, HB={HB} M={M} NB={NB}, "
                                    f"num_splits={num_splits}); stream not bound"[:300])
-                me.launch += 1; me.launches_in_step += 1
+                me.launch += 1
+                me.launches_in_step += 1
                 return res
             me.c._acquire(fa3_stream_name(me.launches_in_step, HB, M, NB, BN, D), buf, job)
             me.launch += 1

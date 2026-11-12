@@ -93,7 +93,7 @@ def _explode_broadcasts(desc: dict) -> dict:
     single-leaf `affine` parts (the same ordered references, one produced value)."""
     def fix(r):
         if "concat" in r:
-            out = []
+            out: list = []
             for p in r["concat"]:
                 if "strided" in p and p["strided"][4] == 0 and p["strided"][5] == 0:
                     s, i, b, _, _, _, c = p["strided"]

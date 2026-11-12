@@ -110,7 +110,7 @@ def _tanh_words(rng) -> np.ndarray:
 def _tanh_ref(words: np.ndarray) -> np.ndarray:
     """`TanhF32Rn_v1` (`dense.tanh_f32_bits`) on f32 words, vectorized: NaN -> 0x7FC00000, |x| >= 10 (inf included) -> ±1,
     ±0 -> ±0, else RN32 of float64 `math.tanh`."""
-    w = words.astype(np.uint32)
+    w: np.ndarray = words.astype(np.uint32)
     a = w & 0x7FFFFFFF
     out = np.where(w >> 31, np.uint32(0xBF800000), np.uint32(0x3F800000))
     mid = (a != 0) & (a < 0x41200000)
@@ -154,6 +154,8 @@ def _edge_products(rng, n: int, act) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
+    sg: np.ndarray
+    su: np.ndarray
     sg, su = np.meshgrid(SPECIALS, SPECIALS, indexing="ij")
     eg, eu = _edge_products(rng, 4096, D.gelu_tanh_bf16_bits)
     g = np.concatenate([sg.reshape(-1), eg, rng.integers(0, 1 << 16, 8192, dtype=np.uint16)])
@@ -177,7 +179,7 @@ def test_the_activation_is_the_table_on_every_word() -> None:
 def test_every_gate_word(u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the activation alone, then signs, zeros (-0 becomes +0), subnormals, the
     finite maximum, an infinity, a NaN and scales that move the product's exponent."""
-    g = np.arange(1 << 16, dtype=np.uint64)
+    g: np.ndarray = np.arange(1 << 16, dtype=np.uint64)
     _agree(bind(BT.GeluTanhMulBf16), g, np.full(g.shape, u, np.uint64))
 
 

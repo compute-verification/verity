@@ -46,7 +46,8 @@ def set_supplied(P, entries: list[tuple[int, int | None, dict]], d: str) -> None
     for node, owner, ent in entries:
         if node not in P.inputs:
             raise ValueError(f"{d}: supplied parameter {ent.get('name')!r} (node {node}) is not an Input node of the Program")
-        flds = sorted((int(f["offset"]), str(f["name"]), int(f["width"])) for f in ent.get("fields") or [])
+        fields = ent.get("fields")   # the entry's layout {name, width, offset} per field; an entry without any tiles no leaf
+        flds = sorted((int(f["offset"]), str(f["name"]), int(f["width"])) for f in fields) if fields else []
         if len({w for _o, _n, w in flds}) > 1:
             raise ValueError(f"{d}: supplied parameter {ent.get('name')!r} mixes widths, so it is not one Input node")
         if [o for o, _n, _w in flds] != list(range(len(flds))) or len(flds) != int(P.inputs[node][1]):
@@ -61,7 +62,8 @@ def set_supplied(P, entries: list[tuple[int, int | None, dict]], d: str) -> None
 
 def derived_registration(prov: dict, n_user: int, d: str) -> dict | None:
     """The derived Program's registered `values` entry: one homogeneous Record, never empty, right after the user inputs."""
-    reg = (prov.get("supplied") or {}).get("registration")
+    supplied = prov.get("supplied")   # the derive report's supplied parameters; a Program that takes none has no block
+    reg = supplied.get("registration") if supplied else None
     if reg and int(reg["param"]) != n_user:
         raise ValueError(f"{d}: derive-report puts `values` at parameter {reg['param']}, after {n_user} user inputs it is {n_user}")
     return reg
@@ -70,21 +72,22 @@ def derived_registration(prov: dict, n_user: int, d: str) -> dict | None:
 def load_oracle_supplied(P, pj: dict, d: str) -> set[int] | None:
     """The fold's supplied parameters at the Input nodes program.json's `supplied.input_nodes` names (an empty `run_<i>` lowers to
     none, so a parameter's node is not its index); returns the weights' Input nodes when it names them."""
-    sup = pj.get("supplied") or {}
-    in_nodes = sup.get("input_nodes")
+    sup = pj.get("supplied")   # program.json's supplied parameters {registration, run, input_nodes}; a fold that takes none has no block
+    in_nodes = sup.get("input_nodes") if sup else None
+    runs = sup.get("run") if sup else None   # the parameters the requests supply, `run_<i>` for request i
     if sup and not in_nodes:
         raise ValueError(f"{d}: program.json states supplied parameters but not the parameters' Input nodes (`input_nodes`)")
     ents = []
-    for ent, owner in [(sup.get("registration"), None)] + [(r, i) for i, r in enumerate(sup.get("run") or [])]:
+    for ent, owner in [(sup.get("registration") if sup else None, None)] + ([(r, i) for i, r in enumerate(runs)] if runs else []):
         if not ent or in_nodes is None:
             continue
-        nodes = in_nodes.get(ent["name"]) or []
+        nodes = in_nodes.get(ent["name"])   # the Input nodes the parameter lowers to: none for an empty one
         if not ent.get("fields"):
             if nodes:
                 raise ValueError(f"{d}: supplied parameter {ent['name']!r} has no fields but Input nodes {nodes[:4]}")
             continue
-        if len(nodes) != 1:
-            raise ValueError(f"{d}: supplied parameter {ent['name']!r} lowers to {len(nodes)} Input nodes, one homogeneous Record is one")
+        if not nodes or len(nodes) != 1:
+            raise ValueError(f"{d}: supplied parameter {ent['name']!r} lowers to {len(nodes) if nodes else 0} Input nodes, one homogeneous Record is one")
         ents.append((nodes[0], owner, ent))
     set_supplied(P, ents, d)
     return set(in_nodes["weights"]) if in_nodes and "weights" in in_nodes else None
