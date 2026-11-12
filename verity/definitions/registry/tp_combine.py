@@ -30,10 +30,11 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   a chunk of one token's elements: a fused MNNVL call is one token, and its chunk AT of C elements is
   `AllReduceResidualMnnvlAt_v1`, which reads the residual row whole, as `rmsnorm_fused_split.RMSNormFusedCudaAdd_v1` does, so a
   residual written as one row (the MoE's) is read without being cut.
-* A producer's whole row. A wire reads its writer's output row whole, so a rank's partial written as one row of N elements (the
-  MoE's `ResidualAdd_v2{N=6144}`) reaches the chunk units through `RowChunks_v1{N,C}`, a copy of it as N / C output rows.
-  Unchunked, a token's row of 6,144 is past one C-Flock block: the fused call's unit by its ANDs alone, and every all-reduce of
-  it with its rows' slots (verity/definitions/tests/test_tp_combine.py).
+* A producer's whole row. A wire reads its writer's output row whole, so a rank's partial written as a row of N elements, N
+  more than a chunk (the MoE's residual add: a token's 6,144 elements as one row, `ResidualAdd_v2{N=6144}`, or as its column
+  blocks' rows, 16 of `ResidualAdd_v2{N=384}`), reaches the chunk units through `RowChunks_v1{N,C}`, a copy of it as N / C
+  output rows. Unchunked, a token's row of 6,144 is past one C-Flock block: the fused call's unit by its ANDs alone, and every
+  all-reduce of it with its rows' slots (verity/definitions/tests/test_tp_combine.py).
 """
 from __future__ import annotations
 
