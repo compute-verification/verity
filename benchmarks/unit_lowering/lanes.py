@@ -1,6 +1,6 @@
 """`lanes.py KIND K R C PATH TREE STAGING`: an R x C leaf's lane statement (`PouwH1LaneZy_v1`, one circuit for all its lanes,
-each 4 rows by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's `benchmarks/pouw/h1_lanes/run.py`
-stages it (its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it
+each 4 rows by 8 columns) or its combine (`PouwH1Combine_v1`) at K, written to PATH as TREE's leaf module stages it
+(`leaf_file`; its `stager`, at its leaf ``RC`` set to R x C), bound to the Program a served window's verifier derives for it
 (`derived`), flat unless ``H1_TMPL`` says otherwise. At STAGING ``fast`` `fast_stage` is installed first, as
 `pouw_h1_circuits --lower` installs it under ``HZ_STAGE=fast``.
 """
@@ -11,13 +11,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-__all__ = ["stage"]
+__all__ = ["leaf_file", "stage"]
+
+
+def leaf_file(tree: Path) -> Path:
+    """``tree``'s leaf module: its `benchmarks/pouw/h1_lanes/leaf.py`, or the `run.py` there of a checkout that has no
+    `leaf.py`."""
+    h1 = tree / "benchmarks" / "pouw" / "h1_lanes"
+    return h1 / ("leaf.py" if (h1 / "leaf.py").is_file() else "run.py")
 
 
 def stage(kind: str, k: int, r: int, c: int, scratch: Path, tree: Path) -> Any:
     """``kind``'s `UnitStager` at K on the R x C leaf, its circuit written under ``scratch``, with whatever staging this process
     has installed."""
-    spec = importlib.util.spec_from_file_location("h1_lanes_run", tree / "benchmarks" / "pouw" / "h1_lanes" / "run.py")
+    spec = importlib.util.spec_from_file_location("h1_lanes_run", leaf_file(tree))
     L = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(L)
     L.RC = (r, c)
