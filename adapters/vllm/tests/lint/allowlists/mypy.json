@@ -8,7 +8,6 @@
     "vllm": null
   },
   "entries": [
-    {"file": "tests/engine/fake_scheduler.py", "kind": "var-annotated", "symbol": "FakeScheduler.schedule", "detail": ""},
     {"file": "tests/engine/test_env.py", "kind": "arg-type", "symbol": "test_a_capture_at_served_defaults_never_pins_a_switch_back", "detail": ""},
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "assignment", "symbol": "<module>", "detail": ""},
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "arg-type", "symbol": "_load", "detail": ""},
