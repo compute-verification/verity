@@ -2,7 +2,8 @@
 /data/agent-watch/events.jsonl (on the pod itself with $AGENT_WATCH_ON_POD, else over ssh) and posts each in #agent-alerts: a
 held run the watch cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
-cancel, held again within the hour, a run unreadable for an hour, and an outage, which names the registry's human too; the first unreadable
+cancel, held again within the hour, a run unreadable for an hour, a run its stream shows held that the watch could not judge
+(`unjudged`: it could not read it afresh, or its stream keeps breaking), and an outage, which names the registry's human too; the first unreadable
 line is posted nowhere) leads with top's handle, and rings top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it); an erroring worker, which its record's `owner` relaunches, rings that handle instead. A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
@@ -120,8 +121,10 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "unplaced": "is under no lane: no Task call the watch saw, workers.d entry or brief gives it a launcher that a "
                    "handle owns, however many workers up, and no workers.d entry or note gives it a lane",
        "handin_waiting": "has a hand-in on {issue} waiting since {since} ({minutes} min): a comment signed {by} with no "
-                         "comment signed LANE/{signs} after it"}
-TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
+                         "comment signed LANE/{signs} after it",
+       "unjudged": "was found {rule} by its stream since {since} ({minutes} min), but {why}: the watch cancelled nothing, "
+                   "and judges it again each sweep; look at it if it can't wait"}
+TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage", "unjudged"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up

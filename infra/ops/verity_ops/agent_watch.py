@@ -37,9 +37,18 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   worker it waits on streamed within `WORKER_LIVE_S`: a resumed worker streaming in the foreground hides it from every rule
   above, and its follow-ups sit unread for hours. For the handle's inbox holder a doorbell must have rung after its last own event an hour ago, or its timer lapsed; a
   lane's subscriptions the watch can't see, so the hour alone. It is cancelled and continued as a held run is (the worker, a
-  cloud agent, runs on), owner top, under the same once-an-hour limit. While `CANCEL_OFF`
-  (`/data/agent-watch/cancel.off`, a file a person makes on the pod) exists, none of these three is cancelled: each
-  finding is recorded once, for a person, and cancelled once the file is gone if it still holds;
+  cloud agent, runs on), owner top, under the same once-an-hour limit.
+
+  Each of these three is cancelled only on a view read as the watch is about to cancel (`afresh`: the agent and the run,
+  `GUARD_TIMEOUT_S` each): the sweep's listing is minutes old by then, and a stream can stop giving a run's events while
+  the run works on, which reads as silence after a finished tool call. The run must still read the status it was judged
+  under. For held and held unread the agent's `updatedAt` must not have moved, by `MOVED_S`, since the last event the
+  stream gave: a quiet stream whose agent moved since is a broken stream, so nothing is judged and the run is followed
+  afresh, which replays it; stalled is judged by the `updatedAt` read then. A run the watch can't read so is not
+  cancelled: it is recorded once as **unjudged**, with why, and judged again at each sweep; so is one whose agent has
+  moved after its stream's last event at the `REOPENS`th time it is followed afresh. While `CANCEL_OFF`
+  (`/data/agent-watch/cancel.off`, a file a person makes on the pod) exists, nothing is cancelled: each finding is
+  recorded once, for a person, and cancelled once the file is gone if it still holds;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the platform has it stopped with an error: for an agent on the list, its latest run ended in ERROR
@@ -282,6 +291,11 @@ RECANCEL_S = 3600
 #: while this file exists the watch cancels no held, stalled or held-unread run: it records the finding once and leaves the
 #: run for a person
 CANCEL_OFF = "/data/agent-watch/cancel.off"
+GUARD_TIMEOUT_S = 15        # a read an action rests on, made as the watch is about to act (the agent and the run before a
+#                             cancel): the sweep's own reads are minutes old by then
+MOVED_S = 60                # an agent's `updatedAt` this far past the last event its run's stream gave has moved since (the
+#                             write an event makes may trail it, and an event is timed as it arrives): a broken stream
+REOPENS = 2                 # a run followed afresh this often for a broken stream is recorded, for a person
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
 AGENTS_PAGE = 10            # GET /v1/agents page size, halved on each 503 down to AGENTS_PAGE_MIN for the process's life: the
 AGENTS_PAGE_MIN = 2         # largest page Cursor answers keeps shrinking (100, 50 and 25 have each 503'd for hours, blinding
@@ -393,7 +407,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced", "handin_waiting")
+                "outage", "archived", "unplaced", "handin_waiting", "unjudged")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -1162,7 +1176,7 @@ class Run:
     said_t: float = 0.0                 # its last assistant text the watch hadn't been given before
     said_n: int = 0                     # characters of assistant text since its stream was last started ...
     said_max: int = 0                   # ... and the most a stream of its has given: text a replay repeats is no new text
-    agent_t: float = 0.0                # its agent's `updatedAt` as the last sweep listed it
+    agent_t: float = 0.0                # its agent's `updatedAt` as the watch last read it: the sweep's listing, or `afresh`
     calls: dict[str, float] = field(default_factory=dict)   # open tool calls the parent waits on: callId -> started
     bg: set[str] = field(default_factory=set)               # open calls it went on past: background work
     told: set[str] = field(default_factory=set)
@@ -1257,6 +1271,7 @@ class Watch:
         self.back: dict[str, float] = s.get("back", {})           # agent -> since when it has been back from ERROR
         self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
+        self.reopened: dict[str, int] = {}                        # followed run -> times dropped for a broken stream (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no launcher -> when (not saved)
         self.stops_left = STOPS_SWEEP                             # v0 statuses the current sweep may still read
         self.learn_left = 0                                       # briefs the current node read may still read
@@ -1664,35 +1679,81 @@ class Watch:
             return f"its {int(every // 60)}-min timer lapsed"
         return None
 
+    def afresh(self, r: Run, t: float, kind: str, **found) -> bool:
+        """Whether `r`, which its stream and the sweep's listing show held, stalled or held unread, is so by its agent and
+        the run as the API reads them now (`GUARD_TIMEOUT_S` each): the listing is minutes old by the time a sweep judges,
+        and a stream can stop giving a run's events while the run works on. The run must read the status it was judged
+        under: one that ended is dropped, one that changed is the next sweep's to judge. A held or held-unread run's agent
+        must not have moved (`updatedAt`, by `MOVED_S`) since the last event the stream gave, its subagents' included: one
+        that has did something the stream never gave, so the stream is broken, and the run is dropped for the next sweep
+        to follow afresh, which replays it; at the `REOPENS`th time for one run that is recorded, `unjudged`. A stalled run
+        must be stalled by the `updatedAt` read now. When a read fails nothing is judged, and the run is recorded
+        `unjudged`, once, with why."""
+        try:
+            a = self.api.get(f"/v1/agents/{r.agent}", timeout=GUARD_TIMEOUT_S) or {}
+            x = self.api.get(f"/v1/agents/{r.agent}/runs/{r.run}", timeout=GUARD_TIMEOUT_S) or {}
+            if (moved := epoch(a.get("updatedAt"))) is None or not x.get("status"):
+                raise ValueError("the API gave no updatedAt for the agent or no status for the run")
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            if self.once(f"{r.run}#unjudged", t):
+                self.record("unjudged", r, rule=kind, why=f"the watch could not read its agent and the run afresh "
+                            f"({type(e).__name__}: {e})", **found)
+            return False
+        if (status := str(x["status"])) != r.status:
+            print(f"{iso(t)} run {r.run} of {r.agent}: {kind} as the sweep listed it ({r.status}), and {status} read now: "
+                  "not judged", file=sys.stderr, flush=True)
+            if status in TERMINAL:
+                r.ended = status
+            return False
+        r.agent_t = moved
+        if kind == "stalled":
+            return self.classify(r, t) == kind
+        if moved - (heard := max(r.last_t, r.bg_t)) < MOVED_S:
+            return True
+        n = self.reopened[r.run] = self.reopened.get(r.run, 0) + 1
+        self.runs.pop(r.run, None)
+        print(f"{iso(t)} run {r.run} of {r.agent}: its stream gave nothing since {iso(heard)} while its agent moved at "
+              f"{iso(moved)}: a broken stream, not {kind}; followed afresh", file=sys.stderr, flush=True)
+        if n == REOPENS:
+            self.record("unjudged", r, rule=kind, why=f"its agent's updatedAt moved ({iso(moved)}) after the last event of "
+                        f"its stream, at each of the {n} times the watch followed it afresh: a stream that keeps breaking, "
+                        "or an agent that moves while its run is held", **found)
+        return False
+
     def free(self, r: Run, t: float, kind: str = "held", why: str = "") -> None:
-        """Cancel a held, stalled or held-unread run and start a continue run on its agent, at most once per agent an hour.
-        While `CANCEL_OFF` exists it cancels nothing, and records the finding once."""
+        """Cancel a held, stalled or held-unread run and start a continue run on its agent, at most once per agent an hour,
+        and only when its agent and the run, read as it is about to (`afresh`), show it so. While `CANCEL_OFF` exists it
+        cancels nothing, and records the finding once."""
         quiet = r.last_t if kind in ("held", "held_unread") else max(r.last_t, r.bg_t)
         since, mins, owner = iso(quiet), int((t - quiet) // 60), self.owned(r.agent)
         if why:
             owner = {**owner, "handle": self.holders_all.get(r.agent), "reason": why}
-        if os.path.exists(CANCEL_OFF):
-            if "cancel-off" not in r.told:
-                r.told.add("cancel-off")
-                self.record(kind, r, since=since, minutes=mins, action=f"none: cancelling is off by hand ({CANCEL_OFF} exists), "
-                            "so nothing was cancelled; a person looks", **owner)
+        # what keeps the run from being cancelled, if anything: one already told, or a refused cancel not yet due, reads nothing
+        stop = ("cancel-off" if os.path.exists(CANCEL_OFF) else
+                "held-again" if t - self.freed.get(r.agent, -RECANCEL_S) < RECANCEL_S else
+                "refused" if r.refused_t is not None else "")
+        if stop in r.told or (stop == "refused" and t - r.refused_t < REFUSED_S):
             return
-        if t - self.freed.get(r.agent, -RECANCEL_S) < RECANCEL_S:
-            if "held-again" not in r.told:
-                r.told.add("held-again")
-                self.record("held_again", r, since=since, minutes=mins, rule=kind, action="none: freed once within the hour",
-                            **owner)
+        if not self.afresh(r, t, kind, since=since, minutes=mins, **owner):
             return
-        if r.refused_t is not None:
-            if t - r.refused_t >= REFUSED_S and "refused" not in r.told:
-                r.told.add("refused")
-                handle = self.coords.get(r.agent)
-                self.record("cancel_refused", r, since=since, minutes=mins, rule=kind,
-                            action=f"{'relaunching it' if handle else 'none'}: the API refused the cancel (409) and still "
-                                   f"reads it {r.status}", **owner)
-                if handle:
-                    self.relaunch_coordinator({"id": r.agent, "name": r.name}, handle,
-                                              f"had run {r.run} {kind}, and the API refused to cancel it", r.run, t)
+        if stop:
+            r.told.add(stop)
+        if stop == "cancel-off":
+            self.record(kind, r, since=since, minutes=mins, action=f"none: cancelling is off by hand ({CANCEL_OFF} exists), "
+                        "so nothing was cancelled; a person looks", **owner)
+            return
+        if stop == "held-again":
+            self.record("held_again", r, since=since, minutes=mins, rule=kind, action="none: freed once within the hour",
+                        **owner)
+            return
+        if stop == "refused":
+            handle = self.coords.get(r.agent)
+            self.record("cancel_refused", r, since=since, minutes=mins, rule=kind,
+                        action=f"{'relaunching it' if handle else 'none'}: the API refused the cancel (409) and still "
+                               f"reads it {r.status}", **owner)
+            if handle:
+                self.relaunch_coordinator({"id": r.agent, "name": r.name}, handle,
+                                          f"had run {r.run} {kind}, and the API refused to cancel it", r.run, t)
             return
         try:
             self.api.post(f"/v1/agents/{r.agent}/runs/{r.run}/cancel")
@@ -2912,6 +2973,7 @@ class Watch:
         with self.lock:
             for run in [run for run in self.runs if run not in current]:
                 self.runs.pop(run)
+            self.reopened = {run: n for run, n in self.reopened.items() if run in current}
             runs = list(self.runs.values())
         for r in runs:
             with self.lock:

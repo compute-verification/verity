@@ -787,6 +787,24 @@ def test_a_holder_held_unread_is_posted_and_rings_top(relay):
     assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
 
 
+def test_a_run_the_watch_could_not_judge_rings_top_with_why(relay):
+    """`unjudged`: a run its stream shows held, of which the watch cancelled nothing because it could not read it afresh:
+    left for a person, so top is rung, with why."""
+    top = relay.slack.tag(relay.slack.entry(relay.REG, "top"))
+    co = PROOFS_INBOX["holder"]
+    why = ("the watch could not read its agent and the run afresh (TimeoutError: this sweep's reads are spent (12 min); the "
+           "next sweep reads again)")
+    relay.log_text["text"] = json.dumps({"kind": "unjudged", "agent": co, "name": "verity: proofs", "run": "run-h",
+                                         "rule": "held", "since": "2026-10-24T17:25:00Z", "minutes": 15, "why": why,
+                                         "owner": "top"}) + "\n"
+    relay.once()
+    link = f"<https://cursor.com/agents/{co}|{co}>"
+    assert relay.posts == [
+        f"{top} *Agent watch:* verity: proofs ({link}, run run-h) was found held by its stream since 2026-10-24T17:25:00Z "
+        f"(15 min), but {why}: the watch cancelled nothing, and judges it again each sweep; look at it if it can't wait."]
+    assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
+
+
 def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(relay):
     rec = {"t": "2026-10-30T00:52:00Z", "kind": "outage", "agent": "", "name": "", "run": "", "owner": "top", "count": 5,
            "handles": ["kernels", "proofs"], "since": "2026-10-29T23:22:00Z", "every_min": 15}

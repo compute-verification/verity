@@ -21,7 +21,8 @@ class Clock:
 class FakeApi:
     """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
     A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API. `workers` (Task subagents) aren't
-    listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read. `convs[agent]` is its
+    listed but are read by id (`GET /v1/agents/{id}`), and so is a listed agent, as the list gives it, with an `updatedAt`
+    long ago when the test gives it none (the API always gives one); 404 for any other id. `gets` counts each read. `convs[agent]` is its
     conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent). `v0[agent]`
     is its status as the legacy `GET /v0/agents/{id}` gives it, or the error that read raises; without one it is RUNNING
     for a worker v1 has ACTIVE and FINISHED for any other."""
@@ -50,9 +51,11 @@ class FakeApi:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
             return {"id": parts[-1], "status": got or ("RUNNING" if self.workers[parts[-1]].get("status") == "ACTIVE" else "FINISHED")}
         if len(parts) == 4:
-            if parts[-1] not in self.workers:
+            if parts[-1] in self.workers:
+                return dict(self.workers[parts[-1]])
+            if (a := next((a for a in FakeApi.agents(self) if a["id"] == parts[-1]), None)) is None:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
-            return dict(self.workers[parts[-1]])
+            return {"updatedAt": "1970-01-01T00:00:00Z", **a}
         if parts[-1] == "runs":
             a = next(a for a in self._agents if a["id"] == parts[-2])
             ids = [a["latestRunId"], *self.older.get(a["id"], [])]
@@ -76,6 +79,33 @@ def _cancelling_is_on(tmp_path, monkeypatch):
     """The switch that turns cancelling off is a file on the machine the watch runs on: here, one beside the watch's log that
     only a test of the switch makes."""
     monkeypatch.setattr(W, "CANCEL_OFF", str(tmp_path / "cancel.off"))
+
+
+def spent():
+    """What `Api.get` raises for a read past `reads_until`."""
+    raise TimeoutError(f"this sweep's reads are spent ({W.SWEEP_READS_S // 60} min); the next sweep reads again")
+
+
+def after(api, reads, then):
+    """From now on, once a sweep has made `reads` reads (it starts at its listing), `then()` runs before each read more:
+    `spent` raises, as a sweep out of read time does; a test's own changes what the API answers, as an agent does that acts
+    while a sweep is under way. Returns what undoes it."""
+    get, agents, left = api.get, api.agents, [reads]
+
+    def listing():
+        left[0] = reads
+        return agents()
+
+    def read(path, **params):
+        if left[0] <= 0:
+            then()
+        left[0] -= 1
+        return get(path, **params)
+
+    def undo():
+        api.get, api.agents = get, agents
+    api.get, api.agents = read, listing
+    return undo
 
 
 def held_tool_call(w, run="run-1", cid="c1"):
@@ -945,6 +975,114 @@ def test_a_continue_refused_for_half_an_hour_is_left_for_a_person(tmp_path):
 CANCEL, CONTINUE = "/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"
 
 
+def test_a_held_run_is_cancelled_on_its_agent_and_the_run_read_as_the_watch_is_about_to(tmp_path):
+    """A stream can stop giving a run's events while the run works on, and the sweep's listing is minutes old by the time it
+    judges. So the watch reads the agent and the run as it is about to cancel: the run still RUNNING and its agent's
+    `updatedAt` no later than the write its last event made, it is held."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    held_from = clock.t
+    api._agents[0]["updatedAt"] = W.iso(held_from + W.MOVED_S - 1)
+    clock.t += W.HELD_S
+    api.gets.clear()
+    w.sweep(started.append)
+    assert api.gets == ["/v1/agents/bc-a/runs", "/v1/agents/bc-a", "/v1/agents/bc-a/runs/run-1"]
+    assert [p for p, _ in api.posts] == [CANCEL, CONTINUE]
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["since"], rec["action"]) == ("held", W.iso(held_from), "cancelled and continued")
+
+
+def test_a_run_its_stream_shows_held_is_not_cancelled_by_sweeps_whose_reads_are_spent(tmp_path):
+    """A finished tool call, then a stream that gives nothing more while the agent works on (its `updatedAt` moves), under
+    sweeps that run out of read time once they have listed the agents and their runs. By the stream alone the run is held,
+    and cancelling it cuts a working turn. The watch can't read the agent and the run afresh, so it cancels nothing and
+    says so once. At the first sweep that can, the agent has moved since the stream's last event: a broken stream,
+    followed afresh, and still nothing is cancelled."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    heard = clock.t
+    undo = after(api, 1, spent)                     # a sweep's read time lasts its listing and the agent's runs
+    for _ in range(W.HELD_S // 60 + 30):
+        clock.t += 60
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        w.sweep(started.append)
+    assert api.posts == [], "nothing is cancelled on a view the watch could not refresh"
+    (rec,) = records(tmp_path)
+    assert {k: rec[k] for k in ("kind", "rule", "run", "since", "minutes")} == {
+        "kind": "unjudged", "rule": "held", "run": "run-1", "since": W.iso(heard), "minutes": 15}
+    assert "could not read its agent and the run afresh (TimeoutError: this sweep's reads are spent" in rec["why"]
+    assert status(tmp_path)["bc-a"]["watch_state"] == "unjudged" and [r.run for r in started] == ["run-1"]
+    undo()
+    clock.t += 60
+    api._agents[0]["updatedAt"] = W.iso(clock.t)
+    w.sweep(started.append)
+    w.sweep(started.append)
+    assert api.posts == [] and len(records(tmp_path)) == 1
+    assert [r.run for r in started] == ["run-1", "run-1"], "followed afresh once the watch could read that its agent moved"
+
+
+def test_a_quiet_stream_whose_agent_moved_since_is_followed_afresh_and_a_run_still_held_then_is_cancelled(tmp_path):
+    """The agent's `updatedAt` moved after the last event the stream gave: the agent did something the stream never gave,
+    so the stream is broken and its silence says nothing of the run. The run is dropped and followed afresh, which replays
+    it. One whose replay ends on the same finished tool call, its agent still since, is held, and is cancelled then."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    heard = clock.t
+    api._agents[0]["updatedAt"] = W.iso(heard + W.MOVED_S)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert api.posts == [] and records(tmp_path) == [] and "run-1" not in w.runs
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1", "run-1"]
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == [CANCEL, CONTINUE]
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["since"], rec["action"]) == ("held", W.iso(heard + W.HELD_S), "cancelled and continued")
+
+
+def test_a_run_followed_afresh_twice_for_an_agent_that_keeps_moving_is_recorded_once_for_a_person(tmp_path):
+    """An agent that has moved after its stream's last event each time its run is followed afresh has a stream that keeps
+    breaking, or moves while its run is held (a follow-up queued behind it). The watch can't tell which: it cancels
+    nothing, and says so once."""
+    api, clock, w, started = setup(tmp_path)
+    for _ in range(W.REOPENS + 1):
+        held_tool_call(w)
+        clock.t += W.HELD_S
+        api._agents[0]["updatedAt"] = W.iso(clock.t - 60)
+        w.sweep(started.append)
+        w.sweep(started.append)
+    assert api.posts == [] and len(started) == W.REOPENS + 2
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["rule"], rec["minutes"]) == ("unjudged", "held", 15) and "a stream that keeps breaking" in rec["why"]
+
+
+@pytest.mark.parametrize("now, followed", [("FINISHED", False), ("WAITING_FOR_BACKGROUND_WORK", True)])
+def test_a_run_that_ended_or_changed_since_the_sweep_listed_it_is_not_cancelled(tmp_path, now, followed):
+    """The sweep listed the run RUNNING. By the time it judges, the run has ended, or waits on background work, where it
+    is held only after an hour: read as the watch is about to cancel, it is neither cancelled nor recorded."""
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    after(api, 1, lambda: api._runs["run-1"].update(status=now))
+    w.sweep(started.append)
+    assert api.posts == [] and records(tmp_path) == [] and ("run-1" in w.runs) == followed
+
+
+def test_a_run_stalled_by_the_listing_whose_agent_has_moved_by_the_time_it_is_judged_is_not_cancelled(tmp_path):
+    """Stalled needs the agent's `updatedAt` still for 30 min. The listing that says so is the sweep's first read, and the
+    agent may move while the sweep is under way: the `updatedAt` read as the watch is about to cancel decides."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r",
+                                             "updatedAt": W.iso(T0)}], {"run-r": {"status": "RUNNING"}}, timers=None)
+    w.sweep(lambda r: None)
+    w.on_event("run-r", "tool_call", {"callId": "c1", "name": "Shell", "status": "running"})
+    clock.t += W.STALL_S
+    after(api, 1, lambda: api._agents[0].update(updatedAt=W.iso(clock.t)))
+    w.sweep(lambda r: None)
+    assert api.posts == [] and records(tmp_path) == []
+
+
 def test_while_the_switch_file_exists_a_held_run_is_recorded_once_and_cancelled_only_once_it_is_removed(tmp_path):
     """`CANCEL_OFF`, a file a person makes on the machine the watch runs on: while it exists the watch records a held run
     once and cancels nothing, however long the run stays held; the first sweep after it is removed cancels and continues
@@ -1114,6 +1252,8 @@ def test_status_carries_no_prompt_error_text_name_branch_slack_or_key(tmp_path):
         if path.endswith("/runs"):
             run = next(a for a in api._agents if a["id"] == path.split("/")[-2])["latestRunId"]
             return {"items": [{"id": run, **api._runs[run]}] if run in api._runs else []}
+        if len(path.split("/")) == 4:               # the agent by id, which the watch reads before it cancels its run
+            return FakeApi.get(api, path, **params)
         return api._runs[path.rsplit("/", 1)[1]]
 
     def post(path, body=None):
