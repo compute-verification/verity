@@ -1,5 +1,5 @@
 """The honest worker's requests in an inner session, held to their Lean (`Flock.Firewall.honestReqs`, the port
-``firewall-honest-difftest`` of `verity/difftest`): for what an honest worker brings (`Flock.Firewall.Honest`), the
+``firewall-honest-difftest`` in the release side's package): for what an honest worker brings (`Flock.Firewall.Honest`), the
 requests `rec_live`'s encoder writes (`encode_req`, and `test_rec_live`'s frame writers for a round's content) are Lean's,
 byte for byte. On a real prover's recorded session the worker's data is read back out of its own requests (`honest_of`)
 and Lean writes those requests again, byte for byte, and they finish under `flock-firewall`; Hypothesis samples sessions
@@ -22,7 +22,7 @@ from test_rec_live import SCHEDULE, _bytes, _domain, _label, _obs, _sq
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-LEAN = Path(__file__).resolve().parents[4] / "difftest" / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "recursion" / "verifier" / "firewall"
 #: the flat GEMM selftest's shape, whose recorded session `test_firewall_agreement` relays
 FLAT_SCHEDULE = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
 

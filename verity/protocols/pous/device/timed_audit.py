@@ -545,5 +545,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if doc["audits"] and doc["audits_accepted"] == doc["audits"] else 1
 
 
+__all__ = ["ALLOWANCE_KIND", "DISAGREE", "HEADER", "OP_CHALLENGE", "OP_CLOSE", "OP_PING", "TRACE_OVER_NS", "VERDICT",
+           "VERDICTS", "LiveResponder", "LogicalClock", "audit", "calibrate", "calibrate_only", "cgroup_cpu", "host_trace",
+           "judge", "lean_unavailable", "lean_verdict", "limit_of", "main", "params_of", "quantiles", "scheme_of",
+           "seeded_source", "verdict"]
+
 if __name__ == "__main__":
     sys.exit(main())

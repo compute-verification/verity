@@ -281,6 +281,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
     return s | {"params": p}
 
 
-__all__ = ["AUDIT_BYTES", "CHALLENGER", "END", "ID", "MANIFEST", "MAX_BLOCK", "MODULE", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "SPIN_NS", "VERSION", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
+__all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
            "coin_session_id", "command", "placement", "request_of", "salt", "session", "session_id", "setup_of", "side_of"]
