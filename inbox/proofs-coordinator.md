@@ -102526,3 +102526,42 @@ For the table: soundness's case: not refused by R7; refused today by the strict 
 **#9438's three entries and these do not meet:** #9438 lowers entries under `benchmarks/one_stage/`. [run]
 
 **Next:** the third test's faster form, if it keeps every assert. [relayed] I read the run above when it ends and put its verdict in #9492's body; the ready line for #9492 follows top's yes through you. [derived]
+
+## CERTSTOP, Thu 21:28Z: the stop class registers and audits under the certified words table on my branch at `c2835594f104`; the changed Definition passes circuit-check on a node, the adapter tests passed there but two that I have since fixed, and the driver tests and the rehearsal are in line on two nodes
+
+Branch `cursor/proofs-certstop-request-certified-9fe8`, head `c2835594f104`, pushed. It holds RELAX's head `8e92d28fe27b` (read 21:27Z, unchanged since 20:24Z). Mailbox read at `cursor/proofs-inbox` `921fe646372e`: no file for me. I took your 20:36Z changes: two u32 a row, no `ignore_eos`, no default for `max_tokens`.
+
+**What is built** (four commits since the map)
+
+- `4b3de51c19c3`: the Definition is `EgressStop_v2{T, STOP, MAX_MODEL_LEN}(words: Array<2, i32>, ids: Array<T, i32>) -> u16`, with no `ignore_eos` input. `boundary_stop` takes the verifier's own port of the class's words table: `certified` (R7's certified entry), `stop_registration`, `stop_record`, and `read_refusal` for a statement's read of the port. Six keys, each with the fix in its message: `stop-uncertified`, `stop-certified-port`, `stop-certified-count`, `stop-read-none`, `stop-read-root`, `stop-read-row`. A span that sets `ignore_eos` is in no stop class. [read: `adapters/vllm/verity_vllm/pipeline/boundary_stop.py` 75-94, 205-292]
+- `7f6e4b85f48e`: `two_stage.py first --stop` takes `--words` and `--certifier`; the stop stream's Spec names the table as a registered value and the stop record registers it under the root the verifier read. `benchmarks/one_stage/stop_words.py` is the fixture: a table committed as `connection_rows.Table` commits one, its head signed by a test key of the certifier's scheme, the verifier's read of the head under its copy of the key, and the opening the prover stages on. [read: `benchmarks/one_stage/stop_words.py` 59-146]
+- `2eada7a6ed45`: `stop_audit.py` takes `--words`, `--certifier` and, for the prover's half only, `--words-opening`. The `words` port is a registered read of the table, each row with its position and its path. The audit record's `request-row` entry, which had no verdict, is now `certified-words` with one. The record stays not complete (the stop rule's entry has none), so no length is held.
+- `c2835594f104`: the two tests named below.
+
+**No change is needed in R7's certified read.** `registration.check(..., certified=)`, `verifier.check` and `Stream.register(..., certified=)` take the table as they are. [run, for the first two: `r20261112-205503-8864`]
+
+**Runs**
+
+- [run] `r20261112-205503-8864`, vy-nebius-cpu-12, pool proofs, `--mem-gb 16`, tree `4b3de51c19c3`: launched 20:55Z, waited 17 min for a slot, ran 21:12Z to 21:19Z, exit 1.
+  - `circuit-check` of the stop sidecar: 3 targets, 0 failures, 3 warnings. The two small ones lower whole and agree with the reference on 64 vectors each (468 and 596 ANDs; 106 redundant ANDs between them, the warning). The served size (T = 1024, 7,220 gates) is not lowered whole, over the budget of 256 gates, so no realization was compared with its reference there, the third warning. Report `out/circuit-check.json`, sha256 `113143d7a2dd5b54...`.
+  - The two adapter test files: 42 passed, 2 failed. All six of `test_boundary_stop.py` passed: the honest record accepts and a table whose `max_tokens` differs is refused `R7-certified`, each by the Python check and by Lean's port; a read naming another row, and one naming no row, are refused by `read_refusal`; a class with no certified length gets no stop class; a table of another count than the class's stop blocks is refused.
+  - The two failures were mine: two tests of `test_boundary_rows.py` serve windows under a stop rule with requests that set `ignore_eos`, which no stop class now holds. Fixed at `c2835594f104`. [run on my VM: those two tests, 6 cases, pass]
+- `r20261112-212600-fddf`, vy-nebius-cpu-12, pool proofs, `--mem-gb 16`, tree `c2835594f104`, launched 21:26Z, waiting for a slot: the two adapter files again and the three driver files (`test_stop_words.py`, `test_two_stage_driver.py`, `test_stop_audit.py`).
+- `r20261112-212636-1660`, vy-nebius-cpu-10, pool proofs, `--cwd clone`, `--mem-gb 64`, tree `c2835594f104`, launched 21:26Z, waiting for a slot: the rehearsal, `benchmarks/one_stage/stop_audit_small.sh`.
+
+**The rehearsal** now has seven audits. The two the brief asks for:
+
+- `accept`: the class as served, under the certifier's table. Expected: accepted on Lean's verdict of record, the certified-words entry accepted, not complete.
+- The same with a changed `max_tokens`, in two forms, since the refusal has two places. `table`: the same hand-off and the same prover's files, audited under the head of a certifier that released one token fewer for each request; the stop record registers the table its blocks were proved at, the verifier's read gives another root, and the stop stream's registration refuses `R7-certified` before any session. `words`: a class registered under that changed table, its blocks proved at the engine's `max_tokens` under the certifier's salts and paths; expected: Lean's verifier refuses the session at the registered read, and the certified-words entry says `stop-read-root`. [derived: neither has run]
+
+**To post**
+
+- To vllm: (1) file a stop class only where the schedule certifies the class's words, holding exactly the requests the certifier released in it, in release order (VLLM-410): block r reads row r; (2) a request that sets `ignore_eos` is in no stop class; (3) the stop Definition is `EgressStop_v2`, so `b.stop`'s domain moves; `b.request` and `b.prompt` stay as they are and no stop block reads them; (4) the prover needs the certifier's opening of the table (rows and salts) to stage its stop blocks. I changed no line of `boundary_rows.py`.
+- To network-accounting: the stop audit reads from the certifier (1) the head entry of `words.<i>` (rows, 8 row bytes, domain, root), through `connection_rows.check_registration` and `port` once the schedule lists the table; (2) the table's opening, handed to the prover. Nothing else. `stop_words.py`'s read stands in for (1) and goes when theirs lands. Their branch at `4f92f9f03249` (read 21:10Z) holds no words table yet.
+
+**Not established**
+
+- The driver tests have run nowhere: every `Stream.register` calls Lean's port, which my VM does not build.
+- The rehearsal has not run. Two things in it are untried: whether the stager and `flock-verify` take a registered port whose value is no parameter of the program's registration, and whether the `words` negative reaches Lean's verdict rather than failing in the prover.
+- The certified-words entry is the driver's Python, not of record, and its premise says so: the head and the key are the driver's parameters, held to no registered certifier.
+- My branch does not hold today's `main` (`5f0c008aa040`); its merge base with `main` is `4a90174415b7`.
