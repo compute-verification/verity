@@ -23,9 +23,9 @@ import struct
 import sys
 from pathlib import Path
 
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import audit
 from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 OUT = Path(__file__).with_name("vectors") / "splitk_rows.json"
