@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import struct
@@ -120,18 +121,17 @@ def quant_vllm(x: np.ndarray, k: int = 0) -> tuple[np.ndarray, np.ndarray]:
 
 def tokens_of(model: Path, m: int, seed: bytes | None) -> list[int]:
     """M prompt tokens: ids from ``seed`` where one is given, else the tokenizer's ids of a fixed prompt where `tokenizers` is
-    installed, else ids from a fresh seed."""
+    installed and the model has a ``tokenizer.json`` (one that doesn't load raises), else ids from a fresh seed."""
     if seed is not None:
         return _seeded(m, seed)
-    try:
+    file = model / "tokenizer.json"
+    if importlib.util.find_spec("tokenizers") is not None and file.exists():
         from tokenizers import Tokenizer
-        tok = Tokenizer.from_file(str(model / "tokenizer.json"))
+        tok = Tokenizer.from_file(str(file))
         ids = [128000] + tok.encode("The verifier draws tiles of the served window by a live coin, and each drawn tile is "
                                     "proved in zero knowledge and checked by the Lean verifier.", add_special_tokens=False).ids
         if len(ids) >= m:
             return ids[:m]
-    except Exception:  # noqa: BLE001 - the tokenizer is optional: ids from the seed instead
-        pass
     return _seeded(m, os.urandom(16))
 
 
