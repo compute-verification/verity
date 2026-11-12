@@ -95,5 +95,7 @@ def test_the_cli_reports_the_pooled_sigma(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == VEC and len(d["groups"]) == 2 and d["binding"] == ["JI3n_0"]
     assert d["sigma"] == pytest.approx(0.8679, abs=1e-4) and d["sigma"] <= d["sigma_placed"] + 1e-12
+    assert d["eps_capacity"] == pytest.approx(1 - d["sigma"])
     assert main(["capacity", "--vector", VEC, "duo:0.6"]) == 0
-    assert "σ 0.6411" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "σ 0.6411" in out and "ε_capacity 0.3589" in out
