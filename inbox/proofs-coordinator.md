@@ -87949,3 +87949,29 @@ Mailbox read at 12:38Z: your 11:47Z section is the newest [run]. No VM reset sin
 **Runs out:** `r20261112-122858-b36a` (the #9237 trial), on `vy-nebius-cpu-6`, running at 12:38Z [read]; about 13:00Z [guess].
 
 **What I need:** the mark on #9199 at `7a528d6b1c01` if this reads right; your word on a second merge for #9232; and the ruling on the renames.
+
+## FRAME, Thu 12 Nov 12:40Z: ready to mark #9176 at `66b659922f14879b0d9e48145e1e638593c0866c`; it moves lock records and no guarantee's statement (the notice line is the first paragraph)
+
+**Notice line.** #9176 changes what `Flock.SecurityProofs.SpotKSTwo` and `Flock.SecurityProofs.SpotExfilTwo` read, and neither's statement: `Spot.SecondStage.Own` gains two fields, `supplied` and `fixed` (two new lock entries), and `SpotFlock.ownOf` and `SpotFlock.codesOk`, which build and read that structure, change with it. [read: `903d`'s `review.txt`, 12:19Z; the lock at the head against `main`'s, 12:20Z] The lock's `guarantees`, `deployed`, `trust_gap` and `open` sections at the head equal `main`'s. [run, 12:20Z]
+
+ready to mark #9176 at `66b659922f14879b0d9e48145e1e638593c0866c`. [the head on GitHub at 12:40Z: open, not a draft, no label]
+
+**The head.** `c0ecf873e2ad` plus one merge of `main` at `8b536f5c1d62`, without a conflict, no rebase, no force; why it was needed is in my 12:22Z entry (`main` added `SpotFlock/OffClassAt.lean`, which imports the changed modules, and changed the Lean check). [run]
+
+**Runs.**
+- The records run at the head, `r20261112-121515-87e8` (vy-nebius-cpu-12): `done`, rc 0, 12:16:48Z to 12:35:08Z, outcome `pass` at commit `66b659922f14…` (its `result.json`). [read, 12:37Z] `AUDIT: PASS` three times: the verifier's package, `security` with `security/Proofs`, `security/Properties`. [read: its `stdout.log`] It kept no record: the committed lock is the one the check regenerates, so there is no record commit to add. [read: no `lean-audit/record` in the run] `Proofs.Flock.SpotFlock.OffClassAt` and `Proofs.Flock` built over this change ("Build completed successfully (14360 jobs)"). [read: `audit-Proofs/build.log`] `security`'s audit prints notes and no warning. [read]
+- The quick tier, `r20261112-084450-9ae4`, at `6bcc587a413e` (the first merge, before the record commit and the second merge): rc 0; `TRIES_BAD 0`, `BUILD_EXIT 0`, `DIFFTEST_EXIT 0` (259 passed, 2 skipped), `CHANGED_EXIT 0` ("65 suites: 65 passed (2 cached), 0 failed", `suites.py --changed 19fb19a21e40 --quick`), `PY_EXIT 0` (the verifier's suite 923 passed, `benchmarks/two_stage` 10 passed and 3 skipped, `benchmarks/one_stage` 575 passed). [read, 12:08Z]
+- Not rerun at the head: the quick tier. The second merge had no conflict, and none of the files `main` moved adds a caller of the changed check; `main` did move inputs of suites this change touches (`adapters/vllm`, `benchmarks/one_stage`, `tools/verity/check`). [read; your rule for a merge without a conflict] Order it if you want it: one run, about 2 hours 55 minutes. [derived from `9ae4`]
+- Before the first merge, at `2e3d3ad762`, `r20261112-061440-b6b9`: `SERVETAX_EXIT 0` and `VLLM_EXIT 0` (the adapter's pipeline, records and sampler-capture tests). [read 09:57Z, not re-read since]
+- The record commit `c0ecf873e2ad` is exactly the file `r20261112-091821-903d` kept at the first merge. [run 09:56Z]
+
+**`git merge-tree`, at 12:38Z.**
+- Onto `origin/main`, which is `1885cf1fe08c` now: exit 0. [run] `main`'s move since the merge (`8b536f5c1d62..1885cf1fe08c`, 56 files) holds no Lean file, lakefile, manifest, toolchain, lock or file of `tools/verity/lean/`, and none of this change's 16 files, so no further merge and no rerun. [run]
+- Against lean's merge branch `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`): no stop beyond `main`'s (the head stops in 24 files, each among `main`'s 27). [run: `comm -23`] Two of `main`'s stops are files this change touches: `verity/protocols/spot/verifier/lean/tests/test_difftest.py` and `verity/protocols/spot/verifier/README.md`. In each the head has one conflict hunk and `main` alone has one, the same bytes (the difftest's list of fuzz budgets; the README's opening paragraph): this change adds nothing to either stop. [run between 12:15Z and 12:18Z, against `main` at `8b536f5c1d62`]
+- With the open pull requests it touches: it merges with #9212 (`40fedb72abd3`) and #9229 (`13d84642f956`). [run] It stops against #9116 (`3a580254f8bf`, open, unmarked) in eight files, as at 09:57Z: `benchmarks/one_stage/two_stage.py`, the verifier's `README.md`, `second_stage.py`, `service.py`, `lean/Spot/Pieces.lean`, `Run.lean`, `SecondStage.lean`, `lean/tests/test_difftest.py`. Whichever of the two lands second merges those by hand; I changed nothing to avoid it. [run]
+
+**Body.** It says the lock paragraph, both merges, each run above and what was not rerun. [run: replaced before 12:23Z and again, with `87e8`'s verdict, at 12:39Z]
+
+**#9212.** `r20261112-093345-2f31` was still running at 12:37Z; its timeout ends it at 12:43:41Z. [read] After it I merge this head into #9212 and launch its records run. [derived]
+
+**#9080.** Merged with `main` once, at `5456b937e7e5`: head `9e10a010f9ff1b9bc3b55411630aa6a6b0ab62c6`, pushed between 12:23Z and 12:24Z; one conflict, the cap line, resolved to `main`'s 267 / 2,141 plus this branch's 7 modules and 206 declarations = 274 / 2,347. [run] Its runs: the records run `r20261112-122414-0639` (vy-nebius-cpu-11) and the quick tier `r20261112-122456-38f2` (vy-nebius-cpu-2), both running at 12:37Z. [read] No stop against lean's branch beyond `main`'s; it stops against #9043 (`b2585b1f5bb6`) in `tools/verity/lean/unread-caps.json` only. [run, 12:25Z] Its ready line follows the two runs; it stays a draft and unmarked.
