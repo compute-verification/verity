@@ -33,6 +33,8 @@ from verity_vllm.engine.profiles.admission_calibration import (
     uncalibrated_model_note,
 )
 
+__all__ = ["CALIBRATION", "predict", "request_prompt_len", "row_config_from_workload"]
+
 MiB = 1 << 20
 SCHEMA = "verity/admission-plan/v1"
 
