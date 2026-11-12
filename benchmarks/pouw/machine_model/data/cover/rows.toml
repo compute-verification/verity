@@ -299,8 +299,8 @@ mark = "covered"
 envelope = "mma"
 fmt = "f64"
 rate = "tensor.f64"
-cost = "products × 32"
-argument = "f64 elements at weight 32; on the H200 the f64 tensor rate times 32 is exactly the INT8 rate, on sm_120 it is 1/18 of it"
+cost = "products × the card's f64 weight"
+argument = "f64 elements at the card's f64 weight: 32 on sm_120, where the f64 tensor rate is 1/18 of the INT8 rate; 29.5 on the H200, its weight at the 1830 MHz tensor clock (32 at f_max, where the f64 tensor rate times 32 is exactly the INT8 rate)"
 source = "θ tensor.f64 (sm_90 DS FP64 Tensor 67 TFLOPS, 128 a SM-clock; sm_120 DMMA.8x8x4 584 SMSP-cycles for 256 FMAs); lowering probe: DMMA.8 native on both"
 
 [[row]]

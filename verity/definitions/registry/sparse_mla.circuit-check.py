@@ -20,6 +20,11 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         # a unit of SparseMla_v1's cut (`CUTS`) at the served statics: a full block after the first
         ("SparseMlaHeadBlock_v1", lambda: bind(sparse_mla.SparseMlaHeadBlock, NVIS=64, FIRST=False,
                                                **{k: sparse_mla.SPARSE_MLA_GLM53[k] for k in ("DR", "DV", "BN", "DOT", "SCALE")})),
+        # the same block cut at P, at small statics: its scores, and half of its O's columns
+        ("SparseMlaHeadScores_v1", lambda: bind(sparse_mla.SparseMlaHeadScores, DR=16, DV=16, NVIS=16, FIRST=False, BN=16,
+                                                DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], SCALE=0.0625)),
+        ("SparseMlaHeadValues_v1", lambda: bind(sparse_mla.SparseMlaHeadValues, NVIS=16, FIRST=False, BN=16,
+                                                DOT=sparse_mla.SPARSE_MLA_GLM53["DOT"], G=8)),
         ("SparseMlaHeadEnd_v1", lambda: bind(sparse_mla.SparseMlaHeadEnd, DV=sparse_mla.SPARSE_MLA_GLM53["DV"],
                                              INV=sparse_mla.SPARSE_MLA_GLM53["INV"])),
         ("SparseMla_v1", lambda: bind(sparse_mla.SparseMla, T=65, **sparse_mla.SPARSE_MLA_GLM53)),

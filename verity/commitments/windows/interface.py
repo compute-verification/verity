@@ -2326,7 +2326,7 @@ class Window:
                                      f"{words[p]}")
                 wanted.setdefault(param, []).append(positions)
         drawn, written = _Drawn(values, wanted), self._written(values)
-        data, salts_of, self._entries = [], {}, {}
+        data, salts_of, strings_of, self._entries = [], {}, {}, {}
         for m, reads in zip(self.window.members, read_by, strict=True):
             lay = by[m.template][1]
             if m.template not in cat:
@@ -2338,6 +2338,7 @@ class Window:
                 if not np.array_equal(d["outs"][o], np.array([t.rows[p] for t, p in mine], dtype=np.uint16)):
                     raise ValueError(f"{m.key} {o}: a unit's output row is not its history table's row at its position")
                 salts_of[m.port(o)] = b"".join(bytes(t.salts[p]) for t, p in mine)
+                strings_of[m.port(o)] = b"".join(bytes(t.bcs[p]) for t, p in mine)
             for g, (p, w) in enumerate(lay.rows):
                 k = int(kv.get(p, 1))
                 for j in range(k):
@@ -2374,7 +2375,8 @@ class Window:
                         raise ValueError(f"{m.key} {r}: recorded by reference, but no wire or registered read fills it")
                     d["rows"][r] = CS.WIRED
             data.append(d)
-        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, carried=carried)
+        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of, strings_of=strings_of,
+                         carried=carried)
 
     def _written(self, values: Mapping[str, Any]) -> dict[str, dict[str, tuple[list[Any], np.ndarray]]]:
         """Each history writer's output (by template, then port): for each of its template's units, the committed table

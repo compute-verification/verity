@@ -50,6 +50,26 @@ def test_a_batched_primitive_reading_one_word_twice_is_the_flat_lowering():
     assert S.check(SQUARES)["mismatched_bits"] == 0
 
 
+F32x4 = tuple((nm, Value(32)) for nm in ("x", "y", "z", "w"))
+PRODUCTS = CompositeDefinition("StructLowerProducts", 1, (), lambda _S: (F32x4, Array(3, Value(32))),
+                               lambda B, _S, x, y, z, w: array_of([B.call(F32Mul, x, y), B.call(F32Mul, z, w),
+                                                                   B.call(F32Mul, y, x)]), register=False)
+
+
+def test_a_large_primitive_node_is_a_call_lowered_once_per_pattern():
+    """`F32Mul`'s piece is past `PRIM_CALL_ANDS`: x·y and z·w bind their caller's bits in the same pattern and share one
+    specialization, y·x another; lowered in place (``prim_calls=None``) there is none, and both compute the flat lowering's
+    outputs."""
+    assert S.check(PRODUCTS)["mismatched_bits"] == 0
+    assert S.check(PRODUCTS, prim_calls=None)["mismatched_bits"] == 0
+    tm, lw, top = S.lower(PRODUCTS)
+    assert T.ordered(tm)["ok"]
+    muls = [sp for k, sp in lw.specs.items() if k[0] == F32Mul.id]
+    assert len(muls) == 2 and len(top.copies) == 3
+    assert not any(k[0] == F32Mul.id for k in S.lower(PRODUCTS, prim_calls=None)[1].specs)
+    assert len(top.rows) < min(len(sp.rows) for sp in muls)
+
+
 def _constants(B, _S, x):
     return array_of([B.call(GB.BlackwellS8ImmaDot32, B.call(SB.const_word(32, v)), x, x) for v in (7, 0, 1, 0x3F800000)])
 
@@ -102,6 +122,22 @@ def test_a_definition_two_calls_read_different_columns_of_is_evaluated_for_each(
     want = [[S.evaluate(flat, [int(x) for x in lanes[:, w]], 4)[c] for w in range(2)] for c in (256, 257)]
     assert np.array_equal(T.evaluate(t, lanes), np.array(want, np.uint64))
     assert want[0][0] == int(lanes[0, 0] & lanes[1, 0]) and want[1][0] == int(lanes[2, 0] ^ lanes[3, 0])
+
+
+def test_a_column_its_caller_writes_inside_a_copy_is_refused_not_evaluated_as_zero():
+    """A copy at 128 of a callee whose row at its column 2 copies its column 1, which the callee leaves unwritten and the
+    caller writes (x at 129). `tmpl.ordered` accepts it and unrolled its output is x, but a copy evaluated on its own reads
+    zero there, so `tmpl.evaluate` refuses the template; without the caller's row it reads the zero the unroll reads."""
+    K = 385
+    q = T.Def(3, 0, ((2, (1,), (3,)),), ())
+    rows = ((0, (0,), (0,)), (129, (0,), (K,)), (256, (130,), (K,)))
+    t = T.Tmpl("t", 1, [str(x) for x in (1, 0, 1, 1, 1, 1, 2, 1, 1, 1)], [q, T.Def(K, 0, rows, (T.Call(0, 1, 128, 3, ()),))])
+    lanes = np.array([[0b10]], np.uint64)
+    assert T.ordered(t)["ok"] and S.evaluate(T.unroll(t), [0b10], 1)[256] == 0b10
+    with pytest.raises(ValueError, match="inside a copy's columns"):
+        T.evaluate(t, lanes)
+    t.defs[1] = T.Def(K, 0, rows[::2], t.defs[1].calls)
+    assert T.evaluate(t, lanes).tolist() == [[S.evaluate(T.unroll(t), [0b10], 1)[256]]] == [[0]]
 
 
 #: a library table of 256 bytes whose bit 6 is always 0 and bit 7 always 1, so a read folds both into the constant

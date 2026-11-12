@@ -5,6 +5,7 @@ thresholds the protocol states, and a grinding try's compressions against the re
 from __future__ import annotations
 
 import hashlib
+import inspect
 import itertools
 import math
 import random
@@ -12,7 +13,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.poub.verifier import receipts, timing
+from verity.protocols.poub.verifier import audit, ledger, receipts, timing
 from verity.commitments import MerkleTree, scheme
 from verity.commitments.randomness import derive
 
@@ -140,23 +141,67 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
     assert lg(timing.sketch_failure(node_day, passes, blocks=blocks, outside=1)) == -43.02
 
 
+def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> audit.Record:
+    """What the memory line's δ reads of a paced session that reserved no append coins: `passes` one-pass windows over
+    `blocks` blocks, `samples` openings a window at `audit.DELTA`, spread evenly over `span_ns`.  Its registration and
+    coins are zeros, which no part of δ reads."""
+    profile = audit.window_profile((blocks,), samples, audit.DELTA)
+    at = [span_ns * t // passes for t in range(passes + 1)]
+    return audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
+        audit.WindowRecord(t, (blocks,), at[t], at[t + 1], at[t + 1], profile) for t in range(passes)),
+        pace=audit.Pace(1), samples=samples, append_coins=0)
+
+
 def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
     """Grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
     outside-compute factor, 2^20 by default.  At gate run 8's session 0 (C = 12,708,215,084,432 over 226.9 s, P = 2,118,
-    N = 97,517,568, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's reading, and 2^20 gives
-    2^-31.59; δs < 2^-50 at F = 2^20 takes 64 rows.  The line's δ there, 2^-40 of profile δ plus AuditRO's 2^-41 a pass
-    plus δs, moves 0.4 bits from F = 1 to 2^20, since the slack dominates."""
+    N = 97,517,568, 48 openings a window, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's
+    reading, and 2^20 gives 2^-31.59; 64 rows give 2^-129.94 at F = 2^20.  The memory line's δ of a record of those
+    counts is the ledger's, typed nowhere as a formula: every `Line.delta` of `ledger.memory` is the sum of
+    `ledger.delta_parts` at `Node.stated(sketch_outside=F)`, AuditRO's slack in it at `audit.SLACK_LOG2` a pass (the
+    run's own record states no slack, so its line is read at `UNRECORDED_SLACK_LOG2` and is another number).  The typed
+    2^-39.99 at F = 1 and 2^-31.59 at F = 2^20 are a second check of that sum and are the ledger's own numbers, and
+    `timing.SKETCH_OUTSIDE`'s docstring must carry every number the ledger returns here."""
     assert timing.SKETCH_OUTSIDE == 2 ** 20
-    c, p, n = 12_708_215_084_432, 2118, 97_517_568
+    c, p, n, span_ns, samples = 12_708_215_084_432, 2118, 97_517_568, 226_932_412_222, 48
     assert timing.sketch_failure(c, p, blocks=n) == timing.sketch_failure(c, p, blocks=n, outside=2 ** 20)
     for f in (2, 2 ** 10, 2 ** 20):
         assert timing.sketch_failure(c, p, blocks=n, outside=f) == timing.sketch_failure(f * c, p, blocks=n, outside=1)
     assert [lg(timing.sketch_failure(c, p, blocks=n, outside=2 ** e)) for e in (0, 10, 20, 30)] == [
         -51.59, -41.59, -31.59, -21.59]
-    assert lg(timing.sketch_failure(c, p, rows=64, blocks=n)) < -50
-    line = [Fraction(1, 2 ** 40) + Fraction(p, 2 ** 41) + timing.sketch_failure(c, p, blocks=n, outside=f)
-            for f in (1, 2 ** 20)]
-    assert [lg(x) for x in line] == [-29.95, -29.55]
+    wide = lg(timing.sketch_failure(c, p, rows=64, blocks=n))
+    assert wide == -129.94
+
+    def said(x: float) -> str:
+        return f"2^{math.log2(x):.2f}"
+
+    record, keys = one_pass_session(n, p, span_ns, samples), 64
+    quoted = {f"{p:,} one-pass windows over {n:,} blocks in {span_ns / 1e9:.1f} s, {samples} openings a window":
+              "the session", f"2^-{audit.SLACK_LOG2} a pass": "`audit.SLACK_LOG2`",
+              f"all but a 2^-{keys} fraction of keys": "the key failure `ledger.hiding` is charged at",
+              f"2^{wide:.2f}": "`sketch_failure` at `rows=64` and F = 2^20"}
+    totals = {}
+    for f, largest in ((1, "profile"), (2 ** 20, "sketch")):
+        node = ledger.Node.stated(sketch_outside=f)
+        assert ledger.compressions(record, node) == c
+        parts = ledger.delta_parts(record, node)
+        assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == largest
+        assert parts["sketch"] == float(timing.sketch_failure(c, p, blocks=n, outside=f))
+        assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
+        assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
+        total = 0.0
+        for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
+            total += parts[name]
+        assert [x.delta for x in ledger.memory(record, node)] == [total] * 3
+        totals[f] = total
+        quoted |= {said(x): f"`ledger.delta_parts`' {name} at F = {f}" for name, x in parts.items()}
+        quoted[said(total)] = f"`ledger.memory`'s `Line.delta` at F = {f}"
+    assert [round(math.log2(totals[f]), 2) for f in (1, 2 ** 20)] == [-39.99, -31.59], "the ledger's, typed to check it"
+    quoted[f"{math.log2(totals[2 ** 20] / totals[1]):.2f} bits"] = "`Line.delta` at F = 2^20 over `Line.delta` at F = 1"
+    prose = " ".join(inspect.getsource(timing).split("SKETCH_OUTSIDE = 2 ** 20\n", 1)[1].split('"""', 2)[1].split())
+    for text, what in quoted.items():
+        assert text in prose, (f"`timing.SKETCH_OUTSIDE`'s docstring quotes the ledger at this session and has parted "
+                               f"from it: it should say {text} ({what})")
     for bad in (0, -1, 1.5):
         with pytest.raises(ValueError, match="outside-compute factor"):
             timing.sketch_failure(c, p, outside=bad)

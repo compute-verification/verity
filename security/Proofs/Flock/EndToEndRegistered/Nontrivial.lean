@@ -7,6 +7,7 @@ public import Flock.Firewall
 public import Flock.HmRow
 public import Flock.Public
 public import Flock.Registered
+public import Mathlib
 public import Proofs.Flock.EndToEndRegistered.Inputs
 public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.SessionLoop.Concrete.Public

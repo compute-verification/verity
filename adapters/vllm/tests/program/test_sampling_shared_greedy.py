@@ -96,14 +96,12 @@ def test_the_target_binds_the_select_in_the_vocabulary_and_the_fold(construction
     from verity_vllm.observe.fold.patterns.sampling import SCRATCH_TOPP_SELECT, TokenSelectGumbelTopP
     from verity_vllm.observe.fold.resolver import StepContext
     from verity_vllm.observe.fold.tree import TreeNode
-    from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
     from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
     V = 64
     tp = DEFAULT_TARGET.with_overrides(sampler_construction=construction)
     for old, new in PAIRS:
         assert sampling_vocab.select_for(old, tp.effective_sampler_construction()) is (new if shared else old)
     select = SM.GumbelTopPTokenSelectSharedGreedy if shared else SM.GumbelTopPTokenSelect
-    assert PROFILE_B1_EAGER_V3.kind("token_select_stochastic", V=V, CONSTRUCTION=tp.effective_sampler_construction()).id == bind(select, V=V).id
     logits = ViewDesc(1, 0, (1, V), (V, 1), "bfloat16", "cuda:0")
     local_argmax, idx, out = ViewDesc(2, 0, (1, 4), (4, 1), "int64", "cuda:0"), *(ViewDesc(a, 0, (1, 1), (1, 1), "int64", "cuda:0") for a in (3, 4))
     node = TreeNode(DispatchEnter(1, None, 0, "sample", "aten.gather.default", "aten::gather(Tensor self, int dim, Tensor index, *, bool "

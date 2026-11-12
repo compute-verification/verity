@@ -24,7 +24,7 @@ import sys
 
 from table import best
 
-from verity.hardware import load, rate
+from verity.hardware.cards import load, rate
 
 SERVER = load("rtx-pro-6000-server")
 CAP = int(rate(SERVER) / 32 / 10 ** 6)                  # tensor steps (32 s8 MACs) a us at the card's ceiling clock

@@ -2,14 +2,15 @@
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto, core.claims and hardware import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, the served
-    workloads' Definitions (ml.definitions) on the catalog and the kernels, and the protocols' circuit builders
-    (ml.protocols) on the catalog and their protocols;
+    workloads' Definitions (ml.definitions) on the catalog, the kernels and the commitments' gates, and the protocols'
+    circuit builders (ml.protocols) on the catalog and their protocols;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml: until a protocol's verifier is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
     ``SOUNDNESS_PATH``, and both only shrink;  ml never imports core;  no unit imports
     another distribution of the workspace (Flock, an integration, a benchmark, a tool) or an external runtime: ``verity``
     imports the standard library, its declared dependencies and itself;  nothing outside ``infra/`` imports ``infra/``;
-    nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  only tests name
+    nothing outside ``benchmarks/`` imports ``benchmarks/``, by name or by path (``BENCHMARKS_IMPORTERS``);  circuit-check
+    imports ``verity`` and no other distribution of the workspace (``CIRCUIT_CHECK_IMPORTS``);  only tests name
     a function past a guard (``TEST_ONLY``);  SPOT[Flock] imports none of the network certifier, in its Python, its Lean
     packages or its analysis (``SPOT_NOT_CERTIFIER``).
 
@@ -61,8 +62,11 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
-    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
-    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads.
+    # A Definition that hashes builds on the commitments' SHA-512 gates (`ml.commitments.gates.sha512`) rather than a second
+    # copy of the compression: `ml.commitments` imports only `ml.circuits` and `ml.crypto`, so there is no cycle, and no core
+    # unit may import `ml.definitions`, so no verifier reaches more.
+    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels", "ml.commitments"},
     # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
     # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
@@ -123,11 +127,79 @@ ALLOWED = {
     "ml.protocols.pous": {"ml.circuits", "ml.commitments"},
     "ml.protocols.certifier": {"ml.circuits", "ml.commitments", "core.protocols.certifier", "core.protocols.spot"},
 }
+#: Where each unit's files are, from ``verity/``.  A unit keeps the name of the package it was before the layout move, so
+#: every list here (which units are core's, which are ml's, the soundness path AGENTS.md names) reads as it did.  First
+#: its package; then, where its files are in more than one place, the rest by exact path (a directory only where every
+#: source file in it is the unit's).  The longest place wins: a file in another unit's package is its own unit's.
+PLACE: dict[str, tuple[str, ...]] = {
+    "core.attest": ("commitments/attest",),
+    "core.claims": ("claims",),
+    "core.deploy": ("configuration/deploy",),
+    "core.devices.memory_challenger": ("protocols/pous/device",),
+    "core.protocols.certifier": ("protocols/certifier/verifier",),
+    "core.protocols.pous": ("protocols/pous/verifier", "protocols/pous/device/challenger_session.py",
+                            "protocols/pous/device/memory_challenger.py"),
+    "core.protocols.pouw": ("protocols/pouw/verifier",),
+    "core.protocols.profile": ("protocols/spot/verifier/profile.py",),
+    "core.protocols.record": ("hardware/record.py",),
+    "core.protocols.registration": ("hardware/registration.py",),
+    "core.protocols.remote_bandwidth": ("protocols/poub/verifier",),
+    "core.protocols.reporting": ("protocols/reporting.py",),
+    "core.protocols.spot": ("protocols/spot/verifier", "protocols/spot/candidates.py", "protocols/spot/costfit.py",
+                            "protocols/spot/device/challenger.py", "protocols/spot/device/coins.py",
+                            "protocols/spot/device/remote.py", "protocols/spot/optimize.py", "protocols/spot/plancheck.py"),
+    "core.site": ("hardware/site",),
+    "core.wire": ("configuration/wire",),
+    "hardware": ("hardware",),
+    "ml.circuits": ("circuits", "definitions/circuits/boolean/memcheck.py", "definitions/circuits/census.py",
+                    "definitions/circuits/constants.py", "definitions/circuits/library.py",
+                    "definitions/circuits/operations.py", "definitions/circuits/requirement.py",
+                    "definitions/circuits/requirement_units.py", "definitions/circuits/stacking.py"),
+    "ml.circuits.ops": ("definitions/ops",),
+    "ml.circuits.silicon": ("definitions/silicon",),
+    "ml.circuits.targets": ("definitions/circuits/targets",),
+    "ml.commitments": ("commitments", "definitions/commitments/gates/attest.py",
+                       "definitions/commitments/gates/block_key.py",
+                       "protocols/poub/verifier/commitments/gates/block_check.py"),
+    "ml.crypto": ("commitments/crypto",),
+    "ml.definitions": ("definitions",),
+    "ml.kernels": ("definitions/kernels",),
+    "ml.private_circuits": ("definitions/private_circuits",),
+    "ml.protocols.certifier": ("protocols/certifier/prover",),
+    "ml.protocols.pous": ("protocols/pous/prover",),
+    "ml.protocols.pouw": ("protocols/pouw/prover",),
+    "ml.randomness": ("commitments/randomness",),
+    "ml.windows": ("commitments/windows",),
+}
+_UNIT_AT = {place: unit for unit, places in PLACE.items() for place in places}
+#: Source files in no unit, by exact path from ``verity/``, each with its owner: code that came under ``verity/`` from
+#: ``benchmarks/`` and was in no unit there.  The unit rules read none of them until its owner gives each a unit.  It only
+#: shrinks.
+NO_UNIT = (
+    # compute-accounting
+    "protocols/pouw/clear/clear_audit.py", "protocols/pouw/clear/clear_work.py",
+    "protocols/pouw/receipts/receipt_conform.py", "protocols/pouw/receipts/receipt_folds.py",
+    # memory-accounting
+    "protocols/poub/device/live_verifier/host.py", "protocols/poub/verifier/remote_session/verifier_process.py",
+    # proofs
+    "composite/device/live_challenger/auditor.py", "composite/device/live_challenger/coin_link.py",
+    "composite/device/live_challenger/models.py", "composite/device/live_challenger/serve.py",
+)
+_LISTED = {*_UNIT_AT, *NO_UNIT}
+#: ml and core are two named sets: the units named ``ml.*`` and ``core.*``, each with its tests, and with them the trees
+#: below, which are no unit's (a ``SEPARATE`` tree, a grouping's own tests, a file beside a unit): what else is ml's, and
+#: what else is core's, from ``verity/``.
+ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
+            "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
+CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
+              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+              "protocols/recursion", "protocols/remote", "protocols/tests")
+_SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "demos")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
@@ -135,7 +207,9 @@ DEPENDENCIES = {"numpy"}
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
-SEPARATE = ("ml/flock", "core/difftest", "core/protocols/pous/check")
+SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
+            "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
+            "protocols/inference_only/nci")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
@@ -143,11 +217,11 @@ NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
 #: ``verity/ml/`` that import core anyway
 #: (globs from ``verity/``), each with why.
 ML_IMPORTS_CORE = {
-    "ml/flock/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
-    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.claims`",
-    "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
+    "protocols/flock/prover/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
+    "commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.claims`",
+    "commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
-    "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
+    "protocols/flock/prover/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/circuits/population.py`, `verity/ml/commitments/registered.py`), "
@@ -155,17 +229,17 @@ ML_IMPORTS_CORE = {
                                              "server, which takes the inner session's coin tree from the challenger's device "
                                              "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
                                              "its sessions to the device's release log (`challenger.coin_trees_of`)",
-    "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
+    "protocols/flock/prover/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
-    "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
+    "protocols/flock/prover/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
                                     "`one_stage.partition`, as rec_inner does, and moves with it in the follow-up to T2",
-    "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
+    "protocols/flock/prover/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",
-    "ml/protocols/pouw/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
+    "protocols/pouw/prover/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
                            "parameters, records and Python references in core (`pouw.protocol`, `registration`, `window`, "
                            "`spot.one_stage`, ...); they shrink as those references leave core",
-    "ml/protocols/certifier/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
+    "protocols/certifier/prover/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
                                 "(`head_check`'s gates, `cache_step`, `compile_slice`, `replay_chain`, `arith_encode`, "
                                 "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
                                 "`active`, `served_rows`, ...)",
@@ -207,6 +281,17 @@ CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/prot
                   "verity/protocols/certifier/verifier/lean", "security/*/NetworkCertifier", "security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
+#: Flock's Lean verifier, by its Lake package's name, and the Lake packages that may require it: those whose Lean reads the
+#: proof system's verifier itself.  The list only shrinks.  A package that reads only the circuit format, the commitments or
+#: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
+FLOCK_VERIFIER = "flock_verifier"
+REQUIRES_FLOCK_VERIFIER = {
+    "core_firewall", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "remote_audit", "security_proofs",
+    "security_properties",
+}
+#: The base packages below Flock's verifier, each with every package it may require: nothing above it.
+BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments": ("core_base",)}
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
@@ -217,25 +302,13 @@ INFRA_IMPORTERS = {
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the H200 example: its runner loads benchmark code by path
-    "archive/examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
-    "archive/examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
-    "archive/examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
-    "archive/examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the staging decode "
-                                       "(`benchmarks/torch_gpu/p2_stage`)",
-    "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
-                                                                 "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
-                                                       "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "`config.P2_POUS` and `config.P2_STAGE`",
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
+                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
-                                                                            "`inplace` (`benchmarks/remote_session`)",
-    "adapters/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
+                                                                          "its `REMOTE_SESSION`) and `paged.py` "
+                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -250,13 +323,6 @@ BENCHMARKS_IMPORTERS = {
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
-    **dict.fromkeys((
-        "verity/protocols/pouw/verifier/tests/epoch_coins_vectors.py", "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_epoch_coins.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
-        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_kw.py",
-        "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
-    ), "compute-accounting: PoUW's clear lifecycle (`verity/protocols/pouw/clear`, and `pearl_c4`)"),
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
     **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
@@ -265,19 +331,33 @@ BENCHMARKS_IMPORTERS = {
                     "responder (`benchmarks/pous/band_gpu/harness.py`)"),
     "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py",
-                     "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
-                     "adapters/vllm/tests/protocols/test_pouw_h1_circuits.py"),
+    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/protocols/challenger_host.py", "adapters/vllm/tests/protocols/local_gate.py"),
-                    "proofs: the live challenger's gate and model registry (`verity/composite/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py",
-                     "adapters/vllm/tests/engine/int8_store_gpu.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
-                    "and `benchmarks/vllm_encoded/paged.py`"),
+    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
+                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
+    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
+    "verity/composite/device/live_challenger/auditor.py":
+        "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
+        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+    "verity/protocols/poub/device/live_verifier/tests/stub_verifier.py":
+        "memory-accounting: the remote session (`benchmarks/remote_session`), "
+        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+    "verity/protocols/poub/device/live_verifier/tests/test_host.py":
+        "memory-accounting: the remote session (`benchmarks/remote_session`), "
+        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+}
+#: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
+#: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
+CIRCUIT_CHECK = "tools/verity/circuit_check/src"
+#: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
+#: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  It
+#: only shrinks.
+CIRCUIT_CHECK_IMPORTS = {
+    f"{CIRCUIT_CHECK}/circuit_check/{name}.py": {"verity_flock"}
+    for name in ("ambient", "checks", "sidecars", "structural", "targets")
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
@@ -323,7 +403,7 @@ def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)
         if isinstance(node, ast.Import):
             out += [(a.name, node.lineno, True) for a in node.names]
         elif isinstance(node, ast.ImportFrom) and node.level == 0:
-            out.append((node.module, node.lineno, True))
+            out += [(name, node.lineno, True) for name in dict.fromkeys(_from(node.module, a.name) for a in node.names)]
         elif isinstance(node, ast.ImportFrom) and node.level > len(package):
             out.append(("." * node.level + (node.module or ""), node.lineno, True))
         elif isinstance(node, ast.ImportFrom):
@@ -338,9 +418,35 @@ def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)
 
 
 def _unit(dotted: str) -> str | None:
-    """The unit a module under ``verity`` (``ml.circuits.cut``) belongs to, or None for a grouping or a top-level file."""
-    parts = dotted.split(".")
-    return next((".".join(parts[:n]) for n in range(len(parts), 0, -1) if ".".join(parts[:n]) in ALLOWED), None)
+    """The unit a module under ``verity`` (``circuits.cut``) belongs to, by ``PLACE``: the unit of its exact path, else of
+    the longest directory that holds it; None for a file of ``NO_UNIT``, a grouping or a top-level file."""
+    path = dotted.replace(".", "/")
+    for exact in (path + ".py", path + "/__init__.py"):
+        if exact in NO_UNIT or exact in _UNIT_AT:
+            return _UNIT_AT.get(exact)
+    parts = path.split("/")
+    return next((_UNIT_AT["/".join(parts[:n])] for n in range(len(parts), 0, -1) if "/".join(parts[:n]) in _UNIT_AT), None)
+
+
+def _from(module: str, name: str) -> str:
+    """The module ``from module import name`` names: ``module.name`` where ``PLACE`` or ``NO_UNIT`` lists that module itself
+    (a file in another unit's package is its own unit's), else ``module``."""
+    path = f"{module}.{name}".removeprefix("verity.").replace(".", "/")
+    return f"{module}.{name}" if f"{module}.".startswith("verity.") and {path, path + ".py", path + "/__init__.py"} & _LISTED else module
+
+
+def _side(rel: str) -> str | None:
+    """``"ml"`` or ``"core"``: whose a file under ``verity/`` is (``circuits/tests/test_cut.py``): its tree's side
+    (``ML_TREES``, ``CORE_TREES``), else its unit's by the unit's name; None for the rest."""
+    hit = max((t for t in _SIDE_AT if rel == t or rel.startswith(t + "/")), key=len, default=None)
+    unit = _unit(rel.removesuffix(".py").replace("/", "."))
+    return _SIDE_AT[hit] if hit else unit.split(".")[0] if unit and unit.split(".")[0] in ("ml", "core") else None
+
+
+def _file(name: str) -> str:
+    """The file of a module of ``verity``, from ``verity/``: ``a/b.py``, or its package's ``a/b/__init__.py``."""
+    path = name.removeprefix("verity.").replace(".", "/")
+    return path + ".py" if (SRC / (path + ".py")).is_file() else path + "/__init__.py"
 
 
 def _dotted(path: Path) -> str:
@@ -367,7 +473,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
             target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
             third_party = set() if unit.startswith("core.protocols.") else DEPENDENCIES
             if (_external(name, imported, third_party)
-                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
+                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))
+                    or (parts[0] == "verity" and _file(name) in NO_UNIT)):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
 
@@ -414,13 +521,15 @@ def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
     offenders = []
     for path in _sources():
-        if _unit(_dotted(path)) is not None:
+        if _unit(_dotted(path)) is not None or path.relative_to(SRC).as_posix() in NO_UNIT:
             continue
         if path.name != "__init__.py" and path.parent != SRC:
             offenders.append(f"{path.relative_to(SRC)}: outside every unit; add its package to ALLOWED")
         offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line, imported in _imports(path)
                       if _external(name, imported, set()) or name.split(".")[0] == "verity"]
     assert not offenders, "\n".join(offenders)
+    stale = sorted(set(NO_UNIT) - {p.relative_to(SRC).as_posix() for p in _sources()})
+    assert not stale, f"NO_UNIT entries that are no source file of verity: remove them (it only shrinks): {stale}"
 
 
 def test_every_source_directory_is_a_package() -> None:
@@ -442,14 +551,15 @@ def test_scalar_references_are_stdlib_only(subtree: str) -> None:
 
 
 def _ml_importers_of_core() -> dict[str, list[str]]:
-    """Each file under ``verity/ml/`` (its tests and ``SEPARATE`` trees included) that names a module of ``verity.core``,
-    with where."""
+    """Each of ml's files (``_side``: its units' files, their tests and its ``SEPARATE`` trees) that names a module of
+    core's, with where."""
     out: dict[str, list[str]] = {}
-    for path in sorted((SRC / "ml").rglob("*.py")):
+    for path in sorted(SRC.rglob("*.py")):
         rel = path.relative_to(SRC)
-        if {".lake", "__pycache__"} & set(rel.parts):
+        if {".lake", "__pycache__"} & set(rel.parts) or _side(rel.as_posix()) != "ml":
             continue
-        hits = [f"{line}: {name}" for name, line, _ in _imports(path) if name.split(".")[:2] == ["verity", "core"]]
+        hits = [f"{line}: {name}" for name, line, _ in _imports(path)
+                if name.startswith("verity.") and _side(_file(name)) == "core"]
         if hits:
             out[rel.as_posix()] = hits
     return out
@@ -637,6 +747,60 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
                        "Flock.Bytes": ["verity/protocols/flock/verifier/Flock/Bytes.lean"]}, modules
 
 
+def _lake_requires() -> dict[str, list[str]]:
+    """Each tracked lakefile's package with the packages it requires, by name; fixtures are left out."""
+    out: dict[str, list[str]] = {}
+    for lake in _tracked("*lakefile.toml"):
+        if "fixtures" not in Path(lake).parts:
+            doc = tomllib.loads((ROOT / lake).read_text())
+            out[doc["name"]] = [r["name"] for r in doc.get("require", [])]
+    return out
+
+
+def _base_line_offenders(requires: dict[str, list[str]]) -> list[str]:
+    """What crosses the base packages' line in ``requires`` ({package: the packages it requires}): a package outside
+    ``REQUIRES_FLOCK_VERIFIER`` that requires Flock's verifier, an entry of that list that no longer does, and a base package
+    (``BASE_LEAN``) that no lakefile declares or that requires more than its entry allows."""
+    out = [f"{pkg} requires {FLOCK_VERIFIER} and REQUIRES_FLOCK_VERIFIER, which only shrinks, doesn't list it: require the "
+           f"base package that holds what it reads ({', '.join(BASE_LEAN)}), or move what it reads into one"
+           for pkg, needs in sorted(requires.items()) if FLOCK_VERIFIER in needs and pkg not in REQUIRES_FLOCK_VERIFIER]
+    out += [f"{pkg} no longer requires {FLOCK_VERIFIER}: remove it from REQUIRES_FLOCK_VERIFIER"
+            for pkg in sorted(REQUIRES_FLOCK_VERIFIER) if FLOCK_VERIFIER not in requires.get(pkg, ())]
+    for base, allowed in BASE_LEAN.items():
+        if base not in requires:
+            out.append(f"BASE_LEAN names {base}, which no lakefile declares")
+        elif extra := sorted(set(requires[base]) - set(allowed)):
+            out.append(f"{base} is a base package and requires {', '.join(extra)}: it may require "
+                       f"{', '.join(allowed) or 'nothing'} alone, so what needs more goes in a package above it")
+    return out
+
+
+def test_only_the_listed_lean_packages_require_flocks_verifier() -> None:
+    """Over every lakefile's requirements: Flock's verifier is required only by the packages whose Lean reads the verifier
+    itself (``REQUIRES_FLOCK_VERIFIER``, which only shrinks), and the base packages below it (``BASE_LEAN``) require nothing
+    above them, so the circuit format, the commitments and the bytes below them reach a package without the proof system."""
+    requires = _lake_requires()
+    assert FLOCK_VERIFIER in requires, f"no lakefile declares {FLOCK_VERIFIER}: FLOCK_VERIFIER names the wrong package"
+    offenders = _base_line_offenders(requires)
+    assert not offenders, "\n".join(offenders)
+
+
+def test_a_requirement_across_the_base_line_is_found() -> None:
+    """The check above isn't vacuous: a new requirer of Flock's verifier, a listed one that stopped, and a base package
+    that requires a package above it or one outside the tree are each found, and the lists as they stand cross nothing."""
+    held = {FLOCK_VERIFIER: list(BASE_LEAN), **{pkg: [FLOCK_VERIFIER] for pkg in REQUIRES_FLOCK_VERIFIER},
+            **{base: list(allowed) for base, allowed in BASE_LEAN.items()}}
+    assert _base_line_offenders(held) == []
+    listed = min(REQUIRES_FLOCK_VERIFIER)
+    crossed = {**held, "core_identity": ["core_base", FLOCK_VERIFIER], listed: ["core_base"], "core_base": ["mathlib"],
+               "core_circuits": ["core_base", FLOCK_VERIFIER]}
+    found = _base_line_offenders(crossed)
+    assert [line.split(" ", 1)[0] for line in found] == ["core_circuits", "core_identity", listed, "core_base",
+                                                         "core_circuits"], found
+    assert _base_line_offenders({pkg: needs for pkg, needs in held.items() if pkg != "core_commitments"}) == [
+        "BASE_LEAN names core_commitments, which no lakefile declares"]
+
+
 def _infra_packages() -> set[str]:
     """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
     Slack events service's suite, whose code Vercel deploys) has no package to import."""
@@ -666,6 +830,60 @@ def test_nothing_outside_infra_imports_it() -> None:
     assert not offenders, "\n".join(offenders)
     stale = sorted(set(INFRA_IMPORTERS) - set(found))
     assert not stale, f"INFRA_IMPORTERS entries that no longer import infra/; remove them: {stale}"
+
+
+def _workspace_packages() -> set[str]:
+    """The import packages of the workspace's distributions other than ``verity``, from each member's wheel configuration."""
+    members = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["uv"]["workspace"]["members"]
+    return {Path(p).name for member in members
+            for p in tomllib.loads((ROOT / member / "pyproject.toml").read_text(encoding="utf-8")).get("tool", {})
+            .get("hatch", {}).get("build", {}).get("targets", {}).get("wheel", {}).get("packages", [])}
+
+
+def _circuit_check_imports(texts: dict[str, str], packages: Set[str]) -> dict[str, set[str]]:
+    """{file: the packages among ``packages`` it names} for circuit-check's files ``texts`` that name one: in an import, an
+    import call's string or a ``"module:attr"`` string."""
+    found: dict[str, set[str]] = {}
+    for rel, text in texts.items():
+        names = _imports(ROOT / rel, ROOT / CIRCUIT_CHECK, (), ast.walk(ast.parse(text, filename=rel)))
+        if hits := {name.split(".")[0] for name, _line, _imported in names} & packages:
+            found[rel] = hits
+    return found
+
+
+def test_circuit_check_imports_no_workspace_distribution_but_verity() -> None:
+    """A check that needs another distribution's code would make ``verity``'s tool depend on what attaches to it: an
+    integration, a benchmark, the team's tooling.  The dependency points the other way, through a sidecar."""
+    packages = _workspace_packages() - {"circuit_check"}
+    assert {"verity_vllm", "verity_numerical", "verity_flock", "research"} <= packages, packages
+    texts = {rel: (ROOT / rel).read_text(encoding="utf-8") for rel in _tracked(f"{CIRCUIT_CHECK}/*.py")}
+    assert len(texts) > 10, sorted(texts)
+    found = _circuit_check_imports(texts, packages)
+    offenders = [f"{f}: {pkg}" for f, pkgs in sorted(found.items()) for pkg in sorted(pkgs - CIRCUIT_CHECK_IMPORTS.get(f, set()))]
+    assert not offenders, ("circuit-check imports `verity` and itself, and no other distribution of the workspace. Have the "
+                           "distribution hand circuit-check what the check needs, in a sidecar it owns beside the module that "
+                           "defines it (`<module>.circuit-check.py`: a binding in `circuit_check.targets`' forms, or a reader "
+                           "as `request_program`; `circuit_check.sidecars` finds it without naming the package), or, if the "
+                           "check is the distribution's own, run it from that distribution's command and suite. "
+                           "CIRCUIT_CHECK_IMPORTS only shrinks.\n" + "\n".join(offenders))
+    stale = sorted(f"{f}: {pkg}" for f, pkgs in CIRCUIT_CHECK_IMPORTS.items() for pkg in pkgs - found.get(f, set()))
+    assert not stale, f"CIRCUIT_CHECK_IMPORTS entries circuit-check no longer imports; remove them: {stale}"
+
+
+def test_a_circuit_check_import_of_another_distribution_is_found() -> None:
+    """The check above isn't vacuous: a statement inside a function, an import call's string and a ``"module:attr"`` string
+    are each found; ``verity``, circuit-check's own modules and a third-party package are not."""
+    texts = {
+        f"{CIRCUIT_CHECK}/circuit_check/a.py": ("def check():\n    from verity_vllm.query import required\n"
+                                                "    import verity_numerical.models as M\n"),
+        f"{CIRCUIT_CHECK}/circuit_check/b.py": ("import importlib\nimportlib.import_module('verity_flock.ir_lower')\n"
+                                                "LOAD = 'research.cli:main'\n"),
+        f"{CIRCUIT_CHECK}/circuit_check/c.py": ("import numpy\nfrom verity.circuits import defs\nfrom . import cache\n"
+                                                "from .targets import family\nNOTE = 'verity_vllm binds the vocabulary'\n"),
+    }
+    found = _circuit_check_imports(texts, {"verity_vllm", "verity_numerical", "verity_flock", "research"})
+    assert found == {f"{CIRCUIT_CHECK}/circuit_check/a.py": {"verity_vllm", "verity_numerical"},
+                     f"{CIRCUIT_CHECK}/circuit_check/b.py": {"verity_flock", "research"}}, found
 
 
 def _benchmarks_packages() -> set[str]:
@@ -768,11 +986,11 @@ def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], lo
 
 
 def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str, list[str]]:
-    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` (and ``archive/``, which has rules of its
-    own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
+    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` that imports a module of
+    ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``config.REMOTE_SESSION``), and through any function, wherever it
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
     is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))
@@ -780,7 +998,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith(("benchmarks/", "archive/"))}
+    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     constants: set[str] = set()
 
@@ -950,10 +1168,11 @@ def test_a_use_past_a_guard_is_found() -> None:
 
 
 def test_core_never_names_a_prover_only_module() -> None:
-    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+    """No file of core's (``_side``; its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
     offenders = []
-    for path in sorted((SRC / "core").rglob("*.py")):
-        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+    for path in sorted(SRC.rglob("*.py")):
+        rel = path.relative_to(SRC)
+        if {".lake", "__pycache__"} & set(rel.parts) or _side(rel.as_posix()) != "core":
             continue
         hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
         hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]

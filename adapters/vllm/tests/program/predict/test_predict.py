@@ -37,7 +37,7 @@ H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
-STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32}
 #: TINY's exact-int8 checkpoint (`engine.int8_checkpoint`'s v1) on a target serving its linears int8 (serve-openai's verity_int8)
 INT8 = {**TINY, "quantization_config": dict(INT8_EXACT_QUANT)}
 INT8_LINEARS = {**RTXPRO6000, "int8_exact": "linears"}
@@ -209,13 +209,14 @@ def test_mhc_refuses_outside_its_domain(tmp_path):
 
 
 @pytest.mark.parametrize("sampling,M,digest", [
-    ({**STOCH}, 8, "5e6a93b800645792671c4a55c6a3981d8f7dc9ae1a8c03ac754e1887a9dac57f78b4fbeb1f951f625feb7a1beee1ac9973c80b555919144be4250186728fae0e"),
-    pytest.param({**STOCH, "top_p": 1.0, "splits": 32}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
+    ({**STOCH}, 8, "cbfc83a7ecd96ac573e80ab31e5b9cd54e25aaaa35c0d53df0d503901ad7419c62cb5f702e41323204d7278278aacb87f394f3155e3a9a5afdaae3e730e4df27"),
+    pytest.param({**STOCH, "top_p": 1.0}, 1, "a027f8b304f152187eef0e47466573131375e5dc5f75a8b5abb8ca49490b65fcf9e7fc1e040b78fb0cca04e367a4686ef0fad45153d7c2e6ecc1c282636103b0",
                  marks=pytest.mark.slow),
 ])
 def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
-    """SmolLM2-135M under the seeded top-p policy: a B8 row's step (the split count a `splits` Input, cov-g230) and a B1 row's (the
-    single request's constant S = 32 on 188 SMs, cov-g253-2)."""
+    """SmolLM2-135M under the seeded top-p policy at the registered S = 32 on 188 SMs: a B8 row's step and a B1 row's.  The B8 row's
+    traced Build read a derived `splits` Input, which serving no longer produces (`engine.topp_pin`); its digest is the registered-S
+    Program's, until that row is rebuilt."""
     r = build_program(_phi(json.loads((FIX / "smollm2-135m.config.json").read_text()), sampling=sampling), "step", M=M, pos0=8)
     assert r.digest == digest
 
@@ -223,8 +224,8 @@ def test_stochastic_step_program_equals_the_traced_build(sampling, M, digest):
 def test_sampling_follows_the_builds_policy():
     one = {"sweep": {"sampling": "stoch-t0.8-p0.95", "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "sampling_seeds": [7]},
            "requests": [{"prompt_len": 8, "max_tokens": 3, "seed": 7}]}
-    assert S.sampling_of(one, _phi(TINY)) == {**STOCH, "splits": 32}
-    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == {**STOCH, "splits": 32}
+    assert S.sampling_of(one, _phi(TINY)) == STOCH
+    assert S.sampling_of({**one, "requests": one["requests"] * 8}, _phi(TINY)) == STOCH
     assert S.sampling_of({"requests": [{"prompt_len": 8, "max_tokens": 3}]}, _phi(TINY)) == {"kind": "greedy"}
     with pytest.raises(Unexpressible, match="the Build refuses the policy"):
         S.sampling_of({**one, "sweep": {**one["sweep"], "sampling_params": {"temperature": 0.8, "top_p": 0.95, "top_k": 50}}}, _phi(TINY))
@@ -389,7 +390,8 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "shared_expert_intermediate_size": 512}, {}, "shared experts"),
     ({**json.loads((FIX / "qwen3-30b-a3b.config.json").read_text()), "mlp_only_layers": [0]}, {}, "dense MLP layers among the MoE ones"),
     (TINY, {"sampling": {**STOCH, "top_k": 50}}, "top_k 50"),
-    (TINY, {"sampling": {**STOCH, "splits": None}}, "without a split count"),
+    (TINY, {"sampling": {**STOCH, "splits": None}}, "top-p split count None is not the registered one, registered_splits(188) = 32"),
+    (TINY, {"sampling": {**STOCH, "splits": "derived"}}, "top-p split count 'derived' is not the registered one"),
     (TINY, {"sampling": {"kind": "mixed"}}, "sampling 'mixed'"),
     (TINY, {"tp": {"world": 4, "rank": 0}}, "tensor parallel world 4"),
     ({**TINY, "hidden_size": 96, "num_attention_heads": 6, "num_key_value_heads": 3}, {"tp": {"world": 2, "rank": 0}},

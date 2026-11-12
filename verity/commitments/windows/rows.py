@@ -22,9 +22,9 @@ value: no output word is ever public).  A bit-row member
 
   row     the words, u16 little-endian
   inner   ``x = SHA-512(sha512_row_prefix(role 1, 16, n) || row)``                              (``sha512/row/v1``)
-  salt    ``y`` = 192 bytes of ChaCha20 (RFC 8439) under the window's salt key, nonce = the row port's index over all members (12
-          bytes LE), at stream offset ``192 i``; the key is 32 fresh bytes from the OS generator per window, dropped once the
-          salts are expanded.  The salts are kept only in the prover's files and never logged
+  salt    ``y`` = 192 fresh bytes from the OS generator, drawn for this row alone.  The salts are kept only in the prover's
+          files and never logged.  Under a test's salt key (``commit``'s ``salt_key``) they are instead ChaCha20 (RFC 8439)
+          under it, nonce = the row port's index over all members (12 bytes LE), at stream offset ``192 i``
   string  ``b || c = hm96.SHA512.commit_string(default_key, x, y)``                               (public, 128 bytes)
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
@@ -653,17 +653,20 @@ def _table_rows(window: Binding, rows: Mapping[str, np.ndarray]) -> list[np.ndar
 def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
            carried: Mapping[str, bytes] | None = None,
            row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
-           chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None) -> Committed:
+           chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None,
+           strings_of: Mapping[str, bytes] | None = None) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
     port's committed as its output row); and each row table, its rows read off its linked members' ``x`` tables, whose rows take
-    their row table row's salt.  Salt nonces: the members' ports in order; a segment's tables', ``segment_salts`` under
+    their row table row's salt.  Salts: 192 fresh OS bytes a row of a member's port; a segment's tables', ``segment_salts`` under
     ``row_salt_key``.  The row tables' roots make each segment's root and the ``row-table`` port is the tree over those; with
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the window's, or the
     commit is refused.
 
-    ``salt_key``: tests only; an integration samples 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
+    ``salt_key``: tests only: ChaCha20 under it, as `salts` gives it.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
+    ``strings_of``: by port of ``salts_of``, its rows' ``b || c`` under those salts, already made (a history table's, whose
+    leaves they are), so the window hashes only their leaves and tree; a wrong string is a leaf no opening of the row matches.
 
     An input port's rows may be given by reference, in a window with no row tables: `WIRED` for a wired port (its writers'
     output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
@@ -736,12 +739,13 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     if any(p not in rows or len(s) != len(rows[p]) * SALT_BYTES for p, s in (salts_of or {}).items()):
         raise ValueError(f"salts_of {sorted(salts_of)}: not one {SALT_BYTES}-byte salt for each row of one of the window's ports "
                          "given in full")
+    if any(p not in (salts_of or {}) or len(s) != len(rows[p]) * BC_BYTES for p, s in (strings_of or {}).items()):
+        raise ValueError(f"strings_of {sorted(strings_of)}: not one {BC_BYTES}-byte b || c for each row of a port of salts_of")
     if refd and window.row_tables:
         raise ValueError(f"{len(refd)} ports given by reference ({sorted(refd)[:3]}) in a window with row tables, whose linked "
                          "members' rows are read off their x tables: give every row")
-    key = os.urandom(32) if salt_key is None else bytes(salt_key)
-    ys = {p: (salts_of or {}).get(p) or salts(key, k, n) for k, (p, n) in enumerate(counts.items()) if p not in refd}
-    del key
+    ys = {p: (salts_of or {}).get(p) or (os.urandom(n * SALT_BYTES) if salt_key is None else salts(bytes(salt_key), k, n))
+          for k, (p, n) in enumerate(counts.items()) if p not in refd}
     domains = {p: window.domain(p, schemas[p], n) for p, n in counts.items() if p not in held}
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
@@ -756,7 +760,9 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
             ys[m.port(LINKED)] = b"".join(ys[window.row_tables[t].port][r * SALT_BYTES:(r + 1) * SALT_BYTES] for t, r in m.links)
     WI.salts(ms, rows, ys, skip=refd)
     t_salt = time.perf_counter()
-    roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
+    given = dict(strings_of or {})
+    roots, bc = commit_ports(domains, {p: r for p, r in rows.items() if p not in given}, {}, ys, workers=workers, chunk=chunk,
+                             schemas=schemas, strings=given)
     if refd:
         strings, at = {}, WI.bases(ms)
         for p, src in refd.items():
@@ -1260,8 +1266,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
-           "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
-           "(12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds, **(extra or {})}
+           "salt_rule": "192 fresh bytes from the os generator a row; under a test's salt key, chacha20 (rfc 8439), nonce = the "
+           "row port's index over all members (12 bytes le), row i at stream offset 192 i", "seconds": c.seconds, **(extra or {})}
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")
     return win
 

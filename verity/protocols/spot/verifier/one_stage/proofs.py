@@ -30,6 +30,7 @@ object, the registered reads or a session's draw as `printed` prints them, at ``
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
+It runs in `verifier_env`: its caller's environment over `VERIFIER_ENV`, the verifier's allocator setting.
 
 The one-stage audit's v2 (`V2`, `Spot.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
@@ -38,6 +39,10 @@ as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts re
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
 `OneStageZk.tablesHeld`).
+
+A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
+statement for each member with a session in the evidence), which the audit parses and refuses. `members_parsed` is what
+its parsers read of a case's parameters and evidence, with no check and no verdict.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -49,6 +54,7 @@ import functools
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import tempfile
@@ -65,6 +71,10 @@ from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = ROOT / "verity/protocols/flock/verifier"
 EXE = "flock-verify"
+#: what the Lean verifier's `verify` runs under where its caller's environment sets no value of its own. The Lean runtime's
+#: allocator (mimalloc) returns freed pages to the kernel after a delay and faults them in again when it reuses them; -1
+#: keeps them, trading peak memory for the faults. No byte the verifier reads or prints depends on it.
+VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
@@ -116,6 +126,12 @@ class Finding:
     registered: dict
     units: tuple[int, ...]
     openings: Any = None
+
+
+def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The environment `verify` starts the Lean verifier in: ``environ`` (this process's when None) over `VERIFIER_ENV`, so
+    a variable the caller sets keeps the caller's value. `verifier_env.sh` is the same for a shell job."""
+    return {**VERIFIER_ENV, **(os.environ if environ is None else environ)}
 
 
 @functools.cache
@@ -421,7 +437,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
-                            "--session", *map(str, proof.sessions)], capture_output=True, text=True)
+                            "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
@@ -503,6 +519,75 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
                          "reps": {r.name: file_sha512(r) for r in reps}})
         blobs += [s / "session.json", *reps]
     return {"sessions": sessions}, blobs
+
+
+#: what the v2 executable's ``members`` says of what it prints (`OneStageZk.PARSED`): no check of the audit ran
+PARSED = "parsed, not checked"
+
+
+@dataclass(frozen=True)
+class Member:
+    """One member of a window in v2's per-member form (`OneStageZk.membersOf`): its name, its statement's files (`Proof`,
+    with no session for a member the sample missed), the SHA-512s the auditor committed for its circuit and public files
+    before any coin, the verifier's registered file for it, its units' ranges ``[lo, hi)`` of the registration's
+    population, ascending, and its circuit's ``vus_per_block``."""
+    name: str
+    proof: Proof
+    circuit_sha512: str
+    public_sha512: str
+    registered: Mapping[str, Any] | None
+    units: tuple[tuple[int, int], ...]
+    vus_per_block: int
+
+
+def members_v2(members: Sequence[Member],
+               names: Mapping[str, Sequence[str]] | None = None) -> tuple[dict, dict, list[Path]]:
+    """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
+    (``{"members": {name: {circuit, public, registered, units, vus_per_block}}}``), the evidence's
+    (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
+    first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs that hold the
+    statements' files. Two members of one name, a member of no unit or one with several sessions raise: a statement is
+    exactly one session on live coins. `Spot.OneStageZk` parses this form and refuses it (`MULTI_REFUSED`);
+    `members_parsed` holds these keys to its parsers."""
+    if len({m.name for m in members}) != len(members):
+        raise ValueError("two members have one name: a member's name is its own")
+    for m in members:
+        if not m.units:
+            raise ValueError(f"member {m.name} has no unit")
+        if len(m.proof.sessions) > 1:
+            raise ValueError(f"member {m.name} has {len(m.proof.sessions)} sessions: a statement is exactly one session "
+                             f"on live coins, never retried")
+    params = {"members": {m.name: {"circuit": m.circuit_sha512, "public": m.public_sha512,
+                                   "registered": None if m.registered is None else dict(m.registered),
+                                   "units": [[lo, hi] for lo, hi in m.units], "vus_per_block": m.vus_per_block}
+                          for m in members}}
+    statements, blobs = [], []
+    for m in sorted((m for m in members if m.proof.sessions), key=lambda m: min(lo for lo, _ in m.units)):
+        pr, files = evidence_v2(m.proof, None if names is None else names[m.name])
+        statements.append({"member": m.name, "sessions": pr["sessions"]})
+        blobs += files
+    return params, {"statements": statements}, blobs
+
+
+def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict | None, str | None]:
+    """What v2's per-member parsers read of `params` and `evidence` (`V2_EXE`'s ``members``,
+    `OneStageZk.membersParsed`): its object, ``{"members", "parsed", "statements"}`` with ``parsed`` the words `PARSED`,
+    and None; or None and the refusal. The command reads the two objects alone and runs no check of the audit, so its
+    answer is no verdict."""
+    with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
+        paths = (Path(d, "params.json"), Path(d, "evidence.json"))
+        for path, x in zip(paths, (params, evidence)):
+            path.write_bytes(_canonical(x))
+        p = subprocess.run([str(v2_executable()), "members", *map(str, paths)], capture_output=True, text=True)
+    try:
+        got = json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} members answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+    if "refused" in got:
+        return None, got["refused"]
+    if got.get("parsed") != PARSED:
+        raise LeanError(f"{V2_EXE} members answered a line that does not say {PARSED!r}: {sorted(got)}")
+    return got, None
 
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],

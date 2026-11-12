@@ -105,13 +105,15 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
--- a part of onsite's subprotocols is not onsite's, onsite has no policy-less or wipe-less form, and neither v1's nor
--- v2's one-stage audit alone is onsite's integrity subprotocol
+-- a part of onsite's subprotocols is not onsite's, onsite has no policy-less, wipe-less or PoUS-less form, and neither
+-- v1's nor v2's one-stage audit alone is onsite's integrity subprotocol
 #guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != NciCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
+#guard (answer ((components.filter (·.id != PousCheck.RunProtocol.protocol.id)).map refused)).reason ==
+  some "params: verity/pous/p2/v4/run is missing"
 #guard (answer ((components.take 5).map refused ++
     [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"

@@ -6,15 +6,18 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """`DsaRMSNorm_v1` at the two rows GLM-5.3 runs: q_a_layernorm (2048) and kv_a_layernorm (512), eps 1e-5; `TritonBlockRMSNorm_v1` at
-    DeepSeek-V4's (q 1536 and kv 512 of a 2048 block on 8 warps, eps 1e-6); `DsaLatentRow_v1` at GLM-5.3's latent row (kv_c 512,
-    k_pe 64)."""
+    """`DsaRMSNorm_v1` and its scale at the two rows GLM-5.3 runs: q_a_layernorm (2048) and kv_a_layernorm (512), eps 1e-5, and its
+    apply unit of 64 elements; `TritonBlockRMSNorm_v1` at DeepSeek-V4's (q 1536 and kv 512 of a 2048 block on 8 warps, eps 1e-6);
+    `DsaLatentRow_v1` at GLM-5.3's latent row (kv_c 512, k_pe 64)."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import dsa_norm
 
     return [
         ("DsaRMSNorm_v1/q", lambda: bind(dsa_norm.DsaRMSNorm, N=2048, EPS=1e-5)),
         ("DsaRMSNorm_v1/kv", lambda: bind(dsa_norm.DsaRMSNorm, N=512, EPS=1e-5)),
+        ("DsaRMSNormSumSq_v1/q", lambda: bind(dsa_norm.DsaRMSNormSumSq, N=2048, EPS=1e-5)),
+        ("DsaRMSNormSumSq_v1/kv", lambda: bind(dsa_norm.DsaRMSNormSumSq, N=512, EPS=1e-5)),
+        ("DsaRMSNormApply_v1", lambda: bind(dsa_norm.DsaRMSNormApply, G=64)),
         ("TritonBlockRMSNorm_v1/q", lambda: bind(dsa_norm.TritonBlockRMSNorm, N=1536, BLOCK=2048, WARPS=8, EPS=1e-6)),
         ("TritonBlockRMSNorm_v1/kv", lambda: bind(dsa_norm.TritonBlockRMSNorm, N=512, BLOCK=2048, WARPS=8, EPS=1e-6)),
         ("DsaLatentRow_v1", lambda: bind(dsa_norm.DsaLatentRow, KVL=512, R=64, EPS=1e-5)),

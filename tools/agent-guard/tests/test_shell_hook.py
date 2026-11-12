@@ -425,9 +425,11 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
     shutil.copytree(ROOT / ".cursor", worker / ".cursor")
     off = tool("check", W, "--repo", str(worker), inbox=tmp_path / "quiet-inbox")
     assert off.returncode == 1 and "NOT POLLING" in off.stdout and f"inbox/{W}" in off.stdout
+    assert f"PROBLEM: no shell hook has run for {W}" in off.stdout, "neither an event of it nor a poll mark"
     (box / f"{W}.polled").touch()
-    unseen = tool("check", W, "--repo", str(worker), inbox=box)
-    assert unseen.returncode == 1 and f"PROBLEM: no shell hook has run for {W}" in unseen.stdout
+    polled = tool("check", W, "--repo", str(worker), inbox=box)
+    # hook.sh runs origin/main's copy of the hook: one from before the event log polls and delivers, and records no event
+    assert polled.returncode == 0 and "PROBLEM" not in polled.stdout and "hook polls for" in polled.stdout, polled.stdout
     hook("ls", W, box)
     assert tool("check", W, "--repo", str(worker), inbox=box).returncode == 0
     assert "AGENT_INBOX_POLL_S is off" in tool("check", W, "--repo", str(worker), inbox=box, poll="off").stdout
@@ -468,6 +470,122 @@ def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deli
     assert f"PROBLEM: Cursor reads {hooks.resolve()} otherwise than its JSON says" in bad.stdout
     assert "the steps beforeShellExecution, stop" in bad.stdout and "PROBLEM: Cursor reads no shell hook" in bad.stdout
     assert f"PROBLEM: no shell hook has run for {other}" in bad.stdout
+
+
+def test_guard_is_one_line_saying_what_is_off_why_and_the_fix_only_where_no_shell_hook_has_run_for_the_agent(tmp_path, event_log):
+    """A VM whose branch's hooks.json Cursor can't load runs no shell hook: no secret refusal, no inbox, and nothing says so.
+    `guard` prints nothing where a shell hook has run for the agent (its event, or the poll mark a copy from before the event
+    log leaves), and otherwise one line: what is off, how Cursor misreads which file, and the fix, which depends on whether
+    origin/main's file loads. The Task hook's event counts for nothing: from a misread file Cursor runs it on shell commands."""
+    origin, vm, box = tmp_path / "origin.git", tmp_path / "vm", tmp_path / "inbox"
+    env = {**os.environ, **GIT_ENV}
+    A, other = "bc-77777777-7777-4777-8777-777777777777", "bc-99999999-9999-4999-8999-999999999999"
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(vm), *args], check=True, capture_output=True, env=env)
+
+    def guard(*args, repo=vm):
+        return subprocess.run([sys.executable, INBOX_TOOL, "guard", *args, "--repo", str(repo)], capture_output=True, text=True,
+                              env={**env, "AGENT_INBOX": str(box), "CURSOR_CONVERSATION_ID": A})
+
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    subprocess.run(["git", "clone", "-q", str(origin), str(vm)], check=True, capture_output=True, env=env)
+    hooks = vm / ".cursor/hooks.json"
+    hooks.parent.mkdir()
+    loads = (ROOT / ".cursor/hooks.json").read_text()
+    misread = loads.replace("/[0-9a-f]*/", "/*/")
+    assert misread != loads
+    hooks.write_text(loads)
+    git("add", ".cursor")
+    git("commit", "-q", "-m", "hooks Cursor reads as written")
+    git("push", "-q", "origin", "HEAD:main")
+    git("fetch", "-q", "origin")
+
+    hooks.write_text(misread)                 # the branch this VM booted on predates main's fix
+    off = guard()
+    assert off.returncode == 1 and off.stdout.count("\n") == 1, off.stdout + off.stderr
+    assert off.stdout.startswith(f"no shell hook has run for {A} on this VM, so the guard that refuses a command printing a "
+                                 "secret and the inbox are not running here.")
+    assert f"Cursor reads {hooks.resolve()} otherwise than its JSON says" in off.stdout
+    assert "Merge origin/main, whose hooks.json loads, and push: a VM booted from the branch after that runs them" in off.stdout
+    (vm / "sub").mkdir()
+    assert guard(A, repo=vm / "sub").stdout == off.stdout, "the checkout's file, from anywhere inside it"
+
+    event_log.write_text(json.dumps({"hook": "task_hook.py", "event": "beforeShellExecution", "conversation_id": A}) + "\n"
+                         + json.dumps({"hook": "shell_hook.py", "event": "beforeShellExecution", "conversation_id": other}) + "\n")
+    assert guard().stdout == off.stdout, "the Task hook's event, and another agent's shell hook, show nothing of this one's"
+
+    git("commit", "-q", "-am", "main's file doesn't load either")
+    git("push", "-q", "origin", "HEAD:main")
+    git("fetch", "-q", "origin")
+    both = guard()
+    assert both.returncode == 1 and "origin/main's does not load either, as of this checkout's last fetch" in both.stdout
+    assert "Merge origin/main, whose" not in both.stdout
+
+    hooks.write_text(loads)
+    late = guard()
+    assert late.returncode == 1 and "this branch's loads as written now, so it changed after this VM booted" in late.stdout
+    (tmp_path / "nowhere").mkdir()
+    lost = guard(repo=tmp_path / "nowhere")
+    assert lost.returncode == 1 and lost.stdout.count("\n") == 1 and "in your checkout for why, and the fix" in lost.stdout
+
+    box.mkdir()
+    (box / f"{A}.polled").touch()
+    assert (guard().returncode, guard().stdout) == (0, ""), "a hook from before the event log polls, and records no event"
+    (box / f"{A}.polled").unlink()
+    assert guard().returncode == 1
+    hook("true", A, box)
+    assert (guard().returncode, guard().stdout) == (0, ""), "this hook's own event"
+
+
+def test_send_wait_tells_the_sender_whether_a_vm_took_this_message(tmp_path, monkeypatch, capsys):
+    """`send` says "pushed" whether or not anything will ever pull the message, and its warning that a target isn't pulling
+    comes only with a later send, minutes on. `send --wait S` looks at origin until a VM has pulled this message: taken, and
+    after how long, or NOT TAKEN and exit 1 after S seconds, when the sender has to stop the work itself. The clock and the
+    sleep are the test's: the worker's pull happens inside the sender's second sleep."""
+    origin, coord, worker, box = (tmp_path / n for n in ("origin.git", "coord", "worker", "worker-inbox"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    for k, v in GIT_ENV.items():
+        monkeypatch.setenv(k, v)
+    inbox = guard_module("inbox", monkeypatch)
+    W = "bc-88888888-8888-4888-8888-888888888888"
+    now, naps, pull_in_nap = [0.0], [], []
+
+    def sleep(seconds):
+        naps.append(seconds)
+        now[0] += seconds
+        if len(naps) in pull_in_nap:
+            inbox.pull(W, worker, box)
+
+    def send(text, wait):
+        code = inbox.main(["send", W, "--text", text, "--wait", wait, "--repo", str(coord)], sleep=sleep, clock=lambda: now[0])
+        return code, capsys.readouterr()
+
+    code, said = send("pause: nobody pulls this", "12")
+    assert code == 1 and naps == [5.0, 5.0, 2.0], naps
+    assert f"pushed for {W}" in said.out and "taken" not in said.out
+    assert "inbox: NOT TAKEN in 12 s: no VM pulled" in said.err and "cancel its runs yourself" in said.err
+    assert inbox.unpulled(coord, W)[0] == 1, "it stays on the branch for a later pull"
+
+    del naps[:]
+    pull_in_nap.append(2)
+    code, said = send("pause: the worker's hook pulls this", "60")
+    assert code == 0 and naps == [5.0, 5.0], naps
+    assert f"inbox: taken 10 s after the push: {W}'s VM pulled" in said.out and "Taken is not acted on" in said.out
+    assert "NOT TAKEN" not in said.err and inbox.unpulled(coord, W)[0] == 0
+    delivered = hook("ls", W, box)
+    assert delivered["permission"] == "deny" and "pause: the worker's hook pulls this" in delivered["user_message"]
+
+    for wait in ("0", "1201"):
+        with pytest.raises(SystemExit, match="--wait .* is not within 0 to 1200 seconds"):
+            send("never pushed", wait)
+    assert inbox.unpulled(coord, W)[0] == 0
+    del naps[:]
+    assert inbox.wait_taken(tmp_path / "no-checkout", W, "0" * 12, 5, sleep, lambda: now[0]) is None and naps == [5.0]
+    assert "could not read origin's inbox" in capsys.readouterr().err, "a look git couldn't make is not a message taken"
 
 
 STOP_HOOK = ROOT / "tools/agent-guard/stop_hook.py"
