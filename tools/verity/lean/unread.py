@@ -61,8 +61,10 @@ seeds) and ``DIR/unread.md`` (the summary). The owners of an area are the `owner
 and assumptions its modules declare: the tree has no other map from Lean to lanes.
 
 **The ratchet.** Each area of the analysis's trees has a cap on its wholly unread modules and on their declarations
-(`unread-caps.json`, `CAPS`), not on their lines, which a rewrap changes. A count may only come down: ``--caps FILE``
-exits 1 when an area's count rose above its cap (an area the file doesn't list has a cap of nothing), and
+(`unread-caps.json`, `CAPS`), not on their lines, which a rewrap changes. ``--caps FILE`` exits 1 when an area's count
+rose above its cap (an area the file doesn't list has a cap of nothing). A change that adds proof modules no guarantee
+reads yet sets its area's entry there to the check's count in the same change, with no room, and lists in its pull
+request's body each such module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`).
 ``--update-caps`` lowers each cap to its count, never raising one. The Lean check runs it (`check`, from
 `lean_audit.py`) on the facts its audits wrote, with no build; there the report is the short one (`analyse` without
 ``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
@@ -125,7 +127,7 @@ CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances
 #: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
 #: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
 CHECKS = re.compile(r"(?:Checks|Vectors)$")
-#: the ratchet's caps: each area's wholly unread modules and their declarations, which may only come down (`ratchet`)
+#: the ratchet's caps: each area's wholly unread modules and their declarations (`ratchet` says what may raise one)
 CAPS = HERE / "unread-caps.json"
 CAPS_SCHEMA = "lean-unread-caps/v1"
 CAP_KEYS = ("modules", "declarations")
@@ -891,7 +893,10 @@ def caps_text(areas: dict[str, dict[str, int]]) -> str:
 def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.relative_to(ROOT))
             ) -> tuple[list[str], dict[str, dict[str, int]]]:
     """(a failure for each area whose wholly unread modules, or their declarations, rose above its cap in ``where``; the
-    caps, each lowered to its count). The count only comes down: an area the caps don't list has a cap of nothing."""
+    caps, each lowered to its count). An area the caps don't list has a cap of nothing. A change that adds proof modules
+    no guarantee reads yet sets its area's entry in ``where`` to the count, with no room, in the same change (the
+    failure prints the entry), and lists in its pull request's body each such module, the guarantee that will read it
+    and the date that guarantee is listed by."""
     now, fails, zero = counts(rep), [], dict.fromkeys(CAP_KEYS, 0)
     for area in sorted(set(now) | set(caps)):
         got, cap = now.get(area, zero), zero | caps.get(area, {})
@@ -904,9 +909,12 @@ def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.re
         fails.append(f"unread: {area} has {got['modules']} wholly unread modules ({got['declarations']} declarations), above "
                      f"its cap of {cap['modules']} ({cap['declarations']} declarations) in {where}: {shown}{more}. Nothing "
                      f"reads such a module: delete it, or seed it: a lock/code reference (name the module, or a declaration "
-                     f"of it, in a lock's text or in code that reads it). A module of checks (its name ending in Checks or "
-                     f"Vectors) is kept once it mentions a declaration that is read, and a module moved to another area "
-                     f"takes its cap with it")
+                     f"of it, in a lock's text or in code that reads it). A change that adds proof modules no "
+                     f"guarantee reads yet sets the area's entry in {where} to its count in the same change, with no "
+                     f"room: {json.dumps({area: got})[1:-1]}, and lists in its pull request's body each such module, "
+                     f"the guarantee that will read it and the date that guarantee is listed by. A module of checks "
+                     f"(its name ending in Checks or Vectors) is kept once it mentions a declaration that is read, and "
+                     f"a module moved to another area takes its cap with it")
     lowered = {a: {k: min(v.get(k, 0), now.get(a, zero)[k]) for k in CAP_KEYS} for a, v in caps.items()}
     return fails, {a: v for a, v in lowered.items() if v["modules"]}
 
@@ -1021,7 +1029,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--facts", type=Path, action="append",
                     help="read these facts instead of running Unread.lean (an audit's `unread-facts.jsonl.gz`; repeat to join)")
     ap.add_argument("--caps", type=Path, help="check the counts against this caps file (`unread-caps.json`): exit 1 when an "
-                                              "area's wholly unread modules or their declarations rose above its cap")
+                                              "area's wholly unread modules or their declarations rose above its cap. "
+                                              "A change that adds proof modules no guarantee reads yet sets its area's "
+                                              "entry there to the count in the same change (the failure prints it)")
     ap.add_argument("--update-caps", action="store_true",
                     help="with --caps: lower each cap to its count (never raise one); a caps file not there yet gets the counts")
     ap.add_argument("--rev", help="the commit the report names")

@@ -36,7 +36,7 @@ NOT_SCANNED = {
     "tests/test_module_strings.py": "its exemptions name modules that don't resolve, as data",
 }
 
-#: The public modules: module -> the interface it is (the vision note's I1..I10).
+#: The public modules: module -> the interface it is (I1..I10).
 PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
@@ -130,6 +130,9 @@ PUBLIC = {
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
+    "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
+                                                 "that put them there, and the fields a registration holds at 0 with "
+                                                 "the rules that do, which benchmarks/network_e2e reports",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
