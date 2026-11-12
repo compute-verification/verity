@@ -30,3 +30,14 @@ tests = [
     "tests/test_network_check_lean_difftest.py",
 ]
 paths = ["verity"]
+
+# `lake build NetworkCheck.Registered` and the script it then runs: the check's Lake package (its lakefile and its Lean),
+# the script, and the packages the module's imports are in (the Site and what it imports)
+[[tool.verity.tests.reads]]
+tests = ["tests/test_network_certifier_registered.py"]
+paths = [
+    "verity/circuits/base",
+    "verity/protocols/certifier/verifier/lean",
+    "verity/protocols/certifier/verifier/tests/lean",
+    "verity/protocols/interface",
+]
