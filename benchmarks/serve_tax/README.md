@@ -62,6 +62,10 @@ that command in two things, each with the recipe's own alternative:
   their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
   refused by the server and counted as failed.
 
+The values a recipe leaves to the operator (the requests at once, the cards' share of memory, the tokens a step) are
+vLLM's own defaults on the arm's line. A job that sets any of them adds the flags to that line alone with
+`PUBLISHED_ARGS=--FLAG=VALUE,...`, each flag once; the arm's `meta.json` holds the line it served (`server_argv`).
+
 The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
 pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,
 and a cost is of an arm of ours over stock.

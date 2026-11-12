@@ -191,7 +191,8 @@ class Arm:
     rows: dict = field(default_factory=dict)
     #: whether the server starts as vLLM's recipe for the model starts it: the model's published flags added
     #: (`Model.published`), at the job's context limit or else the recipe's (`published_context`), the flags of
-    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`)
+    #: `BASE_ARGS` no recipe sets left to vLLM's own defaults (`UNPUBLISHED`), behind the job's front end (`FRONT_ENDS`),
+    #: with the flags of vLLM's own the job adds to the line (`published_args`)
     published: bool = False
 
 
@@ -492,6 +493,17 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
     return model.published_context if given is None else given
 
 
+def published_args(text: str | None) -> tuple[str, ...]:
+    """``--published-args``: the flags of vLLM's own a job adds to the line of an arm that starts the server as the
+    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory), each one
+    ``--FLAG=VALUE``, comma-separated."""
+    args = tuple(x for x in (text or "").split(",") if x)
+    bad = [x for x in args if not x.startswith("--") or len(x.split("=")) != 2 or not all(x.split("=")) or " " in x]
+    if bad:
+        raise SystemExit(f"--published-args: {', '.join(bad)}: each flag is --FLAG=VALUE, the flags comma-separated")
+    return args
+
+
 def front_end(arm: Arm, given: str | None) -> str:
     """The front end ``arm``'s server starts behind: the job's (``--published-frontend``) for an arm that starts the
     server as the recipe does, and vLLM's Python server for every other arm, whose plugins and tick it loads."""
@@ -499,18 +511,27 @@ def front_end(arm: Arm, given: str | None) -> str:
 
 
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
-                max_model_len: int | str | None = None, front: str = PYTHON) -> list[str]:
+                max_model_len: int | str | None = None, front: str = PYTHON, added: Sequence[str] = ()) -> list[str]:
     """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
-    front end (under `RUST_ENV`, `server_env`)."""
+    front end (under `RUST_ENV`, `server_env`). ``added`` (`published_args`) goes on the line of an arm that starts the
+    server as the recipe does, after the recipe's flags and the runner's, and is refused where it names a flag the line
+    already sets; no other arm's line takes it."""
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
     mode = model.published_tokenizer.get(front)
     published = (*model.published, *(("--tokenizer-mode", mode) if mode else ())) if arm.published else ()
-    return [sys.executable, "-m", *serve, "--served-model-name",
+    line = [sys.executable, "-m", *serve, "--served-model-name",
             model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *published, *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
+    added = tuple(added) if arm.published else ()
+    flags = [x.split("=")[0] for x in added]
+    twice = sorted({f for f in flags if f in line or flags.count(f) > 1})
+    if twice:
+        raise SystemExit(f"--published-args: {', '.join(twice)}: the arm's line sets it already; name each flag once, "
+                         "and the context limit with --max-model-len")
+    return [*line, *added]
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
@@ -1375,7 +1396,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     site = plugin_site(out / ".site", arm)
     port = corpus().free_port()
     front = front_end(arm, getattr(a, "published_frontend", None))
-    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front)
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, context, front,
+                       published_args(getattr(a, "published_args", None)))
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates, load_tag(next(iter(passes)), 1, True) if bench else None)
@@ -2641,6 +2663,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
     r.add_argument("--published-frontend", choices=FRONT_ENDS, help="the front end of an arm that starts the server as "
                    "the model's recipe does (default: python, which the other arms have)")
+    r.add_argument("--published-args", metavar="FLAG=VALUE,...", help="flags of vLLM's own added to that arm's line, each "
+                   "--FLAG=VALUE, given as --published-args=--FLAG=VALUE,... (no other arm's line takes them)")
     r.add_argument("--max-model-len", type=context_arg, help="the engines' context limit, a number of tokens or auto "
                    "(default: BASE_ARGS's)")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")

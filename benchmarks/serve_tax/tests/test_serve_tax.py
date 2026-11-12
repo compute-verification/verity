@@ -498,6 +498,19 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     plain = S.server_argv(S.ARMS["compiled"], S.MODELS["moonlight"], Path("/ck"), 8000)
     seqs = plain.index("--max-num-seqs")
     assert S.server_argv(S.ARMS["published"], S.MODELS["moonlight"], Path("/ck"), 8000) == plain[:seqs] + plain[seqs + 2:]
+    # a job's own flags of vLLM's go last on the recipe's line and on no other arm's; one the line sets already,
+    # or one named twice, is refused, and so is anything but --FLAG=VALUE
+    tuning = S.published_args("--max-num-seqs=256,--gpu-memory-utilization=0.95,--max-num-batched-tokens=8192")
+    assert tuning == ("--max-num-seqs=256", "--gpu-memory-utilization=0.95", "--max-num-batched-tokens=8192")
+    assert S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context, added=tuning) == [*argv, *tuning]
+    assert S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context, added=tuning) == stock
+    assert S.published_args(None) == S.published_args("") == ()
+    for twice in (("--kv-cache-dtype=auto",), ("--max-model-len=262144",), ("--max-num-seqs=8", "--max-num-seqs=16")):
+        with pytest.raises(SystemExit, match=twice[0].split("=")[0] + ": the arm's line sets it already"):
+            S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context, added=twice)
+    for bad in ("--max-num-seqs 256", "--max-num-seqs", "max-num-seqs=256", "--a=1=2", "--a="):
+        with pytest.raises(SystemExit, match="each flag is --FLAG=VALUE"):
+            S.published_args(bad)
     # a recipe is its flags, its context limit and its tokenizer mode behind each front end together, and one arm
     # alone is started by it
     for name, m in S.MODELS.items():
