@@ -39,14 +39,13 @@ from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n,
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
-MiB = 1 << 20
 
 
 def _hidden_words(HB: int, M: int, NB: int, BN: int, D: int) -> int:
     return -(-mat_total_words(HB, M, NB, BN, D) // CHUNK_WORDS) * CHUNK_WORDS
 
 
-def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int, per_sequence: bool) -> int:
+def _launch_hidden_words(model: dict[str, Any], *, n_seq: int, seqlen_q: int, seqlen_k: int) -> int:
     """Words of the M1 hidden stream(s) one attention launch binds, in the geometry the record shows (see module doc)."""
     heads, kvh, hd = int(model["heads"]), int(model["kv_heads"]), int(model["head_dim"])
     g = max(1, heads // kvh)
@@ -114,9 +113,9 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         hid = 0
         if hidden_m1:
             for r in pref:
-                hid += _launch_hidden_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K, per_sequence=True)
+                hid += _launch_hidden_words(model, n_seq=1, seqlen_q=r["prompt"], seqlen_k=K)
             if dec:
-                hid += _launch_hidden_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K, per_sequence=False)
+                hid += _launch_hidden_words(model, n_seq=len(dec), seqlen_q=1, seqlen_k=K)
         hb = layers * 4 * hid
         tb, sb, pb = tokens * per_token, len(live) * per_seq, per_step * chunks
         b = tb + sb + pb + hb
