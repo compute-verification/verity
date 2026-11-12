@@ -1058,3 +1058,38 @@ CUDA 13.3's compressed device code** (read the issue; due Wed 18 Nov). KHSHARE f
   your own VM runs no nvcc. Not marked without my word.
 
 Return when a pull request is open with its run, or at 15:00Z with where you are, whichever is first.
+
+## Thu 12 Nov 06:07Z: #9156 is MARKED; your next issue until 15:25Z is HASH-111's first item, five days early
+
+**#9156 is marked ready at `cb075ed2f079`** (by me, 06:04Z: the gate's diff and its tests read whole, your
+three runs read as done rc 0, it merges onto `main` `d6075b75d289` clean; the preflight collected 8 suites
+and refused nothing). Push nothing to it. I took "Not marked" out of the body, set HASH-121's goal label
+(`kernels/witness-on-the-card`, your guess was right) and told the gate's other users on the issue. A
+careful change: the reader behind one flag and one magic, every failure with its fix, the old gate
+against the new on 39 binaries. Also on `main` since you last looked: #8662 (HASH-106 and HASH-99 are
+Done) and #8852.
+
+**Next, from now until 15:25Z: HASH-111, the row digest's kernel takes the LM head's rows** (read the
+issue whole; goal `kernels/row-digest-takes-head-rows`, for compute-accounting's CMP-380; nobody was on
+it). **Read the kernel-engineering skill first, all of it: this is PoUW kernel work under its bar.**
+
+1. **The first item, due Tue 17 Nov and wanted now:** the head's shape (m 16, n 128,256, k 2,048) run
+   through the sm_90 kernel's own check on a CPU node, and **every refusal or trap on it listed with
+   its file and line**: the certain answer to "does anything in the GEMM kernels cap n below 128,256".
+   The issue's pointers are where I read first (`pearl_c/hash_h3.cuh:57`, `:119-121`;
+   `pearl_c_sm120/hash_fast.cuh:16-32`; `pearl_c_sm90/run.py:338`, `:549-551`, `:681-688`); the tree
+   has moved since, so find them again. One worker comment on CMP-380 with the list, for my ring.
+2. **Then a design note, before any kernel is written** (in the notes, `kind: draft`, one page): how
+   `s512_rows` and the fast path (`s512_row_segs`, `s512_folds`, the header tables) take a row of at
+   least 501 one-KiB segments. The header tables grow with the square of the cap (about 8 MB at 512
+   segments), so say whether one scheme stretches or a wide row wants a second, with the cost of each;
+   what the digest must equal (`sha512/row-seg/v1`, bit for bit `pearl_c.row_digest`'s) at 1, 128,
+   129, 501 and the new cap's segments; and which tests on the host twin show it before a card does.
+3. **What you do not change:** a statement parameter, the digest's definition, the gate, the
+   verifier (the skill: the scorer is locked). `benchmarks/pouw` is compute-accounting's directory:
+   the pull request, when there is one, is theirs to review, and nothing is marked without my word.
+4. **Before you start,** the skill's "what's been tried": the technique catalog and the attempts for
+   this line; say in the note what you found there.
+
+Builds and tests are `research run` on a CPU node; your VM runs no nvcc. **Return at 15:00Z with where
+you are** (item 1's list at least), so that Thursday's go at 15:25Z finds you free.
