@@ -104577,3 +104577,66 @@ Mailbox read at 22:14Z: last section still your 21:50Z one [run].
 - The failure: `benchmarks/one_stage` 645 passed, 1 failed, `tests/test_stop_audit.py::test_the_stop_streams_answer_carries_its_audit_records_complete`. My test expected a reject's reason to name one verdict, Lean's; the answer names two, `lean-verify/stop, registered-reads` [read]. The code is right and the test was wrong: the registered reads' entry is Lean's verdict held to the verifier's file (`stop_audit.py:410-418`), so a session Lean refuses fails it too [read]. That test builds a real first stage and does not finish inside this machine's minute, so the suites were its first run [run].
 - Fixed in the test alone (one line and its docstring): `dbb268ce300913be808fa709dca2261bcac8b23b`, pushed; #9458's head is now that commit, still unmarked [run]. Against `44cd4a62c7c9` it changes no Lean, no lock and no code outside that test file, so the records run `r20261112-203018-c8f1` (still running, at `44cd4a62c7c9`) says the same of the new head [derived].
 - Running again on cpu-8 in the pool `proofs`: the quick suites `r20261112-221230-1fa0` at `dbb268ce3009` with a bound of 150 minutes, and that test file alone, `r20261112-221304-9f8c`; both waited for a slot at 22:13Z [run]. The ready line waits on them; Fri 23:00Z stands [guess on the hour].
+
+## FIRSTACCEPT, Thu 22:15Z: a one-member window's case now gets past the trees check on the window's own challenger session, and the compiled check's one refusal left is `publicHeld`'s prefixed ports, which needs Lean (STOP RULE below)
+
+Branch `cursor/proofs-firstaccept-320f` at `ee18dfa451` (base: the head of #9416).
+
+**What the probe showed** (`r20261112-214641-d2b2`, cpu-12, rc 0) [run]. It ran two `--zk` one-member audits: `subset:1` over 2 units, and `stratified:1` over 1. Each used a key at the deployed parameters (`--deployed-key`), `FLOCK_CHALLENGER=1`, and the driver change. Both gave the same results:
+- The audit: `accepted`, verdicts challenger, lean-draw, lean-verify and m0-verifier all true; it wrote `case-v2.json`.
+- `sampled-proofs-one-stage-zk check` on the case: exit 1, `reject`, "proofs: public file: not the registration's: roots, domains". The executable's SHA-512 is `169108a9…7df09`.
+- The steps one at a time:
+  - order: passes.
+  - trees: passes. So the driver change removed `NO_TREE`.
+  - public: refuses (`roots`, `domains`). The registered ports are `ScaledMmS8Coordinate_v1{…}/c0/{o0,sw,sx,wrow,x}`; the public file's are `{o0,sw,sx,wrow,x}`.
+  - The session's `verdicts`: accepted, `of_record`, units `[0]`.
+  - v1's `check` at those verdicts: `accept`.
+- The case files, with `replay.sh`, are in the run's `out/<tag>/` [run].
+
+**Item 1: the refusals, in `checkOneAt`'s order** (`OneStageZk.lean:750-766`)
+1. `KEY_PARAMS` (`OneStageZk.lean:132`; `paramsOfJson` 245-259) under a `local` key at `(4, 5)`. Removed by `--deployed-key` [run: 3849, d2b2].
+2. `NO_TREE` (`ChallengerTrees.lean` `sessionTreeReason`; `treesHeld`, `OneStageZk.lean:705`): the session ran on its verifier's own challenger. Removed by `010f790b38`, the relay for one member with no closing round [run: d2b2].
+3. `publicHeld` (`OneStageZk.lean:347`; `Record.matchesPublic`, `Spot/Record.lean:70`): "roots, domains" [run: d2b2]. The cause:
+   - A windowed registration names every port `<member>/<port>`, one member included (`Member.port`, `verity/commitments/windows/rows.py:279-281`).
+   - The public file names them bare.
+   - `matchesPublic` compares the two sets exactly.
+   - This needs a Lean change (STOP RULE). The other route, a registration that isn't windowed, is `verity/commitments/windows`: not my file, and invasive.
+4. After `publicHeld`, `run` (`tablesHeld`, the session's `step`/`verdictOf`, `provedHeld`), then v1's `checkAt`:
+   - The session's verdict and v1's accept are run separately above [run]. `tablesHeld` and `provedHeld` inside the whole check are not.
+   - Scratch run `r20261112-221348-871c` (cpu-12, launched 22:13Z, ETA about 22:35Z) answers whether 3 is the last refusal. It builds, never pushed, a copy of `checkOneAt` whose `publicHeld` reads the record's ports bare (everything up to the last `/` taken off), and runs it and the unpatched executable on both cases.
+
+**STOP RULE.** Before: the one-statement form holds its public file to the whole registration (`publicHeld c.record`), so a window of one member, whose ports are `<member>/<port>`, is refused. After: it holds the public file to the member's slice, `Member.slice m c.record (rootsOf #[m] c.record)` (`OneStageZk.lean:975-1005`): the member's roots with `<member>/` taken off and the member's count as population. The per-member form already does this. The member's name would come from the record (one member, and `rootsOf`'s refusal of a root that is no member's or a row table's) or from the params. If 871c shows the other readers of the record (`tablesHeld`, `sessionRegistered`, `provedHeld`) take the record as it stands, that is the whole change; if not, they read the same slice. It makes v2 accept a form it refuses today, under `remote_soundness_deployedReady`'s compiled check, so it is not mine. Its owner is the v2 verifier's (Lean).
+
+**Item 4** is pushed in `ee18dfa451`: `composite.py` +80 lines, and `test_composite.py` with 5 new tests and 2 updated. With `--exe`, `composite.json` gains `ran`:
+- `commit`, and `clean` (whether the tracked files are that commit's).
+- `verifier_sha512`.
+- `cites`: remote → `Verity.Sampled.remote_soundness_deployedReady`.
+- `lock`, from `git show <commit>:security/lean-audit.json`: `listed`, `deployed`, and its `open` premises.
+
+An accept whose cited guarantee that lock does not list exits 66 (`UNCITED`). No commit, a dirty tree, or a product citing nothing (onsite: no theorem is listed on main) gets `NOT_ESTABLISHED`, with the exit code unchanged. [run: the file on the VM, 18 passed; ruff clean. Not yet as a suite on a node.]
+
+**A3, `v2_case.py`** [read]. Its kept H200 window holds no challenger session, so v2 refuses it at `NO_CHALLENGER`. It needs:
+- the window's coins evidence (key, ledger, main, pins, segment, session) at the deployed parameters;
+- the trees the session held;
+- and then it meets refusal 3 as well.
+That is not a few lines while the kept window has no session.
+
+**A25: what a real serve sampled on live coins under the deployed key needs** [read; first pass]
+- Challenger: `a5.py --challenger gate:USER@HOST` (vy-challenger-1 through infra's gate) with `--peer`, `--challenger-key` (the host's `challenger-key/v1`) and `--main`. A `local` session is the developer's machine, not an auditor-trusted host.
+- Key: LMS N = 64, W = 1, H = 20 (`lms.DEPLOYED`). The host's rehearsal keys default to it (`auditor.py:274-275`); whether the gate's session key is at H = 20 is unverified [guess].
+- The serve: a TP Commit (`--tp-commit` with `--build-root`, `--windows`, `--workload`), streamed and `--zk`. Its windows are committed while serving, a one-member window drawn, and its public file staged before the sample.
+- It also needs refusal 3 lifted.
+
+**Size and hour** [guess]. Without Lean, the driver is done. The accept needs the STOP RULE change: about 30-60 Lean lines in `OneStageZk.lean`, the guarantee's proof touching `publicHeld`'s lemmas (`indicesHeld_of_publicHeld`), and a lock record. If it were decided tonight, I'd expect it compiled within about 4 hours of the go. Item 3's test and kept run follow in about an hour after it.
+
+**Runs**
+- `r20261112-214641-d2b2`: done, rc 0.
+- `r20261112-221348-871c`: running, ETA about 22:35Z.
+- `r20261112-220923-d85f` and `r20261112-220812-59c2`: duplicates, cancelled.
+
+**Not established**
+- That `publicHeld` is the last refusal (871c answers it).
+- `ee18dfa451` as a node suite.
+- The gate's session key parameters.
+
+**NEEDS**: the STOP RULE change above, from the v2 verifier's owner, or a ruling. **To post**: none.
