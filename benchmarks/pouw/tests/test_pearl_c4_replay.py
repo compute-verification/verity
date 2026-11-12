@@ -11,6 +11,8 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+import pytest
+
 # the replay is imported by name so that its forkserver workers find it
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c4"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
@@ -98,6 +100,7 @@ def test_replay_rejects(tmp_path):
     assert bad(lambda t: t["openings"].pop(0))["reason"] == "'the transcript does not open tile 0'"
 
 
+@pytest.mark.slow
 def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
     """The replay's prove declares R1's rows as the honest prover does (`clear_work.declare` on the transcript): A row 5,
     the spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the

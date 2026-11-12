@@ -31,7 +31,7 @@ import re
 import sys
 import zlib
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
@@ -321,17 +321,31 @@ def kind_of(spec: str) -> str:
 
 #: the reader of a served workload's request Program, which the sidecar of the package that writes it defines
 ROW_READER = "request_program"
+#: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
+SPLIT_READER = "struct_slots_split"
+
+
+def _read_by(reader: str, what: str, path: str) -> Any:
+    """``path`` read by the one binding file that defines ``reader``; refused by name when none or several do."""
+    readers = {prefix: ns[reader] for prefix, ns in binding_files() if ns is not globals() and reader in ns}
+    if len(readers) != 1:
+        raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
+                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
+    return next(iter(readers.values()))(path)
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
     population as `verity.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
     (`verity.definitions.cross_call.check_program`)."""
-    readers = {prefix: ns[ROW_READER] for prefix, ns in binding_files() if ns is not globals() and ROW_READER in ns}
-    if len(readers) != 1:
-        raise ValueError(f"{path}: a request Program is read by the one sidecar that defines `{ROW_READER}`, and "
-                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
-    return next(iter(readers.values()))(path)
+    return _read_by(ROW_READER, "a request Program", path)
+
+
+def struct_slots_split(path: str) -> tuple[Callable[[], Any], str, dict[str, tuple[int, int]], Callable[[str], Sequence[int]]]:
+    """A struct-slots split's directory as `structural_slots` reads it, by the one binding file that defines `SPLIT_READER`:
+    its reading (which raises on a directory that holds none), the format's name, each slot table's (index width, word width),
+    and a slot table's words by its name."""
+    return _read_by(SPLIT_READER, "a struct-slots split", path)
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
@@ -1051,8 +1065,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "ROW_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
            "table_probe", "template_of", "template_params", "templates", "word_call_families"]
