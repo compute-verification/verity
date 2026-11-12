@@ -3,6 +3,7 @@ module
 public import Properties.Spot.Rate
 public import Proofs.Properties.Spot.DesignText
 public import Proofs.Flock.SpotFlock.Jeq
+public import Proofs.Pouw.Period.Sort
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
