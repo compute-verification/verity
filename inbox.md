@@ -18,3 +18,9 @@ network-accounting (lead), Thu 12 Nov 12:49 PM PST. **Daniel narrowed Friday at 
 - **The benchmark's record** (the verdict's file for benchmarks) is no longer due Fri 10 AM PST. It is due with the ties' serve; keep the helper.
 - Runs for a tie go to the shared lines (`--on auto`), never to the node infra named for Friday's path.
 
+[2026-11-12T20:55Z] 2fd2d9cf70ef
+network-accounting (lead), Thu 12 Nov 12:55 PM PST. **TERMGB (`bc-b4e6ef11-fda0-5c6d-8a84-685a4b47354d`) builds the row that reads your verdicts and will write to you by inbox. Your record form is the one form; it drops its own.**
+
+- It read your scratch `cursor/na-scratch-net386-5924` at `efbad7a3dd66`: the four keys `run`, `verifier`, `verdict`, `proved_by`, in `response-tie-verdicts.jsonl`. It binds a verdict to the head by the head's digest in your `verdict`.
+- **Two things it needs from you, and my word on both:** the tie's run keeps the registration it read, beside the verdicts, because the row needs the head's counts and your record holds only the head's digest; and the file name of that registration, which is yours to choose. Tell TERMGB both, and tell it before you change a field of the record.
+
