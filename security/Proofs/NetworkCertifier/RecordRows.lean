@@ -4,6 +4,8 @@ public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Tap
 public import Mathlib.Data.Fin.VecNotation
 public import Proofs.NetworkCertifier.Warden
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.List.OfFn
 meta import Definitions.NetworkCertifier.RecordRows
 
 /-!
@@ -15,6 +17,10 @@ of the cells the network certifier's code sends are those cells (`RowsFormat.rea
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
 bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in turn, so a connection's are its own
 (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
+
+The deployed format is well formed under 2^32 connections and `B`, the frame's bytes, under 2^32 (`cellRows_wf`): a
+u32 holds each connection's ordinal and each payload's length, and so a frame names its connection, its kind and its
+payload (`cellFrame_inj`).
 
 The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
 `verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `params`: B = 64, r = 2, D = 3, two lanes,
@@ -147,6 +153,80 @@ def recordFormat [DecidableEq κ] (F : RowsFormat κ Cell L K) (hF : F.Wf) (S n 
   read_record s hs a := F.read_record hF S n s hs a
 
 end RowsFormat
+
+/-! ### The deployed rows format is well formed -/
+
+theorem length_bitsBE (w x : ℕ) : (bitsBE w x).length = w :=
+  List.length_ofFn
+
+theorem bitsBE_inj {w x y : ℕ} (hx : x < 2 ^ w) (hy : y < 2 ^ w) (h : bitsBE w x = bitsBE w y) : x = y := by
+  unfold bitsBE at h
+  refine Nat.eq_of_testBit_eq fun i => ?_
+  by_cases hi : i < w
+  · have := congrFun (List.ofFn_injective h) ⟨w - 1 - i, by omega⟩
+    simp only at this
+    rwa [show w - 1 - (w - 1 - i) = i by omega] at this
+  · have hw : 2 ^ w ≤ 2 ^ i := Nat.pow_le_pow_right (by decide) (by omega)
+    rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hx hw), Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hy hw)]
+
+theorem length_flatMap_bytes (p : List (Fin 256)) : (p.flatMap fun b => bitsBE 8 b.val).length = 8 * p.length := by
+  induction p with
+  | nil => rfl
+  | cons b p ih => simp only [List.flatMap_cons, List.length_append, length_bitsBE, ih, List.length_cons]; omega
+
+theorem flatMap_bytes_inj {p q : List (Fin 256)} (hl : p.length = q.length)
+    (h : (p.flatMap fun b => bitsBE 8 b.val) = q.flatMap fun b => bitsBE 8 b.val) : p = q := by
+  induction p generalizing q with
+  | nil => cases q with
+    | nil => rfl
+    | cons => simp only [List.length_nil, List.length_cons] at hl; omega
+  | cons a p ih => cases q with
+    | nil => simp only [List.length_nil, List.length_cons] at hl; omega
+    | cons b q =>
+      simp only [List.flatMap_cons] at h
+      obtain ⟨hab, hpq⟩ := List.append_inj h (by simp only [length_bitsBE])
+      rw [Fin.ext (bitsBE_inj (Nat.lt_of_lt_of_le a.isLt (by decide)) (Nat.lt_of_lt_of_le b.isLt (by decide)) hab),
+        ih (by simpa using hl) hpq]
+
+theorem frameKind_fst_lt {P : ℕ} (v : CellView (FrameCell P)) : (frameKind v).1 < 2 ^ 8 := by
+  cases v with
+  | data x => simp only [frameKind]; split <;> simp
+  | pad => simp [frameKind]
+  | fail => simp [frameKind]
+
+theorem frameKind_inj {P : ℕ} {u v : CellView (FrameCell P)} (h : frameKind u = frameKind v) : u = v := by
+  rcases u with ⟨⟨_ | _, _, _⟩⟩ | _ | _ <;> rcases v with ⟨⟨_ | _, _, _⟩⟩ | _ | _ <;> simp_all [frameKind]
+
+/-- **A frame names its connection and its cell**: under 2^32 connections and `B`-byte frames, `B` under 2^32, the
+network certifier's frames of two cells are equal only when they are the same connection's same cell. -/
+theorem cellFrame_inj {B N : ℕ} (hB : B < 2 ^ 32) (hN : N < 2 ^ 32) {x y : Fin N × CellView (FrameCell (B - 9))}
+    (h : cellFrame B x = cellFrame B y) : x = y := by
+  have hlen : ∀ v : CellView (FrameCell (B - 9)), (frameKind v).2.length < 2 ^ 32 := fun v => by
+    cases v with
+    | data d => exact Nat.lt_of_le_of_lt (Nat.le_trans d.fits (Nat.sub_le _ _)) hB
+    | pad => simp [frameKind]
+    | fail => simp [frameKind]
+  have hord : ∀ c : Fin N, c.val + 1 < 2 ^ 32 := fun c => Nat.lt_of_le_of_lt (Nat.succ_le_of_lt c.isLt) hN
+  simp only [cellFrame, List.append_assoc] at h
+  obtain ⟨hk, h⟩ := List.append_inj h (by simp only [length_bitsBE])
+  obtain ⟨ho, h⟩ := List.append_inj h (by simp only [length_bitsBE])
+  obtain ⟨hl, h⟩ := List.append_inj h (by simp only [length_bitsBE])
+  have hl' := bitsBE_inj (hlen x.2) (hlen y.2) hl
+  obtain ⟨hp, -⟩ := List.append_inj h (by simp only [length_flatMap_bytes, hl'])
+  exact Prod.ext (Fin.ext (Nat.add_right_cancel (bitsBE_inj (hord x.1) (hord y.1) ho)))
+    (frameKind_inj (Prod.ext (bitsBE_inj (frameKind_fst_lt _) (frameKind_fst_lt _) hk) (flatMap_bytes_inj hl' hp)))
+
+/-- **The deployed rows format is well formed** under 2^32 connections and `B`-byte frames, `B` under 2^32: its
+connections are each once in ordinal order, and a frame reads back as the connection and cell it encodes. -/
+theorem cellRows_wf {L K B N : ℕ} (hB : B < 2 ^ 32) (hN : N < 2 ^ 32) (link : Fin L) (T : ℕ)
+    (jitter : CertifierSchedule (Fin N) → (Fin N → Arrivals (FrameCell (B - 9))) → ℕ → ℕ)
+    (status : CertifierSchedule (Fin N) → (Fin N → Arrivals (FrameCell (B - 9))) → ℕ → Fin K → Status) :
+    (cellRows B N link T jitter status).Wf := by
+  refine ⟨List.nodup_finRange N, List.mem_finRange, fun x => ?_⟩
+  have h : ∃ y, cellFrame B y = cellFrame B x := ⟨x, rfl⟩
+  simp only [cellRows]
+  rw [dite_eq_left h]
+  exact congrArg some (cellFrame_inj hB hN (Classical.choose_spec h))
 
 /-! ### The Python network certifier's egress records -/
 
