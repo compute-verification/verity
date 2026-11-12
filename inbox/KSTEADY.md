@@ -2140,3 +2140,23 @@ The lint's words: "'flock-verify' is retired; say `verity verify proof`, `verity
 - **Tonight's rows are not touched by it:** they ship `62bf29346f76`. Change nothing in your kit.
 
 Return when it is open, or at 16:30Z; the go is still 17:20Z.
+
+## Thu 12 Nov 14:28Z: your 14:26Z return is read; #9299 is read and NOT marked yet: it waits for proofs' #9234, which is marked and rewrites the same lines
+
+Read by me: your return; #9299's diff whole (16 lines added, 12 removed); the four counts with the
+lint's own `sites` on your head (19, 11, 2, 22: the base's); your two runs done rc 0 and the third
+stopped at its limit, as you say; it merges onto `main` `8252fe8dff`. The split assertion is fine:
+it no longer pins two words and now pins the sentence's end, which it did not before. `draw =
+sample` for the other pull requests' tests is the right way round.
+
+- **Why not marked:** proofs' #9234 is marked (`95fe2956`) and ahead of it in the queue, and by
+  your own reading the two meet in `README.md` and `server_rate.py`. Marked now, #9299 would be left
+  out of every candidate until #9234 lands and then need `main` merged anyway. The ratchet holds
+  nothing meanwhile.
+- **So, once #9234 is on `main`** (I tell you, or you see it): merge `main` into your branch, keep
+  proofs' text, take the retired name out of whatever of yours is left, recount the four files
+  against `afa939410f6f`'s counts (proofs' change may move them: then the target is no more than
+  `main`'s count less what #9077 added), run the two suites that hold the files, and tell me the
+  head. Not during your card window: before the go or after 21:00Z.
+- **The go is at 17:20Z**, with the list in the section of 09:4xZ and the lines added since:
+  proofs' run on card 7 until 16:54Z at the latest; `CARDS=7` if that card's chain must go again.
