@@ -130,7 +130,7 @@ def test_what_a_typed_command_may_do_tmux_may_do(ask, command):
     assert ask(command) == {"permission": "allow"}, command
 
 
-def test_a_sleep_past_the_cap_still_blocks_through_a_shell(ask):
+def test_a_sleep_past_twenty_minutes_still_blocks_through_a_shell(ask):
     for command in ("bash -lc 'sleep 3000'", "env FOO=1 sleep 3000", "timeout 4000 bash -c 'sleep 3000'"):
         assert "would block" in ask(command)["agent_message"], command
 
