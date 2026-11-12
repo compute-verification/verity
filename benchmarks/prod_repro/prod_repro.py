@@ -76,6 +76,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "benchmarks/serve_tax"))
 import replay as R  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
 import serve_tax as S  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402 (the tree's verity/configuration/config, which serve_tax put on sys.path)
 
 SCHEMA = "verity-bench/prod-repro/v0"
 #: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings
@@ -799,12 +800,12 @@ def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
     artifacts, so the store keeps them as the run's files. A result the benchmark's cost wrote stays as it is with
     them added; a job that has none, one that served ours alone, gets one whose validation is the tokens line's.
     None for an out/ that is not the run's, which is another job's read again."""
-    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    run_dir = SHARED.RESEARCH_RUN_DIR
     if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
         return None
     f, t = Path(run_dir) / "result.json", r["tokens"]
     doc = json.loads(f.read_text()) if f.is_file() else {
-        "schema": RESULT, "run_id": os.environ.get("RESEARCH_RUN_ID") or Path(run_dir).name,
+        "schema": RESULT, "run_id": SHARED.RESEARCH_RUN_ID or Path(run_dir).name,
         "workload_fingerprint": {"benchmark": "prod_repro", "model": r["model"], "arm": r["arms"]["ours"], "load": r["load"]},
         "validation": {"status": "not_run" if not t["measured"] else "passed" if t["reproduces"] else "failed",
                        "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
