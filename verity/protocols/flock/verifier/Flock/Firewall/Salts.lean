@@ -28,6 +28,8 @@ Every salt message is 205 bytes and every tag message 333, under different const
   (`RegistrationRecord.valid`). The release side admits each registration once, oldest first, at the first statement
   that reads it, and a statement one of whose trees no registration of the server's holds is refused
   (`Core.Firewall.admitReads`, `core-firewall session --salt-key`).
+* `parseKnown`, `valueTrees`, `readsKnown`: the verifier's list of a statement's known trees, the statement's trees
+  without them, and its reads under the list (**Known content**).
 * `loadKey`: the key file.
 
 **Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
@@ -53,8 +55,25 @@ the leaf hides nothing and needs no secret salt, neither the stack nor the serve
 root, and they add nothing to what was public: the service commits no such row and the leakage terms below count none.
 `Registered.checkKnown` alone does not make a row known content: it roots whatever rows and salts a `--registered` file
 names, and a row whose salt the stack chose is a value commitment under a salt of the stack's, which this rule refuses.
-The release side knows no known content: `treesOf` lists such a row's tree with the rest and `readsOf` refuses it, so a
-statement that has one passes only a loop run without `--salt-key`.
+
+The release side computes no known content: it takes a statement's known trees from the verifier. After the draw, the
+verifier's answer to the session's `Register` lists each tree of the statement that it computed itself (`parseKnown`:
+the published tree's domain, leaf count, schema and root, `Flock.RegKnown.publishedRoot`). The loop cuts the list off
+the answer before the prover receives it, and compares the statement's trees with it before `Hello` leaves
+(`readsKnown`): a tree that equals an entry reads no registration, and the record names it (`known`); every other
+tree is a value commitment and must be a registration's table (`readsOf`). The list is the statement's own and nothing
+else, so that neither side has a choice in it. Each of these is the session's stop, with only `Register` sent:
+
+* a list that does not parse, and the loop reads one only in `Register`'s answer;
+* an entry whose root is a table's of a registration on the record;
+* two entries of one domain;
+* an entry at whose domain the statement has no tree;
+* a tree of the statement at an entry's domain with another leaf count, schema or root.
+
+So a session that passes holds exactly the listed trees as known content, and the stack chooses neither which trees pass
+so nor a bit of them. The list is the verifier's word only where the answer to `Register` is the auditor's: nothing of
+the stack's reaches the auditor but through a release side run with the key, so a stack that answered in the auditor's
+place would have no auditor to hand the session to.
 
 **Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
 among `m` outcomes, so it leaks at most `log₂ m` bits through the choice (`Verity.ValueSalts`,
@@ -395,6 +414,74 @@ def readsOf (k : ByteArray) (regs : Array (ByteArray × Option (ByteArray × Byt
       throw s!"registration {n}: its record tag is not the ZK server's for its number, session count and table refs"
     unless reads.contains n do reads := reads.push n
   return reads.qsort (· < ·)
+
+/-! ### Known content -/
+
+/-- A known tree's entry in the verifier's list (`Registered.knownEntry`): `D ‖ be64 N ‖ u8 schema ‖ ROOT`, a table
+ref's layout without its session, index and tag. -/
+def KNOWN_BYTES : Nat := 64 + 8 + 1 + 64
+
+/-- A tree the verifier lists as known content: its table, its root and its entry's bytes. -/
+structure Known where
+  t : Table
+  root : ByteArray
+  bytes : ByteArray
+  deriving Inhabited
+
+/-- **The verifier's list of a statement's known trees**, what follows the draw in its answer to `Register`
+(`Registered.knownList` writes it): `be32 K`, then `K` entries of `KNOWN_BYTES` each. No byte at all is the list of
+none, which is what a verifier that lists nothing sends. -/
+def parseKnown (b : ByteArray) : Except String (Array Known) := do
+  if b.isEmpty then return #[]
+  let ctx := "the verifier's list of known trees"
+  if b.size < 4 then throw s!"{ctx}: {b.size} bytes, where its count is 4"
+  let count := beAt b 0 4
+  if b.size != 4 + KNOWN_BYTES * count then
+    throw s!"{ctx}: {b.size} bytes, where its {count} entries end at {4 + KNOWN_BYTES * count}"
+  (Array.range count).mapM fun i => do
+    let o := 4 + KNOWN_BYTES * i
+    let schema := (b.get! (o + 72)).toNat
+    if schema ≥ Registered.SCHEMAS.length then
+      throw s!"{ctx}: entry {i} of schema {schema}, none of {Registered.SCHEMAS}'s"
+    let n := beAt b (o + 64) 8
+    if n == 0 then throw s!"{ctx}: entry {i} of no leaf"
+    return { t := { dom := b.extract o (o + 64), n, schema }, root := b.extract (o + 73) (o + 137),
+             bytes := b.extract o (o + KNOWN_BYTES) }
+
+/-- **The trees of a statement that are value commitments**, given the verifier's list `known` of its known trees:
+`trees` without those the list names. The list is the statement's own and nothing else, so no entry leaves the stack a
+choice. Refused:
+
+* an entry whose root is the root of a table of a registration among `regs`: a value commitment of the server's is
+  admitted as one, once (`readsOf`), never passed as known content;
+* two entries of one domain;
+* an entry at whose domain the statement has no tree;
+* a tree of the statement at an entry's domain with another leaf count, schema or root than the entry's. -/
+def valueTrees (regs : Array (ByteArray × Option (ByteArray × ByteArray))) (trees : Array (String × Table × ByteArray))
+    (known : Array Known) : Except String (Array (String × Table × ByteArray)) := do
+  if known.isEmpty then return trees
+  let rs ← (Array.range regs.size).mapM fun n =>
+    (RegistrationRecord.parse regs[n]!.1).mapError (s!"registration {n}: {·}")
+  for i in [0:known.size] do
+    let e := known[i]!
+    if let some n := (List.range rs.size).find? (rs[·]!.tables.any (·.root == e.root)) then
+      throw s!"known tree {i}: its root is a table's of registration {n}, and a value commitment of the ZK server's is no known content"
+    if (known.extract 0 i).any (·.t.dom == e.t.dom) then throw s!"known tree {i}: a second entry of its domain"
+    unless trees.any (·.2.1.dom == e.t.dom) do
+      throw s!"known tree {i}: the statement has no tree at its domain, and the verifier lists a statement's own trees"
+  for (name, t, root) in trees do
+    if let some e := known.find? (·.t.dom == t.dom) then
+      unless e.t.n == t.n && e.t.schema == t.schema && e.root == root do
+        throw s!"row {name}: the verifier lists its domain as known content with another leaf count, schema or root"
+  return trees.filter fun (_, t, _) => !known.any (·.t.dom == t.dom)
+
+/-- **A statement's reads under the verifier's list** `list` of its known trees (`parseKnown`): the registrations
+its other trees read (`valueTrees`, `readsOf`), and each known tree's entry. -/
+def readsKnown (k : ByteArray) (regs : Array (ByteArray × Option (ByteArray × ByteArray)))
+    (trees : Array (String × Table × ByteArray)) (list : ByteArray) : Except String (Array Nat × Array ByteArray) := do
+  let known ← parseKnown list
+  let reads ← readsOf k regs (← valueTrees regs trees known)
+  return (reads, known.map (·.bytes))
 
 /-! ### The key -/
 
