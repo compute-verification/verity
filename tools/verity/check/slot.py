@@ -137,10 +137,12 @@ RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 #: starting: a 448 GB run at the head held 7 idle slots and every small check behind it. Small runs end and free
 #: their memory soon, so passing the head costs it little
 BACKFILL_MAX_GB = 32
-#: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: what a lane run
-#: holds of its reservation, averaged over the time it holds its slot. To measure it again, over a day of pool runs: the
-#: GiB-hours the runs held (each run's cgroup memory less its page cache, sampled in its resources.jsonl) over the GiB-hours
-#: they reserved (the reservation slot.py prints in its stderr.log, times the hold in its slot.json and status.json)
+#: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: about what a
+#: lane run holds of its reservation, averaged over the time it holds its slot. To measure it again, over a day of pool runs:
+#: the GiB-hours the runs held (each run's cgroup memory less its page cache, sampled in its resources.jsonl) over the
+#: GiB-hours they reserved (the reservation slot.py prints in its stderr.log, times the hold in its slot.json and
+#: status.json). The share and a machine's N hold for that day when, at each of its minutes, what they count for the lane runs
+#: then holding slots there is at least what those runs' summed memory then rose by
 PEAK_SHARE = 0.25
 USAGE = ("usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] "
          "[--budget-gb GB] -- CMD...")
