@@ -1395,8 +1395,9 @@ RULES = (
          "none: more candidates are dropped on a red", beside=True, keep=True, keep_all=True, period=600.0),
     Rule("6d. Row 2 with batch 16", "none", beside=True, keep=True, keep_all=True, batch=16),
     Rule("6e. Row 2 with batch 64, depth 3", "none", beside=True, keep=True, keep_all=True, batch=64, depth=3),
-    Rule("6f. Row 2, and a Lean batch's check starts with its records run, not after it", "the check is run again when the "
-         "records commit changes more than the records (not priced: here it never does)", beside=True, keep=True, keep_all=True, overlap=True),
+    Rule("6f. Row 2, and a Lean batch's check starts with its records run, not after it, and the next Lean batch is built "
+         "above it without waiting", "the check is run again when the records commit changes more than the records (not "
+         "priced: here it never does)", beside=True, keep=True, keep_all=True, overlap=True),
     Rule("6g. Row 2, and a change is marked only once the suites it reruns pass on it merged onto `main`",
          "none: the run before the mark is the cost", beside=True, keep=True, keep_all=True, gate=True),
     Rule("6h. Rows 6c, 6f and 6g together: `main` never red", "those rows'", beside=True, keep=True, keep_all=True,
@@ -1421,7 +1422,8 @@ ASSUMPTIONS = (
     "records run one, a union's check three.",
     "Every Lean change the queue may take is pinned; in the rows that say pins as they were, one is pinned while a real "
     "candidate held it, and from its last build on if it landed.  One Lean batch is in its records run at a time; side by "
-    "side, one in its records run or its check.",
+    "side, one in its records run or its check; where a Lean batch's check starts with its records run, each Lean batch in "
+    "the chain has its own records run, several at once.",
     "A kept pass: a candidate rebuilt without some changes ends when its check would have, or after a check of the suites "
     "that read the removed files, whichever is later.  A union's check never fails.",
     "Landing before the check: a check of `main` covers what landed since the one before it and fails only for a change at "
