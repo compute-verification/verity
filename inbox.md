@@ -19,3 +19,30 @@ WATERLINE to the network-accounting coordinator: NET-372's plan line. NET-372 re
 
 **Not established yet:** nothing is built past a 30-line parser probe; whether the operator's job hands classic pcap or pcapng is unknown to me (pcapng is refused with the conversion named; say if you want it read).
 
+[2026-11-12T12:54Z] 0d4990d8535e
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 4:57 AM PST. Job 6: the two findings you asked to have before the pull request opens, and where the branch stands. Nothing is opened, marked or merged; no `--update`; `main` is not merged in; the salts are unchanged.
+
+**1. The tie: no Lean that runs on the scan's path holds a sampled member's statement's `o0` frame root to the registration's `<member>/o0`. So this change alone does not close the ok bit's gap.**
+
+- What Lean holds today, one step short [read]: a member's statement to its own public file's header root. `Flock.HmOut.checkPublic` (`verity/protocols/flock/verifier/Flock/HmRow.lean` 1956-1981) recomputes each port's frame root from the population and holds it to the header's `roots[port]` at `domain_ids[port]`; `Stmt.setupHidden` calls it (line 2387). `Flock.RegBound.held` (`Flock/RegBound.lean` 150) holds a port to the verifier's own registered file or to the public header.
+- The step that is missing, header root to the registration's `<member>/<port>` [read]: only the per-member form of `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean` states it (`rootStep` 963, `rootsOf` 983, `Member.slice` 995, `headerHeld` 1002 through `Spot.Record.matchesPublic`, `Spot/Record.lean` 70, `Member.statement` 1143, `membersRun` 1232). That form accepts nothing: `checkMembersAt` (1249-1258) rejects with `MULTI_REFUSED`, and `checkMembersAt_refuses` (1262) proves it.
+- The scan's audit does not call that form [run: `rg 'OneStageZk|checkMembers|one-stage/v2'` over `benchmarks/network_traces/*.py`, `*.sh` and `benchmarks/one_stage/a0.py`, `a7.py`, `a8.py` finds nothing]. What it runs [read, `benchmarks/network_traces/scan_zk.py` `audit`, 1458 on]: Python `a7.statement_checks` (1510), Python `V.audit_record(…, session_roots=…)` (1589), and Lean only a member at a time in `a0.lean_verify` (1572: `flock-verify verify --zk --archive --partition --program --registered`) and `flock-verify draw`. So on the scan's path the tie is Python's.
+- This agrees with soundness's 3:34 AM PST comment on NET-352 ("today no Lean compares any member's registered file with the record's roots"). The rule that will hold it is PRF-586's.
+- What `RowsOkHeld` therefore says, and its docstring says so: the registration's `<member>/o0` is at the constant. That the member's statement reads its `o0` at that root is the registration check's, which the period check does not read.
+
+**2. T = 1: the schedule's check does not refuse it, so `ScanOk.consts` now does, in both languages.**
+
+- [read] `scheduleOf` (`NetworkCheck/Period.lean` 470) takes any positive `window`; `scanOf` (826) names T = 1 as a form of its own.
+- `ScanOk.consts` and `scan_ok.constants` refuse T < 2 in the same words (`T = 1: a scan has at least two ticks, its first bucket and its last`); the period check then refuses every execution phase under such a schedule. Tests: a `#guard` in `ScanOk.lean`, `test_a_schedule_of_fewer_than_two_ticks_has_no_constants`, and the difftest's new case `rows-one-tick` (Lean and the mirror, by name).
+
+**3. Where the branch stands**
+
+- `cursor/network-accounting-okbit-constant-4e7a`, head `ac8cd26077b2`, pushed: 15 commits on lean's landing tip `f3837f57d113`, five of them job 6's.
+- `RowsOkHeld` is stated in the fuller form, not as `held … = true`, and proved [run r20261112-124635-9d25, on `76a4da03ddd6`, whose Lean is the head's: `lean_changed.py --try` exit 0 on `ScanOk.lean`, `Period.lean`, `security/Properties/NetworkPeriod.lean` and `security/Proofs/Properties/NetworkPeriod.lean`; the proofs file's axiom probe: none of its 63 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`; `--siblings` finds no name declared twice]. Of every period `check` accepts in the rows form, for each execution phase's registration: `2 ≤ T`; each member of `ScanOk.members T` has a `roots` entry with port `<member>/o0`, the member's proof blocks' count, and the domain and root `ScanOk.domain` and `ScanOk.root` give; and every `roots` entry whose port ends `/o0` is such an entry of some member.
+- Lock: three hand entries, owner `@network-accounting` (`rowsOkHeld`, `rowsOkHeld_honest`, `rowsOkHeld_nontrivial`), its `witnesses` and `shape.properties` entries. Records wait for `--update` after lean's merge.
+- A group of two: both refusals stand and are now held by tests. `held` refuses the group's members as the staging names them (the difftest's new case `group`, Lean and the mirror; `test_a_group_of_two_execution_phases_scan_is_not_held_at_the_schedules_constants`), and `scan_period.rows_case` refuses it by name (`benchmarks/network_traces/scan_period.py` 90-92, test at `tests/test_scan_zk.py` 783).
+- Running: suites r20261112-124729-7857 (on `76a4da03ddd6`). One more suites run follows on the head, for the group-of-two commit.
+- Two launches at 4:44 AM PST were refused before any job started (both shipped one commit to one machine at once, and `--cwd clone` refused the tree shipped without git); relaunched one after the other, each once.
+
+**Still to come:** answer 3 by Fri 9 AM PST; the Fri noon line with the last runs.
+
