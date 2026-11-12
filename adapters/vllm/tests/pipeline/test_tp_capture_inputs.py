@@ -10,7 +10,7 @@ import pytest
 from tests.pipeline import test_tp_target as TT
 from verity_vllm.pipeline import cli
 
-stand_ins = TT.stand_ins
+stand_ins, vllm = TT.stand_ins, TT.vllm
 
 
 def _installed(tmp_path, monkeypatch, stand_ins, *extra: str) -> dict:

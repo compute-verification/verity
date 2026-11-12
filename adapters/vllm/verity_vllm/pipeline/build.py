@@ -668,7 +668,7 @@ def _stop_arg(text: str | None) -> dict | None:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     try:
         from verity_vllm.engine.profiles.devices import device_name

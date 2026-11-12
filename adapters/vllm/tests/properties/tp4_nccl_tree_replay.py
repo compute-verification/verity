@@ -254,7 +254,9 @@ def probe_cases() -> list[tuple[str, np.ndarray]]:
 def _probe_rank(rank: int, port: int, out: str, chain: tuple[int, ...]) -> None:
     os.environ.update(NCCL_P2P_DISABLE="1", NCCL_DEBUG="INFO", NCCL_DEBUG_SUBSYS="INIT,GRAPH,TUNING,ENV",
                       NCCL_DEBUG_FILE=str(Path(out) / f"nccl.rank{rank}.log"))
-    from vllm.model_executor.determinism.batch_invariant import override_envs_for_invariance
+    from vllm.model_executor.determinism.batch_invariant import (
+        override_envs_for_invariance,
+    )
 
     override_envs_for_invariance()
     import torch

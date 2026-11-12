@@ -18,7 +18,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Iterable
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import _ratchet as R
@@ -29,7 +29,7 @@ CONFIG = R.ROOT / "ruff.toml"
 LINE_REF = re.compile(r" from line \d+")
 
 
-@lru_cache(maxsize=None)
+@cache
 def scopes(tree: ast.Module) -> tuple[tuple[int, int, str], ...]:
     """(first line, last line, qualified name) of every def and class, in source order.  A def is a statement, so only
     statement bodies are walked."""
@@ -71,7 +71,7 @@ def findings(config: Path, *paths: str) -> tuple[R.Violation, ...]:
     return tuple(violation(f) for f in json.loads(r.stdout))
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     return findings(CONFIG, ".", str(R.DEFINITIONS))
 
