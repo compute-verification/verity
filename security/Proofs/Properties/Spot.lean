@@ -667,22 +667,24 @@ theorem applyOutputs_nil (log : Array Json) (outputs : Array (String × String �
       find_leaves_congr (h2 o.1) (fun n w b => EarlierIs log n w b o.2.1 o.2.2)))
 
 /-- R7 with output values (`checkOutputs`): every output value with an entry has its earlier port or value, and the rest of R7
-holds against the entries and held roots `applyOutputs` leaves. -/
+holds against the entries `applyOutputs` leaves, then the certified ones, and the held roots it leaves. -/
 theorem checkOutputs_nil (c : Array String) (got : Json) (mine : Flock.V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → Flock.V String)
-    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json) :
-    Registration.checkOutputs c got mine held supplied rootOf outputs log = #[] ↔ c = #[] ∧
+    (outputs : Array (String × String × Registration.Earlier)) (log : Array Json)
+    (certified : Array Registered.Entry) :
+    Registration.checkOutputs c got mine held supplied rootOf outputs log certified = #[] ↔ c = #[] ∧
       ∃ mine0 es mine' held', mine = .ok mine0 ∧ got = .arr es ∧
       (∀ o ∈ outputs, ∀ want, mine0.find? (·.value == o.1) = some want →
         EarlierIs log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
       (Registration.applyOutputs #[] mine0 held outputs log).2 = (mine', held') ∧
       (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
         keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-      ValuesAre es mine' ∧
-      (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-        EntryIs e want (heldFor supplied held' want.value)) ∧
-      SuppliedIs es mine' supplied rootOf := by
+      ValuesAre es (mine' ++ certified) ∧
+      (∀ want ∈ mine' ++ certified, ∀ e,
+        es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+          EntryIs e want (heldFor supplied held' want.value)) ∧
+      SuppliedIs es (mine' ++ certified) supplied rootOf := by
   unfold Registration.checkOutputs
   rcases mine with err | mine0
   · simp [addCode_ne_nil]
@@ -840,6 +842,14 @@ theorem poolChained_iff (rec : Json) (v : Registration.Verifier) :
       rcases ho : Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
     exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
+/-- R7's certified roots (`Registration.certifiedHeld`) hold exactly when `CertifiedHeld` does. -/
+theorem certifiedHeld_iff (rec : Json) (v : Registration.Verifier) :
+    Registration.certifiedHeld rec v = true ↔ CertifiedHeld rec v := by
+  unfold Registration.certifiedHeld CertifiedHeld
+  rw [Array.all_eq_true']
+  refine forall_congr' fun x => imp_congr_right fun _ => ?_
+  rcases he : Registration.entryOf rec x.1.value with _ | e <;> simp [he]
+
 theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
   unfold Registration.linkRefused RL
   cases v.members.isEmpty
@@ -869,14 +879,15 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       ⟨fun ⟨h, l, _⟩ => ⟨((r8Codes_nil v c).1 h).1, ((r8Codes_nil v c).1 h).2, l⟩,
         fun ⟨h, r, l⟩ => ⟨(r8Codes_nil v c).2 ⟨h, r⟩, l, trivial⟩⟩
   have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧
-      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v := by
+      WindowPoolSpent rec v ∧ PoolResetOnce v ∧ (v2 = true → R7 rec v ∧ PoolChained rec v ∧ CertifiedHeld rec v) ∧
+      R8 v ∧ RL v := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff]
-      exact ⟨fun ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩ => ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩,
-        fun ⟨a, s, r, wk, p, o, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, e⟩⟩
+      rw [h14, kept_nil, kept_nil, checkOutputs_nil, poolMarks_nil, kept_nil, poolChained_iff, certifiedHeld_iff]
+      exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, ch⟩, e⟩ => ⟨a, s, r, wk, p, o, ⟨b, q, ch⟩, e⟩,
+        fun ⟨a, s, r, wk, p, o, ⟨b, q, ch⟩, e⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, b⟩, q⟩, ch⟩, e⟩⟩
     · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, kept_nil, poolMarks_nil]
       exact ⟨fun ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩ => ⟨a, s, r, wk, p, o, trivial, e⟩,
         fun ⟨a, s, r, wk, p, o, _, e⟩ => ⟨⟨⟨a, s⟩, r, wk, p, o⟩, e⟩⟩
@@ -884,7 +895,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
       (WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v ∧
-        (v2 = true → R7 rec v ∧ PoolChained rec v) ∧ R8 v ∧ RL v) := by
+        (v2 = true → R7 rec v ∧ PoolChained rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1043,17 +1054,20 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       exact ⟨fun h => by simp at h, fun ⟨h, _⟩ => absurd (hk.2 h) (by decide)⟩
   refine (top _ _ bne_eq_false_iff_eq (not_and_false_iff _ _)).trans ?_
   rw [h1 #[], hD #[]]
-  have hv2 : v2 = !v.registered.isEmpty := rfl
+  have hv2 : v2 = !(v.registered.isEmpty && v.certified.isEmpty) := rfl
   have ek : (keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) ↔
-      keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
-    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
+      keys? rec =
+        some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) := by
+    rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> exact Iff.rfl
   have ef : jeq (get "format")
         (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ↔
-      jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
+      jeq (getD rec "format")
+        (.str (if v.registered.isEmpty && v.certified.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) =
         true := by
-    rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> exact Iff.rfl
-  have e7 : (v2 = true → R7 rec v ∧ PoolChained rec v) ↔ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v) := by
-    unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
+    rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> exact Iff.rfl
+  have e7 : (v2 = true → R7 rec v ∧ PoolChained rec v ∧ CertifiedHeld rec v) ↔
+      (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ CertifiedHeld rec v) := by
+    unfold ExpectsV2; rw [hv2]; generalize (v.registered.isEmpty && v.certified.isEmpty) = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
@@ -1061,13 +1075,13 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
     exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5',
-      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, fun hv => ⟨(h7r hv).1, (h7r hv).2, pinnedHeld_of_R7 (h7r hv).1⟩,
-      h8, hrl⟩
+      ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩,
+      fun hv => ⟨(h7r hv).1, (h7r hv).2.1, pinnedHeld_of_R7 (h7r hv).1, (h7r hv).2.2⟩, h8, hrl⟩
   · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
       ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h⟩, h7r, h8, hrl⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
-      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1⟩, h8, hrl⟩
+      h5', h6a, h6b, h6c, h6d, h6e, h6f, h6g, h6h, fun hv => ⟨(h7r hv).1, (h7r hv).2.1, (h7r hv).2.2.2⟩, h8, hrl⟩
     have : some d' = some d := hd''.symm.trans hd'
     cases this
     exact l3
@@ -1574,7 +1588,7 @@ theorem history_of_R7 (rec : Json) (v : Registration.Verifier) (h : R7 rec v) (u
   refine ⟨es, hes, fun e he => ⟨r, hr, ?_⟩⟩
   have hmem := Array.mem_of_find?_eq_some hw'
   rw [← hval] at he
-  obtain ⟨-, hel, -, hed, -, her⟩ := hentry want' hmem e he
+  obtain ⟨-, hel, -, hed, -, her⟩ := hentry want' (Array.mem_append_left _ hmem) e he
   have hheldFor : heldFor v.supplied held' want'.value = held' := by simp [heldFor, hval, hs]
   rw [hheldFor, hval, hfind] at her
   refine ⟨by rw [hroot]; exact her (u, root) rfl, ?_, ?_⟩
@@ -1603,6 +1617,6 @@ root. -/
 theorem pinnedHeld_of_accept (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (h : OneStage.check p c e = .accept pub prof) (hv : ExpectsV2 p.verifier) : PinnedHeld c.record p.verifier := by
   obtain ⟨law, -, -, hr, -⟩ := acceptMeans p c e pub prof h
-  exact (hr.2.2.2.2.2.2.1 hv).2.2
+  exact (hr.2.2.2.2.2.2.1 hv).2.2.1
 
 end Properties.Spot
