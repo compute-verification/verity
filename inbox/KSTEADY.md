@@ -2000,3 +2000,30 @@ cards is at 17:20Z.
 - **Row 15** stays as timed (proofs and circuits, HASH-98, 09:08Z and 09:10Z): nothing of it on
   Thursday. I answered proofs' question on its count: the row of record timed the staged word form,
   1,676,431 AND gates, pin `0bd0add320930b34`, from your table.
+
+## Thu 12 Nov 09:45Z: your 09:43Z return is read; the kit stands; nothing more before the go. What the go (17:20Z) will hold
+
+Read whole: your return; `steady.sh`'s copy step (the source is only read; the EXIT trap removes the
+scratch; the detached watcher removes it when the run's shell is gone: read by me, lines 461-467 and
+378). Finding the table's cause and making `bool-table.py` read a named list is the right mend.
+I resume you at 17:20Z. No work is owed before then.
+
+**At the go, in this order (so that neither of us forgets one):**
+1. proofs' post on `program-word.json` (HASH-115, due 17:00Z) read; if the staging step can write
+   it, it does.
+2. The calendar's rows for cards 4, 5 and 7 read again in that minute; `main` and the tree
+   `62bf29346f76` as shipped.
+3. Node A's free disk read by the launcher (under 40 GB: no circuit kept, said so); the first real
+   read, so say what it printed.
+4. `FIRST_TRUE=1 bash h98/thursday-launch.sh chain go-on-the-leads-word`.
+5. **At the window's end (by 21:00Z): read on node A that `/dev/shm/kernels-ksteady` is gone**, and
+   remove your own directory if a kill left it: that is proofs' term, and the one case your
+   watcher does not cover.
+6. Label nothing until benchmarks has seen the rows.
+
+**For HASH-69, when it starts (not now):** KSLICE opens today the pull request that deletes 34
+unused files in `benchmarks/hash` and `benchmarks/torch_gpu` (HASH-104; `archive/` left `main` at
+09:30Z). Your "about 20 files" are in those two directories: before any line is written, take the
+deleted files out of your list, and start HASH-69 on `main` after that deletion and after #9189 and
+#9152 are on it. ci said at 09:40Z that #9189 no longer merges onto `main` and benchmarks certifies
+its move again; #9152's mapping across the move waits for that, as before.
