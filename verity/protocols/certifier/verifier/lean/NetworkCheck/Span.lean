@@ -37,7 +37,7 @@ printable ASCII and whose marks link name is at most 65,535 bytes, and the sched
     certificate = u16be len(I) ‖ I ‖ u16be len(link) ‖ link ‖ u8 direction ‖ u64be execution phase ‖
                   signed digest (64) ‖ u32be len(signature) ‖ signature
 
-the certificate in the bytes a certified record holds it in (`service.encode`), read exactly (`Read.certificateOf`):
+the certificate in the bytes a certified record holds it in (`service.encode`), read exactly (`Read.certificateOfBytes`):
 each length fits, direction 0 or 1, nothing left over, and here a link name of printable ASCII. Nothing is left after
 the two marks. Its `digest` is `tagged_sha512("verity-network-certifier/span/v0", the commitment's bytes)`. The marks
 are witness, their execution phases with them: a composition reads them off the commitment (`named`) and publishes
@@ -215,7 +215,7 @@ def certificate : M Certificate := do
 
 /-- The certificate `b` is the bytes of (`span.certificate_bytes`), read exactly: each length fits and nothing is
 left over. -/
-def certificateOf (b : ByteArray) : V Certificate := do
+def certificateOfBytes (b : ByteArray) : V Certificate := do
   let (c, r) ← certificate.run ⟨b, 0⟩
   if r.pos ≠ b.size then throw "bytes left after a certificate"
   pure c
@@ -224,7 +224,7 @@ def certificateOf (b : ByteArray) : V Certificate := do
 as, its salt, then the mark. -/
 def mark : M Mark := do
   let certificateBytes ← bytes (← be 4)
-  let certificate ← certificateOf certificateBytes
+  let certificate ← certificateOfBytes certificateBytes
   let salt ← bytes saltBytes
   pure { certificate, certificateBytes, salt, mark := ← bytes markBytes }
 
@@ -432,7 +432,8 @@ def guardMark (phase fill : UInt8) : ByteArray :=
 #guard (namedOf guardParams (guardMark 7 1 ++ guardMark 5 4)).map (·.egressBits) == some none
 #guard (namedOf guardParams (guardMark 5 1)).isNone && (namedOf "{}" (guardMark 5 1 ++ guardMark 7 4)).isNone
 -- a certificate's bytes are read exactly: one byte more or one fewer in their length is refused
-#guard (Read.certificateOf ((guardMark 5 1).extract 4 111)).isOk &&
-  !(Read.certificateOf ((guardMark 5 1).extract 4 112)).isOk && !(Read.certificateOf ((guardMark 5 1).extract 4 110)).isOk
+#guard (Read.certificateOfBytes ((guardMark 5 1).extract 4 111)).isOk &&
+  !(Read.certificateOfBytes ((guardMark 5 1).extract 4 112)).isOk &&
+  !(Read.certificateOfBytes ((guardMark 5 1).extract 4 110)).isOk
 
 end NetworkCheck.Span
