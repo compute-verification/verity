@@ -17,17 +17,23 @@ locations each with its owner, and the links between them. The Site is public. A
 (each block `j`'s location `loc_j`), its inference blocks and its declared advice are private, and only their padded
 counts are public.
 
-* **Locations** (`Site.Loc`): the site at the root, its hosts, a host's devices, memory leaves by tier and bytes under
-  a device or a host, and at the site the auditor's devices, its network certifiers and memory challengers
-  (`Site.Kind.parents`). A host is registered hardware with no compute rate: the Site's compute is its devices'. A
-  device names its sheet by digest, and the auditor's devices carry their keys.
+* **Locations** (`Site.Loc`): the site at the root, which states the Site's unit of time (`Site.timeUnit`); its hosts,
+  the prover's machines; a host's devices; memory leaves by tier and bytes under a device or a host; and the auditor's
+  own: its hosts, machines of the auditor's at the site, and its devices, the network certifiers and memory challengers,
+  each at the site or in one of the auditor's hosts (`Site.Kind.parents`). A host is registered hardware with no compute
+  rate: the Site's compute is its devices'. A host states its on-chip state and, for a tier, the rate its leaves of
+  that tier share; a memory leaf directly under a host states its own rate. A device names its sheet by digest. The
+  auditor's devices and hosts carry their keys, each with the scheme the key is of (`Site.SCHEMES`), and an auditor's
+  host states the time base its clock runs on and how far that clock may run from real time.
 * **Sheets** (`Site.Sheet`): a card, the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the
   SKU, the tensor clock and the peak rate of each operand class) and its memory figures. A device's figures are its
   sheet's, and its device model (`Accounting.Device`) is read off them (`Site.device`).
 * **Links** (`Site.Link`): two ends, each a location or `outside`, the rest of the world, with a capacity `β` in bits a
-  tick each way and a latency in ticks. A network certifier is the leaf that splits an uplink: one link from a host to
-  it, one from it to the outside. The prover's boundary links are a host's links to the outside or to a certifier
-  (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
+  second each way and a latency in the Site's units of time. A network certifier is the leaf that splits an uplink: one
+  link from a host to it, one from it to the outside. The prover's boundary links are a host's links to the outside or
+  to a certifier (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
+  A boundary link no certifier splits says why none does (`Site.Link.unmediated`), and only such a link may state no
+  capacity.
 
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
 kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
@@ -49,13 +55,17 @@ them), and refused by the first check it fails (`Registration.Entry.refusal`):
 | `previous` | the entry follows the log's head |
 | `duplicateId` | no id is registered twice, `outside`'s included, and no sheet twice |
 | `unknownRef` | each new location's parent and each new link's ends are registered |
-| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity; each certifier splits exactly one uplink |
+| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity, or at none where it says why no certifier splits it; each certifier splits exactly one uplink |
 | `sheetDigest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
-| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.Accepted`), and its memory figures are the auditor's |
+| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.Accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's rate and bytes for it (`Rates`), each new host the auditor's on-chip state and shared rates for it (`Chips`), and each new location of kind `site` the Site's unit of time (`Timed`) |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
-| `uncertified` | onsite: every boundary link is certified |
+| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key and its key's scheme, and every other new location is the prover's; each new auditor's host states the auditor's time base and clock figure for it |
+| `uncertified` | onsite: every boundary link is certified, or says why no certifier splits it |
 | `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+
+A log is held to one more check at its end, and not entry by entry, so that a later entry may add hardware under a
+registered host: its Site is complete against the auditor's figures (`Registration.Complete`, the refusal `inventory`):
+under each host, every memory leaf, card and way out the auditor lists for it is registered.
 
 What an entry registers is held to the log before it (`Registration.Entry.Once`): no information item is registered
 twice (`duplicateInformation`), and no day is declared twice (`duplicateDeclaration`). The log refuses its next entry by
@@ -69,8 +79,10 @@ declared circuit when its span lies within the day's and its program is the one 
 (`Registration.RunsDeclared`).
 
 The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check. The auditor's data sheets, public
-and looked up by SKU, its tolerance around their figures and its keys are the check's own (`Registration.Auditor`). At
-every choice of them the check is decidable.
+and looked up by SKU, its tolerance around their figures, its keys with their schemes, its figures for each host and
+each memory leaf directly under one, and its own hosts' time bases and clock figures are the check's own
+(`Registration.Auditor`). That those figures are the hardware is a public input: no check holds it and no premise says
+it, and a result is over the registered hardware. At every choice of them the check is decidable.
 -/
 
 @[expose] public section
@@ -81,7 +93,9 @@ open scoped NNRat
 
 namespace Site
 
-/-- What a location is. `outside`, the kind of the rest of the world, is no registered location's. -/
+/-- What a location is. `host` is a machine of the prover's; `auditorHost` is a machine of the auditor's, which its
+devices may run in and which holds none of the prover's hardware. `outside`, the kind of the rest of the world, is no
+registered location's. -/
 inductive Kind
   | site
   | host
@@ -89,27 +103,30 @@ inductive Kind
   | memory
   | certifier
   | challenger
+  | auditorHost
   | outside
   deriving DecidableEq, Repr
 
 /-- The kinds of parent a location of each kind may have, `none` being the root: the site at the root, a host under the
-site, a device under a host, memory under a device or a host, and the auditor's devices at the site. -/
+site, a device under a host, memory under a device or a host, an auditor's host at the site, and the auditor's devices
+at the site or in one of its hosts. -/
 def Kind.parents : Kind → List (Option Kind)
   | .site => [none]
   | .host => [some .site]
   | .device => [some .host]
   | .memory => [some .device, some .host]
-  | .certifier | .challenger => [some .site]
+  | .certifier | .challenger => [some .site, some .auditorHost]
+  | .auditorHost => [some .site]
   | .outside => []
 
 /-- The pairs of kinds a link may join, in either order: two hosts, a host and the outside, a certifier and a host or
-the outside, and a memory challenger and a host. -/
+the outside, and a memory challenger and a host. No link ends at an auditor's host. -/
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
-/-- The auditor's devices: the network certifiers and the memory challengers. -/
+/-- The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts. -/
 def Kind.auditor : Kind → Bool
-  | .certifier | .challenger => true
+  | .certifier | .challenger | .auditorHost => true
   | _ => false
 
 /-- A memory leaf's tier. -/
@@ -132,8 +149,8 @@ instance _root_.Verity.DeviceFigures.instDecidableEq : DecidableEq DeviceFigures
 
 /-- A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`): the SKU, the tensor clock
 in Hz and the peak tensor-core MACs a second of each operand class. Its memory figures, in the device model's terms
-(`Accounting.Device`): bits from device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes of
-device memory (`mem`). -/
+(`Accounting.Device`): bits read from or written to device memory a second (`bw`), bits of on-chip state (`chip`) and
+bytes of device memory (`mem`). -/
 structure Sheet where
   figures : DeviceFigures
   bw : ℕ
@@ -144,8 +161,18 @@ structure Sheet where
 /-- A sheet's SKU, its figures'. -/
 def Sheet.sku (k : Sheet) : String := k.figures.sku
 
-/-- A location, and who owns it. A device names its SKU's sheet by digest, a memory leaf its tier and its bytes, and the
-auditor's devices their keys; a field the location's kind doesn't use is ignored. -/
+/-- A location, and who owns it. A device names its SKU's sheet by digest, and a memory leaf its tier and its bytes.
+`bw` is the bits a second read from or written to a memory leaf directly under a host, and none on every other
+location: a memory leaf under a device reads at its device's sheet's `bw`. `chip` is a host's on-chip state in bits, as
+a sheet's is, and none on every other location. `shared` is, for a tier, the bits a second read from or written to a
+host's leaves of that tier together, where one ceiling holds them all; empty on every other location. `key` is the
+public key one of the auditor's devices or hosts is registered under, and `scheme` the id of the signature scheme that
+key is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location.
+`timebase` is the SKU of the time base the clock of an auditor's host runs on, and `drift` how far that clock may run
+from real time, as a share of it: the drift of every device of the auditor's in that host, which reads that clock. Both
+are none on every other location, and a device at the site, or in a host that states no drift, times nothing.
+`timeUnit` is the Site's unit of time in seconds, on a location of kind `site` and none on every other
+(`Site.timeUnit`). -/
 structure Loc where
   id : String
   kind : Kind
@@ -155,14 +182,47 @@ structure Loc where
   tier : Option Tier := none
   bytes : ℕ := 0
   key : String := ""
+  scheme : String := ""
+  bw : Option ℕ := none
+  chip : Option ℕ := none
+  shared : List (Tier × ℕ) := []
+  drift : Option ℚ≥0 := none
+  timeUnit : Option ℚ≥0 := none
+  timebase : Option String := none
+  deriving DecidableEq
+
+/-- The auditor's figures for one memory leaf directly under a host: the host it is under, the bits a second read from
+or written to it, and the bytes it holds. -/
+structure MemoryFigures where
+  host : String
+  bw : ℕ
+  bytes : ℕ
   deriving DecidableEq, Repr
 
-/-- A link between two ends, with its capacity `β` in bits a tick each way and its latency in ticks. -/
+/-- The auditor's figures for one host: its on-chip state in bits, the cards it carries, each SKU with its count, for
+a tier the bits a second its leaves of that tier read or write together, and the ways traffic leaves it, each by its
+link's id with the bits a second it carries each way. -/
+structure HostFigures where
+  chip : ℕ
+  cards : List (String × ℕ) := []
+  shared : List (Tier × ℕ) := []
+  ways : List (String × Option ℕ) := []
+  deriving DecidableEq, Repr
+
+/-- The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
+keys that sign. -/
+def SCHEMES : List String := ["lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"]
+
+/-- A link between two ends, with its capacity `β` in bits a second each way and its latency in the Site's units of
+time. `unmediated` is, on a boundary link no certifier splits, the reason none does; none on every other link. A link
+states no capacity (`β` none) only where it carries `unmediated`: an interface that reads no line rate has none, and
+no amount is read from it. -/
 structure Link where
   id : String
   ends : String × String
-  β : ℕ
+  β : Option ℕ
   latency : ℕ
+  unmediated : Option String := none
   deriving DecidableEq, Repr
 
 /-- The rest of the world: an end every Site has, whose id no location may take. -/
@@ -306,6 +366,10 @@ def ids : List String := S.locs.map (·.id) ++ S.links.map (·.id) ++ [outside]
 /-- A device's sheet: the registered sheet under the digest it names. -/
 def sheet? (digest : Sheet → String) (x : Loc) : Option Sheet := S.sheets.find? (digest · == x.sheet)
 
+/-- **The Site's unit of time** in seconds: the one its first location of kind `site` states. A device's model rounds a
+rate at it, and the links' latency is counted in it. -/
+def timeUnit : Option ℚ≥0 := (S.locs.find? (·.kind = .site)).bind (·.timeUnit)
+
 /-- The bytes of the memory leaves directly under `i`. -/
 def held (i : String) : ℕ := ((S.locs.filter fun x => x.kind = .memory ∧ x.parent = some i).map (·.bytes)).sum
 
@@ -361,12 +425,20 @@ structure Digests where
   genesis : Composite → String
 
 /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the SKU's
-(`none` for an SKU it has no sheet for); the tolerance registration allows around an estimate; and the key of each of its
-own devices. -/
+(`none` for an SKU it has no sheet for); the tolerance registration allows around an estimate; the key of each of its
+own devices and hosts, by its id, and the scheme that key is of; its figures for each memory leaf directly under a host,
+by the leaf's id; its figures for each host of the prover's, by the host's id; and for each of its own hosts, by the
+host's id, how far its clock may run from real time and its time base's SKU. That these figures are the hardware is a
+public input: no check holds it and no premise says it, and a result is over the registered hardware. -/
 structure Auditor where
   sheet : String → Option Sheet
   tolerance : FigureTolerance
   key : String → Option String
+  scheme : String → Option String := fun _ => none
+  memory : List (String × Site.MemoryFigures) := []
+  hosts : List (String × Site.HostFigures) := []
+  drift : List (String × ℚ≥0) := []
+  timebases : List (String × String) := []
 
 /-- **The auditor's estimate** its sheet `a` states: `a`'s figures, at the auditor's tolerance. -/
 def Auditor.estimate (A : Auditor) (a : Sheet) : DeviceEstimate := ⟨a.figures, A.tolerance⟩
@@ -387,6 +459,7 @@ inductive Refusal
   | figures
   | capacity
   | owner
+  | inventory
   | uncertified
   | challengerReach
   | duplicateInformation
@@ -399,16 +472,17 @@ namespace Site
 
 open Registration (Auditor)
 
-/-- **A device's model** (`Accounting.Device`), read off the Site. For a device `x` naming a registered sheet `k` whose
-SKU the auditor has a sheet `a` for: its on-chip state and memory bandwidth are `k`'s, its device memory is `k`'s in
-bits, and its tensor-core MACs a tick are the highest peak rate of the figures the bound reads
-(`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's) over a tick of `tick` seconds,
-rounded up. No sheet states a device's CUDA-core ops or oracle queries a tick, or its side channels, so they are
-parameters, as in `Accel.Card.machine`. `none` for anything else. -/
-def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) (tick : ℚ≥0) {ι : Type} (cuda oracle : ℕ)
+/-- **A device's model** (`Accounting.Device`), read off the Site at ticks of the Site's unit of time
+(`Site.timeUnit`). For a device `x` naming a registered sheet `k` whose SKU the auditor has a sheet `a` for: its on-chip
+state is `k`'s, its device memory is `k`'s in bits, and a tick's bits from device memory to the chip and tensor-core
+MACs are each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest peak rate of the figures the bound
+reads (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's). No sheet states a device's
+CUDA-core ops or oracle queries a tick, or its side channels, so they are parameters, as in `Accel.Card.machine`.
+`none` when the Site states no unit of time, and for anything else. -/
+def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) {ι : Type} (cuda oracle : ℕ)
     (cap : ι → ℕ) : Option (Accounting.Device ι) :=
   if x.kind = .device then
-    (S.sheet? digest x).bind fun k => (A.sheet k.sku).map fun a =>
+    S.timeUnit.bind fun tick => (S.sheet? digest x).bind fun k => (A.sheet k.sku).map fun a =>
       let f := k.figures.bounding (A.estimate a)
       { chip := k.chip
         mem := 8 * k.mem
@@ -416,7 +490,7 @@ def device (digest : Sheet → String) (A : Auditor) (S : Site) (x : Loc) (tick 
           | .tc => ⌈tick * Finset.univ.sup f.peakRate⌉₊
           | .cuda => cuda
           | .oracle => oracle
-        bw := k.bw
+        bw := ⌈tick * k.bw⌉₊
         cap := cap }
   else none
 
@@ -436,12 +510,14 @@ def Refs : Prop :=
   (∀ x ∈ e.locs, ∀ p ∈ x.parent, (S.add e).Known p) ∧
     ∀ k ∈ e.links, (S.add e).Known k.ends.1 ∧ (S.add e).Known k.ends.2
 
-/-- `kind`: each new location sits under a parent of a kind its own allows, and has a tier exactly when it is memory;
-each new link joins two different ends, of kinds a link may join, at a positive capacity; and each certifier splits
-exactly one uplink, the far ends of its links being one host and the outside. -/
+/-- `kind`: each new location sits under a parent of a kind its own allows, so an auditor's host is at the site and
+holds only the auditor's devices, and has a tier exactly when it is memory; each new link joins two different ends, of
+kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; and each certifier
+splits exactly one uplink, the far ends of its links being one host and the outside. -/
 def Kinds : Prop :=
   (∀ x ∈ e.locs, x.parent.bind (S.add e).kind? ∈ x.kind.parents ∧ (x.kind = .memory ↔ x.tier.isSome)) ∧
-    (∀ k ∈ e.links, k.ends.1 ≠ k.ends.2 ∧ (∃ p ∈ Kind.links, (S.add e).Joins k p.1 p.2) ∧ 0 < k.β) ∧
+    (∀ k ∈ e.links, k.ends.1 ≠ k.ends.2 ∧ (∃ p ∈ Kind.links, (S.add e).Joins k p.1 p.2) ∧
+      (∀ b ∈ k.β, 0 < b) ∧ (k.β = none → k.unmediated.isSome)) ∧
     ∀ x ∈ (S.add e).locs, x.kind = .certifier →
       (((S.add e).far x.id).map (S.add e).kind?).Perm [some .host, some .outside]
 
@@ -456,19 +532,49 @@ peak rate positive), and its memory figures exactly `a`'s. -/
 def Figures : Prop :=
   ∀ k ∈ e.sheets, ∀ a ∈ A.sheet k.sku, k.figures.Accepted (A.estimate a) ∧ k.bw = a.bw ∧ k.chip = a.chip ∧ k.mem = a.mem
 
+/-- `figures`, a host's memory: each new memory leaf directly under a host states the auditor's figures for it: the
+host it is under, a rate that is not 0, and its bytes; every other new location states no rate. -/
+def Rates : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .memory ∧ x.parent.bind (S.add e).kind? = some .host then
+      ∃ f ∈ A.memory.lookup x.id, x.parent = some f.host ∧ x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
+    else x.bw = none
+
+/-- `figures`, the unit of time: each new location of kind `site` states the Site's unit of time, which is not 0 and is
+the one the Site states; every other new location states none. -/
+def Timed : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .site then ∃ u ∈ x.timeUnit, 0 < u ∧ (S.add e).timeUnit = some u else x.timeUnit = none
+
+/-- `figures`, a host's own: each new host states the auditor's figures for it: its on-chip state in bits, and each
+tier's shared rate, no shared rate 0; every other new location states neither. -/
+def Chips : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .host then
+      ∃ h ∈ A.hosts.lookup x.id, x.chip = some h.chip ∧ x.shared = h.shared ∧ ∀ p ∈ h.shared, 0 < p.2
+    else x.chip = none ∧ x.shared = []
+
 /-- `capacity`: each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory. -/
 def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
     ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
-/-- `owner`: each new certifier or challenger is one of the auditor's own devices, owned by it and with its key, and
-every other new location is the prover's. -/
+/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key and its
+key's scheme, one the check knows (`SCHEMES`); every other new location is the prover's and states no scheme; and each
+new auditor's host states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
+clock, below 1 where there is one, and no other new location states a time base or a clock. -/
 def Owners : Prop :=
-  ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
-    (x.kind.auditor = false → x.owner = .prover)
+  ∀ x ∈ e.locs,
+    (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ A.scheme x.id = some x.scheme ∧
+      x.scheme ∈ SCHEMES) ∧
+    (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "") ∧
+    if x.kind = .auditorHost then
+      (∃ t ∈ A.timebases.lookup x.id, x.timebase = some t) ∧ x.drift = A.drift.lookup x.id ∧ ∀ q ∈ x.drift, q < 1
+    else x.timebase = none ∧ x.drift = none
 
-/-- `uncertified`, onsite: every boundary link is certified. -/
-def Covered : Prop := c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
+/-- `uncertified`, onsite: every boundary link is certified, or says why no certifier splits it. -/
+def Covered : Prop :=
+  c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k ∨ k.unmediated.isSome
 
 /-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/
 def Reached : Prop :=
@@ -477,14 +583,17 @@ def Reached : Prop :=
 /-- **A valid site entry** of a log for the composite `c`, against the Site `S` of the log before it: it passes every
 check of a site entry. -/
 def Valid : Prop :=
-  Fresh D S e ∧ Refs S e ∧ Kinds S e ∧ Sheets D A S e ∧ Figures A e ∧ Capacity D S e ∧ Owners A e ∧ Covered c S e ∧
-    Reached c S e
+  Fresh D S e ∧ Refs S e ∧ Kinds S e ∧ Sheets D A S e ∧ (Figures A e ∧ Rates A S e ∧ Timed S e ∧ Chips A e) ∧
+    Capacity D S e ∧ Owners A e ∧ Covered c S e ∧ Reached c S e
 
 instance instDecidableFresh : Decidable (Fresh D S e) := by unfold Fresh; infer_instance
 instance instDecidableRefs : Decidable (Refs S e) := by unfold Refs; infer_instance
 instance instDecidableKinds : Decidable (Kinds S e) := by unfold Kinds; infer_instance
 instance instDecidableSheets : Decidable (Sheets D A S e) := by unfold Sheets; infer_instance
 instance instDecidableFigures : Decidable (Figures A e) := by unfold Figures; infer_instance
+instance instDecidableRates : Decidable (Rates A S e) := by unfold Rates; infer_instance
+instance instDecidableTimed : Decidable (Timed S e) := by unfold Timed; infer_instance
+instance instDecidableChips : Decidable (Chips A e) := by unfold Chips; infer_instance
 instance instDecidableCapacity : Decidable (Capacity D S e) := by unfold Capacity; infer_instance
 instance instDecidableOwners : Decidable (Owners A e) := by unfold Owners; infer_instance
 instance instDecidableCovered : Decidable (Covered c S e) := by unfold Covered; infer_instance
@@ -497,7 +606,7 @@ def refusal : Option Refusal :=
   else if ¬Refs S e then some .unknownRef
   else if ¬Kinds S e then some .kind
   else if ¬Sheets D A S e then some .sheetDigest
-  else if ¬Figures A e then some .figures
+  else if ¬(Figures A e ∧ Rates A S e ∧ Timed S e ∧ Chips A e) then some .figures
   else if ¬Capacity D S e then some .capacity
   else if ¬Owners A e then some .owner
   else if ¬Covered c S e then some .uncertified
@@ -578,6 +687,23 @@ def Valid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Pro
 instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) :
     Decidable (Valid D A c log) := by
   unfold Valid; infer_instance
+
+/-- `inventory`, of the Site a log folds to: **the Site is complete** against the auditor's figures. Under each of its
+hosts, every memory leaf the auditor has figures for is registered, and so is every card it lists for the host, at
+least its count of devices whose sheet is of its SKU, and every way out it lists, as a link under that id with an end
+at the host and the auditor's rate. A log is held to it at its end and not entry by entry, so a later entry may add
+hardware under a registered host; a result at a head is over a Site complete against the auditor's figures at that
+head. -/
+def Complete (D : Digests) (A : Auditor) (S : Site) : Prop :=
+  ∀ h ∈ S.locs, h.kind = .host →
+    (∀ f ∈ A.memory, f.2.host = h.id → ∃ x ∈ S.locs, x.id = f.1 ∧ x.kind = .memory ∧ x.parent = some h.id) ∧
+    ∀ g ∈ A.hosts.lookup h.id,
+      (∀ k ∈ g.cards, k.2 ≤ (S.locs.filter fun d =>
+        d.kind = .device ∧ d.parent = some h.id ∧ (S.sheet? D.sheet d).map (·.sku) = some k.1).length) ∧
+      ∀ w ∈ g.ways, ∃ k ∈ S.links, k.id = w.1 ∧ (k.ends.1 = h.id ∨ k.ends.2 = h.id) ∧ k.β = w.2
+
+instance instDecidableComplete (D : Digests) (A : Auditor) (S : Site) : Decidable (Complete D A S) := by
+  unfold Complete; infer_instance
 
 /-- **The log's refusal of its next entry** `e`: the entry's own (`Entry.refusal`) against the log's Site and head, else
 `duplicateInformation` when it registers an item the log or the entry already registers, else `duplicateDeclaration`

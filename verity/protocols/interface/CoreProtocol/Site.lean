@@ -435,8 +435,8 @@ def Rates : Prop :=
       ∃ f ∈ A.memory.lookup x.id, x.parent = some f.host ∧ x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
     else x.bw = none
 
-/-- `figures`, a host's own: each new host states the auditor's figures for it, its on-chip state in bits and each
-tier's shared rate, none of them 0; every other new location states neither. -/
+/-- `figures`, a host's own: each new host states the auditor's figures for it: its on-chip state in bits, and each
+tier's shared rate, no shared rate 0; every other new location states neither. -/
 def Chips : Prop :=
   ∀ x ∈ e.locs,
     if x.kind = .host then
