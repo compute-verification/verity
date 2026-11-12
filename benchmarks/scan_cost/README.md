@@ -42,6 +42,29 @@ The Lean verifier's wall is split by its `lean-verify.log` into reading its inpu
 and the session's checks. The round's sum of each stage is a measurement, the prover's named by the proving number
 as its inputs, and `result.py table` prints the round a session a line.
 
+**The steps of Register to the repetitions.** The prover's `LIVE` record names them in `steps_s`: laps of one clock
+from the instant before Register to the start of the repetitions, so they add up to their `total` and leave none of
+it unnamed. `result.py table` prints them a session a line under the round, with what the session's ZK server says
+of its own thread in its `serve.log`'s `SESSION` record beside them. They are in the document a session (`steps`,
+`server`) and are no measurement.
+
+| Step | What the prover does in it |
+| --- | --- |
+| `register` | the Register round trip: the verifier draws the sample |
+| `tables` | the drawn statement's tables |
+| `lean_finish` | connecting the ZK server's Lean finish, which sets the statement up at the sample |
+| `config` | the session's configuration, its salts, and what it starts beside the witness |
+| `witness` | every table's witness, built and handed to the device (`witness_s` is inside it) |
+| `level0_wait`, `zk_pads_wait` | the waits for level 0's salts and for the first repetition's pads |
+| `level0_next` | the next session's level 0 started |
+| `device_wait` | the wait for the previous session's repetitions |
+
+| The ZK server's | What it is |
+| --- | --- |
+| `busy_s` | its session's thread's seconds, from its server's build to its `SESSION` record, less `prover_wait_s` |
+| `build_s` | building the session's server, inside `busy_s` as `record_s`, `handle_s` and `verify_s` are |
+| `prover_wait_s` | waiting for the prover's next frame |
+
 ## The identity
 
 Two results compare only at one identity, and `result.py compare` refuses any other pair:
@@ -120,8 +143,9 @@ before and after its repetitions and its own Lean verifier's inputs and setup.
 **What a session pays once is the first place to look.** A session's stages before its repetitions (to Register,
 Register to the repetitions) and its Lean verifier's inputs and setup are paid whatever the session's blocks, four
 times an execution phase at G = 1. `result.py table` prints them a session, and `compare` a second of execution
-phase, so a candidate's lines say whether they fell. No field of a session's log says what fills Register to the
-repetitions beyond the witness, so naming its parts is the first measurement to add.
+phase, so a candidate's lines say whether they fell. What fills Register to the repetitions is in the table's lines
+by step: the step that holds most of it, and whether the ZK server was busy or waiting meanwhile, say where a
+change to a session's start would pay.
 
 Two steps, in order, each a candidate run compared with the baseline at the identity:
 

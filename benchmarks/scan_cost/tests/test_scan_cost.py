@@ -40,11 +40,20 @@ def members(ticks: int, group: int) -> list[tuple[str, int]]:
     return [("first", 1), *scans, ("last", 1), *((f"egress-{g}", ticks) for g in range(group))]
 
 
-def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: bool = True, public: dict | None = None) -> Path:
+#: a session's 4 s from Register to the repetitions by step, and its ZK server's seconds, as `kept` writes them with `steps`
+STEPS_S = {**dict.fromkeys(R.STEPS, 0.0), "register": 0.5, "tables": 0.25, "lean_finish": 2.5, "config": 0.25, "witness": 0.5,
+           "total": 4.0}
+SESSION = {"accepted": True, "handle_s": 0.125, "verify_s": 0.25, "build_s": 0.5, "record_s": 0.125, "prover_wait_s": 9.0,
+           "busy_s": 1.5}
+
+
+def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: bool = True, public: dict | None = None,
+         steps: bool = False) -> Path:
     """A scan's kept files under `out`. Member i's prover process takes 12 + i s: 2 s to Register, 4 s from there to the
     repetitions, 2 s of level 0, 3 + i s of repetitions and a 1 s tail; its staging takes 0.5 s; its Lean verifier
     takes 4 + i s of wall, of which 1 s reading inputs, 2 s of setup and 0.5 + i/10 s of checks, and 3 + i s of CPU.
-    Another round's verifier process, 9 s, is in `lean.jsonl` beside the honest round's."""
+    Another round's verifier process, 9 s, is in `lean.jsonl` beside the honest round's. With `steps`, each prover's
+    line names its steps (`STEPS_S`) and each session has its ZK server's log with its line (`SESSION`)."""
     ticks, names = TICKS[cls], members(TICKS[cls], group)
     timing, rnd, base = {}, {}, 0
     for i, (name, n) in enumerate(names):
@@ -54,6 +63,11 @@ def kept(out: Path, cls: str = "test", group: int = 1, cores: int = 21, pin: boo
                 "wait_e2e_s": 0.5, "k_log": 20, "dense_m": 22,
                 "buckets": [{"t.prove": 1 + i, "t.upstream": i, "t.zk_inner": 0.75, "t.zk_pads_commit": 0.25},
                             {"t.prove": 2, "t.upstream": 1, "t.zk_inner": 0.75, "t.zk_pads_commit": 0.25}]}
+        if steps:
+            live["steps_s"] = STEPS_S
+            (logs / "serve.log").write_text(
+                f"statement unit/scan-{name} instances=1 blocks={n} built in 0.5s\nSERVING 127.0.0.1:7900\n"
+                f"SESSION\t{json.dumps({**SESSION, 'session': f'l0000-{i}'})}\n", encoding="utf-8")
         (logs / "prove.log").write_text(
             f"$ flock-circuit prove --zk\n# rc 0 in {12 + i} s\n--- stdout\nLIVE\t{json.dumps(live)}\n--- stderr\n"
             f"statement unit/scan-{name} instances=1 blocks={n} built in 0.5s\n", encoding="utf-8")
@@ -129,6 +143,51 @@ def test_a_session_is_read_in_the_rounds_order_and_its_stages_sum_to_its_process
             "process_s": 0, "to_register_s": 2, "register_to_reps_s": 4, "level0_s": 2, "reps_s": 3 + i, "tail_s": 1,
             "statement_built_s": 0.5, "witness_s": 0.25, "wait_s": 0.5, "upstream_s": 1 + i, "zk_inner_s": 1.5, "pads_s": 0.5}
         assert s["lean"] == {"process_s": 4 + i, "inputs_s": 1.0, "setup_s": 2.0, "check_s": round(0.5 + i / 10, 3)}
+
+
+def test_register_to_the_repetitions_is_split_by_step_where_the_sessions_lines_name_their_steps(tmp_path):
+    doc = doc_of(tmp_path, "a", steps=True)
+    for s in doc["sessions"]:
+        assert s["steps"] == STEPS_S and list(s["steps"]) == [*R.STEPS, "total"]
+        assert sum(s["steps"][k] for k in R.STEPS) == s["steps"]["total"] == s["prover"]["register_to_reps_s"]
+        assert s["server"] == {k: SESSION[k] for k in R.SERVER}
+    text = R.table(doc).splitlines()
+    at = text.index("  Register to the repetitions by step, in seconds (the prover's steps, then its ZK server's thread):")
+    assert text[at + 1].split() == ["member", "register", "tables", "lean", "finish", "config", "witness", "level0", "wait",
+                                    "zk", "pads", "wait", "level0", "next", "device", "wait", "total", "server", "busy",
+                                    "its", "build", "its", "wait"]
+    steps = ["0.50", "0.25", "2.50", "0.25", "0.50", "0.00", "0.00", "0.00", "0.00", "4.00"]
+    assert [x.split() for x in text[at + 2:]] == [
+        *([name, *steps, "1.50", "0.50", "9.00"] for name in ("first", "ingress-0", "last", "egress-0")),
+        ["the", "round", "2.00", "1.00", "10.00", "1.00", "2.00", "0.00", "0.00", "0.00", "0.00", "16.00", "6.00", "2.00",
+         "36.00"]]
+    # the numbers and the round's stages are what they are without the steps
+    plain = doc_of(tmp_path, "b")
+    assert (doc["numbers"], doc["round"]) == (plain["numbers"], plain["round"])
+
+
+def test_a_session_whose_lines_name_no_step_has_none_and_the_table_no_such_lines(tmp_path):
+    out = kept(tmp_path / "a", steps=True)
+    logs = out / "sczk" / R.ROUND / "session-last"
+    live = json.loads(next(x for x in (logs / "prove.log").read_text(encoding="utf-8").splitlines() if x.startswith("LIVE\t"))[5:])
+    # a line that lacks a step, or holds one that is no number, names no steps; so does a server's line without its busy seconds
+    for steps_s in ({k: v for k, v in STEPS_S.items() if k != "config"}, {**STEPS_S, "config": None}, {**STEPS_S, "config": True}):
+        (logs / "prove.log").write_text(f"# rc 0 in 14 s\nLIVE\t{json.dumps({**live, 'steps_s': steps_s})}\n", encoding="utf-8")
+        assert R.document(out, 0, RUN)["sessions"][2]["steps"] is None
+    (logs / "serve.log").write_text(f"SESSION\t{json.dumps({k: v for k, v in SESSION.items() if k != 'busy_s'})}\n", encoding="utf-8")
+    doc = R.document(out, 0, RUN)
+    assert doc["sessions"][2]["server"] is None and doc["sessions"][0]["server"] is not None
+    text = R.table(doc).splitlines()
+    row = {x.split()[0]: x.split()[1:] for x in text[text.index(next(x for x in text if "by step" in x)) + 2:]}
+    assert row["last"] == ["-"] * 13 and row["the"][1:] == ["-"] * 13 and row["first"][-3:] == ["1.50", "0.50", "9.00"]
+    # a scan from before the lines named their steps: no step, no server's seconds, and the table as it was
+    old = doc_of(tmp_path, "b")
+    assert all(s["steps"] is None and s["server"] is None for s in old["sessions"])
+    assert not any("by step" in x for x in R.table(old).splitlines())
+    # a document written before the sessions had the two fields is printed as it was too
+    for s in old["sessions"]:
+        del s["steps"], s["server"]
+    assert not any("by step" in x for x in R.table(old).splitlines())
 
 
 def test_a_log_without_its_lines_gives_no_stage_and_the_number_stands(tmp_path):

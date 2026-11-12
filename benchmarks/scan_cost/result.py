@@ -33,6 +33,12 @@ the repetitions), the repetitions (the sum of `buckets[*]."t.prove"`), and the t
 Lean verifier's, from its `lean-verify.log`: reading its inputs (`inputs:`), the sampled statement's setup (`setup`),
 and the session's checks (the session's line less the setup, which it includes).
 
+**The steps** of Register to the repetitions, where the prover's `LIVE` line names them (`steps_s`: laps of one
+clock from the instant before Register to the start of the repetitions, `STEPS`, and their `total`), and beside them
+what the session's ZK server says of its own thread in its `serve.log`'s `SESSION` line (`SERVER`): its busy seconds,
+with its build's, its record's, `handle_s` and `verify_s` inside them, and the seconds it waited for the prover's
+frames. A session whose lines name neither has neither, and `table` then prints no such lines.
+
 **The identity** is what two results must share to compare (`IDENTITY`): the class, the sample (how many of the
 round's units its answers say were proved), T and the tick, the traffic, the cores the job was pinned to and the Lean
 verifier's. The group is a setting, beside the identity: the numbers are for a second of execution phase at any group.
@@ -65,6 +71,10 @@ PROVING, VERIFIER = "network-accounting/scan-proving-cost", "network-accounting/
 #: a session's stages, in order, and the Lean verifier's
 STAGES = ("to_register_s", "register_to_reps_s", "level0_s", "reps_s", "tail_s")
 LEAN_STAGES = ("inputs_s", "setup_s", "check_s")
+#: the steps of Register to the repetitions, in the prover's order (its `LIVE` line's `steps_s`, with their `total`),
+#: and the seconds a `SESSION` line gives of its session's thread
+STEPS = ("register", "tables", "lean_finish", "config", "witness", "level0_wait", "zk_pads_wait", "level0_next", "device_wait")
+SERVER = ("busy_s", "build_s", "record_s", "handle_s", "verify_s", "prover_wait_s")
 ROUND = "honest"
 #: the round's seconds, each a measurement: its name and its key in a document's `round`
 PARTS = (("sessions", "sessions_s"), ("staging", "staging_s"), ("to Register", "to_register_s"),
@@ -102,10 +112,35 @@ def _ms(text: str, line: str) -> float | None:
     return int(found[-1]) / 1000 if found else None
 
 
+def _tagged(log: str, tag: str) -> dict:
+    """A kept log's first `TAG<TAB>{json}` line; empty where it has none."""
+    return next((json.loads(x.split("\t", 1)[1]) for x in log.splitlines() if x.startswith(tag + "\t")), None) or {}
+
+
+def _named(line: dict, names: tuple[str, ...]) -> dict | None:
+    """`line`'s seconds under `names`; None unless it has every one."""
+    if not all(isinstance(line.get(k), (int, float)) and not isinstance(line.get(k), bool) for k in names):
+        return None
+    return {k: round(line[k], 3) for k in names}
+
+
+def steps(log: str) -> dict | None:
+    """A session's seconds from Register to the repetitions by step, as its `prove.log`'s `LIVE` line names them
+    (`steps_s`); None for a prover that names none."""
+    got = _tagged(log, "LIVE").get("steps_s")
+    return _named(got, (*STEPS, "total")) if isinstance(got, dict) else None
+
+
+def server(log: str) -> dict | None:
+    """What a session's ZK server says of its thread's seconds, in its `serve.log`'s `SESSION` line (`SERVER`); None
+    for a server that names no busy seconds."""
+    return _named(_tagged(log, "SESSION"), SERVER)
+
+
 def prover(log: str) -> dict:
     """A session's `prove.log` by stage (module docstring): each figure a field of the prover's LIVE line or of the
     log's process line, or a difference of two. A log without them gives no stage."""
-    live = next((json.loads(x[5:]) for x in log.splitlines() if x.startswith("LIVE\t")), None) or {}
+    live = _tagged(log, "LIVE")
     process = _seconds(log)
     reps = [b["t.prove"] for b in live.get("buckets") or [] if isinstance(b, dict) and "t.prove" in b]
     need = [process, *(live.get(k) for k in ("e2e_s", "tp_s", "prove_total_s"))]
@@ -162,21 +197,23 @@ def _peak_gb(out: Path) -> float | None:
 
 
 def sessions(out: Path, summary: dict, verified: dict) -> list[dict]:
-    """The honest round's sessions in its members' order, each with its summary's figures, its logs' stages and its
-    Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive)."""
+    """The honest round's sessions in its members' order, each with its summary's figures, its logs' stages, its
+    Lean verifier process's CPU seconds (`verified`, `_verifier`'s lines by archive), and its steps and its ZK
+    server's seconds where its logs name them."""
     rnd, members = summary["rounds"][ROUND], summary["members"][ROUND]
     blocks = {m["name"]: m["n"] for m in members}
     rows = []
     for name, t in rnd["audit"]["timing"].items():
         logs = out / "sczk" / ROUND / f"session-{name}"
         text = {f: (logs / f).read_text(encoding="utf-8", errors="replace") if (logs / f).is_file() else ""
-                for f in ("prove.log", "lean-verify.log")}
+                for f in ("prove.log", "lean-verify.log", "serve.log")}
         live = t.get("timing") or {}
         rows.append({"member": name, "blocks": blocks.get(name), "k_log": live.get("k_log"), "dense_m": live.get("dense_m"),
                      "session_s": t["session_s"], "stage_s": (rnd.get(name) or {}).get("stage_s"),
                      "lean_verify_s": t.get("lean_verify_s"),
                      "lean_cpu_s": (verified.get(f"sczk/{ROUND}/session-{name}/archive") or {}).get("cpu_s"),
-                     "prover": prover(text["prove.log"]), "lean": lean(text["lean-verify.log"])})
+                     "prover": prover(text["prove.log"]), "lean": lean(text["lean-verify.log"]),
+                     "steps": steps(text["prove.log"]), "server": server(text["serve.log"])})
     order = {m["name"]: i for i, m in enumerate(members)}
     return sorted(rows, key=lambda r: order.get(r["member"], len(order)))
 
@@ -357,8 +394,41 @@ def _f(x: float | None) -> str:
     return "-" if x is None else f"{x:.1f}"
 
 
+def _grid(head: list[str], rows: list[list[str]]) -> list[str]:
+    """`rows` under `head` as lines, the first column to the left and the others to the right."""
+    width = [max(len(x[c]) for x in [head, *rows]) for c in range(len(head))]
+    return ["  " + "  ".join(c.rjust(w) if k else c.ljust(w) for k, (c, w) in enumerate(zip(x, width, strict=True)))
+            for x in [head, *rows]]
+
+
+def split(doc: dict) -> list[str]:
+    """Register to the repetitions by step, a session a line, with its ZK server's busy seconds, its build's inside
+    them, and its wait for the prover's frames beside them; no line for a document whose sessions name no step."""
+    rows = [(s["member"], s.get("steps") or {}, s.get("server") or {}) for s in doc["sessions"]]
+    if not any(st for _, st, _ in rows):
+        return []
+
+    def f(x: float | None) -> str:
+        return "-" if x is None else f"{x:.2f}"
+
+    def line(name: str, st: dict, sv: dict) -> list[str]:
+        return [name, *(f(st.get(k)) for k in (*STEPS, "total")), *(f(sv.get(k)) for k in ("busy_s", "build_s", "prover_wait_s"))]
+
+    def total(part: int, k: str) -> float | None:
+        vals = [x[part].get(k) for x in rows]
+        return None if None in vals else sum(vals)
+
+    head = ["member", *(k.replace("_", " ") for k in STEPS), "total", "server busy", "its build", "its wait"]
+    body = [line(*x) for x in rows]
+    body.append(line("the round", {k: total(1, k) for k in (*STEPS, "total")},
+                     {k: total(2, k) for k in ("busy_s", "build_s", "prover_wait_s")}))
+    return ["  Register to the repetitions by step, in seconds (the prover's steps, then its ZK server's thread):",
+            *_grid(head, body)]
+
+
 def table(doc: dict) -> str:
-    """A document as text: its identity, the guard, the numbers, then the round, a session a line."""
+    """A document as text: its identity, the guard, the numbers, then the round, a session a line, and Register to
+    the repetitions by step where the sessions name their steps."""
     i, n, r = doc["identity"], doc["numbers"], doc["round"]
     head = ["member", "blocks", "session", "staging", "to Register", "Register to reps", "level 0", "reps", "tail",
             "Lean CPU", "Lean wall", "inputs", "setup", "checks"]
@@ -368,7 +438,6 @@ def table(doc: dict) -> str:
     rows.append(["the round", str(sum(s["blocks"] or 0 for s in doc["sessions"])), _f(r["sessions_s"]), _f(r["staging_s"]),
                  *(_f(r[k]) for k in STAGES), _f(r["lean_cpu_s"]), _f(r["lean_s"]),
                  *(_f(r[f"lean_{k}"]) for k in LEAN_STAGES)])
-    width = [max(len(x[c]) for x in [head, *rows]) for c in range(len(head))]
     lines = [
         f"scan_cost: run {doc['run'] or 'local'}, commit {doc['commit'] or 'unknown'}",
         f"  identity: class {i['class']}, {i['sample']}, T = {i['ticks']} ticks of {i['tick_ms']} ms, {i['cores']} cores, "
@@ -379,8 +448,7 @@ def table(doc: dict) -> str:
         f"  Lean verifier CPU seconds a second of execution phase, on one core: {_f(n['verifier'])}"
         + (f" ({why})" if (why := no_verifier(doc)) else "") + f"; its wall beside it: {_f(n['verifier_wall'])}",
         "  the round, in seconds (the Lean verifier's inputs, setup and checks are its wall's):",
-        *("  " + "  ".join(c.rjust(w) if k else c.ljust(w) for k, (c, w) in enumerate(zip(x, width, strict=True)))
-          for x in [head, *rows])]
+        *_grid(head, rows), *split(doc)]
     return "\n".join(lines)
 
 
