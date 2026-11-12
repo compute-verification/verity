@@ -38,6 +38,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
 from verity.circuits.evaluation import evaluate
+from tests import fake_vllm
 from verity_vllm.program import dsa_table
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
@@ -489,9 +490,8 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     """`vllm_meta.attention_impls` reads an MLA layer's FA3 split count from the `flash_attn_varlen_func` its impl's module calls:
     the one-split pin's marker, else None (vLLM's heuristic)."""
     from verity_vllm.program.frontend import vllm_meta as vm
-    attention = types.ModuleType("vllm.model_executor.layers.attention")
-    attention.__dict__.update(Attention=type("Attention", (nn.Module,), {}), MLAAttention=type("MLAAttention", (nn.Module,), {}))
-    monkeypatch.setitem(sys.modules, attention.__name__, attention)
+    attention = fake_vllm.install(monkeypatch)["vllm.model_executor.layers.attention"]
+    attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
     backend = types.ModuleType("sparse_backend_standin")
     backend.__dict__["Impl"] = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
     monkeypatch.setitem(sys.modules, backend.__name__, backend)
