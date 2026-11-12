@@ -120,7 +120,9 @@ def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
 /-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model refuses
 every registered value (`SecondStage.inputsFailure` at `ownOf`, with no value of the verifier's own and no read);
 round 2 passes a value the verifier pinned, fills or opens as a read's row. A premise on the run, decided on its
-interior record, that round 2's passing check does not give. -/
+interior record, that round 2's passing check does not give. It holds at a design whose interior registration
+registers no value, as the second two-stage try's does; the first try's registers one (`logits`), and there it is
+false. -/
 def RegistersNone (rec : Json) : Prop :=
   ∀ es, Spot.getD rec "registered" = .arr es → ∀ e ∈ es, ∀ v, Spot.getD e "value" ≠ .str v
 
@@ -195,7 +197,9 @@ key in `Challenger.coinsReason` discharges): where `coinsReason` finds no reason
 window `w` and the bytes `read` released after `after`, `drawCoins` under `key` reads, from the evidence without its
 key, coins of some family that `read` starts. Today `coinsReason` takes the key from the evidence, so this holds only
 at the key the evidence carries. The family is `∃ label` because the base's `coinsReason` lets the evidence name it;
-where `coinsReason` takes each stage's family as an argument, it is that stage's own. -/
+where `coinsReason` takes each stage's family as an argument, it is that stage's own. It is stated at one key for the
+run; under `--challenger local` today's driver makes a second key and ledger for the second stage, where the
+statement at one key does not describe the run. -/
 def CheckReadsDraw (key : Spot.Challenger.ChallengerKey) : Prop :=
   ∀ (coins : Json) (w : String) (after read : ByteArray), Spot.Challenger.coinsReason coins w after read = none →
     ∃ label ξ, Spot.Challenger.drawCoins key w label after (drawEvidence coins) = .ok ξ ∧ Starts read ξ
@@ -215,7 +219,8 @@ def FromDevice (dev : Properties.Challenger.History) (key : Spot.Challenger.Chal
 run, where the coin check reads the challenger's draw under the verifier's key (`CheckReadsDraw`), the bytes the first
 stage read are the device's coins released after the boundary record's digest, and those the second stage read the
 device's coins released after the interior record's digest, each on the window its verifier holds; or a break. A stage
-that read no byte carries no evidence. The sessions' coins are not read by `Run.run`. -/
+that read no byte carries no evidence. The sessions' coins are not read by `Run.run`. Both stages are under the one
+key `key`; today's driver under `--challenger local` uses a second key for the second stage. -/
 def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (dev : Properties.Challenger.History),
     AcceptedTwo i it j → CheckReadsDraw key →
