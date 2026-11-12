@@ -334,3 +334,21 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     rc = SimpleNamespace(run_root=_root("run 1"), extra={"coins": {"root": _root("run 0").hex(), "keys": {}}})
     with pytest.raises(ValueError, match="no coins drawn after it"):
         CC.positions(rc)
+
+
+def test_a_tp_pair_takes_its_coins_after_the_root_over_its_ranks(tmp_path, monkeypatch):
+    """A TP pair has one root, over its ranks' roots, and its coins follow that root: this process's own bytes without a
+    gate, a key of each family, and the challenger's with one, which the verifier takes as it takes a run's. `tp_keys`
+    reads the two sources of the pair's samples from either record."""
+    root = _root("pair 0")
+    own = CC.tp_draw(None, root)
+    assert (own["source"], own["root"], sorted(own["keys"])) == (CC.IN_PROCESS, root.hex(), sorted(CC.FAMILIES))
+    assert CC.tp_keys(own) == (bytes.fromhex(own["keys"][CC.POSITIONS]), bytes.fromhex(own["keys"][CC.IDENTITIES]))
+    auditor = _Auditor(tmp_path, monkeypatch)
+    coins = CC.of_options(_options(), 1, gate_run=auditor.run)
+    theirs = CC.tp_draw(coins, root)
+    assert (theirs["source"], theirs["index"], theirs["root"]) == (CC.CHALLENGER, 0, root.hex())
+    assert CC.tp_keys(theirs) == (bytes.fromhex(theirs["keys"][CC.POSITIONS]), bytes.fromhex(theirs["keys"][CC.IDENTITIES]))
+    assert coins.close() is None
+    auditor.end(coins.reserved["session"])
+    assert _reason(auditor, [theirs], [root], coins.reserved["session"]) is None

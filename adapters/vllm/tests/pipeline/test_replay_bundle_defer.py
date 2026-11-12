@@ -119,3 +119,26 @@ def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path
     assert re.fullmatch(r"\[delta\] REPLAY BUNDLE \(pair 1\): store written in [0-9.]+ s beside the checks before the C2 site "
                         r"\(waited [0-9.]+ s here\)", taken), taken
     assert deferred == f"[delta] C2 SAMPLED REPLAY + LINKAGE (pair 1): DEFERRED -- store and weights tree written to {RB.partial(site.out, 1)}"
+
+
+def flags(**more: Any) -> SimpleNamespace:
+    """The Commit flags `refuse` reads, for a slim deferral it takes."""
+    return SimpleNamespace(**{"replay_deferred": "slim", "program_dir": "/p", "programs_root": None, "arms": None, "only_arm": None,
+                              "compiled_taps": "off", "vu_export_dir": None, "serving_rows": None} | more)
+
+
+def test_a_slim_deferral_starts_its_planner_on_the_commit_s_flags_and_no_other_does(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`prepare` starts the slim bundle's planner on the Commit's own flags, once they are ones a deferral runs with; a full
+    deferral and a Commit that defers nothing start none."""
+    started: list[Any] = []
+
+    def planner(args: Any) -> str:
+        started.append(args)
+        return "the planner"
+    monkeypatch.setattr(RB, "Planner", planner)
+    slim = flags()
+    assert RB.prepare(slim) == "the planner" and started == [slim]
+    assert RB.prepare(flags(replay_deferred="full")) is None and RB.prepare(flags(replay_deferred=None)) is None
+    with pytest.raises(SystemExit, match="--replay-deferred: no --program-dir / --programs-root"):
+        RB.prepare(flags(program_dir=None))
+    assert started == [slim]
