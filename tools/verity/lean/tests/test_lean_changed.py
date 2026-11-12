@@ -692,8 +692,7 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
     else, which the records gate reads, and the GiB on stderr: the largest build among every package their runs audit
     (each PKG, its requirers and the packages their `proved_in` names), and no replay, which a records run doesn't run.
     With `--head` it reads the commit's objects alone, as `--inputs-key` does, so the queue can ask a head it never
-    checked out, running this file as a process of its own. In a directory of the tools alone, which lists no tree, it
-    asks the largest build any package's run can need."""
+    checked out, running this file as a process of its own."""
     heavy = json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../props"},
                                      {"type": "git", "name": "Arklib"}]})
     root = tmp_path / "root"
@@ -731,20 +730,30 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
     r = subprocess.run([sys.executable, str(HERE.parent / "lean_changed.py"), "--ask", P, S, "--head", sha, "--repo",
                         str(clone)], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), (r.returncode, r.stdout, r.stderr[-2000:])
-    alone, repo = tmp_path / "tools-alone", HERE.parents[3]
-    tools = alone / "tools/verity/lean"
-    tools.mkdir(parents=True)
+
+
+def test_the_ask_answers_where_the_queue_runs_it_from_the_tools_alone(tmp_path):
+    """`research queue`'s `records_mem_gb` writes the commit's files of the key's code (`KEY_CODE`: this directory's, those
+    of `tools/verity/check/` and the task graph's) into an empty directory, runs `lean_changed.py --ask PKG...` there as
+    its working directory, with no checkout and no git, and takes only one whole number on stdout and exit 0. That
+    directory lists no tree, so the ask is the largest build any package's records run can need. The test writes the
+    files of those directories the tools load (this suite's inputs), fewer than the queue writes."""
+    alone, repo = tmp_path / "queue-keys", HERE.parents[3]
+    (alone / "tools/verity/lean").mkdir(parents=True)
     for f in HERE.parent.iterdir():
         if f.is_file():
-            shutil.copy(f, tools / f.name)
+            shutil.copy(f, alone / "tools/verity/lean" / f.name)
     for f in [*(f"tools/verity/check/{m}.py" for m in ("common", "lean_slot", "slot", "verdicts", "settings")),
-              "tools/verity/graph/verity_graph/contract.py"]:     # what the tools load beside them, as the queue copies
+              "tools/verity/graph/verity_graph/contract.py"]:
         (alone / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(repo / f, alone / f)
-    r = subprocess.run([sys.executable, str(tools / "lean_changed.py"), "--ask", P], cwd=alone,
-                       capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), ("a directory of the tools alone lists no tree, so it asks "
-                                                              "the largest build", r.returncode, r.stdout, r.stderr[-2000:])
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "LEAN_SLOT", "CHECK_SLOT"))}
+    env |= {"PYTHONDONTWRITEBYTECODE": "1", "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    r = subprocess.run([sys.executable, str(alone / "tools/verity/lean/lean_changed.py"), "--ask", P, S], cwd=alone,
+                       capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
+    R = LC.AUDIT.reserve()
+    assert (r.returncode, r.stdout) == (0, f"{R.gb(R.BUILD_HEAVY_GIB)}\n"), (r.returncode, r.stdout, r.stderr[-2000:])
+    assert "BUILD_HEAVY_GIB, tools/verity/lean/reserve.json:" in r.stderr, r.stderr
 
 
 def test_a_records_run_below_the_floor_of_any_build_it_runs_is_refused_with_its_ask(pair, tmp_path, monkeypatch):
