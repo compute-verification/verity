@@ -57,7 +57,6 @@
     {"file": "verity_vllm/observe/capture.py", "kind": "F841", "symbol": "Capture.install", "detail": "Local variable `runner` is assigned to but never used"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "BLE001", "symbol": "_selections", "detail": "Do not catch blind exception: `Exception`", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 15},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F841", "symbol": "binding_record", "detail": "Local variable `max_new` is assigned to but never used"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 7},
     {"file": "verity_vllm/pipeline/serve_openai.py", "kind": "BLE001", "symbol": "HttpThread.run", "detail": "Do not catch blind exception: `BaseException`"},
