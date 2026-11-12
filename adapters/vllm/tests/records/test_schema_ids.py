@@ -15,6 +15,7 @@ ON_DISK = {
     "BUILD_RELABEL_SCHEMA": "verity-vllm/build-relabel/v1",
     "CALL_BOUNDARIES_GATE_SCHEMA": "verity-vllm/call-boundaries-gate/v1",
     "CAPTURE_LOG_SCHEMA": "verity-capture/log/v1",
+    "CAPTURE_MAP_SCHEMA": "verity-vllm/capture-map/v0",
     "CAPTURE_SNAPSHOTS_SCHEMA": "verity-capture/snapshots/v1",
     "CENSUS_RANK_SCHEMA": "verity-capture/census-rank/v0",
     "COMMITTED_STORE_SCHEMA": "verity-vllm/committed-store/v1",

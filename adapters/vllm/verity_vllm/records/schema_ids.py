@@ -31,6 +31,9 @@ COMMITTED_STORE_SCHEMA = "verity-vllm/committed-store/v1"
 SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 #: the reconciliation of what a Commit did not execute, which `commit.executed_prefix.reconcile_not_executed` writes
 NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
+#: a capture map (`commit.capture_map.SCHEMA`), a JSON under `manifests/capture-maps/`, which `load` refuses any other
+#: than
+CAPTURE_MAP_SCHEMA = "verity-vllm/capture-map/v0"
 
 # --- the Commit's driver (`verity_vllm.pipeline`)
 #: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
