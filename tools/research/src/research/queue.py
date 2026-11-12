@@ -2444,7 +2444,9 @@ class Queue:
         head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates
         are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
         holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
-        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None)."""
+        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None).  Its
+        worktree is added and removed under the clone's worktree lock (`worktrees_locked`), which train.sh's launches in the
+        same clone hold for theirs: a prune beside a worktree half made deletes it."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
@@ -2460,9 +2462,10 @@ class Queue:
             rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         except tomllib.TOMLDecodeError as e:
             return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
-        with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
+        with scratch() as tmp:
             wt = Path(tmp, "wt")
-            _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
+            with worktrees_locked(self.workdir):
+                _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
             try:
                 rename = write_scripts(self.workdir, scripts, Path(tmp, "rename")) / RENAME
                 r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
@@ -2496,8 +2499,9 @@ class Queue:
                          f"{_tail(c, 1)}")
                 return commit, "", report
             finally:
-                _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
-                _git(self.workdir, "worktree", "prune", check=False)
+                with worktrees_locked(self.workdir):
+                    _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
+                    _git(self.workdir, "worktree", "prune", check=False)
 
     def _merge_through(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` of ``pr`` onto ``tip``, carried across each move below it (`_moves`) that its head lacks: restacked through
@@ -2525,10 +2529,8 @@ class Queue:
         """Whether ``head``'s own change (from its merge base with the move's base) names a word of ``mv``'s map, in a path or a
         line, as text in any case: a superset of what `rename.py` rewrites in it."""
         if mv.map not in self._words_of:
-            r = _git(self.workdir, "show", f"{mv.commit}^1:{mv.map}", check=False)
-            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its rename.py made the move from it
-            words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {}))}
-            self._words_of[mv.map] = {w.lower() for w in words if w}
+            got = map_retires(self.workdir, f"{mv.commit}^1", mv.map)
+            self._words_of[mv.map] = set(got.words) if got else set()
         r = _git(self.workdir, "diff", "-U0", "--no-color", "--no-ext-diff", f"{mv.commit}^1...{head}", check=False)
         low = r.stdout.lower()
         return bool(r.returncode) or any(w in low for w in self._words_of[mv.map])
@@ -2934,7 +2936,8 @@ class Queue:
         PR based on another branch among them.  ``fetched``, called once the clone is fetched and before anything reads it,
         returns ``stale`` instead: the command reads its cutoff and drive.toml at `main` there, so it fetches once.  With
         ``loop``, as the verified queue admits each onto `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on
-        `main` landed, and a move PR that conflicts with `main` refused as any PR is; else as `sync` builds `next`, with each
+        `main` landed, a move PR that conflicts with `main` refused as any PR is, and so is a head whose own change names what a
+        move it lacks retires (`lacked_moves`); else as `sync` builds `next`, with each
         member's place on it, a head on `checked` landed there, and the refusals of the last sync."""
         self._clone()
         state = self.load_state()
@@ -2985,6 +2988,7 @@ class Queue:
                                               and (loop or not e.pr.move)
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
+        maps: dict[tuple[str, str], Retired | None] = {}
         for n in contained_first(entries):
             e = entries[n]
             if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
@@ -2996,6 +3000,8 @@ class Queue:
             elif e.state == "ready" and (loop or not e.pr.move) and (files := files_of[e.pr.head]):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
+            elif e.state == "ready" and loop and (lacked := lacked_moves(self.workdir, main, e.pr.head, maps=maps)):
+                e.state, e.why = "refused", lacks_why(lacked)
             elif e.state == "ready":
                 e.why = ("admitted: the verified queue merges it into a candidate on `main` once it has a land verdict"
                          + (", or on its mark alone once its move is certified on `main`, as drive.toml allows" if e.pr.move else
@@ -3986,7 +3992,7 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 
 #: a move commit's line naming its map, and so its script, as `tools/move/restack.py`'s `MOVE_LINE` reads it: `Move:` (drive's
 #: and `stage.py`'s word maps, `rename.py`) and `Layout-move:` (`stage.py`'s path maps, `layout.py`)
-MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): tools/move/[\w.-]+\.toml(?: --no-lock)?$", re.M)
+MOVE_LINE_RE = re.compile(r"^(?:Move|Layout-move): (tools/move/[\w.-]+\.toml)(?: --no-lock)?$", re.M)
 #: `mapped_tree`'s program: with `tools/move/restack.py` from the directory argv[1], runs the move argv[3] on commit argv[2] as a
 #: restack runs one on a branch (`run_script`: its move line's script and arguments, its parent's `tools/move/`, in a scratch
 #: worktree), and prints the tree it leaves (`MAPPED_RE`)
@@ -4092,6 +4098,83 @@ def moves_between(repo: Path, onto: str, head: str) -> list[tuple[str, list[str]
             commit, *parents = line.split()
             found.append((commit, parents))
     return found
+
+
+@dataclass(frozen=True)
+class Retired:
+    """What a move's map retires, as a branch's own change may still name it (`map_retires`): ``names``, matched as written
+    (paths, a directory's without its `/`, and dotted module names), and ``words``, a word map's old words in lower case,
+    matched in any case: a superset of what `rename.py` renames."""
+    names: frozenset[str] = frozenset()
+    words: frozenset[str] = frozenset()
+
+    def named(self, text: str) -> list[str]:
+        """Those of them ``text`` holds."""
+        low = text.lower()
+        return sorted({n for n in self.names if n in text} | {w for w in self.words if w in low})
+
+
+def map_retires(repo: Path, at: str, path: str) -> Retired | None:
+    """What the move map ``path`` retires, read at ``at`` (the move's base, where `tools/move/stage.py` ran it and
+    `move_check.py` reads it), or None when it is missing there or doesn't parse (said on stderr): a layout map's old paths
+    that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names
+    (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
+    r = _git(repo, "show", f"{at}:{path}", check=False)
+    try:
+        data = tomllib.loads(r.stdout) if not r.returncode else None
+    except tomllib.TOMLDecodeError as e:
+        print(f"research queue: the move map {path} at {at[:12]} doesn't parse ({e}), so a head that lacks its move "
+              "stays out", file=sys.stderr)
+        data = None
+    if not isinstance(data, dict):
+        return None
+
+    def table(key: str, of: dict = data) -> dict:
+        return t if isinstance(t := of.get(key), dict) else {}
+
+    paths = {o for o, n in table("paths").items() if o != n}
+    paths |= {p for k in ("retired", "drop") if isinstance(ps := table(k).get("paths"), list) for p in ps if isinstance(p, str)}
+    modules = {o for k in ("modules", "aliases") for o, n in table(k).items() if o != n and "." in o}
+    words = {*table("words"), *(w for s in data.get("words_in") or [] if isinstance(s, dict) for w in table("words", s))}
+    return Retired(frozenset(p.rstrip("/") for p in paths if p.strip("/")) | frozenset(modules),
+                   frozenset(w.lower() for w in words if w))
+
+
+def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None = None,
+                 maps: dict[tuple[str, str], Retired | None] | None = None) -> list[tuple[str, str, list[str] | None]]:
+    """Each move ``main`` landed that ``head`` lacks (`moves_between`) whose map (`map_retires`, kept in ``maps`` by its base and
+    path) retires what ``head``'s own change names, oldest first: (the move, its map, those names, or None when its map can't
+    be read).  The own change is ``head``'s against its merge base with ``main``: its files (``files``, else `own_files`) and
+    its added lines.  A head whose change names none of them crosses the moves by a plain merge of `main`, and what a map
+    can't list (a path spelled in parts, a relative one) is the check's to find."""
+    if not (moves := moves_between(repo, main, head)):
+        return []
+    maps = {} if maps is None else maps
+    files = own_files(repo, main, head) if files is None else files
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    text = "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+    out = []
+    for commit, parents in moves:
+        if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
+            continue
+        if (key := (parents[0] if parents else f"{commit}^", m[1])) not in maps:
+            maps[key] = map_retires(repo, *key)
+        if (got := maps[key]) is None or (names := got.named(text)):
+            out.append((commit, m[1], None if got is None else names))
+    return out
+
+
+def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
+    """Why a head `lacked_moves` names moves of is left out, with the fix."""
+    def said(names: list[str] | None) -> str:
+        if names is None:
+            return "whose map can't be read at its base, so what its own change names of it can't be told"
+        shown = ", ".join(f"`{x}`" for x in names[:5]) + (f" and {len(names) - 5} more" if len(names) > 5 else "")
+        return f"whose retired names its own change names ({shown})"
+
+    moves = "; and ".join(f"the move {c[:12]} `main` landed ({m}), {said(ns)}" for c, m, ns in lacked)
+    return (f"it lacks {moves}: merge `main` into it and rename them, or cross it with `tools/move/restack.py`, and mark the "
+            "new head ready")
 
 
 def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
@@ -4563,7 +4646,8 @@ LEAN_FIXTURES = "tools/verity/lean/"
 #: skips `finally`)
 MERGED_PREFIX = "research-merged-"
 #: where a merged worktree goes when its caller names no root (`merged_worktree`): `main` sets it from --preflight-root, so
-#: drive's other merged trees (`ported`'s codemod) leave its network-volume TMPDIR too, where each add and remove takes minutes
+#: drive's other merged trees (`ported`'s codemod, a move's regeneration: `scratch`) leave its network-volume TMPDIR too, where
+#: each add and remove takes minutes
 MERGED_ROOT: Path | None = None
 #: prints, as JSON, the paths of the suites `suites.py`'s `touched` selects for the change from commit argv[1] to tree argv[2]
 #: (`suites`) and, for each, the fetched registry entries under its inputs (`fixtures`), as `suites.py` picks what to fetch before

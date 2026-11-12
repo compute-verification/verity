@@ -19,6 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from research import merge
+from research.merge import REPAIRED
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
@@ -1212,15 +1213,15 @@ def test_of_check_s_own_code_a_lean_input_is_common_py_and_the_code_that_runs_th
     assert set(lean) <= set(lean_inputs(other)), "each is one in a tree that doesn't hold it yet"
 
 
-def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_caps():
+def test_of_the_lean_check_s_code_a_lean_input_is_what_a_key_holds_and_the_ratchet_with_its_limits():
     """Of `tools/verity/lean`: the files every audit's key holds (`lean_audit.tool_files`), with the task graph's contract;
     `lean_changed.py`, which every records key holds beside them; and what no key holds but lean-audit's verdict or a lock run's
-    commit does: the unread ratchet, its caps, and the caps a lock run repairs in `tests/test_lean_packages.py`.  Not its
-    tests and their fixtures, a Lake file among them, its docs, nor the tools beside the audit that no key holds."""
+    commit does: the unread ratchet and the two files a lock run repairs (`merge.REPAIRED`: the ratchet's limits and those of
+    `tests/test_lean_packages.py`).  Not its tests and their fixtures, a Lake file among them, its docs, nor the tools beside
+    the audit that no key holds."""
     tool = "tools/verity/lean"
     lean = [f"{tool}/check.py", f"{tool}/lean_audit.py", f"{tool}/lean_changed.py", f"{tool}/module_keys.py",
-            f"{tool}/unread.py", f"{tool}/unread-caps.json", "tools/verity/graph/verity_graph/contract.py",
-            "tests/test_lean_packages.py"]
+            f"{tool}/unread.py", "tools/verity/graph/verity_graph/contract.py", *sorted(REPAIRED)]
     other = [f"{tool}/README.md", f"{tool}/merge.py", f"{tool}/warm.py", f"{tool}/unread_gate.py", f"{tool}/pyproject.toml",
              f"{tool}/tests/test_cache.py", f"{tool}/tests/fixtures/control/lakefile.toml",
              f"{tool}/tests/fixtures/control/lake-manifest.json", f"{tool}/tests/fixtures/control/data.json",
