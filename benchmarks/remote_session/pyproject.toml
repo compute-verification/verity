@@ -13,7 +13,10 @@
 # on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
 # of the gate node's boundary. That store, what a pinned
 # checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
-# (`verity/protocols/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
+# (`verity/protocols/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints. The suite also runs
+# PoUB's verifier host (`verity/protocols/poub/device/live_verifier/host.py`) on what this directory holds
+# (`tests/test_live_verifier.py`): a run through its gate and `tests/stub_verifier.py`, a real session over
+# `test_session.run`, whose record `auditor_line.py` reads, `fetch` ships and `replay` replays through both verifiers.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -28,6 +31,7 @@ untraced = [
     "tests/test_gate_run.py",
     "tests/test_gate_whatif.py",
     "tests/test_lease.py",
+    "tests/test_live_verifier.py",
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
@@ -59,7 +63,11 @@ inputs = ["verity/protocols/poub/prover/remote_session/prover.py", "verity/proto
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py",
+          # test_live_verifier.py: PoUB's verifier host, the gate's stand-ins its own tests use, and the host's deployed
+          # files (the configuration the gate reads, the tunnel keys' options)
+          "verity/protocols/poub/device/live_verifier/host.py", "verity/protocols/poub/device/live_verifier/tests/gate_harness.py",
+          "tools/research/src/research/pods/nebius/verifier"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

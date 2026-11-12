@@ -1,8 +1,7 @@
 # PoUB's verifier on its auditor host: `host.py`, the gate every key of the host's research is
 # forced to, and the run, replay and store put its units run as `auditor` (pods/nebius/verifier/). Not a package: the suite runs the
-# gate in this process with its root steps (chown, systemctl) injected, holds its whitelist to verifier.py's own parser, and runs a
-# run through `tests/stub_verifier.py` (a real session over PoUB's in-process harness, `test_session.run`, at the
-# paths the gate's command line names), whose record `fetch` ships and `replay` replays through both verifiers.
+# gate in this process with its root steps (chown, systemctl) injected and holds its whitelist to verifier.py's own parser
+# (`tests/gate_harness.py`, which the remote session's run through the gate, `benchmarks/remote_session/tests/`, shares).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -14,25 +13,13 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", 
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
-          # the Lean verifier a session runs beside audit.AuditRun, and the difftest a replay serves: their Lake
-          # packages
-          "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
-          "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
-          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/randomness", "verity/difftest/lean", "verity/difftest/python",
+          # the difftest the replay module imports
+          "verity/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/spot",
-          # verifier.py and its in-process harness, which the stub verifier runs
-          "benchmarks/remote_session", "verity/protocols/poub/prover/remote_session/prover.py", "verity/protocols/poub/prover/remote_session/device.py",
-          # auditor_line.py --boundary, which the stub verifier's run is read with: the network certifiers' records and audit
-          "verity/protocols/certifier", "verity/protocols/certifier/prover",
-          # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
-          "verity/composite/device/live_challenger/serve.py",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its
           # publish imports from the pinned tree
           "tools/research/src/research",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/protocols/poub/device/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py",
-          # the sender's witness rule, which the compose gate's own (host.py's `witness`) is held to
-          "benchmarks/one_stage/served_verdicts.py"]
+          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py"]

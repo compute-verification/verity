@@ -346,12 +346,6 @@ BENCHMARKS_IMPORTERS = {
     "verity/composite/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",
-    "verity/protocols/poub/device/live_verifier/tests/stub_verifier.py":
-        "memory-accounting: the remote session's in-process harness "
-        "(`benchmarks/remote_session/tests/test_session.py`), loaded by path",
-    "verity/protocols/poub/device/live_verifier/tests/test_host.py":
-        "memory-accounting: the remote session's store layout and line of record "
-        "(`benchmarks/remote_session/store_layout.py`, `auditor_line.py`), loaded by path",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).

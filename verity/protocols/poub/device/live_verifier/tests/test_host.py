@@ -3,114 +3,36 @@
 one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
 any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
 stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
-host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
-(`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
-and `replay` replays it through both verifiers."""
+host with no first-parent list of main, doesn't run. The gate's stand-ins are `gate_harness.py`'s; a run through the
+gate that needs the remote session's code (a real session, its line of record, a synthetic checkpoint's binding) is
+tested beside it (`benchmarks/remote_session/tests/test_live_verifier.py`)."""
 from __future__ import annotations
 
-import argparse
-import ast
 import fcntl
-import gzip
 import hashlib
 import io
 import json
 import re
-import shlex
 import subprocess
 import sys
 import tarfile
-import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from gate_harness import (BASE, BOUND, KEY, LANE, PACED, PACKAGING, PIN, ROLE, ROOT, RUN, SSH, T0, T1, H, Units, V,
+                          call, gate, host_at, parsed, refused)
+from verity.protocols.poub.verifier.session import challengers
+
 HERE = Path(__file__).resolve().parent
-ROOT = Path(__file__).resolve().parents[6]
-RS = ROOT / "benchmarks" / "remote_session"
-PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(RS))
-sys.path.insert(0, str(ROOT))
-
-from verity.protocols.poub.verifier.session import challengers  # noqa: E402
-import host as H  # noqa: E402
-import store_layout as SL  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-
-T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
-PIN = "c" * 40
-KEY = "ab" * 64
-LANE = "memory-accounting"
-RUN = "v20261021T130000Z-ab12"
-SSH = "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
-BASE = ["run", "--peer", "gpu-node", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
-PACED = [*BASE, "--paced", "2:8000:40:2", "4:16000:40:2"]
 SESSIONS = ["run", "--peer", "gpu-node", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
             "--sessions", "3", "--windows", "7", "--window-ms", "1000", "--samples", "2773", "--minutes", "30",
             "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4"]
-ROLE = "SYNTHETIC_BF16"
-BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 
 
 @pytest.fixture
 def svc(tmp_path) -> H.Host:
-    settings = json.loads((PACKAGING / "verifier.json").read_text())
-    settings["challenger"].update(ssh=SSH, peer="auditor-host")
-    settings["peers"] = {"gpu-node": next(iter(settings["peers"].values()))}
-    (tmp_path / "verifier.json").write_text(json.dumps(settings))
-    (tmp_path / "var" / "runs").mkdir(parents=True)
-    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
-                  main=tmp_path / "main-first-parent.txt")
-    H.record_pin(host.pins, PIN, T0, seal=lambda p: None)
-    host.main.write_text(f"{PIN}\n{'e' * 40}\n")
-    return host
-
-
-class Units:
-    """systemd as the gate sees it: the units it started (live until cleared), stopped and closed."""
-
-    def __init__(self) -> None:
-        self.started: list[str] = []
-        self.stopped: list[str] = []
-        self.live: list[str] = []
-        self.closed: list[str] = []
-
-    def busy(self) -> list[str]:
-        return list(self.live)
-
-    def start(self, unit: str) -> None:
-        self.started.append(unit)
-        self.live.append(unit)
-
-    def stop(self, unit: str) -> None:
-        self.stopped.append(unit)
-
-    def close(self, node: str) -> dict:
-        self.closed.append(node)
-        return {"node": node, "closed": True}
-
-
-def gate(svc, argv, units: Units | None = None, *, token="ab12", now=T0, **hooks) -> tuple[int, bytes]:
-    units = units or Units()
-    sink = io.BytesIO()
-    rc = H.gate(argv, svc, sink, now=now, token=token, pinned=PIN, busy=units.busy, start=units.start,
-                stop=units.stop, close=units.close, own=lambda p: None, **hooks)
-    return rc, sink.getvalue()
-
-
-def call(svc, words, units: Units | None = None, *, key=LANE, **kw) -> tuple[int, bytes]:
-    """`words` as a gate key registered for `key` sends them (`-`, a read-only key)."""
-    return gate(svc, ["--ssh", shlex.join(words), "--key", key], units, **kw)
-
-
-def refused(got: tuple[int, bytes]) -> str:
-    rc, out = got
-    assert rc == 3, out
-    return json.loads(out)["refused"]
+    return host_at(tmp_path)
 
 
 def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_its_one_unit(svc):
@@ -154,32 +76,6 @@ def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_par
     assert units.started == [] and list(svc.runs.iterdir()) == []
 
 
-def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
-    """The verifier's arguments as its own parser reads the gate's command line, and where it then listens: its
-    process's main (`verifier_process.py`) up to the listen, which nothing reaches."""
-    got = {}
-    parse = argparse.ArgumentParser.parse_args
-
-    def keep(self, *args, **kw):
-        got["a"] = parse(self, *args, **kw)
-        return got["a"]
-
-    class Listened(Exception):
-        pass
-
-    def listen(address, port):
-        raise Listened(address, port)
-
-    monkeypatch.setattr(argparse.ArgumentParser, "parse_args", keep)
-    monkeypatch.setattr(V, "Checks", lambda workers: None)
-    monkeypatch.setattr(V.wire, "listen", listen)
-    monkeypatch.setattr(sys, "setswitchinterval", lambda s: None)
-    monkeypatch.setattr(sys, "argv", argv[2:])
-    with pytest.raises(Listened) as e:
-        VP.main()
-    return got["a"], e.value.args
-
-
 @pytest.mark.parametrize("words, want", [
     (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "port": 7951, "challenger_minutes": 120}),
     (SESSIONS, {"paced": None, "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
@@ -204,48 +100,14 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
 
 @pytest.fixture
 def tree(svc, tmp_path) -> Path:
-    """A pinned tree whose core pin (`models.json`'s shape) pins ROLE as the checkpoint infra provisioned in the host's
-    models dir: a small synthetic BF16 one (`store_layout.synthetic`, an arena of 6 weights blocks)."""
-    ckpt = svc.root / "models" / ROLE
-    pin = SL.synthetic(ckpt, name=ROLE, layers=1, hidden=16, heads=2, kv_heads=1, intermediate=32, vocab=64)
-    (ckpt / "pin.json").unlink()
+    """A pinned tree carrying core's pin (`models.json`) and ROLE's directory in the host's models dir, which is all
+    the gate checks of a bound run (`bound_paths`): the store's binding to the pin is verifier.py's, tested on a
+    synthetic checkpoint beside the remote session (`test_live_verifier.py`)."""
+    (svc.root / "models" / ROLE).mkdir(parents=True)
     t = tmp_path / "tree"
     (t / H.MODEL_PINS).parent.mkdir(parents=True)
-    (t / H.MODEL_PINS).write_text(json.dumps({ROLE: {
-        "checkpoint_sha512": pin["checkpoint_sha512"], "files": pin["checkpoint"], "recipe": "bf16/v1",
-        "repo": "example/synthetic-bf16", "revision": "0" * 40}}, indent=1, sort_keys=True) + "\n")
+    (t / H.MODEL_PINS).write_text(json.dumps({ROLE: {"checkpoint_sha512": "0" * 128}}) + "\n")
     return t
-
-
-def test_a_bound_runs_command_line_names_its_roles_checkpoint_and_cores_pin_which_verifier_py_binds_to(
-        svc, tree, monkeypatch, capsys, tmp_path):
-    """`--model ROLE` names no path: the gate adds the role's directory in the host's models dir as `--checkpoint` and
-    the pinned tree's `models.json` as verifier.py's `--pin`, apart from the gate's own `--pin` (the challenger's key,
-    `--challenger-pin`); the rest is the unbound run's command line, and verifier.py binds the store to that pin before
-    it listens."""
-    rc, out = call(svc, BOUND, tree=tree)
-    doc = json.loads(out)
-    assert rc == 0, doc
-    req = json.loads((svc.runs / RUN / "request.json").read_text())
-    assert (req["model"], req["engines"], req["arena-blocks"], req["pin"]) == (ROLE, 2, 7, KEY)
-    argv = req["argv"]
-    assert argv == doc["argv"]
-    i = argv.index("--model")
-    assert argv[i:] == ["--model", ROLE, "--checkpoint", str(svc.root / "models" / ROLE), "--pin",
-                        str(tree / H.MODEL_PINS), "--engines", "2", "--arena-blocks", "7",
-                        "--paced", "2:8000:40:2", "4:16000:40:2"]
-    assert argv.count("--pin") == 1 and argv[argv.index("--challenger-pin") + 1] == KEY
-    unbound = {k: v for k, v in req.items() if k not in ("model", "engines", "arena-blocks", "argv")}
-    assert argv[:i] + argv[i + 10:] == H.verifier_argv(svc, RUN, unbound, svc.settings(), tree=tree)
-
-    monkeypatch.setattr(V.os, "sched_getaffinity", lambda pid: {0})
-    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
-    a, listened = parsed(monkeypatch, argv)
-    assert listened == ("127.0.0.1", 7951)
-    assert (a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks, a.challenger_pin, a.layout_workers) == (
-        ROLE, svc.root / "models" / ROLE, tree / H.MODEL_PINS, 2, 7, KEY, 1)
-    pinned = json.loads((tree / H.MODEL_PINS).read_text())[ROLE]["checkpoint_sha512"]
-    assert f"store: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
 
 
 def test_a_bound_run_is_refused_before_anything_starts_without_its_roles_checkpoint_or_cores_pin(svc, tree, tmp_path):
@@ -481,19 +343,6 @@ def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it(
     assert code.index('host.py" pinned "$c"') < code.index('ln -sfn "$c" "$O/current.tmp"')
 
 
-def test_a_tunnel_key_gets_a_pty_only_while_the_challengers_pinned_client_forces_one():
-    """ssh ends a session whose forced pty (`-tt`) the server refuses (OpenSSH 9.6, checked against a real sshd), so the
-    prover's key, whose client is run.sh's `ssh -T`, has no `pty`, and the challenger's keeps it only while serve.py
-    forces one."""
-    setup = (PACKAGING / "setup.sh").read_text()
-    assert "opts=restrict,port-forwarding\n" in setup and '[ "$acct" = prover ] || opts+=,pty\n' in setup
-    verifier_host = (RS / "run.sh").read_text().split('[ -n "${VERIFIER_SSH:-}" ]; then')[1].split("\nelif ")[0]
-    assert re.search(r"\bssh -T\b", verifier_host) and "-tt" not in verifier_host
-    serve = (ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py").read_text()
-    assert re.search(r'^SSH = \["ssh", "-tt"', serve, re.M), (
-        "serve.py no longer forces a pty: drop `pty` from the challenger's tunnel key in verifier/setup.sh, and this check")
-
-
 def test_fetch_reads_a_run_and_nothing_else(svc):
     for words in (["fetch"], ["fetch", RUN, "--all"], ["fetch", RUN, "--transcripts", "x"]):
         assert refused(call(svc, words, key="-")) == "fetch RUN [--transcripts]"
@@ -518,9 +367,6 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "print(host.replay_module().__file__)",
     "sys.path.insert(0, str(host.RESEARCH)); from research.store import cli; print(cli.__file__)",
     "sys.argv = ['verifier.py', '--help']; runpy.run_path(str(host.VERIFIER), run_name='__main__')",
-    "sys.argv = ['auditor_line.py', '--help']; "
-    "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
-    "run_name='__main__')",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
     """The host runs its units with its own python3 (`-I`), where neither `verity` nor any other package is installed:
@@ -529,78 +375,6 @@ def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
                         f"import host; {code}"], capture_output=True, text=True, cwd=tmp_path)
     assert p.returncode == 0, p.stderr[-2000:]
     assert "site-packages" not in p.stdout
-
-
-def names(tar: tarfile.TarFile) -> set[str]:
-    return {m.name for m in tar.getmembers() if m.isfile()}
-
-
-@pytest.mark.slow
-def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_ships_and_replay_replays(
-        svc, tmp_path):
-    """The one test that runs a session (with the Lean verdict, so it builds the Lean verifier and the difftest): what
-    the cheaper tests can't show is that the runner's out/ is the one `auditor_line.py` and `replay.py` read, from a
-    real transcript, gzipped, summed and shipped."""
-    units = Units()
-    rc, out = call(svc, [*BASE, "--paced", "2:8:40:2"], units)
-    assert rc == 0, out
-    req = json.loads((svc.runs / RUN / "request.json").read_text())
-    end = H.execute(svc, RUN, pinned=PIN, now=lambda: T1,
-                    argv=[sys.executable, str(HERE / "stub_verifier.py"), *req["argv"][3:]])
-    d, o = svc.runs / RUN, svc.runs / RUN / "out"
-    assert end["rc"] == 0, (o / "verifier.log").read_text()
-    assert sorted(p.name for p in o.iterdir()) == [
-        "challenger", "rc.txt", "registry.json", "transcripts", "verifier.json", "verifier.log"]
-    assert not (svc.scratch / RUN).exists()
-    v = json.loads((o / "verifier.json").read_text())
-    (s,) = v["sessions"]
-    t = s["transcript"]
-    name = Path(t["path"]).name
-    assert s["accepted"] and Path(t["path"]).parent == svc.scratch / RUN / "transcripts"
-    raw = gzip.decompress((o / "transcripts" / f"{name}.gz").read_bytes())
-    assert (len(raw), hashlib.sha256(raw).hexdigest()) == (t["bytes"], t["sha256"])
-    assert (o / "transcripts" / "SHA256SUMS").read_text() == (
-        f"{hashlib.sha256((o / 'transcripts' / f'{name}.gz').read_bytes()).hexdigest()}  ./{name}.gz\n")
-    assert end["transcripts"] == [{"name": name, "bytes": t["bytes"]}]
-    assert end["files"] == {str(p.relative_to(d)): H.digest_of(p) for p in sorted(o.rglob("*")) if p.is_file()}
-    assert json.loads((o / "registry.json").read_text()) == v["registry"] == json.loads(svc.registry.read_text())
-    units.live.clear()
-    rc, st = call(svc, ["status", RUN], units, key="-")
-    st = json.loads(st)
-    assert rc == 0 and st["listening"] and not st["active"] and st["end"]["rc"] == 0 and st["replay"] is None
-
-    import auditor_line
-    line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
-    assert line["registration"] == v["registration"]["digest"]
-    assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
-        (0, True, "no challenger log: coins drawn in the verifier's process")]
-
-    rc, shipped = call(svc, ["fetch", RUN], units, key="-")
-    assert rc == 0
-    with tarfile.open(fileobj=io.BytesIO(shipped), mode="r:gz") as tar:
-        light = names(tar)
-    assert {f"{RUN}/request.json", f"{RUN}/end.json", f"{RUN}/out/verifier.json", f"{RUN}/out/transcripts/SHA256SUMS",
-            f"{RUN}/out/transcripts/transcripts.json"} <= light
-    assert not any(n.endswith(".json.gz") for n in light)
-    rc, shipped = call(svc, ["fetch", RUN, "--transcripts"], units, key="-")
-    assert rc == 0
-    with tarfile.open(fileobj=io.BytesIO(shipped), mode="r:") as tar:
-        assert names(tar) == light | {f"{RUN}/out/transcripts/{name}.gz"}
-        tar.extractall(tmp_path / "fetched", filter="data")
-    assert all((tmp_path / "fetched" / n).read_bytes() == (svc.runs / n).read_bytes() for n in light)
-
-    assert call(svc, ["replay", RUN], units)[0] == 0
-    replayed = H.replay_run(svc, RUN, now=lambda: T1)
-    assert (replayed["rc"], replayed["kind"], replayed["sums_match"], replayed["gz_sums"]) == (
-        0, "transcript", True, {f"{name}.gz": True}), (d / "replay" / "replay.log").read_text()
-    rows = json.loads((d / "replay" / "replay.json").read_text())
-    assert rows and all(r["agree"] and r["held"] and r["recorded"] == "accepted" for r in rows), rows
-    assert not (svc.scratch / f"{RUN}-replay").exists()
-
-    gz = o / "transcripts" / f"{name}.gz"
-    gz.write_bytes(gzip.compress(raw.replace(b'"events"', b'"events" ', 1)))
-    tampered = H.replay_run(svc, RUN, now=lambda: T1)
-    assert tampered["rc"] == 1 and tampered["gz_sums"] == {f"{name}.gz": False} and not tampered["sums_match"]
 
 
 def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening": 47611}\n{"signed": "x"}\n', rc=0):
@@ -936,24 +710,9 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
     assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
 
 
-def witness_rule(source: str) -> tuple[dict[str, list], str]:
-    """A module's witness tables, each in the order it is written, and its `witness` without the docstring, as syntax."""
-    body = ast.parse(source).body
-    tables = {t.id: list(ast.literal_eval(s.value).items()) for s in body if isinstance(s, ast.Assign)
-              for t in s.targets if isinstance(t, ast.Name) and t.id.startswith("WITNESS_")}
-    (rule,) = (s for s in body if isinstance(s, ast.FunctionDef) and s.name == "witness")
-    return tables, ast.dump(ast.Module(body=[rule.args, rule.returns, *rule.body[1:]], type_ignores=[]))
-
-
-def test_the_gate_calls_a_witness_what_the_sender_does():
-    """The gate's `witness` and its three tables are the sender's (`served_verdicts.py witness`, which the served node
-    holds its list to before it sends), entry for entry in the same order and statement for statement: the rule is
-    written in both files, so one edited alone fails here, and the gate takes no name the sender's rule refuses."""
-    ours = witness_rule(Path(H.__file__).read_text())
-    sender = witness_rule((ROOT / "benchmarks" / "one_stage" / "served_verdicts.py").read_text())
-    assert set(ours[0]) == {"WITNESS_DIRS", "WITNESS_TOPS", "WITNESS_NAMES"}
-    assert ours == sender, ("host.py's witness rule and benchmarks/one_stage/served_verdicts.py's differ: make the same "
-                            "edit in both, or have served_verdicts.py read host.py's and delete this test")
+def test_the_gate_names_each_witness_and_why():
+    """The gate's `witness` names each path of a served run's witness with why, and nothing else; that its rule is the
+    sender's (`served_verdicts.py witness`) is held beside the sender (`test_served_verdicts.py`)."""
     assert H.witness(["h1/log.jsonl", "", "windows", "a/values/x", "windows/7/rows", "private/h1/key", "h1/x.key"]) == [
         ("a/values/x", "a committed value file"), ("windows/7/rows", "a sealed row dir (the window's rows)"),
         ("private/h1/key", "H1's prover state (its key)"), ("h1/x.key", "a key")]

@@ -14,15 +14,13 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/remote_session/run.sh`, with `ROLE=verifier` or `ROLE=prover` (`ROLE=both` only tests the scripts on one machine), and `PLAN`, `GIB`, `GPUS` and the sessions' parameters as its header lists them | PoUB sessions on GPUs, the verifier's process and the prover's over TCP. It writes `verifier.json`, `prover.json` and their logs to `$RESEARCH_RUN_DIR/out`. |
 | `benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD` | A gate run in one command: the developer's whole node serving a model, the verifier on the verifier's host through its gate, the coins from the challenger's host, then the line of record (`auditor.sh`, which runs `auditor_line.py`) and the what-if beside it (`gate_whatif.sh`). Each step is a recorded job, and their ids go to `~/.research/gate-runs/PERIOD.env`. |
 
-Read from outside `benchmarks/`: `store_layout.py`, `auditor_line.py` and `tests/test_session.py`, which the live
-verifier's tests (`verity/protocols/poub/device/live_verifier/tests/`) import with this directory and its `tests/` on
-`sys.path`, `auditor_line.py` also run by its path; and the whole directory, which the verifier's host is pinned with,
-beside `verity`. Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
+Read from outside `benchmarks/`: the whole directory, which the verifier's host is pinned with, beside `verity`. The
+live verifier's tests that need this directory's code are here (`tests/test_live_verifier.py`, with the gate's stand-ins
+from `verity/protocols/poub/device/live_verifier/tests/gate_harness.py`). Neither process is here. The prover's (`prover.py`, `device.py`, `session.cu`) is PoUB's prover's, in
 `verity/protocols/poub/prover/remote_session/`, and the verifier's is
 `verity/protocols/poub/verifier/remote_session/verifier_process.py`.
 
-**Status: active.** The live verifier's tests import it (`tests/test_boundaries.py` lists them), the audit's Lean
-verifier names `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session`
+**Status: active.** The live verifier's host is pinned with it, the audit's Lean verifier names `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session`
 over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/remote_session` runs both processes over a loopback, the driver's

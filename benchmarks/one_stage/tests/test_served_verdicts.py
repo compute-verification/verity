@@ -38,6 +38,7 @@ endpoint."""
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import gzip
 import hashlib
@@ -4110,6 +4111,27 @@ def test_witness_names_each_path_a_served_run_holds_as_its_witness_and_why(tmp_p
     monkeypatch.setattr(sys, "stdin", io.StringIO("h1/log.jsonl\nrequests.jsonl\n"))
     assert S.main(["witness"]) == 1
     assert capsys.readouterr().out == "WITNESS requests.jsonl: the requests' prompt and served ids, rows and seeds\n"
+
+
+def witness_rule(source: str) -> tuple[dict[str, list], str]:
+    """A module's witness tables, each in the order it is written, and its `witness` without the docstring, as syntax."""
+    body = ast.parse(source).body
+    tables = {t.id: list(ast.literal_eval(s.value).items()) for s in body if isinstance(s, ast.Assign)
+              for t in s.targets if isinstance(t, ast.Name) and t.id.startswith("WITNESS_")}
+    (rule,) = (s for s in body if isinstance(s, ast.FunctionDef) and s.name == "witness")
+    return tables, ast.dump(ast.Module(body=[rule.args, rule.returns, *rule.body[1:]], type_ignores=[]))
+
+
+def test_the_gate_calls_a_witness_what_the_sender_does():
+    """The compose gate's `witness` and its three tables (the live verifier's `host.py`) are the sender's
+    (`served_verdicts.py witness`, which the served node holds its list to before it sends), entry for entry in the same
+    order and statement for statement: the rule is written in both files, so one edited alone fails here, and the gate
+    takes no name the sender's rule refuses."""
+    ours = witness_rule(Path(_live_host().__file__).read_text())
+    sender = witness_rule(Path(S.__file__).read_text())
+    assert set(ours[0]) == {"WITNESS_DIRS", "WITNESS_TOPS", "WITNESS_NAMES"}
+    assert ours == sender, ("host.py's witness rule and served_verdicts.py's differ: make the same edit in both, or have "
+                            "served_verdicts.py read host.py's and delete this test")
 
 
 @pytest.mark.parametrize("extra, line", [

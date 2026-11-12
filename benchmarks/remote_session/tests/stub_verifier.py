@@ -1,5 +1,5 @@
 """verifier.py as the host's runner starts it, with the prover in this process: given the gate's command line, it runs one paced
-session over PoUB's in-process harness (`benchmarks/remote_session/tests/test_session.py`'s `run`, a CPU prover on
+session over PoUB's in-process harness (`test_session.py`'s `run` beside it, a CPU prover on
 a pass clock, the Lean verdict) with its transcript in `--transcript`, and leaves `--out` as verifier.py does: `verifier.json`
 (its sessions, registration and registry), `challenger/`, the registry at `--registry`. It prints the listening line the gate's
 `status` reads."""
@@ -10,12 +10,9 @@ import json
 import sys
 from pathlib import Path
 
-RS = Path(__file__).resolve().parents[6] / "benchmarks" / "remote_session"
-sys.path.insert(0, str(RS / "tests"))
-
-import test_session as T  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
+import test_session as T
+from verity.protocols.poub.verifier.session import verifier
+from verity.protocols.poub.verifier.session import wire
 
 
 def main() -> int:

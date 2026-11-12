@@ -91,8 +91,13 @@ composite's), and records the pin with the branch it is on (`host.py pinned COMM
 
 ## Tests
 
-`tests/test_host.py` runs the gate in-process with its root steps injected. It holds the whitelist to verifier.py's own
-parser, including a bound run's binding to a `models.json`-shaped pin and the host's main list, and the compose gate's
-receive and compose on toy hand-offs (`benchmarks/one_stage/tests/test_served_verdicts.py` sends one through it with
-`gate-compose`). It also runs one session through `tests/stub_verifier.py` (slow). Run the suite as
-`uv run tools/verity/check/suites.py verity/protocols/poub/device/live_verifier`, on a node (the testing skill).
+`tests/test_host.py` runs the gate in-process with its root steps injected (its stand-ins in `tests/gate_harness.py`).
+It holds the whitelist to verifier.py's own parser, including a bound run's `models.json`-shaped pin and the host's main
+list, and the compose gate's receive and compose on toy hand-offs. Its tests read nothing of `benchmarks/`. Run the suite
+as `uv run tools/verity/check/suites.py verity/protocols/poub/device/live_verifier`, on a node (the testing skill).
+
+What needs the remote session's code is tested beside it, in `benchmarks/remote_session/tests/test_live_verifier.py`: a
+bound run's store bound to a synthetic checkpoint, the prover's tunnel key against `run.sh`, `auditor_line.py` on the
+host's python3, and one session through the gate (`stub_verifier.py`, slow). That the compose gate's witness rule is the
+sender's is held in `benchmarks/one_stage/tests/test_served_verdicts.py`, which also sends a hand-off through the gate with
+`gate-compose`.
