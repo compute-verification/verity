@@ -77893,3 +77893,105 @@ I take (a) unless you say otherwise. **Its difftest rows**: I plan them as the f
 The ready line follows the first and third. Mailbox read at 07:59Z: nothing after your 06:41Z.
 
 **What I need from you:** (a) or (b) for the twin; MEMBERS' read of `Spot/MembersRefusal.lean` at `ce63595747`; and whether the `FLOCK_CHALLENGER=1` gate stays.
+
+## CROSSCLOSE, Thu 12 Nov 08:03Z: `a5.py` and `test_a5_wiring.py` with `main`'s tip in are closed at `57042972d05b` and pass; nine landing closes are on `cursor/proofs-landing-closes-99d1`; `whole_run.py`'s rate is yours to rule before its sha is posted; #9047's new test fails on the crossed line's `population` benchmark, a meet git merged
+
+**1. For LEAN-249 now: `benchmarks/one_stage/a5.py` and `benchmarks/one_stage/tests/test_a5_wiring.py`, at `57042972d05b61a545611c8ede2ab38ef94ee614`**
+
+- [run] Branch `cursor/proofs-landing-closes-99d1`, pushed at `01dea4d2566f`, cut from `de28a691126b`. At `57042972d05b` both files are whole (blobs `d3bcbc8cd44e` and `77434e56efae`): take them by path at that sha.
+- [run] The merge branch's tip I fetched is `1ab0a942376ede7abd75cf03a280a9b9a32b6114` and `main` is `bcaf58a45d5392a3485db5bd61980b3a2c4723a8`. `git diff de28a691126b 1ab0a942376e` is empty on both files, so the cut serves the tip.
+- [read: the stop, `a5.py` in `wiring_negatives`] One stop in `a5.py`. The close takes the crossed line's side, `body[WI.string_at(m, body, p, 0)] ^= 1`. `main`'s side is #9121's eight inline lines, which read `names`; the crossed line removed `names` from the function, so `main`'s side there would name nothing. `wiring.string_at` computes the same offset as those eight lines [read: `verity/commitments/windows/wiring.py`, `string_at`].
+- [run] #9124's change to `a5.py` (`own_replay` and the four places that read it) merged with no stop. The close is the tip's `a5.py` with those 14 lines (+10 −4) and nothing else.
+- [run] `test_a5_wiring.py` has the bytes of my earlier close `7324ec4d80`: `main`'s copy is #9121's head's. Crossed imports; the crossed line's test, then #9121's `Held` and its test.
+- [derived] One line there neither side wrote: `Held` gets `word_bits = 16`. The crossed line's `interface.Window` reads `word_bits` of a registered value; without it #9121's test stops at the attribute [run here]. It is a stand-in's field in a test, no pinned value. Say if you want it another way.
+- [run here] Trial tree `7eac35d253c9` (local, never pushed): the tip, `main`'s tip merged in, the two closes. `test_a5_wiring.py`: 6 passed. #9124's two test files, `test_a5_warden.py` and `test_a5_case_v2.py`: 28 passed.
+- [run: `r20261112-074327-6f04`, same tree] `test_a5_wiring.py`: 6 passed, exit 0. The 13 test files of `benchmarks/one_stage` that import `a5` or name `own_replay`, not slow: 94 passed, 6 deselected, exit 0. The whole `benchmarks/one_stage` suite (quick) is still running; its line comes in my next entry.
+- [derived] In that trial the three other files that stop (`adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`, `verity/protocols/poub/verifier/PROTOCOL.md`) stand at the merge branch's side. They are stand-ins so the tree is whole, not closes.
+- [run] No meet without a stop found beside it: `test_a5_case_v2.py` merged with no stop (the crossed line adds 128 lines of tests that take the `RP` fixture, #9124 rewrites the fixture) and passes in both runs above.
+
+**2. The landing closes, one commit a stop set, each file whole**
+
+[run] All on `cursor/proofs-landing-closes-99d1`. The tip has changed none of these files since the cut, except the pin (row 8).
+
+| # | File | Commit | Serves (head) | Tried |
+|---|---|---|---|---|
+| 1 | `benchmarks/verifier_cost/whole_run.py` | `d22d1644ce14` | #9027 `ff8f3ea94705`, #9047 `40157cc66775` (one blob in both) | **waits for your ruling, section 3**; runs in section 4 |
+| 2 | `verity/protocols/spot/verifier/lean/tests/test_difftest.py` | `cd9819be2258` | #9066 `23b637d143c7`, #8878 `10d1060dd899`, #8893 `7644eae26591`, #8904 `bce41b2dafb3`, #8950 `840b28b0f92d`, #9112 `c454bb683c8e`, #9185 `d5b8ad2f528c` | `e6c7`, `2185`, `3a48` below |
+| 3 | `verity/protocols/spot/verifier/tests/test_optimize.py` | `5d88d49103d6` | #8904, #8950 | `e6c7`, `2185` |
+| 4 | `verity/protocols/spot/optimize.py` and `test_optimize.py` | `f012fd5887e6` | #9112, #9185 | `3a48` |
+| 5 | `test_difftest.py` | `16e5f9633572` | #9116 alone, `f7c857994a36` and its new head `9d26ebc07702` | `bc72` |
+| 6 | `test_difftest.py` | `e9acc17d3ad3` | every one of ours: rows 2 and 5 together | `6e0b` |
+| 7 | `a5.py`, `test_a5_wiring.py` | `57042972d05b` | `main`'s tip (#9121, #9124) | section 1 |
+| 8 | `verity/protocols/pous/lean/TRUSTED.sha256` | `01dea4d2566f` | #9091 `a1fecc4626f2` | section 5 |
+
+- [run] Row 2 is one file for seven heads: `git merge-file` gives the same bytes for #8950 and #9112 as for the stack, and #9185 does not change the file over #9112's head. This matches LAND3's read. The stop is the tail of `PIECE_RUNS`; both sides kept.
+- [run] Row 3: the import line, the stack's `KAPPAS` beside the crossed line's `TensorCommit`. Row 4: #9112's own import line (`SESSIONS` added) and, in `optimize.py`, #9112's `two_stage_counts` with the crossed line's `TensorCommit` in `__all__`. No hunk of `optimize.py` or `test_optimize.py` holds two laws: the crossed line's only change in either file is the rename.
+- [run] Row 5: #9116's new head adds one commit, to `security/lean-audit.json` only, so the close is unchanged.
+- [run] Row 6 (your (b)): the union's lines over the tip are exactly rows 2 and 5 added together. Which is whose: `replay_returned`, `REPLAY_RETURNED`, `(REPLAY_RETURNED, 300)` and `test_a_replay_block_returns_its_units_fields_on_words_of_their_own` are the stack's; `replay_returns`, `REPLAY_RETURNS`, `(REPLAY_RETURNS, 200)` and `test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole` are #9116's. Our changes are additive and edit no line of each other's; they stop against each other only because they insert at the same four places.
+- [run] Tried, each on a local tree of the merge plus that head plus the close:
+  - `r20261112-072314-e6c7` (#8904, on `ded7d80c415b`): difftest selection 6 passed, 113 deselected; `test_optimize.py` 55 passed; `test_two_stage.py` 96 passed; suites so far: `verity-core-sampled-proofs` 266 passed, 2 skipped, three more passed, none failed; running.
+  - `r20261112-073448-2185` (#8950, on `de28a691126b`): done, exit 0. Difftest selection 9 passed, 110 deselected; optimize, plancheck and two_stage 168 passed; `benchmarks/spot_figures` 219 passed, 10 deselected.
+  - `r20261112-072758-3a48` (#9112, on `de28a691126b`): difftest selection 9 passed, 110 deselected; optimize and plancheck 74 passed; `benchmarks/spot_figures` 222 passed, 9 deselected; suites running, two passed, none failed. This run's last "SUITES exit" line is not to be read (a bug in my script masks it); I read its suite lines.
+  - `r20261112-072945-bc72` (#9116, on `de28a691126b`): difftest selection 19 passed, 101 deselected; `test_two_stage.py` 95 passed; suites running.
+  - `r20261112-073201-6e0b` (the union, #9116 and #9112, on `de28a691126b`): difftest selection 25 passed, 97 deselected; two_stage, optimize and plancheck 171 passed; suites running, seven passed, none failed.
+- [derived] Rows 1 to 6 were tried before your 07:38Z rule, so without `main`'s tip in the trial. [run] `main` has changed none of the four files since `d6075b75d289`, and under `verity/protocols/spot` only `verifier/one_stage/verifier_env.sh` and `verifier/tests/test_proofs.py`. I am building one tree with the tip, `main`'s tip, every head and every close, and run it next.
+
+**3. Yours to rule: the rate in `whole_run.py` (#9027 against the crossed line)**
+
+- [read: the stop, tip against `ff8f3ea94705`] The crossed line:
+  `    # a rule states a rate: at 1/population every stratum's count is one, whatever its size`
+  `    law = f"stratified-rate:1/{s.population}"`
+  `    named, table = T.service.params_law(law, s.program, s.query, None)`
+  `    drawn = T.DR.derive(s.program, s.query, named, table)`
+  and `work_table=table` in the record. Its docstring: "a stratified sampling design of one draw per stratum".
+- [read] #9027:
+  `    law = f"stratified-rate:2/{s.population}"`
+  `    named, _ = T.service.params_law(law, s.program, s.query, None)`
+  Its docstring: "the stratified rate of two in the population (`stratified-rate:2/P` over its P units) ... so the sample is one unit of each template, and two of one that holds" more.
+- [derived] The two say different things: one unit a stratum (K = 1), or the rate at which the toy's strata give K = 3 and four sampled units. A benchmark's timings follow the sample.
+- [run] My close `d22d1644ce14` takes #9027's rate and docstring with the crossed line's `named, table`, `drawn` and `work_table=table`. One line git merged without a stop decides the rest: the crossed line's `"instances": sum(st["k"] for st in drawn["strata"])`. So #9027's hunk taken alone leaves `drawn` undefined, and under my close the statement says 4 instances where #9027's own text wrote `len(ms)`, 3. #9027's README line, which merged with no stop, says the sample stays four units.
+- [derived] The other choice: the merge's own blob, rate 1/P, with #9027's docstring and README line taken back.
+- [run here] Both run: `whole_run.py toy 146 --check` accepts under my close (K = 3), under #9027's own text, and under the crossed text.
+- I have not picked for you: the commit is on the branch so you can read it, and I ask you not to post row 1 until you rule.
+
+**4. Meets git merged with no stop, per pull request (your item 5)**
+
+- **#9047: one found, and a test fails on it.** [run: `r20261112-071551-fbc6`, on `ded7d80c415b` + #9047 + row 1] The generator's check: exit 0. `whole_run.sh run toy 146`: exit 0, 20 rows, one with `"symbol":"accept"`. The suite #9047 adds (`benchmarks/verifier_cost`, quick): 7 passed, 2 failed, both in `tests/test_mains.py::test_main_elaborates_against_the_checkouts_verifier`:
+  - `[population]`: "population/Main.lean imports ['SampledProofs'], which no package of PACKAGES holds together". [read] The crossed line added `benchmarks/verifier_cost/population/Main.lean` (`import SampledProofs`, `open Lean SampledProofs`) and `population.sh` (`L=$PWD/verity/core/service/sampled_proofs`, `name = "core_sampled_proofs"`). Those names are nowhere in the tree, on the crossed line either: the package is `verity/protocols/spot/verifier/lean`, `core_spot`, library `Spot`. So the benchmark cannot build today, and nothing tests it until #9047's test reads every `*/Main.lean`.
+  - The directory is ours by the registry [read: `.agents/skills/using-slack/registry.json`]. The fix is four lines in those two files, written like `registration.sh`; what the main calls exists in `Spot` [read]. It is commit `199bb09f8a3c` on my closes branch, local, **not pushed**: it is being tried by `r20261112-074922-2754` (the tip, `main`'s tip, #9047, the closes, the fix). I push and name it when `[population]` passes there.
+  - `[nci_phases]`: `lake build` refuses `inference_only/verifier/nci/lean`'s manifest on `ded7d80c415b` ("dependency 'core_commitments' of 'core_protocol' not in manifest"). lean's manifests commit is after that sha; `2754` reads it on the tip.
+- **#9027:** inside the stopping file only (section 3). `whole_run/Main.lean`: both lines made the same change.
+- **#9121, #9124 (landed):** inside the stopping files only (section 1).
+- **The stack (#9066, #8878, #8893, #8904) and #8950:** none found. [run: `e6c7`] the sampled proofs suite passes with the stack in.
+- **#9112, #9185:** none found. [run] #9185 changes none of the three closed files over #9112's head and stops only where #9112 does.
+- **#9116:** none found so far; `Spot/Pieces.lean`, `Spot/Run.lean`, `SecondStage.lean`, `service.py`, `second_stage.py` and `two_stage.py` merge with no stop and its selections pass [run: `bc72`]; its suites are running.
+- **Ours against ours, not the merge's:** [run] #9112 and #9116 stop against each other in `Spot/Pieces.lean` (3), `benchmarks/spot_figures/second_stage.py` (1) and `test_difftest.py` (4), all additions at one place. Whichever lands second stops on `main` whatever the merge does.
+- **#9091:** one stop, the pin (section 5). Four Lean files both lines changed merge with no stop. [run: `r20261112-073819-235d`, on `de28a691126b` + #9091] `lean_changed.py --try` of `SpotFlock/Facts.lean`, `SpotFlock/Code.lean` and `Claims/Sampling/Reg.lean`: exit 0 each; `Claims/Sampling.lean` running. `security/lean-audit.json` also merges with notes from `merge.py`; it is the lock and not mine.
+
+**5. `TRUSTED.sha256` for #9091**
+
+- [read: `tools/verity/check/pins.py`, `verity/protocols/pous/lean/README.md`] The command that writes it: the `sha256sum ... > TRUSTED.sha256` in that README, run in `verity/protocols/pous/lean`; `python tools/verity/check/pins.py --regen` runs it for every stale pin, and `pins.py --merged OURS THEIRS --conflicted PATH` is the merge's half (it takes OURS and regenerates). lean's worker did the first, on the tree `lake update` rewrote [read: commit `e430d76734` on the merge branch].
+- [run] Which line is whose. #9091 changes one line, `security/Proofs/lakefile.toml`'s: it adds one module, `Proofs.Properties.Spot.SecondRefused`, to that lakefile. The merge changes nine against `main`'s file: that same line (the crossed line's lakefile), `security/Proofs/lake-manifest.json`'s, and seven files under `security/Definitions/Pous`. Only the lakefile's line stops, and neither side's digest is right for the merged file.
+- [run here] It waited for the manifests commit, which the tip has. On the tip + `main`'s tip + #9091 (local `361cb0f4cf7f`) the command changes one line against the tip's file: `security/Proofs/lakefile.toml` from `0cff9c93f55b…` to `3de2975ff7d3…`. After it, `pins.py` finds no stale pin on that tree, `test_pous_trusted.py` gives 9 passed and `tests/test_pins.py` 4 passed.
+- [derived] The file at `01dea4d2566f` holds while `security/Proofs/lakefile.toml` is the merge branch's with #9091's one line added. None of our other ten heads changes a file the pin lists [run]; another lane's landing that does makes the line stale, and the command writes it again. It is memory-accounting's file: I wrote it only by its command.
+
+**6. The older runs**
+
+- [run: `r20261112-070336-9d26`, on `68fc19262653` = `ded7d80c415b` + our fourth to sixth commits] **`benchmarks/one_stage`: 918 passed, 1 failed, 10 error.** All eleven are one cause, lean's: `lake build` refuses a manifest there ("dependency 'core_commitments' of 'core_protocol' not in manifest") in `inference_only/verifier/nci/lean` (ten errors in `test_served_cases.py`) and `pouw/verifier/lean/pearlplus` (`test_served_pearlplus_lean.py`). `test_served_verdicts.py`, the sixth close's file, passes inside the suite. `6f04` reads the same suite on the tip.
+- [run: same] Its two other failing suites: `repository`, the two caps in `tests/test_lean_packages.py` (top's, on the tip since `21f3af548d`); `verity/protocols/certifier/verifier/network`, one error, the same manifest.
+- [run: `r20261112-063715-4580`] All seven steps exit 0: the tries of `Flock.lean`, `Claims/Sampling/Reg.lean`, `Claims/Sampling.lean` and `Flock/Soundness.lean`, the spot verifier's `lake build`, and `whole_run/Main.lean` elaborated.
+- [run: `r20261112-065730-b67b`] `verity/definitions` (quick) passes on the trial tree with the fifth commit.
+
+**7. Runs**
+
+- Running: `6f04` (one_stage suite, about 15 min), `2754` (#9047 on the tip, about 15 min), `235d` (#9091's last try, about 20 min), `e6c7`, `3a48`, `bc72`, `6e0b` (suites, 20 to 40 min).
+- Done: `2185` exit 0, `9b2c` exit 0, `4580` exit 0, `b67b` (its one failing step is my script's `uv run pytest`, not a test), `fbc6` exit 1 (section 4), `9d26` (section 6).
+- [run] Done: `r20261112-061732-4833`, the first trial tree's 84 quick suites: 76 passed, 8 failed. Seven are in my 07:11Z table. The eighth is `verity/definitions`, the two `test_dsa_topk_reads.py` failures the fifth commit closed (they pass in `b67b` and `9d26`). That tree is behind lean's tip and I read it no further.
+
+**Open with you**
+
+1. The rate in `whole_run.py` (section 3): row 1 is not to be posted before you rule.
+2. The `population` fix (section 4): four lines in two files of ours that are not in any stop set. I push it to `cursor/proofs-cross-main-closes-51ee` as its seventh commit when `2754` passes, unless you say it goes elsewhere.
+3. `Held.word_bits = 16` (section 1): a line neither side wrote, in a test.
+
+- Mailbox read through the 07:59Z section. The pass by name over our marked heads is next, its table by 13:30Z.
