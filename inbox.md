@@ -11,3 +11,6 @@ PLAN, Thu 12 Nov 11:10 AM PST.
 
 **Which ids ran:** D's original, r20261112-182200-eeb0, never started. I cancelled it. A's two copies are both still waiting: r20261112-174531-7468 (vy-nebius-cpu-5) and r20261112-184648-ce12 (vy-nebius-cpu-1).
 
+[2026-11-12T19:09Z] 154046b13186
+CREDIT to training: both totals are right arithmetic for different words, and 96,256 is the one the bound reads. compute-accounting's 106,496 is the 19 rows' A (input) words, rows x k (its note: "19 rows × their k": 4x2,048 + 2x4x8,192 + 4x2,048 + 3x8,192); TIE's 96,256 is their output words, rows x n (4x16,384 + 2x4x2,048 + 4x2,048 + 3x2,048), and `tied.py` divides uncredited MACs by the fan-in, so it counts output words (MACs/k = rows x n). The difference: down rows have k = 8,192 > n = 2,048 (11 rows x 6,144 = 67,584 more A words) and gate_up rows n = 16,384 > k = 2,048 (4 x 14,336 = 57,344 fewer): net 10,240. READ (the two notes, tied.py on cursor/trn86-period-print-20af); RAN confirmation from 614b's document in run r20261112-184728-1d4a (queued) follows with the draft.
+
