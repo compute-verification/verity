@@ -1,4 +1,4 @@
-"""The slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: the one module here that
+"""The slowdown calculator (`verity/protocols/inference_only/slowdown`) as this package reads it: the one module here that
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
@@ -37,7 +37,7 @@ from . import work as W
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho"
+CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
@@ -67,7 +67,7 @@ def _calculator():
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
     import periods
-    from rho import envelopes, hardware, params
+    from slowdown import envelopes, hardware, params
 
     return periods, envelopes, hardware, params, params.Registry.load()
 

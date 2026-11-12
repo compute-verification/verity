@@ -51,13 +51,13 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
-Llama-3.1-405B), labeled as constructed, whose shapes are verity/protocols/inference_only/rho's (its `models.toml`, read through
+Llama-3.1-405B), labeled as constructed, whose shapes are verity/protocols/inference_only/slowdown's (its `models.toml`, read through
 `rho.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
 circuit.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
-measures each and sets a_out, a_in and |𝒥| per position beside verity/protocols/inference_only/rho's `fanout`, `legs` and layer products
+measures each and sets a_out, a_in and |𝒥| per position beside verity/protocols/inference_only/slowdown's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.
 
@@ -65,7 +65,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside verity/protoco
 
 The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
-`verity/protocols/inference_only/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
+`verity/protocols/inference_only/slowdown` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
 loads the inference-only policy's calibrations (`verity/protocols/inference_only/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 
@@ -73,6 +73,6 @@ The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), wri
 either it writes no file.
 
 Nothing loads the package. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
-`verity/protocols/inference_only/rho/data/circuits.toml` as data, each number with its source.
+`verity/protocols/inference_only/slowdown/data/circuits.toml` as data, each number with its source.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.

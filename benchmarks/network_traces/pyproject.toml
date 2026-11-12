@@ -58,7 +58,7 @@ untraced = [
 # total_cost.py and the cards they read); where asked, the census's request and GPU peak at the workload card's MACs
 # a token. `verity bench certifier_term`'s runner runs it.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
-          "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
+          "verity/protocols/inference_only/slowdown/data/reference.toml", "verity/protocols/inference_only/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
           "benchmarks/certifier_term/run.py",

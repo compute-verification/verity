@@ -22,7 +22,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/spot/device/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/protocols/certifier/verifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` and `verity/protocols/inference_only/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
+- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` and `verity/protocols/inference_only/slowdown`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
 
 ## Parties
@@ -517,10 +517,10 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator, `verity/protocols/inference_only/rho`.
+calculator, `verity/protocols/inference_only/slowdown`.
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
-(`uv run python verity/protocols/inference_only/rho/periods.py --scenario reference-remote-h200`):
+(`uv run python verity/protocols/inference_only/slowdown/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|

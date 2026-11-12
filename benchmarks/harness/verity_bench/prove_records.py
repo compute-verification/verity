@@ -97,7 +97,7 @@ LEAN_RECORD = "out/" + L.RECORD
 LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "verifier.runs", "accepted", "label", "host.node",
                "host.cores", "host.cpu_model")
 #: each fleet's assumed serving MFU
-FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
+FLEETS = Path("verity/protocols/inference_only/slowdown/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8

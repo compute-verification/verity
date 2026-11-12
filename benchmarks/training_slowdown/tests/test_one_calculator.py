@@ -1,4 +1,4 @@
-"""The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/rho`) through one module,
+"""The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/slowdown`) through one module,
 `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
 
 - One door: no other module or test under this directory imports a module of the calculator or names its directory
