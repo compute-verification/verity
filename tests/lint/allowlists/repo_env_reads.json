@@ -56,7 +56,6 @@
     {"file": "benchmarks/pous/side_by_side.py", "count": 2},
     {"file": "benchmarks/pous/tests/test_pous_harness.py", "count": 2},
     {"file": "benchmarks/pous/tests/test_pous_p2_store.py", "count": 1},
-    {"file": "benchmarks/pouw/exact_kit/exact_kit/checks.py", "count": 5},
     {"file": "benchmarks/pouw/filler/fused_score.py", "count": 8},
     {"file": "benchmarks/pouw/filler/pfill_fp_score.py", "count": 8},
     {"file": "benchmarks/pouw/filler/psched_score.py", "count": 8},
