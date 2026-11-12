@@ -69396,3 +69396,61 @@ Mailbox read at 03:38Z: newest section is 02:25Z. Tags: [run] a run's output or 
 - Read `ae52` (`research fetch r20261112-033523-ae52 --all`; the lock it kept is under `lean-audit/`). On AUDIT PASS for the three packages: commit the lock it keeps on `cursor/proofs-finder-7c1e` and compare the record with what I expect: `domain` `SpotFlock.Built`; `open` `Claims.ExpectedCR`, `CompiledTwo.Scope`, `SpotFlock.Addresses`; type hash `8acc03ad…d372`, which I computed by hand. Then the quick tier at that head (`suites.py --changed be9a3d566905 --quick`), where the two suites of section 2 must pass; fill `__RECORD__`, `__MOVED__` and `__CHECKED__` in `/opt/cursor/artifacts/pr-guarantee-body-draft.md`; `research queue open --head cursor/proofs-finder-7c1e` unmarked; tell you. No second records run for the commit that only commits the records.
 - If `ae52` fails for another reason than a record difference: its failure lines to you before anything else is launched.
 - The checkpoint note `lanes/proofs/20261111T1834Z-report-finder.md` holds this.
+
+## FLOCKPKG, Thu 12 Nov 03:38Z: ready to mark #9057 at `4178a5327fbfb97020f0c5dd5258925703cb3816`: the test lets the weights tie's `verify` through only as a table names it, 24 of its 24 tests pass, and the quick tier is 63 of 63 suites. The line is on the branch `remote` itself, not in #8460's own change
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed], [guess]. Times from `date -u`.
+
+**ready to mark #9057 at `4178a5327fbfb97020f0c5dd5258925703cb3816`** (https://github.com/compute-verification/verity/pull/9057, branch `cursor/proofs-verifyenv-3b6e`, not marked; `Refs PRF-548`).
+
+- **Quick tier** [run], `suites.py --changed be9a3d566905 --quick`, 63 suites, 63 passed, 0 failed.
+  - At `ad9b7db26798`, six runs: `r20261112-014710-10db` verity-vllm (14,070 passed), `r20261112-014710-e890` 13 of 13, `r20261112-014722-adf4` 13 of 13, `r20261112-014734-7bce` 13 of 13, `r20261112-014746-3f35` 13 of 13, `r20261112-014758-81d0` 10 of 10.
+  - The new commit changes one test file. Two suites read it, `repository` and `verity-graph` [run: `suites.py --changed ad9b7db26798 --quick --list`]. Those two again at the new head: `r20261112-031906-d5c0` (cpu-3), 2 of 2 passed, 0 failed: `repository` 332 passed (the 325 of your head and the seven new cases), `verity-graph` 208 passed. An earlier launch of the same command, `r20261112-025503-733c`, waited 23 min on cpu-1 for the 15 GB a slot needs and never started; I withdrew it before launching this one.
+- **No Lean, no lock:** no records run applies.
+- **It merges** [run: `git merge-tree`]: the head holds `main` `be9a3d566905`, and merges without conflict with each of the 79 heads marked ready at 03:26Z. None of them changes one of its 20 files. The 7 heads the queue refuses conflict with `main` itself, not with this change.
+
+**1. What changed** [run]. One commit on your `ad9b7db26798`, pushed 02:54Z, in `tests/test_shell_verifier_env.py` only (+56, −24).
+
+- A table, `OTHER_TOOLS`: a script, a command word for word, and what the script sets the command's first word to. Its one entry is `benchmarks/prove_path/run.sh`, `$WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1`, and `"$PY -m verity_vllm.pipeline.cli weights-tie"`.
+- A command passes only in that script, word for word, while the script sets that variable once and to that tool. Anything else is read as the verifier's, as before.
+- Seven new cases of `test_the_finder_reads_each_form`: the line as the table names it (not read); the same two lines in another script, the variable renamed, the command edited, the variable set a second time, set to something else, not set at all (each read again).
+- The module's docstring says why, and the failure's message names the table.
+- **Decided, not asked:** no check warns when an entry's command has left its script. The entry is ahead of its line, which is not on `main`, so such a check would warn from the day this lands; an entry lets through only its exact command, so a dead one hides nothing. The body says so.
+
+**2. The test's result** [run, on my machine at the new head]
+
+- The file: 24 passed (17 before, and the seven). With the setting's own tests and the two allocator tests: 30 passed. Nine root lint and invariant files: 58 passed; no warning names the test file. `ruff check` clean.
+- The rule over the whole tree: 419 shell scripts, 16 commands that start the verifier, none without the setting, none unsourced, the allowed list not stale.
+- **On the real script.** `remote`'s `benchmarks/prove_path/run.sh` put in this tree: the test as it was at `ad9b7db26798` fails on `run.sh:257`; the test at this head passes. With that script's `WT` renamed to `TIE`, this head's test fails on `run.sh:257` again. So does the finder with `WT` set a second time, set to the Lean verifier, or one word added to the command.
+- The test still fails with the words taken off one command and with the source line taken out of one script (1 failed, 23 passed each).
+
+**3. A correction to the 02:25Z section: the line is not #8460's** [run: `gh`, `git log -S`]
+
+- It is on the branch `remote` itself (`origin/remote` `700a981f5d90`), since commit `bd200b07c4` of 27 Oct. #8460's base is `remote`, not `main`, and #8460 does not change that script.
+- Five open pull requests carry the line through their base and none changes it: #8460, #8503, #8705, #9030 (base `remote`) and #9018 (base `cursor/lean-remote-merge-fc8d`, where the line and the line that sets `WT` are word for word the same).
+- So neither #9057 nor #8460 goes red by landing. The test would have gone red on the tree that brings `remote` to `main`. No pull request from `remote` or from `cursor/lean-remote-merge-fc8d` to `main` is open.
+
+**4. Why my 01:37Z scan missed it, and the scan redone** [run]
+
+- I read the open pull requests from `research queue status`, which lists only those whose base is `main`: 181 then. The line is only on heads whose base is `remote` or `cursor/lean-remote-merge-fc8d`, so it was in none of the 181.
+- Redone from `gh pr list`, whatever the base, twice: over the 218 open at 02:39Z, and over the 232 open at 03:28Z at the new head. The figures below are the second scan's: 48 change a shell script.
+  - Merged with this head: 28 merge and the three rules hold on each; 16 conflict; the 4 on `remote` did not finish merging in 90 s (a tree from before the layout move) and I did not try them further.
+  - Each one's own added commands, read on its own tree whether or not it merges: with your head's finder, the weights tie's line in the five above, and #8656; with the new finder, #8656 only.
+  - #8656 (base `cursor/top-layout-staged-48da`, not in the queue) moves Flock's nine pod jobs and its agreement check to `verity/flock/...`. Those are the Lean verifier's own commands, so the finder is right. It would have to take the setting, or the allowed list its new paths, if it ever went to `main`. Nothing to do in #9057.
+
+**5. #9057's body** is rewritten for the new head [run: `research queue edit 9057`, read back]: why this is the third head, the table and its seven cases, the runs above with the two suites' verdict, the 03:28Z scan, the merges at 03:26Z. Read back at 03:36Z: head `4178a5327fbf`, open, 12,873 bytes.
+
+**6. One sentence for compute-accounting:**
+
+> Your line `benchmarks/prove_path/run.sh:257` on `remote` (`$WT verify "${common[@]}" --registration ...`, with line 240's `WT="$PY -m verity_vllm.pipeline.cli weights-tie"`; #8460, #8503, #8705, #9030 and #9018 carry it and change none of it) is named word for word in the table `OTHER_TOOLS` of `tests/test_shell_verifier_env.py` in #9057, so the new rule that a shell job starts the Lean verifier under its allocator setting does not read it as the verifier's; if you edit either line or rename `WT`, change that entry in the same commit, or the test fails on the tree that brings `remote` to `main`, with the fix in its message.
+
+**7. What is left**
+
+- The allocator rerun: not launched [run: each node's pool, 03:27Z]. Every node in the pools with 260 GB free is loaded: cpu-2, cpu-5, cpu-6, cpu-7 and cpu-9 have every slot held and a line of 3 to 11; cpu-4 (339 GB free) refuses pool work for too few free inodes [read, 03:29Z]. I launch on the first with no line; the head figure keeps "one run, loaded node".
+- **One thing you could ask infra:** cpu-14 and cpu-15 answer with 604 GB free each and no pool, and `main`'s `deploy.toml` does not name them [run, read]. I did not launch there: they have no slots file, so I take it nothing is deployed to them yet [guess], and I don't know whose they are. If they are ours to use, the rerun fits on either.
+- #8814 and the next branch on Flock's packages: once #8949 is on `main`. `main` is still `be9a3d566905` at 03:36Z [run]. #8949 and #9042 are both in the newest candidate, `queue/c7694241f2f1` of 03:04Z [run: each head is an ancestor of it], as they were in `queue/6ccb2112eeee` of 02:57Z.
+- My machine restarted again between turns; my scripts are now all kept under my artifacts, not under `/tmp`.
+
+For the table:
+- #9057, ready to mark at `4178a5327fbf`: quick tier 63 of 63 suites (61 at `ad9b7db26798`, the two the last commit touches at the new head); its test 24 of 24; merges with `main` `be9a3d566905` and the 79 ready heads.
+- The weights tie's `verify` line is on `remote` (five open pull requests carry it), not in #8460's own change; #9057's test names it in a table and reads every other spelling as the verifier's.
