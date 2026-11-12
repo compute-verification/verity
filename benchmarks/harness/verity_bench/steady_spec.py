@@ -65,7 +65,7 @@ from typing import Any
 from verity_config import ConfigError, load, sha256
 
 from verity_bench import steady
-from verity_bench.vllm.presets import ENV_NAME, GPUS, RESERVED_ENV, SOURCE_ROOT, SPEC_ROOT
+from verity_bench.vllm.presets import ENV_NAME, GPUS, RESERVED_ENV, SOURCE_ROOT, SPEC_ROOT, former_name
 
 SCHEMA = "verity-bench/steady-spec/v0"
 #: what a point's time depends on in the tree, beside its spec's setup: the prover (its sources, its patches of
@@ -181,7 +181,7 @@ def timed_sessions(sessions: int, provers: int, period: int | None) -> int:
 
 
 def is_steady(source: str | Path) -> bool:
-    """Whether a spec, by its path or its name under `benchmarks/specs`, says it is a steady-state spec."""
+    """Whether a spec, by its path or its name under `benchmarks/harness/specs`, says it is a steady-state spec."""
 
     try:
         text = spec_path(source).read_text(encoding="utf-8")
@@ -192,7 +192,7 @@ def is_steady(source: str | Path) -> bool:
 
 def spec_path(source: str | Path) -> Path:
     path = Path(source)
-    return path if path.is_file() else SPEC_ROOT / f"{source}.toml"
+    return path if path.is_file() else SPEC_ROOT / f"{former_name(source) or source}.toml"
 
 
 def _positive(spec: str, **counts: int) -> None:

@@ -208,11 +208,13 @@ SERVING_POLL, SERVING_WAIT = 0.02, 900.0
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
-    and its audit of the session's record, and a session whose challenger failed is refused.
+    and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
+    caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
@@ -224,7 +226,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
     ch = None
-    if own_challenger(env, zk):
+    if tree_from is None and own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -232,7 +234,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
-                              *(ch[1] if ch else [])],
+                              *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
@@ -530,12 +532,24 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
+#: how Lean's reason opens where a file of the session, its record or a rep's proof, was not there to read (`verify` in
+#: FlockVerify.lean, after the statement is set up and before any check of a proof)
+NO_SESSION_FILES = "session files:"
+
+
 def lean_refused(v: dict, names: str | None = None) -> bool:
-    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
-    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not where it read none: at
+    setup, where a missing or unreadable input is refused, or for want of a file of the session (`NO_SESSION_FILES`);
+    unless the refusal names `names`, a check Lean makes there."""
     why = v.get("why") or ""
     return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
-        names in why if names else not why.startswith("setup:"))
+        names in why if names else not why.startswith(("setup:", NO_SESSION_FILES)))
+
+
+def lean_read_no_proof(v: dict) -> bool:
+    """Lean's own verdict refused the session for want of a file of it (`NO_SESSION_FILES`), so it read no proof: what a
+    prover that sent none, or a ZK server that held one back, leaves. It says no proof left, never that Lean refused one."""
+    return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
