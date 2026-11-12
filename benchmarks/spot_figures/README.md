@@ -62,20 +62,22 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
   A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its
   `plan` names. It is `saturated` only where a rate above it was served and computed no more; a lower bound is
-  `saturated` false on a provisional card, and `bound` says what held the rate (compute, the KV pool, or unknown). No
-  figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
-  GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
-  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB by
-  proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the requests, which a line
-  planned again at that rate need not do). Under a rate that is a lower bound each caption says its bounds are lower
-  bounds too. Every row priced at a rate, assumed or measured, holds at a registration of 1/q requests, q its sampling
-  rate: the plan counts q·n sampled of a registration's n replay blocks (`optimize.registration_cap`), and the first
-  stage draws at least ⌈q·n⌉ of them, never fewer than one (`Spot.Rate`'s `count`). None is what serving costs at a
-  smaller registration, and a caption at the measured reading says so. Every JSON that read the rate names it under
-  `serving` (Figure 1's two forms, Figure 3, Figure 4 and the break-even, whose table starts with the same sentence),
-  and `figures.py` and `total_cost.py breakeven` write a measured reading into `measured/` under `--out`, never over
-  the default's files. Without it every figure is planned at rho's fleet utilization, as before the card. The
-  `serve_tax` card stays as priced; `total_cost.py priced-card --serving measured` prices one at the card's rate.
+  `saturated` false on a provisional card, and `bound` says what held the rate (compute; the engine's step, where
+  requests waited with room in the KV pool and the record does not tell the GPUs' arithmetic from a step's token
+  budget; the KV pool; or unknown). No figure reads it by its presence. `--serving measured` plans every scope at it:
+  a scope's requests are its GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens
+  over the rate, the scope's GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound
+  would reach 300 GB by proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the
+  requests, which a line planned again at that rate need not do). Under a rate that is a lower bound each caption says
+  its bounds are lower bounds too. Every row priced at a rate, assumed or measured, holds at a registration of 1/q
+  requests, q its sampling rate: the plan counts q·n sampled of a registration's n replay blocks
+  (`optimize.registration_cap`), and the first stage draws at least ⌈q·n⌉ of them, never fewer than one (`Spot.Rate`'s
+  `count`). None is what serving costs at a smaller registration, and a caption at the measured reading says so. Every
+  JSON that read the rate names it under `serving` (Figure 1's two forms, Figure 3, Figure 4 and the break-even, whose
+  table starts with the same sentence), and `figures.py` and `total_cost.py breakeven` write a measured reading into
+  `measured/` under `--out`, never over the default's files. Without it every figure is planned at rho's fleet
+  utilization, as before the card. The `serve_tax` card stays as priced; `total_cost.py priced-card --serving
+  measured` prices one at the card's rate.
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
@@ -259,6 +261,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     longest call (`--longest-call`, 64 KiB unless stated). With `--classes`, the classes of gates one reveal opens
     whole, a design by position is printed in four columns: by gates and by classes, each in calls and in
     compressions.
+  - K_s and K_m as given are means over the verifier's coins. With `--largest`, the most gates one block needs, it
+    prints beside them the gates as a count of the sample gives them: the blocks it checks (`--checked`, the
+    sessions unless stated) times that. `--largest-classes` does the same by classes.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
     (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
     the extractor's waits at each cap, per run (`--waits-k`).

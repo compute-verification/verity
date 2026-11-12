@@ -1151,12 +1151,17 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
     """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
-    public file's, taken when it was staged before the sample, and the verifier's registered file), the evidence with its
+    public file's SHA-512 as the caller took it, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
     which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
     header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
-    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``)."""
+    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``).
+
+    When ``public`` was taken is the caller's to say, and nothing here checks it. `audit`'s is the digest it took when
+    it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that
+    digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
+    after the audit."""
     import replay as RP
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 

@@ -49,6 +49,7 @@ untraced = [
     "tests/test_fixture_fetch.py",
     "tests/test_fleet.py",
     "tests/test_gates.py",
+    "tests/test_gpu_lease_cores.py",
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",

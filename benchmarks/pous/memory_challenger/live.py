@@ -3,7 +3,7 @@ memory_challenger` against the responder, over the harness's responder wire (`ve
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
-        [--signer lms --lms-key DIR --session-log FILE [--keygen-workers N] | --signer test] [--sessions FILE]
+        [--signer lms --lms-key DIR --session-log FILE [--keygen-workers N] | --signer test] [--sessions FILE] [--seed HEX]
 
 `READY.json` names the responder's port, the scheme, its manifest and the setup salt.  `DIGESTS.bin` is the `sha512/row/v2`
 digest of every block of `C` (`memory_challenger.block_digest`), in block order: what `memory_challenger.verdict` checks
@@ -17,6 +17,13 @@ against C's leaf).
   `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
   certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
   publishes for the `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
+- **The coins.** A session's indices are a function of its coin source, its session id, the store's block count and `k`
+  (`CoinTree.draw`), and both come from `os.urandom`.  `--seed HEX` derives them from the seed instead (`seeded_session`),
+  so a CPU test's samples, and with them its controls' verdicts, are the same on every run: a control's gate is a
+  statistical test that real samples fail now and then.  It is refused, before any session, key or connection, unless the
+  clock is logical and the signer is the test one: a timed or LMS-signed session draws from the OS, always.  The hm96 key and
+  the salts stay fresh, and the record names the seed (`seed`).  A seeded run's session ids repeat, so a session log that
+  outlives the run refuses its second one.
 - **The session log** (`--session-log FILE`, with `--signer lms`) is the memory challenger's `memory_challenger.SessionLog`:
   every session's id goes into it, fsynced, when the session commits, and a used id is refused.  It is a file of its own,
   refused inside `--lms-key`; it is made with a new key, and for a key that exists a missing log is refused (one made
@@ -88,6 +95,16 @@ DISAGREE = "the Lean and Python verdicts disagree"
 WARMUP_PINGS = 8
 """Pings before each session's first round, after the previous session's signature: a session's round 0 otherwise follows
 the challenger's own Python work (one measured round 0 took 655.8 µs, 26 µs of it at the responder)."""
+
+
+SEEDED_ONLY = ("a seeded session runs on the logical clock under the test signer alone: a timed or LMS-signed session "
+               "draws its coins from os.urandom")
+
+
+def seeded_session(seed: bytes, j: int) -> tuple[bytes, bytes]:
+    """Session `j`'s coin source and session id under `--seed`: with the block count and `k`, all its indices rest on."""
+    d = hashlib.sha512(b"verity-pous/bench/memory-challenger/seeded-session/v1\0" + seed + j.to_bytes(4, "big")).digest()
+    return d[:32], d[32:]
 
 
 def test_signer() -> Any:
@@ -282,16 +299,21 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
           cpu: int | None = None, allowance: str = "p99.9", deadline_ns: int | None = None, limit_ns: int | None = None,
           clock: Callable[[], int] = time.perf_counter_ns, strict: bool = True, signer: str = "test",
           lms_key: str | os.PathLike | None = None, keygen_workers: int = 1,
-          sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None) -> dict[str, Any]:
+          sessions_out: str | os.PathLike | None = None, session_log_path: str | os.PathLike | None = None,
+          seed: bytes | None = None) -> dict[str, Any]:
     """`audits` sessions of the memory challenger against `limit_ns` (else `Δ` plus the cap), each judged after all of them
     ran, off the timed path.  The Lean verdict is made ready before any session signs (`lean_ready`), and the signed
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
     verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
-    test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed."""
+    test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
+    session's coin source and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
+    test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
     from verity.protocols.pous.verifier import audit as pous_audit
     from verity.protocols.pous.device import memory_challenger as mc
     from verity.protocols.pous.verifier.protocol import StorageProfile
 
+    if seed is not None and not (isinstance(clock, LogicalClock) and signer == "test"):
+        raise ValueError(SEEDED_ONLY)
     if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
         raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
     if signer == "lms" and session_log_path is None:
@@ -312,7 +334,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
-            "k": k, "scheme": scheme.name, "setup_root": binding.hex()}
+            "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}
     gaps: tuple[str, ...] = ()
     try:
         cert = mc.covering_certificate(scheme, k, limit, experimental=True)
@@ -341,10 +363,10 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
         r = LiveResponder(host, port, nb, clock)
         cpu_before = cgroup_cpu()
         sessions = []
-        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(os.urandom(32), os.urandom(32), blocks, k), sig, log=log,
-                                           limit_ns=limit, block_bytes=nb, binding=binding, clock=clock,
-                                           resolution_ns=resolution)
-                       for _ in range(audits)]
+        drawn = [(os.urandom(32), os.urandom(32)) if seed is None else seeded_session(seed, j) for j in range(audits)]
+        challengers = [mc.MemoryChallenger(mc.CoinTree.draw(source, session, blocks, k), sig, log=log, limit_ns=limit,
+                                           block_bytes=nb, binding=binding, clock=clock, resolution_ns=resolution)
+                       for source, session in drawn]
         try:
             before = calibrate(r, pings)
             for c in challengers:
@@ -426,7 +448,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--keygen-workers", type=int, default=len(os.sched_getaffinity(0)))
     ap.add_argument("--sessions", default=None,
                     help="where the signed sessions go before any verdict runs (default: sessions-<--out's name> beside it)")
+    ap.add_argument("--seed", type=bytes.fromhex, default=None, metavar="HEX",
+                    help="derive each session's coin source and session id from this seed (--clock logical --signer test only)")
     a = ap.parse_args(argv)
+    if a.seed is not None and not (a.clock == "logical" and a.signer == "test"):
+        ap.error(SEEDED_ONLY)
     ready = json.loads(Path(a.ready).read_text())
     params = params_of(ready["scheme"], ready["params"])
     clock = LogicalClock() if a.clock == "logical" else time.perf_counter_ns
@@ -444,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
            **audit("127.0.0.1", ready["port"], scheme, bytes.fromhex(ready["salt"]), Path(a.leaves).read_bytes(),
                    audits=a.audits, pings=a.pings, k=a.k, cpu=a.verifier_cpu, allowance=a.allowance, deadline_ns=deadline,
                    limit_ns=a.limit_ns or None, clock=clock, strict=a.strict, signer=a.signer, lms_key=a.lms_key,
-                   keygen_workers=a.keygen_workers, session_log_path=a.session_log,
+                   keygen_workers=a.keygen_workers, session_log_path=a.session_log, seed=a.seed,
                    sessions_out=a.sessions or Path(a.out).with_name("sessions-" + Path(a.out).name))}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["audits"] and doc["audits_accepted_under_signer"] == doc["audits"] else 1
