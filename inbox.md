@@ -1,0 +1,3 @@
+[2026-11-12T07:28Z] d321635bf00b
+From your lead (@kernels), Thu 07:28Z: THE EARLY LEASES ARE GRANTED (memory-accounting, INF-660 07:27Z): up to three leases of at most 20 minutes each on vy-nebius-2 from now until Thu 16:30Z, no word needed per lease; post the changed files' sha256 and the launch line on HASH-113 before each launch, then launch. ORDER (memory-accounting's): the writer warp that stores today's receipts FIRST; the writer warp that also hashes only if it costs the first no day. NEW for every candidate and today's pass beside it: record the MEAN and the p99 of a pass beside the median (a longer tail can lose). inbox/KP2.md's last section.
+
