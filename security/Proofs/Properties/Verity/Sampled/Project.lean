@@ -7,7 +7,7 @@ public import Proofs.Core.Game.InterleaveBridge
 # Sampled proofs' coupling: the projection
 
 `Constructions.project`, the strategy of the live audit a strategy `σ` of the period's game is read as: it simulates
-`σ` (`Verity.Game.Pos`, in `Proofs.Core.Game.InterleaveBridge`). It registers the decoding of the record's most likely
+`σ` (`Verity.Game.Pos`, in `Definitions.Core.Game.InterleaveBridge`). It registers the decoding of the record's most likely
 message; on the sample's widened sample it starts a tape of the period's game (the coin map's `start`); at each stop, the
 first node of `σ`'s play on the tape where a round's cut (`roundCut`) fixes a message, it sends the decoding of the most
 likely message there (`Commit`'s roots at the first stop, a round's submission at each later one) and writes the live

@@ -447,11 +447,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     assert "32 GB and 250 min, from the [tool.verity.tests] of verity-vllm" in capsys.readouterr().err
 
 
-def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its_suites_may_reach(tmp_path):
-    """A `--changed` run, or one of every suite, reserves a test process for each CPU it asks, at the largest figure a process of
-    its suites may reach (TEST_PROCESS_GB where none is declared). The reservation is the budget suites.py divides among its
-    processes, so twice that started processes beyond the CPUs asked, and a node kept it from every other run for as long
-    as the run held its slot."""
+def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_share_of_it(tmp_path):
+    """A `--changed` run, or one of every suite, budgets a test process for each CPU it asks, at the largest figure a process of
+    its suites may reach (TEST_PROCESS_GB where none is declared): suites.py divides that among its processes, so twice it
+    started processes beyond the CPUs asked. A pool's slot keeps its reservation from every other run for as long as the run
+    holds the slot, and the run's processes are at their figure only while the few suites that reach it run, so it reserves
+    MANY_RESERVED of the budget there, never under the kind's own memory. A run of named suites reserves its budget whole."""
     from research import suite_size
 
     repo = tmp_path / "repo"
@@ -467,17 +468,22 @@ def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\n"
         "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
     run = ["uv", "run", "tools/verity/check/suites.py"]
-    for cmd, cpus, workers, gb in (
-            ([*run, "--changed", "small"], None, 4, 18),             # no suite declares one: 4 processes x TEST_PROCESS_GB
-            ([*run, "--changed", "small", "--quick"], 12, 12, 54),
-            ([*run, "--changed", "big"], None, 4, 64),               # a's workers may reach 16 GB each
-            ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32),   # its --jobs is the processes it runs
-            ([*run], None, 4, 64),                                   # every suite
-            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16)):   # 4.5 GB: never under the kind's own 16
-        got = suite_size.size(repo, cmd, cpus)["mem_gb"]
-        assert got == gb, (cmd, cpus)
+    old = suite_size.size(repo, [*run], None)
+    assert old["mem_gb"] == 64 and "reserve_gb" not in old, "a tree whose slot.py takes no --budget-gb reserves its budget whole"
+    (repo / suite_size.SLOT_PY).write_text(f'USAGE = "slot.py [{suite_size.BUDGET_OPT} GB] -- CMD..."\n')
+    for cmd, cpus, workers, gb, reserved in (
+            ([*run, "--changed", "small"], None, 4, 18, 16),         # no suite declares one: 4 processes x TEST_PROCESS_GB
+            ([*run, "--changed", "small", "--quick"], 12, 12, 54, 27),
+            ([*run, "--changed", "big"], None, 4, 64, 32),           # a's workers may reach 16 GB each
+            ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32, 16),   # its --jobs is the processes it runs
+            ([*run], None, 4, 64, 32),                               # every suite
+            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16, 16)):   # 4.5 GB: never under the kind's own 16
+        shape = suite_size.size(repo, cmd, cpus)
+        assert (got := shape["mem_gb"]) == gb, (cmd, cpus)
         assert got // suite_size.TEST_PROCESS_GB >= workers, "suites.py's default --jobs gives it a process for each CPU it asked"
-    assert suite_size.size(repo, [*run, "a"], None)["mem_gb"] == 64, "named suites: their workers at their worker_gb, as before"
+        assert shape["reserve_gb"] == reserved, (cmd, cpus)
+    named = suite_size.size(repo, [*run, "a"], None)
+    assert named["mem_gb"] == 64 and "reserve_gb" not in named, "named suites: their workers at their worker_gb, reserved whole"
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
