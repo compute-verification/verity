@@ -34,6 +34,9 @@ from pathlib import Path
 
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
+from verity_vllm.pipeline.row_json import load_json
+
+__all__ = ["build_spec", "code_version", "digest_doc", "write_experiment", "write_spec"]
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
@@ -48,8 +51,13 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def _digest_doc(doc) -> str:
+def digest_doc(doc) -> str:
+    """The sha256 of ``doc`` as JSON with sorted keys: a spec's ``digest``."""
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
+
+
+#: the older name of `digest_doc`, which `pipeline/match.py` reads
+_digest_doc = digest_doc
 
 
 def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
@@ -73,13 +81,9 @@ def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
 
 
 def _load(run: Path, rel: str):
+    """The run's document at ``rel``, None when it is absent or unreadable."""
     p = run / rel
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):  # an unreadable report is reported as absent
-        return None
+    return load_json(p) if p.exists() else None
 
 
 def code_version(repo: Path) -> dict:
@@ -152,7 +156,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
         },
         "initial_state": initial_state or {"kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"},
     }
-    spec["digest"] = _digest_doc({k: v for k, v in spec.items() if k != "digest"})
+    spec["digest"] = digest_doc({k: v for k, v in spec.items() if k != "digest"})
     return spec
 
 
@@ -188,7 +192,7 @@ def _transcript_values(run: Path) -> dict:
         entries = []
     if entries:
         skipped = [e for e in entries if isinstance(e, dict) and e.get("skipped")]
-        steps = sorted({int(e.get("step")) for e in entries if isinstance(e, dict) and e.get("step") is not None})
+        steps = sorted({int(s) for e in entries if isinstance(e, dict) and (s := e.get("step")) is not None})
         out.update({"tensors_captured": len(entries) - len(skipped), "tensors_skipped_oversize": len(skipped), "snapshot_steps": steps,
                     "skipped_examples": [{"path": e.get("path"), "shape": e.get("shape"), "reason": e.get("skipped")} for e in skipped[:5]]})
     ra = _load(run, "replay_a.json")
@@ -263,9 +267,9 @@ def vu_partition_index(qu: dict | None, gates: dict | None) -> dict:
     gate = {"status": g8.get("status"), "reason": g8.get("reason")} if isinstance(g8, dict) else None
     if not isinstance(qu, dict):
         return {"present": False, "gate": gate}
-    v = qu.get("verdict") if isinstance(qu.get("verdict"), dict) else {}
-    part = v.get("partition") if isinstance(v.get("partition"), dict) else {}
-    width = v.get("width") if isinstance(v.get("width"), dict) else {}
+    v = qu["verdict"] if isinstance(qu.get("verdict"), dict) else {}
+    part = v["partition"] if isinstance(v.get("partition"), dict) else {}
+    width = v["width"] if isinstance(v.get("width"), dict) else {}
     binding = (g8.get("detail") or {}).get("binding") if isinstance(g8, dict) else None
     return {"present": True, "schema": qu.get("schema"), "binding_id": qu.get("binding_id"), "use": qu.get("use"),
             "partition": {"status": part.get("status"), "codes": list(part.get("codes") or [])[:32]},
