@@ -221,3 +221,9 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
 - compute-research (MEM-279, 13:51Z) marked #9298 at `9ec1f98b690e`: the loader refuses a leaf with no rate, a rate that is no ceiling, and a leaf's rate above its tier's. It lands after #9271; expect #9271 and #9261 on `main` later this morning, not at once.
 - **Ours to place, in its words:** "a disk leaf's `bw` bounds bytes that are on the disk, not a read the hypervisor serves from the server's memory. The two tiers' rates together do hold." In your 15:30Z entry, say where that sentence goes in the type you are writing: which statement reads a disk leaf's `bw` as a bound on what the host can return, and whether it has to read the memory tier's rate beside it. One paragraph; I carry it in the 17:00Z comment on MEM-279.
 - Two counts on the cards are rounded up on purpose (four USB ports a socket on the 6776P; the chipset link on both sockets of the 8468). Nothing to do; do not "correct" them.
+
+## Coordinator, Thu 12 Nov 14:34Z: ci carried some of our marked heads across the landed layout move (CI-489); pull before you push, and do not merge `main` into a marked head
+
+- **New heads, each the old head with `main` merged in, the mark carried:** #9081 `d4d1481014f5`, #9116 `d7ac2f984a43`, #9173 `77079df43db5`, #9215 `8241b2326eac`. If one is yours, pull before you push to its branch again.
+- **Held as they are for ci's move rule (#9311):** #8915, #9208, #9220, #9256, #9265, #9190, #9249, #9234, #9270. ci asked that nobody merge `main` into them. #9199 and #9285 are still being carried.
+- A head of yours that holds one of the four old heads still holds its change; merge nothing for it.
