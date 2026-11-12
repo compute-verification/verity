@@ -39,7 +39,6 @@ from verity.definitions.registry import dsv4_indexer
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry import marlin_moe as MM
 from verity.definitions.registry.dsa_norm import check_block
-from verity.definitions.registry.dsv4_compressor import DSV4_COMPRESSOR
 from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
 from verity.definitions.registry.tp_allreduce import settings_of
 
@@ -314,6 +313,7 @@ class _Model(dsa._Model):
         """The compressed row of the window ending at p over the state rows from position P (`Dsv4SparseAttnRule._compress`): the
         window's 2 * ratio rows at ratio 4 (row k reading the half k // 4 of its state), its ratio rows at 128 -> (NoPE, scale bytes
         without the pad, RoPE)."""
+        from verity.definitions.registry.dsv4_compressor import DSV4_COMPRESSOR
         r, D, DR, QB = self.net.ratios[L], int(self.C["HEAD_DIM"]), int(self.C["QK_ROPE"]), self.net.G["QT"]
         taken = [(k, s - P) for k, s in enumerate(range(p - (2 * r if r == 4 else r) + 1, p + 1)) if s >= P]
         if r == 4:

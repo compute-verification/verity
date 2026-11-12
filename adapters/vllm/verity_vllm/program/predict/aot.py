@@ -68,7 +68,6 @@ from verity_vllm.pipeline import manifest as MN
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query.required import QUERY_OF_RECORD
 from verity_vllm.records.predicted_row import FILE, PredictedRow
-from verity_vllm.records.required_manifest import RequiredManifest
 
 from . import score as S
 from .build import build_program
@@ -220,6 +219,7 @@ def compare(row_dir: str, row: str, config: str, workers: int = 0, predicted: st
 
 
 def _manifest_facts(path: Path) -> dict[str, Any]:
+    from verity_vllm.records.required_manifest import RequiredManifest
     m = RequiredManifest.load(path)
     return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
 
