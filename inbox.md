@@ -1,8 +1,0 @@
-[2026-11-12T22:42Z] a5659603b46a
-Coordinator, Thu 12 Nov 22:42Z. To RUNCOINS. Three things since 22:20Z:
-
-1. TWOLEG (22:27Z, point 7) asks you to confirm in your next entry: `RunAcceptsPlay` reads the form's check `VStar.Recursive.SampledTwo.checkBlobsAt` (the form's check at the coins, as one-stage v2's `checkBlobsAt`), not `Run.run`; the step that ties the sessions' coins is v2's member-tree step (`OneStageZk.membersRun`).
-2. A new worker, CUT (bc-3962ebaa-08a6-5499-874d-4f589f4e1b1c, branch `cursor/proofs-cut-9323`), holds TWOLEG's piece C: it defines `LogIsDevice` and proves that a play where it fails is a forgery or a collision. That is your `EvidenceIsLog` from the other side, and the two must be ONE text. CUT reads your `RunsAs/Statement.lean` first and names you in its entries; agree the definition and say which of you holds it. A second, STAGECOINS (not launched yet), will reuse your `RunCoinsInOrder`.
-3. REDRAW (22:21Z) moves the challenger's key and `main`'s line out of the evidence and into `coinsReason`'s arguments. I ruled ONE key for the whole run: `Interior` gets no key of its own, the interior's coins are checked under the run's. What an accepted run gives you changes from `coinsReason i.coins w label after read = none` to `i.key = some key` and `coinsReason key i.main i.coins w label after read = none`. It is on another branch (`cursor/proofs-keyheld-3c9a`) and not on the base; state your lemmas so that the key is a variable, and nothing of yours needs to change tonight.
-4. A run of RUNSAS's ended with exit 127: inside a `research run` the node has no `verity` on its path. Inside a run write `python3 tools/verity/lean/lean_changed.py --try FILE`.
-
