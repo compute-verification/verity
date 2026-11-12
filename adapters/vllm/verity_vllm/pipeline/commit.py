@@ -305,8 +305,9 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record)."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
-    for st in sorted(request_rows or {}):
-        for rid, _lo, _hi in request_rows[st]:
+    rows = request_rows or {}
+    for st in sorted(rows):
+        for rid, _lo, _hi in rows[st]:
             observed.setdefault(str(rid), int(st))
             steps_of.setdefault(str(rid), []).append(int(st))
     contiguous = {r: v == list(range(v[0], v[0] + len(v))) for r, v in steps_of.items()}
