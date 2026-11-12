@@ -73358,3 +73358,80 @@ Mailbox read 05:58Z: three messages (05:00Z, 05:05Z, 05:24Z) [run]. The note wit
 **The toy with two tables.** [run `r20261112-054654-4559`, exit 0, 251 s on vy-nebius-cpu-12, last line "ALL CHECKS HOLD"] `lanes/proofs/tools/tableext_two_table_toy.py` and `.out.txt` in the notes. Exact counts over every coin of a session of two tables that share one link coin and reply; about 10,000 provers at each size, whose rule for answering reads both tables' coins and the link coin. At table 0 of 8 positions beside a table 1 of 4 to 64 positions the one-wait bound at `N_0` alone holds for every prover (largest left minus right `−0.057`; at the prover's own fixed-word error at most 0.64 of the term `N_0·ε/(e·k)` is used, at every `k` from 1 to 12). The least count every prover needs is 3, 7, 7, 7, 7, against today's 18, 24, 36, 59, 106; the honest prover's both tables are extracted with probability 3/4 only from 3, 6, 12, 24, 47 accepted reruns, so a whole-session count has to grow and a table's does not. Three controls that must fail do. It has no hash, so it does not show the conflict term small, and its table error is large (0.17). A rerun with two better replay rows is waiting (`r20261112-055243-5f69`).
 
 **Open, and the exact step.** (a) The two uncommitted Lean files' tries (above). (b) The full check on the branch and a red-team of `KSAt_of_tableBoundJR`. (c) Per-table error: `TableBoundJR` at an error for each table. (d) Not mine: the compiled instance over `Arg.ofFlockAt` and sessions of more than one table in the code.
+
+## FLOCKPKG, Thu 12 Nov 06:00Z: ready to mark #8814 at `dfcb5ea4f4d801ee9fcd15383295b788ce6f0e56` (records run passed all five packages, no lock regenerated; quick tier 87 of 87); and the allocator rerun ended: the Lean verifier's check of the head block takes 0.42 to 0.45 of its time under the allocator setting (three interleaved pairs, one core, no program, not the served engine). `main` moved to `d6075b75d289` while the runs ran: no Lean in it, the head merges, and the records passes are on the merged tree's keys. No guarantee's statement, premise or record changes, so nothing here is Daniel's
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed], [guess]. Times from `date -u`.
+
+**ready to mark #8814 at `dfcb5ea4f4d801ee9fcd15383295b788ce6f0e56`** (https://github.com/compute-verification/verity/pull/8814, branch `cursor/proofs-flockpkg-layers-4c7e`, not marked by me; `Refs PRF-514`, goal `proofs/flock-verifier-split`).
+
+**1. Head** [run]
+
+- `dfcb5ea4f4d8` is `main` `62bf29346f76` merged into the earlier head `6da51696994a`, pushed 04:14Z. No conflict.
+- **`main` has moved since:** it was `62bf29346f76` at 05:14Z and `d6075b75d289` at 05:38Z [run: `git fetch`]: 31 landings, 167 files, none of them a `.lean` file, a lock, a lakefile, a manifest or a file of the Lean tool [run: `git diff --name-only`]. I did not merge it in: a new head would need the runs again, and nothing in it touches what this change reads. What I checked instead:
+  - the head merges with `d6075b75d289` without conflict, and the merged tree differs from it in the same five files, +28, −10 [run: `git merge-tree`, `git diff --stat`];
+  - the Lean inputs keys of the five packages and of `security/Proofs` are the same on that merged tree as at the head, and they are the keys the records run's passes are recorded on [run: `lean_changed.py --inputs-key` on a local, unpushed merge commit];
+  - the quick tier is against `62bf29346f76` and was not run again. If you want it against the new `main`, say so and I merge and rerun.
+- One hand edit inside the merge commit: the lock merge put `NetworkCheck.Clocks` (new on `main`) after the other `layers` entries of the network check's lock. I wrote that file back in `main`'s key order; it parses to exactly what the merge gave.
+
+**2. What the diff is against `main`** [run: `git diff --stat` against `62bf29346f76`, and of the merged tree against `d6075b75d289`: the same]: five lock files, +28, −10, and nothing else (no `.lean` file, lakefile, manifest or test).
+
+- `verity/circuits/base/lean-audit.json` (+7): gains `layers`: `Base` imports only `Base`, `Lean.Data.Json` and `Std.Data.TreeMap`. That makes `Base`'s modules the base package's spec.
+- `verity/protocols/certifier/verifier/lean/lean-audit.json` (+18, −4): `meaning` gains `Base`; `reads_exempt`, which held `Base` alone, goes; `reads` gains the module records `Base.Bytes` and `Base.Canon` (seven definitions: `Flock.V`, `Flock.unhex` and five `Flock.J` readers).
+- `verity/protocols/flock/verifier/lean-audit.json`, `security/lean-audit.json`, `security/Properties/lean-audit.json` (+1, −2 each): `Base` leaves `reads_exempt`; each already has `Base` under `meaning`.
+- **No guarantee's own record changes** [run: the four records of the network check's lock compared as parsed JSON with `main`'s; the run regenerated nothing in the other locks]. The network check's four keep owner, signature, assumptions, premises and type hash.
+
+**3. Runs at the head, each with its exit code** [run]
+
+- **Records run:** `r20261112-041537-44e8`, exit 0 (`lean_changed.py --records verity/circuits/base --update --rebuild`). Outcome pass; `regenerated` is empty, so nothing to commit. Each package's `check.py`: the base package exit 0 in 34 s; Flock's verifier exit 0 in 124 s (11 guarantees); the network check exit 0 in 72 s (4 guarantees); `security` exit 0 in 751 s (1,121 guarantees, with `security/Proofs`); `security/Properties` exit 0 in 664 s (465 guarantees, with `security/Proofs`). Axioms in each: `propext`, `Classical.choice`, `Quot.sound`. It is the fast path: no kernel replay, no tests.
+- **Quick tier**, `suites.py --changed 62bf29346f76 --quick`, 87 suites in six runs, 87 passed, 0 failed, each exit 0: `r20261112-041951-b84a` 18 of 18; `r20261112-041744-1cf9` 18 of 18; `r20261112-041756-5839` 18 of 18; `r20261112-041808-be34` 18 of 18; `r20261112-041820-56b7` 14 of 14; `r20261112-042039-f782` `verity-vllm` alone (14,070 tests passed, 415 skipped, 56 min).
+- **On my VM** [run]: `tests/test_lean_packages.py` and `tools/verity/lean/tests/test_public_lock.py`, 64 passed; both retired-terms lints, the lane-text lint, `test_public_boundary.py`, `test_repository.py`, `test_doc_paths.py`, 106 passed. The two cap warnings of `test_lean_packages.py` are word for word `main`'s (I ran it on both).
+- **Retired terms** [run]: `tests/lint/test_repo_retired_terms.py` does not read `lean-audit.json` files, so the count on the five changed files is 0 on `main` and 0 here. With the lint's own matcher on the diff: no new use added, eight removed (the four exemption reasons said `C-Flock` twice each).
+
+**4. Decided, not asked**
+
+- **`--cwd clone`, not `--cwd source` as your message wrote.** The records run carries `--update` and the suites write into their tree; the writing-runs skill gives `--cwd clone` for a job that writes into the tree. Everything else as you wrote: `--on auto`, `--as proofs`, nothing heavy on my VM.
+- **`--rebuild` on the records run.** The head only merges `main` over `6da51696994a`, whose records run passed (`r20261111-112420-2a07`), so without it the run would have reused that pass and built nothing. I had it audit the tree that lands.
+
+**5. It merges** [run: `git merge-tree` with the lock merge driver; queue status read 05:39Z, after the runs, and at 04:24Z before them with the same result]
+
+- 73 ready heads: none conflicts with this head. Of the 11 the queue has refused, five conflict with it, and each of those conflicts with `main` itself (#8436, #8756, #8823, #9036, #9044).
+- Six ready heads change one of the five locks: #8593, #8595, #8915, #8940, #8994 (`security/lean-audit.json`) and #8686 (that, `security/Properties` and the network check's lock). For each, the merge with this head equals the merge with `main` plus exactly this head's change (per file, as parsed JSON).
+- No ready head changes a file of the base package; in each merged tree every import of a `Base` module is inside the rule and no lock holds `Base` under `reads_exempt`.
+- **No merged tree was built**, and I say so rather than claim it: this head adds no Lean source, so each merged tree's Lean is that head's merged with `main`. What this head adds is lock policy, which the records run checked on `main`'s Lean.
+
+**6. What a reader should know** [run, read]
+
+- **32 of the 35 Lean packages' inputs keys change** (`lean_changed.py --inputs-key` at `main` and at the head), because the base package's lock is an input of every package that requires it. So the candidate's Lean check audits each again though no source changes. The mark's records gate looks only at the five whose lock changes, and the records run covers those.
+- **A new note, not a warning:** with `Base` as spec, the base package's audit prints that 193 of `Base`'s definitions are read by no guarantee's statement. It fails nothing and no cap counts it. The body says so.
+- **The body is rewritten** at this head (10,632 bytes, read back from GitHub and equal to what I sent): the change in one paragraph, each lock's change, the network lock's four records old and new, the four checks with run ids, the runs, the merges, the risks. Kernel replay: not run by this lane. Second reader: none.
+
+**7. The allocator rerun** [run]: it ended 05:57Z, exit 0 (`r20261112-034149-2dc7`, cpu-2).
+
+**One line:** on the head block the Lean verifier's check of one session takes 125 to 134 s with `MIMALLOC_PURGE_DELAY=-1` against 296 to 304 s without: 0.42 to 0.45 by pair over three interleaved pairs, the whole call 0.57 to 0.59, peak memory +11.4%. It replaces "0.55 to 0.63, one run, loaded node".
+
+- **What ran** [read: the run's `spec.txt`, `host.txt`, `job.log`]: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, the saved session `k1`, no program, one session a call, one pinned core of cpu-2. The verifier is the one built at `c6cadd0e325f` (the head block stages only there), with the setting put in the call's environment by hand. So: not the served engine, not `main`'s verifier, not through `main`'s drivers.
+
+| call | at | exit | `inputs` s | setup s | session s | user s | system s | wall s | page faults | peak RSS GB | load before -> after |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| base1  | 05:30:57Z | 1 | 111.5 | 2.4 | 295.9 | 282.6 | 125.0 | 407.6 | 4,364,861 | 42.9 | 42.03 52.89 47.62 -> 58.11 54.46 49.54 |
+| purge1 `MIMALLOC_PURGE_DELAY=-1` | 05:35:08Z | 1 | 108.4 | 2.4 | 133.5 | 236.3 | 5.8 | 242.2 | 53,669 | 47.8 | 58.11 54.46 49.54 -> 37.08 44.98 46.83 |
+| base2  | 05:42:11Z | 1 | 109.9 | 2.4 | 304.3 | 272.2 | 142.1 | 414.6 | 3,769,314 | 42.9 | 37.08 44.98 46.83 -> 60.42 42.33 43.73 |
+| purge2 `MIMALLOC_PURGE_DELAY=-1` | 05:46:13Z | 1 | 107.4 | 2.4 | 127.7 | 229.7 | 5.7 | 235.4 | 52,796 | 47.8 | 60.42 42.33 43.73 -> 58.17 52.61 47.98 |
+| base3  | 05:53:08Z | 1 | 111.5 | 2.4 | 298.5 | 276.8 | 133.2 | 410.2 | 4,263,423 | 42.9 | 58.17 52.61 47.98 -> 39.61 45.95 46.79 |
+| purge3 `MIMALLOC_PURGE_DELAY=-1` | 05:57:09Z | 1 | 107.1 | 2.3 | 125.3 | 226.8 | 5.8 | 232.7 | 52,662 | 47.8 | 39.61 45.95 46.79 -> 28.41 36.86 42.96 |
+
+- **Every call ends refused, exit 1, only at the last check** (no `--program`), as in `a3a2` and `d4ef` [read: my 14:18Z entry]. The verdict shows 256 of 256 units drawn [read: each call's output]. So this is the time of a full check, not of an accepted session.
+- **The verifier prints the same bytes with and without the setting:** the six calls' outputs have one sha256.
+- **How sure:** the three base calls are within 2.9% of each other and the three with the setting within 6.5%; in `a3a2` the two base calls were 30% apart. The node was not idle: load 28 to 60 on 256 cores during the calls (14 when the run took its slot at 03:58Z). I judge the figure by the base calls agreeing, and say the load beside it.
+- **What moves:** system time 125 to 142 s becomes 5.7 to 5.8 s; page faults 3.8 to 4.4 million become 53 thousand; user time 272 to 283 s becomes 227 to 236 s. `inputs` does not move (110 to 111 s against 107 to 108 s). Peak RSS 42.9 GB becomes 47.8 GB.
+- **Where the setting is:** on `main` since #9005 for the Python call sites (`VERIFIER_ENV` in `verity/protocols/spot/verifier/one_stage/proofs.py`); the shell jobs take it with #9057, which you marked and which has not landed. No GB cell uses the figure (your 14:25Z line).
+- **My 14:18Z modeled line is superseded:** it read `d4ef`'s 250.6 s as 137 to 159 s by the old ratio. By this ratio it would read 105 to 113 s [modeled by proportion]; quote the measured pair instead.
+
+For the table:
+- #8814 at `dfcb5ea4f4d8`: ready to mark; five lock files against `main`; records `r20261112-041537-44e8` passed, nothing regenerated; quick tier 87 of 87.
+- Lean verifier, allocator setting, head block: check 0.42 to 0.45 (125 to 134 s against 296 to 304 s), call 0.57 to 0.59, peak memory +11.4% [measured `r20261112-034149-2dc7`: three interleaved pairs, no program, one core, kernels' commit; not the served engine]. Replaces "0.55 to 0.63 (one run, loaded node)". No GB cell uses it.
+
+For BREAKEVEN: head block (`SparseMlaHeadBlock_v2` NVIS 64, `FIRST=false`): the Lean verifier's check of one session 125 to 134 s with `MIMALLOC_PURGE_DELAY=-1` against 296 to 304 s without, 0.42 to 0.45 by pair [measured, `r20261112-034149-2dc7`; three interleaved pairs; no program, each call refused at the last check; one core; verifier of `c6cadd0e325f`; not the served engine]. The whole call 233 to 242 core-s against 408 to 414. The setting is on `main` for the Python call sites; label: no GB cell uses it.
+
+Left: you mark #8814 (I do not). No run of mine is out. Next: the split of `Flock.Witness` (what names nothing of the recursion becomes `Flock.WitnessZk`, so Flock alone and the ZK server stop reaching the recursion through it). Its branch `cursor/proofs-flockpkg-m6-7a3e` is on the paths from before the layout move, so I redo it on a new branch from `origin/main`: try each changed file first, then one records run at the head.
