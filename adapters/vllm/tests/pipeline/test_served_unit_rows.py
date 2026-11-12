@@ -34,7 +34,7 @@ def test_each_served_key_rows_writer_commits_the_bits_it_returns():
     row it returns, which every head's scores and values units read, though it is its input."""
     from verity.protocols.spot.verifier.one_stage import partition as P
 
-    writers = sorted({t for f in SERVED for t in json.loads(f.read_text())["chunk_cap"]
+    writers = sorted({t for f in SERVED for t in json.loads(f.read_text())["templates"]
                       if t.startswith("SparseMlaHeadKeysWire_")})
     got = {t: (P._template_bits(fn), 16 * fn.statics["NVIS"] * fn.statics["W"]) for t in writers for fn in [SRW.template(t).fn]}
     assert len(writers) == 18 and all(b == want for b, want in got.values()), got
