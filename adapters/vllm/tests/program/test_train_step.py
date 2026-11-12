@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import bisect
 import collections
+import contextlib
 import functools
 import math
 from collections.abc import Callable
@@ -33,6 +34,8 @@ from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.ops import scalar as SC
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import fa2_train as FT
+from verity.definitions.registry import fa2_train_bwd as FTB
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
@@ -793,7 +796,7 @@ def test_tiny_step_survey_lists_its_one_hole_and_holds_no_program() -> None:
 def test_tiny_bf16_step() -> None:
     """The tiny step with its linears' operands cast to bf16, as bf16 autocast casts them (`LM(matmul_dtype=torch.bfloat16)`). Every
     op derives with either loss, each bf16 matrix product is `LinearRef_v1` rows of bf16 words (attention's are f32: torch's math
-    path computes it from upcast operands), and the casts are among the primitives."""
+    path computes it from upcast operands, and no flash attention Definition is in it), and the casts are among the primitives."""
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
     opt = AdamW(**ADAMW)
     ex = export_step(model, square_loss, opt, batch)
@@ -802,6 +805,7 @@ def test_tiny_bf16_step() -> None:
     bf16 = ["DT='bf16'" in nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("LinearRef_v1")]
     mms = sum(n.target is aten.mm.default and n.meta["val"].dtype == torch.bfloat16 for n in ex[0].graph.nodes)
     assert sum(bf16) == mms > 0 and not all(bf16), (sum(bf16), len(bf16), mms)
+    assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
     s = step_report(model, loss_fn, opt, batch, survey=True, exported=export_step(model, loss_fn, opt, batch))
     assert s.unsupported is None and s.holes == [], (s.unsupported, s.holes)
     assert {P.Bf16ToF32.id, P.F32ToBf16Rn.id} <= set(s.primitives)
@@ -810,7 +814,8 @@ def test_tiny_bf16_step() -> None:
 CC = CB.TRAIN_CC
 
 
-@pytest.mark.parametrize("kw", [{}, {"cc": CC}, {"cc": CC, "tf32": True}], ids=["cpu", "cc", "cc-tf32"])
+@pytest.mark.parametrize("kw", [{}, {"cc": CC}, {"cc": CC, "tf32": True}, {"cc": CC, "deterministic": True}],
+                         ids=["cpu", "cc", "cc-tf32", "cc-deterministic"])
 def test_training_rules_build_on_the_torch_only_list(kw: dict) -> None:
     """`verity_vllm.program.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
     and none of `rules.VLLM_RULES`: a training step's rule set names no op of vLLM's."""
@@ -882,25 +887,52 @@ def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch, routes) -> None:
 TINY_STEP_ROUTES = {**{(32, K, N, r): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for r in ("fwd", "dX", "dW")},
                     (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
                     (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3}}
+#: the tiny step's attention [B, H, T, D], which no capture of torch's flash attention covers: `_tiny_stand_ins` makes it a
+#: stand-in shape, the forward unsplit over key blocks of 16 and the backward over blocks of 16 rows and 16 keys
+TINY_SDPA = (2, 2, 16, 32)
+
+
+def _tiny_stand_ins(monkeypatch) -> None:
+    """The tiny step's stand-ins on sm_120: its linears' routes (`TINY_STEP_ROUTES`) and its attention's shape (`TINY_SDPA`)."""
+    for key, route in TINY_STEP_ROUTES.items():
+        monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
+    monkeypatch.setitem(FT.TRAIN_SDPA, TINY_SDPA, ("unsplit", 16))
+    monkeypatch.setitem(FTB.TRAIN_SDPA_BWD, TINY_SDPA, (16, 16))
+
+
+@contextlib.contextmanager
+def _deterministic_algorithms(on: bool = True):
+    """torch's deterministic algorithms `on` for the block, and afterwards as they were: the setting is the process's."""
+    was, warn_only = torch.are_deterministic_algorithms_enabled(), torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(on)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(was, warn_only=warn_only)
 
 
 def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
-    """The tiny bf16 step on sm_120 at stand-in routes (`TINY_STEP_ROUTES`): each linear's three GEMMs are their routes'
-    Definitions on words, read off the layouts autograd gives them (nine linears at (K, N) = (64, 64), the lm_head among them,
-    four at (64, 192), two at (192, 64)), and attention's f32 products are `LinearRef_v1` rows as without `cc`."""
-    for key, route in TINY_STEP_ROUTES.items():
-        monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
+    """The tiny bf16 step on sm_120 under deterministic algorithms, at stand-in routes and attention shape (`_tiny_stand_ins`):
+    each linear's three GEMMs are their routes' Definitions on words, read off the layouts autograd gives them (nine linears at
+    (K, N) = (64, 64), the lm_head among them, four at (64, 192), two at (192, 64)), and each layer's attention is torch's flash
+    attention, its forward and its backward each one batch over the step's 2 x 2 heads of the head Definition its kernels
+    compute, with none of the math path's f32 products or its softmax."""
+    _tiny_stand_ins(monkeypatch)
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
-    prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    with _deterministic_algorithms():
+        prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
     assert not isinstance(prog, Unsupported), prog
     got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
-        "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
+        "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1"))
     want: collections.Counter[str] = collections.Counter()
     for (K, N), linears in {(64, 64): 9, (64, 192): 4, (192, 64): 2}.items():
         for role in ("fwd", "dX", "dW"):
             want[word_of(CB.train_linear(role, 32, K, N)).id] += linears
-    assert {k: v for k, v in got.items() if not k.startswith("LinearRef_v1")} == want
-    assert all("DT='f32'" in k for k in got if k.startswith("LinearRef_v1")), got
+    assert got == want
+    heads = TINY_SDPA[0] * TINY_SDPA[1]
+    attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
+    assert attention == [(FT.train_sdpa(*TINY_SDPA).id, heads)] * 2 + [(FTB.train_sdpa_backward(*TINY_SDPA).id, heads)] * 2
+    assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith(("LinearRef_v1", "SoftmaxRef_v1"))]
 
 
 def test_gpu_lowers_smollm2s_grid_z_dw_to_its_route() -> None:
