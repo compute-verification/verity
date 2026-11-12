@@ -27,6 +27,7 @@ from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 
+from verity.protocols.spot.verifier import service as SV
 from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.protocols.spot.verifier.one_stage import registration as R
@@ -136,6 +137,10 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)
+    w = t.window(LAW, CAP).window
+    rated = D.derive(w.program, w.query, *SV.params_law("work-rate:613/613", w.program, w.query, w.work_table))
+    assert D.same_design(D.derive(w.program, w.query, LAW, w.work_table), rated)
+    assert all(s["k"] == s["floor"] == sum(hi - lo for lo, hi in s["units"]) for s in rated["strata"])
 
 
 def test_the_honest_registration_is_accepted(x, tmp_path):

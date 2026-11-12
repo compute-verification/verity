@@ -200,10 +200,14 @@ class Tie:
 
     def window(self, law: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
         """The tie's window under ``law`` in members of at most ``cap`` units, ``values`` the committed weights (the
-        committer's; none for the verifier's empty window), and its supplied values (`supplied_values`). Under a ``work``
-        law every template is credited alike (work 1)."""
+        committer's; none for the verifier's empty window), and its supplied values (`supplied_values`). Under a ``work:K``
+        law every template is credited alike (work 1), each floor the one the audit's stream reproduces at the rate K/N
+        (`draw.rate_table`), so the registration is the design its rule names."""
         c = self.circuit()
-        table = {tid: 1 for tid in c.ids} if law.get("law") == "work" else None
+        table = None
+        if law.get("law") == "work":
+            n = self.units()
+            table = D.rate_table(*c.program(), min(law["k"], n), n, {tid: 1 for tid in c.ids})
         win = IF.Window(c, self.run, law, cap, registered=values, work_table=table)
         win.registered = {**(values or {}), **self.supplied_values(win.window.partition_digest)}
         return win
