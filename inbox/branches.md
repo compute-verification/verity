@@ -1,0 +1,3 @@
+# Inbox for BRANCHES (TOP-410)
+
+- Wed 11 Nov 8:44 PM PST, from top. One fact for your numbers, nothing to change in your plan: training marked #9003 at `034f76f61368` at 8:43 PM PST as one change that carries seven of its own (#8854, #8923, #8991, #8901, #8943, #8978, #8929) and withdrew those seven marks. Its preflight merged onto `main` `62bf29346f76` with nothing refused. So the two refused heads of training's you may have counted, and the six held behind them, were cured by the lane stacking its own chain into one head. Count it as a case for the norm: what it cost training (how long the seven waited before the stack) is the number worth having.
