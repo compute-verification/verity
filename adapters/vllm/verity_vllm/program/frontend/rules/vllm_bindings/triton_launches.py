@@ -5,21 +5,46 @@ from __future__ import annotations
 import sys
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import (GEMM_PINS, QKV_RMS_PINS, RMS_PINS, _pins_ok, _target_kinds, active_gemm_target, gemm_bias_role,
-                                                                   gemm_pins_for, lookup_key)
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
 from verity.definitions.registry.dsa_norm import check_block
 
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    norm_kind,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
+from verity_vllm.program.frontend.rules.triton_iface import (
+    launch_meta,
+    launch_tensor,
+    triton_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+    _strides,
+    _untransposed,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
+    GEMM_PINS,
+    QKV_RMS_PINS,
+    RMS_PINS,
+    _pins_ok,
+    _target_kinds,
+    active_gemm_target,
+    gemm_bias_role,
+    gemm_pins_for,
+    lookup_key,
+)
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 # -- direct Triton launches -----------------------------------------------------------------------------------------------
 
@@ -31,8 +56,8 @@ class TritonRmsNormRule(InPlaceRule):
     info = RuleInfo("TritonRmsNorm[vllm-bi]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant._rms_norm_kernel (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `_rms_norm_kernel`", "BLOCK_SIZE=1024, HAS_WEIGHT=True (profile pins)",
-                                   "input is bf16 [R, N] with unit column stride (row stride = the launch's input_row_stride, >= N: a column slice of a wider "
-                                   "row is allowed), weight bf16 [N], output an unwritten allocation [R, N] (row stride = output_row_stride)",
+                                   ("input is bf16 [R, N] with unit column stride (row stride = the launch's input_row_stride, >= N: a column slice of a wider "
+                                   "row is allowed), weight bf16 [N], output an unwritten allocation [R, N] (row stride = output_row_stride)"),
                                    "n_cols == N; eps is a static float; grid == (R,)"),
                     evidence_domain="structural; numerics: RMSNormTriton_v1 (the same Triton kernel, W11 model)")
 
@@ -57,7 +82,7 @@ class TritonRmsNormRule(InPlaceRule):
             return "output is not an allocation/value"
         if str(ctx.dtype_of(out)) != RMS_PINS["dtype"]:
             return f"numerics_unregistered: output dtype {ctx.dtype_of(out)}; RMSNormTriton_v1 is the bf16 kernel"
-        xs = shape(ctx, x)
+        xs = known(shape(ctx, x))
         if len(xs) != 2 or shape(ctx, w) != (xs[1],) or shape(ctx, out) != xs:
             return f"shapes input {xs} weight {shape(ctx, w)} output {shape(ctx, out)}"
         if sc.get("n_cols") != xs[1]:
@@ -120,8 +145,8 @@ class FusedQKvRmsNormRule(InPlaceRule):
                     applies_to="verity_cba::triton_launch of fused_qk_rmsnorm._fused_q_kv_rmsnorm_kernel (kernel name + source pinned)",
                     preconditions=("kernel qualified name and source sha256 are the pinned ones (QKV_RMS_PINS)",
                                    "BLOCK_SIZE = next_pow2(max(Q_SIZE, KV_SIZE)) and num_warps 8 from BLOCK_SIZE 2048, else 4 (the wrapper's)",
-                                   "q, kv bf16 [T, SIZE] with unit column stride and the launch's row stride; weights bf16 [SIZE]; outputs "
-                                   "two unwritten allocations [T, SIZE], packed, neither an input",
+                                   ("q, kv bf16 [T, SIZE] with unit column stride and the launch's row stride; weights bf16 [SIZE]; outputs "
+                                   "two unwritten allocations [T, SIZE], packed, neither an input"),
                                    "every row stride divisible by 16 and every pointer 16-byte aligned (Triton's specialization the PTX is)",
                                    "TritonBlockRMSNorm's statics (check_block); eps a static float; grid (T, 2)"),
                     evidence_domain="structural; numerics: TritonBlockRMSNorm_v1 (registry.dsa_norm, the kernel's cc 9.0 PTX)")
@@ -162,7 +187,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
                 return r
             if not isinstance(ctx.val(out), Alloc) or not dtype_is(ctx, out, BF16):
                 return f"{name} output is not an unwritten bf16 allocation"
-            N, xs = sc[size_key], shape(ctx, x)
+            N, xs = sc[size_key], known(shape(ctx, x))
             if len(xs) != 2 or xs[1] != N or shape(ctx, w) != (N,) or shape(ctx, out) != xs or (T is not None and xs[0] != T):
                 return f"{name} shapes {xs}, weight {shape(ctx, w)}, output {shape(ctx, out)} vs {size_key}={N}"
             T = xs[0]
@@ -207,16 +232,18 @@ class TritonGemmRule(InPlaceRule):
     info = RuleInfo("TritonGemm[vllm-bi]", 3, "in-place-binding",
                     applies_to="verity_cba::triton_launch of batch_invariant.matmul_kernel_persistent (kernel name + constexprs pinned)",
                     preconditions=("kernel qualified name is the profile's `matmul_kernel_persistent`; source sha256 pinned",
-                                   "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.frontend.gemm_targets: ada cc 8.9 with "
-                                   "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)",
-                                   "tiling = that target's launch geometry for (M, N, K) (GemmTarget.launch_config: the default 128/128/64, 8 warps, 3 stages, or the "
+                                   (
+                                       "the active TargetProfile's capability has a REGISTERED GEMM specialization (verity_vllm.program.frontend.gemm_targets: ada cc 8.9 with "
+                                       "vLLM's tuned sm_89 table, ampere cc 8.0 default tiling only; anything else -> numerics_unregistered)"
+                                   ),
+                                   ("tiling = that target's launch geometry for (M, N, K) (GemmTarget.launch_config: the default 128/128/64, 8 warps, 3 stages, or the "
                                    "M-bucket row of the target's pinned tuned table); GROUP_SIZE_M 8, *_LARGE False, HAS_BIAS False, "
-                                   "NUM_SMS = the active TargetProfile's num_sms (default 128)",
+                                   "NUM_SMS = the active TargetProfile's num_sms (default 128)"),
                                    "a is bf16 [M, K] row-major (stride_am K, stride_ak 1); b is bf16 [K, N] with stride_bk 1, stride_bn K (= W[N,K].t())",
                                    "c is an unwritten allocation [M, N] row-major; bias_ptr is None; M, N, K equal the shapes",
-                                   "fused bias (Gemm_v1 targets, and targets whose record says gemm_bias_dot): c's only other reader is "
+                                   ("fused bias (Gemm_v1 targets, and targets whose record says gemm_bias_dot): c's only other reader is "
                                    "aten.add.Tensor(c, b) (either order, alpha 1), the next computing node, in the launch's module; b bf16 [N] or "
-                                   "[1, N]; the sum bf16 [M, N]"),
+                                   "[1, N]; the sum bf16 [M, N]")),
                     evidence_domain="structural; numerics: Gemm_v1{K,N} / Gemm_v2{K,N,DOT} (the same Triton kernel; f32 accumulator over "
                                     "BLOCK_SIZE_K tiles); GemmBias_v1{K,N} / GemmBias_v2{K,N,DOT} = BiasAdd_v1 of that word "
                                     "(linear_batch_invariant's `output + bias` in bf16)")
@@ -249,7 +276,7 @@ class TritonGemmRule(InPlaceRule):
             return "c is not an allocation/value"
         if str(ctx.dtype_of(c)) != GEMM_PINS["dtype"]:
             return f"numerics_unregistered: c dtype {ctx.dtype_of(c)}; Gemm_v1 is the bf16 kernel"
-        as_, bs, cs = shape(ctx, a), shape(ctx, b), shape(ctx, c)
+        as_, bs, cs = known(shape(ctx, a)), known(shape(ctx, b)), known(shape(ctx, c))
         if len(as_) != 2 or len(bs) != 2 or len(cs) != 2:
             return f"ranks a{as_} b{bs} c{cs}"
         M, K = as_
@@ -278,7 +305,7 @@ class TritonGemmRule(InPlaceRule):
         pouw = _pouw_scheme(node)
         bias_role = ("pouw_linear_row_bias", {}) if pouw is not None else gemm_bias_role()
         fused = _bias_add_reader(node, c, ctx, len(rows), N) if bias_role is not None else None
-        if fused is not None:
+        if bias_role is not None and fused is not None:
             add, bn = fused
             bias = ctx.coll(bn, "b")
             if len(shape_of(bias.type)[0]) != 1:
@@ -365,6 +392,6 @@ def _bias_add_reader(launch, c, ctx, M: int, N: int):
         return None
     if not (dtype_is(ctx, bn, BF16) and dtype_is(ctx, add, BF16)) or _bias_shape(shape(ctx, bn)) != N or shape(ctx, add) != (M, N):
         return None
-    if len(shape(ctx, bn)) > 2:
+    if len(known(shape(ctx, bn))) > 2:
         return None
     return add, bn

@@ -22,8 +22,24 @@ PROTOCOL SUMMARY (Build phase: the lowering rules that turn vLLM's exported ATen
 
 from __future__ import annotations
 
-from verity_vllm.program.frontend.rules.base import ANY, FamilyRule, InPlaceRule, ModuleRule, OpRule, Rule, RuleInfo, RuleSet, StateRule, ViewRule
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER, REFERENCE_CPU_F32, Vocabulary, vocabulary_for
+from verity_vllm.program.frontend.rules.base import (
+    ANY,
+    FamilyRule,
+    InPlaceRule,
+    ModuleRule,
+    OpRule,
+    Rule,
+    RuleInfo,
+    RuleSet,
+    StateRule,
+    ViewRule,
+)
+from verity_vllm.program.frontend.rules.vocab import (
+    PROFILE_B1_EAGER,
+    REFERENCE_CPU_F32,
+    Vocabulary,
+    vocabulary_for,
+)
 
 _LAZY = ("DEFAULT_RULES", "VIEW_RULES", "REFERENCE_RULES", "PROFILE_RULES", "PADDING_RULES", "DEFAULT_FAMILIES")
 _cache: dict[str, object] = {}
@@ -32,11 +48,11 @@ _cache: dict[str, object] = {}
 def _load() -> None:
     if _cache:
         return
-    from verity_vllm.program.frontend.rules.views import VIEW_RULES
-    from verity_vllm.program.frontend.rules.reference import REFERENCE_RULES
-    from verity_vllm.program.frontend.rules.profile import PROFILE_RULES
-    from verity_vllm.program.frontend.rules.padding import PADDING_RULES
     from verity_vllm.program.frontend.rules.family import DEFAULT_FAMILIES
+    from verity_vllm.program.frontend.rules.padding import PADDING_RULES
+    from verity_vllm.program.frontend.rules.profile import PROFILE_RULES
+    from verity_vllm.program.frontend.rules.reference import REFERENCE_RULES
+    from verity_vllm.program.frontend.rules.views import VIEW_RULES
     _cache.update(VIEW_RULES=VIEW_RULES, REFERENCE_RULES=REFERENCE_RULES, PROFILE_RULES=PROFILE_RULES, PADDING_RULES=PADDING_RULES,
                   DEFAULT_FAMILIES=DEFAULT_FAMILIES,
                   DEFAULT_RULES=RuleSet("default", list(VIEW_RULES) + list(REFERENCE_RULES) + list(PROFILE_RULES) + list(PADDING_RULES),

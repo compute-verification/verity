@@ -23,13 +23,13 @@ from __future__ import annotations
 import struct
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import dtype_is, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 BF16 = torch.bfloat16
 

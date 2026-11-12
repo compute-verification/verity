@@ -11,14 +11,25 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides, _untransposed
-from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity.definitions.registry import bf16_gemm_check
+
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    from_rows,
+    known,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+    _strides,
+    _untransposed,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import iface
 
 aten = torch.ops.aten
 
@@ -196,8 +207,8 @@ class CublasRouterRule(OpRule):
         applies_to="aten.mm.dtype(x, W.T, out_dtype=float32): GateLinear's cc 9.0 fallback above 16 tokens, or a direct call",
         preconditions=(
             "x is row-major bf16 [M,K], W.T is the transposed view of row-major bf16 W[N,K], and output is row-major f32 [M,N]",
-            "the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
-            "cuBLAS tier",
+            ("the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
+            "cuBLAS tier"),
         ),
         evidence_domain="GLM-5.3 BF16 GEMM defaults capture; GO pending its capture-side probe fix",
     )
@@ -234,9 +245,11 @@ class CublasRouterRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, wt = node.args[:2]
-        rows_n, K = shape(ctx, x)
-        M, N = launch_tokens_of(node, rows_n), shape(ctx, wt)[1]
-        phase, role, statics = f32out_route(M, K, N)
+        rows_n, K = known(shape(ctx, x))
+        M, N = launch_tokens_of(node, rows_n), known(shape(ctx, wt))[1]
+        route = f32out_route(M, K, N)
+        assert not isinstance(route, str), route  # `applies` refused a launch with no route
+        phase, role, statics = route
         kernel = "splitk" if role == "cublas_splitk_gemm_f32out" else "non_split"
         DOT = targets.tensor_core_dot(active_target_profile())
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)

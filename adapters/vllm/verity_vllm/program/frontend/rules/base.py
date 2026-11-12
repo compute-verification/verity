@@ -20,8 +20,9 @@ registered program family's expanded body).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
     from verity_vllm.program.frontend.derive import Ctx
@@ -62,10 +63,10 @@ class Rule:
         """Graph targets (OpOverload / callables) this rule may consider; `ANY` for a catch-all."""
         return ()
 
-    def applies(self, node, ctx: "Ctx") -> bool | str:
+    def applies(self, node, ctx: Ctx) -> bool | str:
         raise NotImplementedError
 
-    def emit(self, node, ctx: "Ctx") -> None:
+    def emit(self, node, ctx: Ctx) -> None:
         raise NotImplementedError
 
     def declare_inputs(self, ep, module, mode: str) -> list[tuple[str, Any, dict]]:
@@ -145,7 +146,7 @@ class RuleSet:
                 out.append(r)
         return out
 
-    def extended(self, name: str, rules: Iterable[Rule] = (), families: Iterable[Any] = ()) -> "RuleSet":
+    def extended(self, name: str, rules: Iterable[Rule] = (), families: Iterable[Any] = ()) -> RuleSet:
         return RuleSet(name, list(self.rules) + list(rules), list(self.families) + list(families))
 
     def to_json(self) -> dict:

@@ -3,20 +3,27 @@ active target."""
 
 from __future__ import annotations
 
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
+from typing import Any
 
+from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    active_target_profile,
+)
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
 #: kernel pins of the admitted profile `vllm_d9105ea80_sm89_eager` (source: the profile module cited above).
 #: `NUM_SMS` is a TARGET fact: its admitted value is the default `TargetProfile`'s (one source; the active profile overrides it
 #: through `observe_target_profile`, and the GEMM rule then checks every launch against THAT value).
-GEMM_PINS = {"kernel": "vllm.model_executor.determinism.batch_invariant.matmul_kernel_persistent",
-             # sha256 of the kernel's Python source at the pinned vLLM (d9105ea80); the eager capture records the same `src_sha`.
-             # A renamed-but-identical kernel still binds; a same-named kernel with another body is refused.
-             "src_sha256": "4a7e9290c5dbee5e98e04eced96a469438b7514665cdfc1659ed554e293a7287",
-             "constexprs": {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8,
-                            "A_LARGE": False, "B_LARGE": False, "C_LARGE": False, "HAS_BIAS": False},
-             "num_warps": 8, "num_stages": 3, "NUM_SMS": DEFAULT_TARGET.num_sms, "dtype": "torch.bfloat16"}
+GEMM_PINS: dict[str, Any] = {
+    "kernel": "vllm.model_executor.determinism.batch_invariant.matmul_kernel_persistent",
+    # sha256 of the kernel's Python source at the pinned vLLM (d9105ea80); the eager capture records the same `src_sha`.
+    # A renamed-but-identical kernel still binds; a same-named kernel with another body is refused.
+    "src_sha256": "4a7e9290c5dbee5e98e04eced96a469438b7514665cdfc1659ed554e293a7287",
+    "constexprs": {"BLOCK_SIZE_M": 128, "BLOCK_SIZE_N": 128, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 8,
+                   "A_LARGE": False, "B_LARGE": False, "C_LARGE": False, "HAS_BIAS": False},
+    "num_warps": 8, "num_stages": 3, "NUM_SMS": DEFAULT_TARGET.num_sms, "dtype": "torch.bfloat16",
+}
 #: vLLM d9105ea80's fused q / kv RMSNorm (DeepSeek-V4's attention), served by default; its BLOCK_SIZE and num_warps are the wrapper's
 #: functions of the sizes (`fused_qk_rmsnorm.fused_q_kv_rmsnorm`), checked by the rule
 QKV_RMS_PINS = {"kernel": "vllm.models.common.ops.fused_qk_rmsnorm._fused_q_kv_rmsnorm_kernel",
@@ -121,7 +128,7 @@ def tuned_gemm_table_sha256() -> str | None:
     table-less target (Ampere: default tiling for every shape) or an unregistered one."""
     try:
         return active_gemm_target().table_sha256()
-    except Exception:  # noqa: BLE001
+    except UnregisteredGemmTarget:
         return None
 
 

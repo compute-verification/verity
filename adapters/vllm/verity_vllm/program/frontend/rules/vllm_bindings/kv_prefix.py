@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE, dtype_is, shape
+from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE
+from verity_vllm.program.frontend.rules.common import dtype_is, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 
 

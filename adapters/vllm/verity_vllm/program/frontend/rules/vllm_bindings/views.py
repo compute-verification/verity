@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll
+
 from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.value_types import shape_of, width_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import aten
-
+from verity_vllm.program.frontend.value_types import shape_of, width_of
 
 # -- views of allocations ---------------------------------------------------------------------------------------------------
 
@@ -23,12 +22,12 @@ class AllocViewRule(ViewRule):
     region (vLLM's `DeepseekV4Attention.forward`: the kernel writes `o_padded[:, :NH]`, the layer re-slices `o_padded[:, :NH]`)
     is the written value. Only when that one write went through the base: with two, either may have overwritten the other."""
     info = RuleInfo("AllocView", 3, "view", applies_to="aten.view / reshape / flatten / unit-step slice / permute / t / transpose of an unwritten allocation",
-                    preconditions=("operand is an unwritten Alloc", "view/reshape/flatten: leaf count is preserved; slice: step 1 (a sub-allocation "
+                    preconditions=("operand is an unwritten Alloc", ("view/reshape/flatten: leaf count is preserved; slice: step 1 (a sub-allocation "
                                    "of the same storage -- vLLM's MoE workspace carving `buf[:n].view(...)`); permute/t/transpose: the viewed "
                                    "type is the node's (an axis order over the same leaves -- vLLM's column-major FP8 group scales "
-                                   "`torch.empty(K/G, M).permute(-1, -2)`)",
-                                   "the written value: exactly one in-place write went through the operand's storage, its view's storage offset, "
-                                   "shape, stride and dtype are the node's, and it is not stale"), evidence_domain="structural (no gates)")
+                                   "`torch.empty(K/G, M).permute(-1, -2)`)"),
+                                   ("the written value: exactly one in-place write went through the operand's storage, its view's storage offset, "
+                                   "shape, stride and dtype are the node's, and it is not stale")), evidence_domain="structural (no gates)")
 
     def targets(self):
         # v2: + permute / t / transpose (the in-place rule that writes the view rebinds the VIEW node; the base stays an unread Alloc)
