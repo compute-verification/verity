@@ -927,7 +927,9 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     topk = {"env": {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": "{private}/topk-log"}}
 
     def counters(steps: int, drafts: int, accepted: int) -> dict:
-        return {"steps": float(steps), "drafts": float(drafts), "draft_tokens": 5.0 * drafts, "accepted_tokens": float(accepted)}
+        return {"steps": float(steps), "step_tokens": 30000.0, "generation_tokens": 28000.0, "prompt_tokens": 51200.0,
+                "prompt_tokens_cached": 25600.0, "preemptions": 0.0, "drafts": float(drafts), "draft_tokens": 5.0 * drafts,
+                "accepted_tokens": float(accepted)}
 
     # served in the order stock, stock sent the seeds, ours, ours with the top-k off: the report is told ours third
     bench_arm(out, "prod", {"chat@16": [300.0]}, meta=sampled | {"seeded": False}, schedule=counters(2089, 4992, 693), t0=1000.0)
@@ -954,12 +956,13 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
              "in 100.0 s\n"
              "  the requests: sampled with no seed sent (prod); sampled, each under a seed its client sent (prod-record, "
              "prod-seeded and prod-trace)\n"
-             "  the canonical top-k while serving: ")
+             "  the canonical top-k, by directory: ")
     off = "not on for prod, prod-seeded and prod-trace (no VERITY_DSA_TOPK in the environment their records name)\n"
     # a job that named no private directory kept no counters: the record's environment still says where it was on
     txt, r = said()
     assert block + "prod-record on, its counters not kept (the job named no PRIVATE directory); " + off in txt
     assert r["arms"]["beside"] == ["prod-seeded", "prod-trace"] and r["arms"]["served"] == sorted(r["ran"]["arms"])
+    assert [x["dir"] for x in r["ran"]["passes"]["passes"]] == ["prod", "prod-seeded", "prod-record", "prod-trace"]
     assert ("what ran:\n"
             "  prod: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
             "  prod-record: up in 300 s; the load served 1 time, 200 requests, every one finished\n"
@@ -985,19 +988,29 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
     assert block + counted + off in said()[0]
     private.mkdir()
     assert block + counted + off in said("--private", str(private))[0]
+    # a job that served none beside the three prints no such lines, and its JSON holds its passes all the same
+    assert P.main(argv[:-3]) == 0
+    r = json.loads((out / "prod_repro.json").read_text())
+    assert "each pass" not in (out / "prod_repro.txt").read_text() and "beside" not in r["arms"]
+    assert [x["dir"] for x in r["ran"]["passes"]["passes"]] == ["prod", "prod-record"]
     # a lifetime's warm-up is marked, a pass whose record holds no counters says so, and an engine that drafted none too
     out = tmp_path / "lifetimes"
-    bench_arm(out, "prod.1", {"chat@16": [300.0, 300.0]}, meta={"arm": "prod", "lifetime": 1, "left_out": 1, "reps": 2})
-    bench_arm(out, "prod-record.1", {"chat@16": [300.0, 300.0]}, meta={"arm": "prod-record", "lifetime": 1, "left_out": 1, "reps": 2},
-              schedule={"steps": 2040.0}, t0=2000.0)
-    assert P.main(["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record"]) == 0
+    one = {"lifetime": 1, "left_out": 1, "reps": 2}
+    bench_arm(out, "prod.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod"})
+    bench_arm(out, "prod-record.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod-record"},
+              schedule=counters(2040, 0, 0), t0=2000.0)
+    bench_arm(out, "prod-trace.1", {"chat@16": [300.0, 300.0]}, meta=one | {"arm": "prod-trace"}, t0=3000.0)
+    assert P.main(["report", str(out), "--load", "chat", "--stock", "prod", "--again", "", "--ours", "prod-record",
+                   "--beside", "prod-trace"]) == 0
     assert ("  prod.1 chat@16 rep 1, left out: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
             "  prod.1 chat@16 rep 2: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
             "  prod-record.1 chat@16 rep 1, left out: 2,040 engine steps, no drafts; 30,000 output tokens in 100.0 s\n"
             "  prod-record.1 chat@16 rep 2: 2,040 engine steps, no drafts; 30,000 output tokens in 100.0 s\n"
-            "  the requests: greedy (prod and prod-record)\n"
-            "  the canonical top-k while serving: not on for prod.1 and prod-record.1 (no VERITY_DSA_TOPK in the environment "
-            "their records name)\n") in (out / "prod_repro.txt").read_text()
+            "  prod-trace.1 chat@16 rep 1, left out: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  prod-trace.1 chat@16 rep 2: its record holds no counters of the engine's; 30,000 output tokens in 100.0 s\n"
+            "  the requests: greedy (prod, prod-record and prod-trace)\n"
+            "  the canonical top-k, by directory: not on for prod.1, prod-record.1 and prod-trace.1 (no VERITY_DSA_TOPK in the "
+            "environment their records name)\n") in (out / "prod_repro.txt").read_text()
 
 
 def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path):

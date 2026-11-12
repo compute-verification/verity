@@ -109,13 +109,14 @@ replay that differs, the first token that does and the first step.
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
   `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
   exits), and a replay in which no process kept any shows nothing of the top-k having run there.
-- **each pass**: every pass of the load every arm served, a line a pass, by the counters the benchmark read off its
-  server before and after it (the pass's own `meta.json`): its engine steps, its drafts and the share of their tokens
-  the model accepted, and beside them its output tokens and its seconds as the cost counts them; `left out` marks a
-  lifetime's warm-up. Then how each arm's requests were sampled, and whether its client sent their seeds; and for
-  each directory whether its server was started on the canonical top-k (its record's environment) and what the
-  top-k's processes counted there. These lines are in no verdict. They are what an arm served beside the three is
-  read by: two arms that differ in one thing, a line each.
+- **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
+  line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
+  own `meta.json`): its engine steps, its drafts and the share of their tokens the model accepted, and beside them
+  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
+  arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
+  was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
+  These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in
+  one thing, a line each. `out/prod_repro.json` holds them for every job (`ran.passes`).
 - **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding with the
   share of draft tokens accepted where the benchmark counts them, the context limit beside the model's own (the

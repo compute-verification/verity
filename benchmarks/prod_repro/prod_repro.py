@@ -16,12 +16,13 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   the replay's own record says (the served arm's other vLLM general plugins and its environment: the canonical DSA
   top-k's), with the top-k's counters of the replay's processes and of serving's where the job kept them
   (``--private``, the benchmark's PRIVATE; `topk_kept`);
-- each pass of the load every arm served, a line a pass, by the counters the benchmark read off its server around
-  it (`passes`): its engine steps, its drafts and the share of their tokens accepted, its output tokens and its
+- where the job served arms beside the three (``--beside``, the runner's ``--arms``: arms that differ from stock
+  or from ours in one thing), which are in what ran and in no line of the three: each pass of the load every arm
+  served, a line a pass in the order served, by the counters the benchmark read off its server before and after it
+  (`passes`): its engine steps, its drafts and the share of their tokens accepted, its output tokens and its
   seconds; then how each arm's requests were sampled and whether its client sent their seeds, and for each
-  directory whether its server was on the canonical top-k and what the top-k's processes counted there. It is in no
-  verdict. The arms served beside the three (``--beside``, the runner's ``--arms``: arms that differ from stock or
-  from ours in one thing) are in what ran and in these lines, and in no line of the three;
+  directory whether its server was on the canonical top-k and what the top-k's processes counted there. These
+  lines are in no verdict; the report's JSON holds them for every job;
 - the settings each of the two arms ran with, read from its launch line, its engine's own configuration (the step
   trace's header) and its counters: a setting the serve did not turn on is ``off``, and one its files can't confirm
   says so; and the adapter's record of the value settings in force in each server's environment and in the replay's
@@ -326,7 +327,7 @@ def passes(out: Path, dirs: dict[str, list[Path]], per: dict[str, list[dict]], l
     With them, by arm, whether its requests were sampled and whether its client sent their seeds (its record), and by
     directory, whether its server was started on the canonical top-k (its record's environment) and what the top-k's
     processes counted there (`topk_by_dir`). It is in no verdict: it is what an arm served beside stock and ours (the
-    runner's --arms) is read by."""
+    runner's --arms) is read by, and the report prints it for a job that served one."""
     rows, sampling, on = [], {}, {}
     for a, ms in per.items():
         for d, m in zip(dirs[a], ms):
@@ -877,7 +878,8 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
         toks = read("the tokens", lambda: tokens(dirs[ours], ours, replayed or load, rep, replay_dir, state))
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
-            "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "beside": list(beside), "served": sorted(by)},
+            "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by),
+                                   **({"beside": list(beside)} if beside else {})},
             "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine,
                     "passes": read("the passes", lambda: passes(out, dirs, per, load, private))},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
@@ -1173,7 +1175,7 @@ def _passes(v: dict) -> list[str]:
         return (f"{d} {c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
                 f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten")
 
-    lines.append("  the canonical top-k while serving: " + "; ".join(
+    lines.append("  the canonical top-k, by directory: " + "; ".join(
         [one(d) for d, on in t["on"].items() if on]
         + [f"not on for {_names(off)} (no {TOPK} in the environment {'its record names' if len(off) == 1 else 'their records name'})"]
         * bool(off)))
@@ -1286,7 +1288,7 @@ def text(r: dict) -> str:
     else:
         lines.append("  the replay: none was asked for")
     lines += _engine(ran["replay_engine"])
-    lines += _passes(ran["passes"])
+    lines += _passes(ran["passes"]) if r["arms"].get("beside") else []
     lines += [f"settings of {ours}" + (f", with {stock}'s beside:" if stock else ":"),
               _setting("prefix caching", "prefix_caching", r),
               _setting("speculative decoding", "speculative_decoding", r),
