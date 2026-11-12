@@ -11,6 +11,7 @@ from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
+    infer_wrapper_prefix,
     read_program_correspondence,
 )
 
@@ -61,7 +62,7 @@ def test_same_plan_under_both_sources_and_the_source_is_recorded():
     assert b.correspondence["modules"]["confirmed"] == sum(1 for v in b.values if P.ROUTE_OF_FAMILY.get(v.family) in P.MODULE_ROUTES) + sum(len(v.consumers) for v in b.values)
     da, db = a.to_json(), b.to_json()
     assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
-    assert P.load_plan.__name__ and P.plan_digest(db) == db["plan_digest"]
+    assert P.plan_digest(db) == db["plan_digest"]
 
 
 def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
@@ -99,6 +100,20 @@ def test_global_manifest_without_wrapper_prefix_determines_it_from_the_runtime_t
     assert deep.wrapper_prefix == "serve.wrapped.model." and deep.confirmed("body.blocks.0.act") is True
     alien = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(["zz.a", "zz.b.c", ""], prefix="q."))})
     assert alien.wrapper_prefix == "" and alien.confirmed("body.blocks.0.act") is False and alien.owned_modules() == ["", "q.zz.a", "q.zz.b.c"]
+
+
+def test_a_path_that_is_the_trees_own_votes_for_no_prefix():
+    """A record written in the tree's own paths (no export wrapper): each path that is a module of the tree votes for no prefix, so the
+    record's modules read confirmed.  No prefix wins a tie with a longer one, and is outvoted by a prefix more paths meet the tree under."""
+    rt = tree()
+    own = AcquireCorrespondence(rt, wrapper_prefix="", tables={"p": RC.RuntimeCorrespondence.from_json(_record(MODULES, prefix=""))})
+    assert own.wrapper_prefix == "" and own.wrapper_prefix_source == "runtime_tree"
+    assert own.confirmed("body.blocks.0.act") is True and own.owned_modules() == sorted(MODULES)
+    assert infer_wrapper_prefix(MODULES, rt) == ""
+    both = tree(embed=["Embed", "Module"])                                         # `body.embed` is a module as it stands, and `embed` is one under `body.`
+    assert infer_wrapper_prefix(["body.embed"], both) == ""                       # one vote each: the shorter
+    assert infer_wrapper_prefix(["body.embed", "logits"], both) == ""             # two votes to one
+    assert infer_wrapper_prefix(["model.body.embed", "model.logits", "body"], rt) == "model."
 
 
 def test_owning_module_by_call_id_reads_the_record():
