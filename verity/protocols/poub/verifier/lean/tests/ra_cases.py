@@ -295,7 +295,7 @@ def apply(s: AuditRun, clock: Clock, e: tuple) -> dict:
 
 def summary(s: AuditRun) -> dict:
     """`summaryJ`: what `AuditRun.record` gives that the port computes, which is all of it but the coin commitment's
-    root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
+    root, the block size and the registration's fields its digest binds, and of each window's profile its samples; and
     `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
     shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
@@ -410,15 +410,15 @@ def registry_op(v: Any) -> tuple:
     raise D.Reject(f"no registry op {op}")
 
 
-def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
+def _registry_call(r: audit.Registry, source: bytes, registered: list[audit.Registration], op: str, a: tuple) -> Any:
     if op == "register":
         node, blocks, root, c, kind, bind, layout, rows, nonce = a
         reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
-        drawn.append(reg)
+        registered.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
         which, kw, committed, appends, not_before, index = a
-        reg = drawn[which] if isinstance(which, int) else which
+        reg = registered[which] if isinstance(which, int) else which
         s = r.session(params_of(reg, kw), reg, None, not_before_ns=not_before, clock=Clock(), index=index,
                       challenger=lambda k: Replay(k, kw["windows"], committed, appends, kw["groups_per_coin"]))
         return {"session": s.commitment.epoch}
@@ -443,11 +443,11 @@ def registry(v: Any) -> dict:
         source = hex_(v, "source")
         r = registry_of(_get(v, "registry"))
         ops = [registry_op(o) for o in _list(v, "ops")]
-    drawn: list[audit.Registration] = []
+    registered: list[audit.Registration] = []
     results = []
     for op, *a in ops:
         try:
-            results.append(_registry_call(r, source, drawn, op, tuple(a)))
+            results.append(_registry_call(r, source, registered, op, tuple(a)))
         except audit.RegistryError:
             results.append({"refused": True})
     return {"registry": r.to_json(), "results": results}
