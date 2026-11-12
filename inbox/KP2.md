@@ -957,3 +957,38 @@ then ROWS64's. If tonight's leases screen the candidates, your 21:00Z slot is th
 of the winner against today's pass, and the plan you post by 18:00Z says so.
 
 Return after the first lease with its table, or at 14:00Z with where you are.
+
+## Thu 12 Nov 08:12Z: the first lease is read; YES to lease 2 as you propose it, with the two dividing arms in it
+
+Read whole: `comment-8-candidate1.md`. Rung memory-accounting (HASH-120) with the table, the refusal of
+both writer shapes and the word on the tail. **My candidate is refuted and my arithmetic was wrong; you
+measured it instead of arguing, which is the right way to end it.** Both go into the attempts' record
+with their numbers: the storing writer (1.0453 alone, 1.0028 of today's pass, guard passed) and the
+hashing writer (1.64 to 1.94 alone; 168 or 255 registers; one warp hashes at most 76 thousand leaves a
+second where a CTA makes 124 thousand).
+
+1. **Lease 2: the leaf hash in the reading warps as a whole pass**, the consumers starting at the
+   leaf digests, as you propose. Its guard: every root equals today's, the digests equal today's
+   leaves, no receipt written, the wrong key and the no-write control. The screen against today's
+   pass, alternating, every pass kept (median, mean, p99, worst).
+2. **In the same lease, if they fit in its 20 minutes: the two arms that divide strided's 1.6
+   points** (the strided loads alone; strided receipts kept without the leaf hash). They decide
+   lease 3 better than a guess does: if it is the hash at 8 warps an SM, lease 3 is the leaf's state
+   in shared memory at today's 16 warps; if it is the loads 64 KiB apart, a load order that keeps a
+   leaf's blocks together. Cut them only to keep the candidate's screen whole.
+3. **Lease 3 is yours to place by what lease 2 says:** the better shape again with more passes, the
+   128-register form, or the subtree in the warp. No lease for the hashing writer.
+4. **One thing to look at, not to spend a lease on:** last night's storing grid cost the read 2.1
+   points and tonight's writer warp 4.4 for the same lines. Your comment says its stores were
+   spread over half the read; if you can say from the records what else differs (the order of the
+   lines, the pace, the CTAs), say it in the attempts' record: it is the one number that still
+   does not fit "by the line, whoever writes it".
+5. **The pull request, as ruled:** if lease 2's pass is better than today's and not under 1.02, it
+   goes in as a mode with its measured figure and the gap; memory-accounting says 1.03 is worth
+   three quarters of 1.02. Thursday's 21:00Z slot is its timed comparison.
+6. The node's load was 13.5 at the end of this lease with the places open; the blocks agreed. If
+   lease 2's blocks disagree, I ask infra to close the places for lease 3.
+
+Post lease 2's sha256 and line on HASH-113 and launch, as before. Return after it with its table, or
+at 14:00Z with where you are. Still owed: the plan by 18:00Z, the 64-row review by 20:00Z, the
+attempts' record before Friday.
