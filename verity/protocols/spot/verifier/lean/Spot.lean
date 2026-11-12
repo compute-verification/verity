@@ -24,6 +24,7 @@ public import Spot.Slots
 public import Spot.FilePart
 public import Spot.Service
 public import Spot.SecondStage
+public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
 public import Spot.Run
