@@ -146,6 +146,7 @@ def test_a_registration_is_held_at_its_schedules_constants_and_no_other():
         "a member at other leaves": (cs, [*es[:3], entry(cs[3], leaves=4)]),
         "a member at another's domain": (cs, [*es[:3], entry(cs[3], domain=cs[0].domain)]),
         "a member missing": (cs, es[1:]),
+        "a member missing whose root another member is at": (cs, [es[0], es[1], es[3]]),
         "a member named twice, once at another root": (cs, [*es, entry(cs[3], root=cs[0].root)]),
         "a port ending /o0 that is no member's": (cs, [*es, entry(cs[0], port="other/o0")]),
         "leaves a boolean": (K.constants(1), [entry(K.constants(1)[0], leaves=True), entry(K.constants(1)[1])]),

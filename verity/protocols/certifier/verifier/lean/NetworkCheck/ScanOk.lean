@@ -173,7 +173,8 @@ def calls (T : Nat) : Nat := (members T).foldl (fun acc m => acc + 3 + rootCalls
 #guard rootCalls 1 == 7 && rootCalls 14 == 115 && rootCalls 16 == 127 && rootCalls 30 == 243 && rootCalls 32 == 255
 #guard calls 16 == 256 + 12 && calls 32 == 512 + 12 && calls 3 == 3 * 7 + (3 * 7 + 1 + 3) + 12
 -- a registration is held at its schedule's constants and at no other's; not with a member's root, leaves or domain
--- another, a member's port missing or named twice at two roots, or a port ending `/o0` that is no member's
+-- another, a member's port missing (`first`'s, or `last`'s, whose root `ingress-0` is at too) or named twice at two
+-- roots, or a port ending `/o0` that is no member's
 #guard
   let entry := fun (c : Const) => Json.mkObj [
     ("port", .str c.port), ("leaves", toJson c.leaves), ("domain", .str c.domain), ("root", .str c.root)]
@@ -186,7 +187,8 @@ def calls (T : Nat) : Nat := (members T).foldl (fun acc m => acc + 3 + rootCalls
       !held cs (reg (es.set! 3 (entry { cs[3]! with root := cs[0]!.root }))) &&
       !held cs (reg (es.set! 3 (entry { cs[3]! with leaves := 4 }))) &&
       !held cs (reg (es.set! 3 (entry { cs[3]! with domain := cs[0]!.domain }))) &&
-      !held cs (reg (es.extract 1 4)) && !held cs (reg (es.push (entry { cs[3]! with root := cs[0]!.root }))) &&
+      !held cs (reg (es.extract 1 4)) && !held cs (reg (es.extract 0 2 ++ es.extract 3 4)) &&
+      !held cs (reg (es.push (entry { cs[3]! with root := cs[0]!.root }))) &&
       !held cs (reg (es.push (entry { cs[0]! with port := "other/o0" }))) &&
       held cs (reg (es.push (entry { cs[0]! with port := "other/o1" }))) && held cs (reg (es ++ es)) &&
       !held cs (Json.mkObj [])
