@@ -13,8 +13,6 @@ from pathlib import Path
 
 import numpy as np
 
-M32 = np.uint32(0xFFFFFFFF)
-
 
 def mix32(x):
     x = np.asarray(x, dtype=np.uint32)

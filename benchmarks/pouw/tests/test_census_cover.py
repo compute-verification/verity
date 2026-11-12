@@ -41,7 +41,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity_machine_model.model import DATA, attacks, devices, model, vector, vectors
+from verity_machine_model.model import DATA, devices, model, vector
 
 POUW = Path(__file__).resolve().parents[1]
 SASS = Path(__file__).resolve().parent / "fixtures" / "census_cover_sass.json"
@@ -312,7 +312,7 @@ CLOSING: dict[tuple[str, str], tuple[str, str]] = {
     ("sm_120", "ISETP.NE.AND"): (UNOWNED, "cpw_routes mode 9's thread-0 test: ISETP"),
     ("sm_120", "REDUX.XOR"): (UNOWNED, "cpw_routes modes 2 and 7's warp XOR (LI-CP-W's honest route): REDUX"),
     # sm_120, classed, no line on the measured reading's π* row (JI3s_0 on main, JI3t_0 on); 1 at DS_issue
-    ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (#2791's OFF_MENU)"),
+    ("sm_120", "UNI64"): (UNOWNED, "228 bit-slice attack variants' XU on UNI64, which is on UP alone (lean_headline's OFF_MENU)"),
     ("sm_120", "TMA512"): (UNOWNED, "attack (ii)'s TMA gather and dither-duo-l32's [per_mma]"),
     ("sm_120", "TMAred512"): (UNOWNED, "attack (ii)'s TMA reduce-add"),
     ("sm_120", "UBLKRED.G.S.XOR"): (UNOWNED, "cpw_routes modes 8-10's bulk reduce-xor (1 to 16 KB): TMAred512"),
