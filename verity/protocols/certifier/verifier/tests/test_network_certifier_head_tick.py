@@ -223,6 +223,32 @@ async def _twice(at: int) -> None:
         await asyncio.gather(running, return_exceptions=True)
 
 
+def test_the_device_names_the_execution_phases_whose_head_it_awaits():
+    """`awaited` is the execution phases that were handed and whose head isn't back: an execution phase from its
+    hand to the tick its head is handed back before, or to the last tick the head could have left at."""
+    seen: dict[int, list[int]] = {}
+
+    async def main() -> Warden:
+        clock = VirtualClock(-TAU / 2)
+        device = Warden(WAIT, None, origin=0.0, windows=PHASES, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(device.run())
+        running.add_done_callback(lambda _: device._changed.set())
+        t = 0
+        while not running.done():
+            if t == DUE[0]:
+                device.head_back(0, "head 0")
+            clock.advance(t * TAU)
+            await device.until(lambda d, t=t: d.ticks > t or running.done())
+            seen[t] = device.awaited
+            t += 1
+        return device
+
+    device = asyncio.run(main())
+    assert [seen[t] for t in (2 * T - 2, 2 * T - 1, DUE[0] - 1, DUE[0])] == [[], [0], [0], []]
+    assert [seen[t] for t in (3 * T - 2, 3 * T - 1, DUE[1], DUE[1] + 1)] == [[], [1, 2], [1, 2], []]
+    assert device.heads == [(0, DUE[0]), (1, None), (2, None)] and device.left[0] == (0, DUE[0], "head 0")
+
+
 def test_a_schedule_without_the_two_fields_runs_as_it_did():
     """Without the fields no tick publishes a head and the run ends at its last bucket: the hands are the same as
     with them, and `leave` is never called."""
