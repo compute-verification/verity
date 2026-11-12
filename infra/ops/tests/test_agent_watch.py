@@ -4827,5 +4827,5 @@ def test_the_pods_wrapper_hands_the_watch_the_file_its_github_and_linear_credent
     """Without `--gh-env` the watch reads no open pull request and no Linear issue, and says only that it has no
     credential. The wrapper passes the pod's relay.env as a path: its values never enter the watch's environment."""
     sh = (W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch.sh").read_text()
-    assert "CONF=/root/.config/verity\n" in sh and " --gh-env $CONF/relay.env " in sh
+    assert " --gh-env /root/.config/verity/relay.env " in sh
     assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"
