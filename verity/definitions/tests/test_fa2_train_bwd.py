@@ -104,6 +104,7 @@ def test_each_row_s_dq_is_the_captured_kernels_words() -> None:
                     ("rows/xl/wide", 130, 2, 4), ("rows/xl/wide", 621, 5, 4)]
 
 
+@pytest.mark.slow
 def test_a_key_block_s_dk_and_dv_are_the_captured_kernels_words() -> None:
     d = np.load(FIXTURE)
     case = "block/l16/unit"
