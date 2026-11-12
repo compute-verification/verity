@@ -20,7 +20,8 @@ a site the base's tree holds compared by its file and what it is, with a count, 
 moves is the base's, one more of its kind is the change's, a file's count that a mended site lowers is no new violation),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
-counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy, a
+counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy
+(the integration's lint under vLLM's rules as its ruff lint, each against its own list, ruff run where the lint runs it), a
 public command P16's list gains (passing when the file it names runs it, failing when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -972,6 +973,35 @@ def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_cop
     assert (c["verdict"], c["fix"]) == ("failed", [
         f"ruff: {toy}: 1 F541 found, 0 allowed",
         f"ruff: {toy}:{len(TOY_LINT.splitlines()) + 2} [F541] f-string without any placeholders"]), c["why"]
+
+
+def test_a_vllm_rules_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_copy(ruffed):
+    """As ruff's: the lint under vLLM's rules reads the base's copy of a lint module the change edits too.  A change that
+    fixes one of the module's two findings and drops its entry passes, judged on its own copy against that lint's own list,
+    which still holds the other; and one that edits the module, keeps both and drops an entry fails, naming the findings
+    where the change's copy holds them.  Ruff runs on that copy from the integration, as the lint runs it, so a path the
+    config names means there what it means to the lint: here `print` is flagged under ``tests/`` alone."""
+    toy, n = LINT.removeprefix(f"{G.INTEGRATION}/"), len(TOY_LINT.splitlines())
+    say, tell = ({"file": toy, "kind": "T201", "symbol": f, "detail": "`print` found"} for f in ("say", "tell"))
+    says, tells = 'def say():\n    print("x")\n', 'def tell():\n    print("y")\n'
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("ruff with vLLM's rules, and a lint module that prints twice, listed", {
+        RUFF_VLLM_LINT: (REAL_LINT / "test_ruff_vllm.py").read_text(), RUFF_VLLM_JSON: _allowlist(say, tell),
+        G.RUFF_VLLM_CONFIG: RUFF_VLLM_TOML + '[lint.per-file-ignores]\n"!tests/**" = ["T201"]\n',
+        LINT: TOY_LINT + says + tells, "adapters/vllm/verity_vllm/b.py": "print(1)\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("fixes one and drops its entry", {LINT: TOY_LINT + tells, RUFF_VLLM_JSON: _allowlist(tell)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "ruff_vllm"]), c["why"]
+    assert (f"finds 1 violation(s) in the base's copy of {toy}, which it runs in place of the change's, and the "
+            "change's own copy is within its list") in c["why"], c["why"]
+    ruffed.git("checkout", "-q", "-B", "pr", "main")
+    ruffed.commit("edits the module, keeps both findings, and drops an entry", {
+        LINT: TOY_LINT + "# kept\n" + says + tells, RUFF_VLLM_JSON: _allowlist(tell)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [
+        f"ruff_vllm: {toy}: 2 T201 found, 1 allowed", f"ruff_vllm: {toy}:{n + 3} [T201] `print` found",
+        f"ruff_vllm: {toy}:{n + 5} [T201] `print` found"]), c["why"]
 
 
 def _repo_lint(repo: Repo) -> str | None:

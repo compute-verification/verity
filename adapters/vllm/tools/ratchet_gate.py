@@ -210,6 +210,10 @@ RUFF_VLLM_CONFIG = f"{LINT}/ruff_vllm.toml"
 RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), RUFF_VLLM_LINT: (LINT, (RUFF_VLLM_CONFIG,)),
               REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
 RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
+#: the ruff lints that are the integration's: each names a file from ``INTEGRATION`` and holds a list of its own, keyed alike
+INTEGRATION_RUFF = (RUFF_LINT, RUFF_VLLM_LINT)
+#: where a ruff lint runs ruff, when that isn't its first config's directory: its config's paths are relative to there
+RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -712,10 +716,11 @@ def blobs(shas: set[str]) -> dict[str, bytes]:
     return out
 
 
-def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
+def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes], run_from: str | None = None
+                  ) -> list[tuple[str, str, int, str]]:
     """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
-    ``configs`` (path: text), run from the first config's directory and given that config, as the ruff lint that reads it
-    runs it (``RUFF_LINTS``: the repository's, ``{REPO_RUFF_CONFIG: text}``)."""
+    ``configs`` (path: text), run from ``run_from`` (default: the first config's directory) and given the first config, as
+    the ruff lint that reads it runs it (``RUFF_LINTS``, ``RUFF_FROM``: the repository's, ``{REPO_RUFF_CONFIG: text}``)."""
     if not files:
         return []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
@@ -723,9 +728,10 @@ def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, byt
         for path, data in {**files, **{p: t.encode() for p, t in configs.items()}}.items():
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_bytes(data)
-        at = (root / next(iter(configs))).parent
-        r = subprocess.run([*ruff, "check", "--config", next(iter(configs)).rpartition("/")[2], "--no-cache", "--exit-zero",
-                            "--output-format", "json", "--", *(os.path.relpath(root / f, at) for f in sorted(files))],
+        at = root / run_from if run_from is not None else (root / next(iter(configs))).parent
+        r = subprocess.run([*ruff, "check", "--config", os.path.relpath(root / next(iter(configs)), at), "--no-cache",
+                            "--exit-zero", "--output-format", "json", "--",
+                            *(os.path.relpath(root / f, at) for f in sorted(files))],
                            cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         try:
             found = json.loads(r.stdout) if r.returncode == 0 else None
@@ -1135,19 +1141,20 @@ def replaced(c: Change, lints: Iterable[str]) -> set[str]:
 
 def own_ruff(c: Change, s: str, f: str) -> list[str] | None:
     """Ruff lint ``s``'s violations (``RUFF_LINTS``) on the change's own copy of ``f``, ruff run with the configs and pin of
-    the change's base, at each rule it finds there more often than the change's list allows (the integration's entries of
-    that file and rule, the repository's (file, rule) count): none when the copy is within the list, or the change deletes
-    it; None when the base has no config for that lint, so the base's own copy's violations stand."""
+    the change's base, where that lint runs it, at each rule it finds there more often than the change's list allows (an
+    integration's lint's entries of that file and rule, in that lint's list; the repository's (file, rule) count): none
+    when the copy is within the list, or the change deletes it; None when the base has no config for that lint, so the
+    base's own copy's violations stand."""
     _, configs = RUFF_LINTS[s]
     texts = {p: git("show", f"{c.lo}:{p}") for p in configs if git("ls-tree", "--name-only", c.lo, "--", p).strip()}
     if configs[0] not in texts:
         return None
     own = tree_files(c.hi, {f})
-    found = ruff_findings([*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"], texts, own) if own else []
-    name = f.removeprefix(f"{INTEGRATION}/") if s == RUFF_LINT else f
-    if s == RUFF_LINT:
+    found = ruff_findings([*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"], texts, own, RUFF_FROM.get(s)) if own else []
+    name = f.removeprefix(f"{INTEGRATION}/") if s in INTEGRATION_RUFF else f
+    if s in INTEGRATION_RUFF:
         try:
-            doc = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{RUFF_LINT}.json"))
+            doc = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{s}.json"))
         except (GitError, ValueError):
             doc = {}
         listed: Counter = Counter()
@@ -1174,7 +1181,7 @@ def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[
     out, by = [], {}
     for v in found:
         s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
-        f = m and (f"{INTEGRATION}/{m[1]}" if s == RUFF_LINT else m[1])
+        f = m and (f"{INTEGRATION}/{m[1]}" if s in INTEGRATION_RUFF else m[1])
         if m and f in at and (s in names or s in RUFF_LINTS):
             by.setdefault((s, f), []).append(v)
         else:
