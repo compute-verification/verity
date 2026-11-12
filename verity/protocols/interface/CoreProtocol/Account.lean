@@ -389,9 +389,9 @@ def stepsWithin (ticks : Nat) (seconds : Ratio) (tick : Figure) (drift : Option 
     ticks * tick.1.num.toNat * (q.1.den - q.1.num.toNat) * seconds.den / (tick.1.den * q.1.den * seconds.num)
 
 /-- **Where a series of steps lies in the monitoring period**: step `first` of the series begins at the period's tick
-`tick`, and `device` is the auditor's device whose clock numbers the steps, so the drift the Site states for it is the
-series'. A series older than the period gives the step it was at when the period began, at tick 0; one that began in
-the period gives its step 0, at the tick it began. -/
+`tick`, and `device` is the auditor's device that numbers the steps, on the clock of the auditor's host it is in, so
+the drift the Site states for that host is the series' (`Site.drift?`). A series older than the period gives the step
+it was at when the period began, at tick 0; one that began in the period gives its step 0, at the tick it began. -/
 structure Origin where
   first : Nat
   tick : Nat
@@ -512,11 +512,12 @@ structure Row where
   premises : List String := []
   deriving DecidableEq, Repr
 
-/-- **A drift taken on a premise**: how far the clock of the auditor's device `device` may run from real time, as a
-share of it, where no data sheet bounds it and the Site states none for the device; `premise` is the name of the
-premise that says so, as the row that rests on it prints it. The three are the auditor's: no answer states them. -/
+/-- **A drift taken on a premise**: how far the clock of the auditor's host `host` may run from real time, as a share
+of it, where no data sheet bounds it and the Site states none for the host; `premise` is the name of the premise that
+says so, as the row that rests on it prints it. It is the drift of every device of the auditor's in the host. The
+three are the auditor's: no answer states them. -/
 structure Premised where
-  device : String
+  host : String
   drift : Figure
   premise : String
   deriving DecidableEq, Repr
@@ -701,35 +702,38 @@ registration's: the sheets' digest and the auditor, whose estimate compute's `bo
 Site states no unit of time. Where a boundary link of the Site says no certifier splits it (`Site.mediated` is false),
 bits leave by a way no answer counts, so every row of a link prints no amount, a certified one too, and says why.
 
-A row of record reads a device's drift from the Site alone, and a device that states none times nothing. `premised`
-lists drifts taken on a premise, for devices whose locations state none. A flow's amount with a series timed on such a
-device has, after its rows of record, the same rows with those series covered at the premised drifts; each names the
+A row of record reads a device's drift from the Site alone: the drift the auditor's host it is in states
+(`Site.drift?`), and a device at the site, or in a host that states none, times nothing. `premised` lists drifts taken
+on a premise, for auditor's hosts whose locations state none. A flow's amount with a series timed on a device in such a
+host has, after its rows of record, the same rows with those series covered at the premised drifts; each names the
 premises it rests on (`Row.premises`). The rows of record are as they are without the list, so a premised row adds to
-none of them and replaces none. -/
+none of them and replaces none. A premise for a host that is no auditor's host of the Site is refused, by the
+premise's name: a premise is taken for a clock the registration holds, and no row is printed beside one for a clock it
+does not. -/
 def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period)
-    (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : List Row :=
-  match S.timeUnit with
-  | none => []
-  | some tick =>
-    let cs := readings period.heads tick accounts answers
-    let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
-    let stated : String → Option Figure := fun d => (S.loc? d).bind fun (x : Site.Loc) => x.drift
-    let taken : String → Option Premised := fun d =>
-      if (stated d).isSome then none else premised.find? fun q => q.device == d
-    let assumed : String → Option Figure := fun d => (stated d).orElse fun _ => (taken d).map fun q => q.drift
-    let all : List Row :=
-      (groups.flatMap fun g =>
-          let rs : List Reading := (cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2
-          let names : List String :=
-            ((rs.filter fun r => r.certified).filterMap fun r =>
-              (period.origin r.series).bind fun o => (taken o.device).map fun q => q.premise).eraseDups
-          g.1.rows S digest A tick period.ticks period.origin stated g.2 rs ++
-            (if g.1.part.flow && !names.isEmpty then
-              (g.1.rows S digest A tick period.ticks period.origin assumed g.2 rs).map fun r =>
-                { r with premises := names }
-            else [])) ++
-        unaudited S digest A period.ticks cs ++ unregistered S digest
-    if S.mediated then all
+    (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : Except String (List Row) := do
+  if let some q := premised.find? fun q => S.kind? q.host ≠ some .auditorHost then
+    throw s!"premise {q.premise}: {q.host} is no auditor's host of the Site"
+  let some tick := S.timeUnit | pure []
+  let cs := readings period.heads tick accounts answers
+  let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
+  let stated : String → Option Figure := S.drift?
+  let taken : String → Option Premised := fun d =>
+    if (stated d).isSome then none else (S.clock? d).bind fun h => premised.find? fun q => q.host == h
+  let assumed : String → Option Figure := fun d => (stated d).orElse fun _ => (taken d).map fun q => q.drift
+  let all : List Row :=
+    (groups.flatMap fun g =>
+        let rs : List Reading := (cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2
+        let names : List String :=
+          ((rs.filter fun r => r.certified).filterMap fun r =>
+            (period.origin r.series).bind fun o => (taken o.device).map fun q => q.premise).eraseDups
+        g.1.rows S digest A tick period.ticks period.origin stated g.2 rs ++
+          (if g.1.part.flow && !names.isEmpty then
+            (g.1.rows S digest A tick period.ticks period.origin assumed g.2 rs).map fun r =>
+              { r with premises := names }
+          else [])) ++
+      unaudited S digest A period.ticks cs ++ unregistered S digest
+  pure <| if S.mediated then all
     else all.map fun r =>
       if r.part = .egress then { r with status := .unmediated, capacity := none, verified := none, free := none } else r
 
@@ -762,11 +766,25 @@ def account : Account :=
                   time := .unstated, error := .profile "delta", pool := .once,
                   uncertified := .refused, unpriced := ["the toy's units are not work"] }] }
 
-/-- The example's locations with a drift of `n / d` stated for its certifier. -/
-private def drifting (n d : Nat) : List Site.Loc := Core.Registration.Example.locs.map fun x =>
-  if x.id == "cert0" then { x with drift := some (fig n d) } else x
+/-- The rows, or none where `rows` refuses a premise. -/
+private def rowsOf (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period)
+    (accounts : List Account) (answers : List Answer) (premised : List Premised := []) : List Row :=
+  (rows S digest A period accounts answers premised).toOption.getD []
 
-/-- The example's locations, its certifier's clock taken at real time's rate. -/
+/-- An auditor's host, at the site, whose clock may run `drift` from real time, or states none. -/
+private def vm (id : String) (drift : Option Figure) : Site.Loc :=
+  { id, kind := .auditorHost, parent := some "site0", owner := .auditor, key := "k2",
+    scheme := Core.Registration.Example.lms, timebase := some "tb0", drift }
+
+/-- The example's locations with its certifier in an auditor's host, `vm0`, which states `drift` for its clock. -/
+private def hostedBy (drift : Option Figure) : List Site.Loc :=
+  (Core.Registration.Example.locs.map fun x => if x.id == "cert0" then { x with parent := some "vm0" } else x) ++
+    [vm "vm0" drift]
+
+/-- The example's locations with a drift of `n / d` stated for its certifier's host. -/
+private def drifting (n d : Nat) : List Site.Loc := hostedBy (some (fig n d))
+
+/-- The example's locations, its certifier's host's clock taken at real time's rate. -/
 private def locs : List Site.Loc := drifting 0 1
 
 private def site : Site := ⟨[sheet], locs, links⟩
@@ -869,7 +887,7 @@ private def period (ticks : Nat := 1000) (heads : List String := ["h"])
 
 private def table (accounts : List Account) (answers : List Answer) (A : Site.Registration.Auditor := auditor)
     (ticks : Nat := 1000) : List Row :=
-  rows site digest A (period ticks) accounts answers
+  rowsOf site digest A (period ticks) accounts answers
 
 /-- The audits' rows over a period of 20,000 ticks, which holds twenty of their steps. -/
 private def audited (answers : List Answer) : List Row := table [ranged] answers (ticks := 20000)
@@ -913,7 +931,7 @@ private def cached : Site :=
 #guard registered (.read [.dram, .disk]) cached == [(Part.READ_WITH_DRAM, 6554 + 2000)]
 #guard registered (.read [.hbm, .disk]) cached == [(Part.READ_WITH_DRAM, 3200 + 2000 + 6554)]
 -- the row of a read part that holds a host's disk leaf says so in its reading
-#guard ((rows cached digest auditor period [] []).filter fun r => r.part = .read [.disk]).map
+#guard ((rowsOf cached digest auditor period [] []).filter fun r => r.part = .read [.disk]).map
     (fun r => (r.reading, r.status, r.capacity)) ==
   [(Part.READ_WITH_DRAM, .notAudited, some ((2000 + 6554) * 1000))]
 -- the device model's memory bandwidth a tick, from its sheet's bits a second at the Site's unit of time
@@ -924,7 +942,7 @@ private def cached : Site :=
 #guard ticksOf 604799999 ⟨1, 1000⟩ (fig 1 1000000000) == 604799999000000
 #guard hostRated.over 1310000 (604800 * 1000000000) == some 792288000000
 #guard hostRated.over 1310000 (604800 * 1000000000 - ticksOf 604799999 ⟨1, 1000⟩ (fig 1 1000000000)) == some 1310
-#guard ((rows hostRated digest auditor period [spare] [unread 3000 400]).take 1).map
+#guard ((rowsOf hostRated digest auditor period [spare] [unread 3000 400]).take 1).map
     (fun r => (r.status, r.capacity, r.verified, r.free)) ==
   [(.certified, some (9754 * 1000), some (9754 * 1000 - (3000 + 9754 * 600)), some (3000 + 9754 * 600))]
 
@@ -940,9 +958,9 @@ private def cached : Site :=
 -- a free amount with ticks no answer covers and no registered capacity to charge them at prints no amount; it prints
 -- its amount, against no capacity, when its answers cover the period
 #guard spare.Formed
-#guard ((rows hosted digest auditor period [spare] [unread 3000 400]).take 1).map
+#guard ((rowsOf hosted digest auditor period [spare] [unread 3000 400]).take 1).map
     (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.notAudited, none, none, none)]
-#guard ((rows hosted digest auditor period [spare] [unread 3000 1000]).take 1).map
+#guard ((rowsOf hosted digest auditor period [spare] [unread 3000 1000]).take 1).map
     (fun r => (r.status, r.capacity, r.verified, r.free)) == [(.certified, none, none, some 3000)]
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
@@ -1078,7 +1096,7 @@ private def from_ (first : Nat) (at_ : Nat := 0) : Period :=
   period (origin := fun _ => some ⟨first, at_, "cert0"⟩)
 private def linkRow (p : Period) (accounts : List Account) (answers : List Answer) :
     List (Status × Option Nat × Option Nat) :=
-  ((rows site digest auditor p accounts answers).take 1).map fun r => (r.status, r.capacity, r.free)
+  ((rowsOf site digest auditor p accounts answers).take 1).map fun r => (r.status, r.capacity, r.free)
 #guard linkRow period [sent] [check 3000 400 "1/1000"] == linkRow (from_ 0) [sent] [check 3000 400 "1/1000"]
 #guard (linkRow (from_ 400) [sent] [check 3000 400 "1/1000"]).map (fun r => (r.1, r.2.1.isSome, r.2.2 == r.2.1)) ==
   [(.certified, true, true)]
@@ -1110,9 +1128,9 @@ private def twoKeys (second : Nat) : Period :=
   linkRow period [sent] [check 3000 400 "1/1000"]
 #guard linkRow (period (heads := ["h"])) [sent] [check 3000 400 "1/1000" "g"] == linkRow period [] []
 -- the verified side: a span counts only whole in the period
-#guard firstVerified (rows site digest auditor (period 20000 (origin := fun _ => some ⟨5, 0, "cert0"⟩)) [ranged]
+#guard firstVerified (rowsOf site digest auditor (period 20000 (origin := fun _ => some ⟨5, 0, "cert0"⟩)) [ranged]
   [audit 700 (some (0, 9)), audit 500 (some (10, 19))]) == [(some 500, "1/500")]
-#guard firstVerified (rows site digest auditor (period 15000) [ranged]
+#guard firstVerified (rowsOf site digest auditor (period 15000) [ranged]
   [audit 700 (some (0, 9)), audit 500 (some (10, 19))]) == [(some 700, "1/500")]
 
 -- cover on a clock that may drift: none without a stated drift, the length less its share with one, rounded down
@@ -1130,16 +1148,19 @@ private def twoKeys (second : Nat) : Period :=
 -- the rows on a clock that may drift 1/1000. A span of 400 steps surely covers 399 ticks of 1000: 601 are charged
 private def drifted (p : Period) (accounts : List Account) (answers : List Answer) (n : Nat := 1) (d : Nat := 1000) :
     List (Option Nat) :=
-  ((rows ⟨[sheet], drifting n d, links⟩ digest auditor p accounts answers).take 1).map fun r => r.free
+  ((rowsOf ⟨[sheet], drifting n d, links⟩ digest auditor p accounts answers).take 1).map fun r => r.free
 #guard drifted period [sent] [check 3000 400 "1/1000"] == [some (3000 + 601 * 100)]
 -- with no drift the rows are those of a clock at real time's rate
 #guard drifted period [sent] [check 3000 400 "1/1000"] 0 1 ==
   (linkRow period [sent] [check 3000 400 "1/1000"]).map (·.2.2)
--- a device that states no drift covers nothing: the link is charged at capacity, and its answer adds nothing
-#guard ((rows ⟨[sheet], Core.Registration.Example.locs, links⟩ digest auditor period [sent]
+-- a device in a host that states no drift covers nothing: the link is charged at capacity, and its answer adds
+-- nothing; a device at the site, in no host, the same
+#guard ((rowsOf ⟨[sheet], hostedBy none, links⟩ digest auditor period [sent]
+    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
+#guard ((rowsOf ⟨[sheet], Core.Registration.Example.locs, links⟩ digest auditor period [sent]
     [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
 -- an origin that names a device the Site does not hold: the same
-#guard ((rows site digest auditor (period (origin := fun _ => some ⟨0, 0, "nobody"⟩)) [sent]
+#guard ((rowsOf site digest auditor (period (origin := fun _ => some ⟨0, 0, "nobody"⟩)) [sent]
     [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
 -- the period's end: of 1000 steps over a period of 1000 ticks only 999 surely end in it, and they cover 998 ticks
 #guard drifted period [sent] [check 3000 1000 "1/1000"] == [some (3000 + 2 * 100)]
@@ -1158,7 +1179,7 @@ private def standin : Site :=
   ⟨[sheet], locs, links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := some 400000000000, latency := 0,
                               unmediated := some "no certifier splits it" }]⟩
 private def egress (S : Site) : List Row × List Row :=
-  (rows S digest auditor period [sent] [check 3000 400 "1/1000"]).partition fun r => r.part = .egress
+  (rowsOf S digest auditor period [sent] [check 3000 400 "1/1000"]).partition fun r => r.part = .egress
 #guard (egress standin).1.map (fun r => (r.place, r.status, r.capacity, r.verified, r.free)) ==
   [("up0", .unmediated, none, none, none), ("eth0", .unmediated, none, none, none)]
 #guard (egress site).1.map (fun r => (r.place, r.status)) == [("up0", .certified)]
@@ -1173,19 +1194,19 @@ private def unrated : Site :=
   (egress site).2.map (fun r => (r.place, r.status, r.free))
 #guard (egress standin).2.map (fun r => (r.place, r.status, r.free)) ==
   (egress site).2.map (fun r => (r.place, r.status, r.free))
--- a drift taken on a premise. The example's certifier states no drift, so its row of record covers nothing: the link
--- is charged at capacity over the week. With 1/2000 premised for it, the same row follows, covered, and names the
--- premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is left covers
--- its length less a 2000th; the 604.6488 seconds not covered are charged at capacity
+-- a drift taken on a premise. The example's certifier's host states no drift, so its row of record covers nothing:
+-- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
+-- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is
+-- left covers its length less a 2000th; the 604.6488 seconds not covered are charged at capacity
 private def week : Nat := 604800 * 1000000000
 private def paced : Account :=
   { sent with amounts := sent.amounts.map fun m =>
       { m with time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000⟩ } }
-private def bare : Site := ⟨[sheet], Core.Registration.Example.locs, links⟩
+private def bare : Site := ⟨[sheet], hostedBy none, links⟩
 private def onPremise : List Premised :=
-  [{ device := "cert0", drift := fig 1 2000, premise := "ClockRateWithin(vm0, 5e-4)" }]
+  [{ host := "vm0", drift := fig 1 2000, premise := "ClockRateWithin(vm0, 5e-4)" }]
 private def weekRows (S : Site) (premised : List Premised) : List Row :=
-  (rows S digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"] premised).filter
+  (rowsOf S digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"] premised).filter
     fun r => r.metric = "sent"
 #guard (weekRows bare []).map (fun r => (r.premises, r.capacity, r.verified, r.free)) ==
   [([], some 60480000000000000, some 0, some 60480000000000000)]
@@ -1200,15 +1221,31 @@ private def weekRows (S : Site) (premised : List Premised) : List Row :=
 #guard stepsWithin week ⟨1, 1000⟩ tick (some (fig 1 2000)) == 604800000 - 302400
 #guard ticksCredited (604800000 - 302400) ⟨1, 1000⟩ tick (some (fig 1 2000)) == week - 604648800000
 -- the rows of record are the same rows with the list or without it, and every other row is as it was
-#guard (rows bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"] onPremise).filter
+#guard (rowsOf bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"] onPremise).filter
     (fun r => r.premises.isEmpty) ==
-  rows bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
--- a device whose location states a drift is timed at it, of record, and no premise is read for it
+  rowsOf bare digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
+-- a host whose location states a drift times its devices at it, of record, and no premise is read for it
 #guard weekRows ⟨[sheet], drifting 1 2000, links⟩ onPremise ==
   ((weekRows bare onPremise).drop 1).map fun r => { r with premises := [] }
--- a premise for a device that times no series of the amount adds no row
-#guard weekRows bare [{ device := "chal0", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }] ==
-  weekRows bare []
+-- a premise for a host none of whose devices times a series of the amount adds no row
+private def twoHosts : Site := ⟨[sheet], hostedBy none ++ [vm "vm1" none], links⟩
+private def other : List Premised := [{ host := "vm1", drift := fig 1 2000, premise := "ClockRateWithin(vm1, 5e-4)" }]
+#guard weekRows twoHosts other == weekRows bare [] ∧ weekRows twoHosts (other ++ onPremise) == weekRows bare onPremise
+-- a premise for a host that is no auditor's host of the Site is refused by name, and no row is printed: one the Site
+-- does not hold, the auditor's device, the prover's host; a certifier at the site is in no host, so no premise times
+-- it and its row of record covers nothing
+private def refused (S : Site) (host : String) : Option String :=
+  match rows S digest auditor (period week) [paced] [check 1000000000000000 604800000 "1/1000"]
+      [{ host, drift := fig 1 2000, premise := "ClockRateWithin(vm0, 5e-4)" }] with
+  | .error e => some e
+  | .ok _ => none
+#guard refused bare "vm0" == none
+#guard refused bare "vm1" == some "premise ClockRateWithin(vm0, 5e-4): vm1 is no auditor's host of the Site"
+#guard (refused bare "cert0").isSome ∧ (refused bare "node0").isSome
+private def atSite : Site := ⟨[sheet], Core.Registration.Example.locs, links⟩
+#guard (refused atSite "vm0").isSome ∧ (refused atSite "cert0").isSome
+#guard (weekRows atSite []).map (fun r => (r.premises, r.capacity, r.verified, r.free)) ==
+  [([], some 60480000000000000, some 0, some 60480000000000000)]
 -- what a drift leaves of ticks counted, and the steps that surely end in a period
 #guard ticksKept 1000 none == 0
 #guard ticksKept 1000 (some (fig 1 1000)) == 999
