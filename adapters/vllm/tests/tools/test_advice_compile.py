@@ -67,13 +67,15 @@ def _served(out: Path, **kw: Any) -> tuple[Path, dict, WA.Advice]:
 @pytest.mark.usefixtures("code_versions_stood_in")
 def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_windows_coin_to_the_seed_it_committed(tmp_path):
     """Serving derives the seed from the window's seed coin and the body's ``user``, the window's line names the coin, and
-    `compile_steps` given that coin as the window's seed salt (`window_coin`) and the certified body derives the seed the window
+    the compile given that coin as the window's seed salt (`window_coin`) and the certified body derives the seed the window
     committed. Another coin gives another seed for the same id, the rest of the body none; a window whose line names no coin (a
-    server that filled in `DEFAULT_SEED`) is refused by name, and a seed of the engine's own is not the one the compile derives."""
+    server that filled in `DEFAULT_SEED`) is refused by name, and a seed of the engine's own is not the one the compile derives.
+    The compile is read at its plan (`plan_steps`: `compile_steps` up to building Programs), which settles each request's seed
+    and refuses a request that has none; the test below builds the Program."""
     from tests.program.predict.test_steps import _registered
     from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.predict.steps import plan_steps
 
     (tmp_path / "ok").mkdir()
     run, rec, advice = _served(tmp_path / "ok")
@@ -81,23 +83,39 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     coin = AC.window_coin(run, 0)
     assert "seed" not in bodies["q0"] and coin["source"] == "in-process" and rec["ingress"]["seed_rule"] == "derived"
     reg, key = _registered(), bytes.fromhex(coin["coin"])
-    assert compile_steps(reg, advice, bodies, salt=key).requests[0].seed == rec["committed_seeds"][0] == derived(key, "q0")
-    other = compile_steps(reg, advice, bodies, salt=bytes(64) + b"\x01").requests[0].seed
+    assert plan_steps(reg, advice, bodies, salt=key).requests[0].seed == rec["committed_seeds"][0] == derived(key, "q0")
+    other = plan_steps(reg, advice, bodies, salt=bytes(64) + b"\x01").requests[0].seed
     assert other == derived(bytes(64) + b"\x01", "q0") != rec["committed_seeds"][0]
     body = {**bodies["q0"], "temperature": 0.5, "max_tokens": 3, "prompt": [9, 8, 7, 6, 5]}
-    assert compile_steps(reg, advice, {"q0": body}, salt=key).requests[0].seed == rec["committed_seeds"][0]
+    assert plan_steps(reg, advice, {"q0": body}, salt=key).requests[0].seed == rec["committed_seeds"][0]
     lines = [json.loads(x) for x in (run / "windows.jsonl").read_text().splitlines()]
     (run / "windows.jsonl").write_text("".join(json.dumps({k: v for k, v in w.items() if k != "seed_coin"}) + "\n" for w in lines))
     assert AC.window_coin(run, 0) is None
     with pytest.raises(Unexpressible, match=r"request 0 \('q0'\): stochastic with no seed in its certified body, and the compile has "
                                             r"no window seed salt to derive one from: a seed serving fills in "
                                             r"\(`served_seed.DEFAULT_SEED`\)"):
-        compile_steps(reg, advice, bodies, salt=None)
+        plan_steps(reg, advice, bodies, salt=None)
     (tmp_path / "own").mkdir()
     run, rec, advice = _served(tmp_path / "own", seed_override=7)
     key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
     assert rec["committed_seeds"] == [7] and not rec["check"]["passed"]
-    assert compile_steps(reg, advice, AC.served_inputs(run, 0)[2], salt=key).requests[0].seed == derived(key, "q0") != 7
+    assert plan_steps(reg, advice, AC.served_inputs(run, 0)[2], salt=key).requests[0].seed == derived(key, "q0") != 7
+
+
+@pytest.mark.slow
+@pytest.mark.usefixtures("code_versions_stood_in")
+def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window_committed(tmp_path):
+    """`compile_steps` on the same inputs builds the request's Program, seconds in a process that has built none, and hands
+    on its plan's seed: the Program is of the window's one request, whose `seed` Input takes the seed the window committed."""
+    from tests.program.predict.test_steps import _registered
+    from verity_vllm.engine.served_seed import derived
+    from verity_vllm.program.predict.steps import compile_steps
+
+    run, rec, advice = _served(tmp_path)
+    key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
+    compiled = compile_steps(_registered(), advice, AC.served_inputs(run, 0)[2], salt=key)
+    (unit,) = compiled.requests
+    assert unit.seed == rec["committed_seeds"][0] == derived(key, "q0") and set(compiled.programs) == {unit.digest}
 
 
 def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():
