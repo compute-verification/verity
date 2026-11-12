@@ -21,7 +21,7 @@ research run --on MACHINE --project verity --source . --cwd source --mem-gb G --
 
 | job | what it runs | writes |
 |---|---|---|
-| `job` | one recorded window: `layer.py` records two windows' int8 codes from the checkpoint, `run.py prepare` commits, serves, samples, opens and stages, one loopback `--zk` session a statement, the Lean checks of the plan and the selftest build's controls, then `run.py summarize` | `$OUT/summary.json`, and the sessions', Lean checks' and controls' logs under `$OUT` |
+| `job` | one recorded window: `layer.py` records two windows' int8 codes from the checkpoint, `recorded.py prepare` commits, serves, samples, opens and stages, one loopback `--zk` session a statement, the Lean checks of the plan and the selftest build's controls, then `recorded.py summarize` | `$OUT/summary.json`, and the sessions', Lean checks' and controls' logs under `$OUT` |
 | `live` | a served window's live units, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
 | `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected units, `out/program/window-program.json.gz`, a log a negative |
 
@@ -30,14 +30,14 @@ is PoUW's piece of a served window with its sampled proof blocks proved: each sa
 window's registered values, a session a statement, the statements file checked as credit does, then
 `served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
 
-`run.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
+`recorded.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
 
 ## The Python modules
 
 `h1unit.py` is the tile unit as a Flock statement and the commitments it is opened against, which the committer, prover
-and verifier share; `window.py` is the window's committer and prover, which `run.py` drives and the verifier never
+and verifier share; `window.py` is the window's committer and prover, which `recorded.py` drives and the verifier never
 imports; `stage.py K WORK` builds the unit's circuit once and stages each round on it; `layer.py` records a decoder
 layer's int8 codes and scales from a checkpoint on the CPU. `live.py` is also read by the vLLM adapter's tests and
 `benchmarks/one_stage/`, and `h1_lanes/served.py` takes the units `served.py` samples. `h1unit.py`, `window.py`,
-`run.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
+`recorded.py`, `stage.py`, `layer.py` and `live.py` list in `__all__` the names other files read through them, the tests'
 included, except underscore names. Their tests are the `test_h1_prove*.py` files under `benchmarks/pouw/tests/`.

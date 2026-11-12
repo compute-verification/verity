@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 # One served H1 leaf proved as its 32 lanes and its combine (h1zy's PouwH1LaneZy_v1 and PouwH1Combine_v1, pouw.leaf_lanes),
-# one Flock --zk statement each, verified by the Lean verifier against the verifier's own files (run.py's docstring has
+# one Flock --zk statement each, verified by the Lean verifier against the verifier's own files (leaf.py's docstring has
 # the protocol and the negatives).
 #   research run --on MACHINE --pool proofs --project verity --source . --cwd source \
 #     --mem-gb G --declared-output 'out/*' --env H1L_MEM_GB=G -- bash benchmarks/pouw/h1_lanes/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving build, the Lean verifier, a venv), PoUW's pouw-leaf-own-window
 #      and, under H1_TMPL=structural, the prover's flock-tmpl-unit (verity/protocols/flock/prover/tests/lean/TmplUnit.lean, which
 #      unrolls the unit and so is no part of the verifier), built beside the Lean verifier's sources
-#   2. run.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
+#   2. leaf.py prepare: the statements' Programs, the leaf's registered values and partials, every statement staged (WORK/plan.tsv),
 #      each circuit flat, or under H1_TMPL=structural the templated statement of its structural lowering (h1unit.layout),
 #      whose unit rows flock-tmpl-unit then places (circuits/<kind>/unit.placed, the prover's --tmpl-unit)
 #   3. one loopback --zk session per statement, H1L_PAR at a time, each sampling its one instance
 #   4. the plan's Lean checks, each with its statement's own Program, partition, public file and registered reads, and
 #      pouw-leaf-own-window's check of those reads, placed from the window's descriptor and round log, against the
 #      registration and produced record the verifier holds, and of each session's sample against the sample policy (every unit)
-#   5. run.py summarize: out/summary.json
+#   5. leaf.py summarize: out/summary.json
 # env: H1L_MEM_GB (the job's --mem-gb)  H1L_K (448; h1zy.combine takes K >= 384)  H1L_JOBS (8: prepare's stagers)  H1L_PAR (3: sessions at a time)
 #      H1L_LPAR (8: Lean checks at a time)  H1_TILE (v1 or v3)  H1_TMPL (h1unit.layout's: unset or flat the flat statement,
 #      structural the templated one at iv/hybrid/4)  HZ_CACHE: hidden_zk's
-#      H1L_J10R=1: j10r.py's J10-R leaf in place of run.py's (H1L_K 4608 by default, its lanes in 3 chunks; H1L_RC its
+#      H1L_J10R=1: j10r.py's J10-R leaf in place of leaf.py's (H1L_K 4608 by default, its lanes in 3 chunks; H1L_RC its
 #      R x C, 16x16), with no pouw-leaf-own-window check, which states v1's statements only
 set -uo pipefail
 export HZ_CONFIGS=h1-lanes HZ_MEM_GB=${H1L_MEM_GB:?} HZ_RUNS=1 HZ_WARM=0
@@ -27,7 +27,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 . benchmarks/pouw/hidden_zk/job.sh
 export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/benchmarks/pouw/hidden_zk:$SRC/benchmarks/pouw/h1_prove
 H=$SRC/benchmarks/pouw/h1_lanes
-RUN=$H/run.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
+RUN=$H/leaf.py K=${H1L_K:-448} PAR=${H1L_PAR:-3} LPAR=${H1L_LPAR:-8}
 [ -n "${H1L_J10R:-}" ] && RUN=$H/j10r.py K=${H1L_K:-4608}
 WK=$W/work
 mkdir -p "$OUT/lean"

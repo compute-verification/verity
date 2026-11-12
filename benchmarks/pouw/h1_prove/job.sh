@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # H1 tile units of one recorded int8 Llama-3.1-8B window through SPOT: sampled by the live coin, proved by Flock
-# --zk and verified by the Lean verifier against the verifier's own public files (run.py's docstring has the protocol).
+# --zk and verified by the Lean verifier against the verifier's own public files (recorded.py's docstring has the protocol).
 #   research run --on MACHINE --project verity --source . --cwd source --mem-gb G \
 #     --declared-output 'out/*' --env H1_MEM_GB=G [--env H1_K=64 --env H1_COLS=64] -- bash benchmarks/pouw/h1_prove/job.sh
 #   1. hidden_zk/job.sh's builds (flock-circuit's proving and selftest builds, the Lean verifier, a venv)
 #   2. layer.py records the window's int8 codes and their f32 scales from the checkpoint (layer L's q/k/v/gate/up at H1's
-#      quantizers; a second window from other tokens) and run.py prepare commits (each call's A table and z table of its
+#      quantizers; a second window from other tokens) and recorded.py prepare commits (each call's A table and z table of its
 #      tiles' z/y records, and the weights' B rows), serves, samples, opens, checks the openings and has the sampled proof blocks
 #      staged, one statement a sampled call, while stage.py builds the unit's circuit (the long step at K = 4096), bound to
 #      the window's Program once the commitment gives its shape
@@ -14,7 +14,7 @@
 #      computing ok = 0; the in-proof negatives on honest's units, each also as
 #      <tag>-skip, proved with FC_ZK_SELF_CHECK=skip), every instance sampled, each prover under the ZK server (FC_FIREWALL=1:
 #      the Lean session loop, its level-0 sample and Lean finish) unless H1_FIREWALL=0
-#   4. the Lean checks of run.py's plan, each with the verifier's own window Program, partition and its call's registered
+#   4. the Lean checks of recorded.py's plan, each with the verifier's own window Program, partition and its call's registered
 #      reads, the ok port among them (--program, --partition, --registered: honest and each honest-c<c> ACCEPT with their
 #      units derived; flipped-zy, wrong-receipt, other-window
 #      REJECT; other-window-own ACCEPT; tampered-a, ok-zero and ok-unregistered REJECT by their registered reads, each
@@ -26,7 +26,7 @@
 #      the sampled proof blocks' statement (H1_CONTROLS; at K = 4096 a selftest, prover and verifier in one process, peaks past
 #      170 GB) under verity/flock-circuit+seed-injection: st-honest passes every check and is refused for that statement
 #      alone, each forged case by the check it breaks
-#   5. run.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
+#   5. recorded.py summarize: out/summary.json, with window credit's registration step (credit._registration) on the honest
 #      checks' Lean findings under the window's open root, which every per-window registered value binds
 # env: H1_MEM_GB (the job's --mem-gb)  H1_K (4096; a smaller K truncates every row: a smoke)  H1_COLS (each call's first
 #      N weight rows; 0 all)  H1_DRAW (8)  H1_TOKENS (16)  H1_LAYER (0)  H1_HUB (/workspace/hf/hub)
@@ -65,7 +65,7 @@ build_layer_venv() { local D=$1; rm -rf "$D" && uv venv -q --python 3.12 "$D" &&
 [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 PY=$HZ_PYTHON TIME="$HZ_PYTHON $J/timed.py"
 log "h1-prove: K=$K cols=${COLS:-all} draw=$DRAW tokens=$TOKENS layer=$LAYER quant=${H1_QUANT:-h1} controls: $CONTROLS"
-# detached (not a job of this shell), so setup's `wait` doesn't wait for it; run.py and the loop below watch its pid
+# detached (not a job of this shell), so setup's `wait` doesn't wait for it; recorded.py and the loop below watch its pid
 ( $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $H/stage.py $K $SW" > "$OUT/stage.out" 2> "$OUT/stage.err" &
   echo $! > "$W/stager.pid" )
 STAGER=$(cat "$W/stager.pid")
@@ -94,7 +94,7 @@ args=(--work "$WK" --stage "$SW" --lean "$LEAN" --layer "$W/L1.npz" --layer2 "$W
 [ "$K" != 4096 ] && args+=(--k "$K")
 [ "$COLS" != 0 ] && args+=(--cols "$COLS")
 [ -n "${H1_ONLY:-}" ] && args+=(--only "$H1_ONLY")
-"$PY" "$H/run.py" prepare "${args[@]}" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$H/recorded.py" prepare "${args[@]}" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 touch "$SW/requests/END"
 while kill -0 "$STAGER" 2>/dev/null; do sleep 2; done
@@ -122,7 +122,7 @@ while IFS=$'\t' read -r kind tag D n; do
   mkdir -p "$OUT/$tag"
   N=$n
   log "prove $tag: $n instances, subset:$n"
-  if [[ $tag == *-skip ]]; then export FC_ZK_SELF_CHECK=skip; else unset FC_ZK_SELF_CHECK; fi   # run.py's SKIP
+  if [[ $tag == *-skip ]]; then export FC_ZK_SELF_CHECK=skip; else unset FC_ZK_SELF_CHECK; fi   # recorded.py's SKIP
   session "$D" "$OUT/$tag" || log "prove $tag FAILED: $(tail -2 "$OUT/$tag/prove.err")"
   unset FC_ZK_SELF_CHECK
   log "prove $tag: $(cat "$OUT/$tag/prove.time" 2>/dev/null)"
@@ -151,9 +151,9 @@ eval "$VLIMIT"
 each=$(( $(stat -L -c %s "$SW/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))
 par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 6 ] && par=6
 cap=$(( STAGE_GB / par ))
-# the verifier's own window Program and partition (run.py's), from which Lean derives each instance's unit
+# the verifier's own window Program and partition (recorded.py's), from which Lean derives each instance's unit
 BOUND="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
-lean_check() {   # lean_check TAG D PUB STATEMENT_ID REGISTERED: the verifier's own registered reads of the window (run.py's)
+lean_check() {   # lean_check TAG D PUB STATEMENT_ID REGISTERED: the verifier's own registered reads of the window (recorded.py's)
   local tag=$1 D=$2 pub=$3 sid=$4 reg=$5 s
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tr '\n' ' ')
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; return; }
@@ -182,7 +182,7 @@ if [ -n "$CONTROLS" ] && [ -e "$HD/inst.bin" ] && [ -n "$HREG" ]; then
   done
 fi
 wait
-"$PY" "$H/run.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --firewall "$FW" 2>&1 | tee -a "$OUT/job.log"
+"$PY" "$H/recorded.py" summarize --work "$WK" --out "$OUT" --controls "$CONTROLS" --firewall "$FW" 2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 [ "$WIRE" = ok ] || { log "the wire's controls failed: $OUT/honest/selftest-zk_worker_{wire,finish}.out"; rc=1; }
 du -sh "$SW/circuit.txt" "$HD/sessions" 2>/dev/null | tee -a "$OUT/job.log"
