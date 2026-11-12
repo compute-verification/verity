@@ -481,7 +481,7 @@ class Engine:
             S.gpu.Kernels = RefDecode
         torch.backends.cuda.matmul.allow_tf32 = False
         doc = json.loads((store / "store.json").read_text())
-        self.lay, _ = L.open_store(layout, {}, store, doc["source"], doc["commitment"], None)
+        self.lay, _ = L.open_store(layout, None, store, doc["source"], doc["commitment"], None)
         if self.lay.params.blocks != registration.codec.blocks:
             raise ValueError("the layout's store is not the registration's")
         self.store, self.lib, self.chunk, self.readers = store, lib, chunk, readers

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import random
 import re
@@ -27,6 +28,8 @@ ROOT = HERE.parents[2]
 VECTORS = json.loads((ROOT / "verity/protocols/pous/verifier/p2_v1/vectors.json").read_text())
 TOY = ROOT / "verity/protocols/pous/prover/p2/p2_store/store-toy"
 PREFIX = L.registered_prefix(bytes(range(24)))
+# what a weights manifest written here names its weights, and a setup.json written here its store's
+NAME = "p2-stage-tests/weights"
 
 
 def model(width: int, layers: int, heads: int, ff: int, vocab: int = 256) -> list[tuple[str, int, int, int]]:
@@ -416,9 +419,10 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files loads each layer to
-    toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
-    is a segment unfinished or not the SHA-512 its JSON records."""
+    """The toy's coin and commitment give its salt; its C* as an encoded store's segment files, opened with no weights
+    manifest, loads each layer to toy.json's digest under P2's reference; a setup of another commitment, layout,
+    parameters or salt is refused, and so is a weights manifest that names nothing, and a segment unfinished or not the
+    SHA-512 its JSON records."""
     import layer
 
     doc = json.loads((TOY / "toy.json").read_text())
@@ -438,8 +442,10 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, mo
     bps = doc["layout"]["params"]["blocks_per_segment"]
     root = tmp_path / "store"
     encoded_store(root, c_star, bps, setup)
-    lay, got = L.open_store(tmp_path / "layout.json", {}, root, doc["source"], doc["commitment"], None)
+    lay, got = L.open_store(tmp_path / "layout.json", None, root, doc["source"], doc["commitment"], None)
     assert got == setup and lay.prefix.hex() == doc["prefix"]
+    with pytest.raises(ValueError, match="names no weights"):
+        L.open_store(tmp_path / "layout.json", {}, root, doc["source"], doc["commitment"], None)
     monkeypatch.setattr(S.gpu, "Kernels", RefKernels)
     monkeypatch.setattr(layer, "DEVICE", torch.device("cpu"))
     for i, _, _, sha in doc["staging"]:
@@ -459,12 +465,59 @@ def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, mo
         layer.EncodedStore(root, lay, lay.blocks(0), setup).rows(lay.blocks(0))
 
 
+def test_an_encoded_store_is_held_to_the_generators_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`open_store` on what the generator and the store's own `commit` write, at the generator's `tiny`: the manifest
+    names its weights under `model`, `setup.json` holds that name as `program`, and the store opens on its own manifest
+    and with none. Refused: another seed's manifest, the generator's manifest with no seed (it names nothing) and a
+    `setup.json` with no `program`. The name under `program` in a manifest with no `model`, the pinned manifest's form,
+    is held the same way: the store's own opens, another's is refused."""
+    from p2_v1 import store as ST
+
+    monkeypatch.syspath_prepend(str(ROOT))
+    gen = importlib.import_module(ST.GENERATOR)
+    seed, point = gen.TEST_SEED, (L.PARAMS.w, L.PARAMS.c0, 11)
+    manifest = gen.manifest(gen.TINY, seed, digests=True)
+    assert manifest["model"] == gen.model_id(gen.TINY, seed) and "program" not in manifest
+    (tmp_path / "m.json").write_text(json.dumps(manifest))
+    root = tmp_path / "store"
+    assert ST.main(["commit", "--store", str(root), "--out", str(tmp_path / "out"), "--manifest", str(tmp_path / "m.json"),
+                    "--seed", f"hex:{seed.hex()}", "--shape", "tiny", "--point", ",".join(map(str, point)),
+                    "--workers", "1"]) == 0
+    setup = json.loads((root / "setup.json").read_text())
+    assert setup["program"] == manifest["model"] == L.weights_name(manifest)
+    (tmp_path / "layout.json").write_text(ST._dump(ST.Generated(ST.GENERATOR, "tiny", seed, point).store.to_json()))
+
+    def opens(m: dict | None, store: Path = root) -> dict | None:
+        return L.open_store(tmp_path / "layout.json", m, store, "5a" * 32, setup["commitment"], None)[1]
+
+    assert opens(manifest) == opens(None) == setup
+    other = gen.manifest(gen.TINY, b"another seed")
+    with pytest.raises(ValueError, match=re.escape(f"holds {setup['program']}, the weights manifest is {other['model']}")):
+        opens(other)
+    unnamed = gen.manifest(gen.TINY)
+    assert L.weights_name(unnamed) is None and unnamed["tensors"] == other["tensors"]
+    with pytest.raises(ValueError, match="names no weights"):
+        opens(unnamed)
+    (tmp_path / "bare").mkdir()
+    (tmp_path / "bare" / "setup.json").write_text(json.dumps({k: v for k, v in setup.items() if k != "program"}))
+    with pytest.raises(ValueError, match="the store holds None"):
+        opens(manifest, tmp_path / "bare")
+    assert opens(None, tmp_path / "bare") is not None
+
+    def pinned_form(m: dict) -> dict:
+        return {"program": m["model"], **{k: v for k, v in m.items() if k != "model"}}
+
+    assert opens(pinned_form(manifest)) == setup
+    with pytest.raises(ValueError, match="the weights manifest is"):
+        opens(pinned_form(other))
+
+
 def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     """An encoded store's segment files (rows by the stand-in codec under the prefix of `draw_salt(coin, commitment)`)
     through the driver with no stream file: each loaded tensor held to the weights manifest's SHA-256, the scales and the
     padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
-    weights, an unfinished segment; a tensor whose digest differs fails the run."""
+    weights, a manifest that names none, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
     from verity.protocols.pous.verifier import setup as P
 
@@ -477,7 +530,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
             n = t["nbytes"] // 4
             w[t["offset"]:t["offset"] + t["nbytes"]] = ((np.arange(n, dtype=np.float32) + 1) * 2.0 ** -14).view(np.uint8)
         t["sha256"] = hashlib.sha256(w[t["offset"]:t["offset"] + t["nbytes"]]).hexdigest()
-    doc["program"] = "test/program"
+    doc["model"] = NAME
     (tmp_path / "m.json").write_text(json.dumps(doc))
     (tmp_path / "w.bin").write_bytes(w.tobytes())
     (tmp_path / "fakegen.py").write_text(
@@ -495,7 +548,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
                                       dtype=np.uint8).reshape(used, L.PAYLOAD)
     rows = XorKernels(None, None, None, lay.prefix).encode(torch.from_numpy(m), 0).numpy()
     setup = {"commitment": com.hex(), "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest(),
-             "manifest": layout["params"], "program": "test/program"}
+             "manifest": layout["params"], "program": NAME}
     root = tmp_path / "store"
     encoded_store(root, rows, 11, setup)
     out = tmp_path / "out"
@@ -517,8 +570,11 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
         layer.main(args[:-1] + ["encode,stage"])
     with pytest.raises(SystemExit, match="commitment"):
         layer.main([a.replace(com.hex(), "00" * 64) for a in args])
-    (tmp_path / "m.json").write_text(json.dumps({**doc, "program": "other"}))
-    with pytest.raises(SystemExit, match="weights manifest"):
+    (tmp_path / "m.json").write_text(json.dumps({**doc, "model": "other"}))
+    with pytest.raises(SystemExit, match="the weights manifest is other"):
+        layer.main(args)
+    (tmp_path / "m.json").write_text(json.dumps({k: v for k, v in doc.items() if k != "model"}))
+    with pytest.raises(SystemExit, match="names no weights"):
         layer.main(args)
     bad = json.loads(json.dumps(doc))
     next(t for t in bad["tensors"] if t["name"] == "l1.wo")["sha256"] = "00" * 32
@@ -558,8 +614,9 @@ TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 
 def toy_stream(doc: dict) -> tuple[dict, bytes]:
     """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_store/store.py`'s `toy_plain` packs
-    it, held to toy.json's digest) and then each stream tensor's f32 scales: a weights stream, and its manifest with
-    SHA-256s naming each store tensor's stream tensors (QKV as wq, wk and wv of 64 rows each but the query's) in W."""
+    it, held to toy.json's digest) and then each stream tensor's f32 scales: a weights stream, and its manifest, which
+    names it `NAME`, with SHA-256s naming each store tensor's stream tensors (QKV as wq, wk and wv of 64 rows each but
+    the query's) in W."""
     lay = L.store_layout(doc["layout"], PREFIX)
     w = bytearray(lay.params.blocks * L.PAYLOAD)
     for t in lay.tensors:
@@ -577,7 +634,7 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
                          "sha256": hashlib.sha256(s).hexdigest()})
             scales += s
             at += n * t.k
-    return {"tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
+    return {"model": NAME, "tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
 
 
 @pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
@@ -595,7 +652,7 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path: Path, mo
     (tmp_path / "layout.json").write_text(json.dumps(doc["layout"]))
     (tmp_path / "m.json").write_text(json.dumps(manifest))
     (tmp_path / "w.bin").write_bytes(stream)
-    setup = {"commitment": doc["commitment"], "manifest": doc["layout"]["params"],
+    setup = {"commitment": doc["commitment"], "manifest": doc["layout"]["params"], "program": manifest["model"],
              "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest()}
     bps = doc["layout"]["params"]["blocks_per_segment"]
     root = tmp_path / "store"
@@ -650,8 +707,10 @@ def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path: Path, mo
     assert [r["sha256"] for r in recs if r["step"] == "stage"][1] == {"l1.wo": False}
     assert not next(r for r in recs if r["step"] == "summary")["ok"]
     with pytest.raises(SystemExit, match="SHA-256"):
-        full.main(with_manifest({"tensors": [{k: v for k, v in r.items() if k != "sha256"} for r in manifest["tensors"]]})
-                  + ["--out", str(tmp_path / "o3")])
+        full.main(with_manifest({**manifest, "tensors": [{k: v for k, v in r.items() if k != "sha256"}
+                                                         for r in manifest["tensors"]]}) + ["--out", str(tmp_path / "o3")])
+    with pytest.raises(SystemExit, match="names no weights"):
+        full.main(with_manifest({k: v for k, v in manifest.items() if k != "model"}) + ["--out", str(tmp_path / "o3")])
     other = json.loads(json.dumps(manifest))
     next(r for r in other["tensors"] if r["name"] == "head")["shape"] = [128, 64]
     with pytest.raises(SystemExit, match="lm_head"):
