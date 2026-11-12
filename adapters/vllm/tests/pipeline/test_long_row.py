@@ -10,7 +10,7 @@
 * its links (`links`) at the served statics are 87, of nine values, and at small statics they are the ones round 2 derives
   from the replay block (`interior_links.links`), under either naming of round 1's record, and its interior window
   (`window`) with them is the stream's interior program, a function of the replay sample's size (slow);
-* a drawn span's units (`spans`) are one span a template, every unit of the mask's cut and of the index on rows its
+* a sampled span's units (`spans`) are one span a template, every unit of the mask's cut and of the index on rows its
   Definition returns its outputs on and every read an opening of the span's table at its slot's position; the reads' ok
   bits are what the check returns on the same operands and their rows `DsaTopKReadRows_v1`'s kv, and
   `interior_rows.interior` commits the spans under the block's wires and links, refusing a row that is not its writer's,
@@ -280,7 +280,7 @@ def test_a_spans_units_are_each_its_definitions_value() -> None:
 
 
 @pytest.mark.slow
-def test_a_drawn_spans_units_commit_as_its_interior() -> None:
+def test_a_sampled_spans_units_commit_as_its_interior() -> None:
     """Two sampled spans of a class of three (`spans`: one of two instances, one of one, which the interior pads to the
     block's two), each opening its own table as round 1 registered it: the reads' oks are what the check returns on the
     same operands at each instance and their rows `DsaTopKReadRows_v1`'s kv there (the one place a span's units are held
@@ -297,9 +297,10 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     tables = [_table(n, seed, BT.name(RUN, L.prompt, L.outputs, slot, 0), (L.prompt, L.outputs))
               for slot, n, seed in ((0, 9, 1), (2, 5, 2))]
     rows = _rows("long-row-interior", (12, 7))
-    drawn = [LR.spans(t, "r0", rows, tables[0], "p" * 64), LR.spans(t, "r2", _rows("long-row-padded", (5,)), tables[1], "p" * 64)]
+    sampled = [LR.spans(t, "r0", rows, tables[0], "p" * 64),
+               LR.spans(t, "r2", _rows("long-row-padded", (5,)), tables[1], "p" * 64)]
 
-    read = drawn[0][-1]
+    read = sampled[0][-1]
     assert read.n == len(rows) * 2
     index = LR.index_values(2)
     opening = {p: _bits(read.data["rows"][p]).reshape(len(rows), 2, -1) for p in IL.READ[1:]}
@@ -318,7 +319,7 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
                         for x in tables]}
     kw = {"row": "long-row-test", "salt_key": bytes(range(32)), "wires": wires, "rows": block, "tables": tables,
           "served": served, "positions": BT.class_rows(L.prompt, L.outputs, 16), "links": links}
-    it = IR.interior(drawn, cells, "00" * 64, [0, 2], **kw)
+    it = IR.interior(sampled, cells, "00" * 64, [0, 2], **kw)
     w = it.committed.window
     assert [(m.template, m.n) for m in w.members] == [(m.template, 2 * n) for m, n in zip(ms, cells, strict=True)]
     want = P.mixed_population_program([(x, 2 * n) for x, n in zip(L.templates, cells, strict=True)],
@@ -331,14 +332,15 @@ def test_a_drawn_spans_units_commit_as_its_interior() -> None:
     pick = next(m for m in w.members if m.template.startswith("DsaTopKDigitPick"))
     assert w.held_leaves(pick, pick.rows[0][0]) == (0, 1, 2, 3)
 
-    ids = [s.member.template for s in drawn[0]]
+    ids = [s.member.template for s in sampled[0]]
 
     def off(base: str, kind: str, port: str, unit: int = 0) -> list:
         k = next(i for i, x in enumerate(ids) if x.startswith(base))
-        s = drawn[0][k]
+        s = sampled[0][k]
         a = s.data[kind][port].copy()
         a[unit, 0] ^= 1
-        return [(*drawn[0][:k], replace(s, data={**s.data, kind: {**s.data[kind], port: a}}), *drawn[0][k + 1:]), drawn[1]]
+        return [(*sampled[0][:k], replace(s, data={**s.data, kind: {**s.data[kind], port: a}}), *sampled[0][k + 1:]),
+                sampled[1]]
 
     merge = ms[ids.index(next(x for x in ids if x.startswith("DsaPositionsMerge")))]
     for base, kind, port, why in (

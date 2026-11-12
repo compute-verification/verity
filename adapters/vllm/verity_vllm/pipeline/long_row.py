@@ -41,7 +41,7 @@ parameters the interior registers as values (`interior_links`): the scores, n an
 gives, and the table's root and domain and the index rows the verifier supplies (`supplied`). `links` states them in closed
 form, since round 2's derivation (`interior_links.links`) reads the block's Program, which at the served statics builds every
 unit's body; the tests hold the two to each other at small statics.
-`spans` is a drawn span's units as `interior_rows.interior` commits them, one `interior_rows.Span` a template: every unit's
+`spans` is a sampled span's units as `interior_rows.interior` commits them, one `interior_rows.Span` a template: every unit's
 rows and outputs in u16 words, computed from each instance's scores and n and the table its reads open by the units'
 references (`dsa_topk_mask_cut.values`, `dsa_topk_reads.values`, `interior_links.table_reads`), never by a Definition.
 """
@@ -307,7 +307,7 @@ def _instance(check: SpecializedDefinition, scores: Sequence[int], n: int, table
 
 def spans(check: SpecializedDefinition, rid: str, rows: Sequence[tuple[Sequence[int], int]], table: Any,
           program: str) -> tuple[Any, ...]:
-    """A drawn span's units as `interior_rows.interior` takes a sampled span: one `interior_rows.Span` a template of
+    """A sampled span's units as `interior_rows.interior` takes them: one `interior_rows.Span` a template of
     ``check`` in `window`'s order, its units instance by instance (its ``group`` a template's units an instance), each
     unit's rows and outputs in u16 words. ``rows``: each instance's (scores, n), the row's N index scores as f32 words and
     its n, as the replay gives them; ``table``: the history table the span's reads open (`interior_links.kept_table`, the

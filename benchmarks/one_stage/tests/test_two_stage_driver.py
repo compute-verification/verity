@@ -78,6 +78,11 @@ def _interior(layout: BR.Layout, previous: str) -> tuple[dict, dict]:
     return rec, ports
 
 
+def _samples_q(got: TS.First) -> bool:
+    """The first stage sampled Q of the class's spans, a subset."""
+    return got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+
+
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     """The first stage samples Q of the class's N spans on the challenger's coins after the boundary registration;
     ``stage1.json`` alone gives the replay side the same registration and sample on the bytes it read; its interior
@@ -86,7 +91,7 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q and got.read
+    assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.stage1()))
     assert handoff["units"] == list(got.draw.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
@@ -154,7 +159,7 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    assert _samples_q(got)
 
 
 @pytest.mark.parametrize("layers", [(), (0,)])
@@ -162,7 +167,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     """A class that commits its replay block's return (`Layout.verdicts`): its Spec declares the return a served value
     after ``b.ingress`` and ``b.egress``, named under its replay block and before the tables where the class has history
     tables; its first stage registers its root, from ``commit.json`` alone, before the coins commit and samples; and the
-    replay side resumes from ``stage1.json`` alone."""
+    replay side resumes from the first stage's hand-over alone."""
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
     layout = BR.Layout(SAME, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=layers, capacity=8, verdicts=True)
     tables = {}
@@ -178,7 +183,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
                       *((t, HT.SCHEMA) for t in layout.tables)]
     assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    assert _samples_q(got)
     again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
     assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
 

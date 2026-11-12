@@ -301,7 +301,7 @@ SAME = bind(CompositeDefinition("BoundaryTablesTestSame", 0, (), lambda S_: ((("
                                 lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-LAW = {"law": "subset", "k": 1}
+DESIGN = {"law": "subset", "k": 1}
 
 
 class Scheduler:
@@ -369,12 +369,12 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         mine = BR.layout_of(pub, PAIR)
         assert mine.tables == tuple(names) and mine.ports()[names[1]] == {k: made[names[1]].entry()[k] for k in
                                                                            ("leaves", "domain")}
-        rec = BR.record(pub, PAIR, LAW)
+        rec = BR.record(pub, PAIR, DESIGN)
         assert [r["port"] for r in rec["roots"]] == [*BR.PORTS, *names]
-        assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-        assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+        assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         bare = BR.Layout(PAIR, 0, 1, p, o, 1, run)
-        assert R.check(rec, bare.program, bare.grain, LAW, CS.SCHEME, bare.ports()).codes != ()
+        assert R.check(rec, bare.program, bare.grain, DESIGN, CS.SCHEME, bare.ports()).codes != ()
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
     assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]
@@ -401,9 +401,9 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
         name, names = f"{P.template_id(mine.replay)}/{BR.RETURN}", [BT.name(run, p, o, 0, x) for x in (0, 3)]
         assert pub["verdicts"] is True and list(pub["values"]) == [*BR.PORTS, name, *names] == list(mine.ports())
         assert pub["values"][name]["leaves"] == o
-        rec = BR.record(pub, SAME, LAW)
+        rec = BR.record(pub, SAME, DESIGN)
         for check in (R.check, V.check):
-            assert check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+            assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         assert BR.reopen(d, SAME).roots == {k: bytes.fromhex(v["root"]) for k, v in pub["values"].items()}
 
 

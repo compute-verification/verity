@@ -11,8 +11,8 @@ rank widened to words).
   soundness covers (`one_stage.proofs.ks_form_why`), inside Flock's range (k_log, and a region a row against
   `REGIONS_MAX`), on random rows (slow).
 * ``VERITY_VLLM_LONG_ROW_UNITS=1``: the same at statics whose blocks hold more than one key a digit, with the pick, and
-  where `flock-verify` is built its ``ks-form`` on each staged statement's files, which holds the unit's rows to their port
-  bits (`ProvedScope.scopeOkH`), as the mirror does not.
+  where Flock's Lean verifier is built its ``ks-form`` on each staged statement's files, which holds the unit's rows to
+  their port bits (`ProvedScope.scopeOkH`), as the mirror does not.
 """
 from __future__ import annotations
 
@@ -39,7 +39,8 @@ from verity_vllm.query.program_view import spec_base
 #: `Flock.Statement.checkInRange`'s bound on a statement's regions; a unit's are one a row (`Flock.HmOut.regions`)
 REGIONS_MAX = 1024
 BIND = {"partition": "0" * 128, "program": "0" * 128}
-VERIFY = Path(__file__).resolve().parents[4] / "verity" / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+#: Flock's Lean verifier, where it is built
+VERIFY = PF.PACKAGE / ".lake" / "build" / "bin" / PF.EXE
 
 
 def _templates(t) -> dict[str, object]:
@@ -122,7 +123,7 @@ def test_the_small_units_but_the_pick_stage_in_the_proved_form(tmp_path) -> None
                            "17 GB (the pick's circuit); run it as a recorded run")
 def test_every_unit_of_a_long_row_stages_in_the_proved_form(tmp_path) -> None:
     """Every template of the long row at N = 1,024, TOPK = 64 and blocks of 256 but its read, the pick included: staged as
-    above, and held to Lean's ``ks-form`` where `flock-verify` is built."""
+    above, and held to Lean's ``ks-form`` where Flock's Lean verifier is built."""
     lean = VERIFY.is_file()
     for k, tid in enumerate(_templates(_cut(1024, 64, 256))):
         got = _staged(tid, tmp_path / str(k), lean)
