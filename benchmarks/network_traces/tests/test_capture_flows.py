@@ -5,8 +5,8 @@ certifier's listed under names with no address printed or written, and the forei
 skipped when told. On captures built from the fixture's packets: a stream counted across the sequence numbers' wrap
 and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreement, the pairing's counts on each side,
 every capture format read to the same sums, and each thing the reader doesn't read refused by its name, a packet kept
-too short with the least length that reads it and with no length for every capture. Then a run of the network
-certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
+too short with the least length that reads it and with no length for every capture, a packet shorter than the
+headers it states by its own name. Then a run of the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
 on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
 at the id front's cell, agrees as one in the bytes form does, and its capture kept at 54 bytes a packet holds no
@@ -497,6 +497,35 @@ def test_what_the_reader_doesnt_read_is_refused_by_its_name(tmp_path, name, fram
     for skip in (False, True):
         with pytest.raises(cf.Refused, match=said):
             cf.read([path], *_given(), skip_foreign=skip)
+
+
+def test_a_packet_shorter_than_the_headers_it_states_is_refused_by_that_name_whatever_is_kept_of_it(tmp_path):
+    """A packet of 42 bytes on the wire whose IP header says TCP follows: the reader reads the first 48 bytes of a
+    TCP packet, so no capture holds them. Its refusal says that and gives nothing to capture at, the same for the
+    packet kept whole and kept shorter. So does a packet whose bytes on the wire end inside its IP header. Kept at 30
+    bytes, inside its IP header, the first packet is one kept too short: the bytes kept don't say what follows."""
+    stated, runt = fx.ethernet(_packet(fx.TCP, bytes(8))), fx.ethernet(_packet(fx.TCP, b""))[:30]
+    path = tmp_path / "capture.pcap"
+
+    def refusal(frame: bytes, kept: int) -> str:
+        path.write_bytes(fx.pcap([frame], snapshot=kept))
+        with pytest.raises(cf.Refused) as refused:
+            cf.read([path], *_given())
+        return str(refused.value)
+
+    assert len(stated) == 42
+    for kept in (262144, 42, 40, 34):
+        assert refusal(stated, kept) == (
+            "capture.pcap's packet 0 is shorter than the headers it states: it was 42 bytes on the wire, and this "
+            "reads its first 48 bytes (14 of its frame header, 20 of its IP header and TCP's first 14). No capture "
+            "length changes that: the packet itself is that short")
+    for kept in (262144, 30, 20):
+        assert refusal(runt, kept) == (
+            "capture.pcap's packet 0 is shorter than the headers it states: it was 30 bytes on the wire, which end "
+            "before its IPv4 header is whole. No capture length changes that: the packet itself is that short")
+    assert refusal(stated, 30).startswith(
+        "capture.pcap's packet 0 is kept too short for its headers: the 30 bytes kept of it end before its IPv4 "
+        "header is whole, so this can't tell how many it reads. Capture again keeping more of each packet.")
 
 
 _SYN = fx.tcp(40001, 8000, 1, fx.SYN)
