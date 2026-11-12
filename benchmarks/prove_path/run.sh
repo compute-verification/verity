@@ -43,7 +43,8 @@
 #     until the file states a rate: PP_TP, PP_LLAMA, and PP_SERVE_RUN or PP_SERVE_STANDIN without PP_RECORDS. With PP_RECORDS=1
 #     a served window's audit is not refused there: records_audit.py restates a fixed design K as the rate K/N over the N proof
 #     blocks the window itself registers. benchmarks/prove_path/tests/test_run_rules.py holds the stand-in's rules to what a
-#     stream takes and lists the files that still state a fixed design.
+#     stream takes and lists the partition files, this benchmark's and the one-stage audit's (a PP_PARTITION may name one),
+#     that still state a fixed design.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
 #   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/served-windows/rank0.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
