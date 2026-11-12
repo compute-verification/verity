@@ -71,6 +71,7 @@ from verity_bench import jobs, overhead_records, steady
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
+from verity_bench.boolean import boolean_version
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
 CENSUS_KIND = "block-census/v1"
@@ -297,27 +298,6 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
                         art=art, cores=cores, form=form)
     return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
                     row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
-
-
-def boolean_version(block: str, definition: str) -> bool:
-    """Whether the tree registers `definition` (a Definition's id) as the Boolean version of the census type `block`
-    (its census name): the registry binds the type's Definition, and `verity.definitions.boolean.boolean_version` of
-    it, the newest registered Boolean Definition that names it as its word and no caller has to opt in to, has that
-    id. A type this tree's registry doesn't bind, or registers no Boolean version of, has none."""
-
-    from verity.circuits.defs import CompositeDefinition, bind
-
-    # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
-    from verity.commitments.gates import embedding  # noqa: F401
-    from verity.definitions import boolean
-    from verity.definitions.call_scope import spec_base, spec_statics, specialization
-
-    boolean.load()
-    try:
-        own = specialization(spec_base(block), spec_statics(block))
-        return boolean.boolean_version(bind(own) if isinstance(own, CompositeDefinition) else own).id == definition
-    except (LookupError, TypeError, ValueError):
-        return False
 
 
 def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
