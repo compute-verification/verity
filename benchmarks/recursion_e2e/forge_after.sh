@@ -12,13 +12,13 @@ RUN_OUT=/workspace/research/runs/$RUN/out
 want=$(cut -d' ' -f1 $RUN_OUT/lean.sha)
 OLD=$(for b in $FLOCK_WORK/cache/lean-*/flock-verify; do [ "$(sha256sum $b | cut -d' ' -f1)" = "$want" ] && echo $b; done | head -1)
 [ -n "$OLD" ] || { echo "no flock-verify under $FLOCK_WORK/cache with $RUN's lean.sha $want"; exit 1; }
-LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
 NEW=$WORK/lean-$LSHA/flock-verify
 export PATH=$HOME/.elan/bin:$PATH
 if [ ! -x $NEW ]; then
   ( exec 9>$WORK/lean.lock; flock 9
-    [ -x $NEW ] || { rm -rf $WORK/lean-src && mkdir -p $WORK/lean-src && cp -r verity/protocols/flock/verifier/. $WORK/lean-src/ \
-      && (cd $WORK/lean-src && lake build flock-verify) && mkdir -p $WORK/lean-$LSHA && cp $WORK/lean-src/.lake/build/bin/flock-verify $NEW; }
+    [ -x $NEW ] || { rm -rf $WORK/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $WORK/lean-src) \
+      && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $WORK/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $NEW; }
   ) > $OUT/build-lean.log 2>&1 || { tail -20 $OUT/build-lean.log; exit 1; }
 fi
 echo "run's flock-verify $OLD; this tree's $NEW (lean-$LSHA)"
