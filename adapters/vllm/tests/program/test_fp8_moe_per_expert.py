@@ -29,26 +29,24 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import bit_row
+from verity.commitments.windows import interface as WI
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import moe as MOE
-from verity.commitments.windows import interface as WI
-
 
 # --- the cut computes the gather form --------------------------------------------------------------------------------------------
 

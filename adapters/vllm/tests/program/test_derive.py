@@ -19,7 +19,6 @@ from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity.circuits.program import Program
 from verity.circuits.codec import program_digest
-from verity.circuits.refs import Coll
 from verity.definitions.registry import b1, prims as P
 from verity.definitions.numerics.serve3_reference import materialize
 
@@ -196,7 +195,6 @@ def test_gpt2_mlp_block_reference_mode_layernorm_conv1d_gelu():
     x = torch.randn(3, 16)
     rep = derive_report(m, (torch.empty(3, 16),), **REF, name="GPT2MLP")
     assert rep.ok, rep.unsupported
-    ids = [n.fn.id for n in rep.flat_definition.body.nodes]
     bases = [n.fn.base_id for n in rep.flat_definition.body.nodes]
     assert bases[:3] == ["LayerNormRef_v1"] * 3 and bases.count("LinearRef_v1") == 6, bases
     assert bases.count("GeluRef_v1") == 1 and bases.count("AddRef_v1") == 1

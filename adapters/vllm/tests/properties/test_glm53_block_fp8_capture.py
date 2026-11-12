@@ -155,7 +155,7 @@ def test_the_mmav2_probe_quantises_to_its_own_codes() -> None:
     q, s = DGT.ue8m0_group_quant_rows(x, G=GQ)
     assert (s == 0x3B800000).all()
     assert (q[:, 0::32] == 0x7E).all() and (q[:, 2::32] == 0x7E).all() and (w[:, 0::32] == 0x7E).all() and (w[:, 2::32] == 0xFE).all()
-    small = np.delete(np.arange(K), np.r_[0:K:32, 2:K:32])
+    small: np.ndarray = np.delete(np.arange(K), np.r_[0:K:32, 2:K:32])
     assert ((q[:, small] & 0x7F) >> 3 <= 4).all() and ((w[:, small] & 0x7F) >> 3 <= 4).all()
     assert (np.asarray(MR.E4M3_AS_BF16, dtype=np.uint32)[q] << 16).view(np.float32).sum() != 0
 
@@ -442,11 +442,10 @@ def _stub_vllm(monkeypatch) -> None:
     import types
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     ws = types.ModuleType("vllm.v1.worker.workspace")
-    ws.is_workspace_manager_initialized = lambda: True
-    ws.init_workspace_manager = lambda device: None
+    vars(ws).update(is_workspace_manager_initialized=lambda: True, init_workspace_manager=lambda device: None)
     for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.config", vc), ("vllm.v1", types.ModuleType("vllm.v1")),
                       ("vllm.v1.worker", types.ModuleType("vllm.v1.worker")), ("vllm.v1.worker.workspace", ws)):
         monkeypatch.setitem(sys.modules, name, mod)

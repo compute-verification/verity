@@ -11,18 +11,18 @@ import itertools
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.ops import mufu as MU
 from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import mla as M
-from verity_vllm.program import mla_capture as MC
 from verity.definitions.registry import mla_check as MK
+
+from verity_vllm.program import mla_capture as MC
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16

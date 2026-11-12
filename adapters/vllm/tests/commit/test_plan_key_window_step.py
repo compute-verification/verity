@@ -17,11 +17,10 @@ from types import SimpleNamespace
 
 import torch
 
+from tests.commit import test_native_collect_plan_cache as PC
 from verity_vllm.acquire.sources import int8_source as I8
 from verity_vllm.commit import step_rows as R
 from verity_vllm.engine import int8_ops
-
-from tests.commit import test_native_collect_plan_cache as PC
 
 LIN = "model.layers.0.mlp.down_proj"
 K = 4608                                        # a lone request's x_q outgrows the row padding the worker compares at

@@ -12,7 +12,8 @@
 #   source.txt                             the commit, and the sha256 of every source the Makefile names
 #   MANIFEST.sha256                        every file above
 # CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
-# frame from its loaded sources, so a rebuild at the same commit and toolkit path reproduces the cubins.
+# frame from its loaded sources, with ship.sh's SHIP_NVCC as the Makefile's NVCC, so a rebuild at the same commit and
+# toolkit path reproduces the cubins, and so does one after a source or a header only moved (ship_nvcc.sh's header).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
@@ -33,9 +34,9 @@ fi
 git clone -q https://github.com/NVlabs/CGBN "$S/CGBN"
 git -C "$S/CGBN" checkout -q "$(cat "$ROOT/benchmarks/pous/p2_gpu/CGBN.commit")"
 
-mk=(make -C "$P2" NVCC="$CUDA/bin/nvcc" CGBN="$S/CGBN" BIN="$OUT/lib" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"})
+mk=(make -C "$P2" NVCC="$SHIP_NVCC" CGBN="$S/CGBN" BIN="$OUT/lib" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"})
 { "$CUDA/bin/nvcc" --version; echo "${mk[*]}"; } > "$OUT/toolchain.txt"
-"${mk[@]}" > "$S/make.log" 2>&1 || { tail -40 "$S/make.log" "$OUT/lib/libp2v1.so.ptxas" >&2; exit 1; }
+"${mk[@]}" > "$S/make.log" 2>&1 || { tail -n 40 "$S/make.log" "$OUT/lib/libp2v1.so.ptxas" >&2; exit 1; }
 "$CUDA/bin/cuobjdump" --list-elf "$OUT/lib/libp2v1.so" > "$OUT/elf.txt"
 grep -q "$ARCH" "$OUT/elf.txt" || { echo "libp2v1.so holds no $ARCH SASS" >&2; cat "$OUT/elf.txt" >&2; exit 1; }
 ship_cubins "$OUT/lib/libp2v1.so"
