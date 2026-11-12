@@ -10,6 +10,7 @@ directory holds its runner.
 verity bench exfiltration                 the figure, the inputs, each part, and the two side by side a period
 verity bench exfiltration --json          the same as one document: value, unit, inputs, parts, periods
 verity bench exfiltration --share 0.05    read at another share of total compute
+verity bench exfiltration --served-run F  beside it, the share a served two-stage run's record F measures
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
 verity bench exfiltration --response-ids N the network certifier's part for a class of at most N ids a response
 verity bench exfiltration --scan-delta D  the network certifier's errors at another δ of its scans (a fraction)
@@ -54,6 +55,37 @@ block, sampled on a served audit, holds that count to the response's ids. Until 
 server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
 The command reads the output count from that row and prints it beside those sums, marked assumed, in every
 monitoring period and where it says no advice is priced.
+
+## The share of compute
+
+Every figure is read at a share of total compute that is given (`--share`, 10% by default) and marked assumed. Beside
+it the command prints the share a served two-stage run measures: the audit's GPU-seconds on the run over the window's
+serving GPU-seconds. Without a run's record it prints that share as "not measured: no served run's record".
+
+With `--served-run FILE`, the record as the reader of a served run's record gives it, the command reads each part of
+the audit's GPU time from it and marks it measured: the sessions' proving, the staging of the sampled proof blocks,
+the replay of the sampled spans, the interior commitment of their proof blocks, and the serving charge. Where the
+record lacks a field, the command names it and what the run doesn't write, marks it missing, and claims no share.
+Where it claims one, it prints the compute audit's part over the world's year at that share beside the part at the
+given share, at which every other figure stays.
+
+The record is one JSON object (`served_share` in `exfiltration.py`):
+
+- `run`: the served run's id.
+- `prove`, `staging`, `replay`, `interior`: each a list of what held GPUs for that part, one entry a session or a
+  step, each `{"seconds": S, "gpus": G}`: the seconds it held them and how many it held.
+- `serving`: one such entry, the window's load: the seconds it was served over and the GPUs its engine held.
+- `stock`: one such entry, stock vLLM serving the same load at the same launch settings save Verity's changes. The
+  serving charge is the served GPU-seconds less stock's, measured.
+- `serving_cost` and `serving_cost_source`, where there is no `stock`: `verity bench serve_tax`'s cost of the served
+  arm over stock, as a fraction (stock's output tokens a second over the arm's, less one), and the run and load it is
+  of. The serving charge is then the served GPU-seconds times c / (1 + c), modeled, since those loads are not the
+  window's.
+
+`verity bench serve_tax` (`benchmarks/serve_tax/`) serves the two-stage window as its `two-stage` arm, and each load's
+`meta.json` there holds the seconds it was served over and the GPUs' busy seconds (`wall_s`, `gpu`), for every arm the
+job serves. So the window's serving and, where the same job served `compiled` on the same plan and rate, stock's are
+read from that record, and no stock serve of this command's own is needed.
 
 ## The errors
 
@@ -136,7 +168,7 @@ plan of the case, is left out and listed under "Refused".
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
+  (derived from other figures), `assumed`, or `missing` (a field a served run's record lacks, with its gap). The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
   pricing a block family covers (measured statements, computed, or both). The network certifier's are its
   calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.

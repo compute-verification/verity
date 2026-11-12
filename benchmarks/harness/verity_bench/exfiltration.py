@@ -3,6 +3,13 @@
 computes neither part itself: it composes the two calculators that do, and runs on any machine that reaches the
 store, with no GPU and no node.
 
+* **The share of total compute** is given (`--share`) and assumed. Beside it the command prints the share a served
+  two-stage run measures (`served_share`, `--served-run`): the audit's GPU-seconds on the run (its proving, staging,
+  replay and interior commitment, and the serving charge over stock vLLM on the same load) over the window's serving
+  GPU-seconds, each read from the run's record and marked measured, a field the record lacks marked missing with its
+  gap and the share then not claimed; and where it is claimed, the compute audit's part at it beside the part at the
+  given share. Without a record it prints the share as `NO_RUN`.
+
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
   each holding the planner's rows as `ROWS_FILE` in its run files, one JSON object a line. A row prices one case of
@@ -122,7 +129,28 @@ TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
-MARKS = ("measured", "modeled", "assumed")
+#: an input's marks: `missing` is a served run's field its record lacks, which the share it would measure is not claimed
+#: without
+MARKS = ("measured", "modeled", "assumed", "missing")
+#: the audit's GPU time on a served two-stage run, by part, which the share of compute it measures sums: what each part
+#: is, and why a run's record lacks it where it does
+SERVED_PARTS = {
+    "prove": ("the sessions' proving", "the two-stage audit's record keeps each session's proving seconds "
+              "(`audit.timing`) and not the GPUs it held"),
+    "staging": ("staging the sampled proof blocks for their sessions", "the one-stage audit times its staging "
+                "(`staged_s`) and its summary leaves the seconds out"),
+    "replay": ("the replay of the sampled spans", "the two-stage audit reads no clock over its replay"),
+    "interior": ("the interior commitment of the sampled spans' proof blocks",
+                 "the two-stage audit reads no clock over its interior commitment"),
+    "serving_charge": ("serving under Verity over stock vLLM serving the same load", "no stock serve of the window's "
+                       "load (`stock`) and no serving cost of the served arm over stock (`serving_cost`, "
+                       "`verity bench serve_tax`)"),
+}
+#: why a run's record lacks the window's serving, which the share is of
+SERVING_GAP = ("the window's serve is not tied to the audit's record: its load's seconds and GPUs (serve_tax's "
+               "`meta.json`: `wall_s`, `gpu`) are in the serve's own run")
+#: what the command prints for the share a served run measures where no record is given
+NO_RUN = "not measured: no served run's record"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")
@@ -385,6 +413,85 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
                                      "value": default["value"] if head["eps"] < 1 else None, "unit": default["unit"]}}
 
 
+# ---- the share of compute a served run measures ----------------------------------------------------------------------
+
+
+def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]:
+    """The GPU-seconds a record's field holds, a list of what held GPUs for it (one entry a session or a step, each
+    `{"seconds": s, "gpus": g}`) or one such entry, and the keys an entry lacks. None and the gap where it holds none."""
+
+    if not entries:
+        return None, [field]
+    lacks, total = [], 0.0
+    for e in [entries] if isinstance(entries, Mapping) else entries:
+        seconds, gpus = e.get("seconds"), e.get("gpus")
+        lacks += [f"{field}.{k}" for k, v in (("seconds", seconds), ("gpus", gpus)) if v is None]
+        if None not in (seconds, gpus):
+            if not (seconds >= 0 and isinstance(gpus, int) and gpus >= 1):
+                raise ValueError(f"{run}'s record holds {field} at {seconds!r} seconds on {gpus!r} GPUs: an entry is "
+                                 "seconds of 0 or more on a whole count of GPUs, 1 or more")
+            total += seconds * gpus
+    return (None if lacks else total), sorted(set(lacks))
+
+
+def served_share(record: Mapping[str, Any] | None) -> dict:
+    """The audit's share of compute on a served two-stage run, from its ``record`` (the reader of a served run's
+    record gives it): its GPU-seconds over the window's serving GPU-seconds. Each part of the audit (`SERVED_PARTS`)
+    is read from the record and marked measured, and where the record lacks it, its gap is named and the share is not
+    claimed. None: no record, and the share is `NO_RUN`.
+
+    The record is one object: ``run``, the served run's id; ``prove``, ``staging``, ``replay`` and ``interior``, each
+    a list of what held GPUs for that part, one entry a session or a step, each ``{"seconds": s, "gpus": g}`` (the
+    seconds it held them and how many it held); ``serving``, one such entry, the window's load: the seconds it was
+    served over and the GPUs its engine held; and for the serving charge, ``stock``, one such entry for stock vLLM
+    serving the same load at the same launch settings save Verity's changes, or else ``serving_cost``, `verity bench
+    serve_tax`'s cost of the served arm over stock on its own loads, as a fraction (stock's output tokens a second over
+    the arm's, less one), with its ``serving_cost_source`` (the run and load it is of). A field absent or None is one
+    the record lacks; so is an entry's key. The serving charge is the served GPU-seconds less stock's, measured; or
+    from the serving cost c, the served GPU-seconds times c / (1 + c), modeled, since its loads are not the window's."""
+
+    if record is None:
+        return {"run": None, "value": None, "mark": None, "why": NO_RUN, "serving_gpu_s": None, "parts": {},
+                "missing": []}
+    if not isinstance(record, Mapping):
+        raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
+    run = str(record.get("run") or "the served run")
+    serving, missing = _gpu_s(record.get("serving"), "serving", run)
+    gaps = [{"field": "serving", "lacks": missing, "why": SERVING_GAP}] if missing else []
+    parts: dict[str, dict] = {}
+    for name, (what, why) in SERVED_PARTS.items():
+        if name == "serving_charge":
+            stock, lacks = _gpu_s(record.get("stock"), "stock", run)
+            cost = record.get("serving_cost")
+            if record.get("stock") is not None or cost is None:
+                gpu_s, mark = (None if None in (stock, serving) else serving - stock), "measured"
+                source = "the served GPU-seconds less those of stock vLLM serving the same load (`stock`)"
+            else:
+                if not (isinstance(cost, (int, float)) and cost > -1):
+                    raise ValueError(f"{run}'s record holds a serving cost of {cost!r}: a fraction over -1")
+                lacks, mark = [], "modeled"
+                gpu_s = None if serving is None else serving * cost / (1 + cost)
+                source = (f"the serving cost of the served arm over stock, {_pct(cost)} (`serving_cost`, "
+                          f"{record.get('serving_cost_source') or 'its run and load unnamed'}), on its own loads, not "
+                          "the window's: the served GPU-seconds times c / (1 + c)")
+        else:
+            (gpu_s, lacks), mark, source = _gpu_s(record.get(name), name, run), "measured", f"`{name}`"
+        if lacks:
+            gaps.append({"field": name, "lacks": lacks, "why": why})
+        parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None else mark, "source": source,
+                       "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving}
+    if serving is not None and not serving > 0:
+        raise ValueError(f"{run}'s record holds the window's serving at {serving!r} GPU-seconds: the share is of more "
+                         "than none")
+    claimed = not gaps
+    return {"run": run, "value": sum(p["share"] for p in parts.values()) if claimed else None,
+            "mark": (("modeled" if any(p["mark"] == "modeled" for p in parts.values()) else "measured")
+                     if claimed else None),
+            "why": None if claimed else "not measured: " + "; ".join(
+                f"{run}'s record lacks {', '.join(f'`{k}`' for k in g['lacks'])} ({g['why']})" for g in gaps),
+            "serving_gpu_s": serving, "parts": parts, "missing": gaps}
+
+
 # ---- the document ----------------------------------------------------------------------------------------------------
 
 
@@ -393,10 +500,12 @@ def _same(a: float, b: float) -> bool:
 
 
 def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
-            network_check: float, row: str) -> list[dict]:
+            network_check: float, row: str, served: Mapping) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
-    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0."""
+    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0.
+    ``served`` is the share a served run measures (`served_share`): with a run's record, each of its fields with its
+    mark, a field the record lacks marked missing with its gap."""
 
     head = points["world year"]
     budgets = sorted({b for p in points.values() for b in p["pinned"]})
@@ -410,7 +519,9 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
         one(audit, "planner_rows", sum(len(p["pinned"]) for p in points.values()), "row", "modeled",
             f"{where}: the planner's row `{row}` at its step `{head['step']}`, each of {len(points)} scopes at "
             f"audit budgets pinned from {min(budgets):.3g} to {max(budgets):.3g}"),
-        one(audit, "compute_share", share, "", "assumed", "the share of total compute the figure is read at (--share)"),
+        one(audit, "compute_share", share, "", "assumed", "the share of total compute the figure is read at (--share); "
+            + ("the share a served run measures is " + served["why"] if served["value"] is None else
+               f"the share {served['run']} measures is beside it (`served_compute_share`)")),
         one(audit, "delta", head["delta"], "", "assumed",
             f"{where} `delta_seen`: the audit's δ over the monitoring period, a stated parameter"),
         one(audit, "lambda", head["lambda"], "", "assumed",
@@ -432,6 +543,20 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             f"the server chooses a response's output count, which the network certifier's row `{OUTPUT_COUNT}` "
             f"charges {'' if count['GB'] is None else _n(count['bits_a_request']) + ' bits a request '}as its schedules"),
     ]
+    if served["run"] is not None:
+        gaps = {g["field"]: g for g in served["missing"]}
+        whose = f"{served['run']}'s record"
+        out += [one(audit, "served_serving_gpu_s", served["serving_gpu_s"], "GPU-second",
+                    "missing" if "serving" in gaps else "measured",
+                    f"{whose} `serving`: the window's serving, which the share is of"
+                    + (f"; it lacks {', '.join(gaps['serving']['lacks'])}: {SERVING_GAP}" if "serving" in gaps else "")),
+                *(one(audit, f"served_{name}_gpu_s", p["gpu_s"], "GPU-second", p["mark"],
+                      f"{whose}: {p['what']}, {p['source']}"
+                      + (f"; it lacks {', '.join(gaps[name]['lacks'])}: {gaps[name]['why']}" if name in gaps else ""))
+                  for name, p in served["parts"].items()),
+                one(audit, "served_compute_share", served["value"], "", served["mark"] or "missing",
+                    f"{whose}: the audit's GPU-seconds over the window's serving GPU-seconds"
+                    + ("" if served["value"] is not None else f", {served['why']}"))]
     for name, i in term["inputs"].items():
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
     if off := sorted(i["input"] for i in out if i["mark"] not in MARKS or not i["source"]):
@@ -441,7 +566,8 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
 
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
-          store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
+          served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
+          local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
     part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
     for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
@@ -461,11 +587,17 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
     bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
-    the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0)."""
+    the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
+
+    ``served`` is a served two-stage run's record (`served_share`), from which the document's `compute_share` is the
+    share of compute that run measures, with each of its parts, and where it is claimed the compute audit's part over
+    the world's year at that share (`GB`, with its β), beside the figure at ``share``, which stays given and assumed
+    (`given`). Without a record, or where it lacks a field, the share is not claimed, and `why` says so."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
                          f"and {network_check!r}")
+    measured = served_share(served)
     root = root or jobs.repository_root()
     completion = jobs.StoreCompletion(store, root=root, local_only=local_only)
     if not local_only:
@@ -478,6 +610,14 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                          f"{', '.join(sorted(points))}): label the run that does ({_label()})")
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
+    measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
+    measured.update(GB=None, beta=None, inside=None, no_GB=None)
+    if measured["value"] is not None:
+        try:
+            there = at_share("world year", *scopes["world year"], measured["value"])
+            measured.update(GB=there["GB"], beta=there["beta"], inside=there["inside"])
+        except ValueError as e:
+            measured["no_GB"] = str(e)
 
     term = certifier(root, response_ids, scan_delta)
     of, set_time, card = term["of_record"], term["set_time"], term["with_set_time_card"]["label"]
@@ -536,7 +676,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
             "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
-            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row),
+            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, measured),
+            "compute_share": measured,
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
             "certifier": {"schema": term["schema"], "request_count": term["request_count"],
@@ -641,6 +782,41 @@ def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
             for label in dict.fromkeys((*own, *other))]
 
 
+def _share(cs: Mapping) -> tuple[list[str], list[str]]:
+    """The share of compute a served run measures (`build`'s `compute_share`), beside the given share every other
+    figure is read at: a line, and with a run's record a table of its parts."""
+
+    given = f"the given {_pct(cs['given']['share'])} of total compute ({cs['given']['mark']})"
+    if cs["value"] is None:
+        lines = [f"**The audit's share of compute: {cs['why']}.** Every figure below is read at {given}.", ""]
+    else:
+        parts = ", ".join(f"{name.replace('_', ' ')} {_part(p['share'])}" for name, p in cs["parts"].items())
+        there = (f"its part has no figure at that share: {cs['no_GB']}" if cs["GB"] is None else
+                 f"at that share, β = {_part(cs['beta'])}{'' if cs['inside'] else ' (extrapolated)'}, the compute "
+                 f"audit's part over the world's year is {_n(cs['GB'])} GB")
+        lines = [f"**The audit's share of compute: {_part(cs['value'])} ({cs['mark']})**, on {cs['run']}: the audit's "
+                 f"GPU-seconds over the window's serving, {_n(cs['serving_gpu_s'])} GPU-seconds, in parts {parts}. "
+                 f"{there[0].upper()}{there[1:]}, beside {_n(cs['given']['GB'])} GB at {given}, which every figure "
+                 "below is read at.", ""]
+    if cs["run"] is None:
+        return lines, []
+    gaps = {g["field"]: g for g in cs["missing"]}
+
+    def source(name: str, said: str) -> str:
+        return said + (f"; lacks {', '.join(f'`{k}`' for k in gaps[name]['lacks'])}: {gaps[name]['why']}"
+                       if name in gaps else "")
+
+    return lines, [f"## The audit's share of compute on {cs['run']}", "",
+            "Each part of the audit's GPU time on the served run, and the window's serving it is a share of, read from "
+            "the run's record. A part the record lacks is marked missing with its gap, and the share is not claimed "
+            "without it.", "",
+            *_table(("part", "what", "GPU-seconds", "share of the window's serving", "mark", "source"),
+                    [("serving", "the window's serving", _n(cs["serving_gpu_s"]), "",
+                      "missing" if "serving" in gaps else "measured", source("serving", "`serving`")),
+                     *((name, p["what"], _n(p["gpu_s"]), _part(p["share"]), p["mark"], source(name, p["source"]))
+                       for name, p in cs["parts"].items())]), ""]
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
     by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
@@ -657,6 +833,7 @@ def render(doc: Mapping[str, Any]) -> str:
     record = [name for name in TOGETHER if not sums[name]["label"]]
     labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
+    measured, parts = _share(doc["compute_share"])
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the registered and served cut with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
@@ -693,6 +870,7 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
         f"{_pct(share)} of total compute", "",
+        *measured,
         f"Over the world's year, at {_pct(share)} of total compute, in two parts:", "",
         f"- **the compute audit's part: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
@@ -718,7 +896,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
-        f"{marks['modeled']} modeled and {marks['assumed']} assumed.", "",
+        f"{marks['modeled']} modeled{',' if marks['missing'] else ' and'} {marks['assumed']} assumed"
+        + (f" and {marks['missing']} missing" if marks["missing"] else "") + ".", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
@@ -730,6 +909,7 @@ def render(doc: Mapping[str, Any]) -> str:
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], i["mark"], i["source"]) for i in doc["inputs"]]), "",
+        *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
         "Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
         "count the rows are priced over. The parts are shares of total compute; the wait is part of serving.", "",
@@ -834,12 +1014,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the δ of each execution phase's scan of the network certifier, which its rows' ε sum (default: "
                          "the δ at which the row printed that sums the most execution phases, the world's year, carries "
                          f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
+    ap.add_argument("--served-run", type=Path, metavar="FILE",
+                    help="a served two-stage run's record as its reader gives it, one JSON object (`served_share`): the "
+                         "share of compute it measures is printed beside the given share, with the compute audit's part "
+                         f"at it (default: none, and the share is \"{NO_RUN}\")")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     a = ap.parse_args(argv)
     try:
+        served = None if a.served_run is None else json.loads(a.served_run.read_text())
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    response_ids=a.response_ids, scan_delta=a.scan_delta, local_only=a.local_only)
-    except (ValueError, RuntimeError) as e:
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, served=served, local_only=a.local_only)
+    except (ValueError, RuntimeError, OSError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
     print(json.dumps(doc, indent=1, ensure_ascii=False) if a.json else render(doc))
