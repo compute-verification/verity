@@ -1752,7 +1752,7 @@ class Drawn:
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
                  params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
-        s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
+        s.ch = _challenger(rng, [("other", 4), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         c = s.ch.commitment
         s.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]
