@@ -15,9 +15,11 @@
 # threads by: the identity is not the caller's to change.
 # Exit: 0, the guard holds and the result is written; the scan's own exit where it failed; 1, the guard does not hold
 # or the result could not be written; 2, the job cannot run at the identity. The scan's kept files stay under $OUT
-# whatever the exit, but for the verifier's copy of each session's circuit (ROUND/verifier/NAME-circuit.txt): the scan
-# writes it in its scratch and keeps it with the rest, it is most of a scan's kept bytes, and no number reads it, so it
-# is removed here once the scan has ended. Its digest stays in the session's own log.
+# whatever the exit, but for the verifier's copies of a round's circuits and program (ROUND/verifier/NAME-circuit.txt
+# and ROUND/verifier/program.json): the scan writes them in its scratch and keeps them with the rest, they are most of a
+# scan's kept bytes, and no number reads them. The scan takes no directory for them, so each is removed here, once the
+# scan has ended, where a kept lean-verify.log of its round names its SHA-512 (the verifier's command names its
+# circuit and its program by digest); one that no kept log names stays.
 set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT" || exit 2
@@ -43,8 +45,16 @@ rc=$?
 echo "scan_cost: the scan exited $rc"
 KEPT=$RESEARCH_RUN_DIR/out/sczk
 if [ -d "$KEPT" ]; then
-  find "$KEPT" -type f -path '*/verifier/*-circuit.txt' -delete \
-    && echo "scan_cost: removed the verifier's copies of the circuits from the kept files; $(du -sm "$KEPT" | cut -f1) MB kept"
+  find "$KEPT" -type f \( -path '*/verifier/*-circuit.txt' -o -path '*/verifier/program.json' \) -print0 \
+    | while IFS= read -r -d '' f; do
+        digest=$(sha512sum "$f" | cut -d' ' -f1)
+        if grep -rqF --include=lean-verify.log -e "$digest" "$(dirname "$(dirname "$f")")"; then
+          rm -f "$f"
+        else
+          echo "scan_cost: kept ${f#"$RESEARCH_RUN_DIR"/}: no lean-verify.log of its round names its SHA-512"
+        fi
+      done
+  echo "scan_cost: $(du -sm "$KEPT" | cut -f1) MB of the scan's files kept, without the verifier's copies a kept log names"
 fi
 export PYTHONPATH=$ROOT:$ROOT/benchmarks/harness:$ROOT/verity/configuration/config
 PY=(python3)   # the result's writer is the harness kit's, which this job's python3 may be too old to import

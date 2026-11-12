@@ -90,10 +90,11 @@ the scan's settings that change what is proved reaches it), runs `scan_zk.sh`, t
 leaves `out/scan_cost.json` (the document: identity, group, guard, each session with its stages, the round's sums
 and the numbers) and the run's `result.json` (the two metrics of `benchmarks/metrics.toml` under their ids, and
 their inputs, through the harness kit's writer). The scan's own files stay under `out/` as it keeps them:
-`sczk/summary.json`, `sczk/answers.json`, each session's logs, `lean.jsonl`, `rss.jsonl`, `host.txt`. One kind does
-not: the verifier's copy of each session's circuit (`sczk/ROUND/verifier/NAME-circuit.txt`), most of a scan's kept
-bytes, which no number reads. The scan takes no directory for it, so `run.sh` removes it once the scan has ended;
-its SHA-512 is in the session's `prove.log`.
+`sczk/summary.json`, `sczk/answers.json`, each session's logs, `lean.jsonl`, `rss.jsonl`, `host.txt`. Two kinds do
+not: the verifier's copies of a round's circuits and of its program (`sczk/ROUND/verifier/NAME-circuit.txt` and
+`sczk/ROUND/verifier/program.json`), most of a scan's kept bytes, which no number reads. The scan takes no directory
+for them, so `run.sh` removes each once the scan has ended, where a kept `lean-verify.log` of its round names its
+SHA-512: the verifier's command names its circuit and its program by digest. A copy no kept log names stays.
 
 | Setting | What it changes |
 | --- | --- |
@@ -114,8 +115,15 @@ either number.
 ## Targets
 
 The baseline is the scan as it stands at G = 1: four sessions for each execution phase, each paying its own stages
-before and after its repetitions and its own Lean verifier's inputs and setup. Two steps, in order, each a candidate
-run compared with the baseline at the identity:
+before and after its repetitions and its own Lean verifier's inputs and setup.
+
+**What a session pays once is the first place to look.** A session's stages before its repetitions (to Register,
+Register to the repetitions) and its Lean verifier's inputs and setup are paid whatever the session's blocks, four
+times an execution phase at G = 1. `result.py table` prints them a session, and `compare` a second of execution
+phase, so a candidate's lines say whether they fell. No field of a session's log says what fills Register to the
+repetitions beyond the witness, so naming its parts is the first measurement to add.
+
+Two steps, in order, each a candidate run compared with the baseline at the identity:
 
 1. **The grouping.** A setting, with no change to the scan: at `SC_GROUP=G` the round has 2G + 2 sessions for G
    execution phases, so `first` and `last` are paid once a group. The target is the proving number below the

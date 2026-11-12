@@ -10,6 +10,7 @@ exact, `store` stands in for the `research data` commands, and `run.sh` runs aga
 copy of the benchmark under `tmp_path`."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -432,26 +433,38 @@ def test_run_sh_pins_the_job_runs_the_scan_at_the_identity_and_writes_the_result
     assert "scan_cost: pinned to 1 cores" in r.stdout and "guard: holds" in r.stdout
 
 
-def test_run_sh_removes_the_verifiers_circuit_text_and_nothing_else_the_scan_kept(tree, tmp_path):
-    """The scan keeps the verifier's copy of each session's circuit with its other files, and those are most of a run's
-    bytes. The runner removes them once the scan has ended, whatever the scan's exit, and every other kept file stays:
-    the session's logs, the verifier's other files, and a circuit's text outside a verifier's directory."""
+def test_run_sh_removes_the_verifiers_copies_a_kept_log_names_and_nothing_else(tree, tmp_path):
+    """The scan keeps the verifier's copies of a round's circuits and program with its other files, and those are most
+    of a run's bytes. The runner removes each once the scan has ended, whatever the scan's exit, only where a kept
+    `lean-verify.log` of its own round names its SHA-512, so what it removes can still be checked against the run. A
+    copy no log of its round names stays, with a line saying so, and so does every other kept file: the session's logs,
+    the verifier's other files, the lowered Definitions' program, and a circuit's text outside a verifier's directory."""
     files = kept(tmp_path / "kept", cls="w63k4")
-    stays = [f"sczk/{R.ROUND}/verifier/program.json", f"sczk/{R.ROUND}/verifier/first-session-l0-circuit.rep0.bin",
-             f"sczk/{R.ROUND}/stage-first/first-circuit.txt", "sczk/chain/verifier/notes.txt"]
-    goes = [f"sczk/{R.ROUND}/verifier/first-circuit.txt", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt",
-            "sczk/chain/verifier/egress-0-circuit.txt"]
-    for rel in stays + goes:
+    named = {f"sczk/{R.ROUND}/verifier/first-circuit.txt": "first", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt": "ingress-0",
+             f"sczk/{R.ROUND}/verifier/program.json": "last"}
+    unnamed = [f"sczk/{R.ROUND}/verifier/egress-0-circuit.txt", "sczk/chain/verifier/program.json"]
+    stays = [f"sczk/{R.ROUND}/verifier/first-session-l0-circuit.rep0.bin", f"sczk/{R.ROUND}/stage-first/first-circuit.txt",
+             "sczk/joint/program.json", "sczk/chain/verifier/notes.txt"]
+    for rel in [*named, *unnamed, *stays]:
         (files / rel).parent.mkdir(parents=True, exist_ok=True)
-        (files / rel).write_text("x" * 64, encoding="utf-8")
+        (files / rel).write_text(f"the bytes of {rel}", encoding="utf-8")
+    for rel, session in named.items():   # the verifier's command names what it reads by digest, as the scan's does
+        log = files / "sczk" / R.ROUND / f"session-{session}" / "lean-verify.log"
+        digest = hashlib.sha512((files / rel).read_bytes()).hexdigest()
+        log.write_text(log.read_text(encoding="utf-8").replace("$ verifier verify", f"$ verifier verify --reads {digest}"),
+                       encoding="utf-8")
+    # the chain round's program is the honest round's file under another name: a log of another round does not vouch
+    shutil.copy2(files / f"sczk/{R.ROUND}/verifier/program.json", files / "sczk/chain/verifier/program.json")
     before = {p.relative_to(files).as_posix() for p in files.rglob("*") if p.is_file()}
     for name, exit_ in (("held", 0), ("failed", 7)):
         r = run_sh(tree, tmp_path / name, KEPT=str(files), SC_CORES="1", SCAN_EXIT=str(exit_))
         assert r.returncode == exit_, r.stdout + r.stderr
         out = tmp_path / name / "out"
         after = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
-        assert before - after == set(goes) and all((out / rel).is_file() for rel in stays)
-        assert "scan_cost: removed the verifier's copies of the circuits from the kept files" in r.stdout
+        assert before - after == set(named) and all((out / rel).is_file() for rel in [*unnamed, *stays])
+        for rel in unnamed:
+            assert f"scan_cost: kept out/{rel}: no lean-verify.log of its round names its SHA-512" in r.stdout
+        assert "of the scan's files kept, without the verifier's copies a kept log names" in r.stdout
     assert json.loads((tmp_path / "held" / "result.json").read_text(encoding="utf-8"))["validation"]["status"] == "passed"
 
 
