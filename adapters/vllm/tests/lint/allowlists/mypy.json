@@ -224,8 +224,6 @@
     {"file": "tests/protocols/test_pous_option.py", "kind": "union-attr", "symbol": "_signer_module", "detail": "", "count": 2},
     {"file": "tests/protocols/test_pous_option.py", "kind": "var-annotated", "symbol": "_in_process_party", "detail": ""},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "var-annotated", "symbol": "test_serve_v4_tiny_program", "detail": ""},
-    {"file": "tests/test_settings_records.py", "kind": "attr-defined", "symbol": "test_a_builds_target_facts_take_the_environment_as_before", "detail": "", "count": 2},
-    {"file": "tests/test_settings_records.py", "kind": "attr-defined", "symbol": "test_an_engine_record_takes_the_environment_as_before", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "assignment", "symbol": "main", "detail": "", "count": 2},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 3},
