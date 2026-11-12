@@ -98,7 +98,7 @@ CENSUS = ROOT / "benchmarks" / "census"
 #: machine's GPUs, and the served model's workload card
 ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
-RHO, RHO_HARDWARE = "verity/protocols/inference_only/slowdown/data/reference.toml", "verity/protocols/inference_only/slowdown/data/hardware.toml"
+SLOWDOWN, SLOWDOWN_HARDWARE = "verity/protocols/inference_only/slowdown/data/reference.toml", "verity/protocols/inference_only/slowdown/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
@@ -325,9 +325,9 @@ def datacenter_links() -> int:
 
 
 def world_links() -> int:
-    """The world's links: the machines of the slowdown calculator's world fleet (`RHO`'s ``fleet.world-h200``, the census's inference at
+    """The world's links: the machines of the slowdown calculator's world fleet (`SLOWDOWN`'s ``fleet.world-h200``, the census's inference at
     the fleet's serving MFU), one network certifier on each machine's uplink."""
-    return round(_toml(RHO)["fleet"][WORLD]["count"]["value"])
+    return round(_toml(SLOWDOWN)["fleet"][WORLD]["count"]["value"])
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,
@@ -524,24 +524,24 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     scan's δ."""
     census, dc = _reference("adversary.json"), _reference("deployments.json")
     peak = next(e for e in _json(HARDWARE) if e["id"] == PEAK)
-    fleet, card = _toml(RHO)["fleet"][WORLD], _json(WORKLOAD)
+    fleet, card = _toml(SLOWDOWN)["fleet"][WORLD], _json(WORKLOAD)
     count, mfu = fleet["count"], fleet["mfu_serve"]
-    gpus = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]
+    gpus = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]
     if dc["gpus_per_machine"] != gpus["value"]:
         raise ValueError(f"a machine has one count of GPUs: {DEPLOYMENTS} gives {dc['gpus_per_machine']} and "
-                         f"{RHO_HARDWARE} {gpus['value']}")
+                         f"{SLOWDOWN_HARDWARE} {gpus['value']}")
     work = "" if not card["provisional"] else ", provisional"
     macs = card["value"]["served_macs_per_token"]
     chosen = inspect.signature(calibration.choose_sync_set).parameters
     out = {
         "world_machines": Input(round(count["value"]), "machine", _MARK[count["status"]],
-                                f"{RHO} fleet.{WORLD}.count: {count['source']}"),
+                                f"{SLOWDOWN} fleet.{WORLD}.count: {count['source']}"),
         "datacenter_machines": Input(dc["machines"], "machine", "modeled", f"{DEPLOYMENTS} {dc['id']}.machines"),
         "machine_gpus": Input(gpus["value"], "GPU", _MARK[gpus["status"]],
-                              f"{RHO_HARDWARE} location.{fleet['location']}.devices, the data sheet's: "
+                              f"{SLOWDOWN_HARDWARE} location.{fleet['location']}.devices, the data sheet's: "
                               f"{gpus['source']}"),
         "mfu_serve": Input(mfu["value"], "", _MARK[mfu["status"]],
-                           f"{RHO} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
+                           f"{SLOWDOWN} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
         "peak_flops": Input(peak["flop_per_second"], "FLOP/s", "assumed",
                             f"{HARDWARE} {PEAK}.flop_per_second: the data sheet's dense FP8 peak, the H200's too "
                             "(one die, one clock)"),
