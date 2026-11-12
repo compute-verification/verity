@@ -9,12 +9,13 @@ public import Proofs.Flock.Claims.KS.ZkTableAt
 
 `flockKSAt` and `flockKSRegAt` hold at every Flock record, hash, tables' lengths and errors, taking `Flock.KSAt` there,
 the decoder's list bound and the commitment's binding as hypotheses. At Flock's deployed masked record
-(`FlockDeploy.deployZk` at the deployed relation), its tables' words' lengths, the tables' errors summed and SHA-512,
-the three are proved: `Flock.KSAt` is `FlockDeploy.KS.zk_KSAt_untrim`, the list bound `listWithin_deployZk`, and hm96
-leaves of rows that place the value, under the registered path check, bind at every hash (`pathCommit_binds`). So a
-compiled verifier over Flock at one table of a session there, with such a commitment, is knowledge sound, in both
-forms, wherever it meets the contract (`ksAt_masked`, `ksRegAt_masked`), at every way its statements name a table and
-a Flock statement. Its sessions' expected reruns are one table's (`flockRerunsAt`).
+(`FlockDeploy.deployZk` at the deployed relation), its tables' words' lengths, each table's own error
+(`FlockDeploy.KS.tableErrAt`) and SHA-512, the three are proved: `Flock.KSAt` is `FlockDeploy.KS.zk_KSAt_untrim`, the
+list bound `listWithin_deployZk`, and hm96 leaves of rows that place the value, under the registered path check, bind
+at every hash (`pathCommit_binds`). So a compiled verifier over Flock at one table of a session there, with such a
+commitment, is knowledge sound, in both forms, wherever it meets the contract (`ksAt_masked`, `ksRegAt_masked`), at
+every way its statements name a table and a Flock statement. Its sessions' expected reruns are one table's
+(`flockRerunsAt`), and their knowledge error reads one table's error.
 -/
 
 @[expose] public section
@@ -27,7 +28,7 @@ open Claims.Sampling (Opening pathCommit hm96Leaf regPath RowPlaces pathCommit_b
 variable (names : Msg → ℕ × Msg)
   (L : Compiled FlockDeploy.Coin
     (Arg.ofFlockAt (FlockDeploy.deployZk _root_.Flock.Readable.relation) (FlockDeploy.KS.wordLenJ true)
-      (fun x _ => (FlockDeploy.deployZk _root_.Flock.Readable.relation).εtable x) names))
+      (FlockDeploy.KS.tableErrAt true) names))
   {own : Array _root_.Flock.Registered.Port} {at_ : List Msg → ℕ → Option (Msg × ℕ)}
   {row salt π : Opening Bool → Msg} {layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg}
 

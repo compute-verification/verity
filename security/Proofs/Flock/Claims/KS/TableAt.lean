@@ -361,19 +361,6 @@ theorem ks_at_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → 
       Real.sqrt (γ D x * PrB H D.V P x)
   linarith
 
-/-- **`TableBoundJR` at an error for each table** (`ε x j` for `D.εtable x`): at a table `j` and a word at its
-positions that is not `GoodTableAt`, a run accepts with probability at most `ε x j + escapes(ω)` beyond that of
-accepting and opening a position of table `j`'s word off the word. `TableBoundJR` is its instance at the tables'
-errors summed. -/
-def TableBoundAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
-    (ε : Msg → ℕ → ℝ) : Prop :=
-  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
-    e.FitsForkR (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (j : ℕ), j < nTab D x → ∀ C : Fin (N x j) → Col,
-      (∀ p, Ok x j (C p)) → ¬ GoodTableAt D N x j C →
-      accPr H D.V P x ω ≤ ε x j + e.term ω +
-        Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
-          ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
-
 /-- **Flock: KS at each table of a session, at an error for each table, from each table's bound at its error**
 (`TableBoundAtR`): when each of the statement's tables' words is no longer than `N₀`, the errors are nonnegative, the
 verifier takes a round, `K > 0`, at each table of the statement `k_j ≥ 8` or the verifier accepts no run, a table past

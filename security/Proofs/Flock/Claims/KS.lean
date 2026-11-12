@@ -532,13 +532,16 @@ every table's level caps' and pads roots' weights of twice the deployed masked w
 `Claims.Flock.mergeCW`, `Claims.Flock.mergeCW_le`, `Claims.Flock.SlackFitW`, `FlockDeploy.KS.slackEscW_fitsForkR_zk`),
 on accepted first runs (`Claims.Escapes.OnAcc₁`, `Claims.Flock.slackEscW_onAcc₁`), each table's fork terms at the
 slack under their term (`Claims.Flock.slackEscW_term`). At one tape and table, the deployed masked runs accept with no
-column of table `j` off `C` with probability at most `ε_table` and those escapes' term when the mixture bounds them by
-its acceptance with no level-0 opening off `C` on a witness lane and each fork term's mean `Adv` by its event's
-probability and the slack (`ZkBoundW`: `FlockDeploy.KS.mean_epsSZ_le_rawJ`, `FlockDeploy.KS.zk_le_sessionsJW`), so the
-masked sessions bounding every table at that verdict with events on accepted runs give every masked table's bound with
-the escapes counted per round on accepted first runs (`FlockDeploy.KS.ZkSessWJ`,
-`Claims.Flock.TableBoundJAccAtR`, `Claims.Flock.TableBoundJAccAt.tableBoundJAccAtR`,
-`FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). The live sessions' bound at that verdict, with level 0's events
+column of table `j` off `C` with probability at most table `j`'s own error and those escapes' term when the mixture
+bounds them by its acceptance with no level-0 opening off `C` on a witness lane and each fork term's mean `Adv` by its
+event's probability and the slack (`ZkBoundW`: `FlockDeploy.KS.mean_epsSZ_le_rawJ`,
+`FlockDeploy.KS.zk_le_sessionsJW`), so the masked sessions bounding every table at that verdict with events on
+accepted runs give every masked table's bound with the escapes counted per round on accepted first runs, at each
+table's own error (`FlockDeploy.KS.ZkSessWJ`, `Claims.Flock.TableBoundEachAccAtR`,
+`FlockDeploy.KS.Gen.zk_tableBoundEachAccAtR_of_sessionsW`) and so at `ε_table`, the tables' errors summed
+(`Claims.Flock.TableBoundJAccAtR`, `Claims.Flock.TableBoundEachAccAtR.tableBoundJAccAtR`,
+`Claims.Flock.TableBoundJAccAt.tableBoundJAccAtR`, `FlockDeploy.KS.zk_tableBoundJAccAtR_of_sessionsW`). The live
+sessions' bound at that verdict, with level 0's events
 bounding the simulated strategies' `Adv₀` after `Commit`, gives those sessions (`ZkLiveW`:
 `FlockDeploy.KS.ZkLiveAccAtWJ`, `FlockDeploy.KS.zkSessWJ_of_liveW`, `FlockDeploy.KS.zk_tableBoundJAccAtR_of_liveW`),
 so at the deployed masked record every table's bound and table 0's with escapes on accepted runs counted per round
@@ -554,8 +557,11 @@ round is a bound at each table, so the extractor at one table of a session (`Flo
 `k_j = ⌈4·N_j/e⌉` accepted reruns with `N_j` that table's word's length alone, is KS at that table's own relation, at
 the tables' errors summed (`TableAt`: `Claims.Flock.oneWait_le_at`, `Claims.Flock.KSAt_of_tableBoundJR`), and at an
 error for each table from each table's bound at it (`Claims.Flock.TableBoundAtR`,
-`Claims.Flock.KSAt_of_tableBoundAtR`); the deployed masked verifier is, with no premise, at the tables' errors summed
-(`ZkTableAt`: `FlockDeploy.KS.zk_KSAt_untrim`). At a masked statement in scope table
+`Claims.Flock.tableBoundAtR_of_eachAccAtR`, `Claims.Flock.tableBoundAtR_of_extend`,
+`Claims.Flock.KSAt_of_tableBoundAtR`); the deployed masked verifier is, with no premise, at each table's own error,
+so its knowledge error at a table reads that table's error and not `ε_table` (`ZkTableAt`:
+`FlockDeploy.KS.tableErrAt`, `FlockDeploy.KS.Gen.zk_tableBoundAtR_untrim`, `FlockDeploy.KS.zk_KSAt_untrim`). At a
+masked statement in scope table
 `j`'s word has level 0's `2^logLen` columns (`ZkXferW`: `FlockDeploy.KS.zkLevel0_d_eq`,
 `FlockDeploy.KS.wordLenJ_zkTabs`), so the live sessions' bound at the deployed decoders right at the witness-lane
 verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`): with `ExtendJ`,
