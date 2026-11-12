@@ -223,6 +223,10 @@ class ServedCommit:
     run's own auditor), and the linkage that is the check's input rule (the prompt at a request's first step, then its previous
     step's sampled id)."""
 
+    #: empty and None until `engine` reads them off the engine that was built
+    facts: dict[str, Any]
+    weight: Callable[[str], Any] | None
+
     def __init__(self, build: dict[str, Any], fault: str | None) -> None:
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource
 
