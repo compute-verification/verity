@@ -25,7 +25,8 @@ def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = Non
     routers (`kernel_readback.routers`) stay bf16 as the model builds them, and the linears the checkpoint's
     ``modules_to_not_convert`` keeps bf16 (`kernel_readback.kept`) stay bf16 too; neither is recorded."""
     from verity_vllm.program.frontend.kernel_readback import kept, routers
-    skip, seen, out = routers(model) | kept(model), set(), []
+    skip, seen = routers(model) | kept(model), set()
+    out: list[Any] = []
     for m in model.modules():
         qm = getattr(m, "quant_method", None)
         if isinstance(m, types) and id(m) not in skip:
@@ -189,4 +190,5 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "committed", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
+__all__ = ["admitting", "committed", "expert_names", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots",
+           "wire"]

@@ -4,20 +4,24 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.program.compact import p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # [GLM-5.3 "P"]
+from verity_vllm.program.compact import p_item_indices as _p_indices  # [GLM-5.3 "P"]
+from verity_vllm.program.compact import p_item_weight_span as _p_w_span
 
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
     from verity.definitions.boolean import word_descriptor
-    desc = json.load(gzip.open(word_descriptor(d)))
-    rep = json.load(open(os.path.join(d, "derive-report.json")))
+    with gzip.open(word_descriptor(d)) as f:
+        desc = json.load(f)
+    with open(os.path.join(d, "derive-report.json")) as f:
+        rep = json.load(f)
     prov = rep.get("provenance", rep)
     src = prov.get("source") if isinstance(prov.get("source"), dict) else {}
     # the module's USER inputs precede the weight fields: `example_inputs` records one entry per input (the greedy wrapper's `prompt`;
@@ -34,7 +38,8 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
     # by name when the link table and the report disagree on how many user inputs there are.
     tl = os.path.join(d, "tp_links.json")
     if os.path.exists(tl):
-        links = json.load(open(tl))
+        with open(tl) as f:
+            links = json.load(f)
         names = list(links.get("user_inputs") or [])
         if len(names) != n_user:
             raise ValueError(f"{d}: tp_links.json names {len(names)} user inputs, derive-report has {n_user}")
@@ -48,7 +53,6 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
             elif witness:
                 P.witness_fields[j] = nm
         P.tp = {"rank": links.get("rank"), "world": links.get("world")}
-        P.tp_links = links.get("links") or []
     PX.load_layout(P, d)
     return P
 
@@ -73,8 +77,8 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
     # content, so the audit tool compares the two documents' digests with the row's files (and with each other) instead of trusting that
     # two oracle_dir paths named the same bytes.  ~2-3 s per GB at load; nothing else changes (rows, form handling, the RootView).
-    import hashlib
-    raw = open(os.path.join(d, "program.json"), "rb").read()
+    with open(os.path.join(d, "program.json"), "rb") as f:
+        raw = f.read()
     program_sha = hashlib.sha256(raw).hexdigest()
     pj = json.loads(raw)
     del raw
@@ -176,10 +180,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     for o in rows:
         hint = o.get("hint") or ""
         mod, _, tail = hint.rpartition("/")
-        if tail in ("rope.q", "rope.k"):
-            name = f"{mod}.cos_sin_cache"
-        else:
-            name = tail or hint
+        name = f"{mod}.cos_sin_cache" if tail in ("rope.q", "rope.k") else tail or hint
         oroots = o.get("operand_roots") or []
         for k, a in enumerate(o.get("operand_refs") or []):
             nm = oroots[k] if k < len(oroots) and oroots[k] else name

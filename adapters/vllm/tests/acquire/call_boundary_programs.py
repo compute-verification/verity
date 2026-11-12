@@ -51,7 +51,7 @@ def dense_program(embed=EMB, lp=LP, t=T, eps=EPS, weight_add_once=False):
     for s in range(1 + t):
         ks = range(lp) if s == 0 else range(1)
 
-        def each(spec, node, *reads):
+        def each(spec, node, *reads, s=s, ks=ks):
             return [b.add(s, spec, f"{node}[{k}]", *([["n", r[0][k], 0, r[1]]] if isinstance(r, tuple) else r for r in reads)) for k in ks]
 
         e = [b.add(s, f"Embedding_v1{{V={V},H={H}}}", f"{embed}/embedding_{s}[{k}]", [["p", 0, k, k + 1]] if s == 0 else [["n", sel, 0, 1]],

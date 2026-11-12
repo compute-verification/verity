@@ -41,11 +41,16 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import torch
 
-from verity_vllm.acquire.sources import attention_source, dsv4_attention_source, mhc_source
+from verity_vllm.acquire.sources import (
+    attention_source,
+    dsv4_attention_source,
+    mhc_source,
+)
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import MANIFESTS
 from verity_vllm.engine.hooks import Hooks

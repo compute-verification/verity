@@ -28,11 +28,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
-from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AcquireCorrespondence, ReturnSlot, RuntimeTree
+from verity_vllm.correspondence.reader_for_acquire import (
+    RUNNER_PATH,
+    AcquireCorrespondence,
+    ReturnSlot,
+    RuntimeTree,
+)
 
 SCHEMA = "acquisition-plan/v1"
 SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "analytic_table", "prescribed")
@@ -434,7 +440,8 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
         return sites[0], "one legal site"
     order = ["producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "prescribed", "analytic_table"]
     if v.promoted:
-        order.remove("consumer_input"); order.insert(0, "consumer_input")
+        order.remove("consumer_input")
+        order.insert(0, "consumer_input")
     ranked = sorted(sites, key=lambda s: (order.index(s.kind) if s.kind in order else len(order), s.module, s.slot))
     return ranked[0], f"several legal sites ({', '.join(s.kind for s in ranked)}): policy chose {ranked[0].kind}"
 
@@ -444,8 +451,11 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _lifetime_tables() -> dict[str, Any]:
+    from verity_vllm.commit.committer.flush_points import (
+        GATHER_FLUSH_LEAVES,
+        PRE_FLUSH_LEAVES,
+    )
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
-    from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
 
@@ -522,8 +532,8 @@ def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorresp
             v.chosen = AcquisitionSite(v.chosen.kind, v.chosen.module, v.chosen.slot, "mutated-after-hook (HAZARD_LEAVES)", v.chosen.derived_from)
             v.sites = [v.chosen if s.key() == v.chosen.key() else s for s in v.sites]
     residuals = residuals_of(values, rt, tabs)
-    notes = ["every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
-             "the plan's runtime sites are for the executed steps"]
+    notes = [("every identity of a Value at a step >= its request's executed prefix is a PRESCRIBED materialisation (enablement, no runtime producer); "
+              "the plan's runtime sites are for the executed steps")]
     pdig = str(manifest.get("program_digest") or "")
     mdig = str(manifest.get("manifest_digest") or "")
     return AcquisitionPlan(program_digest=pdig, manifest_digest=mdig, runtime_source=rt.source, values=values, residuals=residuals, notes=notes, correspondence=prov)

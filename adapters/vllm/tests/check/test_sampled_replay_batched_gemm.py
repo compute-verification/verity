@@ -13,16 +13,20 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
-from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
-from verity_vllm.program import compact as CP
 from verity.definitions.numerics import batched_gemm_rows, rows
 from verity.definitions.numerics.batched_gemm_rows import batched_gemm
 from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.registry import b1, bf16_gemm_check as BC, cublas_bf16 as CB, hopper
+from verity.definitions.registry import b1, hopper
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import cublas_bf16 as CB
+
+from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import opening as OP
+from verity_vllm.program import compact as CP
 
 HOP = '{"fn":"HopperBF16WgmmaDot16_v1"}'
 
@@ -61,8 +65,9 @@ def test_the_evaluator_cites_the_h200_capture_at_every_shape_and_m_the_capture_r
     """The replay record's `evaluator_provenance` for BatchedGemm_v1 is the capture run that held cuBLAS's bmm to `bmm_rows`: GO in
     both configurations at every (K, N) and M the capture script runs, among them the TP8 Commit's prefill (256) and decode (1) M; and
     the Definition's conformance cites the same record."""
-    from tests.properties import glm53_bf16_gemm_capture_gpu as X
     from verity.circuits.defs import conformance_label
+
+    from tests.properties import glm53_bf16_gemm_capture_gpu as X
 
     p = rows.EVALUATOR_PROVENANCE["BatchedGemm_v1"]
     assert p is batched_gemm_rows.PROVENANCE
