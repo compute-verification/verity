@@ -52,7 +52,7 @@ untraced = [
 # served_session's endpoint step runs it through) and network-e2e's chain. certifier_piece is the network certifier's
 # piece of one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block
 # record.
-# leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is rho's
+# leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is the slowdown calculator's
 # world fleet and its machine's GPUs, and the weights are the workload card's parameters. A scope's requests are by
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
 # total_cost.py and the cards they read); where asked, the census's request and GPU peak at the workload card's MACs

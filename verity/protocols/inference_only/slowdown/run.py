@@ -8,7 +8,7 @@ reference training algorithm at its MFU, with its status, where its premises sta
 it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
 
-Prints Markdown; with `--out DIR` (default `$OUT`) also writes `rho.md`, `rho.json` and the figures (in `figures/`)
+Prints Markdown; with `--out DIR` (default `$OUT`) also writes `slowdown.md`, `slowdown.json` and the figures (in `figures/`)
 there. `--figures DIR` writes the figures (`slowdown/figures.py`, matplotlib) to DIR. `--set` overrides any
 registry key for the whole run.
 """
@@ -39,8 +39,8 @@ def fmt(x: float) -> str:
 
 def row(e: Estimate) -> dict:
     s = e.overhead
-    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
-            "padded": s.padded if s else None, "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside, "excluded": list(e.excluded),
+    return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "slowdown": s.rho if s else None,
+            "padded": s.padded if s else None, "g": s.g if s else None, "declared_slowdown": e.declared, "outside": e.outside, "excluded": list(e.excluded),
             "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
 
@@ -312,7 +312,7 @@ def main() -> None:
     ap.add_argument("--target", action="append", type=float, help="slowdown targets for the danger scan "
                     "(default: 10, 100)")
     ap.add_argument("--set", action="append", default=[], help="KEY=VALUE registry overrides")
-    ap.add_argument("--out", default=os.environ.get("OUT"), help="write rho.md, rho.json and figures/ here ($OUT)")
+    ap.add_argument("--out", default=os.environ.get("OUT"), help="write slowdown.md, slowdown.json and figures/ here ($OUT)")
     ap.add_argument("--figures", help="write the figures (PNG and the JSON they plot) here")
     args = ap.parse_args()
 
@@ -383,7 +383,7 @@ def main() -> None:
                                    "source": reg.param(f"policy.{policy.name}.inference_overhead").source
                                    if f"policy.{policy.name}.inference_overhead" in reg else "not modeled"},
             "attack": {"argument": attack[1].argument, "family": attack[0].family, "status": attack[1].status,
-                       "rho": attack[1].rho, "padded": attack[1].padded, "seconds": s.seconds(attack[1].rho)}
+                       "slowdown": attack[1].rho, "padded": attack[1].padded, "seconds": s.seconds(attack[1].rho)}
             if attack else None,
             "contradictions": contradictions,
             "structure": {"name": s.structure.name, "s_times": s.structure.s_times, "basis": s.structure.basis,
@@ -404,7 +404,7 @@ def main() -> None:
             "tornado": [vars(s) for s in swings],
             "dangers": {str(t): [vars(d) for d in ds] for t, ds in dangers.items()},
             "rescues": {str(t): [vars(d) for d in ds] for t, ds in rescues.items()},
-            "corner": {"rho": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
+            "corner": {"slowdown": corner.rho, "base": corner.base, "joint": corner.joint, "values": dict(corner.values),
                        "path": corner.path},
         }
     text = "\n".join(summary + [""] + attacks + [""] + md + below)
@@ -424,8 +424,8 @@ def main() -> None:
             print(f"figures: {figures}", file=sys.stderr)
     if out:
         out.mkdir(parents=True, exist_ok=True)
-        (out / "rho.md").write_text(text + "\n")
-        (out / "rho.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
+        (out / "slowdown.md").write_text(text + "\n")
+        (out / "slowdown.json").write_text(json.dumps(jsonable(record), indent=1, default=str) + "\n")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ products.
 
 `configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
 no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are verity/protocols/inference_only/slowdown's
-(its `data/models.toml`, read through `rho.instances`, imported by path).
+(its `data/models.toml`, read through `slowdown.instances`, imported by path).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def boolean_gemm(K: int, N: int) -> Program:
 
 
 def rho_models() -> dict:
-    """verity/protocols/inference_only/slowdown's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
+    """verity/protocols/inference_only/slowdown's models by name (`slowdown.instances.models`). Its directory goes last on the path: it holds a `run.py`
     and a `tests`, as this package's does, and must shadow neither."""
     rho = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown")
     if rho not in sys.path:
@@ -70,8 +70,8 @@ def configs() -> dict[str, tuple[dict, str]]:
         "smollm2-135m": (b1.B0_CONFIG, "served: b1.B0_CONFIG"),
         "smollm2-360m": (b1.SMOL360_CONFIG, "served: b1.SMOL360_CONFIG"),
         "qwen25-1b5": (b1.B1_CONFIG, "served: b1.B1_CONFIG"),
-        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's shapes, rho's models.toml (no served workload)"),
-        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's shapes, rho's models.toml (no served workload)"),
+        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's shapes, the slowdown calculator's models.toml (no served workload)"),
+        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's shapes, the slowdown calculator's models.toml (no served workload)"),
     }
 
 

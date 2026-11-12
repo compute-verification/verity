@@ -1,7 +1,7 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
+cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``slowdown.theorem.multiple_bound`` in Lean's
 form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
 the reference-efficiency assumption; every scenario is a set of overrides on
 ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
@@ -488,7 +488,7 @@ def render(s: dict) -> str:
     dirty = " (with uncommitted changes in verity/protocols/inference_only/nci)" if s["uncommitted"] else ""
     out = ["# The compute dampener: the page's numbers", "",
            f"Rendered by `verity/protocols/inference_only/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`rho.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
+           "`slowdown.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
            "terms, the residual training at MFU_0 (the reference-efficiency assumption), the hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
            "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
