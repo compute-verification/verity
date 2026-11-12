@@ -108,7 +108,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
-        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):

@@ -20,11 +20,17 @@ import os
 import sys
 from dataclasses import dataclass, field
 
+from verity.circuits.codec import canonical_json
+
 from verity_vllm.config import UsageError, option
+from verity_vllm.records.schema_ids import PREDICT_NODE_SCHEMA
 
 from . import aot as A
 from . import compiled as PC
 from . import node_registration as NR
+from .node import build_node_program
+
+__all__ = ["COMMANDS", "main"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -49,9 +55,6 @@ COMMANDS = {"node": NodeOptions, "node-registration": NR.Options, "compare": A.C
 def node_main(a: NodeOptions) -> int:
     """`node_descriptor.json.gz` and `node.json`: the summary, θ's parameters and which rank emitted each run of the body
     Definition's nodes (`spans`; the root's nodes are its input nodes, one per parameter's lowering, then one Call of the body)."""
-    from verity.circuits.codec import canonical_json
-
-    from .node import build_node_program
     if os.path.exists(os.path.join(a.out, "build_summary.json")) or os.path.basename(os.path.normpath(a.out)).startswith("build_"):
         raise UsageError(f"--out {a.out} looks like a Build row or Build dir: a prediction is never written into one")
     if a.wrapper == "request" and (a.LP is None or a.T is None):
@@ -62,7 +65,7 @@ def node_main(a: NodeOptions) -> int:
     os.makedirs(a.out, exist_ok=True)
     with gzip.open(os.path.join(a.out, "node_descriptor.json.gz"), "wb") as f:
         f.write(canonical_json(r.desc))
-    doc = {"schema": "verity-predict/node/v1", "row": a.row, "context_digest": phi.digest(), **r.summary(),
+    doc = {"schema": PREDICT_NODE_SCHEMA, "row": a.row, "context_digest": phi.digest(), **r.summary(),
            "theta": list(r.theta), "spans": [list(s) for s in r.spans]}
     with open(os.path.join(a.out, "node.json"), "w") as f:
         json.dump(doc, f, indent=1, sort_keys=True)

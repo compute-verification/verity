@@ -29,6 +29,8 @@ from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Refs, concat, strided_view
 from verity.circuits.types import Type
 
+from verity_vllm.engine.profiles import family_facts as FF
+
 from . import dsa
 from .common import Unexpressible, _arr, _Peers, served_class
 from .phi import Phi
@@ -50,7 +52,6 @@ class Net:
         from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
         from verity.definitions.registry.tp_allreduce import settings_of
 
-        from verity_vllm.engine.profiles import family_facts as FF
         from verity_vllm.observe.fold.profiles.generic import rank_hf_config
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
