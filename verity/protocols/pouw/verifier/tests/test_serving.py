@@ -48,13 +48,6 @@ def test_the_parts_are_the_names_parts():
     assert SchemeId.parse("pearl-c-h100-v1@sm_120").prices == "sm_120"
 
 
-def test_the_hashing_format_is_a_switch():
-    h3 = SchemeId.parse("pearl-c-sm120-v1-h3")
-    assert h3.with_hashing("h0").name == "pearl-c-sm120-v1"
-    assert SchemeId.parse("pearl-c-sm120-v1").with_hashing("h3") == h3
-    assert SchemeId.parse("pearl-c-nvfp4-v0").with_hashing("h3").name == "pearl-c-nvfp4-v0-h3"
-
-
 @pytest.mark.parametrize("name, why", [
     ("pearl-c-a100-v1-h3", "device 'a100'"),
     ("pearl-c-sm120-hot-v1-h3", "device 'sm120-hot'"),

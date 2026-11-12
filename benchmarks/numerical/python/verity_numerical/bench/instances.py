@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 from array import array
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -60,6 +60,7 @@ __all__ = [
     "K",
     "N_TU",
     "N_VU",
+    "REPO",
     "STEP",
     "STEPS",
     "TIERS",
@@ -377,7 +378,7 @@ def _source_digests() -> dict[str, str]:
 
 
 def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str | None = None, cache: Path | str | None = None,
-          log=print) -> dict:
+          log: Callable[[str], None] = print) -> dict:
     """Regenerate every array of the dataset under ``out`` (built and committed alike) and write ``manifest.json``.
     Needs network access to Hugging Face for the real weight rows (cached under ``cache``, default ``<out>/.cache/hf``).
     Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement: each is an
@@ -735,7 +736,8 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
 # --- verify ----------------------------------------------------------------------------------------------------------------------
 
 
-def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None, log=print) -> dict:
+def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None,
+           log: Callable[[str], None] = print) -> dict:
     """Digests of every array against ``manifest.json`` (built arrays: reported missing rather than failed), the seed
     checks, a ``silicon`` recheck of ``sample`` VU and TU instances (every instance with ``full``), and the negatives'
     claims.  Returns a report with ``ok``."""

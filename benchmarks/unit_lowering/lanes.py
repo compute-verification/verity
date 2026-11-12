@@ -9,9 +9,12 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import Any
+
+__all__ = ["stage"]
 
 
-def stage(kind: str, k: int, r: int, c: int, scratch: Path, tree: Path):
+def stage(kind: str, k: int, r: int, c: int, scratch: Path, tree: Path) -> Any:
     """``kind``'s `UnitStager` at K on the R x C leaf, its circuit written under ``scratch``, with whatever staging this process
     has installed."""
     spec = importlib.util.spec_from_file_location("h1_lanes_run", tree / "benchmarks" / "pouw" / "h1_lanes" / "run.py")

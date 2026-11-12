@@ -29,6 +29,7 @@ import hashlib
 import io
 import itertools
 import json
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from operator import xor
@@ -193,7 +194,8 @@ def _lowering_sha256_of(self, expanded: str) -> str:
     return self.sha256
 
 
-def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
+def ands_layout(C: forms.Circuit, in_names: Sequence[str], out_names: Sequence[str],
+                in_split: Sequence[int] | None = None, out_split: Sequence[int] | None = None) -> IL.LoweredUnit:
     """`ir_lower.layout` of a circuit of inputs and ANDs only: the same rows, each form's columns sorted in one call (every
     form's bits are distinct and laid out, so the library's parity pass keeps them all) and the constant column, the last,
     appended."""
@@ -271,7 +273,8 @@ def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
     return lay
 
 
-def evaluate_layout(lay, ports, T, flip=None):
+def evaluate_layout(lay: IL.LoweredUnit, ports: Sequence[Sequence[int]], T: int,
+                    flip: tuple[int, int] | None = None) -> tuple[list, int]:
     """`ir_lower.evaluate_layout`."""
     if isinstance(lay, CST.CompactLayout):
         return lay.evaluate(ports, T, flip)
@@ -411,3 +414,6 @@ def release() -> None:
         d.clear()
     _composed.clear()
     CST.cleanup()
+
+
+__all__ = ["CST", "ands_layout", "composed", "install", "release", "size"]

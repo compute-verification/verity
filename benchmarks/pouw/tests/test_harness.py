@@ -1038,7 +1038,7 @@ class FakeLtLib:
         return b""
 
 
-def test_a_named_configuration_past_the_enumerations_cap_stops_the_run(tmp_path, monkeypatch):
+def test_a_named_configuration_past_the_enumerations_limit_stops_the_run(tmp_path, monkeypatch):
     import native as N
 
     monkeypatch.setattr(B, "cutlass_candidates", lambda *a, **k: ([], []))
