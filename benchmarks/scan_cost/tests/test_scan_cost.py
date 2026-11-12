@@ -327,6 +327,28 @@ def test_the_baseline_names_a_run_and_holds_no_number(tmp_path, monkeypatch, cap
             R.lock(bad)
 
 
+def test_a_baseline_has_both_numbers(tmp_path, monkeypatch, capsys):
+    """A document whose guard holds and that lacks a number is no baseline: a candidate would have nothing to be
+    compared with on it. Neither an unpinned verifier's run nor one with no proving seconds is written."""
+    monkeypatch.setattr(R, "BASELINE", tmp_path / "baseline.json")
+    unpinned = doc_of(tmp_path, "a", pin=False)
+    assert unpinned["guard"]["holds"] and unpinned["numbers"]["proving"] is not None
+    with pytest.raises(R.Refused) as e:
+        R.lock(unpinned)
+    assert str(e.value) == f"a baseline has both numbers: this document has no {R.VERIFIER} ({R.NOT_PINNED})"
+    both = doc_of(tmp_path, "b")
+    assert None not in (both["numbers"]["proving"], both["numbers"]["verifier"])
+    with pytest.raises(R.Refused, match=f"this document has no {R.PROVING}$"):
+        R.lock(both | {"numbers": both["numbers"] | {"proving": None}})
+    neither = unpinned | {"numbers": unpinned["numbers"] | {"proving": None}}
+    with pytest.raises(R.Refused, match=f"has no {R.PROVING} and no {R.VERIFIER} \\("):
+        R.lock(neither)
+    (tmp_path / "a" / R.DOC).write_text(json.dumps(unpinned), encoding="utf-8")
+    assert R.main(["baseline", "--lock", str(tmp_path / "a")]) == 2
+    assert "scan_cost: a baseline has both numbers" in capsys.readouterr().err and not R.BASELINE.exists()
+    assert R.lock(both)["run"] == RUN and R.baseline()["run"] == RUN
+
+
 def test_a_document_is_a_file_a_directory_or_a_run(tmp_path, capsys):
     doc = doc_of(tmp_path, "a")
     (tmp_path / "a" / R.DOC).write_text(json.dumps(doc), encoding="utf-8")

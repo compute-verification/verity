@@ -459,11 +459,17 @@ def baseline(path: Path | None = None) -> dict:
 
 
 def lock(doc: dict, path: Path | None = None) -> dict:
-    """`doc`'s run written as the baseline; Refused for a document with no run, or whose guard does not hold."""
+    """`doc`'s run written as the baseline; Refused for a document with no run, whose guard does not hold, or that
+    lacks either number: a candidate is compared with the baseline on both."""
     path = BASELINE if path is None else path
     if not RUN_ID.fullmatch(str(doc.get("run"))) or not doc["guard"]["holds"]:
         raise Refused("a baseline is a run whose guard holds: this document "
                       + ("names no run" if doc["guard"]["holds"] else "says " + "; ".join(doc["guard"]["why"])))
+    absent = [name for name, key in ((PROVING, "proving"), (VERIFIER, "verifier")) if doc["numbers"][key] is None]
+    if absent:
+        why = no_verifier(doc) if VERIFIER in absent else None
+        raise Refused(f"a baseline has both numbers: this document has no {' and no '.join(absent)}"
+                      + (f" ({why})" if why else ""))
     out = {"schema": BASELINE_SCHEMA, "run": doc["run"], "commit": doc["commit"], "identity": doc["identity"],
            "group": doc["group"]}
     _put(path, out)

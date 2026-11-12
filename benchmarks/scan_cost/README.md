@@ -105,7 +105,8 @@ result.py baseline [--lock DOC]          the baseline's run, or pin DOC's run as
 ~~~
 
 DOC is a `scan_cost.json`, a directory holding one, or a run's id; run them with the workspace's Python (`uv run
-python benchmarks/scan_cost/result.py …`).
+python benchmarks/scan_cost/result.py …`). `baseline --lock` refuses a run whose guard does not hold or that lacks
+either number.
 
 ## Targets
 
