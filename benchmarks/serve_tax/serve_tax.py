@@ -135,8 +135,9 @@ A sessions load (`Load.sessions`: ``agentic``, ``agentic-full``, ``agentic-256k`
 each a chain of requests of which each begins as the one before it does. Its rung is its users: each is a client of
 its own with one request in flight, which sends its sessions' turns in order, each once the turn before has ended, so
 a turn finds its session's prefix computed (`drive_bench`, `merged`). `cost` on such a load is `session_cost`: the
-arm's cost over the stock engine it is made from, with its interval, its noise floor and its verdict against
-`SESSION_TARGET`.
+arm's cost over the stock engine it is made from, a server lifetime its unit (`over_lifetimes`), with its interval
+over the lifetimes an arm, its verdict against `SESSION_TARGET` by that interval's upper end, and beside them the
+cost over the passes taken as independent and the noise floor.
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
@@ -1251,8 +1252,10 @@ def parse_loads(text: str) -> dict[str, tuple[int, ...]]:
                              f"follows the one it repeats: name it without rungs")
     if not out:
         raise SystemExit("--loads: NAME[=RUNG+RUNG...],... names no load")
+    # sessions loads share a run: a cost is of each (`session_cost`), and the engine's context, the largest of theirs,
+    # holds every one's requests
     beside = [n for n in out if not LOADS[n].number]
-    if beside and len(out) > 1:
+    if beside and len(out) > 1 and not all(LOADS[n].sessions for n in out):
         raise SystemExit(f"--loads: {beside[0]} is served in a run of its own: every load of a run is served by one "
                          f"engine, and {beside[0]}'s context limit of {LOADS[beside[0]].context} would be the others' too")
     return out
@@ -2417,21 +2420,63 @@ SESSION_TARGET = 1.0
 SESSION_COST = "session_cost"
 
 
+#: Student's t at a two-sided 95%, by degrees of freedom from 1; past its end the last entry stands, a little wide
+T95 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
+       2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
+
+
+def over_lifetimes(pairs: Sequence[Sequence[tuple[float, float]]]) -> dict:
+    """A cost whose unit is a server lifetime, a fraction. ``pairs`` holds, for each pair of lifetimes (one of the
+    reference's and one of the arm's), the two sides' rates of work in each pass both counted. A pair's cost is the
+    mean over its passes of the reference's rate over the arm's, less one; the cost is the mean of the pairs' costs,
+    with Student's t 95% interval over them (`T95`), which one pair can't give. Passes of one lifetime share whatever
+    its server had of its own, so they are not independent, and an interval over them as if they were is too narrow.
+    ``each`` has the pairs' costs, ``between`` their standard deviation, and ``within`` the standard deviation of a
+    pass's cost about its own pair's, pooled over the pairs (absent where no pair has two passes). No value where
+    there is no pair, or a pass of either side has no rate."""
+    if not pairs or not all(pairs) or any(not x or not y for p in pairs for x, y in p):
+        return {"value": None}
+    costs = [[x / y - 1 for x, y in p] for p in pairs]
+    each = [statistics.fmean(c) for c in costs]
+    out: dict = {"value": statistics.fmean(each), "each": each}
+    if len(each) > 1:
+        out["between"] = statistics.stdev(each)
+        half = T95[min(len(each) - 1, len(T95)) - 1] * out["between"] / math.sqrt(len(each))
+        out["ci95"] = [out["value"] - half, out["value"] + half]
+    free = sum(len(c) - 1 for c in costs)
+    if free:
+        out["within"] = math.sqrt(sum((x - m) ** 2 for c, m in zip(costs, each, strict=True) for x in c) / free)
+    return out
+
+
+def by_lifetime(ref: dict[int, dict], arm: dict[int, dict]) -> dict[int, list[tuple[float, float]]]:
+    """The two sides' output tokens a second in each rep both have, by the server lifetime the rep is a pass of
+    (`lifetimes`; one lifetime where the arms were not served in them): `over_lifetimes`' pairs."""
+    out: dict[int, list[tuple[float, float]]] = {}
+    for k in sorted(set(ref) & set(arm)):
+        out.setdefault(ref[k].get("lifetime", 1), []).append((ref[k].get("output_tok_per_s") or 0.0,
+                                                               arm[k].get("output_tok_per_s") or 0.0))
+    return out
+
+
 def own_noise(reps: dict[int, dict]) -> dict | None:
     """The noise floor of a cost from the stock arm's own server lifetimes (`lifetimes`), where it has two at least:
-    the cost of each second lifetime over the one before it, the same pass of the two paired (`paired_cost`), which
-    is stock over stock a lifetime apart, as far apart as a cost's own pairs or further. ``reps``: the arm's reps at
-    one rung of a load, by rep. None for an arm served in fewer than two lifetimes."""
+    the cost of each second lifetime over the one before it, the same pass of the two paired (`over_lifetimes`, a
+    pair of stock's lifetimes its unit), which is stock over stock a lifetime apart, as far apart as a cost's own
+    pairs or further. ``reps``: the arm's reps at one rung of a load, by rep. None for an arm served in fewer than
+    two lifetimes."""
     of: dict[int, dict[int, float]] = {}
     for r in reps.values():
         if "lifetime" in r:
             of.setdefault(r["lifetime"], {})[r["pass"]] = r.get("output_tok_per_s") or 0.0
     order = sorted(of)
-    pairs = [(of[x][n], of[y][n]) for x, y in zip(order[::2], order[1::2], strict=False) for n in sorted(set(of[x]) & set(of[y]))]
+    pairs = {(x, y): [(of[x][n], of[y][n]) for n in sorted(set(of[x]) & set(of[y]))]
+             for x, y in zip(order[::2], order[1::2], strict=False)}
+    pairs = {k: v for k, v in pairs.items() if v}
     if not pairs:
         return None
-    return {**paired_cost([x for x, _ in pairs], [y for _, y in pairs]), "reps": len(pairs),
-            "lifetimes": [[x, y] for x, y in zip(order[::2], order[1::2], strict=False)]}
+    return {**over_lifetimes(list(pairs.values())), "reps": sum(map(len, pairs.values())),
+            "lifetimes": [list(k) for k in pairs]}
 
 
 def session_loads(arms: list[dict], reference: str) -> list[str]:
@@ -2443,17 +2488,22 @@ def session_loads(arms: list[dict], reference: str) -> list[str]:
 def session_cost(arms: list[dict], arm: str, reference: str, target: float | None = None,
                  load: str | None = None) -> dict | None:
     """The cost of ``arm`` over ``reference`` on the sessions load both served (`Load.sessions`; ``load``, or the
-    first the reference served: `session_loads`), from arms' metrics
-    (one arm's directories joined: `joined`), every figure in percent: the reference's output tokens a second over
-    the arm's, less one, at the users both served, with its 95% interval over reps (`serving_cost`). Its verdict is
-    against ``target`` (`SESSION_TARGET` where none is given), the interval widened by the noise floor: the size of
-    the cost of another arm that starts the reference's engine (`same_engine`), where one served the load, and else
-    of the reference's own lifetimes, each second one over the one before it (`own_noise`). Where the arms were
-    served in lifetimes (`lifetimes`) the reps are the passes both sides counted, each lifetime's first ones left out
-    (``left_out`` an arm, ``warm`` how many were served), and ``by_lifetime`` has each lifetime's own cost: passes of
-    one lifetime share whatever its server had of its own, so the interval over all of them is too narrow where the
-    lifetimes' costs spread more than a lifetime's passes do. Beside
-    them: the share of its prompt tokens the load plans to repeat (`planned`), the share each side's prefix cache
+    first the reference served: `session_loads`), from arms' metrics (one arm's directories joined: `joined`), every
+    figure in percent: the reference's output tokens a second over the arm's, less one, at the users both served.
+    Its unit is a server lifetime (`over_lifetimes`): the mean over the lifetimes an arm of each one's cost, the mean
+    over the passes both sides counted in it, with Student's t 95% interval over the lifetimes. Its verdict is
+    against ``target`` (`SESSION_TARGET` where none is given) by that interval's upper end alone: "meets" where it is
+    under the target, "misses" where the lower end is over it, else "cannot tell", as with one lifetime an arm, which
+    has no such interval. Beside it and in no verdict: ``passes``, the cost over the passes taken as independent, the
+    median with its interval over them (`serving_cost`), which is too narrow where the lifetimes' costs spread more
+    than a lifetime's passes do; ``spread``, the standard deviation between the lifetimes' costs and of a pass within
+    its lifetime; ``by_lifetime``, each lifetime's own cost, where the arms were served in lifetimes (`lifetimes`),
+    each lifetime's first passes left out (``left_out`` an arm, ``warm`` how many were served); and the noise floor,
+    the reference's engine over itself, a lifetime pair its unit too: another arm that starts the reference's engine
+    (`same_engine`) over the reference, where one served the load, and else the reference's own lifetimes, each
+    second one over the one before it (`own_noise`). ``differs`` says whether the floor's own interval leaves out
+    zero: stock then differs from stock. Also beside them: the share of its prompt tokens the load plans to repeat
+    (`planned`), the share each side's prefix cache
     served in fact, from the engine's own counters, and whether each side served every request of every rep.
     ``same_work`` says whether both did and their caches served the same share of the same prompts in every rep:
     where it is false the two sides did not do the same work, and the verdict is "cannot tell". Each side also has
@@ -2487,12 +2537,15 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     gpus = tp_size(MODELS[by[arm]["model_id"]])
     a, b = ({r["rep"]: r for r in bench_rungs(x, load)[rung]} for x in (ref, by[arm]))
     reps = sorted(set(a) & set(b))
-    noise = serving_cost(ref, twin, load, rung) if twin else own_noise(a)
-    floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
-    lives = sorted({a[k]["lifetime"] for k in reps if "lifetime" in a[k]})
-    by_lifetime = [{"lifetime": n, **_cost(paired_cost(*([x[k].get("output_tok_per_s") or 0.0 for k in reps
-                                                          if a[k].get("lifetime") == n] for x in (a, b)))),
-                    "reps": sum(a[k].get("lifetime") == n for k in reps)} for n in lives]
+    lives = by_lifetime(a, b)
+    over = over_lifetimes(list(lives.values()))
+    if twin:
+        again = by_lifetime(a, {r["rep"]: r for r in bench_rungs(twin, load)[rung]})
+        noise = {**over_lifetimes(list(again.values())), "reps": sum(map(len, again.values()))} if again else None
+    else:
+        noise = own_noise(a)
+    each = [{"lifetime": n, "value": _pct(x), "reps": len(lives[n])}
+            for n, x in zip(lives, over.get("each") or [None] * len(lives), strict=True)]
     warm = [len((x.get("warm") or {}).get(pass_name(load, rung), ())) for x in (ref, by[arm])]
     sent = rung * plan["requests"] // plan["users"]
 
@@ -2513,17 +2566,25 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     cached = [(a[k].get("prompt_cached_share"), b[k].get("prompt_cached_share")) for k in reps]
     same = sa["served_all"] and sb["served_all"] and all(x is not None and x == y for x, y in cached)
     target = SESSION_TARGET if target is None else target
+    lo, hi = over.get("ci95") or (None, None)
+    told = "cannot tell" if not same or hi is None else \
+        "meets" if hi < target / 100 else "misses" if lo > target / 100 else "cannot tell"
+    floor = noise and (noise.get("ci95") or (None, None))
     of = {n: by[n]["of"][load] for n in (reference, arm)}
-    return {"value": _pct(c["value"]), "unit": UNIT, "commit": of[arm]["commit"], "run": of[arm]["run"],
+    return {"value": _pct(over["value"]), "unit": UNIT, "commit": of[arm]["commit"], "run": of[arm]["run"],
             "metric": SESSION_COST, "better": "lower", "target": target, "target_basis": "given",
-            "ci95": _cost(c)["ci95"], "verdict": verdict(c, target / 100, floor) if same else "cannot tell",
+            "ci95": _cost(over)["ci95"], "verdict": told,
             "same_work": same, "model": MODELS[by[arm]["model_id"]].served, "arm": arm, "reference": reference,
-            "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"],
-            "by_lifetime": by_lifetime or None,
+            "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"], "lifetimes": len(lives),
+            "passes": {**_cost(c), "reps": c["reps"]},
+            "spread": {"between": _pct(over.get("between")), "within": _pct(over.get("within"))},
+            "by_lifetime": each if any("lifetime" in a[k] for k in reps) else None,
             "seeded": {"reference": bool(ref.get("seeded")), "arm": bool(by[arm].get("seeded"))},
             "left_out": {"passes": by[arm].get("left_out") or 0, "warm": warm} if any(warm) else None,
             "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
             "noise_floor": {"arm": twin["arm"] if twin else reference, **_cost(noise), "reps": noise["reps"],
+                            "pairs": len(noise.get("each") or ()),
+                            "differs": None if floor[0] is None else not floor[0] <= 0 <= floor[1],
                             **({} if twin else {"lifetimes": noise["lifetimes"]})} if noise else None,
             "sides": {"reference": sa, "arm": sb}, "vllm": by[arm].get("vllm"), "gpus": gpus,
             "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
@@ -2542,25 +2603,37 @@ def session_text(r: dict) -> str:
         return (f"{x['arm']}: {x['output_tok_per_s']:,.1f} output tokens a second{each}{user}, {cached}{drafts}, "
                 f"{'every request served' if x['served_all'] else 'NOT every request served'}")
 
-    n = r["noise_floor"]
-    plan = r["planned"]
+    n, plan, spread = r["noise_floor"], r["planned"], r["spread"]
+
+    def points(x: float | None) -> str:
+        return "not measured" if x is None else f"{x:.2f} points"
+
     lines = [
-        f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving compute, "
-        f"{_reps(r['reps'])}, {r['users']} users; target {r['target']:g}%: {r['verdict']}",
+        f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving compute over "
+        f"{_lifetimes(r['lifetimes'])} an arm, {r['users']} users; target {r['target']:g}%: {r['verdict']}",
         f"  the load: {r['what']}; {plan['requests']:,} requests of {plan['prompt_tokens']:,} prompt tokens, "
         f"{plan['repeated_share']:.2f}% of them planned to repeat"
         + (f"; each sampled at temperature {plan['sampled']['temperature']:g} and top-p {plan['sampled']['top_p']:g}"
            + _seeds(r) if plan.get("sampled") else "; each greedy"),
-        *([f"  the reps are the passes both arms counted, in {_lifetimes(len(r['by_lifetime']))} an arm"
+        "  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in it; "
+        + ("one lifetime an arm gives no interval and so no verdict" if r["lifetimes"] == 1 else
+           "its interval is Student's t over the lifetimes, and the verdict is its upper end against the target"),
+        f"  passes taken as independent: {_c(r['passes'])}, {_reps(r['passes']['reps'])}, the median over them with its "
+        "interval; in no verdict",
+        *(["  by lifetime: " + ", ".join(f"{_c(x)} ({_reps(x['reps'])})" for x in r["by_lifetime"])
            + (f"; the first {_passes(r['left_out']['passes'])} of each lifetime, its warm-up, served and recorded and "
               f"left out ({r['left_out']['warm'][0]} of {r['reference']}'s, {r['left_out']['warm'][1]} of {r['arm']}'s)"
-              if r.get("left_out") else "")
-           + "; by lifetime: " + ", ".join(f"{_c(x)} ({_reps(x['reps'])})" for x in r["by_lifetime"])]
+              if r.get("left_out") else "")]
           if r.get("by_lifetime") else []),
+        f"  the spread of the cost (standard deviations): {points(spread['between'])} between lifetimes, "
+        f"{points(spread['within'])} between a lifetime's passes",
         "  noise floor: " + ((f"{r['reference']}'s own lifetimes, each second one over the one before it"
                               if n.get("lifetimes") else f"{n['arm']} over {r['reference']}")
-                             + f": {_c(n)}, {_reps(n['reps'])}; the verdict's interval is widened by its size" if n else
+                             + f": {_c(n)} over {n['pairs']} pair{'s' if n['pairs'] != 1 else ''} of lifetimes, "
+                             f"{_reps(n['reps'])}; beside the cost, not added to its interval" if n else
                              f"not measured: no second lifetime of {r['reference']}'s engine served the load"),
+        *([f"  {r['reference']} differs from {r['reference']}: the noise floor's interval leaves out zero, so two "
+           "lifetimes of the same engine did not serve at the same rate"] if n and n["differs"] else []),
         *(f"  {rate(r['sides'][k])}" for k in ("reference", "arm")),
         *([] if r["same_work"] else ["  the two sides did not do the same work (a request unserved, or their prefix "
                                      "caches served different tokens in a rep): no verdict"]),
@@ -2906,7 +2979,8 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     name, which stands where it has a value and both sides did the same work."""
     if r["metric"] == SESSION_COST:
         entry = {"name": r["load"], **{key: r[key] for key in ("value", "unit", "target", "target_basis", "better", "commit",
-                                                              "run", "ci95", "verdict", "what", "reps", "users")}}
+                                                              "run", "ci95", "verdict", "what", "reps", "users",
+                                                              "lifetimes")}}
         what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
                 "loads": [r["load"]], "vllm": r["vllm"]}
         return r["value"] is not None and r["same_work"], session_text(r).splitlines()[0], what, [entry]

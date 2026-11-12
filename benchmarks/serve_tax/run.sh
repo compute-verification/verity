@@ -44,7 +44,7 @@
 # and so on ("prod prod-record" three times: prod, prod-record, prod-record, prod, prod, prod-record), so that a slow
 # change of the node over the job falls on both arms alike; lifetime K of an arm is OUT/<arm>.K, and the cost pairs
 # pass R of lifetime K of its two arms (serve_tax.lifetimes), its noise floor stock's own lifetimes where no twin of
-# stock is served. LEAVE_OUT=N leaves each lifetime's first N passes, its warm-up, out of every figure: they are served
+# stock is served. A cost's interval is over the lifetimes an arm, so its verdict needs two at least. LEAVE_OUT=N leaves each lifetime's first N passes, its warm-up, out of every figure: they are served
 # and recorded like the rest, and the table and the cost say how many were left out. A replay names the lifetime it
 # replays (REPLAY_FROM=OUT/<arm>.K).
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its

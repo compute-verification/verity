@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -134,6 +135,11 @@ def test_a_sessions_loads_passes_are_its_users_and_the_turns_each_sends(tmp_path
     assert S.parse_loads("agentic") == {"agentic": (4,)} and S.parse_loads("agentic=2+8") == {"agentic": (2, 8)}
     with pytest.raises(SystemExit, match="agentic is served in a run of its own"):
         S.parse_loads("chat,agentic")
+    # sessions loads share a run, its engine's context the largest of theirs; with any other load they do not
+    both = S.parse_loads("agentic=4,agentic-256k")
+    assert both == {"agentic": (4,), "agentic-256k": (4,)} and S.context_of(both, None) == 262144
+    with pytest.raises(SystemExit, match="agentic is served in a run of its own"):
+        S.parse_loads("agentic,agentic-256k,chat")
     loads = S.parse_loads("agentic=1+2")
     assert S.context_of(loads, None) == 131072 and S.parse_pass_prompts("agentic=3", loads) == {"agentic": 3}
     # the lines are of the highest rung's users, each with the turns given; the rungs are the load's own
@@ -295,15 +301,19 @@ def arms() -> list[dict]:
 def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its_noise_floor():
     r = S.session_cost(arms(), "prod-record", "prod")
     ratios = sorted(2.0 / x - 1 for x in OURS)
-    assert r["value"] == round(100 * (ratios[2] + ratios[3]) / 2, 2) == 0.5
-    assert r["ci95"] == [round(100 * ratios[0], 2), round(100 * ratios[5], 2)] == [0.4, 0.6]
+    # one server lifetime an arm: the cost is the mean over its passes, with no interval over lifetimes, so no verdict
+    assert r["value"] == round(100 * sum(ratios) / 6, 2) == 0.5 and r["ci95"] is None and r["lifetimes"] == 1
+    assert (r["target"], r["verdict"], r["same_work"]) == (1.0, "cannot tell", True)
+    assert all(S.session_cost(arms(), "prod-record", "prod", target=t)["verdict"] == "cannot tell" for t in (0.25, 5.0))
+    # beside it, the passes taken as independent, the median over them with its interval, and the spread among them
+    assert r["passes"] == {"value": round(100 * (ratios[2] + ratios[3]) / 2, 2),
+                           "ci95": [round(100 * ratios[0], 2), round(100 * ratios[5], 2)], "reps": 6}
+    assert r["passes"] == {"value": 0.5, "ci95": [0.4, 0.6], "reps": 6}
+    assert r["spread"] == {"between": None, "within": 0.07} and r["by_lifetime"] is None
     assert (r["metric"], r["load"], r["users"], r["reps"], r["arm"], r["reference"]) == ("session_cost", "agentic", 4, 6,
                                                                                     "prod-record", "prod")
-    # the second lifetime's cost over the first is the noise floor, which widens the interval before the verdict
-    assert r["noise_floor"] == {"arm": "prod-again", "value": 0.1, "ci95": [0.1, 0.1], "reps": 6}
-    assert (r["target"], r["verdict"], r["same_work"]) == (1.0, "meets", True)
-    assert S.session_cost(arms(), "prod-record", "prod", target=0.65)["verdict"] == "cannot tell"      # 0.6 + 0.1 is over
-    assert S.session_cost(arms(), "prod-record", "prod", target=0.25)["verdict"] == "misses"           # 0.4 - 0.1 is over
+    # the second lifetime's cost over the first is the noise floor, beside the cost: one pair of lifetimes, no interval
+    assert r["noise_floor"] == {"arm": "prod-again", "value": 0.1, "ci95": None, "reps": 6, "pairs": 1, "differs": None}
     assert r["planned"]["repeated_share"] == 95.0 and r["sides"]["arm"]["cached_share"] == 94.0
     stock = r["sides"]["reference"]
     assert stock["served_all"] and stock["output_tok_per_s"] == pytest.approx(2000.0)
@@ -312,20 +322,48 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert (stock["tok_per_s_a_gpu"], stock["user_tok_per_s_p90"]) == (6500.0, pytest.approx(40.0)) and r["gpus"] == 8
     assert (stock["draft_accepted_share"], stock["tokens_per_draft"]) == (50.0, 3.5)
     text = S.session_text(r)
-    assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.40%, 0.60%] of stock's "
-                                    "serving compute, 6 reps, 4 users; target 1%: meets")
-    assert "noise floor: prod-again over prod: 0.10% [0.10%, 0.10%], 6 reps" in text and "95.00% of them planned to repeat" in text
+    assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving "
+                                    "compute over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
+    assert ("  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in "
+            "it; one lifetime an arm gives no interval and so no verdict\n"
+            "  passes taken as independent: 0.50% [0.40%, 0.60%], 6 reps, the median over them with its interval; in no "
+            "verdict\n"
+            "  the spread of the cost (standard deviations): not measured between lifetimes, 0.07 points between a "
+            "lifetime's passes\n"
+            "  noise floor: prod-again over prod: 0.10% over 1 pair of lifetimes, 6 reps; beside the cost, not added to "
+            "its interval\n") in text
+    assert "95.00% of them planned to repeat" in text and "differs from" not in text
     assert ("  prod: 2,000.0 output tokens a second (6,500.0 prompt and output tokens a second a GPU), 40.0 output tokens "
             "a second a user at the P90 time a token, 94.00% of its prompt tokens from its prefix cache, 50.00% of its "
             "draft tokens accepted, 3.50 tokens a draft, every request served\n") in text
     # with no second lifetime the floor is not measured, and the cost of the second lifetime itself has none
     alone = S.session_cost(arms()[:2], "prod-record", "prod")
-    assert alone["noise_floor"] is None and alone["verdict"] == "meets" and "noise floor: not measured" in S.session_text(alone)
+    assert alone["noise_floor"] is None and alone["value"] == 0.5 and "noise floor: not measured" in S.session_text(alone)
     again = S.session_cost(arms(), "prod-again", "prod")
     assert again["value"] == 0.1 and again["noise_floor"] is None
-    # fewer than six reps have no interval, so no verdict but "cannot tell"
+    # fewer than six passes have no interval of their own either
     few = S.session_cost([served("prod", [2.0] * 3), served("prod-record", OURS[:3])], "prod-record", "prod")
-    assert few["ci95"] is None and few["verdict"] == "cannot tell"
+    assert few["ci95"] is None and few["passes"] == {"value": 0.5, "ci95": None, "reps": 3} and few["verdict"] == "cannot tell"
+
+
+def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them():
+    # three pairs of lifetimes of two passes each: ours costs 0.4%, 0.5% and 0.6% in them, a pass 0.1 points either side
+    pairs = [[(1 + c + d, 1.0) for d in (-0.001, 0.001)] for c in (0.004, 0.005, 0.006)]
+    r = S.over_lifetimes(pairs)
+    assert r["value"] == pytest.approx(0.005) and r["each"] == pytest.approx([0.004, 0.005, 0.006])
+    assert r["between"] == pytest.approx(0.001) and r["within"] == pytest.approx(0.001 * math.sqrt(2))
+    half = 4.303 * 0.001 / math.sqrt(3)
+    assert S.T95[:3] == (12.706, 4.303, 3.182) and r["ci95"] == pytest.approx([0.005 - half, 0.005 + half])
+    # one pair has a cost and no interval, and one pass a pair no spread within
+    one = S.over_lifetimes(pairs[:1])
+    assert one["value"] == pytest.approx(0.004) and "ci95" not in one and "between" not in one and "within" in one
+    assert "within" not in S.over_lifetimes([p[:1] for p in pairs])
+    # no pair, a pair with no pass, or a pass a side has no rate in: no value
+    assert S.over_lifetimes([]) == S.over_lifetimes([[]]) == S.over_lifetimes([[(1.0, 0.0)]]) == {"value": None}
+    # past the table's end its last entry stands
+    many = S.over_lifetimes([[(1 + 0.001 * (k % 2), 1.0)] for k in range(40)])
+    assert many["ci95"][1] - many["value"] == pytest.approx(S.T95[-1] * many["between"] / math.sqrt(40))
+    assert len(S.T95) == 30 and all(a > b for a, b in zip(S.T95, S.T95[1:], strict=False))
 
 
 def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work():
@@ -396,23 +434,74 @@ def test_a_cost_over_server_lifetimes_pairs_the_same_pass_of_the_same_lifetime_a
     assert [(r["rep"], r["output_tok_per_s"]) for r in stock["warm"]["agentic@4"]] == [(1, 1000.0), (5, 1200.0)]
     assert S.lifetimes([stock, ours]) == [stock, ours]                      # read once
     r = S.session_cost(in_lifetimes(), "prod-record", "prod")
-    assert (r["value"], r["ci95"], r["reps"]) == (0.5, [0.5, 0.5], 6)
-    assert r["by_lifetime"] == [{"lifetime": 1, "value": 0.5, "ci95": None, "reps": 3},
-                                {"lifetime": 2, "value": 0.5, "ci95": None, "reps": 3}]
-    assert r["left_out"] == {"passes": 1, "warm": [2, 2]}
-    # no twin of stock was served: the noise floor is stock's second lifetime over its first, pass by pass
-    assert r["noise_floor"] == {"arm": "prod", "value": -0.1, "ci95": None, "reps": 3, "lifetimes": [[1, 2]]}
-    assert r["verdict"] == "meets" and S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.55)["verdict"] == "cannot tell"
+    assert (r["value"], r["ci95"], r["reps"], r["lifetimes"]) == (0.5, [0.5, 0.5], 6, 2)
+    assert r["by_lifetime"] == [{"lifetime": 1, "value": 0.5, "reps": 3}, {"lifetime": 2, "value": 0.5, "reps": 3}]
+    assert r["left_out"] == {"passes": 1, "warm": [2, 2]} and r["spread"] == {"between": 0.0, "within": 0.0}
+    # no twin of stock was served: the noise floor is stock's second lifetime over its first, pass by pass, one pair
+    assert r["noise_floor"] == {"arm": "prod", "value": -0.1, "ci95": None, "reps": 3, "pairs": 1, "differs": None,
+                                "lifetimes": [[1, 2]]}
+    # the verdict is the interval's upper end against the target, and the floor is not added to it
+    assert r["verdict"] == "meets" and S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.55)["verdict"] == "meets"
+    assert S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.45)["verdict"] == "misses"
     text = S.session_text(r)
-    assert ("  the reps are the passes both arms counted, in 2 server lifetimes an arm; the first pass of each lifetime, "
-            "its warm-up, served and recorded and left out (2 of prod's, 2 of prod-record's); by lifetime: 0.50% (3 reps), "
-            "0.50% (3 reps)\n") in text
-    assert ("  noise floor: prod's own lifetimes, each second one over the one before it: -0.10%, 3 reps; the verdict's "
-            "interval is widened by its size\n") in text
-    # a twin of stock, where one served, is still the floor
-    twin = [*in_lifetimes(), *(lifetime("prod-again", k, [x / 1.002 for x in STOCK[k]]) for k in (1, 2))]
-    assert S.session_cost(twin, "prod-record", "prod")["noise_floor"] == {"arm": "prod-again", "value": 0.2,
-                                                                          "ci95": [0.2, 0.2], "reps": 6}
+    assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.50%, 0.50%] of stock's "
+                                    "serving compute over 2 server lifetimes an arm, 4 users; target 1%: meets")
+    assert ("it; its interval is Student's t over the lifetimes, and the verdict is its upper end against the target\n"
+            "  passes taken as independent: 0.50% [0.50%, 0.50%], 6 reps, the median over them with its interval; in no "
+            "verdict\n"
+            "  by lifetime: 0.50% (3 reps), 0.50% (3 reps); the first pass of each lifetime, its warm-up, served and "
+            "recorded and left out (2 of prod's, 2 of prod-record's)\n"
+            "  the spread of the cost (standard deviations): 0.00 points between lifetimes, 0.00 points between a "
+            "lifetime's passes\n"
+            "  noise floor: prod's own lifetimes, each second one over the one before it: -0.10% over 1 pair of "
+            "lifetimes, 3 reps; beside the cost, not added to its interval\n") in text
+    # a twin of stock, where one served, is still the floor, a pair of lifetimes its unit too; its interval leaves out
+    # zero here, and the cost says in words that stock differs from stock
+    twin = S.session_cost([*in_lifetimes(), *(lifetime("prod-again", k, [x / 1.002 for x in STOCK[k]]) for k in (1, 2))],
+                          "prod-record", "prod")
+    assert twin["noise_floor"] == {"arm": "prod-again", "value": 0.2, "ci95": [0.2, 0.2], "reps": 6, "pairs": 2,
+                                   "differs": True}
+    assert ("  noise floor: prod-again over prod: 0.20% [0.20%, 0.20%] over 2 pairs of lifetimes, 6 reps; beside the "
+            "cost, not added to its interval\n"
+            "  prod differs from prod: the noise floor's interval leaves out zero, so two lifetimes of the same engine "
+            "did not serve at the same rate\n") in S.session_text(twin)
+    assert twin["verdict"] == "meets" and "differs from" not in text
+
+
+def spread(costs: tuple[float, ...], again: tuple[float, ...] = ()) -> list[dict]:
+    """A job of a lifetime an arm for each of ``costs``, ours costing that much in every pass of it; stock's lifetime
+    k + 1 costs ``again[k]`` over the first one's rates where it is given."""
+    out = []
+    for k, c in enumerate(costs, 1):
+        stock = [x / (1 + dict(enumerate(again)).get(k - 1, 0.0)) for x in STOCK[1]]
+        out += [lifetime("prod", k, stock), lifetime("prod-record", k, [0.75, *(x / (1 + c) for x in stock[1:])])]
+    return out
+
+
+def test_the_verdict_reads_the_interval_over_lifetimes_by_its_upper_end_alone():
+    # three lifetimes an arm costing 0.4%, 0.5% and 0.6%: 0.5% with Student's t over three, 4.303 * 0.1 / sqrt(3)
+    r = S.session_cost(spread((0.004, 0.005, 0.006)), "prod-record", "prod")
+    assert (r["value"], r["ci95"], r["lifetimes"], r["reps"], r["verdict"]) == (0.5, [0.25, 0.75], 3, 9, "meets")
+    assert [x["value"] for x in r["by_lifetime"]] == [0.4, 0.5, 0.6] and r["spread"] == {"between": 0.1, "within": 0.0}
+    assert (r["passes"]["value"], r["passes"]["reps"]) == (0.5, 9)
+    told = {t: S.session_cost(spread((0.004, 0.005, 0.006)), "prod-record", "prod", target=t)["verdict"] for t in (0.8, 0.7, 0.2)}
+    assert told == {0.8: "meets", 0.7: "cannot tell", 0.2: "misses"}
+    # stock's lifetimes were the same, so its floor is zero over one pair (the third has no second): no interval
+    assert r["noise_floor"] == {"arm": "prod", "value": 0.0, "ci95": None, "reps": 3, "pairs": 1, "differs": None,
+                                "lifetimes": [[1, 2]]}
+    # two lifetimes an arm that spread as much have an interval Student's t makes wide: 12.706 * 0.1414 / sqrt(2)
+    two = S.session_cost(spread((0.004, 0.006)), "prod-record", "prod")
+    assert (two["value"], two["ci95"], two["verdict"]) == (0.5, [-0.77, 1.77], "cannot tell")
+    # stock's second lifetimes 1% and 1.02% slower than the ones before them: a floor whose interval leaves out zero,
+    # said in words, and in no verdict
+    four = S.session_cost(spread((0.005,) * 4, (0.0, 0.01, 0.0, 0.0102)), "prod-record", "prod")
+    assert four["noise_floor"] == {"arm": "prod", "value": 1.01, "ci95": [0.88, 1.14], "reps": 6, "pairs": 2,
+                                   "differs": True, "lifetimes": [[1, 2], [3, 4]]}
+    assert (four["value"], four["verdict"]) == (0.5, "meets")
+    assert ("  noise floor: prod's own lifetimes, each second one over the one before it: 1.01% [0.88%, 1.14%] over 2 "
+            "pairs of lifetimes, 6 reps; beside the cost, not added to its interval\n"
+            "  prod differs from prod: the noise floor's interval leaves out zero, so two lifetimes of the same engine "
+            "did not serve at the same rate\n") in S.session_text(four)
     # the table has the lifetimes' counted passes as the arm's reps, and says what it left out
     t = S.table(S.lifetimes(in_lifetimes()))
     assert [(x["arm"], x["reps"], x["lifetimes"], x["left_out"]) for x in t["rows"]] == [("prod", 6, 2, 2), ("prod-record", 6, 2, 2)]
@@ -427,7 +516,8 @@ def test_one_lifetime_can_leave_its_warm_up_out_and_lifetimes_that_are_not_one_a
                          "prod-record", "prod")
     assert (one["reps"], one["ci95"], one["verdict"]) == (5, None, "cannot tell")
     assert one["left_out"] == {"passes": 1, "warm": [1, 1]} and one["noise_floor"] is None
-    assert "in 1 server lifetime an arm; the first pass of each lifetime" in S.session_text(one)
+    assert "over 1 server lifetime an arm, 4 users" in S.session_text(one)
+    assert "  by lifetime: 0.50% (5 reps); the first pass of each lifetime, its warm-up" in S.session_text(one)
     two = S.session_cost([lifetime("prod", 1, [2.0] * 3, 2), lifetime("prod-record", 1, OURS[:3], 2)], "prod-record", "prod")
     assert two["reps"] == 1 and "the first 2 passes of each lifetime" in S.session_text(two)
     a, b = in_lifetimes()[:2]
@@ -456,14 +546,14 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
         files[-1].write_text(json.dumps(a))
     assert S.main(["cost", *map(str, files), "--arm", "prod-record", "--out", str(tmp_path / "out")]) == 0
     text = capsys.readouterr().out
-    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% [0.40%, 0.60%]")
+    assert text.startswith("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving compute over 1 ")
     assert (tmp_path / "out" / "serving_cost.txt").read_text() == text
     r = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
     assert list(r)[:4] == ["value", "unit", "commit", "run"] and r["reference"] == "prod"
     ok, first, what, measurements = S.result_of(r)
     assert ok and first == text.splitlines()[0] and what["loads"] == ["agentic"] and what["arm"] == "prod-record"
-    assert [(m["name"], m["value"], m["ci95"], m["target"], m["verdict"], m["users"]) for m in measurements] == [
-        ("agentic", 0.5, [0.4, 0.6], 1.0, "meets", 4)]
+    assert [(m["name"], m["value"], m["ci95"], m["target"], m["verdict"], m["users"], m["lifetimes"]) for m in measurements] == [
+        ("agentic", 0.5, None, 1.0, "cannot tell", 4, 1)]
     # a job that served two sessions loads has a cost of each: the first's is the report, the second's is beside it
     two = []
     for a, slower in zip(arms(), (1.0, 1.01, 1.0)):
@@ -476,8 +566,8 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
     assert S.session_cost(two, "prod-record", "prod")["load"] == "agentic" and S.session_cost(two, "prod-record", "prod", load="chat") is None
     assert S.main(["cost", *map(str, files[3:]), "--arm", "prod-record", "--out", str(tmp_path / "two")]) == 0
     first, second = capsys.readouterr().out.split("serving cost on load ")[1:]
-    assert first.startswith("agentic: prod-record over prod: 0.50% [0.40%, 0.60%]")
-    assert second.startswith("agentic-256k: prod-record over prod: 1.51% [1.41%, 1.61%]")
+    assert first.startswith("agentic: prod-record over prod: 0.50% of stock's") and "independent: 0.50% [0.40%, 0.60%]" in first
+    assert second.startswith("agentic-256k: prod-record over prod: 1.51% of stock's") and "independent: 1.51% [1.41%, 1.61%]" in second
     assert (tmp_path / "two" / "serving_cost.txt").read_text() == "serving cost on load " + first
     assert (tmp_path / "two" / "serving_cost.agentic-256k.txt").read_text() == "serving cost on load " + second
     assert json.loads((tmp_path / "two" / "serving_cost.agentic-256k.json").read_text())["load"] == "agentic-256k"
