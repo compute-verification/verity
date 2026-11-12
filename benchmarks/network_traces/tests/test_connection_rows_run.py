@@ -315,6 +315,35 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
     assert not any("connection rows" in p or "no head" in p for p in result["problems"]) and not result["accepted"]
 
 
+def test_under_form_2_a_run_through_its_last_buckets_passes_the_check_which_counts_the_arrivals_turned_away(tmp_path):
+    """Eight requests at form 2 over a run of two execution phases, the last four from the first bucket that admits
+    nothing to the run's last: the network certifier serves the first four and turns the last four away, each with
+    one cell, in its bucket; it refuses none, so both execution phases are certified and each has its head. The
+    run's log counts the four on their own, and the check accepts the run, its summary and its table saying that the
+    four clients whose outcome is refused were turned away."""
+    out = tmp_path / "run"
+    first = 2 * T - ENDS.span
+    late = (first, first, first + 3, 2 * T - 1)
+    device, _ = served(out, tmp_path / "key", windows=2, params=ENDS,
+                       prompts=(*PROMPTS[:4], (14,), (15, 16), (17,), (18,)), answers=ANSWERS[:4],
+                       arrive=dict(enumerate((0, 0, T, first - 1, *late))))
+    (out / "warden.json").write_text(json.dumps({"connections": device.log, **ws.counts(device)}))
+    assert ws.counts(device) == {"ordinals": 4, "refused": 0, "refused_windows": [], "turned_away": 4,
+                                 "ticks": 2 * T}
+    assert [(c["admitted"], c["failed"], c["cut"]) for c in device.log] == \
+        [(t, None, False) for t in (0, 0, T, first - 1)]
+    assert phases_of(out, ENDS) == [(0, "registration"), (1, "registration")]
+    clients = json.loads((out / "client.json").read_text())["connections"]
+    assert [(c["outcome"], c["kinds"], c["arrivals_ms"]) for c in clients[4:]] == \
+        [("refused", ws.KIND_CHARS[ws.REFUSED], [t * ENDS.bucket_ms + 1]) for t in late]
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    s = result["summary"]
+    assert (s["requests"], s["ended"], s["refused"], s["turned_away"], s["withheld_windows"]) == (8, 4, 4, 4, [])
+    assert (s["certified_windows"], s["connection_rows"]["registered"], s["connection_rows"]["of"]) == (6, 2, 2)
+    assert "4/8 ended, 4 refused or turned away (4 turned away)," in ws.table(result)
+
+
 def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_due(tmp_path):
     """The run above, its lines changed: the check refuses an execution phase with neither a head nor the word, one
     with a head where the word is due, one with the word where a head is due, one with two lines, a word signed for

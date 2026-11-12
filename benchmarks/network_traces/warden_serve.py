@@ -117,7 +117,10 @@ connection rows to a registration that verifies and whose head is the tables lai
 `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its head, or in the network
 certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each to the one that is due.
 The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so `rehearse` runs long
-enough for its last request to be admitted before them (`closing_windows`).
+enough for its last request to be admitted before them (`closing_windows`). An arrival in them is turned away
+(`warden`'s "The lengths rows"): no refusal, so no window's records are withheld for it. Its client reads the one
+`REFUSED` cell a refused one does, `warden.json` counts it on its own (`turned_away`, `counts`), and `check`'s summary
+has that count beside the clients' refused outcomes, which hold it.
 """
 
 from __future__ import annotations
@@ -828,8 +831,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         refused = await loop.run_in_executor(None, publish.close)
         stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
-    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
-           "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
+    log = {"connections": warden.log, **counts(warden),
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
@@ -848,6 +850,13 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def counts(warden: Warden) -> dict:
+    """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
+    arrivals turned away, which are neither, and the ticks."""
+    return {"ordinals": warden.ordinals, "refused": warden.refused, "refused_windows": sorted(warden.refused_windows),
+            "turned_away": warden.turned_away, "ticks": warden.ticks}
 
 
 def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,
@@ -1064,7 +1073,8 @@ def check(run: Path) -> dict:
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
         "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
-        "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
+        "withheld_windows": warden_log.get("refused_windows", []),
+        "turned_away": warden_log.get("turned_away", 0), "cell_rows": cells_summary,
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
@@ -1089,7 +1099,8 @@ def table(result: dict) -> str:
     load = "" if "load" not in s else (f"load {s['load']['registered']}/{s['load']['values']} values registered"
                                        f"{'' if s['load'].get('relayed') else ', not the relay heads'}; ")
     return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {load}{s['ended']}/{s['requests']} ended, "
-            f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
+            f"{s['refused']} refused or turned away ({s['turned_away']} turned away), failed {s['failed']}; "
+            f"{s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; ticker D episodes "

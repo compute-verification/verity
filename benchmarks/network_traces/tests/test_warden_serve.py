@@ -645,7 +645,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
                     reader.feed_eof()
                     clients.append(_Writer(warden))
                     tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-            await warden.until(lambda w: w.ordinals + w.refused == len(clients))
+            await warden.until(lambda w: w.ordinals + w.refused + w.turned_away == len(clients))
 
         await connect_due(0)
         PROCESS_CLOCK.append(clock)
