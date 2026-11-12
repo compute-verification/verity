@@ -39,27 +39,18 @@ class Store:
         return {"id": rid} if up is not None and up <= self.w.clock else None
 
 
-class Driver:
-    """The loop's `Landing` as `start` and `judge` use it for a check waiting and launching: each shard's launch registers
-    one run, which keeps the runs its environment named (`CARRY_ENV`)."""
-
-    on, dry_run, repo = "m1,m2,m3", False, Path("/nonexistent")
-    _started = staticmethod(Landing._started)
-
-    def __init__(self, w: CarryWorld):
-        self.w = w
-        self.q = SimpleNamespace(shadow=False, log=lambda text: None, store=Store(w))
-
-    def now(self) -> float:
-        return self.w.clock
-
-    def beside_args(self, sha: str, base: str) -> tuple[dict, list, str]:
-        return {"base": base}, [], ""
-
-    def launch_postland(self, repo, sha, on, steps, **kw) -> tuple[list[str], str]:
-        rid = f"r-{len(self.w.named)}"
-        self.w.named[rid] = [r for r in os.environ.get(CARRY_ENV, "").split(",") if r]
+def driver(w: CarryWorld) -> Landing:
+    """The loop's `Landing` on the world's clock and store, whose launch of each shard registers one run, which keeps the runs
+    the environment it hands train.sh names (`CARRY_ENV`); every candidate is sent the same arguments."""
+    def launch(repo, commit, machine, agreement) -> tuple[list[str], str]:
+        rid = f"r-{len(w.named)}"
+        w.named[rid] = [r for r in dict(os.environ).get(CARRY_ENV, "").split(",") if r]
         return [rid], ""
+
+    q = SimpleNamespace(shadow=False, log=lambda text: None, store=Store(w), workdir=Path("/nonexistent"), auth=())
+    d = Landing(q, on="m1,m2,m3", launch=launch, now=lambda: w.clock)
+    d.beside_args = lambda sha, base: ({"base": base}, [], "")
+    return d
 
 
 class CarryWorld(World):
@@ -68,9 +59,9 @@ class CarryWorld(World):
 
     def __init__(self, seed: int, **kw):
         super().__init__(seed, **kw)
-        self.crng = random.Random(seed + 1_000_003)   # apart from the world's own draws, which script its queue
+        self.crng = random.Random(seed + 1_000_003)   # apart from the world's own stream, which scripts its queue
         self.clock = 0.0
-        self.driver = Driver(self)
+        self.driver = driver(self)
         self.content: dict[str, dict[int, str]] = {MAIN: {}}
         self.tasks = {**{f"suite:{m}": (f"pkg{m}/",) for m in self.marks}, "shared": ("shared/",), "docs": ("docs/",)}
         self.lines: list[dict] = []

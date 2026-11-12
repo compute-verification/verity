@@ -230,20 +230,17 @@ def _awaiting(driver: Landing, runs: dict[str, float]) -> tuple[list[str], list[
 
 @contextlib.contextmanager
 def _carrying(runs: Iterable[str]):
-    """`CARRY_ENV` naming ``runs`` while a launch starts: `landing.train_launch` hands train.sh this process's environment,
-    the one way to the candidate's check.py that every tree's train.sh passes."""
+    """`CARRY_ENV` naming ``runs`` while a launch starts, and in no launch after: `landing.train_launch` hands train.sh this
+    process's environment, the one way to the candidate's check.py that every tree's train.sh passes.  Only this sets it in
+    the loop's process."""
     if not (runs := ",".join(runs)):
         yield
         return
-    was = os.environ.get(CARRY_ENV)
     os.environ[CARRY_ENV] = runs
     try:
         yield
     finally:
-        if was is None:
-            os.environ.pop(CARRY_ENV, None)
-        else:
-            os.environ[CARRY_ENV] = was
+        os.environ.pop(CARRY_ENV, None)
 
 
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,

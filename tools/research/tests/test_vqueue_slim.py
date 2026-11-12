@@ -20,7 +20,7 @@ import pytest
 
 from research import merge
 from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, PLAN_WAIT_S,
-                              SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
+                              SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, abandon, audit_failures,
@@ -645,11 +645,17 @@ def test_abandon_gives_up_a_plan_still_being_made_and_keeps_one_its_launching_sh
 # -- carry: a check replacing dropped candidates' checks
 
 
+def _handed() -> dict[str, str]:
+    """The environment `landing.train_launch` hands train.sh: this process's, whole."""
+    return dict(os.environ)
+
+
 def _carry(h: Beside, monkeypatch) -> tuple[set[str], list[str | None]]:
-    """The runs whose records the store holds (`left`), and what each launch's environment named (`CARRY_ENV`)."""
-    published, named, launch = set(), [], h.d.launch_postland
+    """The runs whose records the store holds (`left`), and what the environment named (`CARRY_ENV`) as each launch returned
+    (`Landing._started`, which reads every launch's run ids)."""
+    published, named = set(), []
     monkeypatch.setattr("research.vqueue_slim.left", lambda d, rid: rid in published)
-    h.d.launch_postland = lambda *a, **kw: named.append(os.environ.get(CARRY_ENV)) or launch(*a, **kw)
+    h.d._started = lambda got: named.append(_handed().get(CARRY_ENV)) or Landing._started(got)
     return published, named
 
 
@@ -674,7 +680,7 @@ def test_a_check_replacing_dropped_ones_waits_for_their_records_then_launches_na
     h.clock += 1
     assert judge(h.d, rec) == Verdict(PENDING)
     n = max(shards, 1)
-    assert len(h.posted) == n and named == ["r-a,r-b"] * n and CARRY_ENV not in os.environ
+    assert len(h.posted) == n and named == ["r-a,r-b"] * n and CARRY_ENV not in _handed()
     assert ("wait" in rec, rec["at"], len(rec["ids"]), "carry_without" in rec) == (False, h.clock, n, False)
     h.run_state.update({i: ("running", None, None) for i in rec["ids"]})
     assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and len(h.posted) == n, "it launches once"
@@ -713,15 +719,18 @@ def test_a_check_launches_at_once_when_nothing_it_replaces_is_awaited(world, mon
                                                             "none": (None, None)}[how]
 
 
-def test_a_launch_names_the_runs_it_carries_and_puts_back_what_the_environment_held(world, monkeypatch):
-    """By the setting check.py reads them from (`check.carried_packs`), which settings.py declares under this name."""
+def test_a_launch_names_the_runs_it_carries_by_the_setting_check_py_reads_and_the_next_launch_names_none(world, monkeypatch):
+    """`CARRY_ENV` is the setting `check.carried_packs` reads, which settings.py declares under this name; a launch that
+    carries nothing, after one that did, names nothing, though its launch failed."""
     assert CARRY_ENV == "TRAIN_CARRY_FROM"
     h, base, sha, _ = _harness(world, monkeypatch)
     published, named = _carry(h, monkeypatch)
     published.add("r-a")
-    monkeypatch.setenv(CARRY_ENV, "theirs")
-    start(h.d, sha, base, after={"r-a": h.clock})
-    assert named == ["r-a"] and os.environ[CARRY_ENV] == "theirs"
+    h.got = ([], "train.sh: no slot")
+    assert start(h.d, sha, base, after={"r-a": h.clock}) is None
+    h.got = None
+    start(h.d, sha, base)
+    assert named == ["r-a", None] and CARRY_ENV not in _handed()
 
 
 def test_an_auto_plan_waits_then_is_made_and_each_of_its_shards_names_the_runs_it_carries(world, monkeypatch, tmp_path):
@@ -792,12 +801,11 @@ def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_t
     env.put(2, {"b.txt": "1\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     named, d = [], loop.world.slim_driver()
-    launch = d.launch_postland
-    d.launch_postland = lambda repo, commit, *a, **kw: named.append((commit, os.environ.get(CARRY_ENV))) or launch(
-        repo, commit, *a, **kw)
+    d._started = lambda got: named.append((got[0][0], _handed().get(CARRY_ENV))) or Landing._started(got)
     lower = loop.tick()[1]["sha"]
     upper = loop.tick()[0]["sha"]
-    replaced_ids = sorted(f"c-{n}" for n, (c, *_) in enumerate(runs.launches, 1) if c == upper)
+    commit = {f"c-{n}": c for n, (c, *_) in enumerate(runs.launches, 1)}
+    replaced_ids = sorted(rid for rid, c in commit.items() if c == upper)
     runs.end(main)
     runs.end(lower, 3, "pytest", rows=(_row(NEW),))
     frozen, reads = loop.now, itertools.count()
@@ -808,13 +816,14 @@ def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_t
     rebuilt = next(r for r in logged if r["action"] == "build")["sha"]
     waits = next(r for r in logged if r["action"] == "slim" and r["sha"] == rebuilt)["record"]
     assert (waits["carry"], sorted(waits["wait"]["runs"]), waits["ids"]) == (replaced_ids, replaced_ids, [])
-    assert not [c for c, _ in named if c == rebuilt]
+    assert not [rid for rid, _ in named if commit[rid] == rebuilt]
     if how == "left":
         runs.end(upper)
     else:
         env.clock += CARRY_WAIT_S + 60
     loop.tick()
-    assert [x for c, x in named if c == rebuilt] == [",".join(replaced_ids)] * 3
+    commit = {f"c-{n}": c for n, (c, *_) in enumerate(runs.launches, 1)}
+    assert [x for rid, x in named if commit[rid] == rebuilt] == [",".join(replaced_ids)] * 3
     rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == rebuilt][-1]["record"]
     assert "wait" not in rec and len(rec["ids"]) == 3
     assert rec.get("carry_without") == (replaced_ids if how == "late" else None)
