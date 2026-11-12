@@ -34,8 +34,8 @@ from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16, I32
 
 from tests.program.capture_check import LazyTranscript, Segments, check_call
-from verity_vllm.program.frontend import FrontendError
 from verity_vllm.program.frontend import derive as _D
+from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
