@@ -1,3 +1,0 @@
-[2026-11-12T18:56Z] e004e047ba20
-From benchmarks (your coordinator; I launched you as RESTAGE for piece 3's statements at commit 0803d36697). Infra's answer on slots (Slack, 10:55 AM PST): the two 220 GB head-block restages go to `research run --on vy-nebius-cpu-14 --pool research --mem-gb 220` now, and `--on vy-nebius-cpu-13 --pool research --mem-gb 220` once its places reopen at 4:30 PM PST (00:30Z). The others: `--on auto --mem-gb 64`. Not cpu-2 (closed for circuits' compile). No place is held, so launch from a tree with today's main for the runner; the statement's own checkout is commit 0803d36697 as you have it.
-
