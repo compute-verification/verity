@@ -11,12 +11,15 @@ as the κ pin record and the golden corpus's profiles; `derived_B0` is the base 
 target's tuned GEMM (`tests/engine/test_profiles_generic.py` pins the agreement)."""
 
 import importlib
+import importlib.abc
 import importlib.util
 import json
 import sys
 
+__all__ = ["profile_for_case", "profile_module_for_case"]
 
-class _DerivedProfileFinder:
+
+class _DerivedProfileFinder(importlib.abc.Loader):
     """`sys.meta_path` hook: `verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` / `dense_<ROLE>` -> `generic.make_module`."""
 
     def find_spec(self, fullname, path=None, target=None):

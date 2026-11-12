@@ -5,6 +5,7 @@ GEMM is Hopper's k16 chain at every step whose rows the process launched the ker
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import pytest
 from verity.definitions.ops.prims import HopperBF16WgmmaDot16
@@ -106,7 +107,7 @@ FACTS = {"gate": {"weight": "model.layers.0.mlp.gate.weight", "shape": [E, H]},
 #: launch configs Triton lowers to MMA v2 (BLOCK_SIZE_M 16) and to wgmma (64, 64, 4 warps)
 SMALL = {"BLOCK_SIZE_K": 64, "BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 WIDE = {"BLOCK_SIZE_K": 32, "BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
-RECORD = {"layers": {LAYER: FACTS}, "pieces": {"1": LAYER}, "cc": [9, 0],
+RECORD: dict[str, Any] = {"layers": {LAYER: FACTS}, "pieces": {"1": LAYER}, "cc": [9, 0],
           "configs": {"8": {"False": SMALL, "True": SMALL}, "256": {"False": WIDE, "True": SMALL}}}
 UP, DOWN = f"{E},{H},{2 * INTER},0", f"{E},{INTER},{H},1"
 
@@ -151,7 +152,7 @@ def test_without_renormalize_the_router_is_plain_top_k() -> None:
 
 
 def test_a_program_without_the_op_is_unchanged() -> None:
-    w = {"calls": [], "values": {}, "attention": []}
+    w: dict[str, Any] = {"calls": [], "values": {}, "attention": []}
     assert SM.expand(w, None) == (w, None)
     assert SM.expand(w, {"layers": {}}) == (w, None)
 

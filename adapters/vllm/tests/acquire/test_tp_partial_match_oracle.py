@@ -20,15 +20,19 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-from tests.check.opened import commit_steps, meta, retained_block  # noqa: E402
-from verity_vllm.acquire.sources import oracle_witness as OW  # noqa: E402
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from verity_vllm.check import oracle_compare as OC  # noqa: E402
-from verity_vllm.commit.step_rows import ROW_BYTES  # noqa: E402
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
+from tests.check.opened import commit_steps, meta, retained_block
+from verity_vllm.acquire.sources import oracle_witness as OW
+from verity_vllm.acquire.sources import partial_source as tps
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.commit.step_rows import ROW_BYTES
 
 OPROJ, MOE = "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.experts"
 

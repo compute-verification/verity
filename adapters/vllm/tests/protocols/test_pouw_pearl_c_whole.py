@@ -9,6 +9,7 @@ kept from them, and a deferred capture's forks and joins over stand-in streams).
 from __future__ import annotations
 
 import contextlib
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +22,7 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
+from verity_vllm.protocols.pouw.pearl_c import lanes as L
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
 
@@ -1029,7 +1031,6 @@ def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_cop
     stream over the call's rows and the padding up to `filled`, or none, left to the call's `_into` (`_widening`), where
     `GraphCalls._widen_later`; with an older cubin, torch's copy and fill, the same words."""
     torch = pytest.importorskip("torch")
-    from verity_vllm.protocols.pouw.pearl_c import lanes as L
     monkeypatch.setattr(L, "_stream", lambda device: 77)
     x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
     for has, later in ((True, False), (True, True), (False, True)):
@@ -1054,8 +1055,6 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
     `finish`'s.  It waits for the event once and fills the ended pass's own dict, the one `details["passes"]` and the
     stack hold, and `commits`.  The executor's pass end and `end_pass` with ``step`` lag where the run's `lag_ends` is
     set; `end_pass` without it (a caller's) never does."""
-    import hashlib
-
     import torch
 
     run = PPD.PearlCDeviceRun.__new__(PPD.PearlCDeviceRun)

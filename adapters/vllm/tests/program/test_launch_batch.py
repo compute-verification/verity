@@ -21,6 +21,7 @@ from verity.definitions.registry import tp_allreduce as TA
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
 from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.outcomes import Refuse
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
@@ -104,7 +105,6 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     from verity.definitions.registry.sparse_mla_split import launch_num_splits
 
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
-    from verity_vllm.program.frontend.compilations import COMPILATIONS
     from verity_vllm.program.predict.common import _Launch
     sizes, seqs = tuple(COMPILATIONS["breakable"]["capture_sizes"]), CLASS_G_LIMITS["max_num_seqs"]
     decode = [[[1, 300 + 37 * i] for i in range(25)]]
