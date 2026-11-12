@@ -92,6 +92,20 @@ def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[in
     assert str(e.value) == f"the device is not its registered card verity/hardware/cards/{card}.toml: {off}"
 
 
+def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(SD, "load", lambda sku: {"arch": "hopper", "sm": {"count": {"value": 132}}})
+    with pytest.raises(Unmodelled) as e:
+        SD.check_card((9, 0), 132, "a-card")
+    assert str(e.value) == "verity/hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
+
+
+def test_fa3_splitting_a_prefill_chunk_is_refused() -> None:
+    """A split launch is a decode row's: one query row.  A chunk of several rows that the heuristic splits is no Definition."""
+    with pytest.raises(Unmodelled) as e:
+        SD.attention_rows(3, 300, 2, NH=32, KVH=8, D=64, BM=128, BN=128, dot=None)
+    assert str(e.value) == "FA3 splits a prefill chunk of 3 rows 2 ways: a split prefill is not modelled"
+
+
 def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
     """`served_match.device_of`, which served-match and the Commit's served mode take the served Build's device from: the engine's
     reported name picks the card, and the one name `NO_CARD` excepts (the B200) is held to none."""

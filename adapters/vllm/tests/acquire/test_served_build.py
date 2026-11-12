@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __models__ = ("unsloth/Llama-3.2-1B",)
 
+import dataclasses
 import json
 import re
 import shutil
@@ -209,6 +210,42 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
     assert all({**c, "writes": None} == {**one["calls"][0], "writes": None} for c in two["calls"])
     with pytest.raises(Unmodelled, match="none of the templates"):
         T.recognize(name, twice.replace(store.replace("out_ptr1", "out_ptr2"), store.replace("out_ptr1", "out_ptr2").replace("tmp22", "tmp20")), cfg, cc=CC)
+
+
+def test_a_kernel_that_is_a_template_only_in_its_function_is_refused(art: Path) -> None:
+    """A source whose jit function is a template's text is still refused, by name, when its heuristic or its signature is not the
+    template's, its literals break the template's relations, its launch config is absent or one the Definition's layout does not
+    take, or the template reads another count of buffers than the Definition takes; a source with no jit function is no kernel, and
+    one with no recorded config has none."""
+    configs = json.loads((art / "launch_configs.json").read_text())
+    srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
+    name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s), cc=CC)["template"] == "ADD_NORM")
+    cfg = T.launch_config(configs, src)
+    t = next(t for t in T.TEMPLATES if t.name == "ADD_NORM")
+    whole = T.recognize(name, src, cfg, cc=CC)
+    lit = {h: whole["literals"][h] for h in T.holes(t)}
+    assert lit == {"N": 2048, "NF": 2048.0, "EPS": 1e-05} and T.instantiate(name, t, lit, cfg) == {k: v for k, v in whole.items() if k != "source_sha256"}
+
+    def why(of, *a, **kw) -> str:
+        with pytest.raises(Unmodelled) as e:
+            of(*a, **kw)
+        return str(e.value)
+
+    at = f"{name} (ADD_NORM): "
+    assert why(T.recognize, name, src.replace("@triton_heuristics.reduction(", "@triton_heuristics.pointwise(", 1), cfg, cc=CC) == \
+        at + "heuristic pointwise, the template's is reduction"
+    assert why(T.recognize, name, src.replace("@triton_heuristics.", "@heuristics.", 1), cfg, cc=CC) == at + "heuristic None, the template's is reduction"
+    assert why(T.recognize, name, src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*fp32'", 1), cfg, cc=CC).startswith(
+        at + "signature {'in_ptr0': '*bf16', 'in_ptr1': '*bf16', 'in_ptr2': '*bf16', 'out_ptr1': '*fp32', 'xnumel': 'i32', 'r0_numel': 'i32', "
+        "'XBLOCK': 'constexpr', 'R0_BLOCK': 'constexpr'} is not {'in_ptr0': '*bf16', 'in_ptr1': '*bf16', 'in_ptr2': '*bf16', 'out_ptr1': '*bf16', ")
+    assert why(T.recognize, name, src, None, cc=CC) == at + "its launch config is a static and none was given"
+    assert why(T.recognize, name, src.replace("@triton.jit", "@jit"), cfg, cc=CC) == f"{name}: no @triton.jit def"
+    assert why(T.instantiate, name, t, {**lit, "N": 2049}, cfg) == at + "literals {'N': 2049, 'NF': 2048.0, 'EPS': 1e-05} break the template's relations"
+    assert why(T.instantiate, name, t, lit, {**cfg, "num_warps": 3}).startswith(at + "Inductor norm: N=2048 XBLOCK=2 R0_BLOCK=2048 NUM_WARPS=3 is not ")
+    short = dataclasses.replace(t, calls=(dataclasses.replace(t.calls[0], reads=t.calls[0].reads[:2]),))
+    assert re.fullmatch(re.escape(at) + r"\S+ takes 3 inputs and gives 1 outputs, the template reads 2 and writes 1", why(T.instantiate, name, short, lit, cfg))
+    assert why(T.launch_config, configs, src + " ") == f"no launch config recorded for kernel source {T.source_sha256(src + ' ')[:16]}"
+    assert why(T.numel, "x") == "type x is not an array of values"
 
 
 @pytest.mark.parametrize("n,uniform,want", [(3, True, ("FULL", 4)), (8, True, ("FULL", 8)), (9, True, ("PIECEWISE", 16)),

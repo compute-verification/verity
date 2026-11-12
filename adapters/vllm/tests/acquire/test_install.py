@@ -17,7 +17,9 @@ from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.install import (
     IncompletePlan,
     OccurrenceSink,
+    apply_plan_to_committer,
     install_from_plan,
+    plan_selection,
 )
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
@@ -161,6 +163,29 @@ def test_refuses_incomplete_plan():
     assert not plan.complete
     with pytest.raises(IncompletePlan, match="unsupported"):
         install_from_plan(plan, model, runner)
+
+
+def test_a_selection_refuses_what_an_install_refuses():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    assert plan_selection(plan, model) == (["embed", "blocks.0.norm", "blocks.0.proj", "logits"], ["embed"])
+    with pytest.raises(IncompletePlan, match=r"^no model to install on$"):
+        plan_selection(plan, None)
+    with pytest.raises(IncompletePlan, match=r"^plan hook sites not in the built model: \['blocks.0.norm', 'blocks.0.proj', 'embed', 'logits', 'embed'\]$"):
+        plan_selection(plan, nn.Sequential(nn.Linear(4, 4)))
+    with pytest.raises(IncompletePlan, match=r"^the committer has no model to install on$"):
+        apply_plan_to_committer(types.SimpleNamespace(), plan)
+    gone, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
+    with pytest.raises(IncompletePlan, match=r"^1 unsupported Value\(s\): blocks.0.gone/out: no legal site: producer_output at blocks.0.gone/out: "):
+        plan_selection(gone, model)
+
+
+def test_an_occurrence_that_holds_no_tensor_is_counted_apart():
+    sink, key = OccurrenceSink(), ("blocks.0.proj", "producer_output", "out")
+    sink(key, None)
+    sink(key, (None, 3))
+    assert sink.counts == {key: 2} and sink.non_tensor == {key: 2} and sink.shapes == {} and sink.dtypes == {}
+    assert sink.to_json()["sites"] == [{"module": key[0], "kind": key[1], "slot": key[2], "occurrences": 2, "shapes": [], "dtypes": [], "non_tensor": 2}]
 
 
 def test_promoted_consumer_pre_hook_only():

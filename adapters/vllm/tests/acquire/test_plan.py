@@ -197,6 +197,45 @@ def test_call_boundaries_are_a_native_tap_of_their_module_body():
     assert "body.blocks.0.norm_in/mul_1" not in {h.module for h in plan.hooks()}              # the source installs its own pre-hook
 
 
+ACT, PROJ = "body.blocks.0.act", "body.blocks.0.proj_a"
+
+
+@pytest.mark.parametrize("family,op,member,extra,site", [
+    (P.MOE_FAMILY, ACT, "p0", {"moe_module": ACT}, ("native_tap", ACT, "p0")),
+    (P.TP_FAMILY, PROJ, "out", {}, ("native_tap", PROJ, "out")),
+    ("vocab_range", "body.embed", "out", {}, ("native_tap", "body.embed", "out")),
+    ("scale_products", PROJ, "out", {}, ("native_tap", PROJ, "out")),
+], ids=["moe", "tp", "vocab", "scale"])
+def test_a_tap_family_whose_module_is_in_the_tree_has_one_site(family, op, member, extra, site):
+    plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
+    v, = (v for v in plan.values if v.family == family)
+    assert plan.complete and [(s.kind, s.module, s.slot) for s in v.sites] == [site] and v.chosen == v.sites[0] and v.why == "one legal site"
+
+
+@pytest.mark.parametrize("family,op,member,extra,kind,slot,why", [
+    (P.MOE_FAMILY, ACT, "p0", {"moe_module": "body.nope"}, "native_tap", "p0", "MoE module body.nope is not a module of the runtime tree"),
+    (P.MOE_FAMILY, ACT, "p0", {}, "native_tap", "p0", "the manifest row names no `moe_module` to anchor the block source on"),
+    (P.TP_FAMILY, "body.nope", "out", {}, "native_tap", "out", "the owning module is not a module of the runtime tree"),
+    ("vocab_range", "body.nope", "out", {}, "native_tap", "out", "the embedding site is not a module of the runtime tree"),
+    ("scale_products", "body.nope", "out", {}, "native_tap", "out", "the linear module is not a module of the runtime tree"),
+    ("router_softmax", ACT, "out", {}, "native_tap", "out", "the manifest row names no `moe_module` to anchor the router-softmax tap on"),
+    ("fa2_hidden_m1_stream", "fa2.m1/L1", "g4x8x2", {"attention_module": "body.nope"}, "native_tap", "*",
+     "attention module body.nope is not a module of the runtime tree"),
+    ("fa2_hidden_m1_stream", "fa2.m1/L1", "g4x8x2", {}, "native_tap", "*", "the manifest row names no `attention_module` to anchor the tap on"),
+    ("run_values", "run/L1", "klen", {}, "native_tap", "*", "the manifest row names no `attention_module` to anchor the run values on"),
+    ("input_token_ids", "body.nope", "in", {}, "consumer_input", "in[0]", "the consuming module is not a module of the runtime tree"),
+    ("weights", "body.nope.weight", "weight", {"step": "*"}, "registered_input", "weight",
+     "neither the weight's owning module 'body.nope' nor a buffer of that name is in the runtime tree"),
+], ids=["moe-absent", "moe-unnamed", "tp-absent", "vocab-absent", "scale-absent", "router-unnamed", "hidden-absent", "hidden-unnamed", "run-unnamed",
+        "input-absent", "weight-absent"])
+def test_a_value_with_no_site_names_the_candidate_it_refused(family, op, member, extra, kind, slot, why):
+    plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
+    v, = plan.unsupported
+    assert (v.family, v.op_path, v.sites, v.chosen) == (family, op, [], None) and not plan.complete
+    assert v.rejected[0] == {"kind": kind, "module": op, "slot": slot, "why": why}
+    assert v.why.startswith(f"no legal site: {kind} at {op}/{slot}: {why}")
+
+
 def test_sampler_without_runner_is_unsupported():
     rt = tree()
     rt.runner = {"sample": False, "sampler_module": False}
