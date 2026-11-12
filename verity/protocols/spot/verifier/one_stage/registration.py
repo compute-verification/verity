@@ -224,6 +224,19 @@ class HistoryRefused(ValueError):
     """History tables `check` can't read, or whose roots it can't hold to the ones the window registers."""
 
 
+def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
+    """``supplied`` as `check` read it under the history tables ``history``, for a registration `check` accepted: each
+    source ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` the bytes of table ``H``'s root or domain id
+    (`history.resolve`), as the Lean's params hold them. It computes no table's root: `check` held each registered
+    root to its table (`history.roots_of`), so the root is the registered one and the domain id the table's own."""
+    if history is None or supplied is None:
+        return supplied
+    roots = {t["name"]: (bytes.fromhex(history["registered"][t["name"]]),
+                         HT.domain(t["program"], t["name"], t["words"], t["capacity"]).domain_id)
+             for t in history["tables"]}
+    return HT.resolve(roots, supplied)
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,

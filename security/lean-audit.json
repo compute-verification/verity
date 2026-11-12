@@ -55555,7 +55555,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "56abaf512e24e7e7a99248f15bee733deeb731ef191ccc3ba0cd91fc7313775e",
+   "digest": "c2a3aea51704533500af0daed90dc46b12c2a32d159cbc6a66cf4caef5d2b757",
    "definitions": {
     "SpotFlock.Held": "696fc670c2679e17d018ff56f9aec6ef5323e9cea3f10b409e2a1701ae803aed",
     "SpotFlock.Held.boundaryNames": "33f16aae45218ba384824fa13e5ffa780b3f9bf825f3edbbec11c60e4dcea7f6",
@@ -55588,7 +55588,7 @@
     "SpotFlock.base": "0876f427eeaf122a2d57caf9348699c37ea3d4e367bf6d3a844a337d5421aa64",
     "SpotFlock.blocksOf": "1e08e138e19d4a1f2095452b4786c1ceaa5f66ab94794dc46376c48d00567d3a",
     "SpotFlock.code": "898d1a6ba4389c8b296baef3f41b5b77f63a93f2f566ac68b7975a4e7e7ec52f",
-    "SpotFlock.codesOk": "19d0e2016ca5ea4f2490fc744cc972fe83387b1736b322991e4532c3c8f6db23",
+    "SpotFlock.codesOk": "e5656cb5412c4dcd4e3d726c7f95035d65556a2d97cbf36a6387c567b9fadd13",
     "SpotFlock.coinByte": "43927e511fb1a08e5466102b42a5299ff18dfcce23d44a15b9f4f051c0dfa44c",
     "SpotFlock.constAt": "750c06f31897d99e7a2754f10a89663282019f01e71579e19f2c4ebd1c67de7e",
     "SpotFlock.decidedAt": "ecb1d9dd2d62f026623cb791aa7399eeacf8c17eedd441a4460ebf770d82aa52",
@@ -55611,7 +55611,7 @@
     "SpotFlock.off": "1526e8cb50cb38e6874eca0d706289d904d4fe856d85ea75aaff82588a7f439a",
     "SpotFlock.oneStageOk": "c885be823a770f382b021003c5bdd1ccbd10bfe55acf3e37b1b820fb90943af8",
     "SpotFlock.order": "22c018485385764aaae73948db6efed98360e4bf39e6314bbb439dbae477d481",
-    "SpotFlock.ownOf": "72f4043abb90712f49e32a583566c4ebcaf625b99828d6bda8bef1cd03a95bc6",
+    "SpotFlock.ownOf": "07a524e8deaa7e25c9988c32febc23a1c28da7d4fb8cf97160e4cfb46ebccf4e",
     "SpotFlock.parse": "3ecaf35fb08d8804163c7c0ae6ac0050a073c4f2fd4d80b30e3fd4f0f6752b0f",
     "SpotFlock.partAt": "6e2cd00cd81b01d76247fe1f89bcc0927bbdaa089d61d11a699405154a20672e",
     "SpotFlock.partition": "796d42dda4df8f8b4db2064063cda8ccde6d5e0ccc2cb0ee447a5789576f5ee6",
@@ -58496,7 +58496,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "438e8ba06e04c0acaeb6840673b750cdb4d690f03b4b16d02ead97f9fb65f552",
+   "digest": "89272557abc0e416c0e8cb31e32a51d51cd7d5af73134f962dd462fd5f07ca8f",
    "definitions": {
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
@@ -58509,9 +58509,10 @@
     "Spot.SecondStage.Link.value": "05b49e9b82be48ac872dec9ca7a938847733bc31c915264f79698966c7160188",
     "Spot.SecondStage.MAX_LEAVES": "9c2dead127137f4fd0e1bf06cf8b63d54d275bfb0d53877f441552c7d844e962",
     "Spot.SecondStage.ONE_TABLE": "2bd5a5b24e1b6c25a374182809a79cb7c7d9a180764476309262e1763ee9afea",
-    "Spot.SecondStage.Own": "11af98b54fb17760f6a3f41b47f926bd8fb77c42e1d6b9e963b9300e75daec5a",
+    "Spot.SecondStage.Own": "3018c5b3ae0b997a5122f01ff8ce9e033efc8a483dd15cef0481bcc07e4a1e95",
     "Spot.SecondStage.Own.boundary": "004425714613337e574fcb96b7e1fa11fae6e42714be5f040131beb822927f5c",
     "Spot.SecondStage.Own.drawn": "9745db868d64b4f26be685822ecab776f95553a1a81c4ad2f71b94128a88c966",
+    "Spot.SecondStage.Own.fixed": "482b4b46e119f55e58ce090141c704d2fba71a9a224c2b94a2e24dda3b1a7a66",
     "Spot.SecondStage.Own.interior": "07fbec86d902048fbeaaf358be62b9cc1e2ee3acef523dc97c867f6a2ae96566",
     "Spot.SecondStage.Own.links": "4d4fb412b93e500db2ce552a5e6aad032a6c8089e907bc13552893a8765d3107",
     "Spot.SecondStage.Own.parts": "a82f415ae734b592d406078a532c201e007e3160990527c0ea666198515959c4",
@@ -58521,6 +58522,7 @@
     "Spot.SecondStage.Own.returns": "92076ffb60c2738b8098571ef778794fcf41788313c8fd0df19cdb3b64ccdb8e",
     "Spot.SecondStage.Own.rows": "aa014bd92b339b7b50eff2bb4c91ebb8ea4944cf7a68ab2becd8190a7d3fbc63",
     "Spot.SecondStage.Own.sample": "184a466d49a07d782ac263e62c6535330f0ec38766d87b85642d579cc1a9c4d3",
+    "Spot.SecondStage.Own.supplied": "ec63164fb8bd50b0cc22dcf41ee1ab1c0c324786122e369947d727b14c5dadcf",
     "Spot.SecondStage.Own.verified": "c98a7781d0e3d33a06fb3196267674f1ab3df10edd2a45d32addfebe6d286d45",
     "Spot.SecondStage.Own.wires": "7a4da42581c633996a60db09f62dcc6afdb57ce015116976f86725937dc5dea4",
     "Spot.SecondStage.Part": "e2884ca123be41628e982fec6862d0d6d71fe6edc917949c5b83231cf23fd6bf",

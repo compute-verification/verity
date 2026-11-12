@@ -2416,12 +2416,13 @@ class Stream:
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
         interior program's strata make, the design's links and wires and their rows, which it derives from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
-        reads the verdicts report, what they
-        name of each session they accepted
-        (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
-        template, `template_circuits`), and the registration's
-        over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
-        failing `run` where the whole run isn't the verifier's; and the public outputs."""
+        reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
+        reference header and registered reads the params `proofs` give each template, `template_circuits`, and its
+        own copies of the interior registration's values it holds without the prover: those it fills, with their
+        sources as the registration's check read them (`registration.resolved`: a history table's root and domain
+        id as bytes), and those it pinned or holds to an earlier record), and the registration's over the replay sample,
+        each taking the sessions' reads of its own ports at their own roots (`own_reads`), both failing `run` where
+        the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2445,7 +2446,9 @@ class Stream:
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
                      rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
-                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
+                     supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
+                     fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)

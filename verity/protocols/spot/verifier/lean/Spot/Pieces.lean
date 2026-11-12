@@ -732,7 +732,9 @@ rows their units read (`replayRows`'), null for none, the names of what the repl
 reads (`Record.sessionRegistered`) and name the header, registered reads and sample each checked
 (`SecondStage.verifiedOf`), the reference header of each template's statement (`refs`, `{template: header}`, null for
 none) and the registered reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no
-template's), and the statements, null for none. -/
+template's), the verifier's own copies of the interior registration's values it fills, with their sources
+(`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
+null for none, and the statements, null for none. -/
 private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -781,10 +783,19 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
     | .null => pure #[]
     | rs@(.obj _) => pure (entries rs)
     | _ => throw "ref_reads is not an object"
+  let supplied ← match SecondStage.suppliedOf? (getD j "supplied") with
+    | some vs => pure vs
+    | none => throw "supplied is null or an object of rows, each a list of sources, each a kind naming a string"
+  let fixed ← match getD j "fixed" with
+    | .null => pure #[]
+    | .arr vs => match vs.mapM (fun v => match v with | .str x => some x | _ => none) with
+      | some vs => pure vs
+      | none => throw "fixed is null or a list of strings"
+    | _ => throw "fixed is null or a list of strings"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
-      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns }
+      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed }
   return (allow, own, stmts)
 
 /-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/

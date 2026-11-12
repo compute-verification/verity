@@ -103,6 +103,23 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   that is no schedule of its replay blocks (`Schedule.failure`): runs of positions of its requests that cover the
   replay blocks in order, and each request's positions in order. A record that commits none passes. It is checked
   with the interior record's order.
+* **The inputs a replay block may read**: `second-inputs` when the interior registration, made after the first
+  stage's sample, registers a value that a replay block's input may not read (`inputsFailure`), naming the first.
+  Every input of a replay block that the prover gives is a port of round 1's record (a link), another template's
+  output in the block (a wire), a value the verifier holds without the prover, or the opened row of a read against a
+  root round 1 committed. So a value the interior registration registers passes where the verifier pinned it, holds it
+  to an earlier record (`Own.fixed`), or fills it from its own bytes (`ownValues`); any other is the prover's, and
+  passes only as a read's row, salt or path, where the verifier fills the read's root and domain with the root and
+  the domain id round 1's record registers for one table (`oneTable`, by their bytes: the interior registration's
+  params hold what the verifier computed for a table in place of its name), the read's key is a port of round 1's
+  record or a value the verifier holds,
+  and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
+  that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
+  (`KEY_WHY`): no statement covers it. A read is a template of the read's Definition (`OPENING`), by its id; that the
+  circuit a session proves under that id is the read's is the template check's (`Flock.ReadNet.check`), not round 2's.
+  Not held here either: that the table has as many leaves as the read's template has rows. It is checked with the
+  interior record's order, and reported beside the other codes, so a run that has it still reaches its other stops
+  (`check_ok_inputs`: a passing check has none).
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
@@ -182,6 +199,47 @@ def NAMES_WHY : String :=
 def RETURN_WHY : String :=
   "the interior registration registers a value of a name the replay block's return has in the boundary " ++
   "registration's record: what a replay block returns is read only at a port that record commits"
+
+def INPUTS_WHY : String :=
+  "the interior registration registers a value that is neither one the verifier holds without the prover (one " ++
+  "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a " ++
+  "read whose root and domain it fills from one table round 1's record registers, whose key is a port of " ++
+  "round 1's record or a value it holds, and whose verdict it holds to 1"
+
+def KEY_WHY : String :=
+  "the interior registration registers the opened row of a read at a key the block computes (the read's key is " ++
+  "wired to another template's output): no statement covers it"
+
+/-- A read's Definition, as a template's id begins (`EmbeddingRead_v1{V, H}`, whose template the verifier builds:
+`Flock.ReadNet.readTmpl`). -/
+def OPENING : String := "EmbeddingRead_v1{"
+
+/-- A read's key port. -/
+def OPENING_KEY : String := "tok"
+
+/-- A read's port of its table's root. -/
+def OPENING_ROOT : String := "root"
+
+/-- A read's port of its table's domain id. -/
+def OPENING_DOMAIN : String := "domain"
+
+/-- A read's ports of the table it opens: its root and its domain id. -/
+def OPENING_TABLE : List String := [OPENING_ROOT, OPENING_DOMAIN]
+
+/-- A read's ports of the row it opens: the row, its salt and its path. -/
+def OPENING_ROW : List String := ["row", "salt", "path"]
+
+/-- A read's verdict port. -/
+def OPENING_VERDICT : String := "o1"
+
+/-- The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes,
+among them the root and the domain id it computed for a table, which the interior registration's params hold in
+place of the table's name (`HistoryTable.resolve`). A `port` or a `value` source reads a root of the interior record,
+the prover's after the sample, and a `position` or a `window` source the interior record's population or window. -/
+def OWN_SOURCES : List String := ["bytes"]
+
+/-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
+def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -344,7 +402,10 @@ Definition makes none), the `{value: root}` the verifiers of record report the s
 template's statement and the registered reads it reads (`refReads`, null for none), as the auditor's params give them
 (`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them, the design's
 wires (`replayWires`, none when the Definition makes none), the rows of the ports they and the links name
-(`replayRows`), and the names the replay block's return has in the boundary registration's record (`replayReturns`). -/
+(`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
+of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
+each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
+of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -359,6 +420,27 @@ structure Own where
   wires : Option (Array Wire) := some #[]
   rows : Array Rows := #[]
   returns : Array String := #[]
+  supplied : Array (String × Array (Array (String × String))) := #[]
+  fixed : Array String := #[]
+
+/-- `second_stage.supplied_of`: the verifier's supplied values from their JSON, `{value: [[source, ...], ...]}`, a
+row a list of sources, each `{kind: name}` of two strings, as `(value, rows)` each, a row its `(kind, name)` sources;
+null is none of them, and anything else is none. -/
+def suppliedOf? : Json → Option (Array (String × Array (Array (String × String))))
+  | .null => some #[]
+  | j@(.obj _) => (entries j).mapM fun ((v, rows) : String × Json) =>
+    match rows with
+    | Json.arr rows => (rows.mapM fun (r : Json) =>
+        match r with
+        | Json.arr ss => ss.mapM fun (x : Json) =>
+          (match x with
+          | Json.obj o => (match o.toArray with
+            | #[(k, Json.str n)] => some (k, n)
+            | _ => none)
+          | _ => none : Option (String × String))
+        | _ => (none : Option (Array (String × String)))).map fun rows => (v, rows)
+    | _ => none
+  | _ => none
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -1096,17 +1178,121 @@ def returnsOk (own : Own) : Bool :=
     | .str v => !own.returns.any (· == v)
     | _ => true
 
+/-- The supplied values each of whose sources is the verifier's own (`OWN_SOURCES`), with their rows. -/
+def ownValues (own : Own) : Array (String × Array (Array (String × String))) :=
+  own.supplied.filter fun (_, rows) => rows.all fun r => r.all fun (k, _) => OWN_SOURCES.contains k
+
+/-- The rows of value `v` among `mine` (`ownValues`), a name's last. -/
+def ownRows (mine : Array (String × Array (Array (String × String)))) (v : String) :
+    Option (Array (Array (String × String))) :=
+  (mine.toList.reverse.find? (·.1 == v)).map (·.2)
+
+/-- The bytes a row is, in hex: `h` where the row is the one source `{"bytes": h}`, none for any other row. -/
+def bytesOf (row : Array (String × String)) : Option String :=
+  let x := row.getD 0 ("", "")
+  if row.size == 1 && x.1 == "bytes" then some x.2 else none
+
+/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's of round 1's record
+at every unit. Each has at least one row and as many as the other; row `i` of each is one `bytes` source (`bytesOf`),
+and some port of round 1's record (`Record.byPort`) registers row `i` of `root` as its root under row `i` of `domain`
+as its domain id; and the two ports' rows place each unit alike (`Own.rows`: one `per` and the same runs). So a unit
+reads the root and the domain id of one table that round 1's record registers. -/
+def oneTable (own : Own) (mine : Array (String × Array (Array (String × String)))) (t root domain : String) : Bool :=
+  let a := ((ownRows mine root).getD #[]).map bytesOf
+  let b := ((ownRows mine domain).getD #[]).map bytesOf
+  let ports := Record.byPort own.boundary
+  let place := fun (p : String) => (rowsOf own t p).map fun r => (r.per, r.runs)
+  !a.isEmpty && a.size == b.size &&
+    (a.zip b).all (fun (r, d) => match r, d with
+      | some r, some d => ports.any fun (_, e) => (match getD e "root", getD e "domain" with
+        | .str x, .str y => x == r && y == d
+        | _, _ => false)
+      | _, _ => false) &&
+    (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
+
+/-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
+read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
+(`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
+of round 1's record at every unit (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked at values the interior
+registration doesn't register (`registered`: a port of round 1's record then, by `second-links`) or the verifier holds
+(`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads
+(`Own.refReads`, the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. A key
+the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
+def openedRow (own : Own) (registered : Array String) (mine : Array (String × Array (Array (String × String))))
+    (x : Link) : Bool :=
+  let t := x.template
+  let linked := fun (p : String) =>
+    ((own.links.getD #[]).filter fun y => y.template == t && y.port == p).map (·.value)
+  let isMine := fun (v : String) => mine.any (·.1 == v)
+  let held := fun (v : String) => !registered.contains v || own.fixed.contains v || isMine v
+  let verdict : Option String := match (own.refReads.find? (·.1 == t)).map (·.2) with
+    | some ref => (match getD (getD (getD ref "ports") OPENING_VERDICT) "value" with
+      | .str v => some v
+      | _ => none)
+    | none => none
+  t.startsWith OPENING && OPENING_ROW.contains x.port &&
+    OPENING_TABLE.all (fun p => !(linked p).isEmpty && (linked p).all isMine) &&
+    (linked OPENING_ROOT).all (fun r => (linked OPENING_DOMAIN).all fun d => oneTable own mine t r d) &&
+    (wireOf own t OPENING_KEY).isNone && !(linked OPENING_KEY).isEmpty && (linked OPENING_KEY).all held &&
+    match verdict with
+    | some v => (match ownRows mine v with
+      | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE)
+      | none => false)
+    | none => false
+
+/-- Whether some template's reference statement (`Own.refReads`) reads value `v` at a port no link names it at: a port
+`second-values` then lets every session of the template read `v` at, with no link's check of it. -/
+def readUnlinked (own : Own) (v : String) : Bool :=
+  own.refReads.any fun (t, ref) => (entries (getD ref "ports")).any fun (p, e) =>
+    (match getD e "value" with
+      | .str w => w == v
+      | _ => false) &&
+      !(own.links.getD #[]).any fun x => x.template == t && x.port == p && x.value == v
+
+/-- **The inputs a replay block may read**: the first value the interior registration registers (its `registered`
+entries' values, in the record's order) that a replay block's input may not read, none for none. A value passes where
+the verifier holds it without the prover: one it pinned or holds to an earlier record (`own.fixed`), or one it fills
+from its own bytes (`ownValues`). Any other passes only as the opened row of a read against a root round 1 committed:
+at least one link names it, each link that does is such a row's (`openedRow`), and no template's reference statement
+reads it at a port no link names it at (`readUnlinked`), so nothing reads the row but its opening. So every input of
+a replay block the prover gives after the first stage's sample is a row a read opens under the root of a table round
+1's record registers, at a key round 1's record or the verifier fixes, and the prover's choice of it is SHA-512's
+collision: the links at round 1's ports, the wires and the values the verifier holds are the block's other inputs,
+none the interior registration's to choose. That the circuit a session proves under a read's id is the read's is the
+template check's (`Flock.ReadNet.check`). -/
+def inputsFailure (own : Own) : Option String :=
+  let names := (match getD own.interior "registered" with | .arr es => es | _ => #[]).filterMap fun e =>
+    match getD e "value" with
+    | .str v => some v
+    | _ => none
+  let mine := ownValues own
+  names.find? fun v =>
+    let links := (own.links.getD #[]).filter (·.value == v)
+    !(own.fixed.contains v || mine.any (·.1 == v)) &&
+      (!(!links.isEmpty && links.all (openedRow own names mine)) || readUnlinked own v)
+
+/-- Why value `v` is refused (`inputsFailure`): `KEY_WHY` where a link names it as the opened row of a read whose key
+is wired, a key the block computes, else `INPUTS_WHY`. -/
+def inputsWhy (own : Own) (v : String) : String :=
+  if (own.links.getD #[]).any fun x => x.value == v && x.template.startsWith OPENING && OPENING_ROW.contains x.port &&
+      (wireOf own x.template OPENING_KEY).isSome then KEY_WHY
+  else INPUTS_WHY
+
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
 `second-interior-names` unless no value the interior registration registers is of a name the boundary registration's
 record has (`namesOk`), then `second-return` unless none is of a name the replay block's return has there
 (`returnsOk`), then `second-schedule` where the schedule the boundary registration's record commits is not one of its
-replay blocks (`Schedule.failure`). -/
+replay blocks (`Schedule.failure`), then `second-inputs` where the interior registration registers a value a replay
+block's input may not read (`inputsFailure`), naming the first and why (`inputsWhy`). -/
 def interiorFailures (own : Own) : List (String × Json) :=
   (if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]) ++
     (if namesOk own then [] else [("second-interior-names", Json.str NAMES_WHY)]) ++
     (if returnsOk own then [] else [("second-return", Json.str RETURN_WHY)]) ++
-    match Schedule.failure own.boundary with
+    (match Schedule.failure own.boundary with
     | some why => [("second-schedule", Json.str why)]
+    | none => []) ++
+    match inputsFailure own with
+    | some v => [("second-inputs", Json.mkObj [("value", Json.str v), ("why", Json.str (inputsWhy own v))])]
     | none => []
 
 /-- Every failure of statements `ss` over parts `ps`, the interior record's order's and the schedule's first, then,
@@ -1242,7 +1428,8 @@ theorem orderFailures_nil {ps : Array Part} {ss : List Json} (h : orderFailures 
 /-- With no `second-interior-order`, the interior record names the replay sample in its order. -/
 theorem interiorFailures_nil {own : Own} (h : interiorFailures own = []) : interiorOrderOk own = true := by
   unfold interiorFailures at h
-  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1).1
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1
+    (List.append_eq_nil_iff.1 h).1).1).1).1
   split at h
   · assumption
   · simp at h
@@ -1251,7 +1438,8 @@ theorem interiorFailures_nil {own : Own} (h : interiorFailures own = []) : inter
 registration's record has. -/
 theorem interiorFailures_names {own : Own} (h : interiorFailures own = []) : namesOk own = true := by
   unfold interiorFailures at h
-  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1).2
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1
+    (List.append_eq_nil_iff.1 h).1).1).1).2
   split at h
   · assumption
   · simp at h
@@ -1260,7 +1448,7 @@ theorem interiorFailures_names {own : Own} (h : interiorFailures own = []) : nam
 in the boundary registration's record. -/
 theorem interiorFailures_return {own : Own} (h : interiorFailures own = []) : returnsOk own = true := by
   unfold interiorFailures at h
-  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).2
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1).2
   split at h
   · assumption
   · simp at h
@@ -1268,6 +1456,14 @@ theorem interiorFailures_return {own : Own} (h : interiorFailures own = []) : re
 /-- With no `second-schedule`, the boundary registration's record commits no schedule, or one of its replay blocks. -/
 theorem interiorFailures_schedule {own : Own} (h : interiorFailures own = []) :
     Schedule.failure own.boundary = none := by
+  unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).2
+  split at h
+  · simp at h
+  · assumption
+
+/-- With no `second-inputs`, every value the interior registration registers is one a replay block's input may read. -/
+theorem interiorFailures_inputs {own : Own} (h : interiorFailures own = []) : inputsFailure own = none := by
   unfold interiorFailures at h
   have h := (List.append_eq_nil_iff.1 h).2
   split at h
@@ -1344,6 +1540,33 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         split at hrep
         · assumption
         · simp at hrep
+
+/-- A passing check has no failure of the interior record's own (`interiorFailures`). -/
+theorem check_ok_interior {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+    interiorFailures own = [] := by
+  simp only [check, fold_codes_empty] at h
+  split at h
+  · simp at h
+  · split at h
+    · simp at h
+    · exact absurd (List.append_eq_nil_iff.1 h).2 (designFailures_ne_nil ‹_›)
+  · rename_i ps _ hp hs
+    cases hs
+    by_cases hl : designOk ps own = true
+    case neg => rw [if_neg hl] at h; exact absurd (List.append_eq_nil_iff.1 h).2 (designFailures_ne_nil hl)
+    rw [if_pos hl] at h
+    simp only [failures] at h
+    split at h
+    · simp at h
+    · simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
+      exact h.1
+
+/-- **A passing `second-inputs`**: under a passing check, every value the interior registration registers is one a
+replay block's input may read: one the verifier holds without the prover, or the opened row of a read against a root
+round 1 committed (`inputsFailure`). -/
+theorem check_ok_inputs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
+    inputsFailure own = none :=
+  interiorFailures_inputs (check_ok_interior h)
 
 /-- A passing statement's checks: an accepted verdict of record checked its header, registered reads and sample, every
 one that did checked its session as one table, and its header at its position, population, roots, sample and

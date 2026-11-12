@@ -68,6 +68,24 @@ block's return has there (`returns_ok`), and ``second-schedule`` where the bound
 commits a schedule (``window.schedule``) that is no schedule of its replay blocks (`schedule.failure`); a record that
 commits none passes.
 
+Every input of a replay block that the prover gives is a port of round 1's record (a link), another template's output
+in the block (a wire), a value the verifier holds without the prover, or the opened row of a read against a root round
+1 committed: the interior registration, made after the first stage's sample, registers nothing else
+(``second-inputs``, `inputs_failure`). A value it registers passes where the verifier pinned it, holds it to an earlier
+record, or fills it from its own bytes (`Own.fixed`, `Own.supplied`). Any other is the prover's, and passes only as a
+read's row, salt or path, where the verifier fills the read's root and domain with the root and the domain id round 1's
+record registers for one table (`_one_table`, by their bytes: `Own.supplied` holds what the verifier computed for a
+table in place of its name, as the interior registration's check read it), the read's key is a port of round 1's
+record or a value the verifier holds, and the read's verdict port reads a value the verifier fills with 1
+(`_opened_row`): the row is then the table's at that key, short of a SHA-512
+collision. A key the block computes, a wire, is refused, with a reason of its own (`KEY_WHY`): no statement covers it.
+A read is a template of the read's Definition (`OPENING`), by its id; that the circuit a session proves under that id
+is the read's is the template check's (`Flock.ReadNet.check`), not round 2's. Which table a read opens is the one whose
+root and domain id the verifier fills, and which row its key. Not held here: that the table has as many leaves as the
+read's template has rows. A design whose key is the prover's after the sample, or whose root and domain are not one
+table's of round 1's record, is refused here. The code is reported beside the others, in every
+branch of `check`, so a run that has it still reaches its other stops.
+
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
 
@@ -107,6 +125,26 @@ NAMES_WHY = ("the interior registration registers a value of a name the boundary
              "registered value")
 RETURN_WHY = ("the interior registration registers a value of a name the replay block's return has in the boundary "
               "registration's record: what a replay block returns is read only at a port that record commits")
+INPUTS_WHY = ("the interior registration registers a value that is neither one the verifier holds without the prover (one "
+              "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a "
+              "read whose root and domain it fills from one table round 1's record registers, whose key is a port of "
+              "round 1's record or a value it holds, and whose verdict it holds to 1")
+KEY_WHY = ("the interior registration registers the opened row of a read at a key the block computes (the read's key is "
+           "wired to another template's output): no statement covers it")
+#: A read's Definition, as a template's id begins, and its ports (`gates.embedding.EmbeddingRead`): its key, the
+#: table's root and domain id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING`).
+OPENING = "EmbeddingRead_v1{"
+OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
+OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
+#: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
+#: them the root and the domain id it computed for a table, which `Own.supplied` holds in place of the table's name
+#: (`history.resolve`; `SecondStage.OWN_SOURCES`). A ``port`` or a ``value`` source reads a root of the interior record,
+#: the prover's after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
+#: A ``history`` source left unresolved is none of the verifier's bytes.
+OWN_SOURCES = ("bytes",)
+#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
+#: (`SecondStage.VERDICT_ONE`).
+VERDICT_ONE = (("bytes", "00000001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -272,8 +310,10 @@ class Own:
     of each template's statement, ``(template, header)``, and the registered reads it reads,
     ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
     (`service.template_circuits`), the design's wires (`replay_wires`, None when the Definition makes none), the
-    rows of the ports they and the links name (`replay_rows`), and the names the replay block's return has in the
-    boundary registration's record (`replay_returns`)."""
+    rows of the ports they and the links name (`replay_rows`), the names the replay block's return has in the boundary
+    registration's record (`replay_returns`), and, of the values the interior registration registers, the verifier's
+    own copies of those it holds without the prover: each one it fills itself, with its rows of sources
+    (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -288,6 +328,26 @@ class Own:
     wires: tuple[Wire, ...] | None = ()
     rows: tuple[Rows, ...] = ()
     returns: tuple[str, ...] = ()
+    supplied: tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...] = ()
+    fixed: tuple[str, ...] = ()
+
+
+def supplied_of(supplied: Any) -> tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...]:
+    """`SecondStage.suppliedOf`: the verifier's supplied values ``{value: [[source, ...], ...]}``, a row a list of
+    sources, each ``{kind: name}`` of two strings, as ``(value, rows)`` each, a row its ``(kind, name)`` sources; None is
+    none. ValueError on any other form."""
+    if supplied is None:
+        return ()
+    if not isinstance(supplied, Mapping):
+        raise ValueError(f"supplied values are an object of rows, not {supplied!r}")
+    out = []
+    for v, rows in supplied.items():
+        if not (isinstance(v, str) and isinstance(rows, (list, tuple))
+                and all(isinstance(r, (list, tuple)) and all(isinstance(x, Mapping) and len(x) == 1 and all(
+                    isinstance(k, str) and isinstance(n, str) for k, n in x.items()) for x in r) for r in rows)):
+            raise ValueError(f"supplied value {v!r}: its rows are not lists of sources, each a kind naming a string")
+        out.append((v, tuple(tuple(next(iter(x.items())) for x in r) for r in rows)))
+    return tuple(out)
 
 
 def parts(q: int, strata: Sequence[tuple[str, Sequence[Sequence[int]]]]) -> tuple[Part, ...] | None:
@@ -1205,16 +1265,110 @@ def returns_ok(own: Own) -> bool:
                    for e in (es if isinstance(es, list) else ()))
 
 
+def _own_values(own: Own) -> dict[str, tuple[tuple[tuple[str, str], ...], ...]]:
+    """`SecondStage.ownValues`: the supplied values each of whose sources is the verifier's own (`OWN_SOURCES`), with
+    their rows: a name's last."""
+    return {v: rows for v, rows in own.supplied if all(k in OWN_SOURCES for r in rows for k, _n in r)}
+
+
+def _bytes_of(row: Sequence[tuple[str, str]]) -> str | None:
+    """`SecondStage.bytesOf`: the bytes a row is, in hex: ``h`` where the row is the one source ``{"bytes": h}``, None
+    for any other row."""
+    return row[0][1] if len(row) == 1 and row[0][0] == "bytes" else None
+
+
+def _one_table(own: Own, mine: Mapping[str, Any], t: str, root: str, domain: str) -> bool:
+    """`SecondStage.oneTable`: values `root` and `domain`, which template `t`'s root and domain ports read, are one
+    table's of round 1's record at every unit. Each has at least one row and as many as the other; row ``i`` of each is
+    one ``bytes`` source (`_bytes_of`), and some port of round 1's record (`_by_port`) registers row ``i`` of `root` as
+    its root under row ``i`` of `domain` as its domain id; and the two ports' rows place each unit alike (``own.rows``:
+    one ``per`` and the same runs). So a unit reads the root and the domain id of one table that round 1's record
+    registers."""
+    a, b = ([_bytes_of(r) for r in mine[v]] for v in (root, domain))
+    ports = list(_by_port(own.boundary).values())
+    at = [None if (r := _rows_of(own, t, p)) is None else (r.per, r.runs) for p in OPENING_TABLE]
+    return (bool(a) and len(a) == len(b)
+            and all(r is not None and d is not None
+                    and any(type(_get(e, "root")) is str and type(_get(e, "domain")) is str
+                            and _get(e, "root") == r and _get(e, "domain") == d for e in ports)
+                    for r, d in zip(a, b))
+            and at[0] is not None and at[0] == at[1])
+
+
+def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link) -> bool:
+    """`SecondStage.openedRow`: link `x` names the opened row of a read against a root round 1 committed. Its template
+    is a read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
+    (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
+    of round 1's record at every unit (`_one_table`); its key (`OPENING_KEY`) is no wire, and is linked at values the
+    interior registration doesn't register (`registered`: a port of round 1's record then, by ``second-links``) or
+    the verifier holds (``own.fixed``, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
+    statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each
+    row `VERDICT_ONE`. A key the block computes, a wire, is refused: no statement covers it (`_inputs_why`)."""
+    t = x.template
+    at = lambda p: [y.value for y in own.links or () if y.template == t and y.port == p]  # noqa: E731
+    held = lambda v: v not in registered or v in own.fixed or v in mine  # noqa: E731
+    ref = next((r for u, r in own.ref_reads if u == t), None)
+    verdict = _get(_get(_get(ref, "ports"), OPENING_VERDICT), "value")
+    roots, domains = at(OPENING_ROOT), at(OPENING_DOMAIN)
+    return (t.startswith(OPENING) and x.port in OPENING_ROW
+            and all(at(p) and all(v in mine for v in at(p)) for p in OPENING_TABLE)
+            and all(_one_table(own, mine, t, r, d) for r in roots for d in domains)
+            and _wire_of(own, t, OPENING_KEY) is None and bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))
+            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE for r in mine[verdict]))
+
+
+def _read_unlinked(own: Own, v: str) -> bool:
+    """`SecondStage.readUnlinked`: whether some template's reference statement (``own.ref_reads``) reads value ``v`` at
+    a port no link names it at: a port `second-values` then lets every session of the template read ``v`` at, with no
+    link's check of it."""
+    at = {(x.template, x.port) for x in own.links or () if x.value == v}
+    reads = [(t, ports) for t, ref in own.ref_reads if isinstance(ports := _get(ref, "ports"), Mapping)]
+    return any((t, p) not in at for t, ports in reads for p, e in ports.items() if _get(e, "value") == v)
+
+
+def inputs_failure(own: Own) -> str | None:
+    """`SecondStage.inputsFailure`: the first value the interior registration registers (its ``registered`` entries'
+    values, in the record's order) that a replay block's input may not read, None for none. A value passes where the
+    verifier holds it without the prover: one it pinned or holds to an earlier record (``own.fixed``), or one it fills
+    from its own bytes (`_own_values`). Any other passes only as the opened row of a read against a root round 1
+    committed: at least one link names it, each link that does is such a row's (`_opened_row`), and no template's
+    reference statement reads it at a port no link names it at (`_read_unlinked`), so nothing reads the row but its
+    opening. So every input of a replay block the prover gives after the first stage's sample is a row a read opens
+    under the root of a table round 1's record registers, at a key round 1's record or the verifier fixes, and the
+    prover's choice of it is SHA-512's collision: the links at round 1's ports, the wires and the values the verifier
+    holds are the block's other inputs, none the interior registration's to choose."""
+    es = _get(own.interior, "registered")
+    names = [v for e in (es if isinstance(es, list) else ()) if isinstance(v := _get(e, "value"), str)]
+    registered, mine = set(names), _own_values(own)
+    for v in names:
+        if v in own.fixed or v in mine:
+            continue
+        links = [x for x in own.links or () if x.value == v]
+        if not (links and all(_opened_row(own, registered, mine, x) for x in links)) or _read_unlinked(own, v):
+            return v
+    return None
+
+
+def _inputs_why(own: Own, v: str) -> str:
+    """`SecondStage.inputsWhy`: why value `v` is refused (`inputs_failure`): `KEY_WHY` where a link names it as the
+    opened row of a read whose key is wired, a key the block computes, else `INPUTS_WHY`."""
+    wired = any(x.value == v and x.template.startswith(OPENING) and x.port in OPENING_ROW
+                and _wire_of(own, x.template, OPENING_KEY) is not None for x in own.links or ())
+    return KEY_WHY if wired else INPUTS_WHY
+
+
 def _interior_failures(own: Own) -> list[tuple[str, Any]]:
     """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`, then
     ``second-interior-names`` unless `names_ok`, then ``second-return`` unless `returns_ok`, then ``second-schedule``
     where the schedule the boundary registration's record commits is not one of its replay blocks
-    (`schedule_failure`)."""
-    why = schedule_failure(own.boundary)
+    (`schedule_failure`), then ``second-inputs`` where the interior registration registers a value a replay block's
+    input may not read (`inputs_failure`), naming the first and why (`_inputs_why`)."""
+    why, value = schedule_failure(own.boundary), inputs_failure(own)
     return (([] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)])
             + ([] if names_ok(own) else [("second-interior-names", NAMES_WHY)])
             + ([] if returns_ok(own) else [("second-return", RETURN_WHY)])
-            + ([] if why is None else [("second-schedule", why)]))
+            + ([] if why is None else [("second-schedule", why)])
+            + ([] if value is None else [("second-inputs", {"value": value, "why": _inputs_why(own, value)})]))
 
 
 def _pos_of(ps: Sequence[Part], t: str) -> int:
@@ -1275,8 +1429,8 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "RETURN_WHY", "Checked", "Link", "Own", "Part", "Rows", "Run",
            "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads",
-           "interior_root", "link_runs", "links_of",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "inputs_failure", "interior_order_ok",
+           "interior_reads", "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_returns", "replay_rows", "replay_wires",
            "returns_ok", "row_at", "rows_of",
-           "set_name", "statement_reads", "verified_of", "wire_runs", "wires_of"]
+           "set_name", "statement_reads", "supplied_of", "verified_of", "wire_runs", "wires_of"]
