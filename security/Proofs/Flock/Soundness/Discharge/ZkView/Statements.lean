@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Wire
 import ArkLib.Data.CodingTheory.JohnsonBound.Family
 import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
 import Batteries.Data.UInt
-import Flock.Sizes
+import Base.Sizes
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Algebra.Polynomial.SpecificDegree
 import Mathlib.Data.Nat.BitIndices

@@ -1,10 +1,11 @@
 """A model served mid-traffic with drained edges (`tp_edge`), restored at its first edge into a fresh engine, replayed to
 its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` model runs.
 
-    tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N]
+    tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N] [--kv-cache-dtype FORMAT]
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
                         [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling own]
-                        [--max-model-len 40960] [--tp N] [--long-share 0.05] [--long-tokens 8192,32768]
+                        [--max-model-len 40960] [--tp N] [--kv-cache-dtype FORMAT] [--long-share 0.05]
+                        [--long-tokens 8192,32768]
                         [--saver MODULE:FUNCTION ...] [--dump 1] [--num-gpu-blocks N]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
@@ -132,9 +133,9 @@ def sampling_params(sampling: Mapping[str, Any], logprobs: int | None = None) ->
                           detokenize=False, output_kind=RequestOutputKind.DELTA)
 
 
-def edge_site(site: Path) -> Path:
-    """`serve_tax.plugin_site`'s directory with `tp_edge.register` declared beside `servetax_plugin.register`."""
-    S.plugin_site(site, tick=False)
+def edge_site(site: Path, arm: S.Arm) -> Path:
+    """`serve_tax.plugin_site`'s directory for ``arm`` with `tp_edge.register` declared beside the arm's plugins."""
+    S.plugin_site(site, arm)
     d = site / "verity_tp_edge-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-tp-edge\nVersion: 0.0\n")
@@ -193,10 +194,12 @@ def lengthen(plan: list[dict], share: float, lo: int, hi: int, seed: int) -> lis
 
 
 def served_argv(a: argparse.Namespace, checkpoint: Path, port: int) -> list[str]:
-    """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context, tensor-parallel size and pool."""
+    """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context, tensor-parallel size, pool and
+    KV cache format."""
     return S.server_argv(S.ARMS["record"], S.MODELS[a.model_id], checkpoint, port, getattr(a, "num_gpu_blocks", None)) \
         + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else []) \
-        + (["--tensor-parallel-size", str(a.tp)] if a.tp else [])
+        + (["--tensor-parallel-size", str(a.tp)] if a.tp else []) \
+        + (["--kv-cache-dtype", a.kv_cache_dtype] if getattr(a, "kv_cache_dtype", None) else [])
 
 
 def preflight(a: argparse.Namespace) -> int:
@@ -242,7 +245,7 @@ def serve(a: argparse.Namespace) -> int:
     plan_file = out / "plan.jsonl"
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
-    site = edge_site(scratch / ".site")
+    site = edge_site(scratch / ".site", arm)
     port = S.corpus().free_port()
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
@@ -762,6 +765,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--checkpoint")
     f.add_argument("--max-model-len", type=int)
     f.add_argument("--tp", type=int)
+    f.add_argument("--kv-cache-dtype")
     s = sub.add_parser("serve")
     s.add_argument("--model-id", default="glm53", choices=sorted(S.MODELS))
     s.add_argument("--checkpoint")
@@ -781,6 +785,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--sampling", default=OWN, help=f"{OWN} (each request's), or one of the corpus's, or production")
     s.add_argument("--max-model-len", type=int)
     s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")
+    s.add_argument("--kv-cache-dtype", help="the KV cache's format (vLLM's --kv-cache-dtype), when not vLLM's default; the "
+                   "restore's engine takes it from the served argv")
     s.add_argument("--saver", action="append", default=[])
     s.add_argument("--dump", type=int, default=1, help="how many of the first edges write their blocks")
     s.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override), each dump's size")

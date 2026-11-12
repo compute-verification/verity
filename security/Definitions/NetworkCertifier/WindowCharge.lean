@@ -6,12 +6,13 @@ import Mathlib.Tactic.Finiteness.Attr
 /-!
 # Advice v1's whole window charged (`ChargeCount_v2`): every term, as `code_v1` codes it
 
-Definitions only. They mirror `verity/ml/protocols/certifier/window_charge.py`'s `reference_window` one for one, with
-each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of `window_code.code_window`'s
-segment for the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
-`arith_encode.py`'s references), and of the length terms' tail after it.
+Definitions only. They mirror `verity/protocols/certifier/prover/window_charge.py`'s `reference_window` one for one,
+with each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of
+`window_code.code_window`'s segment for the whole window, counted by advice v1's counting encoder
+(`AdviceV1.countStep` and `AdviceV1.finish`, from `arith_encode.py`'s references), and of the length terms' tail after
+it.
 
-A window sends its decisions, its hits (v1's sent shortfalls, in hit units), its order entries (each deviating
+A window's advice is its decisions, its hits (in hit units; advice v1 sends none), its order entries (each deviating
 arrival's position and rank) and its length terms (each request's output_len and finish, for the requests whose body
 lands in it). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
@@ -28,10 +29,10 @@ each a plain tail after the segment (`window_code.Encoder.raw`, `lengths.tails`)
 (`AdviceV1.Carry`) and the last order entry's position and rank, each `+ 1` (0 before the session's first entry),
 chained from window to window under `window-charge` (`window_charge.check_chain`); the length terms carry nothing.
 
-**Scope.** Every advice v1 window: v1 sends hits, order entries and length terms, and never resumes or lag bits (the
-`codec.py` refuses a window that sends either), so the two are coded as 0. With no hits, no order entries and no
-length terms the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its
-`zeros`. A registration that sends no length terms gives every window none.
+**Scope.** Every advice v1 window: v1 sends order entries and length terms, and never hits, resumes or lag bits
+(every hit is the replay's block pool's, and `advice_code.codec` refuses a window that sends any), so the three are
+coded as 0. With no order entries and no length terms the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes,
+n_order and n_lag tables' bin 0 for its `zeros`. A registration that sends no length terms gives every window none.
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `window` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the window charge's difftest
@@ -131,7 +132,7 @@ structure Carry where
 order entries, each the arrival's position and rank `(p, r)` (`order`); and the length terms, each the request's
 max_tokens and output_len `(m, n)` (`lens`; its finish is one bit whatever it is). A disabled slot changes nothing, so
 the charge is a function of these. -/
-structure Window where
+structure Advice where
   ds : List Bool
   hits : List ℕ
   order : List (ℕ × ℕ)
@@ -168,7 +169,7 @@ def entrySyms (bk : Book) : ℕ → ℕ → List (ℕ × ℕ) → Option (List S
 /-- **The window's symbols** (`reference_window`), in `window_code.code_window`'s order, and the carry after them: n_arrived,
 the decisions, n_hits, the hits, n_resumes (0), n_order, the entries, n_lag (0). A count over `S` slots has
 `hi = 2^bitlen(S) − 1`. -/
-def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym × Carry) :=
+def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>
       (entrySyms bk cy.pos cy.rank x.order).map fun e =>
@@ -187,7 +188,7 @@ def tailBits : List (ℕ × ℕ) → Option ℕ
 hit slots, `O` order slots and `L` length slots, under the book `bk` and the carry `cy`, the charge (the segment's,
 then the length terms' tail) and the next window's carry. It refuses a carry whose run is past 2 or whose rank is past
 `INDEX_CAP + 1`, and a charge of `2^CW` bits or more. -/
-def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Window) : Option (ℕ × Carry) :=
+def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Advice) : Option (ℕ × Carry) :=
   if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ INDEX_CAP + 1 then
     (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).bind fun c =>
@@ -195,7 +196,7 @@ def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Window) : Option (ℕ �
   else none
 
 /-- **A run's charges**: each window's, the carry passed along. -/
-def session (bk : Book) (N H O L : ℕ) : Carry → List Window → Option (List ℕ)
+def session (bk : Book) (N H O L : ℕ) : Carry → List Advice → Option (List ℕ)
   | _, [] => some []
   | cy, x :: ws => (window bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
@@ -203,12 +204,12 @@ def session (bk : Book) (N H O L : ℕ) : Carry → List Window → Option (List
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- **The run's charges per window**, from the session's first carry, for the advice of `W` windows. -/
-def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Window) : Option (List ℕ) :=
+def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Advice) : Option (List ℕ) :=
   session bk N H O L bk.first (List.ofFn a)
 
 /-- **Advice v1's whole windows**: the advice of `W` windows whose charge no window refuses. A refused window fails its
 unit, so no accepted run has other advice. -/
-def Streams (bk : Book) (N H O L W : ℕ) : Type := {a : Fin W → Window // (charges bk N H O L a).isSome}
+def Streams (bk : Book) (N H O L W : ℕ) : Type := {a : Fin W → Advice // (charges bk N H O L a).isSome}
 
 /-- **The whole window's charge** (I1's `bits(advice, w)`): window `w`'s. -/
 def bits (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Streams bk N H O L W) (w : Fin W) : ℕ :=

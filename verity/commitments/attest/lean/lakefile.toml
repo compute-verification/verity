@@ -10,8 +10,8 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../../../protocols/flock/verifier"
+name = "core_commitments"
+path = "../../lean"
 
 [[require]]
 name = "core_randomness"

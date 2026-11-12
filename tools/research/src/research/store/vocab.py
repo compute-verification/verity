@@ -85,6 +85,7 @@ KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superse
 KERNEL_REASON = "kernel_reason"
 UNIT_LOWERING = "unit_lowering"
 COMPILE_COST = "compile_cost"
+TRAINING_SLOWDOWN = "training-slowdown"               # on a training-slowdown job's run and its run record: the job
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -110,7 +111,7 @@ CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v
 CHALLENGER_MODELS_VALUES = ("head",)
 MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
 MEMORY_LINE_OF_RECORD_PATTERN = r"lean conditional on [A-Z][A-Za-z]*(, [A-Z][A-Za-z]*)*"
-#: What statement C (the line's NoOutsideCompute premise) rests on in a line of record: itself, or the provider's lockdown that grounds it.
+#: What statement C (no outside device computes for the node, `NoOutsideCompute`) rests on in a line of record: itself, or the provider's lockdown that grounds it.
 MEMORY_LINE_GROUNDS = ("NoOutsideCompute", "ProviderLockdown")
 #: The file of the ref run's run record a `memory-line-of-record` label is held to (`check_line_of_record`).
 MEMORY_LINE_FILE = "out/auditor_line.json"
@@ -237,6 +238,10 @@ TASKS_GRAPH = "tasks_graph"
 VERITY_GRAPH = "verity_graph"
 #: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
 TASK_RESULT = "result"
+#: On `commit:<sha>`, by the control pod's nightly loop (infra/control/nightly_check.py): what the uncached check of that commit
+#: of `main` said; the label's ref is its run.
+NIGHTLY_CHECK = "nightly_check"
+NIGHTLY_CHECK_OUTCOMES = ("passed", "contradicted", "failed", "error")
 
 
 def canonical_key(name: str) -> str:
@@ -363,10 +368,14 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "guard pass|fail|n/a, approach, commit branch@sha}"),
     _k(COMPILE_COST, GROUP_RESULT, TEXT, "on a `benchmarks/compile_cost` run, by its lane: its record, a JSON object (--value-json) "
        "{window, layers, wall_min, peak_gib, root_nodes, digests [16-hex prefixes], workload, guard pass|fail|n/a, commit branch@sha}"),
+    _k(TRAINING_SLOWDOWN, GROUP_RESULT, TEXT, "on a training-slowdown job's run (when it is queued) and its run record (once "
+       "the run ends with one), by `verity bench training-slowdown`: the job, as DIGEST/SEED/SPLIT, its attack config's "
+       "digest (benchmarks/training_slowdown/training_slowdown/config.py), its seed and its held-out split; the command's "
+       "only state", pattern=r"[0-9a-f]{64}/\d+/(search|final)"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
-       "its order, which must name NoOutsideCompute (statement C in full, a premise of LineHeld) or ProviderLockdown (the provider's "
+       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the certifiers' record) or ProviderLockdown (the provider's "
        "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
        "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
        pattern=MEMORY_LINE_OF_RECORD_PATTERN),
@@ -406,10 +415,12 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(GRANT, GROUP_VERIFICATION, ENUM, "a reviewer's grant on pr:<n>@<head>: the role that reviewed that exact head; a record only, which no merge waits on",
        GRANT_ROLES),
     _k(READY, GROUP_VERIFICATION, BOOL, "the owner's word that pr:<n>@<head> is ready for the merge queue (`research queue ready`); a new head needs it "
-       "again unless its own change is the same (`StoreLabels`); a train member needs none (Q14)"),
+       "again unless its own change is the same, or, in the verified queue's loop, an older head's carried across the moves "
+       "`main` landed since (`StoreLabels`); a train member needs none (Q14)"),
     _k(REVIEWED, GROUP_VERIFICATION, ENUM, "a reviewer's verdict on pr:<n>@<head> (`research queue review`): land, or hold with the "
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner, and at a new head "
-       "whose own change is the same",
+       "whose own change is the same (in the verified queue's loop, or an older head's carried across the moves `main` landed "
+       "since)",
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
@@ -436,6 +447,11 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
        "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),
+    _k(NIGHTLY_CHECK, GROUP_VERIFICATION, ENUM, "on commit:<sha>, by the control pod's nightly loop: what the uncached check of "
+       "that commit of main (`check.py --no-cache`, every path counted as changed) said, with its run as the ref: passed, and "
+       "the check named no cached pass it contradicts; contradicted, it named one, a cached pass that answers for something "
+       "it failed; failed, and it named none; error, no verdict (it never started, timed out or was lost)",
+       NIGHTLY_CHECK_OUTCOMES),
     # evidence
     _k(INSTRUCTION, GROUP_EVIDENCE, TEXT, "the tensor-core instruction probed, as the registry names it (sm89.mma.m16n8k32.e4m3)"),
     _k(MODEL, GROUP_EVIDENCE, TEXT, "the silicon model the capture was compared with"),

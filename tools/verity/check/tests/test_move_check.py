@@ -154,20 +154,187 @@ def test_a_new_file_is_refused(tmp_path):
 
 
 def test_an_empty_init_for_a_package_level_the_move_makes_is_certified(tmp_path):
-    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory from a moved package module up to its
-    package's root, so the module imports by its new name. Only that is let in: one with a line in it, or one above no
-    module that was a package's at BASE (`verity_pouw/x.py` has no `__init__.py` beside it), is a new file like any other."""
-    roots = {"tools/move/layout_map.toml": '[roots]\nnew = { security = "security", loose = "loose" }\n'}
+    """`tools/move/layout.py` writes an empty `__init__.py` in each new directory from a module moved into a package up to
+    its package's root, so the module imports by its new name: a module that was a package's at BASE, and one that was
+    outside every package (`verity_pouw/x.py` has no `__init__.py` at or above it). Only that is let in: one with a line in
+    it, one above a script a package held as no module of its own (`verity_pous/scripts/gen.py`), or one in a directory
+    run by path (`tests/`), is a new file like any other."""
+    roots = {"tools/move/layout_map.toml": '[roots]\nnew = { security = "security", loose = "loose" }\n',
+             "protocols/pous/src/verity_pous/scripts/gen.py": "G = 1\n", "protocols/pouw/src/verity_pouw/tests/test_x.py": "T = 1\n"}
     repo, base = _repo(tmp_path, {**BASE_FILES, **roots})
     _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
     _move(repo, "protocols/pouw/src/verity_pouw/x.py", "loose/pouw/x.py")
-    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "",
+    _move(repo, "protocols/pous/src/verity_pous/scripts/gen.py", "loose/scripts/gen.py")
+    _move(repo, "protocols/pouw/src/verity_pouw/tests/test_x.py", "loose/pouw/tests/test_x.py")
+    _write(repo, {"security/__init__.py": "", "security/pous/__init__.py": "", "loose/pouw/__init__.py": "", "loose/__init__.py": "",
+                  "loose/scripts/__init__.py": "", "loose/pouw/tests/__init__.py": "",
                   "tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
     r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
-    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/__init__.py", "added")]
-    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {"security/__init__.py", "security/pous/__init__.py"}
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [("loose/pouw/tests/__init__.py", "added"),
+                                                                  ("loose/scripts/__init__.py", "added")]
+    assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {
+        "security/__init__.py", "security/pous/__init__.py", "loose/__init__.py", "loose/pouw/__init__.py"}
+    assert r["rules"] == {"level": ["loose/__init__.py", "loose/pouw/__init__.py"]}
     _write(repo, {"security/pous/__init__.py": "X = 1\n"})
     assert ("security/pous/__init__.py", "added") in [(f["path"], f["reason"]) for f in _check(repo, base)["refusals"]]
+
+
+def test_the_init_of_a_package_the_move_emptied_may_be_deleted(tmp_path):
+    """The mover deletes the `__init__.py` left alone where a package was: its files left by the range's renames and HEAD
+    has nothing at or below its directory. One whose directory still holds a file, and one of a package no file left by a
+    rename, is a deleted file like any other."""
+    files = {**BASE_FILES, "protocols/pous/src/verity_pous/sub/__init__.py": "", "protocols/pous/src/verity_pous/sub/kept.py": "K = 1\n",
+             "protocols/pouw/src/verity_pouw/idle/__init__.py": '"""Nothing here."""\n'}
+    repo, base = _repo(tmp_path, files)
+    _move(repo, "protocols/pous/src/verity_pous/codec.py", "security/pous/codec.py")
+    _write(repo, {"tests/test_pous.py": BASE_FILES["tests/test_pous.py"].replace("verity_pous.codec", "security.pous.codec")})
+    _git(repo, "rm", "-q", "protocols/pous/src/verity_pous/sub/__init__.py", "protocols/pouw/src/verity_pouw/idle/__init__.py")
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert sorted(f["path"] for f in r["refusals"]) == ["protocols/pous/src/verity_pous/sub/__init__.py",
+                                                        "protocols/pouw/src/verity_pouw/idle/__init__.py"]
+    _move(repo, "protocols/pous/src/verity_pous/sub/kept.py", "security/pous/kept.py")
+    _git(repo, "rm", "-q", "protocols/pous/src/verity_pous/__init__.py")
+    r = _check(repo, base, {"verity_pous.codec": "security.pous.codec"})
+    assert [f["path"] for f in r["refusals"]] == ["protocols/pouw/src/verity_pouw/idle/__init__.py"]
+    assert r["rules"] == {"emptied": ["protocols/pous/src/verity_pous/__init__.py", "protocols/pous/src/verity_pous/sub/__init__.py"]}
+
+
+COVERED = {
+    "tools/move/layout_map.toml": '[roots]\nnew = { verity = "verity" }\n',
+    "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
+    "lib/core/proto/check.py": "Y = 1\n", "lib/core/claims.py": "Z = 1\n", "lib/commit/c.py": "C = 1\n", "docs/a.md": "a\n",
+    "other/x.py": "W = 1\n",
+    "gates.toml": 'low_risk = ["docs/", "lib/core/", "lib/commit/"]\ncore = [\n    "lib/core/",  # the verifiers\n]\n',
+    "job.sh": "#!/bin/sh\ngit rev-parse HEAD:lib/core HEAD:other\ncd lib/core\n",
+}
+CORE_COVER = '    "verity/config/",\n    "verity/protocols/proto/",  # the verifiers\n'
+
+
+def _covered(tmp_path: Path, core: str = CORE_COVER, cd: str = "lib/core") -> dict:
+    """The range that sends `lib/core/` three ways and deletes its own `__init__.py`, with `gates.toml`'s `core` list
+    written as `core` and `job.sh` changing directory to `cd`."""
+    repo, base = _repo(tmp_path, COVERED)
+    for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                     ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit")):
+        _move(repo, old, new)
+    _git(repo, "rm", "-q", "lib/core/__init__.py")
+    job = f"#!/bin/sh\ngit rev-parse HEAD:verity/config HEAD:verity/protocols/proto HEAD:other\ncd {cd}\n"
+    _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "", "job.sh": job,
+                  "gates.toml": f'low_risk = ["docs/", "verity/", "verity/commit/"]\ncore = [\n{core}]\n'})
+    return _check(repo, base)
+
+
+def test_a_list_of_paths_rewritten_as_an_exact_cover_of_where_its_files_went_is_certified(tmp_path):
+    """No one path stands for `lib/core/` after the range, so the mover writes a list entry that names it as the fewest
+    paths that hold its files (`tools/move/layout.py`'s `_covers`). The certificate takes any list whose paths hold, of the
+    files HEAD has that the range did not add, exactly those the old list's paths held: beside `lib/commit/` that is
+    `verity/` whole, alone the two parts, in either order. git reads the deleted `lib/core/__init__.py` as renamed to the
+    new `verity/__init__.py`, one empty file as good as another: where no file of its directory went with it, the first is
+    deleted and the second added, so the two parts still hold all `lib/core/` held."""
+    r = _covered(tmp_path / "mover")
+    assert r["certified"], r["refusals"]
+    assert {"old": "lib/core/__init__.py", "new": "verity/__init__.py"} in r["renames"]
+    assert r["rules"] == {"cover": ["gates.toml", "job.sh"]}
+    r = _covered(tmp_path / "order", '    "verity/protocols/proto/",\n    "verity/config/",  # the verifiers\n')
+    assert r["certified"], r["refusals"]
+
+
+def test_a_list_of_paths_that_holds_more_or_less_than_its_old_entries_held_is_refused(tmp_path):
+    """A cover is exact. `verity/` holds `lib/commit/`'s file too, which `core` never named; `verity/config/` alone lost the
+    protocol; a path that holds only what the range added (`verity/__init__.py`) covers nothing; a list whose comment
+    changed is another edit; and a word of a command that takes one directory (`cd`) is no list."""
+    for case, core in (("wider", '    "verity/",  # the verifiers\n'), ("narrower", '    "verity/config/",  # the verifiers\n'),
+                       ("added", CORE_COVER + '    "verity/__init__.py",\n'),
+                       ("comment", CORE_COVER.replace("the verifiers", "the trusted code"))):
+        r = _covered(tmp_path / case, core)
+        assert [f["path"] for f in r["refusals"]] == ["gates.toml"] and r["rules"]["cover"] == ["job.sh"], case
+    r = _covered(tmp_path / "cd", cd="verity/config")
+    assert [f["path"] for f in r["refusals"]] == ["job.sh"] and r["rules"]["cover"] == ["gates.toml"]
+
+
+def test_a_covered_lists_comment_and_its_entry_that_is_no_path_change_as_a_line_may(tmp_path):
+    """A list the range covers also holds a comment that names a moved file and an entry the tree does not have, below a
+    directory that moved whole. Both follow the move as they would on any line, and the list is a cover. Refused: a
+    comment whose other word changed, and the made-up entry sent anywhere else."""
+    core = '    # read beside {c}, {why}\n    "verity/config/",\n    "verity/protocols/proto/",\n    "{made}",\n'
+    for case, c, why, made in (("follows", "verity/commit/c.py", "the verifiers", "verity/commit/made.json"),
+                               ("word", "verity/commit/c.py", "the checkers", "verity/commit/made.json"),
+                               ("elsewhere", "verity/commit/c.py", "the verifiers", "verity/config/made.json")):
+        gates = 'core = [\n    # read beside lib/commit/c.py, the verifiers\n    "lib/core/",\n    "lib/commit/made.json",\n]\n'
+        repo, base = _repo(tmp_path / case, {**COVERED, "gates.toml": gates, "job.sh": "#!/bin/sh\n"})
+        for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                         ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit")):
+            _move(repo, old, new)
+        _git(repo, "rm", "-q", "lib/core/__init__.py")
+        _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "",
+                      "gates.toml": f"core = [\n{core.format(c=c, why=why, made=made)}]\n"})
+        r = _check(repo, base)
+        if case == "follows":
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, r["refusals"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
+
+
+def test_a_cover_may_keep_the_place_the_range_declares_for_an_entry_and_add_its_other_parts(tmp_path):
+    """`moves.json` sends `lib/h/` to `old/lib/h/` and its `face/` elsewhere, so a line that names `lib/h/` may follow
+    to `old/lib/h/`, which no longer holds `face/`. A list that names it there and `face/`'s new place beside it holds
+    what it held: a cover. With a second entry that holds a file the list never held, it is refused."""
+    moves = {"about": "x", "moves": []}
+    for case, face in (("parts", "bench/face/"), ("wider", "bench/")):
+        repo, base = _repo(tmp_path / case, {MC.MOVES: json.dumps(moves, indent=2) + "\n", "lib/h/a.py": "A = 1\n",
+                                             "lib/h/face/b.py": "B = 1\n", "bench/other.py": "O = 1\n",
+                                             "gates.toml": 'owns = ["lib/h/"]\n'})
+        _move(repo, "lib/h/face", "bench/face")
+        _move(repo, "lib/h/a.py", "old/lib/h/a.py")
+        paths = {"lib/h/": "old/lib/h/", "lib/h/face/": "bench/face/"}
+        _write(repo, {MC.MOVES: json.dumps({**moves, "moves": [{"paths": paths}]}, indent=2) + "\n",
+                      "gates.toml": f'owns = ["old/lib/h/", "{face}"]\n'})
+        r = _check(repo, base)
+        if case == "parts":
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, r["refusals"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
+
+
+def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
+    """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
+    `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`
+    and a module of it; the two lists as given."""
+    gates = 'low_risk = ["docs/", "lib/core/"]\nmarks = ["lib/core/__init__.py", "lib/core/claims.py"]\n'
+    repo, base = _repo(tmp_path, {**COVERED, "other/notes.md": "n\n", "gates.toml": gates, "job.sh": "#!/bin/sh\n"})
+    for old, new in (("lib/core/wire", "verity/config/wire"), ("lib/core/proto", "verity/protocols/proto"),
+                     ("lib/core/claims.py", "verity/config/claims.py"), ("lib/commit", "verity/commit"),
+                     ("other/notes.md", "docs/notes.md")):
+        _move(repo, old, new)
+    _git(repo, "rm", "-q", "lib/core/__init__.py")
+    _write(repo, {"verity/__init__.py": "", "verity/config/__init__.py": "", "verity/commit/__init__.py": "",
+                  "gates.toml": f"low_risk = [{low_risk}]\nmarks = [{marks}]\n"})
+    return _check(repo, base)
+
+
+LOW_RISK = '"docs/", "verity/config/", "verity/protocols/proto/"'
+MARKS = '"verity/__init__.py", "verity/config/__init__.py", "verity/config/claims.py"'
+
+
+def test_a_cover_judges_what_the_range_rewrote_and_takes_the_package_levels_above_it(tmp_path):
+    """An entry the range sent whole is where it went, whatever else the range moved there: `docs/` gains a file the list
+    never held and is still the list's entry, beside the two parts of `lib/core/`. And a list that named a package's own
+    `__init__.py`, which the range deleted with the package, may name the levels above what the range wrote anew in it:
+    the mover writes them there, since an import of the moved module runs each."""
+    r = _levels(tmp_path, LOW_RISK, MARKS)
+    assert r["certified"], r["refusals"]
+    assert r["rules"]["cover"] == ["gates.toml"]
+
+
+def test_a_level_above_nothing_the_list_names_or_in_a_list_that_named_none_is_refused(tmp_path):
+    """`verity/commit/` is a package the range made, but `marks` names nothing below it; `low_risk` named no level, so it
+    gains none; and a part that holds a file the old list never held (`docs/notes.md`, written beside `docs/` as its own
+    entry) is no part."""
+    for case, low_risk, marks in (("above nothing", LOW_RISK, MARKS + ', "verity/commit/__init__.py"'),
+                                  ("named none", LOW_RISK + ', "verity/__init__.py"', MARKS),
+                                  ("never held", LOW_RISK.replace('"docs/"', '"docs/a.md", "docs/notes.md"'), MARKS)):
+        r = _levels(tmp_path / case, low_risk, marks)
+        assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
 
 
 def test_an_empty_init_above_the_packages_root_is_refused(tmp_path):
@@ -224,6 +391,42 @@ def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_pat
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
     [f] = _check(repo, base)["refusals"]
     assert f["reason"] == "relative path now resolves elsewhere"
+
+
+INNER_LAKEFILE = 'name = "requirer"\n\n[[require]]\nname = "inner"\npath = "inner"\n'
+INNER_MANIFEST = json.dumps({"packages": [{"type": "path", "name": "inner", "dir": "inner"}]}, indent=1) + "\n"
+INNER_FILES = {"outer/lakefile.toml": INNER_LAKEFILE, "outer/lake-manifest.json": INNER_MANIFEST, "outer/Outer.lean": "",
+               "outer/inner/lakefile.toml": 'name = "inner"\n', "outer/inner/Inner.lean": "def i := 1\n",
+               "outer/other/lakefile.toml": 'name = "other"\n'}
+
+
+def test_a_lake_path_with_no_leading_dot_follows_the_package_it_names(tmp_path):
+    """A package inside the one that requires it is required by its bare name, which Lake reads from the requirer's
+    directory as it reads `../x`. When the inner package leaves, the mover rewrites that path, in the lakefile and in the
+    manifest, and the commit is still a pure move; a path rewritten to any other package is not."""
+    repo, base = _repo(tmp_path / "moved", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "../apart/inner"'),
+                  "outer/lake-manifest.json": INNER_MANIFEST.replace('"dir": "inner"', '"dir": "../apart/inner"')})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert sorted(e["path"] for e in r["edits"]) == ["outer/lake-manifest.json", "outer/lakefile.toml"]
+    repo, base = _repo(tmp_path / "elsewhere", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "other"')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "outer/lakefile.toml" and '+path = "other"' in f["hunk"]
+
+
+def test_a_moved_lakefile_whose_bare_require_stayed_behind_is_refused(tmp_path):
+    """The requirer moves byte for byte and the package inside it goes elsewhere: `path = "inner"` now names nothing."""
+    repo, base = _repo(tmp_path, INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _move(repo, "outer", "far/outer")
+    refusals = _check(repo, base)["refusals"]
+    assert {f["path"]: f["reason"] for f in refusals} == {
+        "far/outer/lakefile.toml": "relative path now resolves elsewhere",
+        "far/outer/lake-manifest.json": "relative path now resolves elsewhere"}
 
 
 def test_lean_audit_pin_change_is_refused(tmp_path):
@@ -464,12 +667,12 @@ RUN = {"why": "random instances", "args": ["{difftest/instances.jsonl}", "10000"
        "data": {"difftest/instances.jsonl": "c048"}, "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]}
 
 
-def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None = None) -> dict:
-    """The split, with core's lock holding a difftest whose runner module and generator move to the proofs package."""
+def _runs_split(tmp_path: Path, proofs_runs: dict | None, spec_runs: dict | None = None, was: dict = RUN) -> dict:
+    """The split, with core's lock holding a difftest (``was``) whose runner module and generator move to the proofs package."""
     base_files = {**SPEC_FILES, f"{SPEC}/Verity/SecurityProofs/Difftest.lean": "def main : IO Unit := pure ()\n",
                   f"{SPEC}/scripts/difftest_vectors.py": "print(1)\n",
                   f"{SPEC}/lean-audit.json": _lock(roots=["Verity"], layers={"Verity.Protocol": []}, pins=PINS, reads=READS,
-                                                   runs={"Verity.SecurityProofs.Difftest": RUN})}
+                                                   runs={"Verity.SecurityProofs.Difftest": was})}
     repo, base = _repo(tmp_path, base_files)
     for m in ("Foo", "Bar", "Difftest"):
         _move(repo, f"{SPEC}/Verity/SecurityProofs/{m}.lean", f"{PROOFS}/CoreProofs/{m}.lean")
@@ -1154,6 +1357,43 @@ def test_anchor_that_names_another_directory_is_refused(tmp_path):
     assert f["path"] == "pkg/tests/protocols/bandwidth/test_remote.py" and "parents[4]" in f["hunk"]
 
 
+LEFT_BODY = "".join(f"STEP_{i} = {i}  # unchanged by the move\n" for i in range(12))
+LEFT_OLD = ("HERE = Path(__file__).resolve().parent\nsys.path.insert(0, str(Path(__file__).resolve().parents[1]))\n"
+            + LEFT_BODY)
+LEFT_NEW = ('HERE = (Path(__file__).resolve().parent.parent.parent / "bench" / "kv")\n'
+            'sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "bench")))\n' + LEFT_BODY)
+LEFT_BY_HAND = ('HERE = Path(__file__).resolve().parent.parent.parent / "bench" / "kv"\n'
+                'sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "bench"))\n' + LEFT_BODY)
+
+
+def _left(tmp_path: Path, new: str) -> dict:
+    """`bench/kv/run.py` moves to `pkg/kv/`, and the rest of `bench/kv/` stays."""
+    repo, base = _repo(tmp_path, {"bench/kv/run.py": LEFT_OLD, "bench/kv/stay.py": "x = 1\n", "pkg/__init__.py": ""})
+    _move(repo, "bench/kv/run.py", "pkg/kv/run.py")
+    _write(repo, {"pkg/kv/run.py": new})
+    return _check(repo, base)
+
+
+def test_an_anchor_joined_back_to_the_directory_its_file_left_is_certified(tmp_path):
+    """As `tools/move/layout.py` writes it: the anchor gains the path back, and parentheses around the two."""
+    r = _left(tmp_path, LEFT_NEW)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_back_by_hand_with_no_parentheses_of_its_own_is_certified(tmp_path):
+    """Where the anchor is a call's whole argument, the call's parentheses are around it and are not ones it gained."""
+    r = _left(tmp_path, LEFT_BY_HAND)
+    assert r["certified"], r["refusals"]
+
+
+def test_an_anchor_joined_to_another_directory_than_its_file_left_is_refused(tmp_path):
+    for i, (was, now) in enumerate((('"bench" / "kv"', '"bench" / "other"'), ("parents[2]", "parents[1]"),
+                                    ('(Path(__file__).resolve().parent.parent.parent / "bench" / "kv")',
+                                     '(Path(__file__).resolve().parent.parent.parent / "bench" / "kv").parent'))):
+        [f] = _left(tmp_path / str(i), LEFT_NEW.replace(was, now))["refusals"]
+        assert f["path"] == "pkg/kv/run.py" and now.split(" / ")[-1] in f["hunk"]
+
+
 SH_BODY = "".join(f'echo "step {i} of the session, unchanged by the move"\n' for i in range(12))
 SH_OLD = ('#!/usr/bin/env bash\nSELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")\n'
           'ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)\ncd "$(dirname "${BASH_SOURCE[0]}")/../../.."\n'
@@ -1192,6 +1432,72 @@ def test_a_shell_path_from_a_variable_that_is_not_the_scripts_own_path_is_refuse
     _write(repo, {"examples/wipe/demo.sh": other.replace('"$SELF")/../../..', '"$SELF")/../..')})
     [f] = _check(repo, base)["refusals"]
     assert f["path"] == "examples/wipe/demo.sh" and "SELF" in f["hunk"]
+
+
+HERE_OLD = ('#!/usr/bin/env bash\nhere=$(cd "$(dirname "$0")" && pwd)\nroot=$(cd "$here/../../.." && pwd)\n'
+            'bash "$here/../../../pkg/app/store/host.py" "$out/../../x"\n' + SH_BODY)
+HERE_NEW = HERE_OLD.replace('"$here/../../.."', '"$here/../.."').replace(
+    '"$here/../../../pkg/app/store/host.py"', '"$here/../../pkg/app/protocols/bandwidth/host.py"')
+
+
+def _here(tmp_path: Path, old: str, new: str) -> dict:
+    repo, base = _repo(tmp_path, {**APP, "bench/pous/wipe/demo.sh": old})
+    for was, new_dir in APP_MOVES:
+        _move(repo, was, new_dir)
+    _move(repo, "bench/pous/wipe/demo.sh", "examples/wipe/demo.sh")
+    _write(repo, {"examples/wipe/demo.sh": new})
+    return _check(repo, base)
+
+
+def test_a_path_after_a_variable_a_shell_script_sets_to_its_own_directory_is_recounted(tmp_path):
+    """`here=$(cd "$(dirname "$0")" && pwd)` is the script's directory, so `$here/../..` is a path from it as
+    `$(dirname "$0")/../..` is: recounted from the script's new place to where what it named went. Refused as before: a
+    climb that names another directory, a path after a variable the script sets again, and one after any other variable."""
+    r = _here(tmp_path / "taken", HERE_OLD, HERE_NEW)
+    assert r["certified"], r["refusals"]
+    assert r["rules"] == {"anchor": ["examples/wipe/demo.sh"]}
+    again = 'here=$(cd "$(dirname "$0")" && pwd)\nhere=$1\n'
+    for case, old, new in (
+            ("elsewhere", HERE_OLD, HERE_NEW.replace('"$here/../.."', '"$here/.."')),
+            ("set again", HERE_OLD.replace('here=$(cd "$(dirname "$0")" && pwd)\n', again),
+             HERE_NEW.replace('here=$(cd "$(dirname "$0")" && pwd)\n', again)),
+            ("another variable", HERE_OLD, HERE_NEW.replace('"$out/../../x"', '"$out/../x"'))):
+        r = _here(tmp_path / case, old, new)
+        assert [f["path"] for f in r["refusals"]] == ["examples/wipe/demo.sh"] and "anchor" not in r["rules"], case
+
+
+SPOT = {"pkg/app/__init__.py": "", "pkg/app/spot/__init__.py": "", "pkg/app/spot/coins.py": "C = 1\n",
+        "pkg/app/spot/service.py": "S = 1\n", "pkg/app/spot/second.py": "T = 1\n", "pkg/app/spot/one/draw.py": "D = 1\n"}
+SPOT_USE = ("from app.spot import coins as CC, service as S  # noqa: E402\n" + SH_BODY
+            + "from app.spot import (coins as C2, second as SS,\n                      service as S2)\n" + SH_BODY
+            + "from app.spot import coins as C3, service as S3\nfrom app.spot.one import draw as D, \\\n    draw as D2\n")
+SPOT_SPLIT = ("from app.device import coins as CC  # noqa: E402\nfrom app.verifier import service as S  # noqa: E402\n" + SH_BODY
+              + "from app.device import coins as C2\nfrom app.verifier import (second as SS,\n                      service as S2)\n"
+              + SH_BODY + "from app.device import coins as C3\nfrom app.verifier import service as S3\n"
+              "from app.verifier.one import draw as D, \\\n    draw as D2\n")
+
+
+def _spot(tmp_path: Path, use: str) -> dict:
+    """`app.spot` goes two ways, `coins` to `app.device` and the rest to `app.verifier`, and `use.py` imports from both."""
+    repo, base = _repo(tmp_path, {**SPOT, "use.py": SPOT_USE})
+    _move(repo, "pkg/app/spot/coins.py", "pkg/app/device/coins.py")
+    for name in ("__init__.py", "service.py", "second.py", "one/draw.py"):
+        _move(repo, f"pkg/app/spot/{name}", f"pkg/app/verifier/{name}")
+    _write(repo, {"use.py": use})
+    return _check(repo, base)
+
+
+def test_an_import_split_in_two_keeps_its_lines_comment_and_the_lines_it_went_on_over(tmp_path):
+    """One `from` import whose names now come from two modules becomes two (`tools/move/layout.py`): each keeps the
+    comment that ended the line, and where the import went on over more lines, in brackets or after a backslash, those
+    lines stay as they were under the statement that has their names. Refused: a line that lost the comment, and a
+    continued line whose module is not where its names went."""
+    r = _spot(tmp_path / "split", SPOT_SPLIT)
+    assert r["certified"] and r["rules"] == {"continued": ["use.py"]}, r["refusals"]
+    for case, use in (("comment", SPOT_SPLIT.replace("coins as CC  # noqa: E402", "coins as CC")),
+                      ("bracket", SPOT_SPLIT.replace("from app.verifier import (second", "from app.other import (second")),
+                      ("backslash", SPOT_SPLIT.replace("from app.verifier.one import", "from app.other.one import"))):
+        assert [f["path"] for f in _spot(tmp_path / case, use)["refusals"]] == ["use.py"], case
 
 
 def test_relative_import_rewritten_absolute_is_certified(tmp_path):
@@ -1458,3 +1764,371 @@ def test_a_prose_move_is_judged_by_the_map_its_move_line_or_words_names(tmp_path
     (tmp_path / "named").mkdir()
     r = _terms(tmp_path / "named", message="move", words="tools/move/terms_map.toml", **notes)
     assert r["certified"], r["refusals"]
+
+
+LAYOUT_MAP = "tools/move/layout_map.toml"
+LAYOUT_MSG = f"Move by {LAYOUT_MAP}\n\nLayout-move: {LAYOUT_MAP}\n"
+#: `verity/ml/flock/` splits: `tool.py` to `verity/flock/prover/`, `pod/` whole to `verity/flock/pod/`
+FLOCK = {
+    LAYOUT_MAP: '[tokens]\n"verity/ml/flock/" = "verity/flock/prover/"\n"verity/ml/" = "verity/elsewhere/"\n',
+    "verity/ml/flock/tool.py": "FLOCK_PURE = 1\n",
+    "verity/ml/flock/pod/10-link.sh": "echo link\n",
+    "verity/ml/other.py": "X = 1\n",
+    "SKILL.md": ("files beside the code (`verity/ml/flock/`). Its patches are `verity/ml/flock/*.patch`,\n"
+                 "and a test names `verity/ml/flock/src.rs`.\nThe pod scripts are in `verity/ml/flock/pod`.\n"),
+    "tests/_release.py": 'FLOCK = ROOT / "verity" / "ml" / "flock"\n',
+    "Security/Proofs/lakefile.toml": '[[require]]\nname = "vstar"\npath = "../../verity/ml/flock"\n',
+    "Security/Sha.lean": "/-- (`verity/ml/flock`) step for step -/\ntheorem t : 1 = 1 := rfl\n",
+}
+FLOCK_MOVED = {
+    "SKILL.md": FLOCK["SKILL.md"].replace("verity/ml/flock/pod", "verity/flock/pod").replace("verity/ml/flock", "verity/flock/prover"),
+    "tests/_release.py": 'FLOCK = ROOT / "verity" / "flock" / "prover"\n',
+    "Security/Proofs/lakefile.toml": FLOCK["Security/Proofs/lakefile.toml"].replace("verity/ml/flock", "verity/flock/prover"),
+    "Security/Sha.lean": FLOCK["Security/Sha.lean"].replace("verity/ml/flock", "verity/flock/prover"),
+}
+
+
+def _flock(tmp_path: Path, message: str = LAYOUT_MSG, **over: str) -> dict:
+    repo, base = _repo(tmp_path, FLOCK)
+    _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+    _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+    _write(repo, {**FLOCK_MOVED, **over})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+
+
+def test_a_reference_to_a_split_directory_follows_the_maps_tokens_row(tmp_path):
+    """The map the move's commit names says where a reference to a directory it splits goes (`[tokens]`), which no rename
+    does: the directory itself, a pattern below it, a path below it that names nothing, a pathlib chain, a lakefile's
+    relative path, a Lean comment. The report lists the paths the row took."""
+    r = _flock(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert "verity/ml/flock" not in r["map"]
+    assert r["rules"] == {"tokens": ["SKILL.md", "Security/Proofs/lakefile.toml", "Security/Sha.lean", "tests/_release.py"]}
+
+
+def test_a_path_below_a_split_directory_that_the_tree_has_follows_only_its_own_move(tmp_path):
+    """`verity/ml/flock/pod` moved whole to `verity/flock/pod`: the directory's row doesn't send it below `verity/flock/prover/`.
+    Neither does a row send a reference anywhere but where it says, and a row the range doesn't bear out (no file of
+    `verity/ml/` is below `verity/elsewhere/`) is no row."""
+    for case, line in (("below", "The pod scripts are in `verity/flock/prover/pod`."),
+                       ("elsewhere", "The pod scripts are in `verity/flock/pod` (`verity/flock/pod/`)."),
+                       ("not borne out", "The pod scripts are in `verity/flock/pod`, not in `verity/elsewhere/`.")):
+        base = FLOCK["SKILL.md"] if case == "below" else FLOCK["SKILL.md"].replace("pod`.", "pod` (`verity/ml/`).") \
+            if case == "not borne out" else FLOCK["SKILL.md"].replace("pod`.", "pod` (`verity/ml/flock/`).")
+        (tmp_path / case).mkdir()
+        repo, at = _repo(tmp_path / case, {**FLOCK, "SKILL.md": base})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "SKILL.md": "\n".join([*FLOCK_MOVED["SKILL.md"].splitlines()[:2], line]) + "\n"})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(at, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        assert [f["path"] for f in r["refusals"]] == ["SKILL.md"], case
+        assert "SKILL.md" not in r["rules"]["tokens"], case
+
+
+def test_an_anchor_that_names_a_split_directory_is_recounted_to_where_its_row_points(tmp_path):
+    """A test of `verity/ml/flock/` names that directory by counting up from its own file. The directory goes two ways and
+    its `[tokens]` row says a reference to it means the prover, so from the file's new place the anchor counts up to
+    there. Refused: a count that names another directory, and the same recount where no row names the directory."""
+    body = "".join(f"V{i} = {i}\n" for i in range(30)) + "sys.path.insert(0, str(Path(__file__).resolve().parents[{n}]))\n"
+    for case, n, rows in (("row", 2, FLOCK[LAYOUT_MAP]), ("other", 3, FLOCK[LAYOUT_MAP]),
+                          ("no row", 2, '[tokens]\n"verity/ml/" = "verity/elsewhere/"\n')):
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: rows, "verity/ml/flock/tests/test_x.py": body.format(n=1)})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/tests/test_x.py", "verity/flock/prover/unit/tests/test_x.py")):
+            _move(repo, old, new)
+        _write(repo, {**(FLOCK_MOVED if case != "no row" else {}), "verity/flock/prover/unit/tests/test_x.py": body.format(n=n)})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "row":
+            assert r["certified"] and "verity/flock/prover/unit/tests/test_x.py" in r["rules"]["tokens"], r["refusals"]
+        else:
+            assert "verity/flock/prover/unit/tests/test_x.py" in [f["path"] for f in r["refusals"]], case
+
+
+def test_a_cover_may_hold_an_entry_its_tokens_row_sends(tmp_path):
+    """A list names the split `verity/ml/flock` beside its own `pod/`, where the mover writes it as its `[tokens]` row
+    says, and `lib/a/`, which goes two ways with no row and is covered. The certificate takes the row's entry in the
+    cover and lists the file under both rules. An entry that holds a file the old list never held (`verity`, with
+    `verity/ml/other.py`) is still refused."""
+    for case, flock in (("row", "verity/flock/prover"), ("wider", "verity")):
+        repo, base = _repo(tmp_path / case, {**FLOCK, "verity/ml/flock/agree.py": "A = 1\n", "lib/a/x.py": "X = 1\n", "lib/a/y.py": "Y = 1\n",
+                                             "gates.toml": 'keyed = ["verity/ml/flock", "verity/ml/flock/pod", "lib/a"]\n'})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/agree.py", "verity/flock/agreement/agree.py"),
+                         ("lib/a/x.py", "p/x.py"), ("lib/a/y.py", "q/y.py")):
+            _move(repo, old, new)
+        _write(repo, {**FLOCK_MOVED, "gates.toml": f'keyed = ["{flock}", "verity/flock/pod", "p", "q"]\n'})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "row":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["cover"] == ["gates.toml"] and "gates.toml" in r["rules"]["tokens"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
+
+
+def test_a_cover_whose_one_part_is_where_the_row_points_is_a_cover(tmp_path):
+    """`verity/ml/flock` goes three ways and its `[tokens]` row names one of them. A list that names it alone is written
+    as all three, and the row's part among them is a part like the others: a cover, under no row. With one of the three
+    left out the list is neither what the row says nor a cover, and is refused."""
+    for case, parts in (("all", '"verity/flock/agreement", "verity/flock/pod", "verity/flock/prover"'),
+                        ("less", '"verity/flock/pod", "verity/flock/prover"')):
+        repo, base = _repo(tmp_path / case, {**FLOCK, "verity/ml/flock/agree.py": "A = 1\n", "gates.toml": 'keyed = ["verity/ml/flock"]\n'})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/agree.py", "verity/flock/agreement/agree.py")):
+            _move(repo, old, new)
+        _write(repo, {**FLOCK_MOVED, "gates.toml": f"keyed = [{parts}]\n"})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "all":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["cover"] == ["gates.toml"] and "gates.toml" not in r["rules"]["tokens"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
+
+
+def test_the_tokens_rows_are_read_only_from_the_map_a_commit_of_the_range_names(tmp_path):
+    """Without the `Layout-move:` line no map says where the split directory's references go, as before."""
+    r = _flock(tmp_path, message="move")
+    assert {f["path"] for f in r["refusals"]} == set(FLOCK_MOVED) and r["rules"] == {}
+
+
+ROOTED = ('export PYTHONPATH=<tree>:<tree>/protocols/pous/src\n'
+          'T=${TESTS:-protocols/pous/tests/test_x.py}\n'
+          'cp -r "$T/wt-$c/protocols/pous/live" .\n'
+          'REPLAY=${REPLAY:-$ROOT/protocols/pous/replay.py}\n'
+          "echo '{r}/protocols/pous/python' ~/verity/protocols/pous /workspace/protocols/pous\n")
+
+
+def test_a_moved_path_after_what_the_mover_reads_as_the_root_is_certified(tmp_path):
+    """`tools/move/layout.py` rewrites a moved path after each prefix it reads as the root (its `ROOT_PREFIX`: `<tree>/`,
+    `$T/wt-$c/`, `{r}/`, `~/verity/`, `/workspace/`) and as a shell variable's default, and the check reads a line nothing
+    else explains by the same pattern. A moved path inside a longer one, or after a word's `-`, is still not the move's."""
+    for case, miss in (("taken", ""), ("inside", "OUT=$W/x/protocols/pous\n"), ("word", "OUT=wt-protocols/pous\n")):
+        run = ROOTED + "echo done\n" + miss
+        repo, base = _repo(tmp_path / case, {**BASE_FILES, "run.sh": run})
+        _move(repo, "protocols/pous", "security_proofs/pous")
+        _write(repo, {"run.sh": run.replace("protocols/pous", "security_proofs/pous")})
+        r = _check(repo, base)
+        if not miss:
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"prefixes": ["run.sh"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == "run.sh" and f["hunk"].splitlines()[1:] == ["-" + miss.strip(), "+" + miss.strip().replace(
+                "protocols/pous", "security_proofs/pous")] and r["rules"] == {}, case
+
+
+def test_a_moved_path_after_a_prefix_the_map_lists_for_the_root_is_certified(tmp_path):
+    """A pod's unit names a file by where the pod installs the tree, which no pattern knows for the root. The move's map
+    lists the prefix (`[rewrite] root_prefixes`), the mover rewrites the path after it, and the check reads it there.
+    Refused as before: the same line when the map does not list the prefix, or lists it and no commit names the map, and
+    a path after another directory."""
+    unit = "ExecStart=/usr/bin/python3 -I /opt/pod/current/verity/ml/flock/tool.py run %i\n"
+    listed = FLOCK[LAYOUT_MAP] + '\n[rewrite]\nroot_prefixes = ["/opt/pod/current/"]\n'
+    for case, layout, message, line in (("taken", listed, LAYOUT_MSG, unit), ("unlisted", FLOCK[LAYOUT_MAP], LAYOUT_MSG, unit),
+                                        ("unnamed", listed, "move", unit),
+                                        ("elsewhere", listed, LAYOUT_MSG, unit.replace("/opt/pod/current/", "/opt/other/current/"))):
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: layout, "pod/unit@.service": line})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "pod/unit@.service": line.replace("verity/ml/flock/tool.py", "verity/flock/prover/tool.py")})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "taken":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["root_prefixes"] == ["pod/unit@.service"] and "prefixes" not in r["rules"]
+        else:
+            assert "pod/unit@.service" in {f["path"] for f in r["refusals"]} and "root_prefixes" not in r["rules"], case
+
+
+def test_a_reference_to_a_split_directory_follows_the_part_the_maps_split_row_names_for_its_file(tmp_path):
+    """`verity/ml/flock/` splits and its `[tokens]` row says the prover, but `run.sh` means the pod scripts by it. The
+    map's `[split]` row for that file names the part (`to`), the mover writes it, and the check reads it there, for the
+    directory and for a path below it that a variable ends. Refused: the same line where the row is another file's,
+    where it names a directory no file of the split one went to, where no commit names the map, and where the line
+    follows the `[tokens]` row the file's own row replaces."""
+    line, part = 'exe "verity/ml/flock/$x" verity/ml/flock\n', "verity/flock/pod"
+    row = '\n[split]\n"FILE: verity/ml/flock" = { to = "TO", why = "the pod scripts" }\n'
+    for case, file, to, message, new in (("taken", "run.sh", part, LAYOUT_MSG, part), ("another", "other.sh", part, LAYOUT_MSG, part),
+                                         ("nowhere", "run.sh", "verity/flock/gone", LAYOUT_MSG, "verity/flock/gone"),
+                                         ("unnamed", "run.sh", part, "move", part),
+                                         ("tokens", "run.sh", part, LAYOUT_MSG, "verity/flock/prover")):
+        layout = FLOCK[LAYOUT_MAP] + row.replace("FILE", file).replace("TO", to)
+        repo, base = _repo(tmp_path / case, {**FLOCK, LAYOUT_MAP: layout, "run.sh": line})
+        _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+        _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+        _write(repo, {**FLOCK_MOVED, "run.sh": line.replace("verity/ml/flock", new)})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "taken":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["split"] == ["run.sh"] and "run.sh" not in r["rules"]["tokens"]
+        else:
+            assert "run.sh" in {f["path"] for f in r["refusals"]} and "split" not in r["rules"], case
+
+
+def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
+    """A line with a moved path after a root prefix, rewritten, and a reference to the split directory left as written
+    is the prefix rule's alone."""
+    line = 'cp "$T/wt-$c/verity/ml/flock/pod/10-link.sh" verity/ml/flock/\n'
+    repo, base = _repo(tmp_path, {**FLOCK, "run.sh": line})
+    _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
+    _move(repo, "verity/ml/flock/pod", "verity/flock/pod")
+    _write(repo, {**FLOCK_MOVED, "run.sh": line.replace("verity/ml/flock/pod", "verity/flock/pod")})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"], r["refusals"]
+    assert r["rules"]["prefixes"] == ["run.sh"] and "run.sh" not in r["rules"]["tokens"]
+
+
+#: the package `verity/ml/circuits/` moves to `verity/circuits/prover/`, but for `ops/` (to `verity/definitions/ops/`) and
+#: `pod/` (to `verity/circuits/pod/`); `benchmarks/pouw/` stays, and `tools/config/` goes to `verity/configuration/config/`.
+#: The script's variable is one `tests/test_pythonpath_entries.py` does not hold to this tree, which has no such paths
+REST = "".join(f"line {i} of the file, which the move leaves as it is\n" for i in range(8))
+REBASE = {
+    LAYOUT_MAP: '[tokens]\n"verity/ml/circuits/" = "verity/circuits/"\n',
+    "verity/ml/circuits/pyproject.toml": '[project]\nname = "circuits"\n',
+    "verity/ml/circuits/README.md": "| [`ops`](ops/README.md) | the primitive circuits |\n" + REST,
+    "verity/ml/circuits/population.py": '"""A tile\'s own check is `ops/gemm.circuit-check.py`, the unit\'s `tests/fixtures/unit.json`.\n'
+                                        + REST + '"""\n',
+    "verity/ml/circuits/ops/README.md": "# ops\n",
+    "verity/ml/circuits/ops/gemm.circuit-check.py": "X = 1\n",
+    "verity/ml/circuits/pod/90-unit.sh": "echo unit\n",
+    "verity/ml/circuits/tests/fixtures/unit.json": "{}\n",
+    "verity/ml/circuits/tests/lean/Unit.lean": "/-- Built by `pod/90-unit.sh` on `tests/fixtures/unit.json`.\n" + REST + "-/\ntheorem t : 1 = 1 := rfl\n",
+    "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
+    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$POUW/../..:$POUW/../../tools/config:$POUW" python -m served\n' + REST.replace("line", "# line"),
+    "tools/config/settings.py": "Y = 1\n",
+    "tools/other.py": "Z = 1\n",
+}
+REBASED = {
+    "verity/circuits/prover/README.md": REBASE["verity/ml/circuits/README.md"].replace("(ops/", "(../../definitions/ops/"),
+    "verity/circuits/prover/population.py": REBASE["verity/ml/circuits/population.py"].replace("`ops/", "`../../definitions/ops/"),
+    "verity/circuits/prover/tests/lean/Unit.lean": REBASE["verity/ml/circuits/tests/lean/Unit.lean"].replace("`pod/", "`../pod/"),
+    "benchmarks/pouw/served/legs.sh": REBASE["benchmarks/pouw/served/legs.sh"].replace("tools/config", "verity/configuration/config"),
+}
+
+
+def _rebase(tmp_path: Path, extra: dict[str, str], **over: str) -> dict:
+    repo, base = _repo(tmp_path, {**REBASE, **extra})
+    for name in ("pyproject.toml", "README.md", "population.py", "tests"):
+        _move(repo, f"verity/ml/circuits/{name}", f"verity/circuits/prover/{name}")
+    _move(repo, "verity/ml/circuits/ops", "verity/definitions/ops")
+    _move(repo, "verity/ml/circuits/pod", "verity/circuits/pod")
+    _move(repo, "tools/config", "verity/configuration/config")
+    _write(repo, {**REBASED, **over})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+    return MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+
+
+def test_a_relative_path_is_based_again_to_where_its_file_went(tmp_path):
+    """A path a line names from its file's directory (a Markdown link, a docstring's), or from its package's root (the
+    directory of the nearest `pyproject.toml` above it; after a variable too), may be written again from where that
+    directory went to where the path went: `ops/README.md` from `verity/circuits/prover/` is `../../definitions/ops/README.md`,
+    and `pod/90-unit.sh` from the package now at `verity/circuits/prover/` is `../pod/90-unit.sh`."""
+    r = _rebase(tmp_path, {})
+    assert r["certified"], r["refusals"]
+    assert r["rules"] == {"relative": ["benchmarks/pouw/served/legs.sh", *list(REBASED)[:3]]}
+
+
+def test_a_directory_written_with_its_slash_is_based_again_in_markdown(tmp_path):
+    """Markdown's dotted paths are read from their file's directory before any rule, which drops a directory's slash:
+    `ops/tests/` in backticks, based again to `../../definitions/ops/tests/`, reads there as the directory with none. Based
+    to its parent it is refused."""
+    old, new = "verity/ml/circuits/README.md", "verity/circuits/prover/README.md"
+    for case, to in (("based", "`../../definitions/ops/tests/`"), ("parent", "`../../definitions/ops/`")):
+        r = _rebase(tmp_path / case, {old: REBASE[old] + "Its tests are `ops/tests/`.\n", "verity/ml/circuits/ops/tests/test_x.py": ""},
+                    **{new: REBASED[new] + f"Its tests are {to}.\n"})
+        assert (r["certified"], [f["path"] for f in r["refusals"]]) == ((True, []) if case == "based" else (False, [new])), case
+
+
+def test_a_path_from_the_packages_root_may_be_based_where_the_directorys_row_points(tmp_path):
+    """The package's `pyproject.toml` went to `verity/circuits/prover/`, and its directory's `[tokens]` row says
+    `verity/circuits/`: the mover writes a path from the package's root from there (`pod/90-unit.sh` is still that, and
+    `tests/fixtures/unit.json` is `prover/tests/fixtures/unit.json`). The certificate takes the line with every such path
+    based so, under `relative` and `tokens`, and refuses one that bases one path at each."""
+    lean = "verity/circuits/prover/tests/lean/Unit.lean"
+    row = REBASE["verity/ml/circuits/tests/lean/Unit.lean"].replace("`tests/", "`prover/tests/")
+    r = _rebase(tmp_path / "row", {}, **{lean: row})
+    assert r["certified"], r["refusals"]
+    assert lean in r["rules"]["relative"] and r["rules"]["tokens"] == [lean]
+    r = _rebase(tmp_path / "mixed", {}, **{lean: row.replace("`pod/", "`../pod/")})
+    assert [f["path"] for f in r["refusals"]] == [lean] and "tokens" not in r["rules"]
+
+
+def test_a_relative_path_based_anywhere_else_is_refused(tmp_path):
+    """The based path is the one the move implies: one that names another place is refused; so is one written from a
+    directory that is neither where the package's `pyproject.toml` went nor where its directory's `[tokens]` row points
+    (`circuits/prover/tests/fixtures/unit.json`, from `verity/`); and a plain path the root also has is a path from the
+    root."""
+    readme, lean = "verity/circuits/prover/README.md", "verity/circuits/prover/tests/lean/Unit.lean"
+    for case, extra, path, text in (
+            ("elsewhere", {}, readme, REBASED[readme].replace("definitions/ops/", "definitions/")),
+            ("a third directory", {}, lean, REBASED[lean].replace("`tests/", "`circuits/prover/tests/")),
+            ("the root's", {"ops/README.md": "# the root's\n"}, readme, REBASED[readme])):
+        (tmp_path / case).mkdir()
+        r = _rebase(tmp_path / case, extra, **{path: text})
+        assert [f["path"] for f in r["refusals"]] == [path], case
+        assert path not in r["rules"]["relative"], case
+
+
+def test_a_file_the_maps_drop_lists_may_be_deleted(tmp_path):
+    """The map the move's commit names lists the files the move deletes (`[drop] paths`); any other deleted file, and the
+    same one in a range whose commit names no map, is still refused."""
+    drop = "benchmarks/pouw/contents/filler/receipts.toml"
+    files = {**BASE_FILES, LAYOUT_MAP: f'[drop]\npaths = ["{drop}"]\n', drop: 'title = "receipts"\n',
+             "benchmarks/pouw/contents/paths/clear.toml": 'title = "clear"\n'}
+    for case, gone, message, refused in (("listed", [drop], LAYOUT_MSG, []),
+                                         ("unlisted", [drop, "benchmarks/pouw/contents/paths/clear.toml"], LAYOUT_MSG,
+                                          ["benchmarks/pouw/contents/paths/clear.toml"]),
+                                         ("no map", [drop], "move", [drop])):
+        repo, base = _repo(tmp_path / case, files)
+        _git(repo, "rm", "-q", *gone)
+        _git(repo, "commit", "-q", "-m", message)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        assert [(f["path"], f["reason"]) for f in r["refusals"]] == [(p, "deleted") for p in refused], case
+        assert r["rules"] == ({"drop": [drop]} if message == LAYOUT_MSG else {}), case
+        assert [e for e in r["edits"] if e["kind"] == "dropped"] == [{"path": p, "kind": "dropped"} for p in r["rules"].get("drop", [])]
+
+
+def test_a_runs_why_may_follow_a_moved_modules_dotted_name(tmp_path):
+    """A run's `why` is prose that names the Python it holds the Lean to by module: the name follows the module's move
+    (`scripts/difftest_vectors.py` goes to the proofs package with the run), and no other."""
+    why = "instances on which lean.scripts.difftest_vectors (packages/verity/lean/scripts) gives what the Lean gives"
+    moved = why.replace("lean.scripts", "core.scripts").replace("packages/verity/lean/scripts", "security_proofs/core/scripts")
+    for case, now in (("moved", moved), ("elsewhere", moved.replace("core.scripts.difftest", "core.scripts.other"))):
+        r = _runs_split(tmp_path / case, {"CoreProofs.Difftest": {**RUN, "why": now}}, was={**RUN, "why": why})
+        if case == "moved":
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"why": [f"{PROOFS}/lean-audit.json"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and r["rules"] == {}
+
+
+def test_a_runs_generator_named_from_the_root_follows_its_move(tmp_path):
+    """A run names its generator from the root after `{repo}/`, which the mover reads as the root: the path follows the
+    script's move, as on a line; one sent anywhere else is refused."""
+    old = ["python3", "{repo}/packages/verity/lean/scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+    for case, to in (("moved", "security_proofs/core/scripts"), ("elsewhere", "security_proofs/scripts")):
+        now = {**RUN, "generate": [old[0], old[1].replace("packages/verity/lean/scripts", to), *old[2:]]}
+        r = _runs_split(tmp_path / case, {"CoreProofs.Difftest": now}, was={**RUN, "generate": old})
+        if case == "moved":
+            assert r["certified"], r["refusals"]
+            assert r["rules"] == {"prefixes": [f"{PROOFS}/lean-audit.json"]}
+        else:
+            [f] = r["refusals"]
+            assert f["path"] == f"{PROOFS}/lean-audit.json" and "changed beyond moved paths" in f["reason"] and r["rules"] == {}
+

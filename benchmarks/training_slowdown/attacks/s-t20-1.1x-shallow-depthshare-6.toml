@@ -1,0 +1,19 @@
+# Every block and the final gain, trained in full with Muon, undecayed; E is each trained tensor's delta in 8-bit
+# codes.
+start = "s-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 1199, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+honest = "s-t20-1.1x-ref-optim"
+
+[dials]
+trainable = "blocks.*,norm"
+opt = "muon"
+lr = 1.5e-3
+warmup = 50
+decay = 0.4
+micro_batches = 2
+store = "q8"
+fused = true

@@ -5,7 +5,7 @@ public import Definitions.NetworkCertifier.Warden
 /-!
 # The tap: one auditor device on each server's uplink, the warden and the certifier at once
 
-Definitions only. The warden (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
+Definitions only. The relay (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
 connection) gives both what the client receives, the warden's cells (`certifierCode`), and the certifier's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`

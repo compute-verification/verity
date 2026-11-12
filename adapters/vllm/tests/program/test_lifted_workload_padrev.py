@@ -1,8 +1,7 @@
-"""Adversarial tests for the MIXED BATCH Program side (`lifted_workload`, `lift_component`, `live_count_hook`), from the attack list
-(A1 shared batch dims, A5 post-hoc deletion, A9 the S relation, R1 one namespace) and T-1/T-4.
-Padded baseline (experimental).  Reuses `test_lifted_mixed`'s TINY fixtures and helpers and the independent live reference
-(`test_lifted_tiny_padrev.padrev_live_ref`, written independently of the LAG implementation).  The `component` fixture and the workload
-builders are `test_lifted_mixed`'s; the properties and the expected values are this module's own."""
+"""Adversarial tests for the MIXED BATCH Program side (`lifted_workload`, `lift_component`), from the attack list (A1 shared batch
+dims, A5 post-hoc deletion, R1 one namespace) and T-1/T-4.  Padded baseline (experimental).  Reuses `test_lifted_mixed`'s TINY fixtures
+and helpers.  The `component` fixture and the workload builders are `test_lifted_mixed`'s; the properties and the expected values are
+this module's own."""
 
 from __future__ import annotations
 
@@ -11,13 +10,11 @@ import pytest
 from verity.circuits import Program
 from verity_vllm.program import workload as W
 from verity.circuits.codec import encode_program
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.defs import REGISTRY
 from verity.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
 from tests.program import test_lifted_mixed as PM
-from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, SMS, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
-from tests.program.test_lifted_tiny_padrev import padrev_live_ref
-from tests.program.test_serve3 import Y_RAW
+from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from verity.circuits.types import Array, Value
 
 I32 = Value(32)
@@ -107,47 +104,7 @@ def test_a1_a5_b_is_word_for_word_invariant_to_whether_a_stops_and_the_program_o
 
 
 # ---------------------------------------------------------------------------------------------------------
-# A9 / P9 — the S hook under LAG=1 with staggered arrivals, against the independent live reference
-# ---------------------------------------------------------------------------------------------------------
-
-
-def _hook(component, arrivals, prompts, lag, caps=None):
-    return PM._hook_run(component, arrivals, prompts, lag)
-
-
-def test_a9_the_hook_under_lag_1_with_staggered_arrivals_equals_the_independent_reference_per_request(component):
-    """`test_lifted_mixed` tests LAG 1 at arrivals (0, 0) and LAG 0 at (0, 2).  This runs LAG 1 at (0, 2): per request the live vector must equal
-    padrev_live_ref (event 0 live; step s live iff no EOS at an event <= s-1-lag), and the root count at engine step t must be the sum of
-    the members' reference values — A contributes its placeholder step (live at a_A under lag 1), B is live throughout its window."""
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-    arrivals = (0, 2)
-    wl, prog, t, outs, n_live, S = _hook(component, arrivals, prompts, 1)
-    per = _request_outs(wl, outs)
-    ref = {rid: padrev_live_ref(per[rid], EOS, CAP, 1)[0] for rid in ("A", "B")}
-    a_A = padrev_live_ref(per["A"], EOS, CAP, 1)[1]
-    assert a_A == 4 and ref["A"] == [1] * 5 + [0] * (CAP - 5) and ref["B"] == [1] * CAP
-    H = max(a + CAP for a in arrivals)
-    want = [sum(ref[rid][tt - a] for rid, a in zip(("A", "B"), arrivals) if 0 <= tt - a < CAP) for tt in range(H)]
-    assert want == [1, 1, 2, 2, 2] + [1] * (H - 5)
-    assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want and all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
-    assert [L.payload(L.SPLITS_BITS, x) for x in S] == [32] * H       # 142 SMs: 1 or 2 live -> 32
-    # the placeholder step's token is A's own y_4 (a value of the execution), Active, then ⊥ -- in the RAW committed event (the boundary
-    # node's gate).  The DESIGNATED output `slot=5/out` is ⊥ (Continuation_v1: served length 4, the discarded lag sample is
-    # executed but not served; the served length is not the executed-prefix length).
-    fA = next(r for r in wl.requests if r.request_id == "A").component.fn
-    base = PM._wl_call_base(wl, prog, "A")
-    # the boundary node's OUTPUT gate = the unlifted request Program's return gate of that event, at the same offset inside the mapped node
-    # (the node ranges correspond 1:1)
-    pu = L.as_program(component.fn)
-    n_in = sum(1 for n in pu.root.body.nodes if getattr(n.fn, "family", None) == "Input")
-    off_u = pu.root.body.offsets[n_in:]  # the lowered root = the Input nodes then the function's nodes: function node b starts at off_u[b]
-    raw_A = [t[base + fA.body.offsets[fA.node_map[b]] + (gu - off_u[b])] for b, gu in zip(fA.boundaries, pu.circuit.root_outputs())]
-    assert raw_A[4] == Y_RAW[4] and L.is_active(32, raw_A[4]) and all(L.is_bot(32, x) for x in raw_A[5:]) and raw_A[:4] == per["A"][:4]
-    assert all(L.is_bot(32, x) for x in per["A"][4:]) and L.served_count(per["A"]) == 4 and L.served_count(raw_A) == 5
-
-
-# ---------------------------------------------------------------------------------------------------------
-# T-4 — a MIXED-CAP population: GP-01 composes it; the hook must not silently miscount it
+# T-4 — a MIXED-CAP population: GP-01 composes it
 # ---------------------------------------------------------------------------------------------------------
 
 CAP_B = 4   # B declared with a smaller cap than A (GP-01's standard B2 fixture is unequal LP/T: R0 cap 3, R1 cap 2)
@@ -170,96 +127,3 @@ def test_t4_a_mixed_cap_population_composes_with_every_request_programmed_for_it
     assert [len(e["members"]) for e in ch["engine_steps"]] == [2] * CAP_B + [1] * (CAP - CAP_B)
     for r in wl.requests:
         assert len(r.component.step_nodes) == r.cap and r.component.body_gates == W.WorkloadProgram(_mixed_requests(component, component_small), lag=0).requests[r.index].component.body_gates + L.continuation_gate_count(r.cap, len(EOS), 0)
-
-
-# live_count_hook takes one cap PER REQUEST and refuses a served-length out_r by name: the single-cap call below is REFUSED by name
-# (the accepted outcome); the per-request test after it
-def test_f_pad_19_the_hook_on_a_mixed_cap_population_takes_each_requests_own_cap_or_refuses_by_name(component, component_small):
-    from verity.circuits.defs import Builder, composite
-    from verity.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.circuits.types import Tuple
-    reqs = _mixed_requests(component, component_small)
-    wl = lifted_compose.lifted_workload(reqs, EOS, lag=0, boundary_prefix=BOUNDARY)
-    wl_u = W.WorkloadProgram(reqs, lag=0)
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-
-    @composite("PadrevMixedS", 1, ["WL", "EOS", "CAP", "ARR"],
-               lambda S: (S.WL.signature()[0], Tuple(S.WL.signature()[1], Array(S.CAP, Value(L.N_LIVE_BITS + 1)))), conformance="protocol-defined")
-    def PadrevMixedS(B, S, *args):
-        w = B.call(S.WL, *args, name="workload")
-        eos_cols = [B.call(b1.const(33, e), name=f"eos[{i}]") for i, e in enumerate(S.EOS)]
-        eos_set = coll_concat(Array(len(S.EOS), Value(33)), eos_cols)
-        bot = B.call(L.l_bot(32), name="bot32")
-        n_live, _ = L.live_count_hook(B, [w[0], w[1]], list(S.ARR), S.CAP, eos_set, bot, 0)
-        return tuple_of(w, array_of(n_live))
-
-    # with cap = the LONGER request's: the hook reads B's out[s-1] for s up to CAP-1 although B has CAP_B words
-    try:
-        prog = Program(bind(PadrevMixedS, WL=wl.fn, EOS=EOS, CAP=CAP, ARR=(0, 0)))
-        _, outs = _run(prog, _inputs_for(wl_u.fn, prompts, True))
-        n_live = outs[CAP + CAP_B:]
-    except ValueError as e:                                   # a NAMED refusal is acceptable
-        assert "cap" in str(e).lower()
-        return
-    except IndexError:
-        pytest.fail("unnamed IndexError: the hook indexed past the shorter request's out")
-    # if it built, the count must be the population's activity: A alone after B's cap (B never stops within its 4 events)
-    per = _request_outs(wl, outs[:CAP + CAP_B])
-    a_A = L.activity_prefix(per["A"], EOS, CAP)
-    want = [(1 if s < a_A else 0) + (1 if s < CAP_B else 0) for s in range(CAP)]
-    assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want
-
-
-def _padrev_mixed_s2():
-    from verity.circuits.defs import composite
-    from verity.circuits.refs import array_of, coll_concat, tuple_of
-    from verity.circuits.types import Tuple
-
-    @composite("PadrevMixedS2", 1, ["WL", "EOS", "CAPS", "ARR", "LAG", "H"],
-               lambda S: (S.WL.signature()[0], Tuple(S.WL.signature()[1], Array(S.H, Value(L.N_LIVE_BITS + 1)), Array(S.H, Value(L.SPLITS_BITS + 1)))),
-               conformance="protocol-defined")
-    def PadrevMixedS2(B, S, *args):
-        w = B.call(S.WL, *args, name="workload")
-        eos_cols = [B.call(b1.const(33, e), name=f"eos[{i}]") for i, e in enumerate(S.EOS)]
-        eos_set = coll_concat(Array(len(S.EOS), Value(33)), eos_cols)
-        bot = B.call(L.l_bot(32), name="bot32")
-        n_live, S_t = L.live_count_hook(B, [w[0], w[1]], list(S.ARR), list(S.CAPS), eos_set, bot, S.LAG, num_sms=SMS)
-        return tuple_of(w, array_of(n_live), array_of(S_t))
-
-    return PadrevMixedS2
-
-
-PadrevMixedS2 = _padrev_mixed_s2()
-
-
-@pytest.mark.parametrize("lag,arrivals", [(0, (0, 0)), (1, (0, 0)), (0, (0, 3)), (1, (2, 0))])
-def test_f_pad_19_per_request_caps_the_hook_equals_the_independent_reference_on_a_mixed_cap_staggered_population(component, component_small, lag, arrivals):
-    """`live_count_hook(cap=[cap_A, cap_B])` on A (cap 9, stops at a_A = 4) + B (cap 4, never stops), under both lags
-    and staggered arrivals.  Per engine step the count must equal the sum of padrev_live_ref over the requests programmed for it (B a member
-    of [a_B, a_B + 4) ONLY -- a row of B outside its own cap would be an invented member), S = SplitsFor of that count and ⊥ exactly at 0;
-    and the same call with ONE cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9)."""
-    reqs = _mixed_requests(component, component_small, arrivals)
-    wl = lifted_compose.lifted_workload(reqs, EOS, lag=lag, boundary_prefix=BOUNDARY)
-    wl_u = W.WorkloadProgram(reqs, lag=lag)
-    prompts = {"A": list(_inputs()[0]), "B": _prompt_b()}
-    caps = [CAP, CAP_B]
-    H = max(a + c for a, c in zip(arrivals, caps))
-    prog = Program(bind(PadrevMixedS2, WL=wl.fn, EOS=EOS, CAPS=tuple(caps), ARR=arrivals, LAG=lag, H=H))
-    _, outs = _run(prog, _inputs_for(wl_u.fn, prompts, True))
-    per = _request_outs(wl, outs[:CAP + CAP_B])
-    n_live, S_t = outs[CAP + CAP_B:CAP + CAP_B + H], outs[CAP + CAP_B + H:]
-    ref = {"A": padrev_live_ref(per["A"], EOS, CAP, lag)[0], "B": padrev_live_ref(per["B"], EOS, CAP_B, lag)[0]}
-    assert padrev_live_ref(per["A"], EOS, CAP, lag)[1] == 4 and ref["B"] == [1] * CAP_B and sum(ref["A"]) == min(4 + lag, CAP)
-    want = [sum(ref[rid][t - a] for rid, a, c in zip(("A", "B"), arrivals, caps) if 0 <= t - a < c) for t in range(H)]
-    assert [L.payload(L.N_LIVE_BITS, x) for x in n_live] == want and all(L.is_active(L.N_LIVE_BITS, x) for x in n_live)
-    assert max(want) == 2 and 0 in want   # both live somewhere; A's window outlives both its stop and B's cap, so some step has no live request
-    from verity.definitions.registry.topp_geometry import splits_for
-    for t in range(H):
-        if want[t] == 0:
-            assert L.is_bot(L.SPLITS_BITS, S_t[t]), t
-        else:
-            assert L.payload(L.SPLITS_BITS, S_t[t]) == splits_for(want[t], SMS), t
-    # one cap for both is refused by name in both directions (9 for B's 4 words, 4 for A's 9): the hook takes the fixed population only
-    for one_cap in (CAP, CAP_B):
-        with pytest.raises(ValueError, match="never a served length"):
-            Program(bind(PadrevMixedS2, WL=wl.fn, EOS=EOS, CAPS=(one_cap, one_cap), ARR=arrivals, LAG=lag, H=max(a + one_cap for a in arrivals)))

@@ -118,11 +118,30 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
+units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
+changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
+`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
+unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
+population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
+(default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
+layout's input class reads. `$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
-`whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
-ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
-three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
-walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
+`whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
+program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
+or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
+so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
+of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
+`whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
 `Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
 a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
 with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
@@ -175,6 +194,26 @@ digest and sections), with the template's size against the unrolled unit's (rows
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
+`flock_sessions.sh census:NAME [N...]` measures the Lean verifier's seconds on a served block type's sessions, on one
+core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as
+`served_units/stage.py` stages a census type, and from the same lowering its first N blocks for each N. Per N, the CPU
+prover proves one loopback `--zk` session sampling all N blocks, and `verify --zk` checks it as the proof server's
+verdict pool calls it, pinned to one core; for the first N one more call takes two sessions of it. A proof server's
+saved sessions of the full statement, sent as `sessions.tar` (one directory a session), are handed to one `verify`
+together. `verify` reads the statement once a call
+(its `inputs:` line) and then sets up and checks each session it was handed, so `summary.json`
+(`verity/flock-sessions/v1`) splits a call into the read, paid once a circuit, and each session's seconds, with their
+median at each block count and the line through them: the seconds a session pays whatever its blocks, and the seconds
+a block. `phases.jsonl` is `flock_read/Main.lean`'s phases of the read, and `perf-symbols.txt` one call's profile. A
+census statement binds no Program, so every session here is refused for want of `--program` once every check has
+passed.
+
+~~~sh
+research run --as proofs --project verity --on auto --mem-gb 48 --source . --cwd source --declared-output 'out/*' \
+  [--send sessions.tar] -- env FS_MEM_GB=48 bash benchmarks/verifier_cost/flock_sessions.sh \
+  'census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}' 1 16 256
+~~~
+
 `table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
 pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
 against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the
@@ -202,3 +241,8 @@ has none.
 
 Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.
+
+The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
+verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
+accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
+listed.

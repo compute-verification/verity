@@ -66,7 +66,7 @@ namespace FlockComplete.JsonRT
 
 open Lean (Json JsonNumber)
 open Flock
-open private hex4 from Flock.Canon
+open private hex4 from Base.Canon
 
 namespace Ascii
 

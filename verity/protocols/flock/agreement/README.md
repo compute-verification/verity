@@ -1,7 +1,9 @@
 # Flock verifier: runners and cross-checks
 
-Flock's verifier is the Lean package in `verity/protocols/flock/verifier/` (`flock_verifier`, Lean 4, no
-dependencies, toolchain pinned in its `lean-toolchain`). Its definitions are the specification, and its docstrings say
+Flock's verifier is the Lean package in `verity/protocols/flock/verifier/` (`flock_verifier`, Lean 4, nothing fetched: it
+requires only the tree's three base packages, `verity/circuits/base/`, `verity/circuits/lean/` and
+`verity/commitments/lean/`, by path; toolchain pinned in its
+`lean-toolchain`). Its definitions are the specification, and its docstrings say
 what each check is. This directory holds what runs it and what holds it to other implementations: the agreement job
 against upstream's Rust verifier, the agreement scripts for single parts, the mutant and fuzz generators, and the vectors.
 Upstream's Rust verifier is a cross-check, never a verifier.
@@ -32,6 +34,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | Ligerito | `Flock.Ligerito`, `Flock.ZkLigerito` |
 | Merkle caps and openings | `Flock.Merkle` |
 | the `fast100` schedule, `m = 22 … 35` | `Flock.Schedule` |
+| the wide-leaf schedule, beside `fast100`: level 0 held at `2^19` symbols for `m = 32 … 35`; no verifier reads it yet | `Flock.WideLeaf` (`fast100Wide`, `Zk.scheduleWide`) |
 | statements: block matrices, regions, Σ, the statement digest, `Hello` | `Flock.Statement`, `Flock.Net` |
 | the circuit file, lookup slots, row leaves, the proved range | `Flock.Circuit`, `Flock.Lookup`, `Flock.RowLeaf`, `Flock.Comp` (`checkInRange`) |
 | frame-v3 roots of the public file | `Flock.HmRow` (`checkPublic`) |
@@ -90,7 +93,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ~~~text
 cd verity/protocols/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
+    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
 flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
@@ -101,7 +104,9 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   and agreement tools.
 - `--program`, `--partition` and `--registered` are the verifier's own copies of the program, the partition object and
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
-  what it verifies.
+  what it verifies. `--interface` is the window's registered circuit record (`verity/window-circuit/v1`, its program the
+  partition object's), whose declared registered ports a `--registered` file that binds ports must register and never
+  bind (`Flock.RegBound`); such a file is refused without it.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
@@ -143,7 +148,7 @@ with two sessions or none, a session opened and not composed, a composed session
 the first Hello, a second staging or one of other inputs, and a record that isn't closed (`RecCompose.checkRun`;
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
 parts). The record is the auditor's: it is read from the challenger's host (`trusted-host`), never from the prover's
-bundle. `verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step
+bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=firewall` (one session per staged statement) its
 oprove step keeps the record (`v-sess/rec-run.jsonl`, one event a line): it stages the rows file and the shared set of
@@ -267,7 +272,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `selftest_records.py` | the prover's selftest cases as replayable sets |
 | `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
-| `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity.ml` |
+| `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
 | `firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`, `firewall_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
@@ -278,6 +283,6 @@ legacy or before hm96-sha512 rows, so Lean refuses each and no agreement job rep
 
 ## Tests
 
-`verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the toolchain, rejects `native_decide`, `implemented_by`, `extern` and
-`unsafe` in the sources, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
+`verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the toolchain, holds the package's requires to the base packages
+of the tree, rejects `native_decide`, `implemented_by`, `extern` and `unsafe` in its sources and theirs, and runs the Lean-backed tests when `lake` is on the PATH; the `test_lean_*.py` modules verify
 fetched fixtures (`fixtures/artifacts.json`) with the built verifier.

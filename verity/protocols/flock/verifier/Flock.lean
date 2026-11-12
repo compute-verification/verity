@@ -30,6 +30,7 @@ public import Flock.Verify
 public import Flock.ZkProof
 public import Flock.ZkLigerito
 public import Flock.Zk
+public import Flock.WideLeaf
 public import Flock.With.Hashes
 public import Flock.With.Transcript
 public import Flock.With.Verify
@@ -64,6 +65,8 @@ public import Flock.ProvedScope
 public import Flock.PortRoots
 public import Flock.KsScope
 public import Flock.Registered
+public import Flock.ProgramRead
+public import Flock.RegBound
 public import Flock.WindowRecord
 public import Flock.RegKnown
 public import Flock.KnownRead

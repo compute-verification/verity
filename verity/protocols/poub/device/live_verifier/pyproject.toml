@@ -18,6 +18,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # packages
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/difftest/lean", "verity/difftest/python",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/spot",
@@ -32,4 +33,6 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "tools/research/src/research",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/protocols/poub/device/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py",
+          # the sender's witness rule, which the compose gate's own (host.py's `witness`) is held to
+          "benchmarks/one_stage/served_verdicts.py"]

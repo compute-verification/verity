@@ -60,7 +60,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `RELEASE=1`), one pass. The inner step fixes the session's parts (V*'s statements at the inner statement's shape, in
   `rec-statements`' order) and its release schedule (`RELEASE_WINDOWS_S`: a window per part by its class, and a lead before
   the first; `rec_inner.py release-parts`) before its one inner session, which opens the recursive session on the ZK
-  server's state (`rec_live --firewall`). oprove then proves each part once, in order, through
+  server's state (`rec_live --firewall`) on a stream whose failure budget is `RELEASE_BUDGET` (1 unless `--env
+  RELEASE_BUDGET=b`: the ZK server opens no recursive session on a stream without one). oprove then proves each part once,
+  in order, through
   `flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`: the Lean session loop (`flock-firewall`) behind
   the release side's own Lean loop (`core-firewall session`), which holds each verdict to its release time and stops the
   session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the

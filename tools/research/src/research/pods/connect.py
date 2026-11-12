@@ -2,10 +2,14 @@
 
     research pods ssh TARGET [--print] [-- CMD ...]
     research pods sync TARGET [SRC] [--dest DIR] [--exclude GLOB]... [--dry-run]
+    research pods procs TARGET --comm NAME|--pid N ... [--json]
 
 TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; a project suffix such as the
-`-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The ssh port is looked up at call time (`remote.pod_target`: the REST API's flaky empty
-mappings are retried), so nothing hard-codes an ip/port that changes when a pod restarts.
+`-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The address is `remote.pod_target`'s: the one last read
+from RunPod while the host there proves the host key recorded for it (ssh to it is then strict about that key), read again when
+it does not or the read is over an hour old (the REST API's flaky empty mappings are retried), so nothing hard-codes an ip/port
+that changes when a pod restarts.  A machine name asks RunPod for nothing else; a pod id or pod name also costs one listing of
+the account's pods.
 
 `sync` ships exactly the files git would show for SRC (default: the repository containing cwd): tracked files that still exist
 plus untracked files that are not ignored -- no `.git`, no `.venv`, no build products, nothing gitignored.  It ships them to DEST
@@ -69,7 +73,7 @@ def _list_pods() -> list[dict]:
     from . import runpod
 
     try:
-        return runpod._request("GET", "/pods") or []  # noqa: SLF001  (runpod.py is kept verbatim; its list verb only prints)
+        return runpod.pods()
     except runpod.PodError as e:
         raise remote.Refused(f"runpod API unavailable: {e}") from None
 
@@ -262,7 +266,8 @@ def main_ssh(argv: list[str]) -> int:
     if "--" in argv:
         i = argv.index("--")
         argv, cmd = argv[:i], argv[i + 1:]
-    ap = argparse.ArgumentParser(prog="research pods ssh", description="ssh to a pod by machine name, pod id or pod name; `-- CMD` runs CMD there")
+    ap = argparse.ArgumentParser(prog="research pods ssh", description="ssh to a pod by machine name, pod id or pod name; `-- CMD` runs CMD there. "
+                                 "Whose a process there is, before you say: `research pods procs TARGET --comm NAME`")
     ap.add_argument("target", metavar="TARGET")
     ap.add_argument("--print", action="store_true", help="print the ssh command line instead of running it")
     ns = ap.parse_args(argv)
@@ -276,6 +281,37 @@ def main_ssh(argv: list[str]) -> int:
         return 0
     os.execvp(base[0], base + cmd)
     return 0  # pragma: no cover  (execvp does not return)
+
+
+def main_procs(argv: list[str]) -> int:
+    from .. import scopemem
+
+    ap = argparse.ArgumentParser(prog="research pods procs", description="whose a process on a machine is: for each live process "
+                                 "of a given name or pid, the run it belongs to and what names it (its cgroup, an ancestor that "
+                                 "is the run's runner, its session scope, else only its working directory), the run's state and "
+                                 "who sent it. Reads only, and prints no command line (research.scopemem's `procs`)")
+    ap.add_argument("target", metavar="TARGET")
+    ap.add_argument("--comm", action="append", default=[], metavar="NAME", help="every process of this name (lake, lean, pytest); repeat for more")
+    ap.add_argument("--pid", action="append", default=[], type=int, metavar="N", help="this process; repeat for more")
+    ap.add_argument("--root", default=scopemem.RESEARCH_ROOT, help=f"the machine's research directory (default {scopemem.RESEARCH_ROOT})")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    if not ns.comm and not ns.pid:
+        print("research pods procs: name the processes with --comm NAME (such as --comm lake) or --pid N; it lists no machine's "
+              "whole process table", file=sys.stderr)
+        return 2
+    cmd = ["python3", "-", "--procs", "--root", ns.root, *(a for c in ns.comm for a in ("--comm", c)), *(a for p in ns.pid for a in ("--pid", str(p)))]
+    try:
+        r = remote.ssh_run(ssh_base(ns.target), cmd, stdin=Path(scopemem.__file__).read_bytes(), timeout=90)
+        doc = json.loads(r.stdout) if r.returncode == 0 else None
+    except (remote.Refused, OSError, subprocess.TimeoutExpired, ValueError) as e:
+        print(f"research pods procs: {ns.target}: {e}", file=sys.stderr)
+        return 1
+    if not isinstance(doc, dict):
+        print(f"research pods procs: {ns.target}: rc {r.returncode} {r.stderr.decode(errors='replace').strip()[-300:]}", file=sys.stderr)
+        return 1
+    print(json.dumps(doc, indent=1) if ns.json else scopemem.render_procs(doc) or f"{ns.target}: no such process is running")
+    return 0
 
 
 def main_sync(argv: list[str]) -> int:

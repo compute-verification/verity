@@ -16,8 +16,7 @@ registered statement, with one network certifier on the server's uplink running 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 - where the network certifier registers its observations in every execution phase, the secrets whose every execution
   phase meets its good event (`WindowGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, that is
-  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i · log2 Dj)` bits.
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
 
 `RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
 accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
@@ -55,6 +54,44 @@ Open premises (`open`):
 
 `PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
 
+## Interface
+
+- **Python**: `verity.protocols.certifier.verifier`. Code outside this directory imports every module but `boundary`,
+  `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/certifier/prover`; `../device`'s vector
+  scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
+  `served_rows`, `warden`); `verity/composite/device/live_challenger`; the tests of `../../pouw/verifier` and
+  `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
+  `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
+  and vector script (`lean/scripts`) import it too. `../../spot`, `../../flock` and `../../recursion` import none.
+- **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
+- **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
+  packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
+  - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
+    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
+  - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
+    a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
+  - `network-check-difftest INSTANCES PYTHON N`.
+- **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
+  library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
+  executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
+  `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest
+  (`../device/program/lean/lean-audit.json`).
+- **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
+  runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads.
+- **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
+  tests of `adapters/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
+  `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
+  `benchmarks/network_e2e/encodings` writes; `advice.py` (`benchmarks/network_e2e/encodings`); and in `network/tests`,
+  `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
+  `test_inference_only_protocol.py` (the tests of `../../remote/verifier/composition`).
+- **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../flock/verifier`),
+  `nci_check` (`../../inference_only/verifier/nci/lean`), `core_protocol` (`../../interface`), and `lms` and
+  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.
+  The modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.spot.verifier`
+  and, `coin_link` alone, `verity.protocols.spot.device`, never the prover side, which
+  `../device/program/lean/scripts/window_vectors.py` and the tests import.
+- **Not here**: the certifier's host programs (`benchmarks/network_traces`).
+
 ## What this package holds
 
 A spec-level reference for network accounting's timing channel:
@@ -62,23 +99,20 @@ A spec-level reference for network accounting's timing channel:
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
-  64-byte salt the certifier samples fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
-  the ingress links' status check;
+  fresh salt, with the execution phase's frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
   its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
   against the digest its certificate signs), with a host-side verifier (no proof of the
   check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
   the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Nothing here holds the frames, the rest of the egress grid (N3, the content check prototyped in
-  `benchmarks/network_sim`, is retired, superseded by the step-indexed scan, `ingress_scan` and `egress`, outside this
-  protocol). The network verdict of record is
+  is at the profile. Nothing here holds the frames, the rest of the egress grid. The network verdict of record is
   `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
   egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
-  `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
+  `NetworkServedCounts_v1`, that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
   already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
   between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
@@ -94,13 +128,12 @@ A spec-level reference for network accounting's timing channel:
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile slice's proof block's core, between
   the committed decisions and `compile_steps`' Programs, and is held step for step to the replay
-  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet. It takes the circuits
-  and their evaluator from `verity`;
+  (`benchmarks/network_e2e/encodings/replay_vectors.py`); it is in no proof-system Spec yet;
 - the I/O tie (`io_tie`), a design (`PROTOCOL.md`, "The I/O tie") and its prototype on a fake upstream, in no Spec:
   served through the network certifier's egress, every cell of an egress execution phase is opened, each a pad, the
   canonical event of one token id or the response's end on the stream the network certifier set, and each is the cell
   the advice's map names at its place (`window_map`, from the advice's outputs, release buckets and advice v1's order
-  permutation, each request on its ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier
+  permutation, each request on its ingress ordinal's stream from 1; the verifier
   computes it in the clear from the opened advice, the named gap, until the map is read in the proof under the advice's
   hiding root), with the id the Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's
   root). The cells are the network certifier's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before
@@ -127,6 +160,9 @@ A spec-level reference for network accounting's timing channel:
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
+  execution phase and slot stride (`PROTOCOL.md`, "The lengths row's proof block");
+- the response tie's two proof blocks (`response_tie`, beside it), in no Spec;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -135,8 +171,7 @@ A spec-level reference for network accounting's timing channel:
   compressed length of the advice;
 - advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile slice's proof block's first part as a Boolean
   Definition, 1 exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode`
-  it defers (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`.
-  From `verity` it takes the circuits and their evaluator;
+  it defers (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`;
 - the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
   state rows of a produced value a window, with private heads into the window row every step reads: the certified
   arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
@@ -149,14 +184,13 @@ A spec-level reference for network accounting's timing channel:
   checking the hits `ReplayStep_v1` reads, and `ChargeLink_v1` over the decisions the window commits, from its
   carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
   ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
-  (`protocol/compile-slice.md`), and
-  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
-  evaluator from `verity`;
+  (`protocol/compile-slice.md`);
 - the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the advice decoder's block pool,
+  `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
@@ -193,29 +227,27 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
   `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
   ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
-  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`);
+  length tail. vLLM's served windows name it (`serve_commit.SERVED_SLICE`), except under `--admit tick`, and
+  `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceRowGroups_v1`). `leaf_ok`
   holds a proof block's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
-  and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
-  hiding commitments from `verity`;
+  and `reads_port` is the same read as the Lean verifier's registered reads take it;
 - the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
   window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
   then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
-  proof block is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and
-  the hm96 leaves from `verity`;
+  proof block is proved, and its port, selection and cost are its docstring;
 - the served rows held to their Programs (`served_statics`): `ServedStaticsTie_v1`, a Boolean Definition with `check`
   its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
   RoPE statics of the Programs its steps ran, with no row hashed but the block's
-  ([protocol/served-statics.md](protocol/served-statics.md)). It takes the circuits and their evaluator from `verity`;
+  ([protocol/served-statics.md](protocol/served-statics.md));
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
   whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
   row's hit (the longest cached prefix while no block can have been evicted, a
-  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
-  circuits and their evaluator from `verity`;
+  cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1");
 - the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
   hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
   leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
@@ -234,22 +266,21 @@ A spec-level reference for network accounting's timing channel:
   `ArithEncodeFinish_v1` check each output bit against a committed segment in the decoder's order, with
   `KTContext_v1{C, NW}` ENC-REPLAY's scaled estimate. It is held symbol for symbol to `code.py` and `code_v1` on advice
   v1's windows and on ENC-DERIVED's still-sent fields (`benchmarks/network_e2e/encodings/arith_vectors.py`), and it is
-  in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1"). It takes the circuits and their evaluator from `verity`;
+  in no proof-system Spec yet (`PROTOCOL.md`, "Advice v1");
 - the charge's carry chain (`charge_chain`): `ChargeCount_v1`'s carry committed from window to window as hiding commitments,
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
-  and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
-  takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
+  and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`);
 - the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2{N, H, O, L}` charge
   advice v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
   `code_v1` codes them, and its length terms' tail, with the order's position and rank added to the carry and chained
   under the value
-  `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
+  `window-charge` (`protocol/charge-chain.md`, "The whole window");
 - the active network certifier (`warden`): a relay between any client and any server. It forwards each direction's
   bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in bucket
   s + D + ⌊i/r⌋ from its admission s. In the id egress form, its default, it releases a server's cell only if
   `io_tie.parse_cell` reads it ("The egress record"), and fails the connection (`format`) at any other, never
-  rewriting it. A miss fails the connection closed with a `FAIL` cell that carries no reason. It records and
-  certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
+  rewriting it. It records and certifies exactly the cells it sends, and each failure's reason in a third record,
+  `fails`.
   `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
@@ -264,10 +295,15 @@ A spec-level reference for network accounting's timing channel:
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
   certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
-  `--registered` port reads, so the sender's proof block opens a cell's row as its output and the receiver's as its
-  input, and the verifier places each read, the (connection, cell) the Program's proof blocks' wiring pins (`Units`,
-  whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`, "The network certifier's
-  cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+  `--registered` port reads, and the verifier places each read, the (connection, cell) the Program's proof blocks'
+  wiring pins (`Units`, whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`,
+  "The network certifier's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
+  (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
+  and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
+  (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
+  head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
+  `--registered` port of the proof blocks that read a table, one a row (`port`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -285,17 +321,18 @@ A spec-level reference for network accounting's timing channel:
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
-- the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
-  window's request bytes in and generated bytes out, and a wire between two servers, committed as a registered value
-  under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
-  certifier signs for the execution phase (`TransferHead`, `registration`). `check_registration` is the verifier's read of
-  it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
+- the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
+  ``load``, ingress), committed as a registered value under the network certifier's own salts at the reading port's
+  leaf width and row format, its root in a head the certifier signs for the session's first execution phase
+  (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
+  `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
+  `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
+  `benchmarks/network_traces/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
   units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
-  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public. `check` refuses a
-  record whose ``blocks`` state a server, server time or transfers (`PRIVATE`), an ``ingress`` declaration, a
-  registered read or table of no registered parameter, a load (every registered parameter but the scan's state) read
+  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
+  state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
+  or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
@@ -315,9 +352,11 @@ A spec-level reference for network accounting's timing channel:
   audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
-  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
-  window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
+  policy's layout check, which is withheld. Programs start at
+  fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
+  execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
   ids, which the scan reads off the network certifier's signed ingress cells, so no other tie holds them to the certified bytes;
@@ -366,35 +405,19 @@ A spec-level reference for network accounting's timing channel:
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
-It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha512` and
-`canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
-Definition, and in `active` the proof system's registration and receipt, which `reveal` reads, and the pair link's
-AEAD (`verity.commitments.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
+The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
-and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `response_tie`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
+From `verity`, `advice_check`, `compile_slice` and `served_statics` take the circuits and their evaluator, `served_tie`
+those and the hm96 leaves, and `charge_chain` and `window_charge` those and hm96, and from SPOT the produced rows.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
-`lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
-definitions, proved equal to them in `security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
-package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `../device/program/lean/scripts/difftest_vectors.py` writes; the audit runs it
-from `../device/program/lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
-what `../device/program/lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
-`lake exe certifier-window-difftest INSTANCES PYTHON N` on what `../device/program/lean/scripts/window_vectors.py` writes from
-`window_charge.reference_window`.
 
-The two terms of the charge the capacity bounds leave open are fixed in the spec, in the last section of
-`security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
-- the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
-  scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
-  `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
-- the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
-  0 bits. The coin link (`coin_link`, run by `verity/composite/device/live_challenger/coin_link.py`) carries a window's session
-  between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
-  grids, exempts only the verified, expected, once-only coin openings, and counts everything else
-  (`protocol/coin-link.md`).
+The coin link (`coin_link`, run by `verity/composite/device/live_challenger/coin_link.py`) carries a window's session
+between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
+grids, exempts only the verified, expected, once-only coin openings, and counts everything else
+(`protocol/coin-link.md`).
 
 ~~~python
 from verity.protocols.certifier.verifier.audit import Audit
@@ -421,8 +444,7 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link's execution phase (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (provisional). N3, the content check,
-is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
+the declared sync), beside the proved timing bound (provisional).
 
 N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of Flock's Lean
@@ -454,11 +476,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   an input (the network certifier's deployment publishes it), and no sync read, as in the Python; it refuses a network
   certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
-  controls included: 193 execution phases of seven runs, plain and served, 180 accepted and 13 refused, each with nine
-  injected controls that both reject. The network certifier runs give 30 execution phases from two runs, the latter a
-  sample of 8 on the H200 network certifier. Of those, 21 are accepted and 9 refused. Each has ten controls: nine that
-  both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
-  verdict.
+  controls included.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the

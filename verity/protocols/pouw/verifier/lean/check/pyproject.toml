@@ -23,7 +23,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, Flock's
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.definitions.kernels` `tc.py` they reach).
-inputs = ["verity/difftest", "verity/__init__.py", 
+inputs = ["verity/protocols/spot/verifier/one_stage/link_points.py", "verity/protocols/spot/device/remote.py",
+          "verity/difftest", "verity/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/pouw/verifier/__init__.py",
           "verity/claims/__init__.py",
@@ -63,7 +64,10 @@ inputs = ["verity/difftest", "verity/__init__.py",
           "verity/commitments/lms/lean/Lms",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
           "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock",
-          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
+          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/hardware/__init__.py",
+          "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py",
+          "verity/protocols/spot/device/__init__.py", "verity/circuits/base", "verity/circuits/lean",
+          "verity/commitments/lean"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_coins.py",

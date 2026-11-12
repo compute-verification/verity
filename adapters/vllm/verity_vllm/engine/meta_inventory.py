@@ -1,6 +1,6 @@
 """Instantiate a checkpoint's vLLM model class on the meta device, without its weights or a GPU, and list its modules.
 
-What a capture map is checked against (`verity_vllm.check.capture_map`): every module the pinned vLLM builds for a
+What a capture map is checked against (`tests/check/capture_map_check.py`): every module the pinned vLLM builds for a
 `config.json`, with its class, its parameters' and buffers' per-rank shapes and dtypes, and the attributes that select its
 kernels (`quant_method`, an attention layer's backend, a fused-MoE layer's router), at one tensor-parallel rank.
 

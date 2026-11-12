@@ -73,7 +73,7 @@ from fractions import Fraction
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MODEL = HERE / "machine_model"
+MODEL = Path(__file__).resolve().parent.parent / "machine_model"
 
 # The readings are the machine model's data: an installed verity_machine_model from another checkout would give that
 # tree's numbers without a word, so this tree's goes first and any other refuses.

@@ -1,12 +1,11 @@
-"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
+"""The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
 `verity.protocols.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
-(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites, remote and onsite, run on
-it.
+(`CHECKS`) likewise. The toy workload provides every subprotocol's hooks, so both composites run on it.
 ``component`` reads ``STATE/record/w<I>/<name>/``'s ``answer.json`` and ``case.json``, and ``product`` runs
 ``STATE/tools.json``'s ``product`` as ``product IDS check PARAMS COMMITMENT EVIDENCE``.
 """
@@ -58,18 +57,27 @@ def _work_law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _warden(params: Mapping[str, Any]) -> dict[str, Any]:
-    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true."""
+    """The network certifier's parameters: `WardenParams`' fields, and ``tie``, which is true. A field that is unset
+    by default (``max_tokens_cap``, ``lengths``, ``content``) stays out of the table while unset (`WARDEN_DEFAULTS`),
+    as it stays out of `WardenParams.digest`, so a configuration that sets none has the form and hash it had before
+    any was a parameter."""
     names = [f.name for f in fields(WardenParams)]
     if extra := sorted(set(params) - {*names, "tie"}):
         raise Refused("unknown-key", f"[params.\"verity/certifier/v0\"]: {', '.join(extra)} (known: WardenParams' "
                                      f"{', '.join(names)}, and tie)")
     if params.get("tie") is not True:
         raise Refused("tie", "tie = true: the network certifier ties the workers' outputs to the ones it relayed")
+    given = {k: params[k] for k in names if k in params}
     try:
-        WardenParams(**{k: params[k] for k in names})
+        WardenParams(**given)
     except (TypeError, ValueError) as e:
         raise Refused("params", f"verity/certifier/v0: {e}") from None
-    return {**{k: params[k] for k in names}, "tie": True}
+    return {**given, "tie": True}
+
+
+#: The network certifier's defaults: `WardenParams`' but the fields unset by default (the response cap, the lengths
+#: rows' form, the content rows' classes), and ``tie``.
+WARDEN_DEFAULTS = {**{k: v for k, v in asdict(WardenParams()).items() if v is not None}, "tie": True}
 
 
 def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -97,6 +105,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
+    Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=_VERIFIER, requires=("sampled-proofs",)),
     Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
     Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
@@ -105,7 +114,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
+              default_params=WARDEN_DEFAULTS, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
@@ -138,6 +147,7 @@ def unserved(what: str) -> Check:
 
 #: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
+                            "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
                             "wipe": unserved("memory challenger's wipe check")}
@@ -263,7 +273,7 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
 PARTIES: dict[str, dict[str, Entry | str]] = {
     "sampled-proofs": {p: LIVE for p in ("challenger", "firewall", "verifier")},
     "certifier": {"network-certifier": network_certifier, "verifier": LIVE},
-    **{c: {"verifier": LIVE} for c in ("pouw", "inference-only", "pous", "bandwidth", "wipe")},
+    **{c: {"verifier": LIVE} for c in ("pouw", "pearl-plus", "inference-only", "pous", "bandwidth", "wipe")},
 }
 WORKLOADS: dict[str, tuple[Workload, Entry | str]] = {"toy": (TOY, LIVE)}
 #: the order a machine's entries run in, all before the live run: a party's sends come before the parties that read them

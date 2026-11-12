@@ -148,6 +148,14 @@ theorem zk_of_oneWait (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed →
     (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZk rel) :=
   Claims.Flock.KS_of_oneWait H (deployZk rel) (fun _ => cap_pos) hk (fun x => εtable_nonneg true x) h
 
+/-- **The deployed masked (`--zk`) verifier with `E^rep` truncated at `K₀ > 0`: KS from one wait's bound** at the
+instance, which reads no truncation (`deployZkAt`). -/
+theorem zk_of_oneWait_at (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) {K₀ : ℕ}
+    (hK₀ : 0 < K₀) (hk : ∀ x, (8 ≤ (deployZk rel).k x ∧ Claims.Flock.Splits (deployZk rel) x) ∨
+      Claims.Flock.NoAcc H (deployZk rel).V x)
+    (h : Claims.Flock.OneWait H (deployZk rel)) : Claims.Flock.KS H (deployZkAt K₀ rel) :=
+  Claims.Flock.KS_of_oneWait H (deployZkAt K₀ rel) (fun _ => hK₀) hk (fun x => εtable_nonneg true x) h
+
 end Gen
 
 /-- **The deployed masked (`--zk`) verifier: KS from one wait's bound.** -/

@@ -1,34 +1,34 @@
 # `check`
 
-`check` is the repository's one check. `verity check` runs `check.py` here, on each landing's tip before `main` moves there, and on any
+`check` is the repository's one check. `verity check` runs `check.py` here, on each candidate before `main` moves to it, and on any
 commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner, a part, a group and what its failure means.
 
 | Part | Jobs |
 | --- | --- |
-| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: on a train, it names the PR whose merge grows a lint allowlist) |
+| `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
 The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
-that failed is failed, whoever is fixing it. What gates and what may stay red is drive's config, `policy.toml`
-(`research.policy`), which drive reads at the commit it judges. An allowance there (`[[allow]]`: an id, its owner, when it
-expires in UTC, and why) covers one suite, one test or one circuit-check failure: drive takes such a failure as not red (no
-culprit, no revert, no hold on `main`) until it expires, and then rings its owner and names the allowance. The quick tier
-applies `main`'s allowances the same way.
+that failed is failed, whoever is fixing it. What gates and what may stay red is the landing policy, `policy.toml`
+(`research.policy`), whose allowances the verified queue reads at a candidate's base, so no candidate's own allowance covers
+its own failure. An allowance there (`[[allow]]`: an id, its
+owner, when it expires in UTC, and why) covers one suite, one test or one circuit-check failure: the verified queue takes
+such a failure as not red (no suspect, no ejection, no hold on `main`) until it expires. The quick tier applies `main`'s
+allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
-checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
-`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
-`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` names its culprit, fixed forward or else reverted, as every
-after-landing red does, and while it is red no PR touching its inputs lands. A red `ratchet-gate` names as culprits the
-merges its log fails and never reverts one (drive.toml's `warn_steps`): drive rings each one's lane, which fixes it forward in
-its next PR, and the next run's `ratchet-gate` judges only the merges above the tip it judged.
-`circuit-check` goes back on the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no
-shard plan, and reports without blocking a merge.
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
+and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
+its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
+`lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
+for that run's preflights and `lean-agreement`, not its `ratchet-gate`. A red `ratchet-gate` (drive.toml's `warn_steps`
+too) names the merges its log fails, whose lanes fix it forward in their next PR; a candidate's `ratchet-gate` judges only
+the merges above its base. `circuit-check` goes back on the gate once `circuit-check --all` fits inside the rest of the
+check; `ratchet-gate` is in no shard plan, and reports without blocking a merge.
 
 ## Suites and reuse
 
@@ -55,8 +55,11 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some
-part reads something it doesn't declare, and the fix goes in the check.
+the same way, each keyed on what it reads. circuit-check's binding records travel through the store instead, each once
+under its name, which a pack lists (`records.py`). A nightly uncached run, which compiles what it tests and first imports every pass
+the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
+and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s `OPT_IN` names, by name in runs of their
+own with their variables set, which every other check leaves skipped.
 
 `suites.py`'s docstring is the full contract. The testing skill (`.agents/skills/testing/SKILL.md`) has the rules every test
 follows.
@@ -70,18 +73,21 @@ follows.
 | `suites.py` | every test suite, each run in its own process, with passes cached |
 | `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
 | `verdicts.py` | passes carried between machines as one verdict pack |
+| `records.py` | circuit-check's binding records, put on the store once and named in the packs, fetched before circuit-check runs |
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
 | `tool.py`, `preflight.py` | the check's store declaration, and whether a machine is prepared for it |
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
-| `train.sh` | the lander's recorded check of a train |
+| `train.sh` | the verified queue's recorded check of a candidate, and its records run |
 | `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
+| `lean_prebuild.py` | a Lean change built before the candidate that holds it: the audit of a ready mark's merge (`tools/verity/lean/warm.py`) as a `research run` in a machine's research pool, off the check slots |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
@@ -114,7 +120,7 @@ verity tasks costs --graph art:ID|FILE [--graph ...] [--seconds FILE] [--out FIL
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
-in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
+in `ci.toml`, as a candidate's check runs it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
 tasks (default: its ci.toml `shards`, or ceil(seconds / S) when `--costs` gives `circuit-check` more seconds than those cover).
@@ -132,7 +138,7 @@ timing record it is of), and each task is:
 | Field | What it is |
 | --- | --- |
 | `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `pytest:SUITE:K/M` for part K of a split suite (by test file, or by test id where it declares `parts`), `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
-| `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `lean-changed`, `ratchet-gate`) |
+| `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `ratchet-gate`) |
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
 | `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
@@ -156,7 +162,7 @@ key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) che
 lister and a worker on other slots or hosts list one key. So keys are of the machine that lists them only as a suite's are
 (Python, the platform, the base image): list on a worker. These have no key yet, and run whenever they're in the graph: the
 builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
-run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`, `ratchet-gate`). The preflight is no task: a
+run builds), and the jobs that keep no verdict (`lean-unit-cut`, `ratchet-gate`). The preflight is no task: a
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
@@ -192,17 +198,17 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 
 ## Landing
 
-PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
-`queue.toml`. Before a PR lands, the landing gates `drive.toml` names judge its merge, and its warn gates
-(`gates/markdown_caps.py`) too, whose failure keeps no PR out: drive lands it and tells its owner, who fixes it in their next
-PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
-with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
-on the gate, where `post_train.py` runs the vLLM regression's rebuilds and fast neutrality tier. A red names its culprit by what its failure names,
-never by bisecting: its lane marks a fix within 30 min, or drive reverts it on `checked` (`research.drive`), but a warn step's
-(drive.toml's `warn_steps`) is never reverted, and its lane fixes it forward in its next PR; a red job off the gate doesn't
-hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
-body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
-(`verity check move BASE HEAD`), running both scripts as `checked` has them.
+PRs land through the verified queue (`research queue vqueue`): its flags are `drive.toml` and its admission rules are
+`queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
+(`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
+`main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
+`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
+moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too; `post_train.py`
+then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
+other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off
+the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
+body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
+`move_check.py` certifies a pure move (`verity check move BASE HEAD`).
 
 ## The public boundary
 
@@ -210,8 +216,11 @@ The public monorepo is exported one way from this repository. `public_boundary.t
 `public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
 paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
 list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
-commit of fresh history, its manifests pruned to what it copies, the leftovers a public reader shouldn't meet counted by area,
-and the third-party pins; with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
+commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
+(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
+never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
+the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
+(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
 `uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings

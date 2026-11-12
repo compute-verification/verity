@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import secrets
+import socket
 import subprocess
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -255,7 +256,7 @@ Period = Run
 
 
 @dataclass(frozen=True)
-class Store:
+class EncodedStore:
     """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
     table of it, and the setup protocol's case."""
 
@@ -275,7 +276,7 @@ class Store:
                                                  sort_keys=True))
 
     @classmethod
-    def load(cls, directory: str | os.PathLike) -> Store:
+    def load(cls, directory: str | os.PathLike) -> EncodedStore:
         d = Path(directory)
         doc = json.loads((d / "store.json").read_text())
         point, data = point_of(doc["point"]), (d / "c-star.bin").read_bytes()
@@ -305,7 +306,7 @@ def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list
     return out
 
 
-def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
+def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> EncodedStore:
     """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt sampled
     from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
     it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
@@ -319,11 +320,11 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
     encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
     blocks = tuple(b for seg in encoded for b in seg)
-    return Store(point, R.Setup(q.blocks, commitment, root, salt), blocks, b"".join(mc.block_digest(b) for b in blocks),
-                 setup_case(q, commitment, salt, encoded))
+    return EncodedStore(point, R.Setup(q.blocks, commitment, root, salt), blocks,
+                        b"".join(mc.block_digest(b) for b in blocks), setup_case(q, commitment, salt, encoded))
 
 
-def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
+def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
           party: Side | None = None) -> Period:
@@ -374,6 +375,12 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
     lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
     p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
+
+
+def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
+    """Who decided a case, as a piece's summary names it under `decided_by`: the program, `exe`'s file name (a
+    component's Lean, as `serve` runs it) or `python` with none, and the host it ran on, this one."""
+    return {"program": "python" if exe is None else Path(exe).name, "host": socket.gethostname()}
 
 
 def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:
@@ -568,7 +575,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             held.save(kept)
         fresh = True
     else:
-        held, fresh = Store.load(kept), False
+        held, fresh = EncodedStore.load(kept), False
     setup_s = round(time.monotonic() - t, 2)
     t = time.monotonic()
     period = audit(node, held, secrets.token_bytes(64), party=party)
@@ -597,6 +604,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
-           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
-           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
+           "answer", "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps",
+           "honest", "leg", "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs",
+           "setup_store", "tie"]

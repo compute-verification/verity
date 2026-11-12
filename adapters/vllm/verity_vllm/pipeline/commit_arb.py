@@ -9,7 +9,9 @@
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
 (`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_row.row_refusal`, and
 taps, with serve-openai's step-input port)
-committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
+committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and each request seeded as
+serve-openai seeds it (`engine.served_seed.served`: an unseeded stochastic one from its window's seed coin and its request id,
+each window's line naming its coin, ``seed_coin``). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
 `benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
 ``max_tokens`` uniform in 1 … ``--tokens``, the model's own EOS), arriving as a Poisson process of ``--rate`` requests an
@@ -31,13 +33,14 @@ A Commit window closes after ``--window-steps`` committed steps or when the engi
 back. Each finished request is checked (`RequestRecord.check`) against what the engine streamed for it (the
 ``RequestOutput`` deltas an HTTP server sends), with the seed it carried. Under ``--out``: ``run.json`` (the engine, the
 traffic's parameters, the scheduler's resolved configuration), ``windows.jsonl`` (each window's Commit verdict and
-readback), ``requests.jsonl`` (each request's sampling, prompt and streamed ids, finish and check), ``record.jsonl`` (the
+readback), ``requests.jsonl`` (each request's sampling, seed and its rule, prompt and streamed ids, finish and check), ``record.jsonl`` (the
 I3 record, `RequestRecord.to_json`) and ``summary.json`` (with each request's cache hit beside the one vLLM reported,
 ``num_cached_tokens``). Exit 0 when every request passed and every window's Commit and readback passed.
 """
 from __future__ import annotations
 
 import json
+import operator
 import shutil
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -47,6 +50,7 @@ from typing import Any
 
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 
@@ -118,7 +122,7 @@ class Options:
 def committer_opts(opts: Options) -> SimpleNamespace:
     """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
     return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
-                           retention=SS.RetentionOptions())
+                           retention=SL.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
@@ -261,17 +265,19 @@ def build(opts: Options) -> tuple[Any, Any]:
 
 
 class Windows:
-    """The committer's windows over the stepped engine, each read back into one `served_record.BlockValues`."""
+    """The committer's windows over the stepped engine, each read back into one `served_record.BlockValues`, each line naming
+    the seed coin of ``coins`` (`engine.served_seed.SeedCoins`) it opened under."""
 
-    def __init__(self, com: Any, record: Any, out: Path, window_steps: int) -> None:
-        self.com, self.record, self.out, self.window_steps = com, record, out, int(window_steps)
-        self.window, self.is_open, self.records = -1, False, []
+    def __init__(self, com: Any, record: Any, out: Path, window_steps: int, coins: Any) -> None:
+        self.com, self.record, self.out, self.window_steps, self.coins = com, record, out, int(window_steps), coins
+        self.window, self.is_open, self.records, self.seed_coin = -1, False, [], None
 
     def before_step(self) -> None:
         if self.is_open and int(self.com._step_index) >= self.window_steps:
             self.close()
         if not self.is_open:
             self.window += 1
+            self.seed_coin = self.coins.record()
             self.com.reset()
             self.com.install()
             self.is_open = True
@@ -286,7 +292,7 @@ class Windows:
         self.com.uninstall()
         self.is_open = False
         rec = {"window": self.window, "commit": window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True},
-               "readback": readback}
+               "seed_coin": self.seed_coin, "readback": readback}
         rec["passed"] = rec["commit"]["passed"] and (readback is None or readback["passed"])
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
@@ -338,10 +344,10 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from verity_vllm.engine import served_seed
 
     engine = llm.vllm.llm_engine
-    seed_hooks = served_seed.install(engine)
+    coins = served_seed.SeedCoins()
     by_id = {q["request_id"]: q for q in requests}
     record = BlockValues(known=by_id)
-    windows = Windows(com, record, out, window_steps)
+    windows = Windows(com, record, out, window_steps, coins)
     streamed: dict[str, list[int]] = {rid: [] for rid in by_id}
     finish: dict[str, dict[str, Any]] = {}
     cached: dict[str, int] = {}
@@ -355,8 +361,11 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
             while pending and pending[0]["arrive_step"] <= step:
                 q = pending.pop(0)
                 q["admitted_step"] = step
-                engine.add_request(q["request_id"], {"prompt_token_ids": q["prompt"]},
-                                   SamplingParams(**q["sampling"], output_kind=RequestOutputKind.DELTA))
+                coin = coins.admitting(not engine.has_unfinished_requests() and not windows.is_open)
+                params, q["seed_rule"] = served_seed.served(SamplingParams(**q["sampling"], output_kind=RequestOutputKind.DELTA),
+                                                            q["request_id"], coin)
+                q["seed"] = params.seed
+                engine.add_request(q["request_id"], {"prompt_token_ids": q["prompt"]}, params)
             if not engine.has_unfinished_requests():
                 windows.close()                               # a window ends when the engine is idle
                 step, idle = step + 1, idle + 1
@@ -376,14 +385,13 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
             step += 1
     finally:
         windows.close()
-        seed_hooks.uninstall()
     for q in requests:
         if "follows" in q and "prompt" not in q and "skipped" not in q:
             q["skipped"] = f"the turn it follows ({q['follows']}) was not served to its finish"
     tok = llm.get_tokenizer()
     eos_ids = [int(tok.eos_token_id)] if tok.eos_token_id is not None else []
     decode = lambda ids: tok.decode(list(ids), skip_special_tokens=True)  # noqa: E731
-    seed_of = lambda q: q["sampling"].get("seed", served_seed.DEFAULT_SEED)  # noqa: E731
+    seed_of = operator.itemgetter("seed")
     checks, skipped = [], []
     with open(out / "requests.jsonl", "w") as fh, open(out / "record.jsonl", "w") as fr:
         for q in requests:
@@ -401,8 +409,9 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
             chk["engine_cached"] = cached.get(rid)
             checks.append((q, fin, chk))
             fh.write(json.dumps({"request_id": rid, "follows": q.get("follows"), "arrive_step": q["arrive_step"],
-                                 "admitted_step": q.get("admitted_step"), "sampling": q["sampling"], "prompt_ids": q["prompt"],
-                                 "streamed_ids": streamed[rid], "finish": fin, "check": chk}) + "\n")
+                                 "admitted_step": q.get("admitted_step"), "sampling": q["sampling"], "seed": q["seed"],
+                                 "seed_rule": q["seed_rule"], "prompt_ids": q["prompt"], "streamed_ids": streamed[rid], "finish": fin,
+                                 "check": chk}) + "\n")
             if rid in record.requests:
                 fr.write(json.dumps(record.requests[rid].to_json()) + "\n")
     negative = prefix_negative(record, checks, streamed, seed_of)

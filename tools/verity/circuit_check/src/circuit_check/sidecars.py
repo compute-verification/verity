@@ -4,7 +4,9 @@
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
-                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
+                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`);
+                              a root function whose bindings may fail one by one, ``_X_bindings`` beside it: each as (label,
+                              the bound Definition, or the error), so one that doesn't bind is named (`targets._root_function`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
                               served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``; and a
@@ -13,9 +15,13 @@
 A module's bindings bind the Definitions it defines (a template module's, its templates), and its pins are the lowerings of its
 Definitions (`owner`; a template's subcircuits for the template module), each the one its pin's key names alone (`pin_owner`),
 so a pin's file is a function of the tree, never of what a process built first.  circuit-check finds every sidecar under the packages
-that define Definitions or templates (`PACKAGES`) and loads a binding file by its path: its name is no module name, so no
+that define Definitions or templates (`PACKAGES`, and each package of another distribution that registers itself, `TREES`:
+none is named here) and loads a binding file by its path: its name is no module name, so no
 registry enumeration imports it, and a Definition module imports nothing of circuit-check; the registries import every module
-with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  `targets.py` keeps what no one module
+with a sidecar (`targets.load_registries`).  A sidecar whose module is gone is an error.  What circuit-check needs of another
+distribution it reads the same way, from a sidecar that distribution owns, and never by importing it: the frontend vocabularies'
+kinds (``_vocabulary_roots``, the word Call families) and the reader of a served workload's request Program
+(``request_program(path)``, `targets.request_program`).  `targets.py` keeps what no one module
 owns, and ``pins/`` the pins of Definitions no key names alone (made only inside another's body) or no module defines, one file
 per pin (`entries`): ``pins/<kind>/<entries.name(key)>.json``, in a pins file's form (``{kind: {key: counts}}``).
 """
@@ -35,59 +41,78 @@ from . import cache as CC
 from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
-#: the packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`) and the templates'
-PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core", "verity_vllm", "verity_numerical",
-            "verity_flock")
+#: `verity`'s packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`)
+PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core")
+#: the repository's directories of other distributions' packages, one directory per serving stack holding the package that
+#: attaches Verity to it.  A package there registers itself by a sidecar of its own module
+#: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
+#: one inside a `PACKAGES` directory (the templates') is found there.  No distribution but `verity` is named here
+TREES = ("adapters",)
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines, one file per pin
 SHARED_PINS = Path(__file__).with_name("pins")
 PIN_KINDS = ("definitions", "pieces", "units", "digests")
 
 
-def _roots() -> list[tuple[str, Path]]:
-    out = []
-    for pkg in PACKAGES:
-        spec = importlib.util.find_spec(pkg)
-        out += [(pkg, Path(p).resolve()) for p in (spec.submodule_search_locations or [])] if spec else []
+def _locations(pkg: str) -> list[Path]:
+    """Package ``pkg``'s directories as Python imports it; none for a name it imports no package under.  A loaded module
+    answers for itself: `importlib.util.find_spec` refuses one that has no spec."""
+    if (loaded := sys.modules.get(pkg)) is not None:
+        return [Path(p).resolve() for p in getattr(loaded, "__path__", ())]
+    spec = importlib.util.find_spec(pkg)
+    return [Path(p).resolve() for p in (spec.submodule_search_locations or [])] if spec else []
+
+
+def _roots() -> list[Path]:
+    """The directories searched for sidecars: each of `PACKAGES`' own, and each package of `TREES` that registers itself."""
+    out = [root for pkg in PACKAGES for root in _locations(pkg)]
+    for tree in TREES:
+        out += [d for d in sorted((REPO / tree).glob("*/*"))
+                if any((d / f"__init__{SUFFIX}.{kind}").is_file() for kind in ("py", "json"))]
     return out
 
 
 @cache
 def discover() -> dict[str, dict[str, Path]]:
-    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `PACKAGES`, by module name.  A file
-    under two packages' roots (`verity_flock`'s tree is inside `verity`'s) is its module's once, named from the deeper root, and
-    only through regular packages: a directory without ``__init__.py`` would name a namespace-package copy of a module that
-    another package's root owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers its
-    Definitions twice."""
+    """{module: {"py": its binding file, "json": its pins file}} for every sidecar under `_roots`, by module name: the name
+    it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
+    tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
+    the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
+    directory owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
-    claimed: set[Path] = set()
+    imported: dict[Path, bool] = {}
     with CC.internal():
-        for pkg, root in sorted(_roots(), key=lambda r: len(r[1].parts), reverse=True):
-            for kind in ("py", "json"):
-                for p in sorted(root.rglob(f"*{SUFFIX}.{kind}")):
-                    if "__pycache__" in p.parts or p in claimed:
-                        continue
-                    rel = p.relative_to(root).parent.parts
-                    if not all((root.joinpath(*rel[:i + 1]) / "__init__.py").is_file() for i in range(len(rel))):
-                        continue
-                    claimed.add(p)
-                    stem = p.name[:-len(f"{SUFFIX}.{kind}")]
-                    parts = [pkg, *rel]
-                    mod = ".".join(parts if stem == "__init__" else [*parts, stem])
-                    if not (p.with_name(f"{stem}.py").is_file() or (p.parent / stem / "__init__.py").is_file()):
-                        raise FileNotFoundError(f"{p}: a circuit-check sidecar of {mod}, which has no module")
-                    out.setdefault(mod, {})[kind] = p
+        for kind in ("py", "json"):
+            for p in sorted({p for root in _roots() for p in root.rglob(f"*{SUFFIX}.{kind}")}):
+                top = p.parent
+                if "__pycache__" in p.parts or not (top / "__init__.py").is_file():
+                    continue
+                while (top.parent / "__init__.py").is_file():
+                    top = top.parent
+                if top not in imported:
+                    imported[top] = top in _locations(top.name)
+                if not imported[top]:
+                    continue
+                stem = p.name[:-len(f"{SUFFIX}.{kind}")]
+                parts = [top.name, *p.parent.relative_to(top).parts]
+                mod = ".".join(parts if stem == "__init__" else [*parts, stem])
+                if not (p.with_name(f"{stem}.py").is_file() or (p.parent / stem / "__init__.py").is_file()):
+                    raise FileNotFoundError(f"{p}: a circuit-check sidecar of {mod}, which has no module")
+                out.setdefault(mod, {})[kind] = p
     return dict(sorted(out.items()))
 
 
+def packages() -> set[str]:
+    """The top-level packages whose modules may have a sidecar: `PACKAGES`' and each one that has one (`discover`)."""
+    return {name.partition(".")[0] for name in (*PACKAGES, *discover())}
+
+
 def path_of(module: str, kind: str) -> Path | None:
-    """Where ``module``'s sidecar of ``kind`` (``py`` or ``json``) is or would be; None for a module outside `PACKAGES`."""
+    """Where ``module``'s sidecar of ``kind`` (``py`` or ``json``) is or would be; None for a module outside `packages`."""
     if (have := discover().get(module, {}).get(kind)) is not None:
         return have
     head, _, rest = module.partition(".")
-    for pkg, root in _roots():
-        if pkg != head:
-            continue
+    for root in _locations(head) if head in packages() else []:
         base = root.joinpath(*rest.split(".")) if rest else root
         if base.with_suffix(".py").is_file():
             return base.parent / f"{base.name}{SUFFIX}.{kind}"
@@ -243,7 +268,7 @@ def named(fid: str) -> Any | None:
     None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
     or not."""
     from verity.circuits.codec import lookup_primitive
-    from verity.circuits.defs import Registry
+    from verity.circuits.defs import DefinitionTable
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -253,7 +278,7 @@ def named(fid: str) -> Any | None:
         if (d := composite_lift(fid)) is not None:
             return d if d.id == fid else None
         try:
-            return lookup_primitive(Registry(), fid)
+            return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
             return None
 
@@ -294,7 +319,7 @@ HANDED: dict[str, str] = {}
 
 
 def _index() -> dict[int, tuple[Any, str]]:
-    """{id(Definition): (it, module)} for every Definition a loaded module of `PACKAGES` binds at its top level other than by
+    """{id(Definition): (it, module)} for every Definition a loaded module of `packages` binds at its top level other than by
     import; where two do, the one its functions are defined in, else the first by name."""
     from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
@@ -303,11 +328,12 @@ def _index() -> dict[int, tuple[Any, str]]:
     if _INDEX:
         return _INDEX
     targets.load_registries()
+    tops = packages()
     with CC.internal():
         found: dict[int, tuple[Any, list[str]]] = {}
         for name, m in sorted(sys.modules.items()):
             f = getattr(m, "__file__", None)
-            if name.partition(".")[0] not in PACKAGES or not f or not f.endswith(".py") or SUFFIX in name:
+            if name.partition(".")[0] not in tops or not f or not f.endswith(".py") or SUFFIX in name:
                 continue
             for attr in _top_level_names(f):
                 v = vars(m).get(attr)
@@ -330,5 +356,5 @@ def owner(d: Any) -> str | None:
     return e[1] if e is not None and e[0] is d else CC._function_module(d)
 
 
-__all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",
-           "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]
+__all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "TREES", "binding_modules", "discover", "load_pins", "named",
+           "owner", "packages", "path_of", "pin_file", "pin_files", "pin_owner", "pin_reads", "rel", "shared_pin", "write_pins"]

@@ -19,7 +19,7 @@ public import Proofs.Flock.Bridge.Members
   verifier's decisions are sound for what they decide.
 * `stepWith_acc_at`, `run_acc_at`: an accepting run passed every round before the verifier could accept.
 * `refusesTwo`: an accepting run's statement is in the two-stage scope (`Code.RefusesTwo` at `SpotFlock.code h`), since
-  round 2 checks the design evaluates and the design evaluates only in scope.
+  round `stage + 1` checks the design evaluates and the design evaluates only in scope.
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
   shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
@@ -194,7 +194,7 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
   exact ⟨topoOk_sound htopo, partitionsOk_sound hpart, of_decide_eq_true hnd, fun v hv => hrep v hv,
     ⟨hlen, fun p hp => oneStageOk_sound (hrules p hp)⟩, hklen, fun k hk' => of_decide_eq_true (hk k hk')⟩
 
-theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.Layout} {k : List ℕ}
+theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.SlotOrder} {k : List ℕ}
     (hc : filesOk g ms l k = true) : g.ns.size = ms.length ∧ (∀ t < ms.length, k.getD t 0 = g.ks.getD t 0) ∧
       Flock.Bridge.Members.FilesFit ms g.ns l ∧ ∀ ρ b, l.blocks[ρ]? = some b → b.unit = some ρ →
         ∀ t < ms.length, ∀ p < g.ns.getD t 0, g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
@@ -232,7 +232,7 @@ theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeplo
 theorem ok_of_toOption {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]
 
-/-! ## An accepting run passed round 2 -/
+/-! ## An accepting run passed the statement check's round -/
 
 /-- **An accepting run passed round `j`**: where the verifier accepts no `j` or fewer messages, rounds that end
 accepting had the verifier answer some `j` messages with other than a refusal. -/
@@ -267,13 +267,18 @@ theorem run_acc_at {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prov
 
 variable (h : Held)
 
-/-- The verifier accepts nothing in rounds 0 to 2. -/
+/-- The verifier accepts nothing in rounds `0` to `stage + 1`. -/
 theorem next_short (H : Msg → Msg) (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin)
-    (hl : cs.length = as.length) (h3 : as.length ≤ 3) : ((next h x as cs).eval H).1 ≠ .acc := by
-  rcases as with _ | ⟨a0, _ | ⟨a1, _ | ⟨a2, _ | ⟨a3, as⟩⟩⟩⟩ <;>
-    rcases cs with _ | ⟨c0, _ | ⟨c1, _ | ⟨c2, _ | ⟨c3, cs⟩⟩⟩⟩ <;>
-    simp only [List.length_cons, List.length_nil] at hl h3 <;> (try omega) <;>
-    unfold next <;> simp only [OC.eval] <;> (try split) <;> simp
+    (hl : cs.length = as.length) (h3 : as.length ≤ h.stage + 2) : ((next h x as cs).eval H).1 ≠ .acc := by
+  by_cases h0 : as = []
+  · subst h0
+    unfold next
+    simp [OC.eval]
+  · by_cases hle : as.length ≤ h.stage + 1
+    · rw [next_coin h x h0 hl hle]
+      simp only [OC.eval] <;> (try split) <;> simp
+    · rw [next_stmt h x hl (by omega)]
+      simp only [OC.eval] <;> (try split) <;> simp
 
 /-! ## The statement is in scope -/
 
@@ -322,9 +327,10 @@ theorem templateOk_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
         exact hc.2 t ht
       · cases hd
 
-/-- **The statement round 2 checks is in scope**: it parses, its partition and design evaluate, and so the two-stage
-scope holds. -/
-theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) :
+/-- **The statement round `stage + 1` checks is in scope**: it parses, its partition and design evaluate, and so the
+two-stage scope holds. -/
+theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) :
     ∃ s Pt d, parse h x = some s ∧ partition h s = some Pt ∧ two h s = some d ∧ InScopeTwo Pt d s := by
   unfold stmtOk at hok
   cases hs : parse h x with
@@ -341,26 +347,26 @@ theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : s
       obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h hd
       exact ⟨s, _, d, rfl, hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
-/-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
-(`stmtOk`) puts its statement in the two-stage scope. -/
+/-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round `stage + 1`,
+whose check (`stmtOk`) puts its statement in the two-stage scope. -/
 theorem refusesTwo (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P (code h).V x ω r).out = .acc →
       ∃ s Pt d, (code h).parse x = some s ∧ (code h).partition s = some Pt ∧ two h s = some d ∧ InScopeTwo Pt d s := by
   intro x Ω P ω r hacc
   obtain ⟨as, cs, has, hcs, hne⟩ :=
-    run_acc_at H P (code h).V x ω r 3 (by omega) (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
-  obtain ⟨a₀, m₁, m₂, rfl⟩ := List.length_eq_three.1 has
-  obtain ⟨c₀, c₁, c₂, rfl⟩ := List.length_eq_three.1 hcs
-  change ((next h x [a₀, m₁, m₂] [c₀, c₁, c₂]).eval H).1 ≠ .rej at hne
-  cases hok : stmtOk h x m₁ m₂ c₀ c₁ with
+    run_acc_at H P (code h).V x ω r (h.stage + 2) (Nat.succ_pos _)
+      (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
+  change ((next h x as cs).eval H).1 ≠ .rej at hne
+  rw [next_stmt h x (hcs.trans has.symm) has] at hne
+  cases hok : stmtOk h x (as.getD 1 []) (as.getD (h.stage + 1) []) (cs.getD 0 default) (stageOf h cs) with
   | false =>
-    unfold next at hne
-    simp [OC.eval, hok] at hne
+    rw [hok] at hne
+    simp [OC.eval] at hne
   | true => exact stmtOk_scope h hok
 
 /-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
 (`slotPartition`), size for size. -/
-theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout) :
+theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.SlotOrder) :
     (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
   simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
 

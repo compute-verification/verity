@@ -58,7 +58,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["source"].startswith("required manifest: Q_module_body_v1(P)")
     # the query of record BY ID with its definition digest: on the header, on the record, on the scope line
     assert man["query"]["query_id"] == "Q_module_body_v1" and man["query"]["boundary"] == "module-body"
-    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
+    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 128
     assert rep["population"]["scope"].startswith("Q_module_body_v1(P) = ")
     # every family of this world has an evaluator: the reach is every instance output + every sampled id, and the sample evaluated some
     n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in COV.QUERY_FAMILIES_WITH_ROWS)
@@ -135,7 +135,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
     bad["identities"].append(ghost)                                              # Q(P) requires something the Program never produces
     bmap, committed = world.bmap_and_reader()
-    # a post-commitment seed of record (root form: seed == run_root[:8]; the seed rule grades the label as a fact where it is on the tree)
+    # a root-form seed (seed == run_root[:8]): the seed rule recomputes it and does not grade it
     run_root = "71f69377" + "ab" * 28
     seed, seed_src = int.from_bytes(bytes.fromhex(run_root)[:8], "big"), "run root (first 8 bytes, after commitment)"
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=bad)
@@ -677,10 +677,10 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     assert c6 is not None and c6["program_rows"] == 14 and c6["header_rows"] == 0 and c6["rows_agree"] is None
 
 def test_revb_n_2_16_1_the_sampler_families_mechanism_names_what_consumes_them():
-    """`sampler_seed` / `sampler_splits` are uncovered BY NAME with a mechanism that says what CONSUMES the
-    committed values (the sampler VU's exact replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does --
-    not only the linkage check on the values themselves."""
-    for fam in ("sampler_seed", "sampler_splits"):
-        m = COV.QUERY_FAMILY_MECHANISM[fam]
-        assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    """`sampler_seed` is uncovered BY NAME with a mechanism that says what CONSUMES the committed value (the sampler VU's exact
+    replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does -- not only the linkage check on the values
+    themselves."""
+    m = COV.QUERY_FAMILY_MECHANISM["sampler_seed"]
+    assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    assert "sampler_splits" not in COV.QUERY_FAMILY_MECHANISM
     assert "boundary linkage" in COV.QUERY_FAMILY_MECHANISM["input_token_ids"]

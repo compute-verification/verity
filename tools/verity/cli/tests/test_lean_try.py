@@ -63,6 +63,28 @@ def test_try_ends_with_the_axiom_probes_line_when_lean_exits_0(tmp_path, monkeyp
         "Quot.sound: t (sorryAx)")
 
 
+def test_try_names_a_theorem_lean_fails_on_and_prints_no_axioms_answer(tmp_path, monkeypatch, capsys):
+    """`#print axioms` answers "does not depend on any axioms" for a theorem Lean refused (here a `rfl` out of recursion
+    depth, as Lean prints it), beside theorems it accepts: the try exits with lean's status, its last line names the
+    theorem as failed, and it prints no answer, so no line of it can be read as clean for any theorem."""
+    (tmp_path / "lakefile.toml").write_text('name = "P"\n')
+    (tmp_path / "T.lean").write_text("theorem clean : True := trivial\n\ntheorem refused : way 100000 = 100000 := rfl\n\n"
+                                     "theorem after : True := trivial\n")
+    said = [".lake/axiom-probe/T.lean:3:0: error: maximum recursion depth has been reached",
+            "use `set_option maxRecDepth <num>` to increase limit",
+            "'clean' does not depend on any axioms", "'refused' does not depend on any axioms",
+            "'after' does not depend on any axioms"]
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "lake").write_text("#!/bin/sh\ncat <<'EOF'\n" + "\n".join(said) + "\nEOF\nexit 1\n")
+    (bin_ / "lake").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    assert verity_cli.main(["lean", "try", str(tmp_path / "T.lean")]) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[1:] == [*said[:2], "verity lean try: T.lean: axiom probe: 1 of its 3 theorems failed, with Lean's error "
+                       "above on its own lines: refused; no axioms are shown for a file lean refuses"]
+
+
 def test_try_refuses_a_file_in_no_package_and_remote_options_without_on(tmp_path, monkeypatch, capsys):
     called = stand_in_lake(tmp_path, monkeypatch, 0)
     loose = tmp_path / "Loose.lean"

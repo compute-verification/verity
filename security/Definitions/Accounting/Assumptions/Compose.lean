@@ -99,7 +99,8 @@ past, a deficient round passes with probability at most `p0` (`Accounting.TS.Rou
 tile at its stage whole (`tileGame … .whole`, whose check is `same`): a tile whose product and fold are both skipped
 keeps its checked values, the fold state its proof pins, with probability at most `p0`. It is a condition at the `p0` it
 is given, and nothing here takes it as a fact. The live line reads it at B′'s `½` until a smaller value survives attack:
-`2^-64` for a 64-bit fold state was proposed and isn't granted. A guess falsifies `luck0 = 0`. It fails if the cheater's
+`2^-64`, one set's checkpoint (two 32-bit receipt words of the tile's `2·(K/32 + m)`), was proposed and isn't granted,
+and no statement reads it. A guess falsifies `luck0 = 0`. It fails if the cheater's
 view pins the fold state without the fold: a state that a computed word, or a coin read before the skip, determines. -/
 def GuessLuckAt {Ω : Type} [Fintype Ω] {S : ℕ} (p0 : ℝ) (G : ReceiptGame Ω S) : Prop :=
   Accounting.TS.RoundGame.LuckAt p0 G.game
@@ -150,7 +151,7 @@ def SeedExtractedAt {B : Type} [Fintype B] {Tq M : ℕ} (sq : Paths (Fin Tq → 
 oracle query, over the whole window's oracle**: on the window's oracle answers `a` (round `r`'s `T_q` seed queries'
 answers its `r`-th coin, uniform), for a joint run `R` whose modes and checked values may read every answer of every
 round, at every round `r` there are per-query gains `g q` whose exponential moment at rate `θ r` over query `q`'s own
-answer (`redraw`), every other answer of the window fixed, is at most `1` (GRIND's per-query moment at `M = 1`), and a
+answer (`resample`), every other answer of the window fixed, is at most `1` (GRIND's per-query moment at `M = 1`), and a
 binding event `Break` of probability at most `δ_b` (a root opened two ways after its seed), such that off `Break` round
 `r`'s gain in mode `s` (`roundGain` over the tiles of round `rd v = r`: `L − κ·U` at weights `w`) is at most the gain
 `g q` of the query `q = sq a r` its proofs' seed answers (`SeedExtractedAt`, the random-oracle premise, which names
@@ -194,14 +195,15 @@ It is taken at `κ = 4`, not at the live luck `p = 7/8`: from `p = 7/8` alone no
 point mass.
 
 The premium's `T_q` and the binding's `δ_b` and `δ_bind` are priced at one prover budget `T`, the same cheater's: at
-`T = 2^128` a fork finder of that cost gives `δ_bind ≈ |L|·2^-64` (`Guarantees.Compose.BindingOfECR` at its best
-`δ'`), not negligible beside `δ_s = 2^-40` for `|L|` past `2^24`, and at `T = 2^80` it gives `|L|·2^-88`, where the
-premium is `0.73` of its `2^128` value. -/
+`T = 2^128` a fork finder of that expected cost gives `δ_bind ≈ |L|·2^-64` (`Guarantees.Compose.BindingOfECR` at its
+best `δ'` and at `κ = 0`; the finder there runs the window twice, which is `√2` more), not negligible beside
+`δ_s = 2^-40` for `|L|` past `2^24`, and at `T = 2^80` it gives `|L|·2^-88`, where the premium `ln(T_q/δ_g)/θ` is
+`0.73` of its `2^128` value at `δ_g = 2^-40/(2·rounds)` over 47 to 4,488 rounds. -/
 def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ)
     (R : JointRun (Paths (Fin Tq → B) M) V) (w : V → ℝ) (s : Mode) (κ : ℝ) (θ : ℕ → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
   ∀ r : Fin M, ∃ (g : Fin Tq → Paths (Fin Tq → B) M → ℝ) (Break : Paths (Fin Tq → B) M → Prop),
-    (∀ q a, ∑ b : B, Real.exp (θ r.val * g q (redraw a r q b)) ≤ Fintype.card B) ∧ prob Break ≤ δb ∧
+    (∀ q a, ∑ b : B, Real.exp (θ r.val * g q (resample a r q b)) ≤ Fintype.card B) ∧ prob Break ≤ δb ∧
       ∀ a q, ¬ Break a → sq a r = some q → roundGain rd r.val R w s κ a ≤ g q a
 
 open Classical in
@@ -236,9 +238,9 @@ def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V →
     (R : JointRun (Paths (Fin Tq → B) M) V) (h : V → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
   ∀ r : Fin M, ∃ (Wh Lk : Fin Tq → Paths (Fin Tq → B) M → Finset V) (Break : Paths (Fin Tq → B) M → Prop),
-    (∀ q a b, Wh q (redraw a r q b) = Wh q a) ∧ (∀ q a v, v ∈ Wh q a → rd v = r.val) ∧
+    (∀ q a b, Wh q (resample a r q b) = Wh q a) ∧ (∀ q a v, v ∈ Wh q a → rd v = r.val) ∧
     (∀ q a (S : Finset V), S ⊆ Wh q a →
-      ((Finset.univ.filter fun b : B => S ⊆ Lk q (redraw a r q b)).card : ℝ) ≤
+      ((Finset.univ.filter fun b : B => S ⊆ Lk q (resample a r q b)).card : ℝ) ≤
         Fintype.card B * Real.exp (-∑ v ∈ S, h v)) ∧
     prob Break ≤ δb ∧
     ∀ a q, ¬ Break a → sq a r = some q → ∀ v, rd v = r.val →

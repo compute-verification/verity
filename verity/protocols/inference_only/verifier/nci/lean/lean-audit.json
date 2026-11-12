@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["NciCheck"],
  "exempt": {
   "NciCheck.CheckMain": "the nci-check exe: reads an instance file and the service's trusted input and prints NciCheck.Baseline.check (or, with --unrolled, NciCheck.Baseline.checkUnrolled) on them, or with --policy NciCheck.Desc.check (NciCheck.check) on the instance alone, or with --count NciCheck.Count.check on it (with --count --detail NciCheck.Count.checkDetail, the private record's); IO around the audited check, not a proof",
@@ -7,8 +8,8 @@
   "NciCheck.BaselineDifftestMain": "the provenance check's difftest, under `runs`: compiled evaluation of NciCheck.BaselineDifftest.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescLivenessMain": "the description-sized check's liveness test, under `runs`: compiled evaluation of NciCheck.DescLiveness.main, audited under NciCheck, a test and not a proof",
   "NciCheck.DescFuzzMain": "the description-sized check's fuzz run, under `runs`: compiled evaluation of NciCheck.DescFuzz.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof",
-  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck"
+  "NciCheck.ProtocolMain": "the inference-only executable's entry point, one line; its command is Core.Protocol.main of NciCheck.Protocol.protocol, audited under CoreProtocol and NciCheck",
+  "NciCheck.CountDifftestMain": "the count mode's difftest, under `runs`: compiled evaluation of NciCheck.CountDifftest.main, audited under NciCheck, a test and not a proof"
  },
  "runs": {
   "NciCheck.BaselineDifftestMain": {
@@ -27,32 +28,32 @@
    "generate": ["python3", "scripts/baseline_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.CountDifftestMain": {
-   "why": "1,669 instances of the count of (c, k)-inference blocks (1,500 random, a quarter of them read across their arrays' rows, 6 on each distinct descriptor of the circuits fixtures, and 7 on a declaration worked by hand: accepted, failing on gates, on fresh bits and on the count, θ empty, the blocks its primitives with a parameter θ at one call site and not the other, and a gate in no block), their blocks every primitive the root reaches with some or all of its composites, about a third malformed in one of the 14 ways NciCheck.Count refuses, on which NciCheck.Count.checkDetail, the private record's whole verdict, gives what scripts/nci_reference.py's check_count_detail computes activation by activation: per block Definition its Boolean gates, fresh bits and blocks, the total, the verdict and the first failure, or the first refusal's code; and NciCheck.Count.check, what the count publishes, gives check_count's: the verdict or the refusal's code, and no other field",
+   "why": "1,687 instances of the count of (c, k)-inference blocks (1,500 random, a quarter of them read across their arrays' rows, 6 on each distinct descriptor of the circuits fixtures, and 7 on a declaration worked by hand: accepted, failing on gates, on fresh bits and on the count, θ empty, the blocks its primitives with a parameter θ at one call site and not the other, and a gate in no block), their blocks every primitive the root reaches with some or all of its composites, about a third malformed in one of the 14 ways NciCheck.Count refuses, on which NciCheck.Count.checkDetail, the private record's whole verdict, gives what scripts/nci_reference.py's check_count_detail computes activation by activation: per block Definition its Boolean gates, fresh bits and blocks, the total, the verdict and the first failure, or the first refusal's code; and NciCheck.Count.check, what the count publishes, gives check_count's: the verdict or the refusal's code, and no other field",
    "args": [
     "{count_difftest/instances.jsonl}",
     "{count_difftest/detail.jsonl}",
     "{count_difftest/public.jsonl}",
-    "1669"
+    "1687"
    ],
    "data": {
-    "count_difftest/detail.jsonl": "741b3a8e94b05bf67ff61ea11d6bc4ece6d347f0dfec752094b02e736536e0d1",
-    "count_difftest/instances.jsonl": "a00899b84a22acbc306fe9725f9b76c5cedffb5341fd0901c6208894e37c986a",
-    "count_difftest/public.jsonl": "4cc5c4aef73f18c2b6c4c08b7683ffbcc0332ebd1404ff4c403f313d8c4ceb0e"
+    "count_difftest/detail.jsonl": "3e89b30da0aacbceff3b2fc356cf510cab56d7a13842717fde046a3c402d7c2d",
+    "count_difftest/instances.jsonl": "9a0b10f7c319efe974c28a8d3de929c5e3d36ebc75a8dfd94e183a529e555230",
+    "count_difftest/public.jsonl": "dcb1c2df02073a63813a8631ad2b67be08a23d9d25980e9caf5e0cb690dfa2f5"
    },
    "generate": ["python3", "scripts/count_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DescDifftestMain": {
-   "why": "4,010 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which a draft of the liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's three pinned ones, the third a declaration with a constant gate) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "4,082 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, 12 on whole members of a batch returning leaves of two arguments they share, each another node's, and 335 whose references name leaves of other widths than their types give them, E_REINTERPRET, which both sides refuse, or are their well-typed neighbours: the shapes on which a draft of the liveness test gave NciCheck mistyped Programs, arrays of up to 2^20 (V8, V16) pairs read whole, by leaf, shifted and as quads and 300 random declarations with one reference moved, then the unrolled difftest's three pinned ones, the third a declaration with a constant gate) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "4010"
+    "4082"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "075bc2551087e057d7c2a5320df77eb72b95b07155668905d4bc54d6c7452cc1",
-    "desc_difftest/instances.jsonl": "233cf70a665aac35270dc4220e2ceb152be98fce993234a9e5f6ad260346405e",
-    "desc_difftest/python.jsonl": "cba6d15d4a8b527b3fb6fc9221e475b494a9ab04571208c5886c67e837c5a160"
+    "desc_difftest/expanded.jsonl": "cf79ae2df12a6fc032d1d573a8d5947f8eb5cfce3d023c987664699df48c0f2b",
+    "desc_difftest/instances.jsonl": "ec114442418c21c536ed2df66d43bc57834c8b092ae7870d3c2d1669a0e9939b",
+    "desc_difftest/python.jsonl": "a92352db25e8a2792f15423f5450b00a1c5954cccd07f03f1077b7d604b3402c"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -84,29 +85,34 @@
  },
  "layers": {
   "NciCheck.Check": {
-   "imports": ["Std", "Flock.Program"],
+   "imports": ["Std", "Circuits.Program"],
    "except": [],
    "why": "the check is code: Lean core and C-Flock's program decoder only, no Mathlib and nothing of Security"
   },
   "NciCheck.Desc": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check"],
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check"],
    "except": [],
    "why": "the description-sized check is code, as NciCheck.Check is: Lean core, C-Flock's program decoder and the check's instance format and verdict"
   },
   "NciCheck.Baseline": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "imports": ["Std", "Circuits.Program", "Flock.WindowRecord", "NciCheck.Check", "NciCheck.Desc"],
    "except": [],
-   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports) and the policy check it runs first"
-  },
-  "NciCheck.Count": {
-   "imports": ["Std", "Flock.Program", "NciCheck.Check", "NciCheck.Desc"],
-   "except": [],
-   "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+   "why": "θ's provenance check is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder (with the canonical JSON and SHA-512 it imports), the window record's one digest and the policy check it runs first"
   },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
    "why": "the inference-only policy as a core protocol is code: the policy's check (NciCheck.Baseline) behind the core interface's decoders and outcome, no Mathlib and nothing of Security"
+  },
+  "NciCheck.Count": {
+   "imports": ["Std", "Circuits.Program", "NciCheck.Check", "NciCheck.Desc"],
+   "except": [],
+   "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
+  },
+  "NciCheck.DefinitionDigest": {
+   "imports": ["Base.Bytes", "Base.Canon", "Base.Hash", "Circuits.Steps"],
+   "except": [],
+   "why": "a Definition's digests are code: Lean core, the base package's bytes, canonical JSON and SHA-512 and the circuit format's step bound, nothing of the policy's check, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

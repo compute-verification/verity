@@ -2,7 +2,7 @@ module
 
 public import Difftest
 public import NetworkCheck.LinkWindow
-public import NetworkCheck.Period
+public import NetworkCheck.Clocks
 public import NetworkCheck.Records
 import Flock.Sizes
 import Std.Data.HashMap

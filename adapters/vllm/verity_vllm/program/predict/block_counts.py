@@ -68,7 +68,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
-    blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -245,4 +245,5 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "session", "write_private"]
+__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "resolve", "session",
+           "write_private"]

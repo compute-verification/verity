@@ -71,7 +71,7 @@ theorem take_run (src : ByteArray) (need p : ℕ) :
   unfold _root_.Spot.Draw.take
   by_cases h : src.size < p + need <;> simp [h, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get,
     StateT.get, set, StateT.set, pure, StateT.pure, throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind,
-    Except.pure]
+    Except.pure, _root_.Spot.Draw.RAN_OUT]
 
 /-- `take` on bytes with more after them returns what it returns on the bytes. -/
 theorem take_append (src t : ByteArray) (need : ℕ) :
@@ -356,7 +356,8 @@ theorem checkBlobsAt_checkAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ (out : Array (String × Lean.Json)) (pub' : _root_.Spot.OneStage.Public) (prof' : Core.Integrity),
       _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := out } = .accept pub' prof' := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h

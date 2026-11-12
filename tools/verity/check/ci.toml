@@ -63,7 +63,8 @@ group = 3
 needs = ["lean-build"]
 # parts named apart from their directory: a move that sends one elsewhere keeps it under the gate
 merge_requires = ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/", "verity/protocols/flock/tool.py",
-                  "verity/protocols/flock/verifier/", "!README.md", "!PROTOCOL.md"]
+                  "verity/protocols/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
+                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]
@@ -72,20 +73,12 @@ owner = "lean"
 part = "lean"
 group = 4
 
-# Group 5: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
-[[job]]
-name = "lean-changed"
-owner = "lean"
-part = "lean"
-group = 5
-halts = true
-
-# Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
+# Group 5: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
 [[job]]
 name = "lean-suites"
 owner = "ci"
 part = "tests"
-group = 6
+group = 5
 after = "lean-build"
 # V*'s stager and its Lean mirror (VStar.In) stay in step: core_vstar's `part_in` difftest holds one to the other.
 merge_requires = ["verity/protocols/flock/prover/python/verity_flock/rec_vstage.py", "verity/protocols/flock/prover/python/verity_flock/rec_outer.py",
@@ -94,13 +87,13 @@ merge_requires = ["verity/protocols/flock/prover/python/verity_flock/rec_vstage.
                   "verity/protocols/spot/verifier/one_stage/registered.py", "verity/protocols/flock/verifier/VStar/In.lean",
                   "verity/protocols/recursion/verifier/vstar_cli/", "verity/protocols/recursion/verifier/recursive/"]
 
-# Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
+# Group 6: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
 # on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
 [[job]]
 name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
-group = 7
+group = 6
 # Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
 # (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red's culprit is the
 # landing whose merge it names.
@@ -116,38 +109,57 @@ group = 7
 # The spec and security/Properties are audited beside their proofs (security/Proofs, which their `proved_in` names), from one
 # build of the proofs, so the three share a shard; a spec package a plan doesn't name goes with its provers
 # (`declaration.resolve`), and no plan names the spec: its path is the analysis directory's bare name.
-# The composition suite (verity-core-composition) declares three parts by test id (`[tool.verity.tests] parts`), so that no
-# shard runs it whole: each plan puts one beside the security analysis's audit, one with the rest of lean-suites, and one with
-# the Rust build.
+# lean-suites' suites go in three groups, which every plan places alike. The Flock suite goes beside lean-build with one part
+# of each suite in parts and no other suite: it runs on as many xdist workers as its lane's memory holds (`suites.py`'s
+# `wide_workers`), less what each one-process suite beside it reserves. The other parallel suites (vLLM's, vstar_cli's and the
+# core evaluation's) and the three longest one-process ones go beside the security analysis's audit, whose shard has cores to
+# spare once its build narrows. The rest (`lean-suites:*`, but for the 5-pod plan's verity-lean-audit) goes with the Rust
+# build, beside circuit-check, which has only what `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer they run, the longer a cold
+# circuit-check. The suites in parts by test id (`[tool.verity.tests] parts`: verity-core-composition, verity-pouw-benchmarks)
+# put one part in each group, so that no shard runs either whole.
 
-# 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
+# 3 pods: the security analysis's audit beside pytest and the parallel suites; lean-build, the rest of the Lean and the Flock
+# suite; the Rust build and the circuits beside the rest of lean-suites.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest",
-     "lean-suites:verity-core-composition:3/3"],
-    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
-     "lean-changed"],
-    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm",
+     "lean-suites:verity/protocols/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
 ]
 
 # 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
 # circuit-check is no single pod's long pole.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4",
-     "lean-suites:verity-core-composition:3/3"],
-    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
-     "lean-changed", "circuit-check:2/4"],
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm",
+     "lean-suites:verity/protocols/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
-    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3"],
+    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
 ]
 
-# 5 pods: each of those apart.
+# 5 pods: each of those apart, and the rest of the audit beside one suite of lean-suites' rest (lean_audit.py's own), so that a
+# candidate whose lean-audit another check lent (`--deferred` without it) still has a step on that shard: a shard holding none of
+# a `--deferred`'s steps is refused.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "lean-suites:verity-core-composition:3/3"],
-    ["lean-audit:*", "lean-changed"],
-    ["lean-build", "lean-unit-cut", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement"],
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "lean-suites:verity-vllm",
+     "lean-suites:verity/protocols/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
+     "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
+     "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
+    ["lean-audit:*", "lean-suites:verity-lean-audit"],
+    ["lean-build", "lean-unit-cut", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["pytest"],
-    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3"],
+    ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
 ]

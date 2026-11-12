@@ -69,11 +69,7 @@ PATH = {"design": "every step prices the per-expert MoE cut (Figure 1's (A′)),
              "prover's peak is about 33 GiB (its H200 run is pending)"},
     {"label": "the dense types' host witness 3.5x lower", "status": "assumed", "basis": "design",
      "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
-], "off": [
-    {"label": "hashing cut 4x", "status": "assumed", "basis": "design", "owner": None,
-     "after": "the dense types' host witness 3.5x lower", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
-     "note": "in-proof hashing at a half share of the marginal, cut 4x"},
-], "unpriced": [
+], "off": [], "unpriced": [
     {"label": "compile-slice proving: under 1% with prefix caching off or hits charged (modeled)", "status": "modeled",
      "note": "the network audit proves every window's compile slice, never sampled, so its share adds to every step's "
              "total"},

@@ -12,7 +12,7 @@ challenger's signed close, sealed under its ledger.
 * the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early sample, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
-* a window whose coins were held in the serving process is no challenge phase's and credits nothing; pouw-serve
+* a window whose coins were held in the serving process is no challenge phase's and credits nothing; ncp-v2
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * the release log is the only evidence that a round's coin followed its root, so an unsigned log would pass roots chosen
@@ -40,7 +40,6 @@ from verity.protocols.spot.device import challenger as LC  # noqa: E402
 from verity.protocols.spot.device import remote as R  # noqa: E402
 from verity.protocols.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
-from verity_vllm.pipeline import pouw_serve  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
@@ -132,7 +131,7 @@ class _Session:
         self.secrets.append(secret)
         return self.client if at == self.at else None
 
-    def _serve(self, sock: socket.socket, session: R.Session) -> None:
+    def _serve(self, sock: socket.socket, session: R.ChallengePhase) -> None:
         with sock:
             self.reason = R.serve(sock, session, iter(range(1 << 20)).__next__)
 
@@ -857,17 +856,9 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
 
 
 @pytest.mark.slow
-def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
-    """``pouw-serve``'s ``--challenger`` and ``--session`` are the pouw settings ncp-v2's salt comes from, one
-    never without the other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
-    opts = pouw_serve.Options(workload="w.json", challenger=T.AUDITOR, session=json.dumps(T.SESSION))
-    assert pouw_serve.protocols_config(opts) == {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION, "draws": 16}}
-    assert "coins" in pouw_serve.protocols_config(pouw_serve.Options(workload="w.json"))["pouw"]
-    with pytest.raises(ValueError, match="--challenger needs --session"):
-        pouw_serve.protocols_config(pouw_serve.Options(workload="w.json", challenger=T.AUDITOR))
-    with pytest.raises(ValueError, match="--session is the session"):
-        pouw_serve.protocols_config(pouw_serve.Options(workload="w.json", session=json.dumps(T.SESSION)))
-
+def test_ncp_v2_takes_the_auditor_hosts_challenger():
+    """The pouw settings ``challenger`` and ``session`` are where ncp-v2's salt comes from, one never without the
+    other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
     def refused(entry, settings):
         return T.PO.refusals(T.PO.Context(stage="serve", enabled=(entry,), settings=settings))
     remote = {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION}}
@@ -883,10 +874,8 @@ class _NcpLinear:
 
 def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
     """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor host's salt coin, opened
-    after the weights' root, carries its challenge phase, and closes the challenge phase at release; pouw-serve parses the flags."""
+    after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
     from verity.protocols.pouw.verifier.audit import salt_of
-
-    from verity_vllm.pipeline import cli
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
     w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()
@@ -902,8 +891,6 @@ def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_
     assert received[Wd.SALT] == (weights,)
     opening = LC.LiveOpening.from_json(c["salt_opening"])
     assert c["salt"] == salt_of(host.challenger.commitment, opening.coin, weights).hex()
-    parsed = cli.parse("pouw-serve", ["--workload", "w.json", "--challenger", T.AUDITOR, "--session", json.dumps(T.SESSION)])
-    assert pouw_serve.protocols_config(parsed)["pouw"]["session"] == T.SESSION
 
 
 def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():

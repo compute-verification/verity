@@ -23,7 +23,7 @@ import all Lean.Data.Json.Basic
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private hex4 from Flock.Canon
+open private hex4 from Base.Canon
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace Properties.Pouw.LiveSalt.Canon
