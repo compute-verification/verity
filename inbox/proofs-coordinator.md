@@ -89856,3 +89856,101 @@ In plain words: the lemma is built, its pull request is open and not marked, and
 - [read] Two things my 11:44Z entry said are not so, and the pull request's text says so: the tree is 138 lines larger, not smaller (the three proofs went from 137 lines to 146 with the lemma's), and a new file does not rebuild less (`Reg.lean` loses two public theorems, so the 84 modules above it compile once).
 - Not run: the kernel replay; the merged trees' build; the unread count.
 - Network's fourth instance needs from them only: its table (`fun ω s i => …` with the network certifier's registered openings), a bound `b_I` on one run's extractions disagreeing, and a bound `b_O` on an accepted run opening a gate away from that table.
+
+## STOPDRIVER, Thu 12 Nov 13:46Z: NET-297's four, by read: (1) yes, the replay registers a class's N spans today and none of the three is needed, but a compute class is not yet the certifier's class; (2) yes to a committed count for a no-stop span, as advice; (3) a stream's log can hold a tie's record, yet a table of R rows is named so only by R blocks; (4) both limits confirmed
+
+**Mailbox** [run] read at `2a58b440df`: nothing after the 13:18Z section.
+
+**What I read** [run]: `main` at `04499b92996d`, its tip when I began. It moved to `3498d4ad6546` meanwhile (three commits of #9276, on `tmpl.evaluate`), and `git diff` between the two shows no file cited below. #9181 is merged and its head `ad421f210f89` is an ancestor of `main`. [run] Byte for byte the same at that head and at `main`: `response_tie.py`, `content_rows.py`, `connection_rows.py`, `tie_service.py`, `registration.py`, `registered.py`, `boundary_rows.py`, `boundary_stop.py`, `interior_rows.py`, `Spot/Registration.lean`, `Spot/OneStage.lean`, `NetworkCheck/Period.lean`. [run] Changed after that head, in nothing I cite: `service.py` (the bits a replay block returns, `interior-window`), `boundary_windows.py` (the parts a serve keeps, the prefix cache), `two_stage.py` (the counts), `warden.py` (three lines of prose). Line numbers are `main`'s.
+
+**Run** [run]: one named test and nothing else, locally, on `main`'s files at `04499b92996d`: `verity/protocols/spot/verifier/tests/test_registered.py -k test_r7_reuses_an_earlier_outputs_commitment`, 1 passed, 76 deselected, 1.27 s. It calls no Lean verifier. No branch, no `research run`.
+
+**A correction to my 04:33Z entry** [read]: I called `tie_service.py` "the lengths tie". It is the ingress tie, over the cells' rows (`warden_rows`). No tie of the connection rows' tables (lengths, fails, content) is registered on a stream on `main`: `response_tie.py` says of itself "Nothing here is in a Spec or proved" (`:3-4`), and only the certifier's own modules, their tests and `benchmarks/network_traces` name those tables. What I said that tie does is right of the ingress tie: its record names the certifier's root as `roots[0]` (`tie_service.py:403`) and its verifier compares that entry's root and domain with the signed head (`:553-556`).
+
+### 1. N spans, not R rows
+
+**[read] Yes: the replay registers a class's N spans today, and nothing in the sampled-proofs verifier has to change. [derived] So none of the three is needed. [read] But a class's N is not the certifier's class's count today: the compute side files a span by another rule, and nothing holds N to a signed count.**
+
+What registers N:
+
+- [read] The class's population is `population_program(self.replay, self.spans)` (`boundary_rows.py:319-320`), and a stop class's stop population is `population_program(self.stop.template, self.spans)` (`:331-336`). Each port has `leaves: self.spans` under a domain that binds it (`:370-382`). A class registers one span or more (`:270-271`).
+- [read] The challenger builds its own program from the record's N: `n = record.get("population")`, any integer of at least 1, then `self._program(n, counts)`, for a two-stage stream the replay block's N instances (`service.py:1917-1922`, `:1978-1984`). `register` reads no schedule and no R.
+- [derived] So R rows was only the hidden form's. Under the charged form no replay block, stop block or tie block stands at an empty slot, provided the tie's population is the class's held rows too. `ResponseTieStop` keeps refusing a finish of 0 (`response_tie.py:35`, `:232-233`), so NET-377 is not needed. The word 0 marks nothing, so the lemma over `StopRule16` is not needed. The replay block needs no empty form.
+- [read] A tie of N blocks can read rows 0 to N − 1 of a table of R leaves: a `--registered` port names its tree's `leaves` and, apart from that, which row each block reads (`Flock/Registered.lean:80-98`: block `reads_from + i` reads `reads[i]`, every other block nothing). `connection_rows.port` today names every row, "held or not" (`connection_rows.py:478-487`).
+
+How each side files, today:
+
+- [read] **The certifier.** Row r of class i's three tables is the r-th release of the execution phase filed in class i, in release order (`content_rows.py:42-48`). A release is in the execution phase of its `END` on ingress (`warden.py:93-98`, `connection_rows.py:210`). Its class is the first the schedule lists whose request room holds its request's bytes and whose O holds its ids (`content_rows.py:274-281`). A release filed in a class whose rows are all held has no row (`:312-313`).
+- [read] **The compute side.** A span is in the serve's own commitment window: the requests that finished in it, in admission order (`boundary_windows.py:172-183`). That window closes `window_s` after it opened, or when no request is running (`:164-170`), not with the certifier's execution phase. A span's class is the least powers of two over its prompt's ids and the ids it was served, and (P, T) in a stop class whatever was served (`boundary_rows.py:5-8`, `boundary_stop.py:5-10`, `:161-171`).
+- [read] The compute side can know a request's release: the certifier's headers give its run, its place N in the release order and its bucket (`serve_admit.py:283-294`), and a span keeps (run, N) (`boundary_windows.py:139-142`). It reads it for one thing: a span with no release is in no stop class (`boundary_stop.py:11-12`, `:169`). Such a span is then in a no-stop class. The one caller that gives the boundary commitment its releases is the serve-tax benchmark's plugin (`benchmarks/serve_tax/servetax_plugin.py:643-644`).
+- [derived] So slot r of a compute class is not row r of a certifier's class today, in three ways. The set: finished in the serve's window, against released in the execution phase. The class: the prompt's ids and the ids served, against the request's bytes and the ids released. The members: a no-stop class holds spans the certifier never released. [read] The order alone can agree: under release-order admission a request reaches the engine once every earlier release has come or been passed over (`serve_openai.py:46-47`, `servetax_plugin.py:67-71`).
+
+What would have to change for the N to be the certifier's:
+
+- [derived] The compute side files a span by its release: the execution phase of its bucket, the class `content_rows.file` gives it, its place in the release order, and no span without a release in a tied class. That is `boundary_windows.close` and `boundary_stop.filed`, the vLLM adapter's, and the schedule's classes must be the ones the compute side lays out (a stop class's O is the rule's T). Nothing in `Stream.register` and no Lean file changes.
+
+What then holds N to the count the head signs:
+
+- [read] Nothing today. The signed head lists each table's name, rows, row bytes, domain and root, and no count (`connection_rows.py:52-59`, `:268-284`). The period check's Lean reads no connection rows' head and no registration's `population` or `leaves`: its `holds` compares a registration's `roots` and `registered` entries with the cells' rows' root and domain, and that is all (`NetworkCheck/Period.lean:948-951`; no file under `NetworkCheck/` names the connection rows).
+- [derived] With the count in the head, one comparison of two public numbers holds it, and one-stage's own rule carries it to the replay. If the tie's verifier holds the tie's population to the signed count, and the tie takes the compute side's rows (`b.egress`, `b.stop`) as output values of the class's records, then R7 refuses the tie's registration unless each of those ports has exactly that many leaves (`R7-output`: `registration.py:554-562`, Lean `Spot/Registration.lean:316-320`), and a port's leaves are the class's N (R3, with R2's population). [run] The named test shows that rule: an output value whose earlier port has other leaves is `R7-output`. The comparison with the signed count is the tie's verifier's or the period check's, so network accounting's.
+- [derived] The same rule is why the hidden form needed R rows in the replay: a tie of R blocks cannot take a port of N leaves.
+- [derived] That slot r is release r is held by the tie's own proofs, at its sample's ε and δ: block r opens the signed root at row r only on the ids the certifier released there.
+
+Not established: the count's form in the head (NET-379's, [relayed], not on `main`); whether the tie's population will be the held rows; whether every release of an execution phase has finished in the engine when its class commits; who refiles the compute side.
+
+### 2. A no-stop class's count
+
+**[read] The replay block reads no count today, the certifier's or anyone's. [derived] Yes to a committed count: with it the replay block still reads nothing of the certifier's.**
+
+- [read] The replay block is a stand-in: `per_prompt · P + per_output · O` instances of one check template, laid out from the class's two sizes alone (`boundary_rows.py:47-52`, `:292-293`, `:315-316`). No parameter of it is a count. It reads neither n, nor `at`, nor any row of the certifier's.
+- [read] Under a stop rule a no-stop span commits `b.request`, `b.prompt` and `b.egress`, and `b.egress` is its O ids, "zero past n: no n and no finish" (`boundary_rows.py:25-30`, `:201-207`). Its n is committed nowhere, and an id may be 0, so the row does not say where it ends. A sampled span's proof blocks are padded to the class's n_rho with copies of its last instance (`interior_rows.py:3-4`, `:19-21`, `:88-98`), so no registered value holds how many are its own.
+- [read] With no rule registered, `b.egress` begins with n and the finish (`boundary_rows.py:16`, `:208-212`). The rule's layout dropped them on purpose: "the ids served n is no number the serve states" (`:22-23`), a stop class's n being its stop block's output.
+- [read] `ResponseTieNoStop` checks that the end row's class is 0 or 1 and that `at` is at most O, and its count is `at` (`response_tie.py:48-51`, `:238-239`, `:351-354`). Its docstring names the gap: "no committed count: its count is the network certifier's `at`, and the compute side commits none" (`:59-61`), under the open premise that the compute audit holds the committed ids below the count to be the Program's outputs (`:55-58`).
+- [derived] Why yes. For an aborted span the ids past n are zeros, not the Program's outputs, so a replay block that holds ids to the Program has to be told how many. Told by `end.i`, it is (b). Told by a committed word c, it is (a): the replay block holds the ids below c to the Program, the tie checks `at` against c, and the ids that left are among the ids the compute audit holds.
+- [derived] The check is `at ≤ c` and `c ≤ O`, not equality. A server may have served ids that never left, and the stop form already reads a failed connection so: `at ≤ n` (`response_tie.py:40-44`).
+- [derived] The word is advice: the server chooses it and no block computes it, where a stop class's n is a block's output. By the rule that every value a circuit reads is a block's output, a certified input, a registered value or advice charged at its width, it is charged, at most log2(O + 1) bits a no-stop span where the form refuses a c above O. Whether what the certifier's `at` already costs covers it is soundness's to say.
+
+What of ours changes:
+
+- [derived] Nothing in the sampled-proofs verifier or its Lean. One more committed word a span is one more port of the class's boundary record, whose leaves and domain the layout derives (R3), and the tie takes it as an output value, as a stop record takes `b.request` and `b.egress` today (`boundary_stop.py:174-206`).
+- [derived] Ours is a statement, not code. The premise "the committed ids below the committed count are the Program's outputs" becomes one that a no-stop class's request Definition can hold, and the guarantee that composes the tie with the compute audit charges the word. Neither is written, and that Definition is not on `main`.
+- [derived] The lemma over `StopRule16` has no part in it: a no-stop span has no stop word.
+
+Not established: where the word goes (the head of `b.egress` again, or a port of its own) and its width, which are the vLLM adapter's; the charge.
+
+### 3. A tie's record in a replay stream's log
+
+**[read] The log can hold another Program's record. [derived] But a table is named so only by a reader with as many blocks as the table has rows, only by a record after the tie's, and at a root that nothing in one-stage holds to the signed head. Under the charged form that is no for a class of N spans, and under (a) it is not needed.**
+
+What the log admits:
+
+- [read] A stream's log starts with whatever records of the prover's the challenger logged before it, "a registration of another Program whose values this stream's registrations reuse" (`service.py:1551-1553`), held to their shape alone (`:1625-1630`; Lean `Spot/OneStage.lean:165-175`, `:266-267`). The stream samples none of them.
+- [read] It is used so today: a stop class's stop record is on a one-stage stream whose log starts with the class's boundary record, and it takes that record's `b.request` and `b.egress` ports as output values (`two_stage.py:398-415`, `boundary_stop.py:174-206`). `register` and `register_interiors` both take `outputs` (`service.py:1883`, `:2060`).
+
+What refuses:
+
+- [read] [run] **The leaf count.** An output value's port must have exactly the value's rows, else `R7-output` (`registration.py:554-562`, Lean `Spot/Registration.lean:316-320`; in the named test, a port of 4 leaves). [read] The value's rows are the reader's own: in a population of N blocks every parameter is an array over the N instances (`verity/circuits/population.py:143-157`; `registered.py:258-264`, `:444-456`). A content table has the class's R rows whatever the load (`content_rows.py:44-46`). [derived] So a population of N blocks cannot name it, and one of R blocks can.
+- [read] **The order.** A record's `previous` is the log's last record (`R6-previous`), and no earlier record of the log has its `window` (`R6-window`) (`registration.py:376-379`, Lean `:573-577`). [derived] A tie that takes the compute side's rows as output values comes after the class's boundary record, and a stream's log is fixed when the stream is made, so the class's own two-stage stream cannot hold the tie's record. A further stream can, as a stop record's does.
+- [read] **Nothing at registration checks the row's form.** A `roots` entry is `port`, `root`, `leaves` and `domain`, with no words. The reader states the words, 16 or 32 bits each, and the row schema itself, and a wrong one fails only when a proof opens a row.
+
+What is not held:
+
+- [read] The reading stream checks nothing of the earlier record but its shape, and R3 never held that record's root (question 4). [derived] So the root the reader opens is the tie's record's own field. It is the signed one only where the tie's verifier compared it with the head, as the ingress tie's does (`tie_service.py:553-556`).
+
+Not established: I did not run the stop record's test (`adapters/vllm/tests/pipeline/test_boundary_rows.py:423-465`), which calls the Lean verifier; how network accounting's tie will name the compute side's rows.
+
+### 4. The two limits
+
+**[derived] The request row's limit is confirmed, the figure itself not recomputed. [read] R3 is confirmed in both verifiers.**
+
+- [derived] **The request row.** A canonical id request holds 11 bytes a prompt id (`active.py:367`, `:526`; `lengths_row.py:29-33`). At P = 4,096 the ids alone are 45,056 bytes, 360,448 bits, over the widest class's 262,144 (`partition_v2.py:100`) at any cell size. At P = 2,048 they are 180,224 bits, and the request's head, its gaps and the count add under 1,000 bytes at 512-byte cells, so the row fits. I did not recompute 369,232. It agrees with the closed form (`lengths_row.py:119-129`) at 512-byte cells if the request's first cell holds 12 prompt ids, which I did not read.
+- [read] No rule on `main` states this limit. `content_rows.classes` holds O to the class (`check_ids`, `content_rows.py:97-111`, `:232`) and P only to what the schedule's cells carry (`:233-236`), so a schedule with P = 4,096 is accepted and its request table is laid. There is no request tie on `main`.
+- [derived] The limit binds a block that returns the row. The ingress tie reads the certifier's row as a registered input and returns one word (`tie_service.py:16-21`). Whether an input row has a limit of its own I did not establish.
+- [read] **R3.** It holds the scheme, the set of ports, each port's leaves and domain, and of the root only that it is hex (`registration.py:348-367`, Lean `Spot/Registration.lean:555-567`).
+- [read] On "held to the signed root only by its proofs' registered reads": the reads hold the proofs to the root the verifier's own port names, which is the head's where the verifier builds the port from the head it checked (`connection_rows.py:478-487`). The record's own root field is held by a comparison. The ingress tie's verifier makes it (`tie_service.py:553-556`), the period check's `holds` makes it for the cells' rows (`NetworkCheck/Period.lean:948-951`), and nothing makes it for a content table. [derived] It matters only where a later record takes that field (question 3).
+
+### The three sentences to post
+
+1. Yes to N spans: the compute side registers a class's N spans on `main` today and the sampled-proofs verifier builds its population from that N, so under the charged form no block stands at an empty slot, and the empty form in the replay block, our lemma on `StopRule16` and NET-377 are not needed, on two conditions that are not ours: the compute side has to file a span as the network certifier files its release (the execution phase of its release, the class `content_rows.file` gives, release order; today it files by the serve's own commitment window and by the ids served), and the tie's population has to be the count the head signs, after which one-stage itself refuses a compute-side port of another leaf count (`R7-output`).
+2. Yes to a committed count for a no-stop span: the replay block reads no count today (it is a stand-in laid out from the class's two sizes, and under a stop rule a no-stop span's `b.egress` is its O ids with no count, so its n is committed nowhere), the count is one more committed word a span that `ResponseTieNoStop` checks as `at ≤ count ≤ O` (not equality: a server may have served ids that never left), nothing in the sampled-proofs verifier or its Lean changes, and the word is advice the server chooses, so it is charged at its width unless soundness rules that the certifier's `at` already pays for it.
+3. A stream's log can hold a tie's record and take a port of its `roots` as an output value (a stop record's stream does this with its class's record today), but one-stage takes the port only where it has exactly the reader's rows, so a table of R rows is named so by a population of R blocks and not by a class of N spans, and the root so taken is the tie's record's own field, which R3 never compares with the signed head; both your limits are right (the ids alone are 360,448 bits at P = 4,096; we did not recompute 369,232), the first one binding a block that returns the request row.
