@@ -126,6 +126,7 @@ theorem pooledLeakRegistered : Guarantees.PooledLeakRegistered := by
 
 /-! ## What follows from the guarantee -/
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **A charge that reads the period's coins only through the phase reads only the earlier phases' coins**: where
 each phase's statement, its prover's strategy and its registered openings read only the earlier phases' coins
 (`PhasesAdaptive`), so does any charge `g z i` of those three and the phase's own coins. -/

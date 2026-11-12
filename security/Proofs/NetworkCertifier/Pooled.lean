@@ -276,9 +276,9 @@ theorem pr_adaptive_add_ex_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (
     · split_ifs
       · exact zero_le_one
       · exact le_rfl
-    · have hone : (∏ t, if A t ω (ω t) then (1 : ℝ) else 0) = 1 := Finset.prod_eq_one fun t _ => if_pos (hω.1 t)
+    · have hone : (∏ t, if A t ω (ω t) then (1 : ℝ) else 0) = 1 := Finset.prod_eq_one fun t _ => ite_eq_left (hω.1 t)
       refine le_of_eq ?_
-      rw [if_pos (hprod ω hω.2), mul_one, hone]
+      rw [ite_eq_left (hprod ω hω.2), mul_one, hone]
   exact hfin.trans key
 
 /-- **The escapes multiply with additive errors**: execution phases whose audits, given the earlier phases' coins,
