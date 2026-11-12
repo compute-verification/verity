@@ -98736,3 +98736,105 @@ Lines are at `origin/main` `5f0c008aa040` (read; `AGENTS.md` is unchanged since 
 - **The climb:** your default. `proofs/exfiltration-under-300gb` is the climb and `proofs/spot-ten-percent` stays beneath it.
 - **`proofs/spot-post-ready`:** a root at tier 2, as you have it.
 ```
+
+## COUNT, Thu 12 Nov 19:53Z: the wrong "measured" mark is fixed in an open pull request that passes; the security level prints from a real planner run; the simulated mark is written and passes, on a branch of mine and not yet on network's, because it has to take `main` first
+
+For Daniel, in plain words. Three labels of the benchmark moved today, and no GB moved. First, the benchmark no longer calls a proving time "measured" when it was timed alone and then priced through an assumed factor: that pull request is open and its checks pass. Second, the benchmark can now print a security level beside the GB: for the plan it prices, the chance that an accepted audit opens a value off the committed trace is at most 2^-101 over one verification phase and at most 2^-73.5 over a world-year of them, marked modeled, with its three assumed inputs listed beside it, and Lean proves no number at these sizes; its checks are running. Third, the network card's label "simulated" is written and passes against network's change, but it is not on network's branch yet, because their branch has to take today's `main` before our lines fit. The reader of a served run's record is not written yet.
+
+### 1. The simulated mark: where the `MARKS` line stops, and why nothing is on network's branch yet
+
+- **The `MARKS` line itself** stops against `main` nowhere [local: `git merge-tree`]. It stops against #9421 (`45f6e5fb2f23`), which widens the same line with `missing` [local]. It stopped against my own security-level branch only because my constants sat under it; I moved them, and that branch now holds #9421, so it stops where #9421 does [local].
+- **Two of the four test lines you list do stop, against #9387**, which is on `main` since 19:13Z [read: `gh pr view 9387`]. #9387 rewrote those two lines to carry each row's error, and the paragraph of the README at line 106. So the three listed edits, made on network's branch as it stands (on `main` `0582899c4392`), conflict with `main` in all three files [local: `git merge-tree`]. Network's own commits merge with `main` cleanly [local].
+- **Network's branch moved after your message.** A third commit at 19:19Z, `599610128648`, charges the design's two rows the count [read: `git log`]. Five of our tests pin those rows' figures. At network's second commit the listed edits pass 14 of 14; at its third they leave 3 failing, each on a pinned figure of a design row [local].
+- **What I did instead: one branch of mine that network's branch fast-forwards to**, `cursor/proofs-count-5c1a` at `8955166a052c`. It is network's head `599610128648`, then `main` `4a90174415b7` merged in (no conflict), then two commits of ours:
+  - `78053df22fdc`, the mark: `simulated` in `MARKS`; the label's text in the test, five lines now; the README's two places; and what the fourth mark entails, which is beyond your list: the line that counts the inputs by mark (without it the counts no longer sum), the three places that list the marks (the module's docstring, `--help`, the README), and one test's name.
+  - `8955166a052c`, the figures: the tests' pinned figures of the design's two rows move to the document's, and one sentence of the README names the count. No code of the command changes.
+- **At that head** [local]: `benchmarks/harness/tests/test_exfiltration.py` 16 of 16; network's `benchmarks/certifier_term/tests/test_result.py` 15 of 15 and `benchmarks/network_traces/tests/test_certifier_term.py` 25 of 25. The command prints "of 36 inputs, 2 are measured, 9 modeled, 1 simulated and 24 assumed" and "with a simulated set-time card" on the tests' store. With #9404 merged in as well, 18 of 18 [local]. The whole harness suite has not run at this head: say if you want it through `research run` before network's mark.
+- **Why I did not push to network's branch.** The hand-over was for three listed edits. Merging `main` into their branch and moving five tests' figures for their third commit are more than that, and the branch is theirs. One word from you or network and I push it (a fast-forward, no force); or network merges `main` and cherry-picks the two commits.
+- **Which lands first.** #9387 and #9404 are on `main` (#9404 since 19:30Z [read: `gh pr view 9404`]). #9421 is open and stops against the mark in three places: the `MARKS` line, the line that counts inputs by mark, and the README's sentence on marks. Whichever lands second keeps both, five marks: measured, modeled, simulated, assumed, missing. If #9421 lands first, as it is marked, I merge `main` into the branch again and resolve those three places. My own #9446 stops against it in one test line, the same count.
+- **A figure to check with network** [local: the command at `8955166a052c` on the tests' store]: with the count charged, the design's row after the stop block reads 91,778 GB a world-year with the simulated card, and 24,544,790 GB before the stop block. Your 19:04Z section relays 72,765 and 24,453,012, and network's line on NET-390 says about 82,000 by arithmetic. The command only prints the document; the difference is network's to explain.
+
+### 2. The row after the stop block carries `assumed`: the smallest change, and where it goes
+
+- **Today** the command names that row from a table of its own ("by the design no run has behind it, once a served audit has sampled a stop block") and takes every input's mark from the network certifier's document [read: `exfiltration.py`, `TOGETHER` and `_inputs`]. A mark belongs to an input; a row has none. The card's `simulated` reaches a row as the label the document gives it (`with_set_time_card`).
+- **So `MARKS` needs no change, and two marks on one row need one field more.** The smallest change is on network's branch, with the simulated change, in two places:
+  1. network's document: one input marked `assumed` whose source is the rule (a class is charged less than its schedule only with four verdicts, each accepted and complete: the stop record, the response tie, the request tie, and the compute audit's second stage over the class's sample), and on the design's row after the stop block a field that holds that one line, as `with_set_time_card` holds the card's label;
+  2. ours, about 15 lines and a test: the command prints that line wherever it prints the row, with the word assumed, beside the card's label.
+- **The five charges** are terms of network's calculator (`benchmarks/network_traces/leak_bounds.py`). The held-row count is there since 19:19Z, and the design's rows already charge the connections that fail, pooled over the period. I found no term for the stop sample's ε at δ, the wrong stop words' 16 bits or the no-stop spans [read: the file at the branch's head, by search]. The command prints each as the document gives it, with its mark; it computes none.
+- Not written. I write our half on `cursor/proofs-count-5c1a` when network names the field, or with a name of mine if you say so.
+
+### 3. Ready lines
+
+- **#9418, the reader of tonight's table** ([pull request](https://github.com/compute-verification/verity/pull/9418)): head `3dc5aae4d904`; the suites it touches 3 of 3 [run `r20261112-182411-7b4c`]; four files under `benchmarks/served_units/`; adds no conflict against `origin/cursor/lean-remote-merge-landing-fc8d` [local]. Ready for your mark.
+- **#9446, the wrong "measured" mark** ([pull request](https://github.com/compute-verification/verity/pull/9446)): head `819334aea90d`; the suites it touches 3 of 3: verity-bench 561, repository 354, verity-graph 246 [run `r20261112-191419-47ad`]. Three files. Ready, and it waits for benchmarks' word.
+  - It is built on #9404's head, not #9387's: #9404 already recorded how much of the plan's proving is at the planner's assumed default, and my first version conflicted with it. Both are on `main` now, so the diff is ours alone.
+  - The mark only changes [local: the command at this head on the store, the run of record `r20261112-124742-a3fe`, at an assumed cache factor of 0.1]: the compute audit's part stays 4,887 GB a world-year; inputs marked measured go from 2 to 1 (the weights); "proving priced measured", 4.956% of the proving time, reads `modeled`, with the words "each is timed alone, one session on a card, and with its provers sharing a GPU the plan prices 95.394% of its proving at the planner's assumed default"; one new input marked assumed holds that 0.9539.
+  - Against lean's remote merge branch it adds no conflict: the two files that conflict (`tools/verity/check/public_boundary.toml`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`) are `main`'s own, and `main` conflicts with that branch in ten [local].
+- **The security level (gap 6), not yet a pull request:** branch `cursor/proofs-count-70d5` at `4e37472f6988`. Its suites run `r20261112-194655-5b81` waits for a slot [run]. I open it when that passes; the body is written. It holds #9421's head, merged in, because both add at the same three places; until #9421 lands its diff shows #9421's lines too.
+
+### 4. The security level: what the command prints, and the table of the two evaluations
+
+**From a real planner run** [run `r20261112-192309-c065`, the planner at `e440f30c5ad0`; the command's own build and render at `4e37472f6988` on that run's files, no label written; the planner's row the headline reads, over the world's year at the pinned budget nearest, β = 5.5%, at an assumed cache factor of 0.1]:
+
+- "Over one verification phase: at most 2^-101.08" counted in calls of SHA-512, as the Lean counts, and 2^-92.08 in compressions.
+- "Over a world-year of phases, 197,078,976 of them: at most 2^-73.53" in calls and 2^-64.52 in compressions.
+- A verification phase is a datacenter's 600 s on 12,500 machines: its first stage samples 55 replay blocks, and its second 207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.
+- What Lean proves: "not proved at these sizes". The nearest instance, `Claims.Flock.Numbers.εclsAt_le_table1` (at most 2^-100), is stated for sessions of one table, at most 2,592,237,061 reruns a session against 10,368,948,031 here. No theorem sums a monitoring period's verification phases.
+- The three assumed inputs, printed beside it and listed among the inputs: 4,130 classes of gates a sampled proof block; 2^23 symbols of a table's level-0 codewords; "one commitment, one sample; every committed window is presented".
+- **PRF-600 is the third one's reference, and it is in the pull request's body, not in the tree**: the tree's rule is that code and docs cite no issue, so the code states the assumption as itself.
+- The rows of record today hold no bound (the planner wrote them before it computed one), so on today's label the command prints "not read" in place of the figure. The run above is unlabelled. Its label is yours.
+- My hand read at 18:29Z gave 2^-75.4. It took one table a session where the plan's largest session holds four, which costs 2 bits, and it was of the planner's row the headline read before #9404 landed, which differs by 0.09 bit [local].
+
+**The inputs on which the two evaluations differ** (the command's is the planner's `binding.py`; the other is the script in our notes; all figures are of the world's year, as powers of two) [local: `binding.py` at each step; read: the script]:
+
+| input | the command | the notes' script | moves the figure by |
+| -- | -- | -- | -- |
+| which bound's form | two stages, on `main`: the right-hand side of `CompiledTwo.eventTwoX_le_cls_at_budget`, 2·`runCost` + 4·`firstHitCost` over 2^256, reruns 1 + 210·k | one stage, on `main` (`Compiled.eventX_le_cls_at`, 2 + 2), its 62.3; and two stages with one wait, **on the branch `cursor/proofs-finder-7c1e` and not on `main`** (4 + 8, reruns 1 + k), its 68.1 | 1.0 bit against the first, 6.7 against the second |
+| how phases are counted | the planner's: a datacenter's phase of 600 s on 12,500 machines, 197,078,976 a world-year | one a machine every 128 s, 1.155·10^13 a world-year | 15.84 bits |
+| classes of gates | 4,130 a sampled proof block times the phase's 207,715,585: 2^39.64 | 2^38, fixed | 1.64 bits |
+| symbols and tables | 2^23 symbols a table; the plan's largest session holds 4 tables: 49,375,943 reruns a wait | one table a session: 12,343,986 | 2.00 bits |
+| sessions a sample | 406,360, the plan's | 1,135,341 | under 0.01 bit |
+| the prover's calls over the year | 2^80 a run, every phase charged in full | the same for its 62.3 and 68.1; its 96 to 97 charges the part linear in the calls once over the whole year | 28 to 35 bits |
+
+- In `main`'s two-stage form at the script's own sizes the figure is 2^-61.33. Phases, classes and tables take it to the 2^-73.53 the command prints: 61.33 + 15.84 − 1.64 − 2.00.
+- **Which matches which Lean statement.** The command's figure counted in calls is the formula of a theorem on `main`, `CompiledTwo.eventTwoX_le_cls_at_budget`, at the row's own sizes. The script's 62.3 is the formula of `main`'s one-stage theorem, which is not the two-stage design the plan runs. Its 68.1 is a branch's formula. Its 96 to 97 is no statement, on `main` or on the branch.
+- **Neither evaluation matches a Lean statement at these sizes**: Lean's instances at numbers are stated for sessions of one table, and none sums a period's phases.
+- **The pull request prints the planner's**, because it is `main`'s two-stage theorem's form at the design the row itself prices, so the security level and the GB are of one design. It prints none of the script's figures.
+- **A correction for the Goals page:** "68 by main's bound" is not `main`'s. It is the branch's one-wait form. `main`'s two-stage form gives 61.3 at the script's sizes and 73.5 at the plan's own.
+
+### 5. Which seconds (gap 3), for your ruling
+
+- **`prove_total_s`** is the prover's own timer, summed over a session's tables: it starts when a table's proving starts and stops when that table's proof is built [read: `flock-circuit.rs`, `session_proved`, `prove_s`]. It leaves out the witness build, the commitment and hello round trips, the wait for the challenger's coins, and everything between sessions. In tonight's table it is the median over a statement's timed sessions [read: `benchmarks/flock_s8_block/summary.py`, `session_set`].
+- **`session_s`** is wall clock for one whole session: in the table, from the last warm session's record to the last timed session's record, divided by the timed sessions [read: the same function]; in a served audit, from a member's session's launch to its return [read: `benchmarks/one_stage/a5.py`]. It holds all that `prove_total_s` leaves out.
+- **The time the GPU is unavailable to anyone else is `session_s`**: the table times one prover at a time on one leased card [read: `inbox/overhead-run/for-benchmarks.md`], and the prover's process holds that card from the session's start to its end [derived]. `prove_total_s` is the part of it in which the card computes the proof. In the rest the card is held and is idle or builds the witness; which of the two I have not read [guess].
+- The reader in #9418 carries both columns, and I price both when the table is in the store.
+
+### 6. The reader of a served two-stage run's record (gap 7): its fields, and what a record fills today
+
+- It returns exactly benchmarks' dict: `run`; `prove`, `staging`, `replay`, `interior`, each a list of `{"seconds", "gpus"}`; `serving` and `stock`, one such entry each; `serving_cost` and `serving_cost_source` only where `stock` is absent. A field the record lacks is `None`, and `served_share` names it.
+- **What a record fills today** [read: `benchmarks/one_stage/two_stage.py` and `a5.py` on `main`]:
+  - `prove`: the seconds of each session, from `audit.timing` of the second stage's `summary.json` (`session_s`, and `timing.prove_total_s` beside it); **not the GPUs a session held**. So no entry of `prove` is whole.
+  - `staging`: nothing. The one-stage audit does time it (`staging.before_draw_s`, `staging.drawn_s` in its own summary), and the two-stage summary keeps `timing` and drops `staging`. Keeping it is one word in `two_stage.py`; the GPUs are still absent.
+  - `replay`, `interior`: nothing. The two-stage audit reads no clock over either.
+  - `serving`, `stock`: not in the audit's record; they are in the serve's own run.
+- **So of the four lists a record fills none today**, and `prove` is the nearest: it lacks only `gpus`. The reader is not written yet. It is next.
+
+### 7. What these figures carry (your 19:40Z section)
+
+- No figure of this entry ran the served engine. The planner's are modeled, at the commit named beside each. The two settings do not enter them.
+- The 4,887 GB is the rows of record's as labelled today, and those rows read Wednesday's timing of the head block, which reads 10% to 18% high [relayed: your section]. The security level does not read that timing.
+
+### 8. Open, with each head
+
+| what | branch | head | state |
+| -- | -- | -- | -- |
+| the reader of tonight's table (gap 1) | `cursor/proofs-count-e41c` | `3dc5aae4d904` | #9418, ready for your mark |
+| the wrong "measured" mark (gap 4) | `cursor/proofs-count-e290` | `819334aea90d` | #9446, ready, waits for benchmarks' word |
+| the security level (gap 6) | `cursor/proofs-count-70d5` | `4e37472f6988` | suites `r20261112-194655-5b81` waiting for a slot; then the pull request |
+| the simulated mark, for network's branch (gap 5) | `cursor/proofs-count-5c1a` | `8955166a052c` | passes; waits for your word to go onto network's branch |
+| the reader of a served run's record (gap 7) | `cursor/proofs-count-9fb0` | `0582899c4392`, nothing written | next |
+| the first version of gap 4 | `cursor/proofs-count-45db` | `87f4aed72e55` | superseded by #9446; nothing reads it |
+
+- **Gap 2, the map file:** the overhead run's file is on your branch. It marks its commit as open to a fix from the rehearsal, which it says ends about 21:50Z [read: `inbox/overhead-run/for-benchmarks.md`]. I start the map from its 70 statements after gap 7 and close it when the rehearsal has passed.
+- **Runs I cancelled before they took a slot**, each superseded by a new head: `r20261112-185710-ba77`, `r20261112-192236-dd40`, `r20261112-194000-5f50`.
+- **Asked of you:** a word on pushing `8955166a052c` to network's branch; the field's name for the row's assumption, or leave to choose it; the label of `r20261112-192309-c065` when you have read it.
