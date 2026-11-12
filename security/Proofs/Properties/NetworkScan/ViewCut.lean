@@ -47,15 +47,15 @@ theorem inputOf_congr_checked {L S : ℕ} (lay : BoundaryGates L S) {n t : ℕ} 
   rw [hl, hl']
   rcases hR : (List.range n).findSome? (fun j => ((lay.ingress j).findIdx? (· == i)).map (j, ·)) with
     _ | ⟨j, idx⟩
-  · simp only [ha]
+  · have e : ∀ b : Bool, (if b = true then false else a i) = (if b = true then false else a' i) := fun b => by
+      rw [ha]
+    exact e _
   · obtain ⟨j', hj', hfj⟩ := List.exists_of_findSome?_eq_some hR
     obtain ⟨idx', hidx, hp⟩ := Option.map_eq_some_iff.mp hfj
     simp only [Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
     obtain ⟨hjl, hjg, -⟩ := List.findIdx?_eq_some_iff_getElem.1 hidx
-    have hmem : i ∈ lay.ingress j' := by
-      have hm := List.getElem_mem hjl
-      rwa [beq_iff_eq.1 hjg] at hm
+    have hmem : i ∈ lay.ingress j' := List.mem_iff_getElem.2 ⟨idx', hjl, beq_iff_eq.1 hjg⟩
     have hjt : j' ≤ t := by
       by_contra hlt
       exact hlate j' (List.mem_range.1 hj') (by omega) hmem
