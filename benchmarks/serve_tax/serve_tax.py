@@ -59,17 +59,22 @@ The arms, each one engine configuration; each adds its change to the arm it name
   seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
-- ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
-  window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
-  serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
+- ``boundary-rows``: ``record`` with the two-stage audit's boundary commitment at serve, each window's finished
+  requests committed by size class (`verity_vllm.pipeline.boundary_rows`), vLLM's prefix cache left on, its object the
+  two-stage serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead
+  (``check``, ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``tables`` for each span's latent history tables
   (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``; the server is held
   after its loads until its windows' commits account for every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
-  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
-  is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+  canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`), with
+  prefix caching off: a table holds its request's rows from position 0, and a request served from the cache computes
+  none before its hit's end (`BoundaryWindows.install` refuses the pair). The line is this arm's data and is stated
+  nowhere else: a job that serves the two-stage audit serves this arm.
+- ``two-stage-tick``: that launch line admitting on the certified tick, as ``tick`` does: the arm whose schedule is a
+  function of the certified arrivals, so its windows' advice holds no decision. It is made of ``two-stage``'s data,
+  and like every tick arm the corpus's client serves it, standing in for the certifier.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -245,14 +250,15 @@ ARMS = {
                     "state and each rank's runner rows and generators taken and kept; no leaf dump, no per-step timing",
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
     "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
-                         "by size class (boundary_rows), prefix caching off", ("--no-enable-prefix-caching",),
-                         plugin=("record", "boundary_rows"), rows=ROWS),
+                         "by size class (boundary_rows)", plugin=("record", "boundary_rows"), rows=ROWS),
     "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
                           env=TOPK_ENV, general=TOPK),
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
-                     "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
+                     "layer's history tables in the boundary commitment, prefix caching off",
+                     ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
 }
+ARMS["two-stage-tick"] = replace(ARMS["two-stage"], parent="two-stage", what="+ admission on the certified tick", tick=True)
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
 #: what a part of a model's target (`Part`) is of
 CHANGES: dict[str, Callable[[Arm], bool]] = {

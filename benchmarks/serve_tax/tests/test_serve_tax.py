@@ -89,13 +89,17 @@ def test_plugin_site_declares_the_arms_plugins_the_tick_after_this_one(tmp_path:
     topk = "verity_dsa_topk = dsa_topk:register"
     assert site_entries(tmp_path, "canonical-topk") == [ep[0], topk]
     assert site_entries(tmp_path, "two-stage") == [*ep[:2], topk]
+    # the launch line under the tick loads all three: this module's, the tick's after it, then the top-k's
+    assert site_entries(tmp_path, "two-stage-tick") == [*ep[:3], topk]
 
 
 def test_the_two_stage_arm_is_the_serves_launch_line_and_nothing_else(tmp_path: Path):
-    """The serve's line as data: prefix caching off, the step record and the boundary commitment with the model's
-    check template and one attention layer's tables, and the canonical top-k on the path and switched on."""
+    """The serve's line as data: prefix caching off, which its history tables need, the step record and the boundary
+    commitment with the model's check template and one attention layer's tables, and the canonical top-k on the path
+    and switched on."""
     glm, two, rows = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["boundary-rows"]
-    assert S.server_argv(two, glm, Path("/ck"), 8000) == S.server_argv(rows, glm, Path("/ck"), 8000)
+    assert S.server_argv(two, glm, Path("/ck"), 8000) == [*S.server_argv(rows, glm, Path("/ck"), 8000),
+                                                          "--no-enable-prefix-caching"]
     assert (two.parent, two.plugin, S.ARMS["canonical-topk"].parent) == ("boundary-rows", rows.plugin, "compiled")
     private = tmp_path / "private"
     env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, check=glm.check, private=private)
@@ -235,10 +239,34 @@ def test_the_boundary_rows_arm_holds_the_server_until_its_commits_account_for_ev
     assert S.await_commits(tmp_path, 21, 5.0, clock=lambda: 0.0)["tables"] == 3
 
 
-def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its_object(tmp_path: Path):
+def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Path):
+    """The launch line under the certified tick is the two-stage arm's data with the tick: its flags with the tick's
+    middleware, its boundary commitment and top-k, and τ in the server's environment. Its engine has the launch line's
+    changes and the tick, so of the target's parts only the edge snapshot's is off; and vLLM's own client, which sends
+    no certified feed, can't drive it."""
+    glm, two, tick = S.MODELS["glm53"], S.ARMS["two-stage"], S.ARMS["two-stage-tick"]
+    assert replace(tick, parent=two.parent, what=two.what, tick=False) == two and tick.parent == "two-stage"
+    assert S.server_argv(tick, glm, Path("/ck"), 8000) == [*S.server_argv(two, glm, Path("/ck"), 8000), "--middleware",
+                                                          S.TICK_MIDDLEWARE]
+    tau, private = {"bucket_us": 100000, "sat_us": 9000, "free_us": 11000}, tmp_path / "private"
+    env = S.server_env(tick, tmp_path, tmp_path / "site", tau, 600.0, 600.0, check=glm.check, private=private)
+    plain = S.server_env(two, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
+    assert {k: v for k, v in env.items() if k != "VERITY_TICK"} == plain
+    assert {k: json.loads(env["VERITY_TICK"])[k] for k in tau} == tau
+    with pytest.raises(SystemExit, match="the tick arms need τ"):
+        S.server_env(tick, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
+    assert S.changes_of("two-stage-tick") == [*S.changes_of("two-stage"), "admission on the certified tick"]
+    assert [(x["name"], x["off"]) for x in S.target_parts(glm, "two-stage-tick")] == [
+        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", ["the edge snapshot"])]
+    with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
+        S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
+
+
+def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_its_object(tmp_path: Path):
     m = S.MODELS["glm53"]
     argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
-    assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching"]
+    assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000)
+    assert S.server_argv(S.ARMS["no-prefix-cache"], m, Path("/ck"), 8000) == argv + ["--no-enable-prefix-caching"]
     # the object is the arm's own with the model's check template; a model that names none needs one given
     kept = tmp_path / "kept"
     for missing in (None, {}, {"per_output": 1}):
@@ -1397,6 +1425,8 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
     assert S.changes_of("compiled") == S.changes_of("compiled-again") == S.changes_of("no such arm") == []
     assert S.changes_of("two-stage") == ["the step record", "prefix caching off", "the two-stage boundary commitment",
                                          "the history tables", "the canonical top-k"]
+    # the cache goes off with the history tables, not with the boundary commitment
+    assert S.changes_of("boundary-rows") == ["the step record", "the two-stage boundary commitment"]
     assert S.changes_of("tick") == ["the step record", "admission on the certified tick"]
     assert S.changes_of("boundary")[-1] == "the edge snapshot"
     # the launch line leaves off the tick and the edge snapshot, which the snapshot bundle is of
@@ -1471,11 +1501,11 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     # history tables
     assert rows["record"] == [{"changes": ["the step record"], "part": None, "points": None, "whole": False}]
     assert rows["no-prefix-cache"] == [{"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
-    assert rows["boundary-rows"] == [{"changes": ["prefix caching off", "the two-stage boundary commitment"],
-                                      "part": None, "points": None, "whole": False}]
+    assert rows["boundary-rows"] == [{"changes": ["the two-stage boundary commitment"], "part": None, "points": None,
+                                      "whole": False}]
     assert rows["two-stage"] == [
         {"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25, "whole": True},
-        {"changes": ["the history tables"], "part": None, "points": None, "whole": False}]
+        {"changes": ["prefix caching off", "the history tables"], "part": None, "points": None, "whole": False}]
     text = S.cost_text(r)
     assert ("| arm | cost over compiled | over | cost over that arm | share of the cost | what the step turns on, and "
             "the target's part for it |\n|---|---:|---|---:|---:|---|\n"
@@ -1483,11 +1513,11 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
             "model |\n"
             "| no-prefix-cache | 0.00% [0.00%, 1.01%] | compiled | 0.00% [0.00%, 1.01%] | — | prefix caching off: not "
             "in the model |\n") in text
-    assert "| 3.14% [3.12%, 3.16%] | 45% | prefix caching off, the two-stage boundary commitment: not in the model " \
-           "|\n" in text
+    assert "| 3.14% [3.12%, 3.16%] | 45% | the two-stage boundary commitment: not in the model |\n" in text
     assert "| canonical-topk | 2.56% [2.04%, 3.09%] | compiled | 2.56% [2.04%, 3.09%] | — | the canonical top-k: the " \
            "tie order, 0.25% |\n" in text
-    assert "| 31% | the canonical top-k: the tie order, 0.25%; the history tables: not in the model |\n" in text
+    assert "| 31% | the canonical top-k: the tie order, 0.25%; prefix caching off, the history tables: not in the " \
+           "model |\n" in text
     # a step that turns on none of our changes has nothing to say
     assert S.in_target(S.MODELS["glm53"], "eager", "compiled") == [] and S._in_target([]) == "—"
 

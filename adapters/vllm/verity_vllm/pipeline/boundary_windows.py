@@ -196,14 +196,17 @@ class BoundaryWindows:
     def install(self, sched: Any, hooks: Any) -> BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
-        no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary. Refused under a stop rule whose model length is not
-        the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block at the
-        rule's, so every such response would be filed without a stop block. An honest serve's guard, which no verifier
-        relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
-        if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
-            raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
-                             "reads another request's rows")
+        no `atexit` hook (vLLM's engine core is one). A scheduler that caches prefixes commits the same rows: a span's
+        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read. With history
+        tables it is refused: a table holds its request's latent rows from position 0 (`boundary_tables.Latents`), and
+        a request served from the cache computes none before its hit's end. Refused under a stop rule whose model
+        length is not the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block
+        at the rule's, so every such response would be filed without a stop block. An honest serve's guard, which no
+        verifier relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
+        if self.tables is not None and getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
+            raise ValueError("the boundary commitment's history tables need prefix caching off "
+                             "(--no-enable-prefix-caching): a table holds its request's latent rows from position 0, "
+                             "and a request served from the cache computes none before its hit's end")
         served = getattr(sched, "max_model_len", None)
         if self.stop_rule is not None and served != self.stop_rule.max_model_len:
             raise ValueError(f"the stop rule's model length is {self.stop_rule.max_model_len} and the scheduler's "
