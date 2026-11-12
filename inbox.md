@@ -132,3 +132,51 @@ blame`]. That is what your rule asks. If lean edits those lines, the merge stops
 
 Kept on the VM's artifacts: the gate before and after with the per-file counts, and the three runs' verdict lines.
 
+[2026-11-12T04:11Z] 83b2b8e17810
+NETSEATS, report 2 of 2 (Wed 11 Nov 8:10 PM PST): the frozen list is done. A–D are in the notes at `lanes/network-accounting/tools/swarm/` (notes commit `e6dfb3f11052`); E, F and the note follow.
+
+**Frozen: 337 of our 675 files, 338 free** [ran: `python3 net_frozen.py --seats network_seats.json --out . --main be9a3d566905` in the clean checkout, 8:08 PM PST]. `main` `be9a3d566905`, the crossed head `aa3898c0cd6b`, the onsite branch `aa2e51199fb2`. A file is frozen whole.
+
+| seat | files | frozen | free | code lines frozen | code lines free | free if the onsite's base-only files are free |
+| --- | --- | --- | --- | --- | --- | --- |
+| certifier-check | 50 | 32 | 18 | 4,405 | 636 | 22 |
+| certifier-device | 36 | 25 | 11 | 6,322 | 414 | 14 |
+| certifier-circuits | 55 | 18 | 37 | 3,949 | 3,605 | 39 |
+| certifier-prover | 70 | 34 | 36 | 8,886 | 2,363 | 38 |
+| difftest | 27 | 9 | 18 | 2,843 | 3,340 | 22 |
+| bench-traces-serve | 55 | 32 | 23 | 11,842 | 990 | 28 |
+| bench-traces-zk | 38 | 31 | 7 | 9,903 | 1,064 | 11 |
+| bench-prove-path | 30 | 14 | 16 | 5,201 | 409 | 16 |
+| bench-e2e | 77 | 17 | 60 | 2,553 | 3,362 | 62 |
+| bench-encodings | 33 | 18 | 15 | 5,003 | 2,013 | 15 |
+| bench-model | 60 | 13 | 47 | 2,604 | 6,148 | 49 |
+| lean (held) | 144 | 94 | 50 | 19,648 | 3,500 | 60 |
+| total | 675 | 337 | 338 | 83,159 | 27,844 | 376 |
+
+**Each source alone, then together** (files of ours on `main`; Python in brackets):
+
+| source | files | held by it alone |
+| --- | --- | --- |
+| 1a open pull requests, ours (9 of 216 open) | 57 (35) | 1 |
+| 1b open pull requests, other lanes' (17 hold a file of ours: vllm 5, training 4, top 2, proofs 2, ci, lean, memory-accounting and one unowned 1 each) | 44 (17) | 11 |
+| 2 branches of ours, a commit in three days that main lacks, no pull request's head (44 read, 26 hold a file) | 129 (77) | 12 |
+| 3 the crossed head against its merge base `493f49485e50` | 156 (103) | 1 |
+| 4a the onsite branch, where a merge into main lands a change | 210 (122) | 45 |
+| 4b the onsite branch, files that only differ from its merge base | 69 (38) | 38 |
+| 1 and 2 | 156 (90) | |
+| 3 and 4 | 287 (166) | |
+| all | 337 (198) | |
+
+The crossed head: 156 files of ours on `main`, 103 Python, and 11 more it adds (5 Python), which is your 108.
+
+**How the onsite branch was mapped.** By the moves' own record, `tools/research/src/research/store/moves.json` at `main`: the branch's copy has 18 entries, `main`'s 33, so each old path goes through the 15 it lacks (a file's row, else the longest directory row). No worktree, and `research queue map-moves` not run.
+
+- 3,777 files differ between `fd0e813ff660` and the tip; 3,171 map onto a file of `main`; **279 are ours (160 Python)**, 176 of them at a path the record changed.
+- **None of ours is unmapped.** 34 more paths under our directories are files the branch adds (16 Python; 17 Lean, 8 in `network_traces`, 4 the check's, 3 `prove_path`, 2 `network_sim`); over the whole tree 74 files did not map, none under our directories.
+- The branch has **136 merge bases** with `main`, so a diff from one counts what `main` already holds. Second method, git's own rename detection: `git merge-tree` of the tip into `main` with directory renames and no rename limit (5 min, 805 conflicts). It changes **210 of the 279 on `main` (122 Python)** and none outside them. The other 69 are `base-only` in the list: frozen in the table above, and its last column says what each seat frees if you take them as free.
+- Your 282 and 181 at old paths: I get 181 Python for names matching `network|certifier|warden|nci|datacenter|prove_path` (268 files that way), against my 176 Python under our directories (160 on `main`, 16 new); I did not find the pattern that gives 282.
+
+**What I am least sure of here.** A head of 1 or 2 holds what a merge of it into its line changes; I made two heads exceptions by hand (`EXCEPT` in `net_frozen.py`): `cursor/net-307-readme-interface-5cb1` is a staging of the layout's move with two commits of its own (4 files of ours, not 148), and `cursor/net100-restack-net282-720ef0` is #8415 restacked on a staged copy of the certifier's renames (37, not 144). Old branches still count by the three-day rule: `cursor/network-accounting-first-slice-6b9a` (44 files, 44 hours old) and `cursor/net311-mend-8415-a9af` (28) may be dead; `frozen_sources.json` has every head with its count, so one can be dropped.
+
+Files: `swarm_frozen.txt` (337 lines: path, seat, what holds it), `frozen_counts.md`, `frozen_sources.json`, `onsite_map.tsv` (313 rows), `net_frozen.py`.
+
