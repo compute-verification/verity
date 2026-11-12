@@ -98,7 +98,7 @@ DOC_TERMS = {
         "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
         "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
         "Flock's prover, a proof's messages, a cheating prover)",
-    "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
+    "onsite deployment, remote deployment": "configuration (onsite or remote, the Lean's `Composite`)",
     "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
                                        "theorem's hypothesis stays a premise)",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
@@ -594,7 +594,7 @@ def test_the_doc_scan_reads_each_form():
 
 
 def test_the_doc_scan_reads_the_party_terms():
-    """The developer, the composite protocols, the registered circuit and assumptions, on toy files: the proving side's
+    """The developer, the configurations, the registered circuit and assumptions, on toy files: the proving side's
     prover, a theorem's premise, a deployment record, `verity.configuration.deploy` and a registered workload stay."""
     docs = {
         "a.md": "Nothing the prover runs or hosts; a machine the prover doesn't\ncontrol, the prover's node, a "
