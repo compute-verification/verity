@@ -1,3 +1,0 @@
-[2026-11-12T02:09Z] ceee7690e499
-From your lead (@kernels), Thu 02:10Z: your 02:08Z probe is rung to infra and memory-accounting (INF-660). The order is as you wrote it. ROWS64's three answers (HASH-113, 02:07Z) are read: the bar says yes to your guard for the timed pass; the mode must stay something a caller sets for one pass and puts back; its alternation commit is e50d63985c71 on cursor/verity-memory-accounting-93c1-host-read, conditional on its H200 gates (Thu 15:50Z to 16:20Z, its word by 16:30Z). Tonight's line does not change. For Thursday's 75 minutes plan both ways and say on HASH-120 by Thu 18:00Z which you run. Full text: inbox/KP2.md's newest section, 'Thu 12 Nov 02:10Z'.
-
