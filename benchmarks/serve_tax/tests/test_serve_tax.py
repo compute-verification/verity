@@ -341,13 +341,6 @@ vllm:prompt_tokens_cached_total{engine="0",model_name="m"} 1200.0
 vllm:num_preemptions_total{engine="0",model_name="m"} 0.0
 vllm:num_requests_running{engine="0",model_name="m"} 7.0
 """
-#: an engine that decodes speculatively also counts its drafts, the tokens they proposed and those accepted
-DRAFTS = """\
-vllm:spec_decode_num_drafts_total{engine="0",model_name="m"} 100.0
-vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="m"} 500.0
-vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="m"} 250.0
-vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="m",position="0"} 90.0
-"""
 
 
 def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
@@ -357,16 +350,16 @@ def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
                  "accepted_tokens": 0.0}
     s = S.schedule_metrics(c)
     assert (s["steps"], s["tokens_per_step"], s["rows_per_step"], s["prompt_cached_share"]) == (50.0, 120.0, 24.0, 0.25)
-    # an engine that drafts nothing has no acceptance; one that does: half its draft tokens, 3.5 tokens a draft
-    assert s["draft_accepted_share"] is None and s["tokens_per_draft"] is None
-    drafted = S.counters(METRICS + DRAFTS)
-    assert (drafted["drafts"], drafted["draft_tokens"], drafted["accepted_tokens"]) == (100.0, 500.0, 250.0)
-    s = S.schedule_metrics(drafted)
-    assert (s["draft_accepted_share"], s["tokens_per_draft"]) == (0.5, 3.5)
-    # a record made before the engine's drafts were counted reads as one that drafted nothing
-    old = {k: v for k, v in c.items() if k not in ("drafts", "draft_tokens", "accepted_tokens")}
-    assert S.schedule_metrics(old) == S.schedule_metrics(c)
+    assert "accepted_per_draft" not in s and "draft_accepted_share" not in s
     assert S.schedule_metrics(None) == {} == S.schedule_metrics(dict(c, steps=0.0))
+    # an engine that drafts: its drafts, the tokens they proposed and the accepted ones, and not the per-position counter
+    drafting = S.counters(METRICS + 'vllm:spec_decode_num_drafts_total{engine="0",model_name="m"} 400.0\n'
+                          'vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="m"} 2000.0\n'
+                          'vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="m"} 700.0\n'
+                          'vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="m",position="0"} 300.0\n')
+    assert (drafting["drafts"], drafting["draft_tokens"], drafting["accepted_tokens"]) == (400.0, 2000.0, 700.0)
+    assert S.schedule_metrics(drafting)["accepted_per_draft"] == 1.75
+    assert S.schedule_metrics(drafting)["draft_accepted_share"] == 0.35
 
 
 def test_the_table_carries_each_loads_schedule():
@@ -457,28 +450,55 @@ def test_max_model_len_replaces_the_base_context_limit():
     assert S.base_args() == S.BASE_ARGS and len(S.base_args(40960)) == len(S.BASE_ARGS)
 
 
-def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
-    """The arm's line is stock's at the recipe's context limit with the recipe's flags added and the runner's cap on
-    the requests at once dropped, and nothing else; a model with no recipe here and a context limit that isn't the
-    recipe's are refused, since the server would then not be the recipe's."""
+def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path, monkeypatch):
+    """The arm's line is stock's with the recipe's flags added and the runner's limit on the requests at once dropped,
+    and nothing else, at the job's context limit, and at the recipe's, not the runner's, where the job names none; a
+    model with no recipe here is refused. Behind the Rust front end the same flags go to ``vllm serve`` with the
+    recipe's own tokenizer mode, under the variable that starts it, and no other arm's server has it."""
     glm = S.MODELS["glm53"]
     context = S.published_context("published", "glm53", None)
-    assert context == glm.published_context == S.published_context("published", "glm53", 262144) == 262144
+    assert context == glm.published_context == S.AUTO == "auto"
+    assert [S.published_context("published", "glm53", n) for n in (131072, 262144, "auto")] == [131072, 262144, "auto"]
     stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
-    cap = stock.index("--max-num-seqs")
+    seqs = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
-    assert argv == [*stock[:at], *glm.published, *stock[at:cap], *stock[cap + 2:]]
-    assert argv[argv.index("--kv-cache-dtype") + 1] == "fp8" and argv[argv.index("--max-model-len") + 1] == "262144"
+    assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:seqs], *stock[seqs + 2:]]
+    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
+    # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
+    for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
+                        ("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),
+                        ("--speculative-config.num_speculative_tokens", "5"), ("--tool-call-parser", "glm47"),
+                        ("--reasoning-parser", "glm47")):
+        assert argv.count(flag) == 1 and argv[argv.index(flag) + 1] == value, flag
+    assert "--enable-auto-tool-choice" in argv and "--max-num-seqs" not in argv
+    # the Rust front end: vLLM's serve command with the checkpoint as its argument and the recipe's tokenizer mode,
+    # every other flag as behind the Python one; the variable is the published arm's alone, whatever the job's says
+    rust = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context, front=S.RUST)
+    assert rust[:5] == [argv[0], "-m", "vllm.entrypoints.cli.main", "serve", "/ck"]
+    assert argv[:5] == [argv[0], "-m", "vllm.entrypoints.openai.api_server", "--model", "/ck"]
+    mode = argv.index("--tokenizer-mode") + 1
+    assert rust[5:] == [*argv[5:mode], "glm5_next", *argv[mode + 1:]]
+    assert [S.front_end(S.ARMS["published"], g) for g in (None, "python", "rust")] == ["python", "python", "rust"]
+    assert S.front_end(S.ARMS["compiled"], "rust") == "python" and S.FRONT_ENDS == ("python", "rust")
+    monkeypatch.setenv("VLLM_USE_RUST_FRONTEND", "1")
+    env = S.server_env(S.ARMS["published"], tmp_path, tmp_path, None, 1.0, 1.0)
+    assert "VLLM_USE_RUST_FRONTEND" not in env
+    assert S.server_env(S.ARMS["published"], tmp_path, tmp_path, None, 1.0, 1.0, front=S.RUST)["VLLM_USE_RUST_FRONTEND"] == "1"
     assert S.base_args(without=S.UNPUBLISHED) == ("--max-model-len", "4096", "--seed", "0", "--disable-uvicorn-access-log")
-    with pytest.raises(SystemExit, match="MAX_MODEL_LEN=262144, for every arm of the job"):
-        S.published_context("published", "glm53", 131072)
+    # auto is the engine's to resolve: no load is checked against it, and a number still is
+    assert S.context_of({"long": (1,)}, "auto") == "auto" and S.context_arg("auto") == "auto" and S.context_arg("4096") == 4096
+    with pytest.raises(ValueError):
+        S.context_arg("automatic")
+    with pytest.raises(SystemExit, match="need a context of 16384"):
+        S.context_of({"long": (1,)}, 4096)
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
         with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
             S.published_context("published", model_id, None)
-    # a recipe is its flags and its context limit together, and one arm alone is started by it
+    # a recipe is its flags, its context limit and its tokenizer mode behind each front end together, and one arm
+    # alone is started by it
     for name, m in S.MODELS.items():
-        assert bool(m.published) == (m.published_context is not None), name
+        assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
     assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
 
@@ -1023,13 +1043,16 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
                       (["passes", "--loads", "chat", "--arms", "two-stage", "--model-id", "moonlight"], "check template"),
                       (["passes", "--loads", "long", "--max-model-len", "4096"], "need a context of 16384"),
                       (["passes", "--loads", "chat", "--arms", "published", "--model-id", "moonlight"], "no recipe for"),
-                      (["passes", "--loads", "chat", "--arms", "compiled published", "--model-id", "glm53",
-                        "--max-model-len", "131072"], "MAX_MODEL_LEN=262144"),
+                      (["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
+                        "--max-model-len", "4096"], "need a context of 16384"),
                       (["dataset", "long"], None)):                # a load that reads no file is no choice of `dataset`
         with pytest.raises(SystemExit, match=why):
             S.main(argv)
-    assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
-                   "--max-model-len", "262144"]) == 0
+    # the published arm is served at the job's context limit, a number or vLLM's auto, like the arms beside it
+    for limit in ("131072", "262144", "auto"):
+        assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
+                       "--max-model-len", limit]) == 0
+    assert S.main(["passes", "--loads", "long", "--arms", "published", "--model-id", "glm53"]) == 0
     # a model with no check template of its own takes the job's object
     assert S.main(["passes", "--loads", "long", "--arms", "two-stage", "--model-id", "moonlight", "--boundary-rows",
                    '{"check": "t"}']) == 0

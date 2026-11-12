@@ -13,36 +13,36 @@ import serve_tax as S
 GLM = S.MODELS["glm53"]
 
 
-def test_the_prod_arms_are_the_published_arm_with_the_recipes_drafts_and_are_costed_over_prod():
+def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod():
     prod, again, record = (S.ARMS[n] for n in ("prod", "prod-again", "prod-record"))
     assert prod.parent == "published" and again.parent == record.parent == "prod"
-    assert prod.args == again.args == record.args == S.MTP and record.plugin == ("record",) and not prod.plugin
+    assert prod.args == again.args == record.args == () and record.plugin == ("record", "ids") and not prod.plugin
     assert prod.published and again.published and record.published
     context = S.published_context("prod", "glm53", None)
     argv = S.server_argv(prod, GLM, Path("/ck"), 8000, max_model_len=context)
+    # the published arm's line, the recipe's speculative decoding in it once, in every one of the three
+    assert argv == S.server_argv(S.ARMS["published"], GLM, Path("/ck"), 8000, max_model_len=context)
     assert S.server_argv(record, GLM, Path("/ck"), 8000, max_model_len=context) == argv
-    # the published arm's line, then the recipe's speculative decoding as the recipe spells it
-    assert argv == [*S.server_argv(S.ARMS["published"], GLM, Path("/ck"), 8000, max_model_len=context),
-                    "--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", "5"]
-    for flag, value in (("--kv-cache-dtype", "fp8"), ("--tool-call-parser", "glm47"), ("--reasoning-parser", "glm47"),
-                        ("--tensor-parallel-size", "8"), ("--max-model-len", str(GLM.published_context))):
-        assert argv[argv.index(flag) + 1] == value, flag
+    for flag, value in (("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),
+                        ("--speculative-config.num_speculative_tokens", "5"), ("--tool-call-parser", "glm47"),
+                        ("--reasoning-parser", "glm47"), ("--tensor-parallel-size", "8"), ("--max-model-len", S.AUTO)):
+        assert argv.count(flag) == 1 and argv[argv.index(flag) + 1] == value, flag
     # what the recipe leaves to vLLM stays vLLM's: the requests at once, each card's memory, the prefix cache, the mode
     assert not {"--max-num-seqs", "--gpu-memory-utilization", "--no-enable-prefix-caching", "--enforce-eager"} & set(argv)
-    # a second lifetime starts the same engine, the record another; and the published arm is not this engine
-    assert S.same_engine("prod", "prod-again") and not S.same_engine("prod", "prod-record")
-    assert not S.same_engine("prod", "published") and not S.same_engine("prod-again", "compiled-again")
-    assert S.changes_of("prod") == S.changes_of("prod-again") == [] and S.changes_of("prod-record") == ["the step record"]
+    # the published arm and a second lifetime start prod's engine, the record another
+    assert S.same_engine("prod", "prod-again") and S.same_engine("prod", "published")
+    assert not S.same_engine("prod", "prod-record") and not S.same_engine("prod-again", "compiled-again")
+    assert S.changes_of("prod") == S.changes_of("prod-again") == []
+    assert S.changes_of("prod-record") == ["the step record", "the served ids"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
     assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record")} == {"compiled"}
     assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
-    # the recipe is one model's, and is served at its context limit alone
+    # the recipe is one model's; its arms serve at the job's context limit, the same for the three
     for arm in ("prod", "prod-again", "prod-record"):
         with pytest.raises(SystemExit, match=f"arm {arm} starts the server as vLLM's recipe.*no recipe for moonlight"):
             S.published_context(arm, "moonlight", None)
-        with pytest.raises(SystemExit, match=f"arm {arm}: the recipe's context limit is 262144, not --max-model-len 131072"):
-            S.published_context(arm, "glm53", 131072)
+        assert S.published_context(arm, "glm53", 131072) == 131072
 
 
 def test_the_pinned_corpus_is_a_whole_sha512_and_a_commit_of_its_repository():
@@ -222,7 +222,7 @@ def served(name: str, rates: list[float], load: str = S.AGENTIC, cached: float =
     reps = [{"rep": i + 1, "rate": None, "concurrency": 4, "sent": 96, "ok": ok, "met": ok, "goodput_req_per_s": 0.5,
              "req_per_s": 0.5, "output_tok_per_s": 1000 * r, "prompt_tok_per_s": 50000.0, "output_tokens": 60000,
              "prompt_tokens": 8000000, "prompt_cached_share": cached, "total_tok_per_s": 52000.0, "tpot_p90_s": 0.025,
-             "draft_accepted_share": 0.5, "tokens_per_draft": 3.5} for i, r in enumerate(rates)]
+             "draft_accepted_share": 0.5, "accepted_per_draft": 2.5} for i, r in enumerate(rates)]
     return {"arm": name, "parent": S.ARMS[name].parent, "what": name, "run_id": "r-1", "commit": "c" * 40,
             "vllm": "0.1+gd9105ea8", "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
             "loads": {S.pass_name(load, 4): reps}, "planned": {load: plan}}
@@ -285,7 +285,7 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     plain = [served(n, x) for n, x in (("prod", [2.0] * 6), ("prod-record", OURS))]
     for a in plain:
         for rep in a["loads"]["agentic@4"]:
-            rep |= {"draft_accepted_share": None, "tokens_per_draft": None, "tpot_p90_s": None}
+            del rep["draft_accepted_share"], rep["accepted_per_draft"], rep["tpot_p90_s"]
     text = S.session_text(S.session_cost(plain, "prod-record", "prod"))
     assert "a GPU), 94.00% of its prompt tokens from its prefix cache, no drafts, every request served" in text
     # a cost is over stock from the same environment

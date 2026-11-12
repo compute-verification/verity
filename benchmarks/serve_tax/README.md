@@ -11,7 +11,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `compiled` | stock vLLM, its defaults: CUDA graphs, with torch.compile on the architectures vLLM compiles (not those it captures breakable CUDA graphs for, GLM-5.3's among them), chunked prefill, prefix caching, async scheduling | — |
 | `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
 | `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
-| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags and context limit, and vLLM's own cap on the requests it runs at once in place of the runner's 256 | `compiled` |
+| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags, its speculative decoding among them, the job's context limit or else the recipe's, and vLLM's own limit on the requests it runs at once in place of the runner's 256 | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -25,9 +25,9 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
-| `prod` | the recipe's speculative decoding, as the recipe spells it: drafts from the checkpoint's own MTP layer, five a step (`serve_tax.MTP`). Stock vLLM as its recipe's line for the model starts it | `published` |
+| `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
-| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled` | `prod` |
+| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`, and each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -43,15 +43,31 @@ arm where one doesn't load, because vLLM logs such a plugin and serves on withou
 `published` is stock vLLM under the settings its authors publish for the model, where `compiled` is stock under the
 settings every other arm shares. Its data is the command of the model's recipe (`recipes/models/` in vLLM's
 repository, shown at recipes.vllm.ai) for the cards the runner serves the model on: the flags that command adds
-(`Model.published`) and its context limit (`Model.published_context`). The arm adds the flags to `compiled`'s line,
-serves at the recipe's context limit and no other (a job that serves it beside other arms sets `MAX_MODEL_LEN` to that
-limit, so that the arms differ by the flags alone), and drops the runner's cap of 256 requests at once, which leaves
-vLLM's own for the cards. A model with no recipe here is refused. Of GLM-5.3's recipe the integration's pin runs all
-but three things, which the arm therefore lacks: the Rust front end (`VLLM_USE_RUST_FRONTEND=1`), the tokenizer mode
-`glm5_next`, and the release the recipe names as its minimum. The recipe's speculative decoding is opt-in and stays
-off. The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and
-each pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is
-stock, and a cost is of an arm of ours over stock.
+(`Model.published`) and the context limit it is served at where the job names none (`Model.published_context`). The
+arm adds the flags to `compiled`'s line and drops the runner's limit of 256 requests at once, which leaves vLLM's own
+for the cards. A model with no recipe here is refused.
+
+GLM-5.3's is the recipe's command "FP8 on 8xH200 (standard)": an FP8 KV cache, speculative decoding with five draft
+tokens a step from the model's own draft layer (`mtp`), and the tool-call and reasoning parsers. The arm departs from
+that command in two things, each with the recipe's own alternative:
+
+- **The front end.** The command starts vLLM's Rust front end (`VLLM_USE_RUST_FRONTEND=1`) with the tokenizer mode
+  `glm5_next`, which the integration's pin does not have. The arm takes what the recipe names for such a build: the
+  Python front end and `--tokenizer-mode auto`. The release the recipe names as its minimum is also later than the
+  pin. A job on a build that has the Rust front end asks for the command's own with `PUBLISHED_FRONTEND=rust`: the
+  server is then `vllm serve` under that variable with `--tokenizer-mode glm5_next`, and the arm's `meta.json` names
+  the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
+- **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
+  own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
+  at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
+  when it starts and prints in its log. The recipe's command builder sets 262,144 for these cards instead; a job that
+  wants that, or any other limit, names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by
+  their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
+  refused by the server and counted as failed.
+
+The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
+pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,
+and a cost is of an arm of ours over stock.
 
 What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
 classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
@@ -248,19 +264,18 @@ number or load `prefix` has not run writes no entry under the metric's id. `gpus
 
 ## The recipe's line and the agentic load
 
-`prod` is `published` with the speculative decoding of vLLM's recipe for GLM-5.3 on eight H200s
-([recipes.vllm.ai/zai-org/GLM-5.3](https://recipes.vllm.ai/zai-org/GLM-5.3)), spelled as the recipe spells it
-(`serve_tax.MTP`): stock vLLM as that recipe's line starts it, as far as the job's vLLM runs the line. `prod-again` is
-its second lifetime and `prod-record` adds the scheduler's step trace. An arm is costed over the nearest stock arm
-above it (`serve_tax.STOCK`, `stock_of`), so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same
-settings, with `prod-again`'s cost over `prod` as its noise floor. The three start from one environment, the job's
-(`VENV`), and `cost` refuses arms that different builds of vLLM served. Where `prod`'s server and its requests differ
-from the recipe's line, beside what `published` lacks of it (above), and why:
+`prod` is `published`'s server, stock vLLM as its recipe for GLM-5.3 on eight H200s starts it (above), under the
+name of the stock arm two arms are made from: `prod-again` is its second lifetime, and `prod-record` adds the
+scheduler's step trace and keeps each request's prompt ids and served ids (`servetax_plugin.ServedIds`,
+`server/ids.PID.jsonl`), since vLLM's client keeps neither and a replay of a pass is given the first and compared with
+the second (`replay.window`). An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
+so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same settings, with `prod-again`'s cost over
+`prod` as its noise floor. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
+different builds of vLLM served. Where `prod`'s server and its requests differ from the recipe's line, beside
+`published`'s two departures (above), and why:
 
 | the recipe's line | `prod` | why |
 |---|---|---|
-| no `--max-model-len`: the model's own limit | the limit `published` serves at (`Model.published_context`) | the arms of a cost serve at one limit, which the job names |
-| the Rust front end (`VLLM_USE_RUST_FRONTEND=1`, `vllm serve`) | vLLM's Python OpenAI server (`vllm.entrypoints.openai.api_server`) | every arm starts that one module, which is where an arm's plugins load, so both sides of a cost have the same front end |
 | no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
 | requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says | `/v1/completions` with token ids, greedy, each request decoding to its recorded length | every arm then serves the same tokens whatever it generates; the parsers are loaded and parse nothing |
 
