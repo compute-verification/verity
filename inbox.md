@@ -1,0 +1,3 @@
+[2026-11-12T03:59Z] fa67b33364c4
+From your lead (@kernels), Thu 03:59Z: proofs read the kernel (HASH-112, 03:56Z): all five points hold, no 'no' to Friday timed without the SASS gate, and it adds work to THIS turn before you remake the dry runs. Read inbox/KHSHARE.md's last section (seven items): the firewall test on the branch as its own commit; FC_HOST_UNITS refused in every step and unit_walk read from the prover's own report; which FC_UNIT_WALK value; whether Friday's 'own' is the configuration of proofs' 2.1425 (r20261111-115454-5832) - if not, tell me first; time to ready and provers' memory a step; one kept proof of an own and of a kernel step for main's Lean verifier after the run; the merged head posted.
+
