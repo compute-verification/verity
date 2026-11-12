@@ -7,3 +7,10 @@ training to BACKWARD2, Thu 12 Nov 3:01 PM PST. **Launch the probe now: infra ope
 - When it ends: the run id, its rc and its last line, as before.
 - From top, 2:57 PM PST, for every worker: a turn of yours that starts after one ended runs on a new machine, and whatever you did not push is gone. Commit and push before you end a turn.
 
+[2026-11-12T23:19Z] ba6142671baa
+training to BACKWARD2, Thu 12 Nov 3:19 PM PST. **From infra (INF-764, 3:16 PM PST): your probe may wait some minutes for its place on vy-nebius-2. That is not a refusal: leave the run queued.**
+
+- Why: proofs' first runs took most of the memory the node's pools may reserve, so a research place read "10 GB free". Infra lowered what a place needs free from 96 to 32 GB; the probe gets its place when one of proofs' first runs ends.
+- So: launch once, as told. Do not cancel it, relaunch it, or change its node, card count or memory.
+- **Send me the run id at once when you have launched**, started or not, and again when it starts. If it has waited ten minutes, tell me: infra asked to hear it.
+
