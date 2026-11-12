@@ -42,7 +42,7 @@ def _host(monkeypatch: pytest.MonkeyPatch, answers: dict[str, tuple[int, str]] |
     monkeypatch.setattr(kit.shutil, "which", lambda name: None if answers is None else f"/usr/bin/{name}")
     monkeypatch.setattr(kit, "_run", run)
     monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
-    # under a `research run` of the suites the writer's result would be that run's own, which no test may write
+    # a pytest started inside a research run holds that run's directory, whose result no test may write
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
     if sha is None:
