@@ -245,7 +245,7 @@ theorem block_gates_of {P : Prog} {doc : Json} {ts : List Tmpl} {S : ℕ} {per :
       rw [hti, hs]
       exact hmapu
     · intro i v g h1 h2
-      obtain ⟨hk, hcnt⟩ := range_node hr hP.2.2.2.2.2.2 hrs i.isLt
+      obtain ⟨hk, hcnt⟩ := range_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs i.isLt
       obtain ⟨t, hget, htt, htu⟩ := tmpl_of_range hmap i.isLt
       have hunit : UnitAt P rs rs[i.val]!.template v.val (P.child P.rootScope rs[i.val]!.node v.val) :=
         (unitAt_iff hts hrs _ _ _).2

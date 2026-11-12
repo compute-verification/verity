@@ -31,7 +31,7 @@ open Flock.Program
 open Std.Do
 open BodiesOk (DM ex_throw_bind decode_root)
 open private getDef composite staticFns DecState DecState.defs DecState.index DecState.busy Desc Desc.ddefs liftV
-  from Flock.Program
+  from Circuits.Program
 
 /-! ## Reading the decoder's functions -/
 

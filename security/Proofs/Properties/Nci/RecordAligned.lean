@@ -251,7 +251,7 @@ theorem unit_good {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadP
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = false) : Resolve.Good P sc := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
-  obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hP.2.2.2.2.2.2 hrs hu
+  obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hu
   have hp' : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hp
   exact Resolve.good_child P (parent := P.rootScope)
     (by show Resolve.Good P (.top P.root 0 none); unfold Resolve.Good; exact ⟨rfl, rfl, rfl⟩) hk rfl hp' hm rfl
@@ -261,7 +261,7 @@ theorem unit_callee {P : Prog} {ts : Array String} {rs : Array TRange} (hP : Rea
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
     {sc : Scope} (hu : UnitAt P rs tid u sc) : BodiesOk.CalleeOk (P.defs[sc.d]!) := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
-  obtain ⟨k, m, hk, -, -, -, rfl⟩ := unit_node hr hP.2.2.2.2.2.2 hrs hu
+  obtain ⟨k, m, hk, -, -, -, rfl⟩ := unit_node hr hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hu
   obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
   exact (Resolve.decoded_root bytes P hdec k hk).2.1
 

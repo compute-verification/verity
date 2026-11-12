@@ -199,8 +199,9 @@ theorem returnsOwn (hP : ReadProg P)
   | true => exact Or.inl (returnsOwn_prim hP hrs hu hp ho).2
   | false =>
     obtain ⟨hr, hrp, hlay, hB⟩ := read_bodies hP
+    have hir := readProg_inputs hP
     obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-    obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+    obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
     have hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hp
     have hgood : Resolve.Good P (P.child P.rootScope k m) :=
       Resolve.good_child P (parent := P.rootScope)
@@ -238,8 +239,9 @@ theorem operandsOwn (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
     exact Or.inr (rowLeaf_of_param hT hS hu hi ht hres)
   | false =>
     obtain ⟨hr, hrp, hlay, hB⟩ := read_bodies hP
+    have hir := readProg_inputs hP
     obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-    obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+    obtain ⟨k, m, hk, -, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
     have hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hp
     rcases Resolve.gate_within P ⟨hr, hrp⟩ hB hlay hk hm hc hlo hhi hgate o ho with hin | ⟨i, j, hi, hj, hij⟩
     · exact Or.inl hin
@@ -279,8 +281,9 @@ private theorem unit_place {ts : Array String} (hP : ReadProg P)
       ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
         (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
   obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hir hrs
   obtain ⟨j, m, hj, htj, hm, huj, hsc⟩ := hu
   have hmem : rs[j]! ∈ rs.toList := by
     rw [getElem!_pos rs j hj]
@@ -311,6 +314,7 @@ theorem ownRows_holds (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
   obtain ⟨hr, hrp, hL, -⟩ := read_bodies hP
   obtain ⟨hov, hlay⟩ := read_walk hP
   have hP' := hP
+  have hir := readProg_inputs hP
   obtain ⟨⟨bytes, hdec⟩, -, hRL, hIR, -, -, hfirst⟩ := hP'
   constructor
   · rintro r l g lo hi' ⟨sc, hu, i, hip, -, hrow, hl, hres, -, -⟩
@@ -350,10 +354,10 @@ theorem ownRows_holds (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
       ((P.defs[P.root]!).body.nodes[rs[j']!.node]!).fn (P.child P.rootScope rs[j']!.node m').off hres hres'
     have hjj : j = j' := by
       rcases Nat.lt_trichotomy j j' with h | h | h
-      · have := ranges_sorted hr hfirst hrs hj hj' h
+      · have := ranges_sorted hr hfirst hir hrs hj hj' h
         omega
       · exact h
-      · have := ranges_sorted hr hfirst hrs hj' hj h
+      · have := ranges_sorted hr hfirst hir hrs hj' hj h
         omega
     subst hjj
     subst hmm

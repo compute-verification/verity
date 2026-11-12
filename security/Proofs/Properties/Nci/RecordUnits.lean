@@ -5,18 +5,21 @@ public import Proofs.Properties.Nci.RecordJson
 /-!
 # The root's ranges
 
-`Flock.TemplateQuery.evaluate` reads the root's nodes in order and gives one range a node that is no input: the
-node, its callee's id as the template, and its members as the count. `evaluate_spec` states it: the ranges' nodes
-are the root's nodes whose callee's id is no input id, in order, each a call or a batch, a call with one unit and a
-batch with its `n`. `ranges_spec` states it of a Program's own root: the query finds the root by its key
-(`Desc.def?`), which is the Program's root where no Definition before it has that key (`RootFirst`, `ofProg_root`).
+`Flock.TemplateQuery.evaluate` reads the root's nodes in order and gives one range a node that is no input node:
+the node, its callee's id as the template, and its members as the count. `evaluate_spec` states it: the ranges'
+nodes are the root's nodes that are no input node (`Desc.isInputNode`: the callee's id an input id and the first
+Definition of that id a primitive), in order, each a call or a batch, a call with one unit and a batch with its `n`.
+`ranges_spec` states it of a Program's own root: the query finds the root by its key (`Desc.def?`), which is the
+Program's root where no Definition before it has that key (`RootFirst`, `ofProg_root`), and it passes over every
+root node whose callee's key is an input id where the first Definition of such a key is a primitive (`InputsRead`),
+so the ranges' nodes are the root's nodes whose callee's key is no input id.
 -/
 
 @[expose] public section
 
 namespace NciCheck.Record.SecurityProofs
 
-open Flock.TemplateQuery (Desc DDef TRange isInput)
+open Flock.TemplateQuery (Desc DDef DNode TRange isInput)
 
 /-- A loop that never stops early keeps an invariant on the indices it has read. -/
 theorem forIn_done {σ : Type} {f : Nat → σ → Except String (ForInStep σ)} (Inv : List Nat → σ → Prop)
@@ -41,12 +44,12 @@ theorem forIn_done {σ : Type} {f : Nat → σ → Except String (ForInStep σ)}
 /-- The id of the callee of the root's node `k`. -/
 def tidAt (d : Desc) (root : DDef) (k : Nat) : String := d.callees.getD root.nodes[k]!.fn ""
 
-/-- **The root's ranges are its nodes that are no input, in order**: each a call or a batch of its callee's id, a
-call with one unit and a batch with its `n`. -/
+/-- **The root's ranges are its nodes that are no input node, in order**: each a call or a batch of its callee's id,
+a call with one unit and a batch with its `n`. -/
 theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
     (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
     ∃ root, d.def? d.root = some root ∧
-      rs.toList.map (·.node) = (List.range root.nodes.size).filter (fun k => !isInput (tidAt d root k)) ∧
+      rs.toList.map (·.node) = (List.range root.nodes.size).filter (fun k => !d.isInputNode root.nodes[k]!) ∧
       ∀ r ∈ rs.toList, r.template = tidAt d root r.node ∧
         (root.nodes[r.node]!.form = "call" ∨ root.nodes[r.node]!.form = "batch") ∧
         r.count = (if root.nodes[r.node]!.form == "batch" then root.nodes[r.node]!.n else 1) := by
@@ -65,7 +68,7 @@ theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
     rw [hrange] at hloop
     have hinv := forIn_done
       (fun done (s : Array TRange × Nat) =>
-        s.1.toList.map (·.node) = done.filter (fun k => !isInput (tidAt d root k)) ∧
+        s.1.toList.map (·.node) = done.filter (fun k => !d.isInputNode root.nodes[k]!) ∧
           ∀ r ∈ s.1.toList, r.template = tidAt d root r.node ∧
             (root.nodes[r.node]!.form = "call" ∨ root.nodes[r.node]!.form = "batch") ∧
             r.count = (if root.nodes[r.node]!.form == "batch" then root.nodes[r.node]!.n else 1))
@@ -85,12 +88,12 @@ theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
       split at hx
       · rename_i hin
         cases hx
-        have hin' : isInput (tidAt d root k) = true := hin
+        have hin' : d.isInputNode root.nodes[k]! = true := hin
         refine ⟨_, rfl, ?_, hi.2⟩
         rw [List.filter_append, hi.1]
         simp [hin']
       · rename_i hin
-        have hin' : ¬ isInput (tidAt d root k) = true := hin
+        have hin' : ¬ d.isInputNode root.nodes[k]! = true := hin
         split at hx
         · cases hx
         · cases hx
@@ -180,6 +183,27 @@ theorem ofProg_root {P : Prog} (hr : P.root < P.defs.size) (hk : RootFirst P) :
   rw [hdefs, hroot, hfind, Option.map_some, hget, Array.getElem_map]
 
 open Flock.Program (Prog) in
+/-- **A Definition is the description's Definition of its key**, where no Definition before it has that key. -/
+theorem ofProg_def {P : Prog} {i : Nat} (hi : i < P.defs.size)
+    (hk : ∀ j < i, (P.defs[j]!).key ≠ (P.defs[i]!).key) :
+    (Desc.ofProg P).def? (P.defs[i]!).key = some (dOf (P.defs[i]!)).2 := by
+  have hget : P.defs[i]! = P.defs[i] := getElem!_pos P.defs i hi
+  have hdefs : (Desc.ofProg P).defs = P.defs.map dOf := rfl
+  have hsz : i < (P.defs.map dOf).size := by rw [Array.size_map]; exact hi
+  have hfind : (P.defs.map dOf).find? (·.1 == (P.defs[i]).key) = some (P.defs.map dOf)[i] := by
+    rw [Array.find?_eq_some_iff_getElem]
+    refine ⟨?_, i, hsz, rfl, fun j hj => ?_⟩
+    · rw [Array.getElem_map]
+      exact beq_self_eq_true _
+    · have hj' : j < P.defs.size := Nat.lt_trans hj hi
+      have := hk j hj
+      rw [getElem!_pos P.defs j hj', hget] at this
+      rw [Array.getElem_map]
+      simpa [dOf] using this
+  unfold Desc.def?
+  rw [hdefs, hget, hfind, Option.map_some, Array.getElem_map]
+
+open Flock.Program (Prog) in
 /-- A node's callee's id, as the template query reads it, is the callee's key. -/
 theorem callee_key (P : Prog) (fn : Nat) : (Desc.ofProg P).callees.getD fn "" = (P.defs[fn]!).key := by
   show (P.defs.map (·.key)).getD fn "" = _
@@ -190,11 +214,29 @@ theorem callee_key (P : Prog) (fn : Nat) : (Desc.ofProg P).callees.getD fn "" = 
       getElem!_neg P.defs fn h]
     rfl
 
+open Flock.Program (Prog isInputId) in
+/-- A node as the template query reads it in a Program's description: an input node where its callee's key is an
+input id and the first Definition of that key is a primitive. -/
+theorem ofProg_isInputNode (P : Prog) (x : DNode) :
+    (Desc.ofProg P).isInputNode x =
+      (isInputId (P.defs[x.fn]!).key && ((Desc.ofProg P).def? (P.defs[x.fn]!).key).any (·.prim)) := by
+  show (isInput ((Desc.ofProg P).callees.getD x.fn "") &&
+    ((Desc.ofProg P).def? ((Desc.ofProg P).callees.getD x.fn "")).any (·.prim)) = _
+  rw [callee_key] <;> rfl
+
+open Flock.Program (Prog isInputId) in
+/-- The template query passes over every root node whose callee's key is an input id: the first Definition of such
+a key is a primitive, so the node is an input node as the query reads one (`Desc.isInputNode`). -/
+def InputsRead (P : Prog) : Prop :=
+  ∀ k < (P.defs[P.root]!).body.nodes.size,
+    isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = true →
+      ((Desc.ofProg P).def? (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key).any (·.prim) = true
+
 open Flock.Program (Prog Form Node isInputId) in
 /-- **The ranges are the root's nodes whose callee's key is no input id, in order**: each a call or a batch, its
 template the callee's key and its count the node's members. -/
 theorem ranges_spec {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.root < P.defs.size)
-    (hk : RootFirst P) (h : Flock.TemplateQuery.evaluate (Desc.ofProg P) ts = .ok rs) :
+    (hk : RootFirst P) (hin : InputsRead P) (h : Flock.TemplateQuery.evaluate (Desc.ofProg P) ts = .ok rs) :
     rs.toList.map (·.node) = (List.range (P.defs[P.root]!).body.nodes.size).filter
         (fun k => !isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key) ∧
       ∀ r ∈ rs.toList, r.node < (P.defs[P.root]!).body.nodes.size ∧
@@ -226,8 +268,16 @@ theorem ranges_spec {P : Prog} {ts : Array String} {rs : Array TRange} (hr : P.r
     rw [hnodes, hsize]
     apply List.filter_congr
     intro k hk'
-    rw [htid k (List.mem_range.1 hk')]
-    rfl
+    have hk'' : k < (P.defs[P.root]!).body.nodes.size := List.mem_range.1 hk'
+    have hq : (Desc.ofProg P).isInputNode (dOf (P.defs[P.root]!)).2.nodes[k]! =
+        isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key := by
+      rw [ofProg_isInputNode, hnode k hk'']
+      show (isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key &&
+        ((Desc.ofProg P).def? (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key).any (·.prim)) = _
+      cases hI : isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key with
+      | false => rfl
+      | true => rw [hin k hk'' hI] <;> rfl
+    rw [hq]
   refine ⟨hlist, fun r hr' => ?_⟩
   have hlt : r.node < (P.defs[P.root]!).body.nodes.size := by
     have : r.node ∈ rs.toList.map (·.node) := List.mem_map.2 ⟨r, hr', rfl⟩

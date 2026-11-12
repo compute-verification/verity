@@ -119,7 +119,7 @@ theorem evaluate_congr {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs :
         rw [ite_eq_right hb]
         exact h
     · intro k s x hx
-      by_cases hi : Flock.TemplateQuery.isInput (d.callees.getD root.nodes[k]!.fn "") = true
+      by_cases hi : d.isInputNode root.nodes[k]! = true
       · rw [ite_eq_left hi] at hx ⊢
         exact hx
       · rw [ite_eq_right hi] at hx ⊢
@@ -235,7 +235,7 @@ theorem unit_tmpl {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String}
   obtain ⟨r, hr, htm⟩ := mapM_getElem? (tmplOf P) _ _ hmapM i t hti
   have hri := get_of_toList hi hr
   subst hri
-  have hk := (range_node (read_bodies hP).1 hP.2.2.2.2.2.2 hrs hi).1
+  have hk := (range_node (read_bodies hP).1 hP.2.2.2.2.2.2 (readProg_inputs hP) hrs hi).1
   refine ⟨t, List.mem_of_getElem? hti, htid, hlt, ?_, _, htm⟩
   rw [(tmplOf_spec htm).1, (child_root P _ _).1, Array.getElem?_eq_getElem hk,
     getElem!_pos (P.defs[P.root]!).body.nodes _ hk]
