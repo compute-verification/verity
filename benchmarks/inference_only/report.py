@@ -5,7 +5,8 @@ It prints two policies. First the served one, priced from its stated numbers (`s
 tree builds no circuit of the served class, so no check runs on it, and its number is the command's. Then the class this
 tree builds, which is not served (`built.py`): its policy by the integration's code, the Lean count's verdict and cost,
 its number, and the record's three divisions. Then both over monitoring periods, and one JSON object, printed last and
-written to `--out`.
+written to `--out`, where the served policy's number is also written into the run's result under the metric's id
+(`METRIC`).
 """
 from __future__ import annotations
 
@@ -21,10 +22,13 @@ from typing import Any
 import built as B
 import policy as P
 from rho import lean, min_cut
+from verity_bench import kit
 from verity_config.settings import SHARED
 
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
+#: the metric's id (benchmarks/metrics.toml), the name the served policy's value is written under in the run's result
+METRIC = "training/inference-only-slowdown"
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python verity/protocols/inference_only/rho/periods.py"
 
@@ -261,5 +265,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "inference_only.json").write_text(text + "\n")
+        if stated.label == "served":
+            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT)
     print("\n" + text)
     return doc

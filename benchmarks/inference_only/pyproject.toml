@@ -11,11 +11,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (`benchmarks/one_stage`'s `served_shares` and `served_verdicts`, which imports `served_overhead`). The built class's
 # record, its counts and the model's shape are the integration's (`adapters/vllm`: `verity_vllm` and its manifests),
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
-# are named by its Lake package's `lakefile.toml`. The tests check the count's refusal with its Python reference
+# are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
+# kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`). The tests check the count's refusal with its Python reference
 # (`nci_reference.py`), which the count's difftest holds the Lean to, so the suite builds no Lake package.
 inputs = ["verity/protocols/inference_only/rho",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/served_overhead.py",
+          "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity",
           "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
           "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",

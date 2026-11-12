@@ -41,9 +41,11 @@ def small() -> IF.Circuit:
 
 @pytest.fixture(autouse=True)
 def no_out(monkeypatch) -> None:
-    """The command writes its JSON to `$OUT` by default; a test names its own directory or none."""
-    monkeypatch.delenv("OUT", raising=False)
-    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    """The command writes its JSON to `$OUT` by default and its result into `$RESEARCH_RUN_DIR`; a test names its own
+    directory or none. The result's host stamp is a fixed one, since the kit's asks nvidia-smi and git."""
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(report.kit, "host_stamp", lambda: {"commit": None})
 
 
 def reference(inst: dict) -> dict:
@@ -142,6 +144,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     out = capsys.readouterr().out
     lines = out.splitlines()
     assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
+    result = json.loads((tmp_path / "result.json").read_text())
+    assert [(m["name"], m["value"], m["unit"]) for m in result["measurements"]] == [(report.METRIC, doc["value"], doc["unit"])]
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
@@ -172,12 +176,19 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
         assert word in out
 
 
-def test_stated_only_builds_nothing_and_another_division_is_the_built_number(capsys) -> None:
+def test_stated_only_builds_nothing_and_another_division_is_the_built_number(capsys, tmp_path) -> None:
+    """A stated policy other than the served one is priced and written to its JSON, and nothing is written under the
+    metric's id, which is the served policy's."""
     def never(*_a, **_k):
         raise AssertionError("built")
 
     doc = report.main(["--stated-only"], check=never, commit=lambda: None)
     assert len(doc["policies"]) == 1 and doc["divisions"] == [] and "NOT SERVED" not in capsys.readouterr().out
+    (tmp_path / "stated.toml").write_text(P.SERVED.read_text())
+    doc = report.main(["--stated-only", "--policy", str(tmp_path / "stated.toml"), "--out", str(tmp_path)], check=never,
+                      commit=lambda: None)
+    assert doc["policies"][0]["label"] == "stated" and (tmp_path / "inference_only.json").is_file()
+    assert not (tmp_path / "result.json").exists()
     doc = report.main(["--class", ",".join(map(str, CLASS)), "--division", "proof block"], check=reference,
                       circuit=small(), commit=lambda: None)
     assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"

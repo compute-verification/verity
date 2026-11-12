@@ -37,6 +37,11 @@ through `research run` in the run's own clone.
    has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
    counts every weight and wired row a block reads as fresh input: on the built class it counts `c` exactly and
    refuses on `k`, and an instance of any other class has the same form.
+5. **The metric**: with `--out`, the served policy's `value` is also a measurement named
+   `training/inference-only-slowdown` in the run's `result.json` (the harness kit's writer: `$RESEARCH_RUN_DIR` under
+   a research run, else `--out`), the number `benchmarks/metrics.toml` declares. A `--policy FILE` writes none. The
+   metric's command is the second form above with `uv run python benchmarks/inference_only/run.py`, the script
+   `verity bench inference_only` runs, in place of `uv run verity bench inference_only`.
 
 For each policy it prints what `k` is made of. For a stated policy: the outputs of the linears the class leaves outside
 the circuit, from the model's shape (layers × positions × widths × bits a value), and the class's scan state row, with

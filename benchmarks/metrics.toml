@@ -29,3 +29,13 @@ better = "lower"
 command = "research run --on NODE --project verity --source . --cwd clone --pool network --as network-accounting --mem-gb 128 --timeout 10800 -- bash benchmarks/scan_cost/run.sh"
 every = "7d"
 goal = "network/period-bound-checked"
+
+[[metric]]
+id = "training/inference-only-slowdown"
+title = "Llama 3.2 1B, the serve's stated policy: the least slowdown of training hidden in its inference blocks"
+owner = "training"
+unit = "the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs"
+better = "higher"
+command = "research run --on auto --mem-gb 16 --cwd clone -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/inference_only/run.py --out \"$OUT\"'"
+every = "7d"
+goal = "accounting/inference-only-small-model"
