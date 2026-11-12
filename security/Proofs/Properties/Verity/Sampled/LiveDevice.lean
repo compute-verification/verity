@@ -204,7 +204,7 @@ the next one's `prev` (`Core.Record.prevOf`). -/
 def entries (H : Host) (θ : ByteArray) : ℕ → ℕ → String → List (String × Option String × Json) → List Json
   | _, _, _, [] => []
   | j, q, prev, (kind, s, body) :: es =>
-    let l := H.entryLine θ j q prev kind s body
+    let l := entryLine H θ j q prev kind s body
     l :: entries H θ (j + 1) (q + 1) (_root_.Core.Record.prevOf (strOf l)) es
 
 theorem entries_length (H : Host) (θ : ByteArray) :
@@ -225,7 +225,7 @@ def RESERVE_FIELDS : List String := ["by", "for", "peer", "scheme", "epoch", "mi
 
 /-- **The period's open** (`period`'s `period-open`): the request's period, the pinned commit, the key and the time. -/
 def periodOpenBody (H : Host) (θ a : ByteArray) : Json :=
-  H.body θ "period-open" (requestPart a "period")
+  body H θ "period-open" (requestPart a "period")
     ["period", "lane", "by", "cap", "circuit", "draw_k", "rows", "weights_root", "model", "circuit_files", "length",
       "policy", "alpha", "gamma", "registration", "policy_name"]
     [("pinned", .str H.pinned), ("key_sha512", .str H.keySha512), ("opened_utc", .str (H.clock θ 0))]
@@ -233,7 +233,7 @@ def periodOpenBody (H : Host) (θ a : ByteArray) : Json :=
 /-- **The window's reserve** (`reserve`): the request, the layout the session commits to, the pinned commit, the key, the
 record's host, and when it starts and expires (`later`). -/
 def reserveBody (H : Host) (θ a : ByteArray) : Json :=
-  H.body θ "reserve" (requestPart a "reserve") RESERVE_FIELDS
+  body H θ "reserve" (requestPart a "reserve") RESERVE_FIELDS
     [("families", familiesJson (families θ)), ("pinned", .str H.pinned), ("key_sha512", .str H.keySha512),
       ("host", .str (H.hostAt θ)), ("started_utc", .str (H.clock θ 1)),
       ("expires_utc", .str ((later (H.clock θ 1) ((nat? (getD (requestPart a "reserve") "minutes")).getD 0)).getD ""))]
@@ -241,7 +241,7 @@ def reserveBody (H : Host) (θ a : ByteArray) : Json :=
 /-- **The window's open** (`admit`): the window's root the opener named, its reserve's `seq`, the reserve's request and
 layout, its opener, the pinned commit, the key, the record's host and the time. -/
 def openBody (H : Host) (θ a : ByteArray) : Json :=
-  H.body θ "open" (requestPart a "reserve") RESERVE_FIELDS
+  body H θ "open" (requestPart a "reserve") RESERVE_FIELDS
     [("window", Json.mkObj [("root", getD (requestPart a "open") "root")]), ("reserve", Lean.toJson (H.seq θ + 1)),
       ("families", familiesJson (families θ)), ("opened_by", getD (requestPart a "open") "by"),
       ("pinned", .str H.pinned), ("key_sha512", .str H.keySha512), ("host", .str (H.hostAt θ)),
@@ -274,7 +274,7 @@ fourth of the play's), its commitment's root and the time. -/
 def endBody (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) : Json :=
   let files := Json.mkObj ((fieldsOf (getD (Json.mkObj (H.extra θ "end")) "files")) ++
     ((releaseLog H θ a log b ρ).map fun ls => [(LOG_FILE, Json.str (logDigest ls))]).getD [])
-  H.body θ "end" .null []
+  body H θ "end" .null []
     [("closed", .bool (closed b)),
       ("ended", match getD (closeJson b) "ended" with
         | .str s => .str s
@@ -288,7 +288,7 @@ def endBody (H : Host) (θ a : ByteArray) (log : List Release) (b : ByteArray) (
 def periodCloseBody (H : Host) (θ a : ByteArray) (log : List Release) : Json :=
   let window := Json.mkObj [("root", getD (requestPart a "open") "root"), ("session", .str (H.session θ)),
     ("complete", .bool (complete θ log))]
-  H.body θ "period-close" (requestPart a "period") ["period", "lane", "by"]
+  body H θ "period-close" (requestPart a "period") ["period", "lane", "by"]
     [("windows", .arr #[window]), ("complete", .bool (complete θ log)), ("closed_utc", .str (H.clock θ 4))]
 
 /-- **The ledger's entries at the close**: the window's end and the period's close, entries `seq θ + 3` and
@@ -427,7 +427,10 @@ deployed device's history sits under (`Deployment.setupAt`'s `pubOf`). -/
 theorem pubOf_holds {H : Host} {θ : ByteArray} (h : Holds H θ) : pubOf θ = H.pub := by
   obtain ⟨p, key, l, ⟨ps, hps, x, hx, hp⟩, hc, hpub, -⟩ := h
   have hid : x.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hx
-  have hk : Binding.keyAt x = some key := by simp [Binding.keyAt, hid, hp, hc]
+  have hk : Binding.keyAt x = some key := by
+    unfold Binding.keyAt
+    rw [hp]
+    simp [hid, hc]
   have hθ : Binding.keyOf θ = some key := by
     simp only [Binding.keyOf, hps]
     exact findSome_keyAt hx hk
