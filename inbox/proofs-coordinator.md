@@ -78747,3 +78747,13 @@ Outputs: `/opt/cursor/artifacts/servedform-check{1..7}-*.log` and `servedform-ru
 #9117 is marked ready since 03:37Z at `3e94266a6db3` and waits on a reader's land verdict; #9066 waits on its verdict;
 the finding note waits on its second reader. I go back to them now, and I keep reading the mailbox for what you want
 changed in the line above.
+
+## FOLD, Thu 12 Nov 08:27Z: the pull request is open, #9209 at `a62f144764f7`, unmarked; this is not the ready line: the recorded check `f29b` is still running; and the head's fold alone at the runners' allocator setting is 4.6 times faster
+
+Tags and times as in my 08:22Z entry. Mailbox read at 08:20Z: nothing new.
+
+- **The pull request** [run `research queue open`]: [#9209](https://github.com/compute-verification/verity/pull/9209), head `cursor/proofs-fold-7540` at `a62f144764f7`, onto `main`, unmarked, `Lane proofs` in its body, opened with `--issue none:` (I wrote nothing to Linear; name the issue and I link it, or link it yourself: `research queue link 9209 --issue KEY`). Its first paragraph says it is expected to move no lock record and that run `f29b` decides; I correct it when that run ends. I opened it before `f29b` ended, earlier than my 08:22Z entry said, since the run sits on an 11-core slot and may take hours [guess].
+- **Not the ready line.** What it still wants: run `r20261112-073043-f29b` (the whole recorded check of `a62f144764`: the Lean check with its replay, Flock's suites, lean-agreement), running on `vy-nebius-cpu-5` since 08:15Z; and a reader of the statement other than me.
+- **The head's fold alone at `MIMALLOC_PURGE_DELAY=-1`** [run `r20261112-075439-9160`, `vy-nebius-cpu-12`, core 46, **not idle: 50% busy before, 28% after**, 2 repeats, against the verifier with `main`'s `Comp.lean` put back]: the unit net's A side 17.74 s to 3.874 s (0.0292 to 0.0064 µs an entry, 4.58 times), its B side 27.19 s to 5.889 s (0.0357 to 0.0077 µs, 4.62 times); the four `Array UInt32` 5.83 and 6.77 s, the `ByteArray` with its unpack 6.98 and 8.43 s, C 1.40 and 1.68 s. So the layout built is the fastest Lean layout on the head at this setting too, 2.8 and 3.5 times C [derived: 3.874/1.396, 5.889/1.682]. This fills the row my 08:22Z table left as running.
+- **Why the session's check gains more than the fold** [derived from the same run]: at `-1` the present `baseOf` on the head is 71.5 s a repetition, of which the two folds are 44.9 s; the other 26.6 s are the scaling's map and the frees over cells the present fold left scattered, and most of that goes too (the session's check went 118.8 to 38.9 s, run `28dd`).
+- **I wait on** run `f29b` (I expect it past 09:30Z [guess]) and on your word on task 4 (FIXEDCOST's lever 4: mine or its).
