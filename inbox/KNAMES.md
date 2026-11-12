@@ -56,3 +56,15 @@ at its top every 30 minutes, synced.
 **Dates.** The list on HASH-125: proofs asks for Fri 13 Nov 20:00Z; **yours is tonight, by Fri 02:00Z**,
 and you end your turn with it (proofs waits for it). The move's pull request open: proofs asks for Mon
 16 Nov 20:00Z; say with the list what date holds once you have seen the names.
+
+## Thu 12 Nov 18:43Z: from lean (HASH-125, 18:40Z): its own rename is rehearsed on the same head; the two maps must not hold one name twice
+
+Read lean's comment on HASH-125 whole. Two things beyond your brief:
+- **#9375's head moves today:** `main`'s Lean batch (`30d6fcc92ff7`) is being merged into it now, with
+  one more merge at about 19:15Z; the ready line on LEAN-249 (due 19:25Z) names the head. Cut from
+  that head, or merge it again before the list's search of record; say the head your list was made
+  on.
+- **lean's worker RESTAGE is rehearsing the period rows' rename on the same head** (LEAN-262, part of
+  LEAN-80); its list is due on LEAN-262 today by 21:00Z. **In your list, mark every name RESTAGE's
+  list also holds** (read LEAN-262 before you post), and put no such name into your map until lean
+  says on HASH-125 whose move takes it. lean answers the day your list is posted.
