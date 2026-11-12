@@ -12,10 +12,12 @@ store, with no GPU and no node.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
-  each holding the planner's rows as `ROWS_FILE` in its run files, one JSON object a line. A row prices one case of
-  the plan (`row`, `step`, `world`) over one scope at one pinned audit budget β (`b10`): its share of total compute
-  (`total`, with its parts `PARTS`) and its bound in bits (`bound_bits`). The command takes one case (`ROW`, `STEP`,
-  `WORLD`), and for each scope reads off the budget at which the total is the share (`at_share`): the total is linear
+  each holding the planner's rows in one or more of `ROWS_FILES` in its run files, one JSON object a line, a case's rows
+  over a scope from the first file that holds them (a later file holding them otherwise leaves the run out). A row
+  prices one case of the plan (`row`, `step`, `world`) over one scope at one pinned audit budget β (`b10`): its share
+  of total compute (`total`, with its parts `PARTS`) and its bound in bits (`bound_bits`). The command takes one case
+  (`ROW`, the plan of record's row, `STEP`, `WORLD`), and for each scope reads off the budget at which the total is the
+  share (`at_share`): the total is linear
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
@@ -28,6 +30,13 @@ store, with no GPU and no node.
   itself (`PLAN_FILE`, the sampling plan the row is priced over at one audit budget, with each cell's share), which is
   held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
   says so and marks no proving measured.
+* **What prices that part's proving** is read from the row's own plan too (`_sources`): the share each source prices
+  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price), as the row's
+  `split.sources` records it, else by its `split.basis`, and the share at the planner's assumed default
+  (`DEFAULT_BASIS`). A row whose plan records neither is printed as "not recorded".
+* **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
+  world's year and printed only under `ASSUMED_LABEL`, never as the figure, and the document holds it as its own field
+  (`at_assumed_prices`); as the row read, its figure carries the label.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
   rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
@@ -94,9 +103,10 @@ AMOUNTS = ("schedules", "cells", "jitter", "term", "entries")
 #: its scope's monitoring period
 ERRORS = {"certifier_GB": "eps", "GB": "error"}
 MODEL = "GLM-5.3"
-#: the record whose runs hold the planner's rows, and the rows' file in a run's files
+#: the record whose runs hold the planner's rows, and the rows' files in a run's files: the driver's default command's
+#: and its rows over the world's year alone
 RECORD = "exfiltration-glm53-compute-audit"
-ROWS_FILE = "out/rows.jsonl"
+ROWS_FILES = ("out/rows.jsonl", "out/three/rows.jsonl")
 #: a row's plan in a run's files: the sampling plan the row is priced over at one audit budget (`beta`), with each
 #: cell's block and its share of the plan's proving time (`cells`, and `left_out` for the cells it lists apart)
 PLAN_FILE = "out/mix.json"
@@ -104,16 +114,32 @@ PLAN_FILE = "out/mix.json"
 PLAN_TOLERANCE = 1e-3
 #: the field in which the planner's driver names a row's variant, where it writes several of one row
 VARIANT = "h8"
+#: what makes rows one case of the plan over one scope, which one file of a run holds
+CASE_KEYS = ("world", "row", "step", "scope", VARIANT)
 #: how a block family is priced where the rows don't say
 UNSTATED = "in no stated way"
+#: what prices a plan's proving, by the planner's driver's names (`split.sources`): a block type's own steady-state
+#: row, its Definition's at the same static K, and the planner's price
+SOURCES = ("own row", "family row", "planner's price")
+#: the source of each `split.basis` key, by its text before any colon; every other key is the planner's price, but
+#: its copy stratum's model (`COPY_BASIS`), which is a source of its own
+BASIS_SOURCES = {"steady": "own row", "family": "family row"}
+COPY_BASIS = "headline.copy_stratum"
+#: the planner's assumed default price, a key of `split.basis`
+DEFAULT_BASIS = "reprice.DEFAULT"
+#: printed where a row's plan records no source
+NOT_RECORDED = "not recorded"
 #: the share of total compute the figure is read at
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
-#: the case of the plan the figure is: the planner's world (rho's world fleet), its row for the registered and served
-#: cut with every modeled lever at its measured value, and the step of that row that prices the verifier as measured
-#: (a prefix of the step's name)
-WORLD, ROW, STEP = "ours", "(i) honest", "+ the verifier as measured"
+#: the case of the plan the figure is: the planner's world (rho's world fleet), the plan of record's row, with every
+#: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
+#: step's name)
+WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
+#: the row the planner prices at its assumed prices, and what every figure of it is printed under
+ASSUMED_ROW = "(i) honest"
+ASSUMED_LABEL = "at the planner's assumed prices"
 #: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
 #: longest output the plan of record serves (assumed, as every class is: no run has certified one)
 RESPONSE_IDS = 1024
@@ -173,7 +199,9 @@ def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
 
 
 def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]:
-    """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither."""
+    """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither or
+    is not read. The rows are its rows files' (`ROWS_FILES`), a case's over a scope the first file's that holds them; a
+    later file that holds other rows of that case and scope leaves the run unread."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
@@ -182,11 +210,26 @@ def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]
     files = out.get("run_files") or out.get("run_record")
     if not files:
         return [], None, "kept no run files"
-    held = [name for name in (ROWS_FILE, PLAN_FILE) if store.listing(files, [name])]
+    held = [name for name in (*ROWS_FILES, PLAN_FILE) if store.listing(files, [name])]
     if not held:
-        return [], None, f"holds no planner rows (`{ROWS_FILE}`) and no plan (`{PLAN_FILE}`)"
+        return [], None, f"holds no planner rows ({', '.join(f'`{n}`' for n in ROWS_FILES)}) and no plan (`{PLAN_FILE}`)"
     at = Path(store.fetch(files, paths=held))
-    rows = [json.loads(line) for line in (at / ROWS_FILE).read_text().splitlines() if line.strip()] if ROWS_FILE in held else []
+    rows: list[dict] = []
+    first: dict[tuple, tuple[str, list[str]]] = {}
+    for name in (n for n in ROWS_FILES if n in held):
+        cases: dict[tuple, list[dict]] = {}
+        for line in (at / name).read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                cases.setdefault(tuple(str(r.get(k)) for k in CASE_KEYS), []).append(r)
+        for case, its in cases.items():
+            text = sorted(json.dumps(r, sort_keys=True) for r in its)
+            if case not in first:
+                first[case] = (name, text)
+                rows += its
+            elif first[case][1] != text:
+                return [], None, (f"holds row `{case[1]}` over the {case[3]} in `{first[case][0]}` and in `{name}`, and the "
+                                  "two differ")
     return rows, json.loads((at / PLAN_FILE).read_text()) if PLAN_FILE in held else None, None
 
 
@@ -293,21 +336,39 @@ def _priced(shares: Mapping[str, float], said: Mapping) -> dict[str, dict]:
     return out
 
 
+def _sources(split: Mapping) -> dict | None:
+    """The share of a plan's proving each source prices, as its row's `split` records it: its `sources`, else its
+    `basis` by `BASIS_SOURCES`, each of `SOURCES` at 0 where it prices none (`by`); and the share at the planner's
+    assumed default (`default`, None where the split holds no `basis`). None where it records neither."""
+
+    basis = split.get("basis") or {}
+    by = dict(split.get("sources") or {})
+    if not by:
+        for key, share in basis.items():
+            source = BASIS_SOURCES.get(key.split(":")[0]) or (key if key == COPY_BASIS else SOURCES[-1])
+            by[source] = by.get(source, 0.0) + share
+    if not by:
+        return None
+    return {"by": {s: by.get(s, 0.0) for s in SOURCES} | {s: v for s, v in by.items() if s not in SOURCES},
+            "default": basis.get(DEFAULT_BASIS, 0.0) if basis else None}
+
+
 def _own(run: str, row: Mapping) -> dict | None:
     """A row's own plan, where its `split` is one: it says the `q` and the sampled replays it is the plan of, and they
-    are the row's. How its proving is priced (`_priced`), or None for a `split` that is not the row's plan."""
+    are the row's. How its proving is priced (`_priced`) and what prices it (`_sources`), or None for a `split` that is
+    not the row's plan."""
 
     split = row.get("split") or {}
     if not all(split.get(k) and row.get(k) and _same(split[k], row[k]) for k in ("q", "replay_sample")):
         return None
     families = split.get("families") or {}
     return {"of": "rows", "run": run, "beta": row["b10"],
-            "ways": _priced({family: f["share"] for family, f in families.items()}, families)}
+            "ways": _priced({family: f["share"] for family, f in families.items()}, families), "sources": _sources(split)}
 
 
 def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: str, plan: Mapping) -> dict:
     """``of``'s plan of a scope as these rows' plan: how its proving is priced (`_priced`), once it counts the rows'
-    requests and bounds what they do at its budget."""
+    requests and bounds what they do at its budget. A plan records no source of its prices."""
 
     count, theirs = _requests(plan), _between(rows, "bound_bits", plan["beta"], log=True)
     if count is None or not _same(count, requests):
@@ -322,7 +383,7 @@ def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: st
         shares[family] = shares.get(family, 0.0) + cell["share"]
     near = min(rows, key=lambda r: abs(r["b10"] - plan["beta"]))
     return {"of": "plan", "run": of, "beta": plan["beta"],
-            "ways": _priced(shares, (near.get("split") or {}).get("families") or {})}
+            "ways": _priced(shares, (near.get("split") or {}).get("families") or {}), "sources": None}
 
 
 def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
@@ -564,6 +625,25 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     return out
 
 
+def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None) -> dict:
+    """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under `ASSUMED_LABEL`: its
+    run, budget, δ and amount, and what prices its proving (`_sources`); or, with no amount, why it is not read: no run
+    of record holds it, or its rows cover other compute or weights than the figure's."""
+
+    out = {"row": ASSUMED_ROW, "label": ASSUMED_LABEL, "GB": None, "why": None}
+    try:
+        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant)
+        if "world year" not in scopes:
+            return out | {"why": f"no run of record holds its world year's rows (they hold {', '.join(sorted(scopes))})"}
+        p = at_share("world year", *scopes["world year"], share, plans.get("world year"))
+    except ValueError as e:
+        return out | {"why": str(e)}
+    if moved := [k for k in ("gpu_seconds", "requests", "weights_bits") if not _same(p[k], head[k])]:
+        return out | {"why": f"its rows differ from the figure's in {', '.join(moved)}"}
+    return out | {k: p[k] for k in ("run", "beta", "inside", "delta", "bits", "GB")} | {
+        "sources": p["priced"] and p["priced"]["sources"]}
+
+
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
           variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
           served: Mapping[str, Any] | None = None, store: Any = None, root: Path | None = None,
@@ -589,6 +669,9 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
     the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
 
+    Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
+    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is `ASSUMED_LABEL`.
+
     ``served`` is a served two-stage run's record (`served_share`), from which the document's `compute_share` is the
     share of compute that run measures, with each of its parts, and where it is claimed the compute audit's part over
     the world's year at that share (`GB`, with its β), beside the figure at ``share``, which stays given and assumed
@@ -610,6 +693,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                          f"{', '.join(sorted(points))}): label the run that does ({_label()})")
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
+    assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
     measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
     measured.update(GB=None, beta=None, inside=None, no_GB=None)
     if measured["value"] is not None:
@@ -674,7 +758,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             "name": f"{MODEL}'s exfiltration capacity over the world's year at {_pct(share)} of total compute: the "
                     "compute audit's part",
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
-            "record": RECORD,
+            "label": ASSUMED_LABEL if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
             "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row, measured),
             "compute_share": measured,
@@ -757,6 +841,16 @@ def _how(priced: Mapping | None) -> str:
             + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
 
 
+def _by_source(sources: Mapping | None) -> str:
+    """The share of a row's proving each source prices and the share at the planner's assumed default (`_sources`),
+    each `NOT_RECORDED` where the row's plan doesn't say."""
+
+    default = None if sources is None else sources["default"]
+    by = sources["by"] if sources else dict.fromkeys(SOURCES)
+    return (", ".join(f"{s} {NOT_RECORDED if v is None else _pct(v)}" for s, v in by.items())
+            + f"; at the planner's assumed default (`{DEFAULT_BASIS}`) {NOT_RECORDED if default is None else _pct(default)}")
+
+
 def _names(names: Sequence[str]) -> str:
     """Rows' names in a sentence."""
 
@@ -835,8 +929,18 @@ def render(doc: Mapping[str, Any]) -> str:
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
     measured, parts = _share(doc["compute_share"])
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
-    what = ", the registered and served cut with every modeled lever at its measured value" if doc["row"] == ROW else ""
+    what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
+    label = f", {doc['label']}" if doc["label"] else ""
+    sources = head["priced"] and head["priced"]["sources"]
+    plan = f" (its own plan at β = {_part(head['priced']['beta'])}, {head['priced']['run']})" if sources else ""
+    a = doc["at_assumed_prices"]
+    assumed = [] if a is None else [
+        f"- row `{a['row']}`, {a['label']}: "
+        + (f"not read: {a['why']}." if a["GB"] is None else
+           f"{_n(a['GB'])} GB, at β = {_part(a['beta'])}{'' if a['inside'] else ', extrapolated'} ({a['run']}), failing "
+           f"with at most δ = {_n(a['delta'])} over the monitoring period. It is not the figure. What prices its "
+           f"proving time: {_by_source(a['sources'])}.")]
     on = f"modeled, on an assumed class of at most {_n(cert['response_ids'])} ids a response"
     if eps < 1:
         scan = next(r for r in cert["rows"] if r["row"] == "scan")
@@ -872,13 +976,15 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{_pct(share)} of total compute", "",
         *measured,
         f"Over the world's year, at {_pct(share)} of total compute, in two parts:", "",
-        f"- **the compute audit's part: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
+        f"- **the compute audit's part{label}: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
         f"planner's row `{doc['row']}`{what}, read at the audit budget where its total is {_pct(share)} of the compute, "
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
         f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
         f"- {_how(head['priced'])}.",
+        f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
+        *assumed,
         *certifier,
         *together,
         "- the output count: "
@@ -1003,7 +1109,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--network-check-share", type=float, default=NETWORK_CHECK_SHARE, metavar="S",
                     help="the network check's own proving as a share of total compute, which the planner's rows don't "
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
-    ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`)")
+    ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`, the plan of record's; `{ASSUMED_ROW}` "
+                                               f"is printed only {ASSUMED_LABEL})")
     ap.add_argument("--step", default=STEP, help=f"the row's step, or the beginning of its name (default `{STEP}`)")
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
