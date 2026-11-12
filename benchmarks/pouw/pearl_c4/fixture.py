@@ -22,6 +22,8 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.crypto.turboshake import turboshake128
+from verity.definitions.kernels.tc import group_sum_total_batch
+from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.verifier import audit as AU
 from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
@@ -107,7 +109,7 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
     c = T.chain(fmt, a.codes, a.scales, b.codes, b.scales, ti, tj)
     u = c.copy()
     for st in range(0, F.PEEL_K, 16):
-        u = T.group_sum_total_batch(T.HOPPER_BF16_M16N8K16, u, pa[ti, st:st + 16], pb[tj, st:st + 16])[0]
+        u = group_sum_total_batch(HOPPER_BF16_M16N8K16, u, pa[ti, st:st + 16], pb[tj, st:st + 16])[0]
     c, u = c.reshape(m, n), u.reshape(m, n)
 
     inv_a = T.u32(np.float32(1) / T.f32(a.alpha))

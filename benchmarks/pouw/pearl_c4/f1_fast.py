@@ -27,6 +27,8 @@ import numpy as np
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
+__all__ = ["certified_modes", "p_lower", "row_pmf", "row_units", "split_units_fast", "window_charges"]
+
 MAGS = (1, 2, 3, 4, 6, 8, 12)                      # |2·value| of the nonzero E2M1 magnitudes
 SLACK = F.F1_EPS
 C = F.FFMA_UNITS / F.SPAN_K
