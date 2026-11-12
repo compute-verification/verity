@@ -2,6 +2,7 @@ module
 
 public import Aesop.BuiltinRules
 public import Definitions.Core.Assumptions
+public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Tap
 public import Mathlib.Tactic.ToDual
 public import Proofs.NetworkCertifier.Warden
@@ -19,9 +20,10 @@ lane sends before its fail cell is in the record, as that cell's data in its buc
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
 
-Under a record format of the wire (`WireFormat`), the same three hold of the frames, padding included: the frames the
-client receives are the code's cells' on the wire (`wire_frames`), they read back from the record (`wire_frames_read`),
-and a data cell before the fail cell is the `(j mod r)`-th of its connection's frames in its bucket (`wire_data_read`).
+Under a record format of the wire (`WireFormat`, `Definitions.NetworkCertifier.RecordRows`), the same three hold of the
+frames, padding included: the frames the client receives are the code's cells' on the wire (`wire_frames`), they read
+back from the record (`wire_frames_read`), and a data cell before the fail cell is the `(j mod r)`-th of its
+connection's frames in its bucket (`wire_data_read`).
 -/
 
 @[expose] public section
@@ -89,7 +91,7 @@ theorem wire_data_read (f : WireFormat κ Cell Ob) (arr : Srv → κ → Arrival
     ((f.read s (run tap (s, σ)).2 c).filter fun x => x.1 == s.bucket c j)[j % s.r]? =
       some (s.bucket c j, .data (arr σ c).stream[j]) := by
   rw [← wire_frames_read f arr tap run htrust s hfit σ, wire_frames f arr tap run htrust s σ,
-    filter_laneWire s _ c (bucket_mem_span s c hj), List.getElem?_map, wireFrames_cell s _ c hj, certifierCode_eq]
+    filter_laneWire s _ c (bucket_mem_span s c hj), List.getElem?_map, laneFrames_cell s _ c hj, certifierCode_eq]
   simp only [clientView, List.getElem?_map, List.getElem?_range hj, Option.map_some, cellView_of_lt _ hf,
     streamCell, hd, ↓reduceDIte]
 

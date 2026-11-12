@@ -1,5 +1,6 @@
 module
 
+public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Warden
 public import Aesop.BuiltinRules
 public import Mathlib.Tactic.Attr.Core
@@ -23,8 +24,7 @@ cells from.
 On the wire, a bucket's frames are the connection's frames in it (`filter_laneWire`), every cell's bucket in the
 connection's span (`bucket_mem_span`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
 cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
-bucket's frames (`getElem?_filter_countP_take`, `wireFrames_cell`), the admission padding in earlier buckets and the
-padding after the lane's last cell after it.
+bucket's frames (`getElem?_filter_countP_take`, `laneFrames_cell`), the admission padding in earlier buckets.
 -/
 
 @[expose] public section
@@ -148,9 +148,9 @@ theorem bucket_mem_span (s : CertifierSchedule κ) (c : κ) {j : ℕ} (hj : j < 
 
 /-- **A bucket's frames on the wire** are the connection's frames in it. -/
 theorem filter_laneWire (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) {b : ℕ}
-    (hb : b ∈ s.span c) : (laneWire s v c).filter (fun x => x.1 == b) = (wireFrames s v c b).map (b, ·) := by
-  have h : ∀ d, ((wireFrames s v c d).map (d, ·)).filter (fun x => x.1 == b) =
-      if d = b then (wireFrames s v c b).map (b, ·) else [] := by
+    (hb : b ∈ s.span c) : (laneWire s v c).filter (fun x => x.1 == b) = (laneFrames s v c b).map (b, ·) := by
+  have h : ∀ d, ((laneFrames s v c d).map (d, ·)).filter (fun x => x.1 == b) =
+      if d = b then (laneFrames s v c b).map (b, ·) else [] := by
     intro d
     by_cases hd : d = b
     · subst hd
@@ -163,9 +163,9 @@ theorem filter_laneWire (s : CertifierSchedule κ) (v : κ → List (ℕ × Cell
   exact filterMap_flatMap_ite _ List.nodup_range hb
 
 /-- **A lane's cell `j` is the `(j mod r)`-th of its connection's frames in its bucket**: the admission padding is in
-earlier buckets, and the padding after the lane's last cell follows it. -/
-theorem wireFrames_cell (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) {j : ℕ} (hj : j < s.cells c) :
-    (wireFrames s (certifierCode s a) c (s.bucket c j))[j % s.r]? = ((certifierCode s a c)[j]?).map Prod.snd := by
+earlier buckets. -/
+theorem laneFrames_cell (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) {j : ℕ} (hj : j < s.cells c) :
+    (laneFrames s (certifierCode s a) c (s.bucket c j))[j % s.r]? = ((certifierCode s a c)[j]?).map Prod.snd := by
   have hlen : (certifierCode s a c).length = s.cells c := certifierLane_length _ _ _ _
   have h2 : j < (certifierCode s a c).length := hlen ▸ hj
   have hfst : ((certifierCode s a c)[j]).1 = s.bucket c j := by
@@ -175,7 +175,7 @@ theorem wireFrames_cell (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c
     exact h
   have hpre : ¬(s.adm c ≤ s.bucket c j ∧ s.bucket c j < s.adm c + s.D) := fun h =>
     absurd h.2 (Nat.not_lt.2 (Nat.le_add_right _ _))
-  simp only [wireFrames, hpre, ite_false, List.nil_append]
+  simp only [laneFrames, hpre, ite_false, List.nil_append]
   have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (certifierCode s a c) j h2
     (by simp [hfst])
   have hcount : ((certifierCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
@@ -187,10 +187,7 @@ theorem wireFrames_cell (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c
     funext i
     simp [CertifierSchedule.bucket]
   rw [hcount] at key
-  have hlt : j % s.r < (((certifierCode s a c).filter fun x => x.1 == s.bucket c j).map Prod.snd).length := by
-    rw [List.length_map]
-    exact (List.getElem?_eq_some_iff.1 key).1
-  rw [List.getElem?_append_left hlt, List.getElem?_map, key, List.getElem?_eq_getElem h2]
+  rw [List.getElem?_map, key, List.getElem?_eq_getElem h2]
 
 end Wire
 

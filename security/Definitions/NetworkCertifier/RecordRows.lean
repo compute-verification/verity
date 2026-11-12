@@ -24,6 +24,10 @@ Read back (`lanesOfRows`), connection `c`'s cell `j`, for `j < cells c`, is the 
 frames, which the network certifier's admission keeps (at most `lanes` connections a bucket, `r` frames each, and
 `S = lanes·r`).
 
+**What crosses the wire** on a connection (`laneWire`) is those frames, bucket by bucket over its span, the admission
+padding included; the padding after a lane's data, to the end of its last bucket, is the lane's own cells. A record
+format of the wire (`WireFormat`) reads every one of them back, where a `RecordFormat` reads the lanes' cells.
+
 **The deployed format** (`cellRows`) is `warden.py`'s frames of `B` bytes: a kind u8, the connection's ordinal u32, the
 payload's length u32, the payload and zero fill, the `c`-th of `N` connections at ordinal `c + 1`. It is well formed
 (`RowsFormat.Wf`) when `B` and `N` are under 2^32.
@@ -48,6 +52,28 @@ admission to `adm c + D`, then the cells `v c` of its lane in bucket `b`, in ord
 def laneFrames (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) (b : ℕ) : List (CellView Cell) :=
   (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
     ((v c).filter fun x => x.1 == b).map Prod.snd
+
+/-- **What crosses the wire on connection `c`**: its frames (`laneFrames`), bucket by bucket over its span, each with
+its bucket. The padding is included: the admission padding, and, a lane's `cells` being its length through its last
+bucket, the padding after its data to that bucket's end. -/
+def laneWire (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) : List (ℕ × CellView Cell) :=
+  (s.span c).flatMap fun b => (laneFrames s v c b).map (b, ·)
+
+/-- **A record format of the wire**: as `RecordFormat` (`Definitions.NetworkCertifier.Tap`), but what reads back from
+the record on a schedule the format holds is every frame that crossed the wire on each connection, padding included,
+in its bucket (`laneWire` of the code's cells), not the lanes' cells alone. -/
+structure WireFormat (κ Cell Ob : Type) where
+  record : CertifierSchedule κ → (κ → Arrivals Cell) → (κ → List (ℕ × CellView Cell)) → Ob
+  read : CertifierSchedule κ → Ob → κ → List (ℕ × CellView Cell)
+  fits : CertifierSchedule κ → Prop
+  read_record : ∀ s, fits s → ∀ a, read s (record s a (certifierCode s a)) = laneWire s (certifierCode s a)
+
+/-- **The tap's code, on the wire**: on schedule `s` and the arrivals `arr c` of each connection `c` on the server's
+uplink, the frames the client receives (`laneWire` of the code's cells, `certifierCode`) and the record of them
+(`f.record`), from one run. -/
+def wireCode {Ob : Type} (f : WireFormat κ Cell Ob) (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) :
+    (κ → List (ℕ × CellView Cell)) × Ob :=
+  (laneWire s (certifierCode s arr), f.record s arr (certifierCode s arr))
 
 /-- **Bucket `b`'s row of frames**: each connection's frames in the bucket (`laneFrames`), connection by connection in
 the order `conns` (the ordinals), each frame naming its connection. -/
