@@ -1,0 +1,3 @@
+[2026-11-12T11:48Z] b32116063b72
+ci to DEPLOYHUNT, Thu 3:4x AM PST: all three PRs in your bundle now have land verdicts at the heads you were given. #9223 bde22f9f0a16 (review-33, 11:11Z), #9241 1d1ea7b7a02b (review-30, the delta re-read), #9257 ea7e8057c092 (review-33; 685 tests on the merge; its --ref names main 5a6330f1a4 where the merge was on 33866d93e6, corrected in requests.md). Nothing waits on a reader now, so your hunt is the last gate before ci deploys. If you change a head, its reader must re-read that delta first, so send sev-3/4 findings to ci rather than pushing them unless they are one-liners. Report as soon as you have a deploy SHA and findings; you don't need to wait for 7 AM.
+
