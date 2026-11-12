@@ -47,14 +47,20 @@ EXITED_NONZERO = ("the audit exited nonzero (records_audit.py audit's exit is it
 #: wrote it too), and the audit record, written after the sample. An ``--out`` that holds either is spent, whatever
 #: the attempt wrote after: nothing resamples
 ATTEMPT = ("window/receipt.json", "window/audit.json")
-#: the rejects of an attempt that reached its draw and ended with no summary, or with neither an audit record nor a
-#: refusal: an audit that died, which no answer accepts on
-NO_SUMMARY = ("an attempt reached its draw under this audit (its receipt, written before it draws, or its audit record "
-              "is there) and ended without a summary: nothing resamples, so its directory is spent and no answer "
-              "accepts on it")
-NO_RECORD = ("an attempt reached its draw under this audit (its receipt, written before it draws, is there) and ended "
-             "with neither an audit record nor a refusal: nothing resamples, so its directory is spent and no answer "
-             "accepts on it")
+#: how the reject of an audit that did not finish starts, which no reject of a refused proof or of an audit that
+#: finished and failed does: an attempt that reached its draw and died, which no answer accepts on. `NO_SUMMARY`: it
+#: left no summary; `ACCEPTING_NO_SUMMARY`: it left none beside an accepting audit record, the record written before
+#: its negatives ran; `NO_RECORD`: its summary holds neither an audit record nor a refusal
+UNFINISHED = "the audit did not finish"
+NO_SUMMARY = (f"{UNFINISHED}: it reached its draw (the registration's receipt, written before the draw, or its audit "
+              "record is there) and ended before its summary, so this is no proof's refusal and no acceptance: "
+              "nothing resamples, its directory is spent and no answer accepts on it")
+ACCEPTING_NO_SUMMARY = (f"{UNFINISHED}: it wrote an accepting audit record and ended before its summary, so whether "
+                        "its negatives were refused and what it exited with are not known: nothing resamples, its "
+                        "directory is spent and no answer accepts on it")
+NO_RECORD = (f"{UNFINISHED}: it reached its draw (the registration's receipt, written before the draw, is there) and "
+             "its summary holds neither an audit record nor a refusal, so this is no proof's refusal and no "
+             "acceptance: nothing resamples, its directory is spent and no answer accepts on it")
 #: what `answer` reads of the audit record ``window/audit.json``: its verdict, each check's outcome and the proved units
 #: its statement covers, the draw, the registration, the bound on wrong units and the units proved; and what the onsite
 #: record credits members by: each check after the draw's outcome, with the drawn members whose ``--registered`` files
@@ -129,6 +135,14 @@ def public_copy(out: Path, dst: Path) -> None:
     (dst / "window" / "audit.json").write_text(json.dumps(rec, indent=1, sort_keys=True, default=str) + "\n")
 
 
+def _accepting(record: Path) -> bool:
+    """Whether ``record`` is an audit record that accepts; one missing or cut short isn't."""
+    try:
+        return json.loads(record.read_text()).get("accepted") is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def _refusal(reason: str, commitment: str | None) -> dict[str, Any]:
     return {"commitment": commitment, "profile": None, "protocol": PROTOCOL, "public": None, "reason": reason,
             "verdict": "reject"}
@@ -190,14 +204,16 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ. It accepts only where the summary says the audit passed (``ok``
     true, an exit of 0): any other beside an accepting record is `EXITED_NONZERO`. An attempt that reached its draw
-    (`attempt`) and died, leaving no summary (`NO_SUMMARY`) or neither an audit record nor a refusal (`NO_RECORD`),
-    is a reject; an ``out`` no attempt drew under, with no summary or no refusal, is no audit's and raises."""
+    (`attempt`) and died is a reject whose reason starts with `UNFINISHED`, which says the audit did not finish and
+    so reads apart from a refused proof: no summary (`NO_SUMMARY`; beside an accepting record,
+    `ACCEPTING_NO_SUMMARY`), or neither an audit record nor a refusal (`NO_RECORD`). An ``out`` no attempt drew
+    under, with no summary or no refusal, is no audit's and raises."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
     except (OSError, ValueError) as e:
         if attempt(out) is not None:
-            return _refusal(NO_SUMMARY, commitment)
+            return _refusal(ACCEPTING_NO_SUMMARY if _accepting(out / "window" / "audit.json") else NO_SUMMARY, commitment)
         raise RuntimeError(f"the records audit left no summary under {out}: {e}") from None
     if opened(summary):
         raise RuntimeError(f"the records audit under {out} opened the advice (records_audit.py audit --opening), a "
@@ -256,8 +272,8 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["ATTEMPT", "EXITED_NONZERO", "NO_RECORD", "NO_SUMMARY", "PROTOCOL", "RECORD", "SUMMARY", "answer", "attempt",
-           "exact_delta", "opened", "public_copy"]
+__all__ = ["ACCEPTING_NO_SUMMARY", "ATTEMPT", "EXITED_NONZERO", "NO_RECORD", "NO_SUMMARY", "PROTOCOL", "RECORD", "SUMMARY",
+           "UNFINISHED", "answer", "attempt", "exact_delta", "opened", "public_copy"]
 
 
 if __name__ == "__main__":

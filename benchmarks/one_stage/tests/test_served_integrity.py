@@ -177,16 +177,20 @@ def test_an_attempt_that_reached_its_draw_and_died_is_a_reject_never_an_error_or
     """An audit's directory that holds a5's receipt is one an attempt reached its draw under. One that then died
     leaves no summary, or a summary with neither an audit record nor a refusal; each was an error, so nothing said
     the directory is spent. Each is a reject that says so, on the registration, with no public outputs or profile.
-    So is an accepting audit record whose audit died before its summary: the record alone, with or without the
-    receipt, says an attempt drew. The same directories without receipt or record are no audit's, and raise."""
+    So is an accepting audit record whose audit died before its summary, with a reason of its own: the record alone,
+    with or without the receipt, says an attempt drew; a record cut short or one that rejects reads as no summary.
+    The same directories without receipt or record are no audit's, and raise."""
     passed = {"checks_before_draw": {"registration": True}}
     died = {"no summary": (receipt(tmp_path / "a"), I.NO_SUMMARY),
             "no record": (receipt(write(tmp_path / "b", passed)), I.NO_RECORD),
-            "a record, no summary": (receipt(tmp_path / "c"), I.NO_SUMMARY),
-            "a record alone": (tmp_path / "d", I.NO_SUMMARY)}
-    for d in (tmp_path / "c", tmp_path / "d"):
+            "a record, no summary": (receipt(tmp_path / "c"), I.ACCEPTING_NO_SUMMARY),
+            "a record alone": (tmp_path / "d", I.ACCEPTING_NO_SUMMARY),
+            "a record cut short": (tmp_path / "e", I.NO_SUMMARY),
+            "a rejecting record, no summary": (tmp_path / "f", I.NO_SUMMARY)}
+    for d, body in ((tmp_path / "c", json.dumps(record(True))), (tmp_path / "d", json.dumps(record(True))),
+                    (tmp_path / "e", json.dumps(record(True))[:40]), (tmp_path / "f", json.dumps(record(False)))):
         (d / "window").mkdir(parents=True, exist_ok=True)
-        (d / "window" / "audit.json").write_text(json.dumps(record(True)))
+        (d / "window" / "audit.json").write_text(body)
     for out, reason in died.values():
         a = I.answer(out, REG)
         assert check_answer(a) == a
@@ -195,7 +199,26 @@ def test_an_attempt_that_reached_its_draw_and_died_is_a_reject_never_an_error_or
     assert I.attempt(tmp_path / "a") == tmp_path / "a" / "window" / "receipt.json"
     assert I.attempt(tmp_path / "d") == tmp_path / "d" / "window" / "audit.json" and I.attempt(tmp_path / "none") is None
     assert I.ATTEMPT == ("window/receipt.json", "window/audit.json")
-    assert "before it draws" in I.NO_SUMMARY and "before it draws" in I.NO_RECORD and I.NO_SUMMARY != I.NO_RECORD
+    assert len({I.NO_SUMMARY, I.ACCEPTING_NO_SUMMARY, I.NO_RECORD}) == 3
+    assert "written before the draw" in I.NO_SUMMARY and "written before the draw" in I.NO_RECORD
+
+
+def test_only_the_reject_of_an_audit_that_did_not_finish_says_so(tmp_path):
+    """A reader tells an audit that did not finish from a refused proof by the reason: each reject of an attempt that
+    died starts with `UNFINISHED`, and no other reject does: a refusal before or after the draw, a rejecting audit
+    record, or an audit that finished and exited nonzero beside its accepting record."""
+    assert I.UNFINISHED == "the audit did not finish"
+    assert all(r.startswith(I.UNFINISHED + ": ") for r in (I.NO_SUMMARY, I.ACCEPTING_NO_SUMMARY, I.NO_RECORD))
+    finished = [write(tmp_path / "a", {"refused": {"records": "ValueError: no such value"}}),
+                write(tmp_path / "b", {"checks_before_draw": {"registration": False}}),
+                write(tmp_path / "c", {"checks_before_draw": {"registration": True},
+                                       "checks": {"registration": {"ok": True}, "wiring": {"ok": False, "codes": ["wiring"]}}}),
+                write(tmp_path / "d", PASSED, record(False)),
+                write(tmp_path / "e", PASSED | {"ok": False}, record(True))]
+    for out in finished:
+        a = I.answer(receipt(out), REG)
+        assert a["verdict"] == "reject" and I.UNFINISHED not in a["reason"]
+    assert I.answer(receipt(finished[-1]), REG)["reason"] == I.EXITED_NONZERO
 
 
 @pytest.mark.parametrize("summary, reason", [
