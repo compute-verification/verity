@@ -695,7 +695,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
-    place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
+    place of a5's own; the audit record and its negatives are then decided as that stream decides the interior's
+    (`verifier.audit_record`'s ``own_reads``: a session's read of one of the registration's own ports at its own root is
+    no registered read, its rows being round 2's to hold), ``audit.json`` says so (``own_reads``), and the summary's
+    ``handed`` is what the audit record took (its verdicts, statement, sessions,
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
     of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
     registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
@@ -1039,7 +1042,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
-                                sessions=sessions, served=sorted(served_units), session_roots=session_roots)
+                                sessions=sessions, served=sorted(served_units), session_roots=session_roots,
+                                own_reads=drawn is not None)
+        if drawn is not None:
+            result["own_reads"] = True
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -1117,7 +1123,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
                                            tie(a)))
-        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units),
+                                      own_reads=drawn is not None))
         neg.update(coin_neg)
         if linked is not None:
             neg.update(registered_negatives(a, *linked))

@@ -332,3 +332,157 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     got = TS.round_two(*args, stmts, {"verdicts": verdicts}, proofs)
     assert (got["ok"], got["codes"][0]) == (False, "second-read")
     assert got["detail"]["second-read"] == {"statement": k - 1, "template": combine}
+
+
+def _engine(v: int, spans: int, outputs: int, lengths: dict[str, int] | None = None) -> tuple[dict, list[dict], list[dict]]:
+    """A greedy engine's steps over ``spans`` requests of ``outputs`` tokens each at a vocabulary of ``v`` (request
+    ``r<i>`` of ``lengths[r<i>]`` where given, leaving the batch after it): each step's bf16 logits rows (one a request
+    in the batch, standard normal, so ties within a row are bf16's; a request's rows are the same whatever the others'
+    lengths), its batch as vLLM's V2 runner hands the sampler one, the ids its greedy sampler takes (torch's argmax, the
+    first maximum), and the step as a replay's trace records it."""
+    import torch
+    from types import SimpleNamespace as NS
+    g = torch.Generator().manual_seed(1112)
+    rids, lp = [f"r{i}" for i in range(spans)], len(SM.PROMPT)
+    steps, trace = [], []
+    for s in range(outputs):
+        live = [i for i, r in enumerate(rids) if s < (lengths or {}).get(r, outputs)]
+        on = [rids[i] for i in live]
+        logits = torch.randn(spans, v, generator=g).to(torch.bfloat16)[live]
+        batch = NS(req_ids=on, num_reqs=len(on), num_draft_tokens=0, prefill_len_np=[lp] * len(on),
+                   num_computed_tokens_np=[0 if s == 0 else lp + s - 1] * len(on),
+                   num_scheduled_tokens=[lp if s == 0 else 1] * len(on))
+        ids = logits.float().argmax(dim=1)
+        steps.append({"logits": logits, "batch": batch, "ids": ids, "on": on})
+        trace.append({"step": s, "emitted": dict.fromkeys(on, 1),
+                      "rows": [[r, 0 if s == 0 else lp + s - 1, lp if s == 0 else 1] for r in on]})
+    return {"rids": rids}, steps, trace
+
+
+def test_the_serves_hook_and_the_samplers_capture_give_a_class_of_the_greedy_select_in_units(tmp_path):
+    """The engine's side of a class of the greedy select in units, from the launch line's boundary object (inline, one
+    instance an output, ``ids``) as serve_tax hands the plugin it: the serve's hook (`BoundaryWindows.of`) commits the
+    spans a greedy engine served as the stand-in serve's layout lays its class out (`two_stage_small.layout`: program,
+    partition, every value's domain, the provenance; the ids its return), and the sampler's wrapper on the same steps
+    (`sampler_capture.Capture`, `take`, `spans`, `write`, under the template the serve committed) captures rows the
+    driver lays out as the class's units, one of each of its K templates a token (`two_stage.spans_of`), each a
+    span whose combine selects the ids the serve committed. The class designs with every template linked, the combine
+    wired to each chunk and its return held, and its rule passes at more than one output a span (`two_stage.rule_of`)."""
+    pytest.importorskip("torch")
+    from types import SimpleNamespace as NS
+    from verity_vllm.engine import sampler_capture as SC
+    from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+    v, k, spans, outputs = 160, 20, 3, 4
+    check = SM.template(v, k)
+    cfg = {"window_s": 3600.0, "check": check, "inline": True, "per_prompt": 0, "per_output": 1, "drained": True,
+           "ids": True}
+    lines: list[dict] = []
+    hook = BoundaryWindows.of(cfg, tmp_path / "boundary", sink=lines.append)
+    eng, steps, trace = _engine(v, spans, outputs)
+    for rid in eng["rids"]:
+        hook.admit(NS(request_id=rid, prompt_token_ids=list(SM.PROMPT),
+                      sampling_params=NS(**{**SM.GREEDY, "max_tokens": outputs})))
+    sampler = SC.Capture(lambda logits, batch: NS(sampled_token_ids=logits.float().argmax(dim=1)[:, None]), eng["rids"])
+    for s, st in enumerate(steps):
+        out = sampler(st["logits"], st["batch"])
+        hook.served({0: NS(outputs=[NS(request_id=r, new_token_ids=[int(out.sampled_token_ids[i, 0])],
+                                       finish_reason="length" if s == outputs - 1 else None)
+                                    for i, r in enumerate(eng["rids"])])})
+    hook.stop()
+    assert [ln.get("error") for ln in lines] == [None]
+    [directory] = (tmp_path / "boundary" / "w0").iterdir()
+    assert directory.name.endswith(f"-o{outputs}")
+    c = BR.reopen(directory, BR.check_template(check))
+    mine = SM.layout(v, outputs, spans, True, hook.serve, k)
+    L = c.layout
+    assert (L.partition["program"], P.digest(L.partition), L.ports(), L.provenance()) == (
+        mine.partition["program"], P.digest(mine.partition), mine.ports(), mine.provenance())
+    assert L.returned == "o0" and L.provenance()["ids"] is True and len(L.templates) == k
+    served = {b.engine_id: list(b.served) for b in c.spans}
+    assert served == {r: [int(st["ids"][i]) for st in steps] for i, r in enumerate(eng["rids"])}
+
+    take = SC.take(NS(model_runner=NS(sampler=sampler), rank=0), str(tmp_path / "ranks"))
+    SC.write(tmp_path / "capture", check, SC.spans([take], trace))
+    sample = [0, 2]
+    per, launches = TS.spans_of(c, tmp_path / "capture", sample)
+    assert sorted(launches) == [c.spans[u].engine_id for u in sample]
+    units = [P.template_id(t) for t in L.templates]
+    for u, pieces in zip(sample, per, strict=True):
+        assert [p.member.template for p in pieces] == units and all(p.n == outputs for p in pieces)
+        assert [SM.token(w) for w in pieces[-1].data["outs"]["o0"].tolist()] == served[c.spans[u].engine_id]
+    d = TS.design(L)
+    combine = units[-1]
+    assert d.cells == (outputs,) * k and [x.template for x in d.links] == units
+    assert [(w.template, w.port) for w in d.wires] == [(combine, f"r{j}") for j in range(k - 1)]
+    assert d.returns == (IR.Return(combine, "o0", "o0", outputs, tuple(range(outputs)), True),)
+    assert TS.rule_of(L, f"rate:{Q}/{spans}", K).span_values == (("logits", outputs * k, (v // k, 16)),)
+
+
+def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_select_in_units_committing_its_ids(tmp_path):
+    """The same engine's side under a stop rule (the boundary object's ``stop``, T the outputs, no tables): a request
+    the greedy engine ends at the rule's stop id and those it ends at ``max_tokens`` are one stop class, (P, T), which
+    commits the ids its replay block returns. The driver lays each sampled span's rows out as the K units of its own
+    tokens (`two_stage.spans_of`), the class designs wired with its return held and its rule passes (`design`,
+    `rule_of`), its first stage samples it under the verifier's rule, and its stop blocks register after its boundary
+    record and are sampled on the stop population's stream (`stop_first`)."""
+    pytest.importorskip("torch")
+    from types import SimpleNamespace as NS
+    from verity_vllm.engine import sampler_capture as SC
+    from verity_vllm.pipeline import boundary_stop as BS
+    from verity_vllm.pipeline.boundary_windows import BoundaryWindows
+    v, k, spans, outputs = 160, 20, 3, 4
+    check = SM.template(v, k)
+    _eng, full, _trace = _engine(v, spans, outputs)
+    whole = {r: [int(st["ids"][i]) for st in full] for i, r in enumerate(_eng["rids"])}
+    rule = BS.Stop((whole["r0"][1],), SM.MAX_MODEL_LEN, outputs)
+    lengths = {r: t.index(rule.ids[0]) + 1 if rule.ids[0] in t else outputs for r, t in whole.items()}
+    assert lengths["r0"] == 2 and outputs in lengths.values()
+    cfg = {"window_s": 3600.0, "check": check, "inline": True, "per_prompt": 0, "per_output": 1, "drained": True,
+           "ids": True, "stop": rule.to_json()}
+    lines: list[dict] = []
+    hook = BoundaryWindows.of(cfg, tmp_path / "boundary", sink=lines.append)
+    eng, steps, trace = _engine(v, spans, outputs, lengths)
+    for rid in eng["rids"]:
+        hook.admit(NS(request_id=rid, prompt_token_ids=list(SM.PROMPT),
+                      sampling_params=NS(**{**SM.GREEDY, "max_tokens": outputs, "ignore_eos": False})))
+    sampler = SC.Capture(lambda logits, batch: NS(sampled_token_ids=logits.float().argmax(dim=1)[:, None]), eng["rids"])
+    for s, st in enumerate(steps):
+        out = sampler(st["logits"], st["batch"])
+        ids = [int(x) for x in out.sampled_token_ids[:, 0]]
+        hook.served({0: NS(outputs=[NS(request_id=r, new_token_ids=[ids[i]],
+                                       finish_reason=None if s + 1 < lengths[r] else
+                                       "stop" if ids[i] in rule.ids else "length")
+                                    for i, r in enumerate(st["on"])])})
+    hook.stop()
+    assert [(ln.get("error"), ln.get("filed")) for ln in lines] == [(None, {"stop": spans, "nostop": 0})]
+    [directory] = (tmp_path / "boundary" / "w0").iterdir()
+    assert directory.name.endswith(f"-o{outputs}")
+    c = BR.reopen(directory, BR.check_template(check), stop=rule)
+    L, pub = c.layout, json.loads((directory / BR.COMMIT).read_text())
+    assert L.returned == "o0" and L.provenance()["ids"] is True and len(L.templates) == k
+    assert list(pub["values"]) == [*BR.PARTS, "o0", BR.STOP]
+    served = {b.engine_id: list(b.served) for b in c.spans}
+    assert served == {r: t[:lengths[r]] for r, t in whole.items()}
+
+    take = SC.take(NS(model_runner=NS(sampler=sampler), rank=0), str(tmp_path / "ranks"))
+    SC.write(tmp_path / "capture", check, SC.spans([take], trace))
+    sample = list(range(spans))
+    per, _launches = TS.spans_of(c, tmp_path / "capture", sample)
+    units = [P.template_id(t) for t in L.templates]
+    for u, pieces in zip(sample, per, strict=True):
+        rid = c.spans[u].engine_id
+        assert [p.member.template for p in pieces] == units and all(p.n == lengths[rid] for p in pieces)
+        assert [SM.token(w) for w in pieces[-1].data["outs"]["o0"].tolist()] == served[rid]
+    d = TS.design(L)
+    combine = units[-1]
+    assert [x.template for x in d.links] == units
+    assert [(w.template, w.port) for w in d.wires] == [(combine, f"r{j}") for j in range(k - 1)]
+    assert [(r.template, r.port, r.held) for r in d.returns] == [(combine, "o0", True)]
+    rule_of = TS.rule_of(L, f"rate:{Q}/{spans}", K)
+    assert rule_of.span_values == (("logits", outputs * k, (v // k, 16)),)
+
+    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first"), stop=rule)
+    assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
+    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}", FC.Challenger("stop"), got.record)
+    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans
+    assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q

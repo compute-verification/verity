@@ -15,7 +15,8 @@
 #   --unlinked`: exit 0 when everything holds but round 2's wires (second-wires)
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
-#   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances
+#   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
+#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
 #   verity/protocols/flock/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
 #   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
@@ -80,15 +81,17 @@ INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLIN
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
+RULE=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop", ""))' "$O/serve.json")
+STOP=(); [ -z "$RULE" ] || STOP=(--stop "$RULE")
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
-  --challenger local --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
+  --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
 "${ON_CARDS[@]}" "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" "${UNLINKED[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json

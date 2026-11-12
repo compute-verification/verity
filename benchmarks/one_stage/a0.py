@@ -414,15 +414,17 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                           statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
 
 
-def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None) -> dict[str, dict]:
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None, *,
+                    own_reads: bool = False) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`); `agree`
-    is whether the Lean and the Python decided it alike."""
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`, with its
+    ``own_reads`` where the real record was decided with it); `agree` is whether the Lean and the Python decided it
+    alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
-                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots, own_reads=own_reads)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})

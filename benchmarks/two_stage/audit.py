@@ -35,9 +35,9 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   holding: Lean's registered reads refuse both link members ("does not open"), the fold and flips accepted.
 
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
-verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
-the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
-alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
+verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted (it takes the
+sessions' reads of the interior's own ports as the stream's records do, `verifier.audit_record`'s ``own_reads``), and
+the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
 (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
 ``--out`` holds the params
@@ -150,29 +150,10 @@ def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
     return {"registration": registration.digest, "law": dict(draw.law), "draw": draw.units}
 
 
-def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
-    """The interior registration's own ports the sessions read: the port holding each port but its link port of each
-    member the second stage drew a unit of (`Binding.held`: a wired port's, its writer's output port), each once."""
-    return sorted({window.held(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in drawn)
-                   for p, _ in m.all_rows if p != T.link(t)})
-
-
-def own_reads_only(record: dict | None, ports: list[str]) -> bool:
-    """Whether a5's audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
-    check is one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and
-    exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a link
-    port's at the boundary record's leaf S[i]), and the stream's two-stage records take them (`verifier.audit_record`'s
-    ``own_reads``)."""
-    bad = {k: v for k, v in ((record or {}).get("checks") or {}).items() if not v.get("ok")}
-    d = (bad.get("registered") or {}).get("detail") or {}
-    return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == ports
-
-
-def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding, r2: dict | None,
-             o: dict | None, files: dict | None) -> bool:
+def expected(a: argparse.Namespace, s: dict, ok: bool, r2: dict | None, o: dict | None, files: dict | None) -> bool:
     """Both: every check before the sample passed and every session's circuit file the one its template's params name
     (`pins`, ``files``). Honest: every Lean verdict accepted, the sessions' registered reads the verifier's own, every
-    negative refused, a5's record accepted or refusing only the reads of the interior's own ports (`own_reads_only`),
+    negative refused, a5's record accepted (``ok``: it takes the reads of the interior's own ports, a5's ``drawn``),
     round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
     form alone, while `second_stage.FORM` is off (`two_stage.held`). ``--altered``: Lean's verify refused both link
     members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
@@ -180,7 +161,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
     if not a.altered:
-        return TS.held(s, r2, o, files) and (ok or own_reads_only(record, own_ports(window, s.get("draw") or [])))
+        return TS.held(s, r2, o, files) and ok
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
     return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
@@ -264,8 +245,6 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                              "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],
                              "links": T.links(it.window)},
                    sample=sample, **got)
-    drawn_units = s.get("draw") or []
-    summary["record"]["own_reads_only"] = own_reads_only(record, own_ports(it.window, drawn_units))
     published = draws.evidence()
     summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
     evidence = [AC.evidence(published, g) for g in segments]
@@ -273,11 +252,10 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                                                indent=1, sort_keys=True))
     if "handed" in s:
         summary["outcome"] = TS.outcome_of(stream, second, s["handed"], evidence, stmts, proofs)
-    summary["as_expected"] = expected(a, s, ok, record, it.window, summary.get("round_two"), summary.get("outcome"),
-                                      summary.get("pins"))
+    summary["as_expected"] = expected(a, s, ok, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     r2, o = summary.get("round_two"), summary.get("outcome") or {}
-    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "pins", "as_expected")},
+    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "record", "pins", "as_expected")},
                                "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
