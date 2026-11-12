@@ -135,7 +135,7 @@ def test_split_chain_cuts_a_binding_at_its_statics() -> None:
 @pytest.mark.slow
 def test_each_unit_fits_the_block_at_the_served_statics() -> None:
     """Every unit `split_chain` stages at GLM-5.3's statics past `head_chain`'s (whose tests hold the blocks and the end): each
-    column end, and the combine of up to 32 splits (vllm-flash-attn's split cap), fits Flock's proved range where a split row
+    column end, and the combine of up to 32 splits (vllm-flash-attn's most), fits Flock's proved range where a split row
     of two blocks doesn't (`circuit_check.block_held` held it), each read off its Definition (seconds each); circuit-check's
     ``block`` checks a bound row's cut only."""
     from verity_flock import circuit as FC

@@ -131,11 +131,11 @@ def fast : Sched → Bool
 
 end Sched
 
-/-! ## The cards' atoms (`b1` at `Open.b1 = 1/8`) -/
+/-! ## The cards' atoms (`b1` at the H200's weight 1/8) -/
 
 /-- INT8 MMA, s32 accumulate: weight 1, all 256 values. -/
 def s8 : Atom := ⟨8, 256, none⟩
-/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at `Open.b1 = 1/8`. -/
+/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`Accel.H200.card`'s `weight .b1`). -/
 def b1 : Atom := ⟨1, 2, none⟩
 
 /-- The H200 SXM at its data sheet's instruction `k` (f16 and bf16 at 8, tf32 at 4): s8, e4m3, e5m2, f16, bf16,
@@ -144,46 +144,60 @@ def h200Sheet : List Atom :=
   [s8, ⟨8, 33, some (32, 14)⟩, ⟨8, 17, some (32, 14)⟩, ⟨16, 4097, some (8, 24)⟩, ⟨16, 513, some (8, 24)⟩,
     ⟨32, 4097, some (4, 24)⟩, b1]
 
-/-- The H200 SXM at the measured instruction `k` (f16 and bf16 at 16, tf32 at 8). -/
-def h200Measured : List Atom :=
-  [s8, ⟨8, 33, some (32, 14)⟩, ⟨8, 17, some (32, 14)⟩, ⟨16, 4097, some (16, 24)⟩, ⟨16, 513, some (16, 24)⟩,
-    ⟨32, 4097, some (8, 24)⟩, b1]
-
 /-- The RTX PRO 6000 (sm_120) at its data sheet's `k`: s8, e4m3, e5m2, e2m1, nvf4 (`k = 64`, weight 1/2), f16,
-bf16, tf32, b1. -/
+bf16, tf32, b1. Its `b1` is at the H200's weight 1/8, where the card's own file, `rtx-pro-6000-server.toml`, has 1
+(`Accel.Sm120.card`'s `weight .b1`): the lighter atom makes this the more permissive table, on purpose, so that a
+lower bound on it holds at the card's own weight too. -/
 def rtx6000Sheet : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (8, 24)⟩, ⟨16, 513, some (8, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
 
-/-- The RTX PRO 6000 at the measured `k` (f16 and bf16 at 16, f16 at 8 at twice the weight, tf32 at 4). -/
-def rtx6000Measured : List Atom :=
-  [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
-    ⟨16, 4097, some (16, 24)⟩, ⟨32, 4097, some (8, 24)⟩, ⟨16, 513, some (16, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
+/-! ## The tables the statements cover
 
-/-- The four instances. -/
-def instances : List (List Atom) := [h200Sheet, h200Measured, rtx6000Sheet, rtx6000Measured]
+The statements hold on every atom table that `rtx6000Sheet` dominates (`Packed.Dom`). That reference table is fixed
+here, not a parameter. It and `h200Sheet` are written by hand: a card file gives each format's weight, and neither its
+instruction `k` nor the width `w` within which its dot is exact. -/
+
+namespace Packed
+
+/-- The atom table's entry where no atom holds. -/
+def BIG : Nat := 65536
+
+/-- The least weight of an atom of `fs` that holds operands over `a` and `b` values (`BIG` if none). -/
+def atomMin (fs : List Atom) (a b : Nat) : Nat :=
+  fs.foldl (fun acc f => if f.holds a b then min acc f.weight8 else acc) BIG
+
+/-- **The RTX PRO 6000's data sheet dominates `fs`**: every atom of `fs`, wherever it holds, weighs at least the
+lightest atom of `rtx6000Sheet` that holds there. So no table it dominates has a cheaper exact path for any
+sub-product, and a lower bound on the sheet's schedules is one on `fs`'s. -/
+def Dom (fs : List Atom) : Prop :=
+  ∀ f ∈ fs, ∀ a b, f.holds a b = true → atomMin rtx6000Sheet a b ≤ f.weight8
+
+end Packed
 
 /-! ## The statements -/
 
 /-- **Theorem 1**: at every depth budget `l ≤ L`, every schedule over `fs` for int8 operands that applies Strassen
 or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive.
 
-The served guarantee (`Verity.Guarantees.NaiveBeatsStrassenServed`) states it at `L = 12` on all four instances. Served
-inner and outer dimensions are at most 65536 (DeepSeek-V4's and Llama-3.1-70B's MLPs), and a leaf is at least 16:
-sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200 is taken at `Open.sync = 1`. So a recursion on
-a served product is at most `log₂(65536 / 16) = 12` deep. Deeper schedules pad past the served size, and the size
-form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them at every depth. Both are about int8 operands at `(256, 256)`.
+The guarantee (`Verity.Guarantees.NaiveBeatsStrassenAny`) states it at `L = 12` on every table that `rtx6000Sheet`
+dominates (`Packed.Dom`). Served inner and outer dimensions are at most 65536 (DeepSeek-V4's and Llama-3.1-70B's
+MLPs), and a leaf is at least 16: sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200's 16-wide
+`mma.sync` tiles are priced at its `wgmma`'s weight, the most permissive price (an atom's weight is its format's
+alone), which allows a leaf of 16 there too. So a recursion on a served product is at most `log₂(65536 / 16) = 12`
+deep. Deeper schedules pad past the served size, and the size form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them
+at every depth. Both are about int8 operands at `(256, 256)`.
 
-The exact tables hold further on three instances: to depth 13 on the H200 (both `k`) and the RTX PRO 6000 at the
-measured `k`. On the RTX PRO 6000's data sheet they stop at 12: with b1 at `1/8`, a schedule reaches `0.998267` of
-naive at depth 13. -/
+The exact tables hold further on three of the four card tables: to depth 13 on the H200 (both `k`) and the RTX PRO
+6000 at the measured `k`. On the RTX PRO 6000's data sheet they stop at 12: with b1 at `1/8`, a schedule reaches
+`0.998267` of naive at depth 13. -/
 def NaiveBeatsStrassen (fs : List Atom) (L : Nat) : Prop :=
   ∀ l ≤ L, ∀ S : Sched, S.valid fs schemes 0 l 256 256 = true → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l
 
 /-- **Theorem 1 in size**: an `n × n` product padded to `2^l` leaves of size `b`, at any depth `l`, loses to naive
 tiled's `8 n³` whenever `n ≤ c·b`.
 
-The served guarantee in size (`Verity.Guarantees.NaiveBeatsStrassenServedSize`) states it at `c = 4096 = 65536 / 16`
+The guarantee in size (`Verity.Guarantees.NaiveBeatsStrassenAnySize`) states it at `c = 4096 = 65536 / 16`
 (dimensions at most 65536, leaves at least 16), for int8 operands at `(256, 256)`. The proof uses Theorem 1 up to
 depth 12, the least cost at depth 13 (above `8^13`), and `cost ≥ 7^l` from depth 14 on (`7^14 > 2^39`).
 
