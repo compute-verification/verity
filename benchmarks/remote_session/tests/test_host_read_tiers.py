@@ -1,7 +1,9 @@
 """`host_read_tiers.sh` with no card: its dry run prints the lease's line and each size's command and touches nothing;
 under the tree's own gpu-lease, faking eight cards, the lease's line is taken as written and each size runs in turn in
 that lease; a lease that is short drops the last sizes, and one asked for near END is asked shorter by the wait it
-allows; a failing size is the run's exit and the next still runs; cards
+allows; a failing size is the run's exit and the next still runs; a card whose clocks the driver held down during a
+size is named on that size's line and over the lease, and each card's clock and temperature are kept between the
+sizes unless SAMPLE_MS is 0; cards
 in use, a lease of fewer cards, a failed build and a start outside the hours start nothing; and `launch` sends nothing
 outside the hours. The clock is NOW; host_read.sh, the Python, nvidia-smi and nvcc are stubs."""
 from __future__ import annotations
@@ -20,7 +22,7 @@ NOW = 2_000_000_000
 EIGHT = "0,1,2,3,4,5,6,7"
 #: what the job reads that the tests leave at its default, whatever the suite's own environment holds
 KNOBS = {"OUT", "DRY", "SIZES", "GIB", "GPUS", "CHUNK_BLOCKS", "LEASE_MIN", "GRANT_S", "MEM_GB", "CLEAR_MIB", "SIZE_MIN_S",
-         "TAIL_S",
+         "TAIL_S", "SAMPLE_MS", "SAMPLE_CPUS",
          "BUILD_S", "ARCH", "ARGS", "BASE_REV", "EXPECT_COMMIT", "SLOTS", "RESEARCH_SOURCE_SHA", "GPU_LEASE_TIMED",
          "CUDA_VISIBLE_DEVICES", "GPU_LEASE_UUID"}
 
@@ -44,6 +46,21 @@ case "$*" in
   *) for i in 0 1 2 3 4 5 6 7; do echo "$i, 3"; done ;;
 esac
 """
+#: a driver that counts how long it has held each card's clocks down: card 1's thermal count grows by 153.4 s, and
+#: card 6's power-cap count by 2 s, from each reading of the cards to the next. The sampler's call is not a reading:
+#: it says what it was called with.
+COUNTING = """#!/bin/bash
+case "$*" in
+  *--query-compute-apps*) ;;
+  *-lms*) echo "$*" > "$STUBS/sampling" ;;
+  *clocks_event_reasons_counters*)
+    n=$(cat "$STUBS/smi.n" 2> /dev/null || echo 0); echo $((n + 1)) > "$STUBS/smi.n"
+    for i in 0 1 2 3 4 5 6 7; do
+      echo "$i, GPU-$i, card, 3, 40, 80, 2000, $((i == 6 ? 7000000 + n * 2000000 : 5)), $((i == 1 ? n * 153400000 : 0)), 0, 0, 0x0000000000000000"
+    done ;;
+  *) for i in 0 1 2 3 4 5 6 7; do echo "$i, 3"; done ;;
+esac
+"""
 GRANT = """#!/bin/bash
 [ "$1" != status ] || exit 0
 echo "$*" >> "$STUBS/lease.calls"
@@ -59,14 +76,14 @@ exec bash {GPU_LEASE} "$@"
 
 
 def start(tmp_path: Path, stage: str = "job", lease: str = GRANT, left: int = 4500, python: str = PYTHON,
-          **env: str) -> subprocess.Popen:
+          smi: str = SMI, **env: str) -> subprocess.Popen:
     """`host_read_tiers.sh STAGE` started in a tree of stubs, `left` seconds before END."""
     tree, stubs = tmp_path / "tree", tmp_path / "stubs"
     (tree / "benchmarks/remote_session").mkdir(parents=True)
     (stubs / "cuda/bin").mkdir(parents=True)
     shutil.copy(RS / "host_read_tiers.sh", tree / "benchmarks/remote_session")
     (tree / "benchmarks/remote_session/host_read.sh").write_text(BUILD)
-    for name, text in {"python": python, "nvidia-smi": SMI, "gpu-lease": lease, "cuda/bin/nvcc": "#!/bin/bash\n"}.items():
+    for name, text in {"python": python, "nvidia-smi": smi, "gpu-lease": lease, "cuda/bin/nvcc": "#!/bin/bash\n"}.items():
         (stubs / name).write_text(text)
         (stubs / name).chmod(0o755)
     env = {**{k: v for k, v in os.environ.items() if k not in KNOBS},
@@ -127,6 +144,47 @@ def test_under_the_trees_gpu_lease_each_size_runs_in_turn_on_the_eight_cards(tmp
     assert "clocks_throttle_reasons.active" in (out / "cards.start.txt").read_text()
     assert any("8 GiB: exit 0" in line and line.endswith("cards: 5") for line in account)
     assert (out / "leased").exists() and (out / "cards.end.txt").exists() and not (out / "cards.not-clear.txt").exists()
+    # this nvidia-smi counts no held-down clocks: the account says so once, and no size's line names a card for it
+    assert sum("does not count how long it holds a card's clocks down" in line for line in account) == 1
+    assert not any("clocks held down" in line for line in account)
+
+
+def test_a_card_the_driver_held_down_is_named_on_its_size_and_over_the_lease(tmp_path):
+    """The sampler is a stub that writes its arguments to a FIFO this test holds open, so reading them waits for the
+    sampler to have started, whenever that is."""
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    os.mkfifo(stubs / "sampling")
+    sampling = os.open(stubs / "sampling", os.O_RDWR)
+    try:
+        p = start(tmp_path, smi=COUNTING)
+        sampler = os.read(sampling, 4096).decode().split()
+        stdout, stderr = p.communicate()
+    finally:
+        os.close(sampling)
+    assert p.returncode == 0, stdout + stderr
+    assert sampler[:6] == ["-i", ",".join(f"GPU-{i}" for i in range(8)), "-lms", "2000", "--format=csv,nounits",
+                           "--query-gpu=timestamp,index,temperature.gpu,clocks.sm,power.draw,utilization.gpu,"
+                           "clocks_event_reasons.active"] and len(sampler) == 6
+    out = tmp_path / "run/out"
+    account = (out / "tiers.txt").read_text().splitlines()
+    during = "; clocks held down during it: card 1 sw_thermal_slowdown 153.4 s; card 6 sw_power_cap 2.0 s"
+    assert [line.endswith(during) for line in account if " GiB: exit 0 after " in line] == [True] * 3
+    over = "clocks held down over the lease: card 1 sw_thermal_slowdown 613.6 s; card 6 sw_power_cap 8.0 s"
+    assert account[-2].endswith(over) and "VERDICT host-read-tiers ok (exit 0)" in account[-1]
+    assert "clocks_event_reasons_counters.sw_thermal_slowdown" in (out / "cards.start.txt").read_text().splitlines()[0]
+    assert not any("does not count" in line for line in account)
+    assert any("every 2000 ms, in out/cards.during.csv: one nvidia-smi on" in line for line in account)
+
+
+def test_no_sampler_runs_with_sample_ms_0_and_a_driver_whose_counts_do_not_move_names_no_card(tmp_path):
+    still = COUNTING.replace("n * 153400000", "9").replace("n * 2000000", "0")
+    p, calls, out = run(tmp_path, smi=still, SAMPLE_MS="0")
+    assert p.returncode == 0 and sizes(calls) == ["8", "12", "16"], p.stdout + p.stderr
+    account = (out / "tiers.txt").read_text().splitlines()
+    assert account[-2].endswith("clocks held down over the lease: on no card")
+    assert not any("clocks held down during it" in line or "cards.during.csv" in line for line in account)
+    assert not (out / "cards.during.csv").exists()
 
 
 def test_a_short_lease_drops_the_last_sizes(tmp_path):

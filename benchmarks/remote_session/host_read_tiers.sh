@@ -23,6 +23,14 @@
 #           the last TAIL_S seconds of its share and is ended at it. A size whose share would be under SIZE_MIN_S
 #           seconds is not run, the last of SIZES first.
 #
+# A card the driver holds below its clock makes every card's pass longer, so the lease keeps what tells that from the
+# code under test. out/cards.start.txt, cards.after-SIZE.txt and cards.end.txt are the lease's cards at those moments:
+# temperature, power, clock, the reasons the driver gives for holding the clock down and, where the driver counts
+# them, how long it has held each card's clocks down by reason since it loaded. A size's line names the cards whose
+# count grew during it, and one line before the verdict those over the whole lease. out/cards.during.csv is each
+# card's temperature, clock, power and use every SAMPLE_MS ms (0: not kept), from one nvidia-smi on SAMPLE_CPUS, or on
+# no core of its own where that pin does not run.
+#
 # NOT_BEFORE and END (`date -d` syntax, UTC) are the hours: nothing starts before the one, and no lease is held at
 # the other. NAMES are host_read.py's rows after `pass` (its own default without it), GIB the store on the cards,
 # CHUNK_BLOCKS the tier's step in blocks, ARGS more arguments of host_read.py. DRY=1 builds nothing and touches no
@@ -47,6 +55,7 @@ set -a
 SIZES=${SIZES:-8 12 16} GIB=${GIB:-700} CHUNK_BLOCKS=${CHUNK_BLOCKS:-65536} GPUS=${GPUS:-8}
 DRIVER_CPUS=${DRIVER_CPUS:-48-87} LEASE_MIN=${LEASE_MIN:-30} GRANT_S=${GRANT_S:-300} MEM_GB=${MEM_GB:-300}
 CLEAR_MIB=${CLEAR_MIB:-1024} CLEAR_WAIT_S=${CLEAR_WAIT_S:-120} SIZE_MIN_S=${SIZE_MIN_S:-240} TAIL_S=${TAIL_S:-90}
+SAMPLE_MS=${SAMPLE_MS:-2000} SAMPLE_CPUS=${SAMPLE_CPUS:-88-95}
 ARCH=${ARCH:-120a} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 PY=${PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
 GPU_LEASE=${GPU_LEASE:-/workspace/pouw/infra/bin/gpu-lease} SMI=${SMI:-nvidia-smi}
@@ -68,7 +77,7 @@ if [ "$STAGE" = launch ]; then
   BASE_REV=${BASE_REV:-$(git merge-base HEAD origin/main)} || refuse "no BASE_REV, and no merge base with origin/main"
   E=()
   for v in END NOT_BEFORE EXPECT_COMMIT BASE_REV SIZES NAMES GIB CHUNK_BLOCKS GPUS DRIVER_CPUS LEASE_MIN GRANT_S MEM_GB \
-    CLEAR_MIB CLEAR_WAIT_S SIZE_MIN_S TAIL_S ARCH CUDA_HOME PY GPU_LEASE SMI ARGS GPU_LEASE_WHO; do
+    CLEAR_MIB CLEAR_WAIT_S SIZE_MIN_S TAIL_S SAMPLE_MS SAMPLE_CPUS ARCH CUDA_HOME PY GPU_LEASE SMI ARGS GPU_LEASE_WHO; do
     [ -z "${!v+x}" ] || { E+=(--env "$v=${!v}"); export "${v?}"; }
   done
   run_s=$((END_S - t + 300))   # from taking the slot: the run outlives its lease by the end's records and its upload
@@ -191,9 +200,12 @@ clear() {  # waits up to CLEAR_WAIT_S, and no later than `stop`, for the lease's
     sleep 5; waited=$((waited + 5))
   done
 }
+HELD=clocks_event_reasons_counters   # microseconds the driver has held a card's clocks down, by reason, since it loaded
 cards() {  # cards TAG: the lease's cards now, into out/cards.TAG.txt; prints the cards with a throttle reason active
   local q=index,uuid,name,memory.used,temperature.gpu,power.draw,clocks.sm reason out line r bad=
-  for reason in clocks_event_reasons.active clocks_throttle_reasons.active ""; do   # the field's name, by driver
+  local counted=$HELD.sw_power_cap,$HELD.sw_thermal_slowdown,$HELD.hw_thermal_slowdown,$HELD.hw_power_brake_slowdown
+  # the fields' names, by driver: the counters where it has them, and the reasons active now last
+  for reason in "$counted,clocks_event_reasons.active" clocks_event_reasons.active clocks_throttle_reasons.active ""; do
     out=$("$SMI" --query-gpu="$q${reason:+,$reason}" --format=csv,noheader,nounits -i "$GPU_LEASE_UUID" 2>&1) && break
   done
   { echo "# $(utc "$(now)") $q${reason:+,$reason}"; echo "$out"; } > "$O/cards.$1.txt"
@@ -205,10 +217,23 @@ cards() {  # cards TAG: the lease's cards now, into out/cards.TAG.txt; prints th
   done <<< "$out"
   echo "${bad# }"
 }
+held_down() {  # held_down A B: the cards whose clocks the driver held down between out/cards.A.txt and out/cards.B.txt,
+  # each with the seconds by reason; nothing where no count grew, and nothing where the driver counts none
+  awk -F', *' '
+    FNR == 1 { for (i = 2; i <= NF; i++) if ($i ~ /_counters\./) { name[i] = $i; sub(/.*\./, "", name[i]) } next }
+    NR == FNR { for (i in name) was[$1, i] = $i; next }
+    { s = ""
+      for (i = 2; i <= NF; i++) if (i in name && $i - was[$1, i] > 0)
+        s = s sprintf(" %s %.1f s", name[i], ($i - was[$1, i]) / 1e6)
+      if (s != "") all = all sprintf("%scard %s%s", all == "" ? "" : "; ", $1, s) }
+    END { print all }' "$O/cards.$1.txt" "$O/cards.$2.txt" 2> /dev/null
+}
 
+sampler=
 if [ -n "${DRY:-}" ]; then
   say "not done here: that the lease holds $GPUS distinct cards, that they are clear before each size ($CLEAR_MIB MiB," \
-    "waited for up to $CLEAR_WAIT_S s), and the cards' records at the start, after each size and at the end"
+    "waited for up to $CLEAR_WAIT_S s), the cards' records at the start, after each size and at the end, and each" \
+    "card's temperature and clock every $SAMPLE_MS ms between them"
 else
   utc "$t" > "$O/leased"
   held=$(tr ',' '\n' <<< "${CUDA_VISIBLE_DEVICES:-}" | grep . | sort -u | wc -l)
@@ -216,6 +241,20 @@ else
     || verdict 7 refused "the lease holds cards '${CUDA_VISIBLE_DEVICES:-}', not $GPUS distinct ones; nothing started"
   throttled=$(cards start)
   say "leased: cards $CUDA_VISIBLE_DEVICES, the sizes over by $(utc "$stop")${throttled:+; throttle reasons, cards: $throttled}"
+  grep -q "$HELD" "$O/cards.start.txt" || say "this driver does not count how long it holds a card's clocks down: a" \
+    "card held down under a size shows only in out/cards.during.csv"
+  if [ "$SAMPLE_MS" -gt 0 ]; then
+    reason=$(head -n 1 "$O/cards.start.txt"); reason=${reason##*,}; [[ $reason == clocks_*_reasons.active ]] || reason=
+    pin=(taskset -c "$SAMPLE_CPUS") on="cores $SAMPLE_CPUS"
+    "${pin[@]}" true 2> /dev/null || pin=() on="no core of its own (taskset -c $SAMPLE_CPUS does not run here)"
+    "${pin[@]}" timeout $((stop + 60 - t)) "$SMI" -i "$GPU_LEASE_UUID" -lms "$SAMPLE_MS" --format=csv,nounits \
+      --query-gpu="timestamp,index,temperature.gpu,clocks.sm,power.draw,utilization.gpu${reason:+,$reason}" \
+      > "$O/cards.during.csv" 2>&1 &
+    sampler=$!
+    trap 'kill "$sampler" 2> /dev/null' EXIT
+    say "each card's temperature, clock, power and use every $SAMPLE_MS ms, in out/cards.during.csv: one nvidia-smi" \
+      "on $on"
+  fi
 fi
 read -ra S <<< "$SIZES"
 cut=() ran=()
@@ -225,7 +264,7 @@ done
 [ ${#S[@]} -gt 0 ] || verdict 9 refused "$(((stop - t) / 60)) min of lease are left before $(utc "$stop"), under the" \
   "$SIZE_MIN_S s a size needs; nothing started"
 
-rc=0 k=0
+rc=0 k=0 last=start
 for size in "${S[@]}"; do
   if [ -z "${DRY:-}" ] && ! clear; then
     [ $rc != 0 ] || rc=11
@@ -251,14 +290,19 @@ for size in "${S[@]}"; do
   mkdir -p "$D"
   watch "${RUN[@]}" > "$D/host_read.log" 2>&1; r=$?
   [ -z "$ended" ] || verdict 143 failed "a signal ended the lease during $size GiB; out/host-*/ hold what was measured"
-  throttled=$(cards "after-$size")
-  say "$size GiB: exit $r after $(($(now) - t)) s${throttled:+; throttle reasons after it, cards: $throttled}"
+  throttled=$(cards "after-$size"); slowed=$(held_down "$last" "after-$size"); last=after-$size
+  line="$size GiB: exit $r after $(($(now) - t)) s${throttled:+; throttle reasons after it, cards: $throttled}"
+  say "$line${slowed:+; clocks held down during it: $slowed}"
   grep -E 's (store:|[^ ]+: gate |control under |alone: |beside: |chain: )' "$D/host_read.log" | cut -c1-400 \
     | tee -a "$O/tiers.txt"
   [ $rc != 0 ] || rc=$r
 done
 [ $rc != 0 ] || [ ${#cut[@]} = 0 ] || rc=10
-[ -n "${DRY:-}" ] || cards end > /dev/null
+if [ -z "${DRY:-}" ]; then
+  cards end > /dev/null
+  ! grep -q "$HELD" "$O/cards.end.txt" \
+    || { slowed=$(held_down start end); say "clocks held down over the lease: ${slowed:-on no card}"; }
+fi
 case $rc in 0) word=ok ;; 10) word=partial ;; *) word=failed ;; esac
 verdict "$rc" "$word" "sizes run: ${ran[*]:-none} GiB in chunks of $CHUNK_BLOCKS blocks${cut:+; not run: ${cut[*]} GiB};" \
   "each size's record is out/host-SIZE/host_read.json"
