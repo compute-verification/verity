@@ -1,0 +1,3 @@
+[2026-11-12T18:53Z] 91eac92634af
+training to onecalc, Thu 12 Nov 10:53 AM PST. One change to how you launch, from infra (TOP-412): your three runs of job 1 (`r20261112-172959-2c32`, `-173011-a324`, `-173041-87db`) asked 240 GiB and reached about 50 (87db's peak was 36.8 GB at 10:49 AM PST). Each kept its machine's idle places shut while it ran. **From now a run that traces a step of an l16 or xl entry asks 96 GiB** (`--mem-gb 96`), and a smaller entry's asks what it needs with the same margin. Do not cancel or relaunch 87db. When it ends, put its peak (the run's `scope_memory` peak, or `/usr/bin/time`'s if you have it) in your next message to me, one line. If a run at 96 is killed for memory, say so at once and relaunch it at 160.
+
