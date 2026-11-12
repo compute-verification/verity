@@ -117,6 +117,8 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import copy
+import functools
 import hashlib
 import itertools
 import json
@@ -373,6 +375,13 @@ def findings_of(doc: dict) -> dict:
     return {p: {"value": e["value"], "root": e["root"]} for p, e in doc["ports"].items()}
 
 
+@functools.lru_cache(maxsize=4)
+def _layout_of(descriptor: bytes) -> tuple:
+    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on a window's
+    descriptor, kept for `credit_registration`'s calls on the same one."""
+    return CR.layout_of(descriptor)
+
+
 def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str,
                         ok: dict) -> list | None:
     """Execution phase credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
@@ -385,8 +394,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
     descriptor's SHA-512, the Program Lean was given. The
     steps before them (the challenger's log, the credit bits, the round roots) need a served execution phase's ledger, which this
-    harness has none of."""
-    layout, why = CR.layout_of(descriptor)
+    harness has none of. The layout is derived once per descriptor (`_layout_of`)."""
+    layout, why = copy.deepcopy(_layout_of(descriptor))
     if why is None:
         ss, why = CR.strata(layout)
     if why is None:
