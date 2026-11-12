@@ -142,17 +142,6 @@ def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor()
     inst.remove()
 
 
-def test_install_from_the_serialised_document(tmp_path):
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    path = tmp_path / "plan.json"
-    plan.save(path)
-    doc = P.load_plan(path)
-    inst = install_from_plan(doc, model, runner)
-    assert inst.keys() == [h.key() for h in plan.hooks()]
-    inst.remove()
-
-
 def test_refuses_a_plan_for_another_runtime():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows(), model, runner)

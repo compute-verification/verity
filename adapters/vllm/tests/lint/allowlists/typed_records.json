@@ -11,7 +11,6 @@
     {"file": "verity_vllm/acquire/gate.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/acquisition-plan-compare/v1"},
     {"file": "verity_vllm/acquire/gate.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 11},
     {"file": "verity_vllm/acquire/install.py", "kind": "schema-literal", "symbol": "OccurrenceSink.to_json", "detail": "verity-vllm/acquisition-observed/v1"},
-    {"file": "verity_vllm/acquire/install.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/served.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/served-required-manifest/v1"},
     {"file": "verity_vllm/acquire/served.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},

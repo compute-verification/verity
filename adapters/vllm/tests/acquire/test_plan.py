@@ -286,7 +286,8 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     path = tmp_path / "plan.json"
     dig = p1.save(path)
     doc = P.load_plan(path)
-    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA and P.hooks_of_doc(doc) == [h.key() for h in p1.hooks()]
+    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA
+    assert [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]] == [h.key() for h in p1.hooks()]
     # any change to the body changes the digest; a tampered file is refused
     rows2 = copy.deepcopy(rows)
     rows2.append(row("instance_outputs", "body.norm", "out", spec="Norm_v1"))

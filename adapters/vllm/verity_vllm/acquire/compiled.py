@@ -45,7 +45,6 @@ def _split_args(s: str) -> list[str]:
 _SHAPE_ALLOC = re.compile(r"^\s*(\w+) = empty_strided_cuda\(\(([^()]*)\),")
 _SHAPE_ASSERT = re.compile(r"^\s*assert_size_stride\((\w+), \(([^()]*)\),")
 _REINTERP = re.compile(r"^reinterpret_tensor\((\w+), \(([^()]*)\),")
-_ALIAS = re.compile(r"^\s*(\w+) = (\w+)\s*;\s*del \w+")                         # Inductor's buffer reuse: `buf6 = buf0; del buf0  # reuse`
 
 
 def _dims(s: str) -> list[str]:
