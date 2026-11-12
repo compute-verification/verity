@@ -76,6 +76,9 @@ theorem mem_of_marks {n : ℕ} {l : List ℕ} {i : ℕ} (h : (Spot.SecondWires.m
 theorem mem_writes_of_covers {c : _root_.Flock.Circuit} {port : String} {bits : ℕ}
     (h : Spot.SecondWires.covers c port bits = true) {β : ℕ} (hβ : β < bits) :
     β ∈ Spot.SecondWires.writes c port := by
+  have h : (decide (bits ≤ (Spot.SecondWires.writes c port).length) &&
+      (Spot.SecondWires.marks bits (Spot.SecondWires.writes c port)).all id) = true := h
+  have h := (Bool.and_eq_true_iff.1 h).2
   have hsz : (Spot.SecondWires.marks bits (Spot.SecondWires.writes c port)).size = bits := by
     unfold Spot.SecondWires.marks
     rw [size_marks_fold, Array.size_replicate]
@@ -94,7 +97,7 @@ theorem writesBit_of_mem_writes {c : _root_.Flock.Circuit} {port : String} {β :
   unfold Spot.SecondWires.writes at h
   obtain ⟨k, hk, h⟩ := List.mem_flatMap.1 h
   obtain ⟨j, hj, h⟩ := List.mem_flatMap.1 h
-  have hk' := List.mem_range.1 hk
+  have hk' : k < c.upv := Nat.lt_of_lt_of_le (List.mem_range.1 hk) (Nat.min_le_left _ _)
   have hj' : j < (c.leavesOut.getD k #[]).size := List.mem_range.1 hj
   generalize hfind : (Spot.SecondWires.outRows c).find? (fun r =>
     decide (r.2.1 ≤ (c.leavesOut.getD k #[]).getD j 0) &&
@@ -167,7 +170,7 @@ theorem writesBit_of_mem_writes {c : _root_.Flock.Circuit} {port : String} {β :
           rw [hsome]
           rfl
         unfold writesBit
-        refine List.any_eq_true.2 ⟨k, hk, List.any_eq_true.2 ⟨j, hj, ?_⟩⟩
+        refine List.any_eq_true.2 ⟨k, List.mem_range.2 hk', List.any_eq_true.2 ⟨j, hj, ?_⟩⟩
         rw [hmod, hgate, hpos]
         simp
       · rw [ite_eq_right hcol] at h

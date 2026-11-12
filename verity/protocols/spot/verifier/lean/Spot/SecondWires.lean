@@ -24,6 +24,8 @@ at the size of what it reads; no check calls it.
   reader port's bits (`marks`), and one pass over the bitmap. It reads no unit of a batch, since the leaves are one
   unit's and the same in every unit, and no row of the unit net: a leaf's bit `t` is on a computed row exactly when its
   column `col·WORD + 16 j + t` is at or past the net's inputs, `min (inWords·WORD) constPos`, and before its constant.
+  Its work follows the lists the file holds, never a number in it: `writes` passes over the instances whose leaves the
+  file lists, at most `upv`, and `covers` marks a bitmap only where the port is no wider than the bits listed.
 * `decided` is the three together, and `failures` each one's refusal: `second-wire-rows`, `second-part-names` and
   `second-wire-widths`, with its reason.
 
@@ -62,13 +64,14 @@ def outRows (c : Flock.Circuit) : List (String × Nat × Nat) :=
 returned leaf `j` of an instance `k`, where the leaf's output word `x` is one of the row's, from the row's first word
 `lo`, and the bit's column `col·WORD + 16 j + t` is a computed row of the unit net: at or past its inputs
 (`min (inWords·WORD) constPos`) and before its constant. One entry a leaf's bit, the leaf looked up among the output
-rows; the same in every unit. -/
+rows; the same in every unit. The instances are those under `upv` whose leaves the file lists: one past the list
+returns no leaf. -/
 def writes (c : Flock.Circuit) (port : String) : List Nat :=
   let rows := outRows c
   let cp := c.unit.constPos
   let nIn := min (c.unit.inWords * Flock.WORD) cp
   let base := (c.unit.outGroups.getD 0 default).col * Flock.WORD
-  (List.range c.upv).flatMap fun k =>
+  (List.range (min c.upv c.leavesOut.size)).flatMap fun k =>
     let ls := c.leavesOut.getD k #[]
     (List.range ls.size).flatMap fun j =>
       match rows.find? fun r => decide (r.2.1 ≤ ls.getD j 0) && decide (ls.getD j 0 < r.2.1 + r.2.2) with
@@ -84,8 +87,11 @@ def writes (c : Flock.Circuit) (port : String) : List Nat :=
 def marks (n : Nat) (l : List Nat) : Array Bool :=
   l.foldl (fun a i => a.setIfInBounds i true) (Array.replicate n false)
 
-/-- **Circuit file `c` writes every bit under `bits` of its output row `port`** (`writes`, marked once). -/
-def covers (c : Flock.Circuit) (port : String) (bits : Nat) : Bool := (marks bits (writes c port)).all id
+/-- **Circuit file `c` writes every bit under `bits` of its output row `port`** (`writes`, marked once): no more bits
+than it lists, which a list that holds each needs, and every bit of the bitmap set. -/
+def covers (c : Flock.Circuit) (port : String) (bits : Nat) : Bool :=
+  let l := writes c port
+  decide (bits ≤ l.length) && (marks bits l).all id
 
 /-- **A reader's port is no wider than what its writer writes**: for each wire, every bit under the `bits` of each
 port of the wire's name in the reader's circuit file is one the writer's circuit file writes on the wire's output row
