@@ -1,6 +1,6 @@
 """`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.AuditRun` as
-`ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
+`ra_cases.session` replays them, and `period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
 
@@ -139,8 +139,8 @@ def test_a_small_periods_answers_agree(server) -> None:
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "dropping": "reject", "unverified": "undecided"}
     honest = got["honest"]
     assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
-    draws = sum(s for _, s in honest["profile"]["windows"])
-    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + draws, 2 ** 64), honest
+    sampled = sum(s for _, s in honest["profile"]["windows"])
+    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + sampled, 2 ** 64), honest
 
 
 def _covered(kw: dict) -> bool:

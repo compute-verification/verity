@@ -140,7 +140,7 @@ def registry_inputs(take) -> dict:
     place among those sampled."""
     registry = read_back(take) if take(st.integers(0, 2)) == 0 else None
     live = {n: (None, 0) for n in (registry or {}).get("live", ())}
-    ops, drawn = [], []
+    ops, registered = [], []
     for _ in range(take(st.integers(1, 6))):
         kind = take(st.sampled_from(["fresh", "fresh", "fresh", "register", "session", "event", "close", "close",
                                      "live", "drawn"]))
@@ -149,8 +149,8 @@ def registry_inputs(take) -> dict:
             ops.append(r)
             n = r["node"]
             if n not in live:
-                live[n] = (len(drawn), 0)
-                drawn.append(n)
+                live[n] = (len(registered), 0)
+                registered.append(n)
             if kind == "fresh":
                 index, k = live[n]
                 ops.append(session_op(take, index))
@@ -158,9 +158,9 @@ def registry_inputs(take) -> dict:
                     live[n] = (index, k + 1)
                 ops += script(take, n, k)
         elif kind == "session":
-            ops.append(session_op(take, take(st.integers(0, len(drawn) - 1)) if drawn else None))
+            ops.append(session_op(take, take(st.integers(0, len(registered) - 1)) if registered else None))
         elif kind == "event":
-            ops.append(event_op(take, take(st.sampled_from(drawn)) if drawn else node(take)))
+            ops.append(event_op(take, take(st.sampled_from(registered)) if registered else node(take)))
         else:
             n = node(take)
             ops.append({"op": kind, "node": n})
