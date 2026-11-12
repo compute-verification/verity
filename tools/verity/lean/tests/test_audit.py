@@ -1804,9 +1804,10 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
                 odd.add(name)
         return reads, odd, loose
 
-    reads, odd, loose = walk([("audit", {"policy", "current"}), ("proved", {"policy", "qpol"}), ("replay_step", {"policy"})])
-    # `final_replay(*args)` is `replay_step(*args)`, walked from here; `Pipeline` keeps the lock, and only to hand it to
-    # `replay_step`; `facts_key` reads `FINDINGS_SECTIONS` by a variable
+    reads, odd, loose = walk([("audit", {"policy", "current"}), ("proved", {"policy", "qpol"}),
+                              ("replay_in_steps", {"policy"})])
+    # `final_replay(*args)` is `replay_in_steps(*args)`, walked from here, which only hands the lock to `replay_step`;
+    # `Pipeline` keeps the lock, and only to hand it to `replay_step`; `facts_key` reads `FINDINGS_SECTIONS` by a variable
     assert loose == {"audit -> final_replay"} and odd == {"Pipeline.__init__", "facts_key"}, (loose, odd)
     pipeline = ast.unparse(next(n for n in module.body if isinstance(n, ast.ClassDef) and n.name == "Pipeline"))
     assert pipeline.count("self.policy") == 2 and "replay_step(self.pkg, self.policy," in pipeline
@@ -5006,8 +5007,8 @@ NCI_CONSTANTS = {"Nci.admissible": ("def", "admissible"), "Nci.values": ("def", 
 
 def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_says_it_names():
     """A dotted name that ends in a field on a variable (`D.D.Trace`, `Verity.Circuit.Trace D.D` by field notation) is
-    renamed where `--moved` moved the constant the build says that field stands for (`fields`): Nci's two premises over a
-    trace, as the lock keyed them before `Verity.Circuit.Transcript` moved, take their entries' places with no hand edit,
+    renamed where `--moved` moved the constant the build says that field stands for (`fields`): two premises over a
+    trace, as a lock keyed them before `Verity.Circuit.Transcript` moved, take their entries' places with no hand edit,
     and `--update` keys them as printed. Without the move, or with no constant the build reports for the field, each
     fails and `--update` drops it."""
     for d in "Dd":
@@ -7438,6 +7439,39 @@ def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_p
     assert calls == [["P.A", "P.B"]] and p.batches[-1]["checked"] == 0 and "error" not in p.batches[-1]
 
 
+def test_a_batch_leaves_a_listed_module_and_what_imports_it_to_the_final_replay(tmp_path, monkeypatch):
+    """A batch runs at the batch's threads, and with `--closure` checks what its modules import: so a module the replay
+    is to check in a step of its own (`replay_first`) is in no batch, and neither is a module that imports it, until that
+    step has stored it. The batch's facts are then those of the modules left, closed under their imports."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/Heavy.lean", "P/Uses.lean", "P/Top.lean"])
+    p.closure = True
+    imports = {"D": [], "P.A": ["D"], "P.Heavy": ["D"], "P.Uses": ["P.Heavy"], "P.Top": ["P.Uses", "P.A"]}
+    for m in imports:
+        (tmp_path / f"{m}.olean").write_text(m)
+    facts = {"graph": {m: {"olean": str(tmp_path / f"{m}.olean"), "imports": i} for m, i in imports.items()},
+             "modules": ["P.A", "P.Heavy", "P.Uses", "P.Top"], "axioms": []}
+    monkeypatch.setattr(A.Pipeline, "copied", lambda self, mods, work: (facts, []))
+    monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "P.Heavy", "threads": 1, "why": "w"},
+                                                        {"module": "P.Elsewhere", "threads": 1, "why": "w"}])
+    calls = []
+    monkeypatch.setattr(A, "replay_step", lambda *a, **k: calls.append((a[2]["modules"], sorted(a[2]["graph"]))) or
+                        ([], {"checked": len(a[2]["modules"]), "phases": {}, "peak_gib": 0}))
+    p.replay_cache.mkdir()
+    p._replay(list(facts["modules"]))
+    assert calls == [(["P.A"], ["D", "P.A"])] and p.batches[-1]["left"] == 3 and p.batches[-1]["modules"] == 4
+    p._replay(["P.Heavy", "P.Uses"])
+    assert len(calls) == 1 and p.batches[-1] | {"seconds": 0} == {"modules": 2, "left": 2, "checked": 0, "seconds": 0}
+    A.store_replay(p.replay_cache, A.replay_keys(facts, "t")["P.Heavy"], "P.Heavy")
+    p._replay(list(facts["modules"]))
+    assert calls[1:] == [(facts["modules"], sorted(imports))] and "left" not in p.batches[-1]
+
+    def unreadable(pkg):
+        raise RuntimeError("the list does not read")
+    monkeypatch.setattr(A, "replay_first", unreadable)
+    p._replay(["P.A"])
+    assert len(calls) == 2 and "the list does not read" in p.batches[-1]["error"], "the final replay reports it"
+
+
 def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_bytes_in_place(tmp_path, monkeypatch):
     """A batch's `.olean` files under a `.lake` the build writes (the package's, a fetched package's) are copied once into
     the snapshot, every part, and named there, the search path too; the toolchain's stay where they are. Their keys are
@@ -7606,6 +7640,169 @@ def test_a_pipelined_closure_replay_of_module_system_files_leaves_the_final_one_
                   closure=True)
     assert not [f for f in rep["failures"] if f.startswith("replay")], rep["failures"]
     assert counts(rep) == (0, batch["checked"]) and rep["replay"]["closure"]["checked"] == 0, rep["replay"]
+
+
+def test_a_replay_plan_checks_each_listed_module_first_alone_at_its_threads_and_then_the_rest():
+    """`replay_plan`: a step for each listed module the package audits that has not passed, in the list's order, alone,
+    at its stated threads and never more than the replay's own; then the rest at the replay's own. An entry that names
+    no audited module, or one that passed, plans no step, and a package with no entry has the one step."""
+    first = [{"module": "P.Heavy", "threads": 2, "why": "w"}, {"module": "P.Wide", "threads": 64, "why": "w"},
+             {"module": "P.Gone", "threads": 1, "why": "w"}, {"module": "P.Done", "threads": 1, "why": "w"}]
+    modules = ["P.A", "P.Wide", "P.Heavy", "P.Done", "P.B", "P.Old"]
+    passed = {"P.Done", "P.Old"}.__contains__
+    assert A.replay_plan(modules, first, passed, 16) == [(["P.Heavy"], 2), (["P.Wide"], 16), (["P.A", "P.B"], 16)]
+    assert A.replay_plan(modules, first, passed, 1) == [(["P.Heavy"], 1), (["P.Wide"], 1), (["P.A", "P.B"], 1)]
+    assert A.replay_plan(modules, [], passed, 16) == [(["P.A", "P.Wide", "P.Heavy", "P.B"], 16)]
+    assert A.replay_plan(modules, first, lambda m: True, 16) == [([], 16)]
+
+
+def test_the_modules_a_replay_checks_first_are_read_from_the_file_beside_the_tool(tmp_path, monkeypatch):
+    """`replay_first`: a package's entries of `replay-first.json`, by its path from the repository's root, in the file's
+    order; none for another package, for one outside the repository, or where the file is absent. A file of another
+    schema, or with an entry that lacks its reason, states no count of threads or names a module twice, is refused with
+    what the file holds, and `replay_in_steps` then fails the package rather than check it in one step unseen. The
+    tool's own file reads."""
+    monkeypatch.setattr(A, "ROOT", tmp_path)
+    pkg, path = tmp_path / "a" / "pkg", tmp_path / A.REPLAY_FIRST
+    heavy = {"module": "P.Heavy", "threads": 2, "why": "its declarations each hold much memory in the kernel"}
+    wide = {"module": "P.Wide", "threads": 1, "why": "the same"}
+    def write(packages, schema=A.REPLAY_FIRST_SCHEMA):
+        path.write_text(json.dumps({"schema": schema, "packages": packages}))
+    write({"a/pkg": [heavy, wide], "b": [wide]})
+    assert A.replay_first(pkg, path) == [heavy, wide] and A.replay_first(tmp_path / "b", path) == [wide]
+    assert A.replay_first(tmp_path / "c", path) == [] and A.replay_first(tmp_path.parent / "outside", path) == []
+    assert A.replay_first(pkg, tmp_path / "absent.json") == []
+    for bad in ({"a/pkg": [heavy | {"threads": 0}]}, {"a/pkg": [heavy | {"threads": "2"}]}, {"a/pkg": [heavy | {"threads": True}]},
+                {"a/pkg": [heavy | {"why": " "}]}, {"a/pkg": [{k: v for k, v in heavy.items() if k != "why"}]},
+                {"a/pkg": [heavy | {"note": "more"}]}, {"a/pkg": [heavy, heavy | {"threads": 1}]}, {"a/pkg": ["P.Heavy"]},
+                [heavy]):
+        write(bad)
+        with pytest.raises(RuntimeError, match="replay-first.json does not read as"):
+            A.replay_first(pkg, path)
+    write({"a/pkg": [heavy]}, schema="lean-replay-first/v0")
+    with pytest.raises(RuntimeError, match="does not read as"):
+        A.replay_first(pkg, path)
+    path.write_text("{")
+    with pytest.raises(RuntimeError, match="JSONDecodeError"):
+        A.replay_first(pkg, path)
+    monkeypatch.setattr(A, "TOOL", tmp_path)
+    fails, stats = A.replay_in_steps(pkg, {"roots": ["P"]}, {}, "t", tmp_path, None)
+    assert [f.code for f in fails] == ["lean"] and "replay-first.json does not read as" in fails[0] and stats["checked"] == 0
+    monkeypatch.undo()
+    own = json.loads((A.HERE / A.REPLAY_FIRST).read_text())
+    assert own["schema"] == A.REPLAY_FIRST_SCHEMA
+    assert [A.replay_first(A.ROOT / p) for p in own["packages"]] == list(own["packages"].values())
+
+
+def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_step_reuses_it(tmp_path, monkeypatch):
+    """`replay_in_steps` on a stubbed `Replay.lean`, with two of the package's modules listed and one it does not have.
+    Each listed module goes to a `Replay.lean` that names it alone, at its stated threads and never more than the
+    replay's own, stated to `lean` as its `-j` (the pool of its tasks is the machine's without it), and is stored under
+    the key the whole replay computes; the last step names them `--reused` and checks the rest as a replay without a
+    list does, with no `-j`. The stats count each stored module as checked, so the modules checked, the
+    failures and the cache's entries are the one step's. A listed step the kernel rejects stores nothing, so the last
+    step checks its module with the rest and fails as the one step does. A second replay plans no step. Without a cache
+    it may write, the replay is the one step and says so."""
+    graph = {"Init": [], "P.A": ["Init"], "P.Heavy": ["P.A"], "P.Wide": ["Init"], "P.B": ["P.Heavy", "P.Wide"]}
+    facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["P.A", "P.Heavy", "P.Wide", "P.B"],
+             "axioms": []}
+    first = [{"module": "P.Wide", "threads": 64, "why": "w"}, {"module": "P.Heavy", "threads": 2, "why": "w"},
+             {"module": "P.Gone", "threads": 1, "why": "w"}]
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+    monkeypatch.setenv("LEAN_NUM_THREADS", "8")
+    calls, rejected = [], set()
+
+    def run(cmd, cwd, log, timeout=None):
+        rest = cmd[cmd.index("--run") + 3:]
+        cut = rest.index("--reused") if "--reused" in rest else len(rest)
+        flag = cmd[cmd.index("-j") + 1] if "-j" in cmd[:cmd.index("--run")] else None
+        assert flag == next((a.split("=")[1] for a in cmd if a.startswith("LEAN_NUM_THREADS=")), None), cmd
+        calls.append((flag, rest[:cut], rest[cut + 1:]))
+        bad = sorted(rejected & set(rest[:cut]))
+        A.Path(cmd[cmd.index("--run") + 2]).write_text(json.dumps({"rejected": bad} if bad else {"axioms": []}))
+        return (1 if bad else 0), ""
+
+    monkeypatch.setattr(A, "run", run)
+
+    def replay(cache, listed=first, **kw):
+        monkeypatch.setattr(A, "replay_first", lambda pkg: listed)
+        calls.clear()
+        fails, stats = A.replay_in_steps(tmp_path, {"roots": ["P"]}, facts, "t", tmp_path, cache and tmp_path / cache, **kw)
+        entries = sorted(p.stem for p in (tmp_path / cache).glob("*.json")) if cache else None
+        return [f.split("\n")[0] for f in fails], stats, entries, list(calls)
+
+    fails, stats, entries, ran = replay("listed")
+    assert ran == [("8", ["P.Wide"], []), ("2", ["P.Heavy"], []), (None, ["P.A", "P.B"], ["P.Heavy", "P.Wide"])]
+    assert [(s["module"], s["threads"], s["stored"], s["failures"]) for s in stats["first"]] == \
+        [("P.Wide", 8, True, []), ("P.Heavy", 2, True, [])]
+    plain = replay("plain", [])
+    assert plain[3] == [(None, ["P.A", "P.Heavy", "P.Wide", "P.B"], [])] and "first" not in plain[1]
+    assert (fails, stats["checked"], stats["reused"], entries) == (plain[0], plain[1]["checked"], plain[1]["reused"], plain[2])
+    assert fails == [] and (stats["checked"], stats["reused"]) == (4, 0) and entries == ["P.A", "P.B", "P.Heavy", "P.Wide"]
+    fails, stats, entries, ran = replay("listed")
+    assert ran == [(None, [], ["P.A", "P.Heavy", "P.Wide", "P.B"])] and stats["first"] == []
+    assert fails == [] and (stats["checked"], stats["reused"]) == (0, 4)
+
+    rejected.add("P.Heavy")
+    fails, stats, entries, ran = replay("listed-bad")
+    assert ran == [("8", ["P.Wide"], []), ("2", ["P.Heavy"], []), (None, ["P.A", "P.Heavy", "P.B"], ["P.Wide"])]
+    assert [(s["module"], s["stored"]) for s in stats["first"]] == [("P.Wide", True), ("P.Heavy", False)]
+    assert stats["first"][1]["failures"] == ["replay: the kernel rejected a declaration under P, in P.Heavy (exit 1):"]
+    plain = replay("plain-bad", [])
+    assert (fails, stats["checked"], stats["reused"], entries) == (plain[0], plain[1]["checked"], plain[1]["reused"], plain[2])
+    assert fails == stats["first"][1]["failures"] and stats["checked"] == 4 and entries == ["P.A", "P.B", "P.Wide"]
+    rejected.clear()
+
+    for cache, kw in ((None, {}), ("unwritten", {"store": False})):
+        fails, stats, entries, ran = replay(cache, **kw)
+        assert ran == [(None, ["P.A", "P.Heavy", "P.Wide", "P.B"], [])] and stats["first"].startswith("not used: ")
+        assert fails == [] and stats["checked"] == 4 and not entries
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_replay_in_listed_steps_checks_accepts_and_rejects_what_the_one_step_does(tmp_path, monkeypatch, sandboxed_node):
+    """On real builds, each audited twice on cold caches, as one step and with modules listed (`replay_first`): the same
+    modules checked, the same failures, the same axioms and the same keys stored. The module controls, with `Modular.Uses`
+    listed, whose proof uses theorems of modules it imports privately: its own step loads them as an import does and the
+    kernel accepts it. The control with a declaration that skipped the kernel, with `Control.Thms`, `Control.Bad` and a
+    module it does not have listed: the first is stored by its step, the second is rejected in its step and again in the
+    last, as in the one step. Only a real replay shows `Replay.lean` taking a set of one module on its imports, and the
+    keys of a step meeting those of the whole replay."""
+    def audit(pkg, cache, first):
+        monkeypatch.setattr(A, "replay_first", lambda pkg: first)
+        return A.audit(pkg, tmp_path / cache / "out", update=True, runs=False, log=lambda *_: None,
+                       replay_cache=tmp_path / cache, store=True)
+
+    def same(pkg, tag, first):
+        one, listed = audit(pkg, f"{tag}-one", []), audit(pkg, f"{tag}-listed", first)
+        assert counts(listed) == counts(one) and listed["axioms"] == one["axioms"]
+        assert [f.split("\n")[0] for f in listed["failures"]] == [f.split("\n")[0] for f in one["failures"]]
+        assert sorted(p.name for p in (tmp_path / f"{tag}-listed").glob("*.json")) == \
+            sorted(p.name for p in (tmp_path / f"{tag}-one").glob("*.json"))
+        assert "first" not in one["replay"]
+        return one, listed
+
+    modules = tmp_path / "modules"
+    shutil.copytree(A.FIXTURES / "modules", modules, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=modules, check=True, capture_output=True, env=A.lake_env())
+    one, listed = same(modules, "modules", [{"module": "Modular.Uses", "threads": 1, "why": "w"}])
+    assert one["failures"] == [] and counts(one) == (5, 0), one["failures"]
+    (step,) = listed["replay"]["first"]
+    assert (step["module"], step["threads"], step["stored"], step["failures"]) == ("Modular.Uses", 1, True, [])
+
+    control = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", control, ignore=shutil.ignore_patterns(".lake"))
+    kernel = kernel_control(control)
+    subprocess.run(["lake", "build"], cwd=control, check=True, capture_output=True, env=A.lake_env())
+    one, listed = same(control, "control", [{"module": "Control.Thms", "threads": 2, "why": "w"},
+                                             {"module": "Control.Bad", "threads": 1, "why": "w"},
+                                             {"module": "Control.Gone", "threads": 1, "why": "w"}])
+    assert counts(one) == (5, 0) and [f for f in one["failures"] if f.startswith(kernel["fails"])]
+    thms, bad = listed["replay"]["first"]
+    assert (thms["module"], thms["stored"], thms["failures"]) == ("Control.Thms", True, [])
+    assert (bad["module"], bad["stored"]) == ("Control.Bad", False) and bad["failures"][0].startswith(kernel["fails"])
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
