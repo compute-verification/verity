@@ -56,7 +56,7 @@ from types import SimpleNamespace
 FORMAT = "grader-handover/v1"
 READ = "grader-products/v1"
 #: the capture of training's slowdown code the grader reads beside (its `capture.products.CAPTURE`)
-CAPTURE = "4.23.0"
+CAPTURE = "4.25.0"
 THE_CODE = "training's slowdown code"
 #: its package, which sits in `benchmarks/training_slowdown`
 PACKAGE = "training_slowdown"

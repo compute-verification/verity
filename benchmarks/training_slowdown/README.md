@@ -98,8 +98,8 @@ weight at its width.
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
 shape, traces its step on a CPU as a job does after its last step (`traced.traced_step`, on fake tensors: the job's
-program, since a route's step runs under bf16 autocast on a CPU as on a GPU), prints the dtypes that step's circuit
-prices its matrix products in (`priced in`), and reads the
+program, since a route's step runs under bf16 autocast on a CPU as on a GPU), prints the dtypes that step's matrix
+products are priced in (`priced in`: attention's at the width the card's kernel computes them at), and reads the
 slowdown on the traced step from the one entry point (`calculator.slowdown`): the least slowdown of any partition of
 that step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
@@ -253,8 +253,11 @@ with it is θ's, a buffer a step writes is an updated weight from that write on,
 where the counter can't see makes the run invalid, as for a weight. |C| counts the circuit a trace of the step holds:
 each product by its shape and each elementwise multiplication at one MAC an element (`flops.py`), and a fused attention
 kernel as the ops the math kernel computes attention by, which are the ones a trace runs: the forward's two scalings and
-two products, and in the backward the products and scalings of the gradients the step asks for. A job's record is the
-same under either kernel, and its counted step is its trace's (`tests/test_run.py`). A fused optimizer kernel is one op,
+two products, and in the backward the products and scalings of the gradients the step asks for. The card's fused
+backward computes the scores again, a fifth product, which this count leaves out because a circuit reads the
+forward's. A job's record has the same ops, shapes and MACs under either kernel, in the dtype its kernel ran them in
+(a fused kernel in the query's, the math kernel in float32 for a 16-bit call), and its counted step is its trace's,
+which prices a call's ops in the query's dtype too (`tests/test_run.py`). A fused optimizer kernel is one op,
 priced at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing
 a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW
 counts 8 multiplications a parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4,
@@ -282,11 +285,16 @@ reachable.
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read, each in the dtype it was traced in. The capture runs attention on torch's math path, so a step under
-bf16 autocast has its attention products in float32, as that path computes them from upcast operands and as the
-train-step circuit wires them; its other products are bf16. A trace of a capture before
-`capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products, and that capture's rule prices them in
-bf16 (`capture.products.priced_dtype`); the rule goes when the stored records it reads are traced again. The
+are read: each in the dtype it was traced in, and those of a scaled-dot-product attention call in the dtype of the
+call's query. The capture runs attention on torch's math path, so a step under bf16 autocast has its attention
+products in float32, as that path computes them from operands it casts up; its other products are bf16. On the card
+a fused kernel computes the call at the query's width, so the trace's float32 products stand in for the kernel's and
+are priced as the kernel's: the capture states each call's query's dtype (a row's `attention`), and |C| and the
+rows read it (`capture.products.priced_dtype`, which names the premise and its edge: a call the card serves on its
+math path is priced low by the trace, and the job's count sees it). A trace of a capture before
+`capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products and states no call, and that capture's
+rule prices every forward or backward product wider than bf16 in bf16; the rule goes when the stored records it
+reads are traced again. The
 capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
 so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the

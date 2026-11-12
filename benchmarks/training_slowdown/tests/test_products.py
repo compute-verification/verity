@@ -2,6 +2,7 @@
 H = 256, past the K at which the GEMM rate rule changes (3^1.5·√(k/32), 235 at the console's k)."""
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 
@@ -11,7 +12,7 @@ import torch.nn.functional as tF
 from torch import nn
 
 from training_slowdown import calculator, policy, work
-from training_slowdown.capture import capture_step, capture_steps, products
+from training_slowdown.capture import capture_step, capture_steps, products, trace
 
 V, H, B, CTX = 16, 256, 4, 8
 SHAPES = {"emb": [V, H], "fc": [H, H], "head": [V, H]}
@@ -46,23 +47,25 @@ def test_a_steps_rows_and_their_kinds():
 
 def test_the_capture_and_the_stored_records_capture_are_the_two_that_are_read():
     """Every stored record was traced by the capture's 4.12.9 rows, which are read still, by that capture's rule
-    (`priced_dtype`); this capture's are the first priced in the dtype each was traced in. Moving `CAPTURE` moves
-    the grader's with it, and dropping 4.12.9 from `READS` needs every stored record traced again."""
+    (`priced_dtype`); from `PRICED_AS_TRACED_FROM` on a product is priced in the dtype its trace's |C| counts it in,
+    and this capture's rows state the attention call each is of. Moving `CAPTURE` moves the grader's with it, and
+    dropping 4.12.9 from `READS` needs every stored record traced again."""
     assert products.READS == ("4.12.9", products.CAPTURE)
-    assert products.CAPTURE == products.PRICED_AS_TRACED_FROM == "4.23.0"
+    assert (products.PRICED_AS_TRACED_FROM, products.CAPTURE) == ("4.23.0", "4.25.0")
 
 
 def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_one_in_bf16():
-    """One rule: a product's price is its traced dtype's Definition, which is what the step's circuit counts it at.
-    The rule of the captures before `PRICED_AS_TRACED_FROM` stays for their traces alone: a forward or backward
-    product they traced wider than bf16 (attention's, which every capture traces in float32) is priced in bf16, an
-    optimizer's in its own, and a trace that states no capture is read as theirs."""
+    """One rule: a product's price is the Definition of the dtype the trace's |C| counts it in: its traced dtype's,
+    and for a product of an attention call the call's query's (`attention`), whatever it was traced in. The rule of
+    the captures before `PRICED_AS_TRACED_FROM` stays for their traces alone: a forward or backward product they
+    traced wider than bf16 (attention's, which every capture traces in float32) is priced in bf16, an optimizer's in
+    its own, and a trace that states no capture is read as theirs."""
     from training_slowdown import gates
 
-    def row(phase: str, dtype: str) -> dict:
+    def row(phase: str, dtype: str, attention: str | None = None) -> dict:
         return {"count": 1, "phase": phase, "op": "bmm", "dims": {"batch": 2, "m": 4, "k": 8, "n": 4},
-                "token_dims": ["batch"], "dtypes": [dtype, dtype], "affected": [True, True], "widths": [32, 32],
-                "self": False, "gathered": [False, False], "rates": [32.0, 32.0]}
+                "token_dims": ["batch"], "dtypes": [dtype, dtype], "attention": attention, "affected": [True, True],
+                "widths": [32, 32], "self": False, "gathered": [False, False], "rates": [32.0, 32.0]}
 
     f32, bf16 = gates.per_mac("gemm/f32"), gates.per_mac("gemm/bf16")
     assert f32 > bf16
@@ -76,14 +79,25 @@ def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_o
             assert products.priced_dtype(wide, earlier) == ("bfloat16" if repriced else "float32")
             assert products.priced(wide, earlier)["gates_per_mac"] == (bf16 if repriced else f32)
     assert products.priced_dtype(row("forward", "float32"), "4.24.1") == "float32"
+    for phase in ("forward", "backward"):
+        called = row(phase, "float32", "bfloat16")
+        assert (products.traced_dtype(called), products.counted_dtype(called)) == ("float32", "bfloat16")
+        assert products.priced_dtype(called, products.CAPTURE) == "bfloat16"
+        assert products.priced(called, products.CAPTURE)["gates_per_mac"] == bf16
+        assert products.priced(row(phase, "float32", "float32"), products.CAPTURE)["gates_per_mac"] == f32
+    # a row of a capture that states no call (no `attention`) is priced as traced
+    unstated = {k: v for k, v in row("forward", "float32").items() if k != "attention"}
+    assert products.priced_dtype(unstated, "4.23.0") == products.priced_dtype(unstated, products.CAPTURE) == "float32"
 
 
-RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "affected", "widths", "self", "gathered",
+       "rates"}
 PRICE = {"macs", "outputs", "paid", "b_c", "gates_per_mac", "cell_gates"}
 
 
 def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
-    """What a record keeps (`raw_on_dial`) holds each row's operands' dtypes and nothing a price decides, at the
+    """What a record keeps (`raw_on_dial`) holds each row's operands' dtypes, the attention call it is of (none in
+    this step) and nothing a price decides, at the
     console's k and at each other k of its dial, and pricing it after a round trip through JSON gives `rows`' rows at
     that k: a record's rows read where the grade prices them are the rows the capture would have stated."""
     model = Toy()
@@ -97,12 +111,13 @@ def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
     for a in [raw] + list(raw["at"].values()):
         b = products.rows(g, a["k"])
         assert set(a) >= {"k", "rows", "p_match"} and a["p_match"] == b["p_match"]
-        assert all(set(r) == RAW and r["dtypes"] == ["float32", "float32"] for r in a["rows"])
+        assert all(set(r) == RAW and r["dtypes"] == ["float32", "float32"] and r["attention"] is None
+                   for r in a["rows"])
         assert [products.priced(r, raw["capture"]) for r in a["rows"]] == b["rows"]
     assert raw["capture"] == products.CAPTURE
     for r in raw["rows"]:
         d, got = r["dims"], products.priced(r, raw["capture"])
-        assert set(got) == RAW - {"dtypes"} | PRICE
+        assert set(got) == RAW - {"dtypes", "attention"} | PRICE
         assert (got["macs"], got["outputs"]) == (d["batch"] * d["m"] * d["k"] * d["n"], d["batch"] * d["m"] * d["n"])
         assert got["paid"] == [work.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])]
         assert got["b_c"] == products.ACC_BITS
@@ -632,3 +647,120 @@ def test_a_gradient_scaled_by_its_clip_coefficient_is_elementwise(form, found):
     g = capture_steps([step] * 3, m, (torch.randn(2, 16, 8), torch.randn(2, 16, 4 if form == "clip" else 16)), measured=1,
                       optimizers=torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1))
     assert products.rows(g, policy.CONSOLE[1])["elementwise_products"] == found
+
+
+# --- an attention call's price -----------------------------------------------------------------------------------------
+AH, HEADS, AB, AS = 32, 2, 3, 8
+#: a call's head dim, its batch of heads, and what its ops count: one product's MACs, one scaling's (of q or of k),
+#: and one op's on the weights (dropout's, a trained mask's add)
+AE, AN = AH // HEADS, AB * HEADS
+PRODUCT, SCALING, WEIGHTS = AN * AS * AS * AE, AN * AS * AE, AN * AS * AS
+#: what each step's calls count, forward and backward, as (products, scalings, ops on the weights): a call's forward
+#: is two products and two scalings, its backward four and two; dropout scales the weights twice forward and once
+#: backward; a trained mask is added to the scores once; a call under no_grad has no backward
+CALLS = {"plain": (6, 4, 0), "dropout": (6, 4, 3), "mask": (6, 4, 1), "module": (6, 4, 0), "no grad": (8, 6, 0),
+         "wide": (6, 4, 0)}
+
+
+class Attending(nn.Module):
+    """An embedding, q, k and v projections, one attention call and a head. `how`: the call as it is, with dropout,
+    with a trained bias as its mask, made by `nn.MultiheadAttention`, made a second time under no_grad, or followed
+    by a product that the step computes in float32 with autocast turned off around it."""
+
+    def __init__(self, how: str) -> None:
+        super().__init__()
+        self.how = how
+        self.emb = nn.Embedding(V, AH)
+        self.q, self.k, self.v, self.head = (nn.Linear(AH, AH, bias=False) for _ in range(4))
+        if how == "mask":
+            self.bias = nn.Parameter(torch.zeros(1, 1))
+        if how == "module":
+            self.att = nn.MultiheadAttention(AH, HEADS, bias=False, batch_first=True)
+        if how == "wide":
+            self.side = nn.Parameter(torch.randn(AH, AH))
+
+    def forward(self, ids):
+        x = self.emb(ids)
+        if self.how == "module":
+            return self.head(self.att(x, x, x, need_weights=False)[0])
+        b, s, d = x.shape
+        q, k, v = (f(x).view(b, s, HEADS, d // HEADS).transpose(1, 2) for f in (self.q, self.k, self.v))
+        if self.how == "mask":
+            a = tF.scaled_dot_product_attention(q, k, v, attn_mask=self.bias.expand(s, s))
+        else:
+            a = tF.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=0.5 * (self.how == "dropout"))
+        if self.how == "no grad":
+            with torch.no_grad():
+                again = tF.scaled_dot_product_attention(q, k, v, is_causal=True)
+            a = a + again
+        a = a.transpose(1, 2).reshape(b, s, d)
+        if self.how == "wide":
+            with torch.autocast("cpu", enabled=False):
+                a = a + (a.float() @ self.side).to(a.dtype)
+        return self.head(a)
+
+
+def attending(how: str, autocast: bool, marked: bool = True):
+    """The capture of `Attending(how)`'s step, its forward under bf16 autocast or in float32; `marked` False: as a
+    capture that states no call takes it, every op in the dtype it was traced in."""
+    def loss(m, b):
+        with torch.autocast("cpu", dtype=torch.bfloat16, enabled=autocast):
+            out = m(b[0])
+        return tF.cross_entropy(out.float().flatten(0, 1), b[1].flatten())
+
+    torch.manual_seed(0)
+    m = Attending(how)
+    with pytest.MonkeyPatch.context() as patch:
+        if not marked:
+            patch.setattr(trace, "_marked_attention", contextlib.nullcontext)
+        return capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), loss,
+                            (torch.empty(AB, AS, dtype=torch.long), torch.empty(AB, AS, dtype=torch.long)))
+
+
+def _priced(g) -> list[dict]:
+    return [products.priced(r, products.CAPTURE) for r in products.raw_on_dial(g)["rows"]]
+
+
+@pytest.mark.parametrize("how", CALLS)
+def test_a_bf16_calls_ops_are_priced_at_16_bits_and_every_other_op_as_traced(how):
+    """A step under bf16 autocast: torch's math kernel, which the capture runs, computes the call's products in
+    float32 from operands it casts up, and the rows state the bf16 the call was made in (`attention`), which is
+    their price; no other row states a call, and every other row is priced as a capture that marks no call prices
+    it, a float32 product inside autocast at float32. The step's |C| is under that capture's by exactly the call's
+    ops (its products, its scalings, dropout's and a trained mask's add, forward and backward: the ops the counter
+    counts in a call, `flops.Counter._attention`) at the difference of the two dtypes' prices, and by nothing else;
+    its MACs are the same. Whatever makes the call: `nn.MultiheadAttention`, and a call that has no backward."""
+    from training_slowdown import gates
+
+    g, unmarked = attending(how, True), attending(how, True, marked=False)
+    raw = products.raw_on_dial(g)["rows"]
+    assert {(r["op"], tuple(r["dtypes"]), r["attention"]) for r in raw} == {
+        ("mm", ("bfloat16", "bfloat16"), None), ("bmm", ("float32", "float32"), "bfloat16"),
+        *([("mm", ("float32", "float32"), None)] if how == "wide" else [])}
+    assert sum(r["count"] * math.prod(r["dims"].values()) for r in raw if r["attention"]) == CALLS[how][0] * PRODUCT
+    bf16, f32 = gates.per_mac("gemm/bf16"), gates.per_mac("gemm/f32")
+    priced, before = _priced(g), _priced(unmarked)
+    assert {(r["op"], r["gates_per_mac"]) for r in priced} == {
+        ("mm", bf16), ("bmm", bf16), *([("mm", f32)] if how == "wide" else [])}
+    assert [r for r in priced if r["op"] != "bmm"] == [r for r in before if r["op"] != "bmm"]
+    assert {r["gates_per_mac"] for r in before if r["op"] == "bmm"} == {f32}
+    n_products, n_scalings, n_weights = CALLS[how]
+    elementwise = gates.per_mac("elementwise/f32") - gates.per_mac("elementwise/bf16")
+    assert products.step_gates(unmarked) - products.step_gates(g) == (
+        n_products * PRODUCT * (f32 - bf16) + (n_scalings * SCALING + n_weights * WEIGHTS) * elementwise)
+    assert (g.macs, g.elementwise_macs, g.c_macs) == (unmarked.macs, unmarked.elementwise_macs, unmarked.c_macs)
+    assert products.rows(g)["gates"] == products.step_gates(g)
+
+
+@pytest.mark.parametrize("how", ("plain", "dropout", "mask"))
+def test_a_float32_calls_ops_stay_at_32_bits(how):
+    """A step in float32: the call is made in float32, its rows say so, and its price is the traced one: the rows
+    and the step's |C| are those of a capture that marks no call."""
+    from training_slowdown import gates
+
+    g, unmarked = attending(how, False), attending(how, False, marked=False)
+    raw = products.raw_on_dial(g)["rows"]
+    assert {(r["op"], tuple(r["dtypes"]), r["attention"]) for r in raw} == {
+        ("mm", ("float32", "float32"), None), ("bmm", ("float32", "float32"), "float32")}
+    assert _priced(g) == _priced(unmarked) and {r["gates_per_mac"] for r in _priced(g)} == {gates.per_mac("gemm/f32")}
+    assert products.step_gates(g) == products.step_gates(unmarked) > 0

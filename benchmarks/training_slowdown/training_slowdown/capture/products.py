@@ -14,8 +14,11 @@ too (`raw_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
 
 What the capture measures and what a price adds are apart: `raw_on_dial` gives the rows with their operands' dtypes
 and no price, as a job's record keeps them, and `priced` makes a raw row the row `rows` states, so a record's rows are
-priced where they are read. A product is priced in the dtype it was traced in (`traced_dtype`), the dtype the step's
-circuit counts it in; the one exception is the rule of the captures before `PRICED_AS_TRACED_FROM` (`priced_dtype`).
+priced where they are read. A product is priced in the dtype the trace's |C| counts it in (`counted_dtype`): the
+one it was traced in (`traced_dtype`), and for a product of a scaled-dot-product attention call the dtype of the
+call's query (the row's `attention`), which the card's kernel computes it in and the trace's float32 product stands
+in for (`ATTENTION_PREMISE`). The one exception is the rule of the captures before `PRICED_AS_TRACED_FROM`
+(`priced_dtype`).
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates here are keyed by the capture's values
@@ -33,15 +36,19 @@ import operator
 import torch
 
 from training_slowdown.capture.structure import (
-    _GATHERS, _WALK, _closure, _dtype_name, _Flow, _gemms, _macs, _past, _phases, _pk, _shape, _slots)
+    _GATHERS, _WALK, _attention, _closure, _counted_dtype, _dtype_name, _Flow, _gemms, _macs, _past, _phases, _pk,
+    _shape, _slots)
 from training_slowdown.work import is_paid
 from training_slowdown.policy import CONSOLE
 
 #: the capture's version of these rows (training_slowdown's VERSION when they, or the rule that prices them, last
 #: changed), so a trace that has them is distinguishable from one traced before them
-CAPTURE = "4.23.0"
-#: the first capture whose every product is priced in the dtype it was traced in (`priced_dtype`)
+CAPTURE = "4.25.0"
+#: the first capture whose every product is priced in the dtype its trace's |C| counts it in (`priced_dtype`)
 PRICED_AS_TRACED_FROM = "4.23.0"
+#: the premise a trace's price of an attention call's products takes (`priced_dtype`), as published strings state it
+ATTENTION_PREMISE = ("each of attention's six matrix products is a 16-bit tensor-core dot product on the card; "
+                     "measured for the forward's two, read for the backward's four")
 #: the captures whose raw rows are read: this one, and the one the stored records were traced by
 READS = ("4.12.9", CAPTURE)
 #: the dtype the routes' autocast casts a step's forward to, which the rule of the captures before
@@ -128,23 +135,48 @@ def _gemm_price(phase: str, op: str, dtype: str | None) -> tuple[float, float]:
 
 
 def traced_dtype(row: dict) -> str | None:
-    """The dtype a raw row's product was traced in, operand A's: what the trace's circuit prices it at
-    (`capture.structure`'s GEMMs)."""
+    """The dtype a raw row's product was traced in, operand A's."""
     return row["dtypes"][0]
 
 
+def counted_dtype(row: dict) -> str | None:
+    """The dtype the trace's |C| counts a raw row's product in (`capture.structure._counted_dtype`): the query's of
+    the scaled-dot-product attention call that computes it, where the capture states one (the row's `attention`),
+    else the one it was traced in."""
+    return row.get("attention") or traced_dtype(row)
+
+
 def priced_dtype(row: dict, capture: str | None) -> str | None:
-    """The dtype a raw row's product is priced at, for a trace of `capture`: the one it was traced in
-    (`traced_dtype`). Under bf16 autocast that is float32 for attention's products: the capture runs attention on
-    torch's math path, which computes them from upcast operands, and the train-step circuit wires them so. The one
-    exception is the rule of the captures before `PRICED_AS_TRACED_FROM`, whose traces hold the same float32
-    products: a forward or backward GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`, and the trace's
-    circuit is not (`work.repriced`). The rule lasts as long as the stored records traced by those captures: the
-    rebuild that retraces them deletes it."""
+    """The dtype a raw row's product is priced at, for a trace of `capture`: the one the trace's |C| counts it in
+    (`counted_dtype`), so a slowdown over a trace's own |C| has one price.
+
+    That is the dtype the product was traced in, but for the products of a scaled-dot-product attention call, whose
+    price is the card's kernel's and not the traced product's. The capture runs a call on torch's math path, which
+    computes a 16-bit call from operands it casts up, so the trace holds float32 products there; a step's circuit
+    built product by product to the trace computes them on that path too, until it wires the card's kernel. On the
+    path a job runs the card's fused kernel computes the call, in the dtype of its query, and the job's count writes
+    the call's ops in that dtype (`flops.Counter._attention`). The trace's float32 products stand in for the
+    kernel's, and their price is the kernel's: the query's dtype as the call took it, which the capture states at
+    the call (`capture.trace`'s marker, the row's `attention`). A float32 job's call stays float32, and so does a
+    float32 product a step computes outside a call, under autocast or not.
+
+    The premise (`ATTENTION_PREMISE`): each of attention's six matrix products is a 16-bit tensor-core dot product on
+    the card; measured for the forward's two, read for the backward's four. Its edge: the trace is taken under the
+    math kernel and cannot see the card's choice, so a call the card serves on its math path (fused kernels turned
+    off, or a call none of them takes) is computed in float32 and priced low by the trace; the job's count sees it.
+    |C| counts a call's other ops (its scalings, dropout's, a mask's add) at the query's dtype too, not on the
+    premise but because the job's count prices them so (`capture.structure._counted_dtype`).
+
+    The one exception is the rule of the captures before `PRICED_AS_TRACED_FROM`, whose traces hold the same float32
+    products and state no call: a forward or backward GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`,
+    and the trace's circuit is not (`work.repriced`). The rule lasts as long as the stored records traced by those
+    captures: the rebuild that retraces them deletes it."""
     from training_slowdown.capture.structure import _dtype_bits
 
+    if _priced_as_traced(capture):
+        return counted_dtype(row)
     dtype = traced_dtype(row)
-    if not _priced_as_traced(capture) and row["phase"] in ("forward", "backward") and dtype is not None and \
+    if row["phase"] in ("forward", "backward") and dtype is not None and \
             _dtype_bits(getattr(torch, dtype)) > _dtype_bits(getattr(torch, AUTOCAST)):
         return AUTOCAST
     return dtype
@@ -161,7 +193,8 @@ def _priced_as_traced(capture: str | None) -> bool:
 
 def step_gates(graph) -> float:
     """The step's |C| in gates for a step captured by capture_step, each counted op at
-    training_slowdown.gates' price for its dtype as training_slowdown.capture.structure prices it: GEMMs (`_gemm_price`),
+    training_slowdown.gates' price for the dtype training_slowdown.capture.structure counts it in (`_counted_dtype`:
+    the traced one, an attention call's ops at its query's): GEMMs (`_gemm_price`),
     elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
     activation with an updated parameter (a gather of an updated table by token data at the circuit's gather, any other
     at its work)."""
@@ -172,6 +205,10 @@ def step_gates(graph) -> float:
     vs = _Values(graph)
     phases = _phases(vs.gm)
     total = 0.0
+
+    def dtype(n, x) -> str | None:
+        return _counted_dtype(vs.attention, n, _dtype_name(x))
+
     for n in vs.nodes:
         if n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload):
             continue
@@ -181,11 +218,11 @@ def step_gates(graph) -> float:
         gs = _gemms(n)
         if gs:
             for g in gs:
-                total += _macs(g.dims) * _gemm_price(ph, name, _dtype_name(g.operands[0]))[0]
+                total += _macs(g.dims) * _gemm_price(ph, name, dtype(n, g.operands[0]))[0]
             continue
         k, kind = _other_macs(n)
         if kind:
-            total += k * per_mac(kind_of(ph, "", name, _dtype_name(n))[0])
+            total += k * per_mac(kind_of(ph, "", name, dtype(n, n))[0])
         if ph != "forward" or _is_view(n.target):
             continue
         ops = _arg_nodes(n)
@@ -196,7 +233,7 @@ def step_gates(graph) -> float:
                               n.meta["val"].numel())
             total += gm_ * per_mac("gather", _dtype_bits(n.args[0].meta["val"].dtype))
         elif not src and not kind and acts and any(vs.updated_param(a) for a in ops):
-            total += _work(n) * per_mac(kind_of(ph, "", name, _dtype_name(n))[0])
+            total += _work(n) * per_mac(kind_of(ph, "", name, dtype(n, n))[0])
     return total
 
 
@@ -211,6 +248,7 @@ class _Values:
         self.token_dims = {(m.node, m.part): m.token_dims for m in graph.matmuls}
         self.attrs, self.updated = base.attrs, graph.updated
         gm = self.gm = base.gm
+        self.attention = _attention(gm)
         self.nodes = list(gm.graph.nodes)
         pos = {n: i for i, n in enumerate(self.nodes)}
         vnodes = [list(t.gm.graph.nodes) for t in varied]
@@ -803,17 +841,20 @@ def raw_on_dial(graph) -> dict:
     "rows", "p_match", "elementwise_products", "at"} at the console's k, and under "at" each other k of the console's
     dial (`DIAL_K`, by its integer as a string) the rows and P-match check there ({"k", "rows", "p_match"}): a
     product's rates move with k (a block of k bits pays a GEMM output at 4K²·b²/k), which only the captured step
-    gives. A raw row is {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self",
-    "gathered", "rates"}: `dtypes` its two operands' (A first, as `_dtype_name` names them), from which `priced`
-    takes its price. A job's record keeps these (its `trace`), so neither the dial nor a new price needs a retrace."""
+    gives. A raw row is {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "affected", "widths",
+    "self", "gathered", "rates"}: `dtypes` its two operands' as traced (A first, as `_dtype_name` names them), and
+    `attention` the dtype of the query of the scaled-dot-product attention call that computes the product (None
+    outside a call), from which `priced` takes its price. A job's record keeps these (its `trace`), so neither the
+    dial nor a new price needs a retrace."""
     return _raw_on_dial(_Values(graph), graph)
 
 
 def priced(row: dict, capture: str | None) -> dict:
-    """A raw row (`raw_on_dial`'s, a job's trace's) of a trace of `capture` as `rows` states it: its `dtypes`
-    replaced by what they price. `macs` and `outputs` are its dims' (one GEMM's of its count), `paid` whether each
-    operand is paid at its passed width (`is_paid` of its rate), `b_c` the partial sums' width (`ACC_BITS`), and
-    `gates_per_mac` and `cell_gates` its price (`_gemm_price` of its phase, its op and `priced_dtype`)."""
+    """A raw row (`raw_on_dial`'s, a job's trace's) of a trace of `capture` as `rows` states it: its `dtypes` and
+    its `attention` replaced by what they price. `macs` and `outputs` are its dims' (one GEMM's of its count), `paid`
+    whether each operand is paid at its passed width (`is_paid` of its rate), `b_c` the partial sums' width
+    (`ACC_BITS`), and `gates_per_mac` and `cell_gates` its price (`_gemm_price` of its phase, its op and
+    `priced_dtype`)."""
     d = row["dims"]
     gpm, cell = _gemm_price(row["phase"], row["op"], priced_dtype(row, capture))
     return {"count": row["count"], "phase": row["phase"], "op": row["op"], "dims": dict(d),
@@ -876,7 +917,8 @@ def _raw(vs: _Values, graph, k: float, made: dict, gathered: set) -> dict:
         d = g.dims
         found.append({"count": 1, "phase": m.phase, "op": _pk(n.target),
                       "dims": {x: d[x] for x in ("batch", "m", "k", "n")}, "token_dims": sorted(m.token_dims),
-                      "dtypes": [_dtype_name(A), _dtype_name(B)], "affected": list(aff),
+                      "dtypes": [_dtype_name(A), _dtype_name(B)], "attention": vs.attention.get(n),
+                      "affected": list(aff),
                       "widths": [_passed_width(vs, n, A), _passed_width(vs, n, B)],
                       "self": _root(A, scale=True) is _root(B, scale=True),
                       "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)],

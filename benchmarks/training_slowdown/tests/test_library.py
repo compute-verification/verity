@@ -106,14 +106,15 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert whole["trains"] == {"parameters": SHAPE["parameters"], "of": SHAPE["parameters"], "share": 1.0}
     assert part["trains"]["parameters"] == SHAPE["parameters"] - VOCAB * 16 and part["trains"]["share"] < 1
     assert whole["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0}
-    # the table's trace is the job's program, bf16 under autocast on this CPU, but for attention's products, which
-    # the capture traces in float32, as torch's math path computes them; so a step prints two dtypes with their
-    # shares, the larger first. Shampoo's own products are float32 too, as it runs them
-    for traced in (whole, part):
-        dtypes = traced["step"]["priced_in"]
-        assert set(dtypes) == {"bfloat16", "float32"} and sum(dtypes.values()) == pytest.approx(1)
-        assert list(dtypes.values()) == sorted(dtypes.values(), reverse=True)
-        assert library.line(traced)[3] == ", ".join(f"{d} {s:.2%}" for d, s in dtypes.items())
+    # the table's trace is the job's program, bf16 under autocast on this CPU. Attention's products, which the
+    # capture traces in float32 as torch's math path computes them, are priced in the bf16 their calls were made in,
+    # so AdamW's step prints one dtype. Shampoo's own products are float32, as it runs them, and its step prints two
+    # with their shares, the larger first
+    assert whole["step"]["priced_in"] == {"bfloat16": 1.0} and library.line(whole)[3] == "bfloat16"
+    dtypes = part["step"]["priced_in"]
+    assert set(dtypes) == {"bfloat16", "float32"} and sum(dtypes.values()) == pytest.approx(1)
+    assert list(dtypes.values()) == sorted(dtypes.values(), reverse=True)
+    assert library.line(part)[3] == ", ".join(f"{d} {s:.2%}" for d, s in dtypes.items())
     approx = part["step"]["approximated"]
     # each of the seven matrices' two factors, an eigendecomposition each, at its side cubed
     assert approx["macs"] == 4 * 2 * 16 ** 3 + 3 * (16 ** 3 + 32 ** 3)
@@ -127,12 +128,19 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert beside["step"]["gates"] > part["step"]["gates"] and library.line(beside)[2] == "100%"
 
 
-def test_a_row_prints_the_dtypes_its_circuit_prices_the_steps_products_in():
-    """The cell is the trace's own: each product's dtype as traced, with its share of the products' MACs where the
-    step has more than one, the largest first."""
+def test_a_row_prints_the_dtypes_the_steps_products_are_priced_in():
+    """The cell is the trace's own: the dtype each product is priced in (its own as traced, an attention call's at
+    its query's), with its share of the products' MACs where the step has more than one, the largest first."""
     wide = raw("optimizer", [], 1024, 1024, 1024) | {"dtypes": ["float32", "float32"]}
     assert library.priced_in(trace()) == {"bfloat16": 1.0}
     assert library.priced_in(trace([*STEP, wide])) == {"bfloat16": 6 / 7, "float32": 1 / 7}
+    # a 16-bit attention call's products, which the capture traces in float32 and prices at the call's width
+    called = raw("forward", ["m"], 1024, 1024, 1024) | {"dtypes": ["float32", "float32"]}
+    new = {"capture": products.CAPTURE}
+    assert library.priced_in(trace([*STEP, called | {"attention": "bfloat16"}]) | new) == {"bfloat16": 1.0}
+    assert library.priced_in(trace([*STEP, called | {"attention": "float32"}]) | new) == {
+        "bfloat16": 6 / 7, "float32": 1 / 7}
+    assert library.PRICED_IN.endswith(f"on the premise that {products.ATTENTION_PREMISE}.")
     row = {"entry": "e", "route": "r", "slowdown": 2.0, "binds": "b", "trains": {"share": 1.0}}
     assert library.line(row | {"step": {"priced_in": {"bfloat16": 1.0}}})[3] == "bfloat16"
     assert library.line(row | {"step": {"priced_in": {"bfloat16": 6 / 7, "float32": 1 / 7}}})[3] == (
@@ -144,19 +152,20 @@ def test_a_trace_whose_products_and_circuit_differ_in_price_has_no_slowdown_over
     """One slowdown has one price. A trace of a capture before `capture.products.PRICED_AS_TRACED_FROM` holds
     attention's products in float32; that capture's rule prices them in bf16, and the trace's own circuit counts
     them in float32. Over that circuit there is no slowdown, and the reason names the product and the fix. Over a
-    run's own gates the same trace is read as it was, and a trace of this capture is priced as traced on both
-    sides."""
+    run's own gates the same trace is read as it was, and a trace of this capture is priced as its circuit counts
+    it on both sides, a call's products too."""
     c, pol = GATES / 100, {"c_gates": GATES / 100, "k_bits": K}
     wide = raw("forward", ["m"], 1024, 1024, 1024, 2) | {"dtypes": ["float32", "float32"]}
     rows = [wide, *STEP[1:]]
     stored, new = trace(rows) | {"capture": "4.12.9"}, trace(rows) | {"capture": products.CAPTURE}
     assert [r["count"] for r in work.repriced(stored)] == [2] and work.repriced(new) == work.repriced(trace()) == []
+    assert work.repriced(trace([wide | {"attention": "bfloat16"}, *STEP[1:]]) | {"capture": products.CAPTURE}) == []
     got = library.bound(stored, c, K)
     assert got == {"slowdown": None, "binds": (
         "unmeasured: 2 of the traced step's matrix products are priced in another dtype than its circuit counts "
-        "them in (the largest: 2 forward mm of 1024×1024 by 1024×1024, traced in float32 and priced in bfloat16), "
-        "and one slowdown has one price; retrace the record with training's slowdown code 4.23.0 or later, which "
-        "prices each product as traced")}
+        "them in (the largest: 2 forward mm of 1024×1024 by 1024×1024, counted in float32 and priced in bfloat16), "
+        f"and one slowdown has one price; retrace the record with training's slowdown code {products.CAPTURE} or "
+        "later, which prices each product as its circuit counts it")}
     assert calculator.slowdown(pol, stored)["read"] == {"capture": "4.12.9"}
     # the same trace over a run's count of |C|, as the grade reads a stored record: its products at bf16, as before
     over_run = calculator.slowdown(pol, stored, {"gates": GATES})

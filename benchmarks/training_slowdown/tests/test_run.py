@@ -2,6 +2,7 @@ import contextlib
 import copy
 import hashlib
 import json
+import math
 import os
 import signal
 import sys
@@ -352,7 +353,8 @@ def test_a_job_keeps_its_last_checkpoints_whole_state_only_when_asked(tmp_path):
     assert not any("path" in cp for cp in rec["checkpoints"][:-1])
 
 
-RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "affected", "widths", "self", "gathered",
+       "rates"}
 
 
 def test_the_job_traces_its_routes_step(ran):
@@ -373,12 +375,14 @@ def test_the_job_traces_its_routes_step(ran):
     # the forward's ops that read the update, each over the step's tokens: block 0's MLP reads its three trained
     # matrices in products at the 16 bits the route's autocast runs them in, on this CPU as on a GPU, and the norms
     # above it, which autocast runs in fp32, read what it wrote at 32. Attention's products (`bmm`) are traced in
-    # fp32, as torch's math path computes them from upcast operands, and every other product in bf16
+    # fp32, as torch's math path computes them from upcast operands, and every other product in bf16; the rows state
+    # the bf16 the calls were made in, which is their price
     assert all(u[2:4] == [u[2], tr["tokens"]] for u in tr["updated"])
     assert sorted({u[4] for u in tr["updated"]}) == [16, 32] and len([u for u in tr["updated"] if u[4] == 16]) >= 3
-    assert {(r["op"] == "bmm", tuple(r["dtypes"])) for r in tr["rows"]} == {
-        (False, ("bfloat16", "bfloat16")), (True, ("float32", "float32"))}
+    assert {(r["op"] == "bmm", tuple(r["dtypes"]), r["attention"]) for r in tr["rows"]} == {
+        (False, ("bfloat16", "bfloat16"), None), (True, ("float32", "float32"), "bfloat16")}
     priced = [products.priced(r, tr["capture"]) for r in tr["rows"]]
+    assert len({r["gates_per_mac"] for r in priced if r["phase"] != "optimizer"}) == 1
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
     # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the
@@ -564,6 +568,57 @@ def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job
     assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
                        "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
     assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+
+
+@pytest.mark.parametrize("job", ["whole", "lora"])
+def test_a_jobs_count_and_its_trace_agree_in_gates_at_attention(tmp_path, job):
+    """On the path a job runs, a fused attention kernel under the route's bf16 autocast, the counter counts each
+    call as the math kernel's ops in the query's dtype (`flops.Counter._attention`, on stand-ins `_shaped` makes in
+    it), and the trace, which is taken under the math kernel and holds those ops in float32, counts them in the
+    query's dtype too (`capture.structure._counted_dtype`). So at attention the traced step's gates are the counted
+    step's: the ops the counter writes for the kernel in that step, each at its dtype's price, against the gates the
+    traced circuit holds at the nodes of its calls. At float32's price the same ops are more, which is what the
+    circuit held before it read the call's dtype."""
+    import numpy as np
+
+    from training_slowdown import gates
+    from training_slowdown.capture.structure import _attention
+
+    added, dtypes = {}, {}
+    inner, shaped = flops.Counter._attention, flops.Counter._shaped
+
+    def attention(self, func, *rest):
+        before = {key: list(n) for key, n in self.cur.log.items()}
+        out = inner(self, func, *rest)
+        into = added.setdefault(self.cur.index, {})
+        for key, n in self.cur.log.items():
+            was = before.get(key, [0, 0])
+            if n != was:
+                into[key] = [a + b - c for a, b, c in zip(into.get(key, [0, 0]), n, was)]
+        return out
+
+    def stand_in(self, like, shape):
+        dtypes.setdefault(self.cur.index, set()).add(str(like.dtype).removeprefix("torch."))
+        return shaped(self, like, shape)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", attention)
+        patch.setattr(flops.Counter, "_shaped", stand_in)
+        rec, tr, g, _ = counted_and_traced(tmp_path, 3, **JOBS[job])
+    assert rec["invalid"] == []
+    step = rec["steps"][tr["step"]]["step"]
+    kernel, calls = added[step], _attention(g.graph)
+    assert dtypes[step] == set(calls.values()) == {"bfloat16"} and {key[2] for key in kernel} == {"bmm", "mul"}
+
+    def counted(dtype: str) -> float:
+        return sum(macs * gates.per_mac(gates.kind_of(*key[:3], dtype)[0]) for key, (_, macs) in kernel.items())
+
+    at = [i for i, n in enumerate(g.graph.graph.nodes) if n in calls]
+    traced = float(g.circuit.gates[np.isin(g.circuit.node, at)].sum())
+    assert traced == counted("bfloat16") > 0 and counted("float32") > traced
+    assert {r["attention"] for r in tr["rows"] if r["op"] == "bmm"} == {"bfloat16"}
+    assert sum(r["count"] * math.prod(r["dims"].values()) for r in tr["rows"] if r["attention"]) == sum(
+        macs for key, (_, macs) in kernel.items() if key[2] == "bmm")
 
 
 def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):

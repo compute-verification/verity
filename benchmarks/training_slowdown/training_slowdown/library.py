@@ -11,14 +11,15 @@ after its last step (`traced.trace_step`: on fake tensors, so it trains nothing 
 reads the slowdown on that step from the benchmark's one entry point (`calculator.slowdown`): the least slowdown of
 any partition of the traced step into the policy's blocks, by the slowdown calculator's bound of record on the work
 the theorem charges (the products whose two operands both depend on the update). It prints one row an entry: the
-share of the start's parameters its step trains (`trains`), the dtypes its circuit prices the step's matrix products
-in (`priced_in`), its slowdown and what binds, and how much of the step's gates the capture approximates where it
+share of the start's parameters its step trains (`trains`), the dtypes the step's matrix products are priced in
+(`priced_in`), its slowdown and what binds, and how much of the step's gates the capture approximates where it
 does (`approximated`); then the entry's planned run at that slowdown over each fleet and period (`periods`). With
 `--out` it writes the rows with what each read to `DIR/library.json`.
 
 An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU. The row prints the
-dtypes the traced products are priced in: bf16, and float32 for attention's, which the capture traces as torch's
-math path computes them from upcast operands and as the train-step circuit wires them.
+dtypes the traced products are priced in. Attention's are priced at the dtype of the call's query, the width the
+card's kernel computes them at: the capture traces a call as torch's math path computes it, in float32 from operands
+it casts up, and those products stand in for the kernel's (`capture.products.priced_dtype`, with the premise).
 
 A row has no slowdown, and says why, where the capture refuses the step, where the step breaks a premise the rows'
 rates take, where the trace doesn't classify the products at the policy's k, and where the entry's E keeps less than
@@ -50,8 +51,9 @@ FLOOR = "the floor: blocks of at most c gates cover the step's gates, and the th
 EMPTY = "the floor: no product of the step has two operands the update reaches, so the theorem charges nothing"
 TRAINS = ("trains: the share of the start's parameters the traced step updates. An entry that trains less charges "
           "fewer products, so its slowdown is not its optimizer's.")
-PRICED_IN = ("priced in: the dtypes the step's circuit prices its matrix products in, each product's own as traced, "
-             "with each one's share of the products' MACs where there is more than one.")
+PRICED_IN = ("priced in: the dtypes the step's matrix products are priced in, with each one's share of the products' "
+             "MACs where there is more than one: each product's own as traced, and an attention call's at its "
+             f"query's, on the premise that {products.ATTENTION_PREMISE}.")
 PARTS = {
     "traced": "each entry's step, by the capture on fake tensors at the config's batch and the start's shape: its "
               "gates, its tokens, the parameters it updates and its products' MACs, output wires and operand "
@@ -139,11 +141,11 @@ def approximated(graph) -> dict:
 
 
 def priced_in(trace: dict) -> dict:
-    """The dtypes a traced step's circuit prices its matrix products in: each product's own as traced
-    (`capture.products.traced_dtype`), with its share of the products' MACs, the largest first."""
+    """The dtypes a traced step's matrix products are priced in (`capture.products.priced_dtype`: each product's own
+    as traced, an attention call's at its query's), with its share of the products' MACs, the largest first."""
     macs: dict = {}
     for r in trace["rows"]:
-        d = products.traced_dtype(r)
+        d = products.priced_dtype(r, trace.get("capture"))
         macs[d] = macs.get(d, 0) + r["count"] * math.prod(r["dims"].values())
     total = sum(macs.values())
     return {d: n / total for d, n in sorted(macs.items(), key=lambda x: -x[1])}

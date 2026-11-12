@@ -74,7 +74,7 @@ import numpy as np
 import torch
 
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from training_slowdown.capture.trace import BACKWARD, Capture, CaptureRefused
+from training_slowdown.capture.trace import ATTENTION, BACKWARD, Capture, CaptureRefused
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
 from training_slowdown.gates import kind_of, per_mac
@@ -299,9 +299,10 @@ class Matmul:
     width: int = 0
 
 
-def _phases(gm) -> dict:
-    """Each node's phase, from the `record_function` markers around it (module docstring of `trace`)."""
-    out, stack = {}, []
+def _marked(gm):
+    """Each node of the graph with the `record_function` markers around it, the innermost first (module docstring of
+    `trace`)."""
+    stack = []
     for n in gm.graph.nodes:
         name = _pk(n.target) if n.op == "call_function" else ""
         if name == "_record_function_enter_new":
@@ -311,8 +312,15 @@ def _phases(gm) -> dict:
                 stack.pop()
             if stack:
                 stack.pop()
+        yield n, [m for _, m in reversed(stack)]
+
+
+def _phases(gm) -> dict:
+    """Each node's phase, from the markers around it."""
+    out = {}
+    for n, markers in _marked(gm):
         ph = "forward"
-        for _, m in reversed(stack):
+        for m in markers:
             if m == BACKWARD:
                 ph = "backward"
                 break
@@ -321,6 +329,30 @@ def _phases(gm) -> dict:
                 break
         out[n] = ph
     return out
+
+
+def _attention(gm) -> dict:
+    """The nodes a scaled-dot-product attention call computes, forward and backward, each with the dtype of the
+    call's query as the call took it: the innermost ``te_capture::attention::DTYPE`` marker around it. That dtype is
+    the one |C| counts the node in (`_counted_dtype`)."""
+    out = {}
+    for n, markers in _marked(gm):
+        m = next((m for m in markers if m.startswith(ATTENTION)), None)
+        if m is not None:
+            out[n] = m[len(ATTENTION):]
+    return out
+
+
+def _counted_dtype(attention: dict, n, traced: str | None) -> str | None:
+    """The dtype |C| counts node `n` in, which was traced in `traced`: the query's of the scaled-dot-product
+    attention call that computes it (`_attention`), else the traced one.
+
+    The graph holds a call as the math backend computes it, from operands cast up to float32 where the query is 16
+    bits wide; on the path a job runs the card's fused kernel computes the call, in the query's dtype. So the call's
+    six matrix products are counted at the kernel's width, on the premise `capture.products.ATTENTION_PREMISE`. The
+    call's other counted ops (the scalings of q and of k, dropout's, a mask's add) are counted with them because the
+    job's count prices them so (`flops.Counter._attention`), which keeps a job's count and its trace op for op."""
+    return attention.get(n) or traced
 
 
 class _Flow:
@@ -622,7 +654,7 @@ class StepGraph:
             s = vshape(n, idx, None)
             return s is not None and any(vshape(n, idx, vs) != s for vs in vnodes)
 
-        phases = _phases(gm)
+        phases, attention = _phases(gm), _attention(gm)
         flow = _Flow(gm, phases, tok)
         attrs = base.attrs
         params = {t: v for t, v in attrs.items() if v[0] == "parameter"}
@@ -722,7 +754,7 @@ class StepGraph:
 
         def priced(n, macs, dtype, kind=None, width=16) -> None:
             if macs:
-                k = kind or kind_of(phases.get(n, "forward"), "", _pk(n.target), dtype)[0]
+                k = kind or kind_of(phases.get(n, "forward"), "", _pk(n.target), _counted_dtype(attention, n, dtype))[0]
                 node_gates[n] = node_gates.get(n, 0.0) + macs * per_mac(k, width)
 
         raw = []
