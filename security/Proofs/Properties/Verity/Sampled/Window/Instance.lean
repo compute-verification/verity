@@ -21,7 +21,8 @@ of the named `Prop`s below.
   committed files.
 * **The sampled names** (`WindowInstance.vocab`, at constructions `K` over the base, whose game and declared calls
   are the vocabulary's): v2's log, the binding's read finder and forger at `2t` calls, the further finders (the file
-  finders under `ecr/sha-512`, and at a window `K`'s two-continuation finders under `cr/sha-512`), the window's
+  finders under `ecr/sha-512`, and at a window `K`'s two-continuation finders under `cr/sha-512` and each member's
+  roots finder under `ecr/sha-512`, `rootsSpecs`), the window's
   premises at the projected strategy (`JointFinderCR`), no loss, and the window's δ (`Window.delta`) at the
   deployment's window, `⊤` where it runs none.
 * **The claim's transfer** (`ClaimTransfers`, `claimTransfers`): the units the extracted transcript doesn't bind are
@@ -241,9 +242,26 @@ noncomputable def strictSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteAr
   | some W => (List.finRange W.rounds).map (I.msgSpec K W θ F c) ++ [I.recordSpec K W θ F c, I.bindSpec K W θ F c]
   | none => []
 
+/-- **A member's roots finder as a further finder**: the finder that recomputes the member's roots
+(`Member.rootsFinder`), asked under `ecr/sha-512` at its calls (`Member.rootsCalls`), which no strategy changes. Its
+premise is `Member.RootsCR`. -/
+noncomputable def rootsSpec {nJ : ℕ} (m : Member nJ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
+  finder _ := m.rootsFinder
+  budget _ := m.rootsCalls
+  calls _ _ := Nat.le_refl _
+
+/-- **The members' roots finders as further finders**: at the deployment's window, each member's (`rootsSpec`), of
+the members with a proof block in the sample and of those with none; none elsewhere. -/
+noncomputable def rootsSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
+  match I.windows θ F with
+  | some W => W.ms.map fun m => I.rootsSpec m θ F c
+  | none => []
+
 noncomputable def findersOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c))
-  | .sampled => fun θ F c => I.fileSpecs θ F c ++ I.strictSpecs K θ F c
+  | .sampled => fun θ F c => I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c
   | a => I.base.finders a
 
 /-- **SPOT's window premises as deployed**: at the deployment's window, `JointShareV5`'s per-finder premises at the
@@ -352,9 +370,10 @@ noncomputable def liftOf (K' : WindowConstructions I.base) : WindowConstructions
 theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).finderCR .sampled θ F c σ) :
     (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 := by
-  have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
+  have hall := List.forall_iff_forall_mem.1
+    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
   have hl : finderCROf (I.fileSpecs θ F c) σ :=
-    List.forall_iff_forall_mem.2 fun f hf => hall f (List.mem_append_left _ hf)
+    List.forall_iff_forall_mem.2 fun f hf => hall f (List.mem_append_left _ (List.mem_append_left _ hf))
   obtain ⟨h1, h2⟩ := hl
   have lt2 : ((2 : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by norm_num)
   exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2⟩
@@ -367,20 +386,35 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Win
     (∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder W θ F c σ j)) ∧
       Claims.StrictBirthday Verity.sha512Msg (K.recordFinder W θ F c σ) ∧
       Claims.StrictBirthday Verity.sha512Msg (K.bindFinder W θ F c σ) := by
-  have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
+  have hall := List.forall_iff_forall_mem.1
+    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
   have hs : I.strictSpecs K θ F c =
       (List.finRange W.rounds).map (I.msgSpec K W θ F c) ++ [I.recordSpec K W θ F c, I.bindSpec K W θ F c] := by
     unfold strictSpecs
     rw [hW]
-  refine ⟨fun j => hall (I.msgSpec K W θ F c j) (List.mem_append_right _ ?_),
-    hall (I.recordSpec K W θ F c) (List.mem_append_right _ ?_),
-    hall (I.bindSpec K W θ F c) (List.mem_append_right _ ?_)⟩
+  refine ⟨fun j => hall (I.msgSpec K W θ F c j) (List.mem_append_left _ (List.mem_append_right _ ?_)),
+    hall (I.recordSpec K W θ F c) (List.mem_append_left _ (List.mem_append_right _ ?_)),
+    hall (I.bindSpec K W θ F c) (List.mem_append_left _ (List.mem_append_right _ ?_))⟩
   · rw [hs]
     exact List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_finRange j, rfl⟩)
   · rw [hs]
     exact List.mem_append_right _ (by simp)
   · rw [hs]
     exact List.mem_append_right _ (by simp)
+
+/-- **The members' roots finders' premises**: at the deployment's window, where the further finders meet theirs,
+each member's roots finder outputs a SHA-512 collision with probability at most its calls over `2^256`
+(`rootsSpecs`, `Window.RootsCR`). -/
+theorem rootsCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Window}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.windows θ F = some W)
+    (h : (I.vocab K).finderCR .sampled θ F c σ) : W.RootsCR := by
+  have hall := List.forall_iff_forall_mem.1
+    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
+  have hs : I.rootsSpecs θ F c = W.ms.map fun m => I.rootsSpec m θ F c := by
+    unfold rootsSpecs
+    rw [hW]
+  intro m hm
+  exact hall (I.rootsSpec m θ F c) (List.mem_append_right _ (by rw [hs]; exact List.mem_map.2 ⟨m, hm, rfl⟩))
 
 /-- **The claim's transfer at the deployment's windows** (`WindowDeployed.claim`, at the constructions `K`): where
 every member's roots fix their domains (`Window.RootsFix`), at a strategy whose extracted transcript fails the claim
@@ -437,7 +471,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
 /-- **`WindowDeployed` at the deployed vocabulary**, from what the claim reads of the window (`ClaimReads`,
 `claimTransfers`), at constructions whose read finder and forger are the binding's
 (`WindowConstructions.withBinding`): the leg's per-finder premises are `error`'s condition at this strategy
-(`strictSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
+(`strictSpecs`, `rootsSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
 (`Window.delta_extend`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimReads K) :
@@ -448,7 +482,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
   claim θ F W h hR c σ := I.claimTransfers K hC θ F W h hR c σ
   finderCR θ F W h c σ hcr hpr := by
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
-    exact ⟨hpr W h, hm, hr, hb⟩
+    exact ⟨hpr W h, hm, hr, hb, I.rootsCR K h hcr⟩
   delta θ F W h c σ :=
     le_of_eq ((Window.delta_extend W _ _ _).trans (I.deltaOf_some (I.windows_some h).1 _).symm)
 

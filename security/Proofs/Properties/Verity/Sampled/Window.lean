@@ -24,17 +24,24 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's
   coins widened by the coins a projection reads.
 * **The bound** (`Window.sessionDelta`, `Window.delta`): the sample's own miss of any set of more than an `ε` share of
   the population (`Window.drawMiss`) plus `JointAuditV5.eps`, the members' knowledge and binding terms summed,
-  `Σ_m (ε_ks,m + ε_bind,m)`, plus each member's registration's roots term (`Window.rootsErr`, `Member.rootsErr`,
-  `Live.rootsErr` at the member); then one two-continuation term per round of every member's session, the record's
-  and the bound digests', the coin trees' hiding term and the read finder's bound.
-* **The roots guard** (`Member.RootsFix`, `Window.RootsFix`, `le_add_rootsErr`): a probability that is at most `x`
-  wherever every member's roots at its public file's leaf map fix their domains is at most `x` plus the members' roots
-  terms, at every registration: a member whose roots don't is a SHA-512 collision its roots finder outputs, and its
-  term is then at least 1. So the claim's transfer is asked only where every member's roots fix their domains, of the
-  members with a proof block in the sample and of those with none alike.
+  `Σ_m (ε_ks,m + ε_bind,m)`, plus each member's registration's roots term (`Window.rootsErr`, `Member.rootsErr`):
+  its roots finder's SHA-512 calls over `2^256`, the form `Vocab.finderPr_le_crBound` gives the read finder; then one
+  two-continuation term per round of every member's session, the record's and the bound digests', the coin trees'
+  hiding term and the read finder's bound.
+* **One SHA-512 on messages** (`sha512Msg_eq`): the vocabulary's `Verity.sha512Msg` is the claims'
+  `Claims.Sampling.sha512Msg`, by definition, so a collision the claims' lemmas exhibit is one the vocabulary's
+  finders' premises speak of.
+* **The roots guard** (`Member.RootsFix`, `Window.RootsFix`, `Member.RootsCR`, `Window.RootsCR`,
+  `le_add_rootsErr`): where each member's roots finder meets its collision premise at its calls (`Member.RootsCR`,
+  `FinderSpec.CR` under `ecr/sha-512`), a probability that is at most `x` wherever every member's roots at its public
+  file's leaf map fix their domains is at most `x` plus the members' roots terms, at every registration: a member
+  whose roots don't is a SHA-512 collision its roots finder outputs, and its term is then at least 1. So the claim's
+  transfer is asked only where every member's roots fix their domains, of the members with a proof block in the
+  sample and of those with none alike.
 * **`Window.ks`**: Flock's bound at the window, `Flock.SecurityProofs.JointShareV5` applied, not proved again, under
-  the roots guard: a strategy of the window's audit at which, wherever every member's roots fix their domains, more
-  than an `ε` share of the population is incorrect is accepted with probability at most `Window.sessionDelta`.
+  the roots guard and the roots finders' premises: a strategy of the window's audit at which, wherever every
+  member's roots fix their domains, more than an `ε` share of the population is incorrect is accepted with
+  probability at most `Window.sessionDelta`.
 * **The projection's target** (`WindowCouplingTarget`): the sampled verdict in the period's game is at most as likely
   as the window's audit accepting (`JointAuditV5.Accepts`: the session of every member with a proof block in the
   sample) at the projected strategy, plus the two-continuation finders' terms, the hiding term, the read finder's
@@ -54,6 +61,11 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
+
+/-- **The vocabulary's SHA-512 on messages is the claims'** (`Verity.sha512Msg`, `Claims.Sampling.sha512Msg`): each
+is the compiled SHA-512 of the message's bytes, one function by definition. A finder's collision probability at one
+is its probability at the other. -/
+theorem sha512Msg_eq : Verity.sha512Msg = Claims.Sampling.sha512Msg := rfl
 
 /-- **A member of a window, as v2 sets its session up on the member's own statement**: `MemberV5`'s binders, each the
 value v2's check derives (the member's circuit file's parse, its public file over the circuit's empty public input
@@ -167,14 +179,40 @@ its ports with one root publish one domain. -/
 def RootsFix : Prop :=
   Flock.Bridge.RootFixesDomainL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n)
 
-/-- **The member's registration's roots term** (`Live.rootsErr`, at the member): `ecr/sha-512` at the finder that
-recomputes the member's roots at its public file's leaf map (`Flock.Bridge.rootsFinderL`, no coins,
-`Flock.Bridge.rootsCostL` SHA-512 calls), its calls over `2^256` where that finder meets `ecr/sha-512`: two of the
-member's ports with one root and different domains are a collision it finds. -/
-noncomputable def rootsErr : ℝ≥0∞ :=
-  Claims.ecrBound Claims.Sampling.sha512Msg
-    (Flock.Bridge.rootsFinderL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n))
-    (Flock.Bridge.rootsCostL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n))
+/-- **The member's roots finder** (`Flock.Bridge.rootsFinderL` at the member's public file's leaf map): no coins; it
+recomputes the member's roots and outputs the collision that two of its ports with one root and different domains
+are. -/
+noncomputable def rootsFinder : Claims.Finder :=
+  Flock.Bridge.rootsFinderL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n)
+
+/-- **The roots finder's SHA-512 calls** (`Flock.Bridge.rootsCostL`), on its one coin. -/
+noncomputable def rootsCalls : ℕ :=
+  Flock.Bridge.rootsCostL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n)
+
+/-- **The roots finder's collision premise** (`FinderSpec.CR` under `ecr/sha-512`, the form
+`Vocab.finderPr_le_crBound` reads the read finder's in): it outputs a SHA-512 collision, at the vocabulary's SHA-512,
+with probability at most its calls over `2^256`. -/
+def RootsCR : Prop := m.rootsFinder.Pr Verity.sha512Msg ≤ (m.rootsCalls : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **The member's registration's roots term**: the roots finder's calls over `2^256`, what `ecr/sha-512` gives a
+finder of that many calls (`RootsCR`). Two of the member's ports with one root and different domains are a collision
+the finder outputs. -/
+noncomputable def rootsErr : ℝ≥0∞ := ENNReal.ofReal ((m.rootsCalls : ℝ) / 2 ^ (256 : ℝ))
+
+/-- **A member's roots fix their domains, or its roots term is at least 1**, where its roots finder meets its
+premise (`RootsCR`): roots that don't expose a collision (`Flock.Bridge.fixesL_of_none`,
+`Flock.Bridge.rootsCollL_collides`) that the finder outputs on its one coin, at the claims' SHA-512 and so at the
+vocabulary's (`sha512Msg_eq`), so the premise puts its calls over `2^256` at 1 or more. -/
+theorem rootsFix_or_one_le (h : m.RootsCR) : m.RootsFix ∨ 1 ≤ m.rootsErr := by
+  cases hc : Flock.Bridge.rootsCollL m.D.unroll (Flock.Bridge.LeafMap.ofPublic m.D.unroll m.pub m.n) with
+  | none => exact Or.inl (Flock.Bridge.fixesL_of_none hc)
+  | some z =>
+    have hPr : m.rootsFinder.Pr Verity.sha512Msg = 1 := by
+      rw [sha512Msg_eq]
+      exact Flock.Bridge.PortRoots.finderPr_one fun _ =>
+        ⟨z.1, z.2, hc, Flock.Bridge.rootsCollL_collides (x := z.1) (y := z.2) hc⟩
+    have h1 : (1 : ℝ) ≤ (m.rootsCalls : ℝ) / 2 ^ (256 : ℝ) := hPr.symm.le.trans h
+    exact Or.inr (ENNReal.one_le_ofReal.2 h1)
 
 /-- **The member's part of a sample** of the window's population (`MemberV5.part`): its proof blocks the sample
 holds. -/
@@ -287,6 +325,9 @@ noncomputable def drawMiss : ℝ≥0∞ :=
 those with none. -/
 def RootsFix : Prop := ∀ m ∈ W.ms, m.RootsFix
 
+/-- **Every member's roots finder meets its collision premise** (`Member.RootsCR`). -/
+def RootsCR : Prop := ∀ m ∈ W.ms, m.RootsCR
+
 /-- **The registrations' roots term**: each member's (`Member.rootsErr`), summed. -/
 noncomputable def rootsErr : ℝ≥0∞ := (W.ms.map Member.rootsErr).sum
 
@@ -312,6 +353,9 @@ theorem extend_hidingTerm (S : Widening) : (W.extend S).hidingTerm = W.hidingTer
 /-- The roots term doesn't read the widening: the members are the window's. -/
 theorem rootsErr_extend (S : Widening) : (W.extend S).rootsErr = W.rootsErr := rfl
 
+/-- The roots finders' premises don't read the widening: the members are the window's. -/
+theorem rootsCR_extend (S : Widening) : (W.extend S).RootsCR ↔ W.RootsCR := Iff.rfl
+
 end Window
 
 /-- **`JointShareV5`'s per-finder SHA-512 premises at a window's audit `w` and a strategy `τ` of it**: `cr/sha-512` at
@@ -326,34 +370,37 @@ structure JointFinderCR (w : Flock.Guarantees.JointAuditV5) (τ : FlockSoundness
     (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
     (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t'
 
-/-- **The roots guard over members costs each member's roots term** (`Flock.Bridge.le_add_ecrBoundL`, a member at a
-time): a probability `p ≤ 1` that is at most `x` wherever every member's roots fix their domains is at most `x` plus
-the members' roots terms. -/
+/-- **The roots guard over members costs each member's roots term** (`Member.rootsFix_or_one_le`, a member at a
+time): where each member's roots finder meets its premise (`Member.RootsCR`), a probability `p ≤ 1` that is at most
+`x` wherever every member's roots fix their domains is at most `x` plus the members' roots terms. -/
 theorem le_add_rootsErr {nJ : ℕ} {p : ℝ≥0∞} (hp : p ≤ 1) : ∀ (ms : List (Member nJ)) (x : ℝ≥0∞),
-    ((∀ m ∈ ms, m.RootsFix) → p ≤ x) → p ≤ x + (ms.map Member.rootsErr).sum
-  | [], _, h => (h fun _ hm => absurd hm List.not_mem_nil).trans le_self_add
-  | m :: ms, x, h => by
-    have hm : (∀ m' ∈ ms, m'.RootsFix) → p ≤ x + m.rootsErr := fun hms =>
-      Flock.Bridge.le_add_ecrBoundL hp fun hm => h fun m' hm' => by
+    (∀ m ∈ ms, m.RootsCR) → ((∀ m ∈ ms, m.RootsFix) → p ≤ x) → p ≤ x + (ms.map Member.rootsErr).sum
+  | [], _, _, h => (h fun _ hm => absurd hm List.not_mem_nil).trans le_self_add
+  | m :: ms, x, hcr, h => by
+    have hm : (∀ m' ∈ ms, m'.RootsFix) → p ≤ x + m.rootsErr := fun hms => by
+      rcases m.rootsFix_or_one_le (hcr m (List.mem_cons.2 (Or.inl rfl))) with hf | h1
+      · refine (h fun m' hm' => ?_).trans le_self_add
         rcases List.mem_cons.1 hm' with e | hin
         · rw [e]
-          exact hm
+          exact hf
         · exact hms m' hin
+      · exact hp.trans (h1.trans le_add_self)
     rw [List.map_cons, List.sum_cons, ← add_assoc]
-    exact le_add_rootsErr hp ms (x + m.rootsErr) hm
+    exact le_add_rootsErr hp ms (x + m.rootsErr) (fun m' hm' => hcr m' (List.mem_cons.2 (Or.inr hm'))) hm
 
 /-- **The window's knowledge soundness at a claim that fails**: a strategy of the window's audit at which, wherever
 every member's roots fix their domains (`Window.RootsFix`), more than an `ε` share of the population's proof blocks
 is incorrect (`JointAuditV5.wrongSet`) is accepted, the session of every member with a proof block in the sample,
 with probability at most the window's error at `t` calls, where the per-finder premises hold at each member's
-session played alone. It is `Flock.SecurityProofs.JointShareV5` at the window, the sample's miss and the members'
-terms summed, under the roots guard (`le_add_rootsErr`), which costs each member's roots term. -/
+session played alone and each member's roots finder meets its own (`Window.RootsCR`). It is
+`Flock.SecurityProofs.JointShareV5` at the window, the sample's miss and the members' terms summed, under the roots
+guard (`le_add_rootsErr`), which costs each member's roots term. -/
 theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.joint t).game)
-    (hF : JointFinderCR (W.joint t) τ)
+    (hF : JointFinderCR (W.joint t) τ) (hcr : W.RootsCR)
     (hI : W.RootsFix → W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
     Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t :=
   show _ ≤ W.drawMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
-    le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) fun hR =>
+    le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) hcr fun hR =>
       (Verity.Game.prob_mono (fun _ ho => ⟨ho, hI hR⟩) _ τ).trans
         (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ hF.table hF.link W.ε)
 
@@ -395,14 +442,15 @@ noncomputable abbrev WindowConstructions.live {V : Vocab d α} (K : WindowConstr
   W.extend (K.coins W θ F c σ)
 
 /-- **The leg's per-finder SHA-512 premises at a strategy and the window `W`**: `JointShareV5`'s at the projected
-strategy and the strategy's calls (`JointFinderCR`), and `cr/sha-512` as the strict birthday bound at each
-two-continuation finder. -/
+strategy and the strategy's calls (`JointFinderCR`), `cr/sha-512` as the strict birthday bound at each
+two-continuation finder, and `ecr/sha-512` at each member's roots finder at its calls (`Window.RootsCR`). -/
 structure WindowFinderCR (V : Vocab d α) (K : WindowConstructions V) (W : Window) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop where
   session : JointFinderCR ((K.live W θ F c σ).joint (V.cost θ F c σ)) (K.project W θ F c σ)
   msg : ∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder W θ F c σ j)
   record : Claims.StrictBirthday Verity.sha512Msg (K.recordFinder W θ F c σ)
   bind : Claims.StrictBirthday Verity.sha512Msg (K.bindFinder W θ F c σ)
+  roots : W.RootsCR
 
 /-- **The coupling, the projection's target at the window `W`** (`CouplingTarget`, at a window): the plays of the
 period's game whose sampled verdict accepts are at most as likely as the plays of the window's audit, at the window
@@ -460,8 +508,8 @@ variable (V : Vocab d α) (k : Verity.Registration.Composite)
 target at composite `k`, from the coupling at each window (`WindowCouplingTarget`). Where `error`'s premises hold and
 the claim fails, the coupling bounds the verdict by the window's audit's acceptance at the projected strategy and the
 finders' terms; `Window.ks` (`JointShareV5`, under the roots guard) bounds the first by the sample's miss, the
-members' terms summed and their roots terms, the
-strict birthday bound each two-continuation finder, `FinderCR` the read finder and `LmsUnforgeable` the forger. -/
+members' terms summed and their roots terms, each roots finder's premise its own term, the strict birthday bound
+each two-continuation finder, `FinderCR` the read finder and `LmsUnforgeable` the forger. -/
 theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array ByteArray → Option Window}
     (hD : WindowDeployed V K S) (hCov : WindowCovers V k S)
     (hC : ∀ θ F W, S θ F = some W → WindowCouplingTarget V k K W θ F) : V.SpotSound k := by
@@ -489,7 +537,7 @@ theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array
   | some W =>
     have hFin := hD.finderCR θ F W hS c σ hfs hpr
     have hks := (K.live W θ F c σ).ks (V.cost θ F c σ) (K.project W θ F c σ) hFin.session
-      (fun hR => hD.claim θ F W hS hR c σ hI)
+      ((W.rootsCR_extend _).2 hFin.roots) (fun hR => hD.claim θ F W hS hR c σ hI)
     have hdel := hD.delta θ F W hS c σ
     unfold Window.delta at hdel
     rw [Window.extend_rounds, Window.extend_qM, Window.extend_hidingTerm] at hdel

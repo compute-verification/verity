@@ -27,8 +27,8 @@ Same shape as the one-member `remote_soundness_deployedAt` (`Sampled/Instance.le
 (`remote_soundness_of_subprotocols`) with its sampled leg `WindowInstance.spotSound`, which is
 `windowSpotSound_sessions` at the deployed vocabulary. The sampled leg's error at a window is `Window.delta`:
 `W.drawMiss + (W.joint t).eps` (`JointShareV5`: the one sample's own miss and `Σ_k (ε_ks,k + ε_bind,k)` at member
-`k`'s part of the one sample), each member's roots term (`Window.rootsErr`: `ecrBound` at the member's
-`rootsFinderL`, one a member, drawn or not), one two-continuation term per round of every member's session
+`k`'s part of the one sample), each member's roots term (`Window.rootsErr`: the calls of the member's
+`rootsFinderL` over `2^256`, one a member, drawn or not, its finder listed under `ecr/sha-512`), one two-continuation term per round of every member's session
 (`W.rounds = Σ_m m.rounds`, each member's closing round among them: 1026 a member at the deployed table), the
 record's, the bound digests', the hiding term, and the read finder's bound.
 
@@ -95,10 +95,18 @@ LmsUnforgeable remote only. Nothing else is introduced.
 ## What is left
 
 1. **`ClaimReads` from the per-member verifier.** `laid` from `laidHeld`; `share` and `units` from the parameters
-   and the committed files; `reads` from the files check on every member, drawn or not. That check is not in the
-   verifier: `runMembers` checks only the members a statement names. It goes in `Spot.OneStageZk.membersRun`, after
-   `rootsOf` and before `runMembers`, over every member of `ms` (`m.statement`, then its `ksFiles` and
+   and the committed files; `reads` from the files check on every member, drawn or not. That check is not in this
+   branch's verifier: `runMembers` checks only the members a statement names. It goes in
+   `Spot.OneStageZk.membersRun`, after `rootsOf` and before `runMembers`, over every member of `ms` (`m.statement`,
+   then its `ksFiles` and
    `population`), public files only, O(descriptor). The δ already pays its roots clause (`Window.rootsErr`).
+   The check and its property exist on proofs' branches, not here (`membersRun_files`: every member has
+   `Member.FilesHeld`; `Member.FilesChecked → MemberV5.Checked`). They give `ReadAt.checked` inside `reads` for
+   every member: `parsed` and `distinct` from `FilesHeld`'s ports and roots check and population check, `noPublic` by
+   definition, `fixes` being `reads`' own hypothesis. Missing: the lemma from the verifier's `FilesHeld` to the
+   window member's `FilesChecked.loads` and `.distinct` (the member's `I`, `D`, `pub`, `n` are the statement's), which
+   is `SetsUp`'s to give. `read`, `opens`, `consts` and `trace` of `ReadAt`, and `laid`, `share`, `units`, are not
+   theirs.
 2. **`WindowReads` and `WindowAt` from the per-member verifier** (the port). `WindowSessions` now takes
    `members : MemberForm.Accepted x.log` (the log is the read of lines `membersTreeReason` accepts) in place of
    `order` and `specs`, which are theorems (`Accepted.opensLast`, `Accepted.specs`). The several-member path still
@@ -107,8 +115,12 @@ LmsUnforgeable remote only. Nothing else is introduced.
    `tree-open` lines (`memberLine`), and refuses one of member k+1 before member k's closing round
    (`membersOrder_before_closing`, `memberLine_hello`). `OpensInOrder`, over the read's frames, still speaks of
    openings only: the same order on the read's `hello` frames is not stated.
-4. **The roots term's form.** `ecrBound` at `rootsFinderL` (the one-statement leg's), not a `FinderSpec` through
-   `finderPr_le_crBound`: `Verity.sha512Msg` and `Claims.Sampling.sha512Msg` have no proved equality.
+4. **The roots term's form.** Each member's roots finder is a further finder of the vocabulary (`rootsSpec`,
+   `rootsSpecs`, under `ecr/sha-512` at its calls), its premise `Member.RootsCR` in `error`'s condition and its term
+   its calls over `2^256` (`Member.rootsErr`), the form `finderPr_le_crBound` gives the read finder.
+   `Verity.sha512Msg = Claims.Sampling.sha512Msg` is `sha512Msg_eq`, by definition; the two definitions stay
+   (the vocabulary's in `Properties/Verity/Game.lean`, the claims' in `Proofs/Flock/Claims/Sampling/Path.lean`). The
+   one-statement leg's `Live.rootsErr` is still `ecrBound` at the claims' one.
 5. **The window's own class** (`row-table` roots and `registered` values): refused in the per-member form; the
    rows link is proofs'.
 6. `Window.hcls` stays a field of `Window` (`JointAuditV5.hcls_of_bounds` discharges it from bounds).
