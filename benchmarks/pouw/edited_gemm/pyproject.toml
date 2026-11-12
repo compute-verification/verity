@@ -13,13 +13,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # through, theory/checked_strip.py. test_egemm_ref.py holds egemm_ref.py to the receipt folds'
 # reference: `verity.protocols.pouw.receipts.receipt_conform`'s check, with the receipt_folds.py and vectors.json it
 # reads and the packages above it, which import nothing. test_eps_profile.py prices a made-up profile as the job
-# scripts do, with `eps_profile.py --mm benchmarks/pouw/machine_model`: the ACCEL model's `model` module and the data it
+# scripts do, with `eps_profile.py --mm benchmarks/machine_model`: the ACCEL model's `model` module and the data it
 # reads for the current vector's census (the workspace environment brings the package).
 inputs = ["benchmarks/pouw/exact_kit", "benchmarks/pouw/floored_gemm/derive.py", "benchmarks/pouw/floored_gemm/ref.py",
-          "benchmarks/pouw/machine_model/data/census", "benchmarks/pouw/machine_model/data/citations.toml",
-          "benchmarks/pouw/machine_model/data/model.toml", "benchmarks/pouw/machine_model/data/vectors",
-          "benchmarks/pouw/machine_model/verity_machine_model/__init__.py",
-          "benchmarks/pouw/machine_model/verity_machine_model/model.py", "benchmarks/pouw/theory/checked_strip.py",
+          "benchmarks/machine_model/data/census", "benchmarks/machine_model/data/citations.toml",
+          "benchmarks/machine_model/data/model.toml", "benchmarks/machine_model/data/vectors",
+          "benchmarks/machine_model/verity_machine_model/__init__.py",
+          "benchmarks/machine_model/verity_machine_model/model.py", "benchmarks/pouw/theory/checked_strip.py",
           "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
           "verity/protocols/pouw/receipts/__init__.py", "verity/protocols/pouw/receipts/receipt_conform.py",
           "verity/protocols/pouw/receipts/receipt_folds.py", "verity/protocols/pouw/receipts/vectors.json"]

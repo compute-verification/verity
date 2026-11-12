@@ -5,7 +5,7 @@ device code on a node, disassembled and its dotted opcodes counted, then diffed 
 prices. An opcode the menu doesn't price is a row a person reads: can it head a committed word, and by which route.
 The probes beside it answer what the diff raises: the rate of a class the census leaves unpriced, what ptxas lowers a
 PTX form to, and what `multimem` does on a card with no NVLink. The opcode table's rows
-(`../machine_model/data/cover/rows.toml`) cite these probes.
+(`../../machine_model/data/cover/rows.toml`) cite these probes.
 
 ## Jobs
 
@@ -40,7 +40,7 @@ python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]            
 
 - `sass_count.py` is stdlib only, so it runs on a node's own Python beside the toolkit.
 - `diff_menu.py` buckets every opcode of the census and of NVIDIA's instruction-set table for the architecture
-  (`../machine_model/data/cover/sass_isa_tables.json`): priced on a lane, tensor or side route, a mover, harmless, or a
+  (`../../machine_model/data/cover/sass_isa_tables.json`): priced on a lane, tensor or side route, a mover, harmless, or a
   gap (a tensor form with no rate, a product on no route, a paired multiply counted as one, a word the model prices at
   nothing), and flags where its own table and the model's classifier (`../facet_break/loads.py`'s `class_of`) disagree.
   Its module docstring defines each bucket.
