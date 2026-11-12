@@ -1,8 +1,8 @@
 # The NVIDIA RTX PRO 6000 Blackwell Server Edition: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
-# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/Sm120.lean is held to this file. The
-# host the card sits in is its own card (xeon-6776p-2s.toml on our node).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
+# runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/Sm120.lean is held to
+# this file. The host the card sits in is its own card (xeon-6776p-2s.toml on our node).
 
 kind = "gpu"
 sku = "rtx-pro-6000-server"
@@ -25,14 +25,24 @@ tensor = { value = 2430, unit = "MHz", mark = "ceiling", source = "clock.sm: the
 memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (max and application memory clock 12481 MHz); art:529e118ea9ea (supported memory clocks [12481, 405], offset range [0, 0]); art:198a12d9c2e8 (a memory clock lock at 12981 MHz clamped, NVML still reading 12481 MHz, and a +500 MHz memory offset refused; no application clock above 12481 MHz was tried)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
-# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own.
+# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own. dram is
+# the device memory a program gets and dram_installed the memory on the board, a second reading of the same store.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "whitepaper v1.1: a 256 KB register file an SM, 64 Ki 32-bit registers" }
-reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words) and the uniform predicates (7 bits a warp, 11 words)" }
+reg_extra = { value = 4187, unit = "word/SM", mark = "ceiling", source = "the uniform registers (80 a warp at 48 warps, 3840 words), the predicates (7 bits a thread at 1536 threads, 336 words) and the uniform predicates (7 bits a warp, 11 words). The 80 are a run's, UR0 to UR79: a kernel rewritten to keep two values in chosen uniform registers gets both back at UR0, UR6 to UR8, UR14, UR15, UR63, UR64, UR72, UR78 and UR79, and the compiler's own kernels name UR4 to UR77. Past UR79 nothing held a value: at every number tried, UR80, UR96, UR112, UR126 to UR128, UR160, UR192, UR224 and UR254, the kernel ends with 'an illegal instruction was encountered'; the numbers between those were not tried (art:f7da4f4f5a3f: benchmarks/bandwidth/chip.cu's --ur with chip_ur.py, one warp on one card)" }
 smem = { value = 131072, unit = "B/SM", mark = "ceiling", source = "whitepaper v1.1: 128 KB of L1 and shared memory an SM" }
 smem_carveout = { value = 102400, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 12.0, 'Maximum amount of shared memory per SM 100 KB' (the table's KB is 1024 bytes), and section 18.10.3, the capacity 'can be set to 0, 8, 16, 32, 64, or 100 KB'. The Blackwell Tuning Guide section 1.4.1.1 calls CC 12.0's 'shared memory capacity per SM' 128KB, the pool's size, so a bound that must hold on both wordings reads store.smem" }
 l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.1, Table 4: L2 128 MB, taken as 128 MiB" }
 dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
+dram_installed = { value = 103079215104, unit = "B", mark = "ceiling", source = "96 GiB, the memory on the board, all of which a program gets (store.dram): 32 GDDR7 packages of 3 GB, 16 a side. GamersNexus's teardown of the Workstation Edition, 'NVIDIA RTX PRO 6000 Blackwell Benchmarks & Tear-Down', 25 Sep 2025: 'We counted 32 total memory locations, which means that they are 3GB memory modules as that totals 96GB'. TechPowerUp, 'NVIDIA RTX PRO 6000 GDDR7 Memory Comes in 3 GB Modules, Sandwiching the PCB on Both Sides', 29 Apr 2025: 16 modules a side, and the Workstation and Server editions with the same 96 GB. No source found gives the Server Edition's board more, and none read is a teardown of it" }
+
+# What a run found on one card beyond the stores above, which no NVIDIA document sizes: the caches an SM serves code and
+# constants from. Each is the first footprint its sweep missed at, so at or above the cache as that sweep saw it, and
+# the sweeps do not show whether one level holds another's contents. No Lean store holds them and no reader sums them.
+l15 = { value = 147456, unit = "B/SM", mark = "measurement", source = "the cache past an SM's first levels, which code and constants share (L1.5): straight-line code looped by one warp runs at 2.05 cycles an instruction through 122,880 B and at 4.13, every fetch a miss, from 147,456 B, and 64 KiB of constants give way once the code beside them passes 64 KiB, on one card at an SM clock of 2092 MHz (art:f7da4f4f5a3f: benchmarks/bandwidth/chip.cu's icache and unified sweeps)" }
+l1i = { value = 65536, unit = "B/SM", mark = "measurement", source = "an instruction cache below store.l15: FFMA code that can issue every cycle runs at 1.096 cycles an instruction at 49,152 B and at 1.169 at 65,536 B, a fixed cost a pass of the loop from there on, the same at 1 and 4 warps (art:f7da4f4f5a3f: chip.cu's icachef sweep)" }
+l0i = { value = 24576, unit = "B/SM", mark = "measurement", source = "the first instruction cache, 6,144 B counted once a warp scheduler (rate.issue's four): FFMA code runs at 1.094 cycles an instruction at 4,096 B and at 1.185 at 6,144 B, a fixed cost a pass of the loop from there on, the same at 1 and 4 warps; that each scheduler has its own is argued, not measured (art:f7da4f4f5a3f: chip.cu's icachef sweep)" }
+const_l0 = { value = 12288, unit = "B/SM", mark = "measurement", source = "the first constant cache, 3,072 B counted once a warp scheduler: a chase through a constant bank takes 35 cycles a load through 2,048 B and 130 from 3,072 B, at strides of 64 and 256 B; that each scheduler has its own is argued, not measured (art:f7da4f4f5a3f: chip.cu's const sweep)" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]

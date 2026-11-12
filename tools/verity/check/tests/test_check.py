@@ -961,7 +961,8 @@ def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypat
         return pt[1][pt[1].index("--mem-gb") + 1]
 
     assert mem(None) == mem(["circuit-check", "pytest"]) == "175", "halved: lean-suites runs beside pytest with the same share"
-    assert mem(["pytest"]) == "280"
+    assert mem(["pytest", "lean-build"]) == "280", "halved beside a Lean step"
+    assert mem(["pytest"]) == "560", "a shard of pytest alone (the 5-pod plan's 4/5) halved the slot for a lean-suites it lacks"
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
     [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
     assert "--mem-gb" not in pt[1]
@@ -2032,7 +2033,10 @@ _POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] &
 
 def _train_repo(tmp_path):
     """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
-    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock.  Each call of
+    ``train`` has its own launch (`launched.$TEST_CALL`): train.sh returns once it reads the launch line, so a launcher can
+    still be running, and mark its launch, after a later call has begun, whose 720 polls would each return at once on that mark
+    and could all end before its own launcher writes (on a loaded node)."""
     import os
     import subprocess
 
@@ -2052,19 +2056,20 @@ def _train_repo(tmp_path):
     bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
     bin_.mkdir()
     (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
-                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
-    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n"
+                             f"touch {done}.$TEST_CALL\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done}.$TEST_CALL ]; do :; done\n")
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
            "R2_ENDPOINT": "dummy"}
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
+    calls = iter(range(1, 1000))
 
     def train(*a, **extra):
-        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env={**env, **extra})
+                              cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
 
     return git, train, argv
 
@@ -2132,6 +2137,19 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
                        (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
         p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_gives_every_check_a_timeout_so_its_run_extends_the_nodes_lease(tmp_path):
+    """Only a `research run` with a --timeout extends its node's lease (`remote.lease_extend_s`): without one a node that runs
+    nothing but checks stops two hours after its boot, so every check train.sh launches carries one."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    for flags in ((), ("--deferred", "lean-audit"), ("--cc-records",)):
+        p = train("HEAD", "vy-x", *flags)
+        args = argv.read_text().split()
+        assert p.returncode == 0 and args[args.index("--timeout") + 1] == "36000", (flags, p.stderr, args)
 
 
 def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
@@ -2239,20 +2257,59 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:main")       # by its path: no ref of the clone's says origin has it
     origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
     origin.rename(gone)
     # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
-                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+                                            f'else while [ ! -e {tmp_path / "launched"}.$TEST_CALL ]; do :; done; fi\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
     assert sleeps.read_text().split()[0] == "5"
     sleeps.unlink()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "another")
+    git("push", "-q", str(origin), "HEAD:main")
     origin.rename(gone)
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
+
+
+def _counting_git(tmp_path):
+    """A `git` ahead of the real one on train.sh's PATH that appends each call's subcommand to the file it returns."""
+    import shutil
+
+    calls = tmp_path / "git-calls"
+    (tmp_path / "bin" / "git").write_text(
+        f'#!/bin/sh\nfor a; do case $a in -*|*/*) ;; *) echo "$a" >> {calls}; break;; esac; done\nexec {shutil.which("git")} "$@"\n')
+    (tmp_path / "bin" / "git").chmod(0o755)
+    return calls
+
+
+def test_train_sh_fetches_only_a_commit_no_ref_of_origin_holds(tmp_path):
+    """The queue launches each shard of a candidate it has just built and pushed from the same clone: a branch of origin
+    points at it, so the launch fetches nothing (a fetch per shard held the clone's lock for each); a commit origin holds but
+    no ref of the clone's says so is fetched, then launched; one origin lacks is refused."""
+    git, train, argv = _train_repo(tmp_path)
+    calls = _counting_git(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "candidate")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
+    for shard in ("1/2", "2/2"):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", shard)
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert "fetch" not in calls.read_text().split(), calls.read_text()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "pushed by its path")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:refs/heads/queue/c2")
+    calls.unlink()
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and calls.read_text().split().count("fetch") == 1, (p.stderr, calls.read_text())
+    (tmp_path / "repo" / "a").write_text("d\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

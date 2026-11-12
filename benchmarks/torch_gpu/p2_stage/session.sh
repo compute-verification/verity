@@ -50,7 +50,7 @@ M=${M:-4096,16384}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
 export O D PY S SRC STORE ENC SALT LAYER STEPS LAYOUT MANIFEST PATH=$CUDA/bin:$PATH \
-  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$S/tl${PYTHONPATH:+:$PYTHONPATH}
+  PYTHONPATH=$PWD:$PWD/benchmarks/pous${PYTHONPATH:+:$PYTHONPATH}
 : > "$O/rc.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 keep() {  # PATH WHAT: `research keep` PATH under keep.json's owner and expiry, with WHAT's reason
@@ -61,14 +61,13 @@ print(k["owner"], k["expires"], k["why"][sys.argv[2]].format(layer=sys.argv[3]),
   research keep "$1" --owner "$owner" --expires "$expires" --priority normal --why "$why" > /dev/null 2>&1
 }
 
-mkdir -p "$S/lib" "$S/toy" "$S/tl/e2e_h200" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
+mkdir -p "$S/lib" "$S/toy" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
   && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) && tar -C "$S/toy" -xf "$IN/store-toy.tar" \
   && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ] \
   && [ "$(sha256sum < "$MANIFEST" | cut -c1-64)" = "$MANIFEST_SHA256" ]
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-cp "$IN/served_weights.py" "$S/tl/e2e_h200/served_weights.py" && touch "$S/tl/e2e_h200/__init__.py"
 (cd "$IN" && sha256sum served_weights.py h200-manifest.json store-layout.json store-toy.tar) > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
