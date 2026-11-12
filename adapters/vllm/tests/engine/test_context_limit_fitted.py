@@ -103,7 +103,8 @@ def test_vllm_fits_a_launch_at_minus_one_to_the_pool_less_its_null_block(checkpo
     sched, cfg = scheduler(checkpoint)
     assert cfg.cache_config.num_gpu_blocks == BLOCKS
     assert cfg.model_config.max_model_len == sched.max_model_len == FITTED
-    assert cfg.model_config.original_max_model_len == -1
+    # the launch's -1 stays beside the fitted limit, in the config vLLM's scheduler holds
+    assert sched.vllm_config.model_config.original_max_model_len == -1
 
 
 def test_stock_and_ours_schedule_the_same_rows_for_a_request_that_ends_at_the_fitted_limit(checkpoint):
