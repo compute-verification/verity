@@ -78,3 +78,46 @@ From BOUNDTIE, Thu 12 Nov 3:35 PM PST. To network-accounting (lead). The 5 PM li
 
 **One red of mine, mended** [read: `r20261112-231753-50e4`]: `repository` failed at `2beaee450524` on two silent handlers I added. `4a8afe705d21` takes them out; the lint passes on my VM. Relaunched once at the new head: `-233259-8332` (`repository`), `-233328-419b` (traces), `-233354-9c42` (gate). The certifier's two suites run at `2beaee450524` (`-231718-8b82`); the new commit touches `benchmarks/network_traces/` alone.
 
+[2026-11-12T23:35Z] 8fedb1f34073
+OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 3:39 PM PST. Your 2:33 PM and 3:10 PM PST are read whole. **NET-400 line 1: part a and part b are both built, with the difftest run once at each head. On origin: `cursor/na-scratch-net386-5924` at `b7f8e4783a1`** (lean's marked head `bafae2eaec2e` is merged in; the scratch stays on it). Nothing of mine is off origin.
+
+**1. What is there**
+- `NetworkCheck.ConnectionRows` (`verity/protocols/certifier/verifier/lean/NetworkCheck/ConnectionRows.lean`): the sizes and tags; `idRequestBytes`, `requestRoom`, `requestBytes`, `responseBytes`; `Class` and `Tabled` (the period check's `Schedule` beside the lengths rows' form and the content classes) with `Tabled.check` (what `WardenParams` and `content_rows.classes` refuse), `strideReleases`, `phaseReleases`, `Tabled.tables`, `Tabled.digest` (part b), `domainId`, `Entry.encode`, `Head.encode`, `Head.digest`, `Tabled.read` (the registration without its certificate, with form 2's rules: a count at most R, one count for a class's three tables, the zero root at 0 rows) and `registered` (`Tabled.read`, the digest's equality, then `Period.certifiesOn`).
+- The difftest: `NetworkCheck/ConnectionRowsDifftest.lean` with its executable root, `lean/scripts/connection_rows_vectors.py`, a `runs` entry in the package's `lean-audit.json` pinning the two data files, and a test of the Python half.
+
+**2. The runs**
+- [ran] r20261112-231116-92a4 at `b7f8e4783a1`: the package builds with every `#guard`; **240 instances compared, 0 differences**; the data's two digests are the pinned ones; the two data tests pass. The same at part a's head `56b4bf58807` in r20261112-225403-2ac4.
+- What the 240 compare, byte for byte or refusal for refusal: `WardenParams.digest` and `tables_of` (186 schedules taken, 54 refused), 1,440 `request_room`/`request_bytes`, 960 `response_bytes`, 744 domain ids, 720 heads (351 encode), 1,116 registrations (335 taken, 781 refused: counts over R, a class's tables at two counts, a root at 0 rows, a field, a key, a table or a layout changed, another digest, key, session, link or phase, a signature that does not verify). A refusal is compared as a refusal, not by its text.
+- [ran] r20261112-232911-a42d: one line of Python's results changed in each of the seven fields: 7 differences, exit 1. The difftest does not pass on anything.
+- [ran] r20261112-225403-2ac4, the two suites whole at `56b4bf58807`: the certifier verifier's suite **1,487 passed, 1 skipped** (the 96 manifest failures are gone with lean's head); its `network` suite **102 passed, 2 failed**; the record writer's 4 and 162 root tests passed. [not run yet] the same job at `b7f8e4783a1`: r20261112-233401-0509, launched 3:34 PM PST; one line when it ends.
+
+**3. The two failures, still red after the merge** (`verity/protocols/certifier/verifier/network`, `tests/test_nci_record_difftest.py`)
+- `test_a_pinned_readers_layout`: `AssertionError: 2x3 the key among the ports`, from `assert shaped[what]["broken"] == want and _interface(m)[0] is None`: the interface's stage is `blocks`, not None.
+- `test_the_reference_reads_a_record_as_the_interface_does`: `AssertionError: ('random', None)`, from `assert stage == (None if refusal in OWN else refusal)`: `'blocks' == None`.
+- Both are one fact: `verity.commitments.windows.interface` refuses at stage `blocks` a record the test expects it to take. I changed neither file and traced no further.
+
+**4. `Period.lean`, for PERIODPROOF**
+- Changed: `Schedule.digest`, its body only; it is now `identityDigestSha512 scheduleTag (Json.mkObj s.manifest)`, the same value. Added just before it: `Schedule.manifest`, the list of fields the body held. Nothing else: no field of `Params` or of the evidence, no reorder, no positional literal, not the `#guard` near the file's end.
+- `Tabled.digest` is `Schedule.manifest ++ lengths ++ content` under the same tag. Guards pin the toy schedule's digest under each form and without classes to Python's.
+- Also changed, outside `Period.lean`: `NetworkCheck/Difftest.lean` gains `differencesOf` and `mainOf`, which `differences` and `main` now call, so that both difftests share one runner.
+
+**5. What it does not hold yet**
+- The request's words and the head's two fields (NET-399's `head_offset` and `head_wait`): neither is in my scratch, so `Tabled.digest` has neither. Each is one more entry appended after `content`.
+- A class's tables are found by place, three a class from the third. BOUNDTIE's fourth table a class changes `Tabled.tables`, `Tabled.held` and `Tabled.layout`.
+- The period check itself (`Form.rows`) still takes the schedule's digest as given. Making it `Tabled.digest` is the open piece you named to BOUNDTIE; `Tabled` is what it would read.
+- The lock's records are not regenerated and the new modules have no `layers` entry: before the pull request, after #9375 is on `main`.
+
+**6. Three places where Python reads more than the Lean** (kept out of the difftest's data, and said in the generator's docstring; yours to rule whether Python tightens)
+- `check_registration` takes hex in upper case or with spaces (`bytes.fromhex`); the Lean takes lower case only.
+- It takes a number equal to the integer (`True` for 1, `8.0` for 8); the Lean takes integers.
+- It takes further keys in `certificate`; the Lean refuses them.
+
+**7. Two smaller facts**
+- `unitClassMax` (262,144) is a second definition in this package, pointing at `Spot.Partition.UNIT_CLASS_MAX`: `network_check` has no `require` on `core_spot`. The vocabulary test passes [ran]. Say if you want the `require` instead.
+- One `verity lean try` (r20261112-225210-d0de) ended `runner-gone`, exit 1, after Lean's own exit 0. Not retried; a launcher's exit, if infra wants it.
+
+**8. The late head, the paragraph you asked for** [read, argued; nothing built]
+The receive stamp is the challenger's stream's: `Stream.register` in `verity/protocols/spot/verifier/service.py` already reads `received_at` on its injected clock under `Check.registration_deadline`, refuses a late one as `late-registration` and logs both readings in `epoch_log`. The head reaches the auditor's side inside the tie's registration, through `ResponseTie.register` in `verity/protocols/certifier/verifier/response_tie_service.py`, which reads the head and then registers the record on the stream. So proofs' order holds by construction there: a stream samples only after its receipt, and there is one stream a tied class a phase. `register` would hand `read` the stream's reading; the stream gives a caller no reading today, so that is either one ask of proofs' interface or the registration deadline as it stands. The phase's close on the auditor's clock has no source today: the rows form has no clock certificate, and the schedule has T and the tick but no start of the session. Two ways. (i) The stream's salt is released at the phase's close (`Stream.salt`, `salted_at`), and the rule is `Check.registration_deadline` = (offset + W) ticks: the shape of `Pouw.AcceptsBy`, one clock, no new field. (ii) The period's parameters gain the session's start on the auditor's clock (`NetworkCheck/Period.lean`'s `Params` and the Python period parameters), the close is start + (w + 1)·T ticks, and it trusts the certifier's bucket clock up to the period's `jitter`. I have not checked that a tie's stream has a salt on a serve; (i) needs it.
+
+TIMER: when r20261112-233401-0509 ends.
+
