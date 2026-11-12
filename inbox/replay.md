@@ -107,20 +107,36 @@ The table, six columns for each route, AgentX's shape first. Reading left: the l
 the span and the pages' sizes, the carry spec, CACHE's final (05:15Z), `origin/cursor/proofs-inbox:inbox/replay.md`
 at each hour.
 
-## Entry 2, Thu 12 Nov 02:54Z, revised 03:00Z (due 06:00Z): the table, the recommended route, what is undecided, the context limit
+## Entry 2, Thu 12 Nov 02:54Z, revised 03:04Z (due 06:00Z): the table, the recommended route, what is undecided, the context limit
+
+I read vllm's 02:50Z on VLLM-377: the route is to be chosen there at 07:00Z. This entry is written to be used for
+that; what could still move a cell before then is named at the end of this head.
 
 Read since entry 1: your 02:28Z section (the context column is 1,048,576 beside 131,072; your point checked below
 with file and line), CACHE's entry 2 (`cursor/proofs-cache-7c3e` at `8dfb1e1dbe`), vllm's
-`20261112T0229Z-report-cachedserve-load`, the goals' texts, and vLLM's rejection sampler, draft layer, request and
-step defaults at the pin `d9105ea80`. The note `20261112T0217Z-report-cheapest-replay` holds the same text. Nothing
-was run and no code changed.
+`20261112T0229Z-report-cachedserve-load`, the goals' texts, vllm-prodreplay's answer on VLLM-377 (02:48Z), the end of
+tonight's serving-cost run `03bb`, and vLLM's rejection sampler, draft layer, request and step defaults at the pin
+`d9105ea80`. The note `20261112T0217Z-report-cheapest-replay` holds the same text. Nothing was run and no code
+changed.
 
-Revised since `c348d79df3`: (1) the Lean on `main` does cover a replay block that reads another's committed values,
-in the sets' form, at about 1,900 times the figure's bound; it is the patterns' form that does not, and I had written
-"refuses"; (2) a recomputed hit re-runs the conversation so far, the earlier requests' decode steps included, since
-vLLM caches the pages a request fills while decoding; (3) the ratios of replay to own compute are a request's (18 and
-291 times), not weighted against unweighted; (4) row 16 against CACHE's route; the grain of the page commitment; who
-is charged across execution phases; the draft layer; whose each 131,072 is; the message for Daniel at 297 words.
+Revised since `c348d79df3` (02:54Z):
+
+1. The Lean on `main` does cover a replay block that reads another's committed values, in the sets' form, at about
+   1,900 times the figure's bound; it is the patterns' form that does not. I had written "refuses".
+2. A recomputed hit re-runs the conversation so far, the earlier requests' decode steps included: vLLM caches the
+   pages a request fills while decoding.
+3. The ratios of replay to own compute are a request's (18 and 291 times); I had set a compute-weighted figure
+   against an unweighted one.
+4. From vllm-prodreplay's reading of the records: the 131,072 run's replay ratio is 1.35 by its record and 0.87
+   less the time it spent writing values; a whole-run replay reproduced a 128,960-token hit by re-running its
+   producer; the CPU replay has never run at full depth; the table of the indexer's keys is not built.
+5. Tonight's two-stage arm ended: 194 of 3,272 requests committed, 7% of output rate over three repeats.
+6. Added: row 16 against CACHE's route; the grain of the page commitment; who is charged across execution phases;
+   the draft layer; whose each 131,072 is; the design sentence on `main` that this route changes
+   (`commit/history_tables.py:22-26`); the message for Daniel at 300 words or under.
+
+Still to come tonight, each named where it lands below: `r20261112-025327-f570` (the measured cost of the step record
+and the canonical top-k, by 06:15Z); CACHE's final (05:15Z); vllm-prodserve's settings and accept rule (05:30Z).
 
 ### The answer
 
@@ -141,7 +157,8 @@ is charged across execution phases; the draft layer; whose each 131,072 is; the 
    table builder the tree has today is too slow for this (2% to 4% of serving GPU time by my arithmetic). Two things
    outside the replay decide whether the whole serve is under 1%: the certified tick, which removes the scheduling
    advice and cost 1.0% of output rate in the one pair of runs there is (1.6% modeled), and the two-stage boundary
-   commitment as built, which fell behind in tonight's serving-cost run.
+   commitment as built, which in tonight's serving-cost run committed 194 of 3,272 requests and cost 7% of output
+   rate over three repeats (row 10).
 4. **Advice.** 0 bits for cache hits, admission and release buckets under the certified tick; 5.6 bits a request
    measured for the terminator and the output length, 0 once the verifier holds the stop rule each request's circuit
    already ends with. Speculative decoding adds the accept lengths, at most 2 bits a step at three draft tokens, until
@@ -150,8 +167,9 @@ is charged across execution phases; the draft layer; whose each 131,072 is; the 
    replay block, so it does not cover a replay block that reads another's committed values, a cache hit and a long
    request's earlier span alike; the form on `main` that does cover it prices about 1,900 times higher [m, CACHE].
    (b) The request's circuit on the two-stage path: today's replay block is a stand-in of token selects. (c) The
-   draft layer and its accept rule: not built. (d) Measurements at size: no hit past 384 tokens has been replayed,
-   nothing has run at an agentic load, and no page commitment has run beside serving.
+   draft layer and its accept rule: not built. (d) Measurements at size: no hit past 384 tokens has been replayed
+   this way (a whole-run replay reproduced a 128,960-token hit by re-running the request that wrote it), nothing has
+   run at an agentic load, and no page commitment has run beside serving.
 6. **Against CACHE's route** (a conversation as one replay block, row 14): that route is on `main` and cheaper in the
    bound (1.4 times at 86 requests against 1.5), but its replay block for AX's median conversation holds 142,016
    positions or more, the size the 128k goal already found too large for one replay block. At agentic lengths it
@@ -174,16 +192,20 @@ otherwise. No run has draft tokens.
   tokens repeated, largest prompt 130,808 tokens) at 0.4 requests a second; prefix cache on. Served twice: at vLLM's
   defaults, steps of 8,192 tokens and no cap on a prefill chunk (`r20261107-213820-c343`), and at the registered
   engine limits, steps of 2,048 tokens and prefill chunks of 256 rows (`r20261108-195819-b00b`).
-- **Chat**: 1,024 short prompts, 384 in flight, context limit 4,096 (`r20261112-013012-03bb`, tonight, in flight).
+- **Chat**: 1,024 short prompts a pass, 384 in flight (`r20261112-013012-03bb`, tonight, ended 02:35Z).
 - **AX**: AgentX's shape: median prompt 142,016 tokens, 98.31% of prompt tokens repeated within the conversation,
   median output 444 tokens [read `proofs/20261111T2108Z-report-traffic-published-traces`]; median 86 requests a
   conversation [relayed, CACHE]. **No run of ours is at this shape**: every AX cell is my arithmetic from the
   other configurations.
 
 **Two readings of "replay cost".** Over the steps a replay re-runs, replay GPU-seconds are about serving's: 0.83
-times in busy GPU-seconds (317 against 381, ±12%) over 226 steps at P40 [M `r20261107-125416-f460`]; 0.87 times in
-wall seconds (1,306 against 1,495) over 11,350 steps at P128 [M `r20261108-203339-cf6c` against `b00b`]; both read in
-`vllm/20261111T0837Z-report-replay-how-and-cost`. That ratio does not separate the routes. What separates them is
+times in busy GPU-seconds (317 against 381, ±12%) and 0.85 in wall seconds over 226 steps at P40 [M
+`r20261107-125416-f460`, read in `vllm/20261111T0837Z-report-replay-how-and-cost`]; over 11,350 steps at P128 the
+record's own ratio is 1.35 in wall seconds (2,022.5 against 1,495.4), or 0.87 less the 716.0 s the replay spent
+writing three steps' values [M `r20261108-203339-cf6c` against `b00b`; relayed, vllm-prodreplay on VLLM-377, 02:48Z,
+who read the records]; 0.68 to 0.73 for one request with stand-ins (96 to 113 s against 141 to 158 s served for the
+same 150 to 249 steps) [M `r20261110-063224-38ef`; relayed, the same comment]. That ratio does not separate the
+routes: every replay on the engine does the whole batch's work for the steps it covers. What separates them is
 **which steps a sampled request makes the prover re-run**, against the request's own share of serving. On P128 a
 request's own compute is 17.6 GPU-seconds on average, its lifetime's steps 320 (18 times), and every 600 s execution
 phase its lifetime touches 5,120 (291 times) [m, same note and `proofs/20261107T2045Z-report-lifetime`: lifetimes
@@ -233,7 +255,7 @@ tree or the notes; 16 is built from their parts; 17 is the floor and is not buil
 | 7 | The request on the CPU from its Program (`check/replay/request_replay.py`) | Row 1's. | none | 290 core-seconds a prefill position a rank and 770 a decode step [M, a fit of two requests, read in `vllm/20261109T2018Z-report-128k-path`]; 84,500 core-hours for a 131,072-token request over 8 ranks [scaled by that note]. Only the request's own rows. |
 | 8 | The request alone under batch-invariant kernels | 14.1% to 31.1% of output rate on three other models on one H200 [m, card `serve_tax.glm-5.3.json`, `tokens_bi`]. None exists for GLM-5.3's sparse attention. Over 1%. | none, and the schedule stops mattering | The request's own tokens. |
 | 9 | A span of positions inside a request, earlier positions read from per-layer history tables (`verity/commitments/history.py`, `pipeline/boundary_tables.py`) | One table a request a layer: 176 MB a layer and 13.7 GB over 78 layers for a 131,072-token request; 0.28 to 0.30 s a layer on one idle H200 [M `r20261110-185544-dba6`]. That is 0.17 to 0.18 GPU-ms a token over 78 layers: **2.3% to 4.3% of serving's GPU time** (against 7.5 GPU-ms a token on P40's mix and 4.2 for a long prefill), and 32% to 34% of a long prefill's wall time if the step waits on it [mine]. The builder runs when the phase closes, for finished requests only (`boundary_tables.py:1-2`, `:14-17`). While serving: not measured; tonight's arm asks for one layer and builds none [read `vllm/20261111T0131Z-checkpoint-servecost-full`]. | none | Not measured: no span replay exists. The span's steps only [argued]. |
-| 10 | Stand-in interior: one token-select check for each served id, on logits a replay produced (`pipeline/interior_rows.py:14-16`) | Today's `two-stage` arm: the boundary commitment by size class, prefix cache off. Its host thread took 458 s for a 30 s phase of 107 requests in 40 classes, so it does not keep up; output rate +2.55% over 2 paired repeats, no interval, Chat [M `r20261112-013012-03bb`, read in `servecost-full`, 02:14Z]. | none | Whatever replay produces the logits (rows 1, 2, 5). Interior: 309,760 bytes an output on rank 0 [M, `128k-path`]. |
+| 10 | Stand-in interior: one token-select check for each served id, on logits a replay produced (`pipeline/interior_rows.py:14-16`) | Today's `two-stage` arm: the boundary commitment by size class, prefix cache off. Its host thread took 458 s for the first 30 s phase (107 requests in 40 classes) and 759 s for the second, and committed 194 of 3,272 finished requests, none with tables: it does not keep up. Serving cost +7.16% of output rate over 3 paired repeats (−2.07%, +7.16%, +12.53%, rising rep by rep; no interval), Chat [M `r20261112-013012-03bb`, ended 02:35Z, read in `servecost-full`, 02:31Z and 02:41Z]. | none | Whatever replay produces the logits (rows 1, 2, 5). Interior: 309,760 bytes an output on rank 0 [M, `128k-path`]. |
 | 11 | The hit held to a committed pool by the certifier's cache step (`verity/protocols/certifier/verifier/cache_step.py`) | A pool's commitment a phase; the pricer's pool per phase recomputes 4.37% of P128's FLOPs at 600 s [m `sweep.py:63`]. | none: it is how the 0 bits for hits are held in a circuit | Not a replay. It proves which pages a request hit, not what they hold [read `cache_step.py:1-40`; CACHE's entry 2]. Pairs with row 5 or 16. |
 | 12 | Hits allowed only by a rule on the certified record (same conversation; registered prefixes) | Nothing at serving; hits the rule forbids are recomputed. Notes only [read `proofs/20261108T2305Z-report-cacheopt-memo`]. | none | As the route it pairs with. |
 | 13 | Hits sent as advice | nothing | 1.54 to 1.57 bits a request; 5,181 bits a 600 s phase (`sweep.py:51`) | None of its own. Superseded: the scheduler replay derives hits. |
@@ -258,15 +280,15 @@ refuses one); a replay at an agentic load; a start inside the phase at TP8.
 
 | # | 4. Why bit for bit; what the tree has shown, at what size | 5. What it needs from the circuit ahead of time | 6. What the guarantee charges |
 |---|---|---|---|
-| 1 | It is the serve again. Shown: all 11,350 steps and 184,922 tokens, 8 of 8 ranks, P128 at the registered limits [M `cf6c`]. | The whole phase's Program if the replay block is the phase. One 131,072-token request alone: 28,360 s and 788 GiB on one rank [relayed, the brief; the 788.1 GiB read in `128k-path`]. | A phase as the replay block is closed only if nothing is carried in. Its interior is every request's: not feasible. |
+| 1 | It is the serve again. Shown: all 11,350 steps and 184,922 tokens, 8 of 8 ranks, P128 at the registered limits [M `cf6c`], among them a 128,960-token hit replayed as a hit, its producer re-run too [relayed, vllm-prodreplay, from `b00b`'s step trace]. It starts only where the engine was empty (`replay.py:62`, `:65` [relayed, the same]): under traffic that never drains, its block is the server's whole life. | The whole phase's Program if the replay block is the phase. One 131,072-token request alone: 28,360 s and 788 GiB on one rank [relayed, the brief; the 788.1 GiB read in `128k-path`]. | A phase as the replay block is closed only if nothing is carried in. Its interior is every request's: not feasible. |
 | 2 | The restored state is checked leaf by leaf. Shown: 226 steps, 329 requests, 50,517 tokens equal, P40 [M `f460`]. | As row 1. | As row 1; the snapshot's pool is a committed input every request of the phase reads. |
 | 3 | Shown on one process (`rebuild.py:10-31`); sizes not read. | As row 1. | As row 1. |
 | 4 | Start state from a per-step copy: shown on one GPU only; the tensor-parallel path has none (`rebuild.py:68`), and it refuses a start step that runs a request the step before finished (`:40-41`). | The request's Program (row 5). | As row 5. |
-| 5 | The target's values depend on the others' shapes, not their values. Shown: 4 of 4 targets, among them a 256-token hit loaded as 4 pages, a 19,170-token prompt decoding at 19,360 keys, and a request preempted 3 times; an all-real control of 307 steps; P40 [M `ef0f`, `c677`, `b2cd`]. Not shown: a hit past 384 tokens; a 131,072-token target. | The request's Program after its history: the step compiler writes it in this engine class with the hit's rows as boundary inputs, the producers' (`steps.py:23-24`, `:45-46`), and a request carried over a phase's edge reads its own earlier rows the same way (`:46-51`). Refused today: a step above 2,048 tokens (`:57-59`), positions past 131,072 (`:95-96`), a recompute after preemption (`:56-57`), sampling other than greedy or seeded top-p (`:98`). Stock steps are 8,192 tokens on an H200 [read vLLM `vllm/engine/arg_utils.py:2663-2666`]. On the two-stage path the replay block is still the stand-in (`adapters/vllm/README.md:98-100`), and the CPU replay refuses a Program that reads a cached prefix (`request_replay.py:39-41`). Compile: 135 s a Program a rank over a 256-step span, 3.1 to 3.8 core-hours a sampled request [m `sweep.py:52-53`]. | Not closed: it reads values another replay block computed. On `main` the patterns' form, which the figure of record uses, refuses it: each request must read in one replay block (`TwoStageCheck.lean:58`), and the pricer refuses a fan-out above 1 (`optimize.py:1200-1202`). The capped form (`ServedCover`, `:89-94`) covers it when no two requests read one proof block, so with the conversation taken as the request and the cache keyed by conversation; it prices at about 1,945 times the patterns' form [m, CACHE's entry 2]. The patterns' form with S read as F·S: 1.52 times at F = 86, and no statement on `main` [m, CACHE; a proof sketch]. |
+| 5 | The target's values depend on the others' shapes, not their values. Shown: 4 of 4 targets, among them a 256-token hit loaded as 4 pages, a 19,170-token prompt decoding at 19,360 keys, and a request preempted 3 times; an all-real control of 307 steps; P40 [M `ef0f`, `c677`, `b2cd`]. Not shown: a hit past 384 tokens in a one-request replay; a 131,072-token target; more than one KV cache group, which `rebuild.py:870` refuses [relayed, vllm-prodreplay]. | The request's Program after its history: the step compiler writes it in this engine class with the hit's rows as boundary inputs, the producers' (`steps.py:23-24`, `:45-46`), and a request carried over a phase's edge reads its own earlier rows the same way (`:46-51`). Refused today: a step above 2,048 tokens (`:57-59`), positions past 131,072 (`:95-96`), a recompute after preemption (`:56-57`), sampling other than greedy or seeded top-p (`:98`). Stock steps are 8,192 tokens on an H200 [read vLLM `vllm/engine/arg_utils.py:2663-2666`]. On the two-stage path the replay block is still the stand-in (`adapters/vllm/README.md:98-100`), and the CPU replay refuses a Program that reads a cached prefix (`request_replay.py:39-41`). Compile: 135 s a Program a rank over a 256-step span, 3.1 to 3.8 core-hours a sampled request [m `sweep.py:52-53`]. | Not closed: it reads values another replay block computed. On `main` the patterns' form, which the figure of record uses, refuses it: each request must read in one replay block (`TwoStageCheck.lean:58`), and the pricer refuses a fan-out above 1 (`optimize.py:1200-1202`). The capped form (`ServedCover`, `:89-94`) covers it when no two requests read one proof block, so with the conversation taken as the request and the cache keyed by conversation; it prices at about 1,945 times the patterns' form [m, CACHE's entry 2]. The patterns' form with S read as F·S: 1.52 times at F = 86, and no statement on `main` [m, CACHE; a proof sketch]. |
 | 6 | Each stretch of the hit is recomputed in the step that first computed it, so every kernel choice is the served one (`steps.py:63-66`). Shown: hits of 128, 256 and 384 tokens, prompts up to 910 tokens [M `38ef`]. Refused by name: a producer an earlier execution phase carries in, a stretch whose row started before it, two requests computing one page in one step, a resume (`steps.py:66-67`). At AX most producers are from earlier phases. | The Program with the hit recomputed: built (#8403). For a producer in an earlier phase it would read that phase's schedule: not built. | Closed, F = 1: the form on `main` and the figure of record's. The interior and the proving grow with 1 + hits over computed: 14,229 GB a world year on our plan (1.13 times no reuse), 44 to 57 times at AX's reuse [m, CACHE's entry 2, `r20261112-020726-bb59` and `-020801-9d1e`]. |
-| 7 | It evaluates the registered circuit's own rows, so it is exact by definition; it is the reference the others are held to. | The request's Program, as row 5 or 6. | As the Program it evaluates. |
+| 7 | It evaluates the registered circuit's own rows, so it is exact by definition; it is the reference the others are held to. Never run on a GLM-5.3 request at full depth: 4 of 78 layers, synthetic weights, one rank [relayed, vllm-prodreplay, `r20261108-091453-bf6d`]. | The request's Program, as row 5 or 6. | As the Program it evaluates. |
 | 8 | A position's row would not read its batch. Not available for this model. | The uncached request's Program, one a (prompt, output, hit) shape, shared by requests (`steps.py:27`). | As row 5 or 6, by what the hit reads. |
-| 9 | Not shown. The table's rows are the engine's cache rows read at the step's slots (`boundary_tables.py:8-12`); the span's replay would be row 5 cut shorter. | The long row's Definitions exist to 131,072 keys (`verity/definitions/registry/boolean_dsa.circuit-check.py:13`, `boolean_dsa_topk_mask.circuit-check.py:14-37`); the table's tree is pinned at 2^17 rows in the Lean verifier (`Spot/HistoryTable.lean:56`) and in Python (`history.py:41`). Missing: the second stage reading a table; the span's replay Definition; the committed schedule a span's range comes from (`boundary_tables.py:28-29`). | As row 5: the span reads a table another replay block wrote. Its readers are its own request only, so the capped form on `main` holds with `N` = 1; the patterns' form refuses it by the same clause. |
+| 9 | Not shown. The table's rows are the engine's cache rows read at the step's slots (`boundary_tables.py:8-12`); the span's replay would be row 5 cut shorter. | The long row's Definitions exist to 131,072 keys (`verity/definitions/registry/boolean_dsa.circuit-check.py:13`, `boolean_dsa_topk_mask.circuit-check.py:14-37`); the table's tree is pinned at 2^17 rows in the Lean verifier (`Spot/HistoryTable.lean:56`) and in Python (`history.py:41`). Missing: the second stage reading a table (`two_stage.py second` passes none [relayed, vllm-prodreplay]); a table of the indexer's keys, 132 B a position a layer, which a long row's scores read at every earlier position [relayed, the same, from #8434's body]; the span's replay Definition; the committed schedule a span's range comes from (`boundary_tables.py:28-29`). A cached request's reads are refused (`pipeline/history_rows.py:94-99`): the design on `main` has them open a table whose rows below the hit the replay recomputes (`commit/history_tables.py:22-26`). | As row 5: the span reads a table another replay block wrote. Its readers are its own request only, so the capped form on `main` holds with `N` = 1; the patterns' form refuses it by the same clause. |
 | 10 | The ids are held to logits; nothing ties the logits to the model's layers [read `128k-path`]. | `TokenSelect_v4{V=154880}` and its chunk and combine Definitions: built. | A stand-in: it audits the token select alone. |
 | 11 | n/a | `CacheStep_v1` to `_v3`: built; no compile slice runs on GLM-5.3 [read `vllm270-answers`, section 9]. | The pricer's pool unit: 1.10e11 to 3.05e11 ANDs a phase [m `sweep.py:58-59`]. It does not close a reader [CACHE]. |
 | 12 | n/a | A rule Definition over the certified record: not built. | Bounds the group a page's readers form, so it caps F. |
@@ -304,8 +326,10 @@ The changes, by lane, each with what I read that makes it possible:
     the commitment in `report-lifetime` (section 1), which reads that vLLM's own offloading connector stores each
     page as it is computed. The copy is keyed by the write, not by content: two writes of the same tokens can hold
     different bits. One rank's copy is enough: the latent rows and the indexer's keys are the same on every rank.
-  - The grain is the open choice [argued]. A leaf a page is what serving can afford (the hash rate above); a leaf a
-    row, the history table, is what a proof block opens cheaply and what today's builder makes at 2.3% to 4.3%.
+  - The grain is the open choice [argued]. A leaf a page a layer is what serving can afford: it is the leaf the
+    edge snapshot's kernels hash the pool by, at the rate above (`benchmarks/serve_tax/boundary.py:9`, `:698`). A
+    leaf a position, the history table, is what a proof block opens cheaply and what today's builder makes at 2.3%
+    to 4.3%.
     The two fit together if serving commits pages and the replay builds the row tables of the sampled request's
     history, with proof blocks that hold a table's rows to their page's leaf: at today's builder's rate that is
     26 GPU-s for a 142,016-token history [mine: 0.18 GPU-ms a token], paid only for sampled requests. Not designed.
@@ -317,7 +341,11 @@ The changes, by lane, each with what I read that makes it possible:
   after replay block (engine start is 131.5 to 140.3 s; no script does this).
 - **circuits' Definitions.** The size class's replay Definition for the two-stage path, the model's computation in
   place of the stand-in [read `vllm270-answers`, section 9, step B]; a Definition that opens a committed page or
-  table row; the draft layer (the model's config has one, `num_nextn_predict_layers` 1; the capture map does not
+  table row. For a hit the design on `main` is one sentence away: a cached request's reads open a table "its replay
+  builds, its own recomputed rows below C and then a held run of this table's strings"
+  (`commit/history_tables.py:22-26`), and a held run is already how a table takes its request's rows from earlier
+  execution phases (`pipeline/history_rows.py:18-20`); this route makes the rows below C held runs of the
+  producers' tables, not recomputed rows. Also missing: the table of the indexer's keys; the draft layer (the model's config has one, `num_nextn_predict_layers` 1; the capture map does not
   build it, `:74`) and the accept rule (vLLM `vllm/v1/worker/gpu/spec_decode/rejection_sampler_utils.py:548-667`);
   captures for the step shapes stock vLLM runs.
 - **The certifier's cache step.** Nothing new for this route's replay. For the 0 bits to be held in a circuit: a
@@ -371,6 +399,10 @@ Each with the run or statement that decides it.
 8. **A recompute after preemption** has no Program in this engine class (`steps.py:56-57`), and the engine can
    preempt under the tick [read `cachedserve-load`, item 2]: 65 preemptions in the no-tick row B100, 0 in T100.
    Decided by circuits, or by a pool sized so nothing is preempted.
+9. **The canonical top-k's and the step record's cost on this model at saturation.** 0.25% modeled and inside
+   noise at P40. Decided tonight by `r20261112-025327-f570` (arms `record`, `canonical-topk`, `no-prefix-cache`,
+   Chat, six repeats), which ends about 05:20Z to 05:35Z by its launcher's guess and no later than 06:15Z [read
+   `vllm/20261111T2113Z-checkpoint-vllm-servecost-night`, 02:56Z].
 
 ### The context limit
 
@@ -448,5 +480,5 @@ circuit.
    hits and long contexts, at about 1.5 times today's bound for 86 requests sharing a prefix (modeled); without it,
    about 1,900 times.
 2. The request's circuit on this path, with the draft layer and its accept rule.
-3. Measurements: no cache hit past 384 tokens replayed, nothing at an agentic load, nothing past 131,072 context.
-   The design does not limit context; this node's memory stops near 400,000 tokens.
+3. Measurements: no cache hit past 384 tokens replayed this way, nothing at an agentic load, nothing past 131,072
+   context. The design does not limit context; this node's memory stops near 400,000 tokens.
