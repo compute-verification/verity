@@ -1,7 +1,8 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
-PouwCheck), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
-and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
-float32 holding BF16), judged in the clear as the scheme (`verity.protocols.pouw.prover.schemes.pearl_c4`) judges a unit:
+PouwCheck), per linear of a capture directory (``manifest.json``: each linear's input file and shape, and the model's
+``snapshot``): X, the linear's input rows (float32 holding BF16 exactly), and its weight W (the snapshot's BF16
+safetensors); or of a capture npz file (X and W of each linear as float32 holding BF16), judged in the clear as
+the scheme (`verity.protocols.pouw.prover.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
@@ -61,7 +62,7 @@ def x_codes(path: Path | np.ndarray, label: str = "") -> np.ndarray:
 
 
 def npz_manifest(path: Path) -> dict:
-    """A manifest for an `fp4_v3_real.capture` npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): per
+    """A manifest for a capture npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): per
     linear ``model.layers.<i>.<linear>``, its X's shape from the member's header (nothing is loaded)."""
     def shape(z, member: str) -> list[int]:
         fmt = np.lib.format
@@ -115,7 +116,7 @@ def unit_rows(codes: np.ndarray, keep: np.ndarray, k_unit: int) -> list[bytes]:
 
 
 class Job:
-    """A `pearlc_capture.py` directory, or an `fp4_v3_real.capture` npz file (X and W of each linear)."""
+    """A capture directory, or a capture npz file (X and W of each linear)."""
 
     def __init__(self, capture: Path, out: Path, seed: int):
         self.capture, self.out, self.seed = capture, out, seed

@@ -3,8 +3,9 @@ from its 64 A rows and 64 B rows (BF16 words) and the job's seeds.
 
 The per-element and per-word work is batched over `verity.definitions.kernels.tc`' bit-exact steps: the noise atoms, the noisy block
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
-P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.pouw.prover.schemes.pearl_c4`).  The FP4 bench arm's gate compares
-the device's sampled tiles with `tile`; benchmarks/pouw/tests/test_pearl_c4_twin.py holds it to the scalar reference.
+P_B's FP32 FMA chain come from the scalar reference (`verity.protocols.pouw.prover.schemes.pearl_c4`).  `fixture.py` writes
+the device check's fixtures from these steps; `tile` is the steps as one tile, which
+benchmarks/pouw/tests/test_pearl_c4_twin.py holds to the scalar reference.
 """
 
 from __future__ import annotations

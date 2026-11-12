@@ -1,4 +1,4 @@
-"""benchmarks/pouw/pearl_c4/real.py, the verifier on a `pearlc_capture.py` directory, on a synthetic one-linear capture: the
+"""benchmarks/pouw/pearl_c4/real.py, the verifier on a capture directory, on a synthetic one-linear capture: the
 stand-in split removes the massive-activation channel that fails D-NF, a chunk out of budget exits 99 with its tasks'
 checkpoints, and the next run finishes the tile's replayed inert work under its bound."""
 
