@@ -42,6 +42,12 @@ from pathlib import Path
 from verity_machine_model import eps as E
 from verity_machine_model.model import device
 
+#: What other files read of it: the tests of both exporters, `theory/cpw_floor.py` and `lean_headline_dc.py`, which is
+#: this exporter for the data-centre families and also takes its private `_eps_budget`, `_list`, `_words` and `_wrap`.
+__all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P_M", "OFF_MENU", "P", "P_OPERAND", "Q",
+           "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "exact", "exact_logs", "instance", "load", "main",
+           "measured", "mload", "price", "stars"]
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 OUT = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
