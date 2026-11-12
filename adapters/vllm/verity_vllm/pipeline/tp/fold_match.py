@@ -9,7 +9,7 @@ cross-rank check; the record is assembled in rank order.
 
     verity-vllm tp-fold-match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
-        [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
+        --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
 Verdict (`<out>/tp2_fold_match.json`): PASS iff BOTH ranks fold with 0 errors / 0 unresolved, BOTH rank compares PASS (the TP1 rule:
 canonical-equal, same steps, no differing operand; X-09 verdict at B>1), GM-01 PASS on EVERY rank (required: no --gprog = FAIL), and the cross-rank check PASSes.  A
@@ -34,13 +34,14 @@ from typing import Any
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.log import init_logger
-from verity_vllm.pipeline.match import fold_construction_args
-from verity_vllm.pipeline.row_records import decomp_rc
 from verity_vllm.pipeline.tp.links import read_tp_links
+from verity_vllm.records.schema_ids import TP_FOLD_MATCH_SCHEMA
+
+__all__ = ["Options", "main"]
 
 logger = init_logger(__name__)
 
-SCHEMA = "verity/tp2/fold-match/v1"
+SCHEMA = TP_FOLD_MATCH_SCHEMA
 
 
 def _run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
@@ -67,6 +68,21 @@ def _load(p: Path) -> dict | None:
         return json.loads(p.read_text())
     except (OSError, ValueError):
         return None
+
+
+def _block(doc: dict, name: str) -> dict:
+    """The block ``name`` of a document: a stage's own (a fold summary, a compare, a decomposition), one of its entries, a rank's
+    record or the cross-rank check's.  Empty for one that holds none: a stage that wrote no document (it was killed, timed out or
+    failed first) loads as an empty one, a fold summary may hold no `fold` statistics, and a rank whose fold failed has no `compare`
+    and no `global_match`.  Each field read off the missing block is then None."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def _listed(doc: dict, name: str) -> list:
+    """The list ``name`` of a document; empty for one that lists none, and for a stage that wrote no document."""
+    listed = doc.get(name)
+    return listed if listed else []
 
 
 def _load_links(p: Path) -> dict | None:
@@ -104,12 +120,13 @@ def fold_rank(py: str, log: Path, profile: str, out: Path, timeout: int | None, 
     rc = 0 if done else _run([py, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(log), "--profile", profile,
                               "--out", str(out / "fold_summary.json"), "--persist-dir", str(out), *construction], out / "fold.log", timeout)
     fs = _load(out / "fold_summary.json") or {}
+    stats = _block(fs, "fold")
     ok = rc == 0 and (out / "program.json").exists() and (out / "instances.jsonl").exists() and int(fs.get("errors") or 0) == 0 and \
         int(fs.get("unresolved") or 0) == 0
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "ok": ok, "kept": done, "errors": fs.get("errors"), "unresolved": fs.get("unresolved"),
             "unsupported": fs.get("unsupported"), "n_instances": fs.get("n_instances"), "n_steps": fs.get("n_steps"), "digest": fs.get("digest"),
-            "tp": (fs.get("fold") or {}).get("tp"), "collectives": len((fs.get("fold") or {}).get("collectives") or []),
-            "collectives_by_kind": (fs.get("fold") or {}).get("collectives_by_kind"), "error_examples": (fs.get("error_examples") or [])[:3],
+            "tp": stats.get("tp"), "collectives": len(_listed(stats, "collectives")),
+            "collectives_by_kind": stats.get("collectives_by_kind"), "error_examples": _listed(fs, "error_examples")[:3],
             "max_rss_gb": fs.get("max_rss_gb"),
             "construction": {k: fs.get(k) for k in ("sampler_construction", "moe_construction", "registered_values")}}
 
@@ -121,6 +138,8 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     t0 = time.time()
     if derived:
         if shared:
+            # Read here, not at import: only a row whose ranks share one Build reads the row's records, and this module imports without them.
+            from verity_vllm.pipeline.row_records import decomp_rc
             rc = decomp_rc(str(rank_dir))
         else:
             cmd = [py, "-m", "verity_vllm.pipeline.cli", "batch-decomp", "--oracle", str(rank_dir), "--out", str(rank_dir / "match_decomp.json"),
@@ -129,22 +148,22 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
                 cmd += ["--derived", d]
             rc = _run_unless(reuse, rank_dir / "match_decomp.json", cmd, rank_dir / "match_compare.log", timeout)
         dec = _load(rank_dir / "match_decomp.json") or {}
-        reqs = dec.get("requests") or []
-        verdict = "PASS" if dec.get("verdict") == "PASS" and rc == 0 else f"FAIL batch_decomp {dec.get('verdict')} rc={rc}: {'; '.join(dec.get('reasons') or [])[:300]}"
+        reqs = _listed(dec, "requests")
+        verdict = "PASS" if dec.get("verdict") == "PASS" and rc == 0 else f"FAIL batch_decomp {dec.get('verdict')} rc={rc}: {'; '.join(_listed(dec, 'reasons'))[:300]}"
         return {"comparator": "cb_a.global_match --decomp-out (X-09)" if shared else "cb_a.batch_decomp (X-09)", "rc": rc, "verdict": verdict,
                 "seconds": round(time.time() - t0, 1),
                 "requests": len(reqs), "canonical_equal_all": all(r.get("canonical_equal") is True for r in reqs) and bool(reqs),
-                "operands_different": sum(int((r.get("totals") or {}).get("operands_different", 0) or 0) for r in reqs),
-                "unattributed": (dec.get("attribution") or {}).get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
+                "operands_different": sum(int(_block(r, "totals").get("operands_different", 0) or 0) for r in reqs),
+                "unattributed": _block(dec, "attribution").get("unattributed"), "xreq": dec.get("xreq_total"), "missing_derived": dec.get("missing_derived"),
                 "per_request": [{"request_id": r.get("request_id"), "LP": r.get("LP"), "T": r.get("T"), "derived": r.get("derived"),
                                  "canonical_equal": r.get("canonical_equal"), "steps": r.get("steps")} for r in reqs]}
     rc = _run_unless(reuse, rank_dir / "match_compare.json", [py, "-m", "verity_vllm.pipeline.cli", "program-compare", "--a", str(build), "--b", str(rank_dir),
                      "--out", str(rank_dir / "match_compare.json"), "--operands", "progressions"], rank_dir / "match_compare.log", timeout)
     doc = _load(rank_dir / "match_compare.json") or {}
-    cmp = doc.get("compare") or {}            # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
-    tot = cmp.get("totals") or {}
-    sa, sb = (cmp.get("a") or {}).get("steps"), (cmp.get("b") or {}).get("steps")
-    canon = (cmp.get("canonical_sha256") or {}).get("equal")
+    cmp = _block(doc, "compare")              # cb-a/compare/v1: the step comparison sits under `compare` (row_pod reads the same field)
+    tot = _block(cmp, "totals")
+    sa, sb = _block(cmp, "a").get("steps"), _block(cmp, "b").get("steps")
+    canon = _block(cmp, "canonical_sha256").get("equal")
     dag_doc = None
     if canon is not True and within == "dag" and rc == 0:     # the within-step criterion of record: a step order may differ
         _run_unless(reuse, rank_dir / "match_dag.json", [py, "-m", "verity_vllm.pipeline.cli", "program-dag", "--a", str(build), "--b", str(rank_dir),
@@ -155,7 +174,7 @@ def compare_rank(py: str, rank_dir: Path, build: Path, derived: list[str], withi
     return {"comparator": "cb_a.compare", "rc": rc, "seconds": round(time.time() - t0, 1),
             "verdict": "PASS" if ok else f"FAIL canonical_equal={canon} dag_multiset_equal={dag} steps={sa}/{sb} operands_different={tot.get('operands_different')} rc={rc}",
             "criterion": "sequence" if canon is True else "dag-multiset over the live cone (within-step criterion of record)",
-            "dag_multiset": dag_doc, "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(doc.get("histogram_diff_T_normalised") or {}), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
+            "dag_multiset": dag_doc, "canonical_equal": canon, "steps": [sa, sb], "totals": tot, "histogram_diff_T_normalised": len(_block(doc, "histogram_diff_T_normalised")), "first_diff": (cmp.get("first_differences") or cmp.get("diffs") or [None])[0]}
 
 
 def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, within: str, timeout: int | None, reuse: bool = False,
@@ -170,19 +189,20 @@ def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, with
     G = _load(rank_dir / "global_match.json") or {}
     return {"rc": rc, "seconds": round(time.time() - t0, 1), "verdict": G.get("verdict") if G else {124: "TIMEOUT"}.get(rc, f"rc={rc}"),
             "ok": G.get("verdict") == "PASS" and rc == 0, "failed_checks": G.get("failed_checks"),
-            "checks": {c.get("id"): c.get("status") for c in (G.get("checks") or [])}, "achieved_concurrency": G.get("achieved_concurrency"),
-            "generated_lengths": {e.get("request_id"): e.get("generated_length") for e in (G.get("requests") or [])},
+            "checks": {c.get("id"): c.get("status") for c in _listed(G, "checks")}, "achieved_concurrency": G.get("achieved_concurrency"),
+            "generated_lengths": {e.get("request_id"): e.get("generated_length") for e in _listed(G, "requests")},
             "eos_truncated_requests": G.get("eos_truncated_requests"), "within_step_criterion": G.get("within_step_criterion")}
 
 
 def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) -> list[dict] | dict[str, list[dict]] | None:
     """B1: the rank Program's tp_links.json `links`.  B>1: {request_id: links of the request's Program} from the batch decomposition's
-    per-request derived dir (each derived dir of a rank carries its own tp_links.json)."""
+    per-request derived dir (each derived dir of a rank carries its own tp_links.json), read off the rank's compare record
+    (`compare_rank`'s `per_request`; a record that lists none has no links)."""
     if not derived:
         doc = _load_links(build / "tp_links.json")
         return list(doc["links"]) if doc and isinstance(doc.get("links"), list) else None
     out: dict[str, list[dict]] = {}
-    for r in compare.get("per_request") or []:
+    for r in _listed(compare, "per_request"):
         d = r.get("derived")
         if not d:
             return None
@@ -201,9 +221,6 @@ class Options:
                           help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_<ROLE>_tp<W> (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
-    derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
-                                      help="B>1: further request Programs of rank 0 (per served (LP, T))")
-    derived_rank1: list[str] = option("--derived-rank1", action="append", default=[])
     gprog_rank0: str | None = option("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 stage)")
     gprog_rank1: str | None = option("--gprog-rank1", default=None)
     build_rank: list[str] = option("--build-rank", action="append", default=[],
@@ -236,6 +253,19 @@ class Options:
                               help="B>1: a rank's X-09 is the one its GM-01 computes and writes (global-match --decomp-out, row_pod's MATCH_PIPELINE=shared), "
                                    "not a second batch-decomp process over the same fold under the audit checker's operations (past 800 GB on a "
                                    "GLM-5.3 B8 rank)")
+
+
+def _stage(per_rank: dict[str, dict], r: int, name: str) -> dict:
+    """Rank r's record of its `fold`, its `compare` or its `global_match`; empty for a rank whose fold failed, which ran neither of
+    the last two, and for the `global_match` of a rank given no GP-01 Program or no workload."""
+    return _block(per_rank[str(r)], name)
+
+
+def _fails_too(xr: dict[str, Any], name: str) -> None:
+    """Fails the cross-rank check ``xr`` by ``name``, an input it was not given, beside the checks it failed itself (it lists none
+    when it stopped at the ranks or at a rank's duplicate collective)."""
+    xr["failed"] = list(_listed(xr, "failed")) + [name]
+    xr["verdict"] = "FAIL"
 
 
 def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gprog: str | None, pr: dict[str, Any], problems: list[str],
@@ -290,7 +320,7 @@ def main(a: Options) -> int:
         if not (a.build_rank0 and a.build_rank1):
             raise UsageError("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
         builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
-        derived = {0: a.derived_rank0, 1: a.derived_rank1}
+        derived = {0: [], 1: []}
         gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
     if a.world < 2 or a.world != len(builds):
         raise UsageError(f"world {a.world} vs {len(builds)} rank Builds")
@@ -298,6 +328,8 @@ def main(a: Options) -> int:
     res: dict[str, Any] = {"schema": SCHEMA, "capture": str(cap), "profile": a.profile, "world": a.world, "per_rank": {}, "problems": []}
 
     ranks = list(range(a.world))
+    # Read here, not at import: `pipeline.match` loads the core `verity`, and this module imports without numpy, torch or the core.
+    from verity_vllm.pipeline.match import fold_construction_args
     construction = {r: fold_construction_args(a.workload, [str(builds[r]), *derived[r]]) for r in ranks}
 
     def run_rank(r: int) -> tuple[dict[str, Any], list[str]]:
@@ -327,7 +359,7 @@ def main(a: Options) -> int:
             problems.append(f"rank {r}: fold not ok (rc {pr['fold']['rc']}, errors {pr['fold']['errors']}, unresolved {pr['fold']['unresolved']}): "
                             f"{json.dumps(pr['fold']['error_examples'])[:300]}")
             return pr, problems
-        tp = pr["fold"].get("tp") or {}
+        tp = _block(pr["fold"], "tp")       # what the log's run header states of its rank; a log that states none is no rank's
         if int(tp.get("rank", -1)) != r or int(tp.get("world", 0)) != a.world:
             problems.append(f"rank {r}: the log's RunHeader.notes.tp2 states rank {tp.get('rank')} / world {tp.get('world')} (swapped or mislabelled rank)")
         with leg_slots:
@@ -345,7 +377,7 @@ def main(a: Options) -> int:
         res["problems"].extend(problems)
 
     # ---- cross-rank check
-    folded = [r for r in ranks if (res["per_rank"][str(r)].get("fold") or {}).get("ok")]
+    folded = [r for r in ranks if _stage(res["per_rank"], r, "fold").get("ok")]
     xr: dict[str, Any]
     if folded != ranks:
         xr = {"verdict": "FAIL", "failed": ["partner_rank"], "why": f"ranks folded {folded} of {ranks}: the cross-rank check needs every rank's fold"}
@@ -354,7 +386,7 @@ def main(a: Options) -> int:
         for rank in ranks:
             rd = out / f"rank{rank}"
             fs = _load(rd / "fold_summary.json") or {}
-            colls[rank] = list((fs.get("fold") or {}).get("collectives") or [])
+            colls[rank] = list(_listed(_block(fs, "fold"), "collectives"))
             producers[rank] = RM.own_producers_from_record(rd / "instances.jsonl")
             ferr[rank] = int(fs.get("errors") or 0)
             p = cap / f"coll.rank{rank}.jsonl"
@@ -363,7 +395,7 @@ def main(a: Options) -> int:
                 rec_sha[rank] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
             else:
                 res["problems"].append(f"rank {rank}: no collective recorder rows ({p}); the value check cannot run")
-            lk = links_for_rank(rank, builds[rank], res["per_rank"][str(rank)].get("compare") or {}, derived[rank])
+            lk = links_for_rank(rank, builds[rank], _stage(res["per_rank"], rank, "compare"), derived[rank])
             if lk is None:
                 res["problems"].append(f"rank {rank}: no tp_links.json for the rank Program(s); the link check cannot run")
             else:
@@ -386,28 +418,25 @@ def main(a: Options) -> int:
                                  links=links if len(links) == len(ranks) else None, provenance=prov,
                                  recorder_sha256=rec_sha if len(rec_sha) == len(ranks) else None, require_all=True)
         if len(rec) != len(ranks):
-            xr["failed"] = list(xr.get("failed") or []) + ["recorder_missing"]
-            xr["verdict"] = "FAIL"
+            _fails_too(xr, "recorder_missing")
         if len(links) != len(ranks):
-            xr["failed"] = list(xr.get("failed") or []) + ["links_missing"]
-            xr["verdict"] = "FAIL"
+            _fails_too(xr, "links_missing")
         if prov is None:
-            xr["failed"] = list(xr.get("failed") or []) + ["provenance_missing"]
-            xr["verdict"] = "FAIL"
+            _fails_too(xr, "provenance_missing")
         (out / "tp2_rank_match.json").write_text(json.dumps(xr, indent=1, default=str) + "\n")
         logger.info("[tp2foldmatch] cross-rank check: %s failed=%s collectives=%s checks=%s", xr["verdict"], xr.get("failed"), xr.get("n_collectives"),
-                    [(c["name"], c["pass"]) for c in xr.get("checks") or []])
+                    [(c["name"], c["pass"]) for c in _listed(xr, "checks")])
     res["cross_rank"] = {k: v for k, v in xr.items() if k not in ("peer_binding",)}
-    res["cross_rank"]["peer_binding_n"] = len(xr.get("peer_binding") or {})
+    res["cross_rank"]["peer_binding_n"] = len(_block(xr, "peer_binding"))        # a check that did not reach its peer binding bound none
     res["cross_rank"]["artifact"] = str(out / "tp2_rank_match.json")
 
-    ok_ranks = all((res["per_rank"][str(r)].get("fold") or {}).get("ok") and (res["per_rank"][str(r)].get("compare") or {}).get("verdict") == "PASS"
-                   and ((res["per_rank"][str(r)].get("global_match") or {}).get("ok") is True) for r in ranks)     # GM-01 None = not PASS
+    ok_ranks = all(_stage(res["per_rank"], r, "fold").get("ok") and _stage(res["per_rank"], r, "compare").get("verdict") == "PASS"
+                   and (_stage(res["per_rank"], r, "global_match").get("ok") is True) for r in ranks)     # GM-01 None = not PASS
     res["pass"] = bool(ok_ranks and xr.get("verdict") == "PASS" and not res["problems"])
     res["seconds"] = round(time.time() - t_start, 1)
-    res["legs"] = {"fold_per_rank": {str(r): (res["per_rank"][str(r)].get("fold") or {}).get("ok") for r in ranks},
-                   "compare_per_rank": {str(r): (res["per_rank"][str(r)].get("compare") or {}).get("verdict") for r in ranks},
-                   "global_match_per_rank": {str(r): (res["per_rank"][str(r)].get("global_match") or {}).get("verdict") for r in ranks},
+    res["legs"] = {"fold_per_rank": {str(r): _stage(res["per_rank"], r, "fold").get("ok") for r in ranks},
+                   "compare_per_rank": {str(r): _stage(res["per_rank"], r, "compare").get("verdict") for r in ranks},
+                   "global_match_per_rank": {str(r): _stage(res["per_rank"], r, "global_match").get("verdict") for r in ranks},
                    "cross_rank": xr.get("verdict")}
     (out / "tp2_fold_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     logger.info("[tp2foldmatch] %s legs=%s problems=%s %ss -> %s", "PASS" if res["pass"] else "FAIL", res["legs"], res["problems"][:4], res["seconds"],

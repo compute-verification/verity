@@ -48,16 +48,17 @@ from verity_vllm.config import (
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 from verity_vllm.pipeline.row_json import load_json
+from verity_vllm.records.schema_ids import CONFIG_RECORD_SCHEMA, RECORDS_INDEX_SCHEMA
 
 __all__ = ["INDEX", "KIND", "NAME", "TIERS", "aot_of", "index_refusal", "load_index", "record", "write_index"]
 
-SCHEMA = "verity-vllm/config-record/v1"
+SCHEMA = CONFIG_RECORD_SCHEMA
 NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).
 KIND = "vllm-config-record/v1"
 MANIFEST_RC = re.compile(r"\bmanifest_rc=(-?\d+)\b")
 INDEX = RECORDS
-INDEX_SCHEMA = "verity-vllm/records-index/v1"
+INDEX_SCHEMA = RECORDS_INDEX_SCHEMA
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
 INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "

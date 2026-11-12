@@ -89,6 +89,10 @@
     auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
+    tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
+                    prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
+                    machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
+                    tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -178,6 +182,8 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+#: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
+NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
 AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
@@ -500,21 +506,38 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
-def node_slot_only() -> Any:
-    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
-    package's `pods.nebius.slot_only`."""
-    p = Path(os.environ.get("NODE_SLOT_ONLY_FILE") or NODE_SLOT_ONLY_FILE)
+def _node_module(var: str, default: str, name: str) -> Any | None:
+    """The machine's deployed copy of a rule (stdlib, one file) at $VAR, else `default`; None when it has none."""
+    p = Path(os.environ.get(var) or default)
     if p.is_file():
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("vy_node_slot_only", p)
+        spec = importlib.util.spec_from_file_location(name, p)
         if spec is not None and spec.loader is not None:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
+    return None
+
+
+def node_slot_only() -> Any:
+    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
+    package's `pods.nebius.slot_only`."""
+    if (mod := _node_module("NODE_SLOT_ONLY_FILE", NODE_SLOT_ONLY_FILE, "vy_node_slot_only")) is not None:
+        return mod
     from .pods.nebius import slot_only
 
     return slot_only
+
+
+def node_tool_rules() -> Any:
+    """What this machine requires of a shipped research package: its deployed NODE_TOOL_RULES_FILE when it has one, else this
+    package's `pods.nebius.tool_rules`."""
+    if (mod := _node_module("NODE_TOOL_RULES_FILE", NODE_TOOL_RULES_FILE, "vy_node_tool_rules")) is not None:
+        return mod
+    from .pods.nebius import tool_rules
+
+    return tool_rules
 
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -1591,6 +1614,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                 from .pods.nebius import slot_only as rule
             if not rule.auditor_allows(req["command"], marker):
                 raise Refused(rule.auditor_refusal(marker))
+        if why := node_tool_rules().refusal(Path(__file__).resolve().parent):
+            raise Refused(why)
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -2093,6 +2118,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
+        from .pods.nebius import tool_rules
+
+        if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
+            raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)

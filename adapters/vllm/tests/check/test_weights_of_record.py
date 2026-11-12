@@ -2,10 +2,15 @@
 engine; a served model that differs from the checkpoint in ONE element fails the Commit by name."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import re
 import struct
+import subprocess
+import types
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -13,7 +18,7 @@ import pytest
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import cli
 
-H, I, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
+H, INTER, HQ, HKV, D, V = 8, 12, 2, 1, 4, 20          # hidden, intermediate, heads, kv heads, head dim, vocab
 
 
 def _bf16(rng, *shape) -> np.ndarray:
@@ -22,7 +27,9 @@ def _bf16(rng, *shape) -> np.ndarray:
 
 def write_safetensors(path: str, tensors: dict[str, tuple[str, np.ndarray]]) -> None:
     """A real safetensors shard: 8-byte header length, JSON header, raw little-endian data."""
-    hdr, blobs, off = {"__metadata__": {"format": "pt"}}, [], 0
+    hdr: dict[str, dict] = {"__metadata__": {"format": "pt"}}
+    blobs: list[bytes] = []
+    off = 0
     for name, (dt, arr) in tensors.items():
         b = np.ascontiguousarray(arr).tobytes()
         hdr[name] = {"dtype": dt, "shape": list(arr.shape), "data_offsets": [off, off + len(b)]}
@@ -48,27 +55,27 @@ def checkpoint(tmp_path):
         "model.layers.0.self_attn.k_proj.bias": ("BF16", _bf16(rng, HKV * D)),
         "model.layers.0.self_attn.v_proj.bias": ("BF16", _bf16(rng, HKV * D)),
         "model.layers.0.self_attn.o_proj.weight": ("BF16", _bf16(rng, H, HQ * D)),
-        "model.layers.0.mlp.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.0.mlp.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.0.mlp.down_proj.weight": ("BF16", _bf16(rng, H, I)),
+        "model.layers.0.mlp.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.0.mlp.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.0.mlp.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
         "model.layers.0.input_layernorm.weight": ("F32", rng.random(H, dtype=np.float32)),   # stored f32, served bf16 (cast rule)
         "model.norm.weight": ("BF16", _bf16(rng, H)),
         # a 2-expert MoE layer: per-expert checkpoint tensors, fused w13 / w2 in the served model
         "model.layers.1.mlp.gate.weight": ("BF16", _bf16(rng, 2, H)),
-        "model.layers.1.mlp.experts.0.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.0.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.0.down_proj.weight": ("BF16", _bf16(rng, H, I)),
-        "model.layers.1.mlp.experts.1.gate_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.1.up_proj.weight": ("BF16", _bf16(rng, I, H)),
-        "model.layers.1.mlp.experts.1.down_proj.weight": ("BF16", _bf16(rng, H, I)),
+        "model.layers.1.mlp.experts.0.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.0.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.0.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
+        "model.layers.1.mlp.experts.1.gate_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.1.up_proj.weight": ("BF16", _bf16(rng, INTER, H)),
+        "model.layers.1.mlp.experts.1.down_proj.weight": ("BF16", _bf16(rng, H, INTER)),
     }
     d = tmp_path / "snap"
     d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    json.dump({"tie_word_embeddings": True, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H}, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps({"tie_word_embeddings": True, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H}))
     sha = WR.sha256_file(str(d / "model.safetensors"))
     man = tmp_path / "checkpoints.json"
-    json.dump({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": sha}}}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "revision": "abc", "local_path": str(d), "files": {"model.safetensors": {"sha256": sha}}}]}))
     return d, man, t
 
 
@@ -81,13 +88,13 @@ def _program(tp=None):
         ("model.model.layers.0.self_attn.qkv_proj.weight", [(HQ + 2 * HKV) * D, H], 16),
         ("model.model.layers.0.self_attn.qkv_proj.bias", [(HQ + 2 * HKV) * D], 16),
         ("model.model.layers.0.self_attn.o_proj.weight", [H, HQ * D], 16),
-        ("model.model.layers.0.mlp.gate_up_proj.weight", [2 * I, H], 16),
-        ("model.model.layers.0.mlp.down_proj.weight", [H, I], 16),
+        ("model.model.layers.0.mlp.gate_up_proj.weight", [2 * INTER, H], 16),
+        ("model.model.layers.0.mlp.down_proj.weight", [H, INTER], 16),
         ("model.model.layers.0.input_layernorm.weight", [H], 16),
         ("model.model.layers.0.self_attn.attn._k_scale", [], 32),
         ("model.model.layers.1.mlp.gate.weight", [2, H], 16),
-        ("model.model.layers.1.mlp.experts.w13_weight", [2, 2 * I, H], 16),
-        ("model.model.layers.1.mlp.experts.w2_weight", [2, H, I], 16),
+        ("model.model.layers.1.mlp.experts.w13_weight", [2, 2 * INTER, H], 16),
+        ("model.model.layers.1.mlp.experts.w2_weight", [2, H, INTER], 16),
         ("model.model.norm.weight", [H], 16),
         ("model.lm_head.weight", [V, H], 16),
     ]
@@ -206,10 +213,10 @@ def test_rotary_table_is_pinned_by_the_frozen_analytic_bound(checkpoint, tmp_pat
     [MAX_POS, ROT] of config.json is unresolved (fail closed); a rope_scaling type without a table stays unpinned by name."""
     from verity_vllm.program import model as analytic
     d, man, t = checkpoint
-    cfg = json.load(open(d / "config.json"))
+    cfg = json.loads((d / "config.json").read_text())
     cfg.update({"model_type": "llama", "num_hidden_layers": 1, "intermediate_size": 12, "vocab_size": 20, "rope_theta": 10000.0,
                 "max_position_embeddings": 64, "head_dim": 4, "rms_norm_eps": 1e-5, "torch_dtype": "bfloat16"})
-    json.dump(cfg, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps(cfg))
     C, _ = analytic.config_of(cfg)
     MAXP, ROT = int(C["MAX_POS"]), analytic.rotary_dim(C)
     prog, fields = _program()
@@ -232,17 +239,19 @@ def test_rotary_table_is_pinned_by_the_frozen_analytic_bound(checkpoint, tmp_pat
     bad = WR.check(rec, dict(live, raw={"model.layers.0.self_attn.rotary_emb.cos_sin_cache": other}))
     assert bad["result"] is False and bad["analytic"][0]["status"] == "fail" and "outside the frozen analytic bound" in bad["why"] and "cos_sin_cache" in bad["why"]
     # one corrupted word (a flipped exponent bit at position 7) -> FAIL named with the offending position
-    corrupt = table.copy(); corrupt[7, 1] ^= 0x4000
+    corrupt = table.copy()
+    corrupt[7, 1] ^= 0x4000
     bad2 = WR.check(rec, dict(live, raw={"model.layers.0.self_attn.rotary_emb.cos_sin_cache": corrupt}))
     assert bad2["result"] is False and bad2["analytic"][0]["n_outside_bound"] >= 1 and bad2["analytic"][0]["first_offending"][0]["pos"] == 7
     # served words not captured -> not a pass
     assert WR.check(rec, dict(live, raw={}))["result"] is False
     # a declared table shape that is not config.json's [MAX_POS, ROT]: unresolved, complete False (fail closed)
-    prog2 = dict(prog); prog2["instances"] = dict(prog["instances"], params=[["weights", "{" + f"{field}: Array<{MAXP * 2},Array<{ROT},Value<16>>>" + "}"]])
+    prog2 = dict(prog)
+    prog2["instances"] = dict(prog["instances"], params=[["weights", "{" + f"{field}: Array<{MAXP * 2},Array<{ROT},Value<16>>>" + "}"]])
     rec2 = WR.weights_of_record(prog2, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     assert rec2["complete"] is False and rec2["unresolved"][0]["field"] == field and "!= analytic [MAX_POS, ROT]" in rec2["unresolved"][0]["why"]
     # a rope_scaling type without an analytic table: unpinned BY NAME (not assumed, not a silent pass)
-    json.dump(dict(cfg, rope_scaling={"rope_type": "longrope", "factor": 2.0}), open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps(dict(cfg, rope_scaling={"rope_type": "longrope", "factor": 2.0})))
     rec3 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     assert rec3["unpinned"] == [field] and "longrope" in {f["field"]: f for f in rec3["fields"]}[field]["why"]
 
@@ -267,7 +276,7 @@ def test_unpinned_shard_and_unresolved_field_are_named(checkpoint, tmp_path):
     d, man, t = checkpoint
     # the manifest pins a different sha: the shard is NOT the checkpoint of record
     bad_man = tmp_path / "bad.json"
-    json.dump({"checkpoints": [{"repo": "test/tiny", "local_path": str(d), "files": {"model.safetensors": {"sha256": "0" * 64}}}]}, open(bad_man, "w"))
+    Path(bad_man).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny", "local_path": str(d), "files": {"model.safetensors": {"sha256": "0" * 64}}}]}))
     ck = WR.CheckpointIndex(str(d), checkpoints_manifest=str(bad_man))
     assert ck.pin["shards"]["model.safetensors"]["pinned"] is False
     prog, fields = _program()
@@ -305,7 +314,7 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     d, man, t = checkpoint
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -369,10 +378,10 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     d2 = tmp_path / "snap2"
     d2.mkdir()
     write_safetensors(str(d2 / "model.safetensors"), t2)
-    json.dump(json.load(open(d / "config.json")), open(d2 / "config.json", "w"))
+    (d2 / "config.json").write_text(json.dumps(json.loads((d / "config.json").read_text())))
     man2 = tmp_path / "checkpoints2.json"
-    json.dump({"checkpoints": [{"repo": "test/tiny2", "revision": "abc", "local_path": str(d2),
-                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d2 / "model.safetensors"))}}}]}, open(man2, "w"))
+    Path(man2).write_text(json.dumps({"checkpoints": [{"repo": "test/tiny2", "revision": "abc", "local_path": str(d2),
+                                                       "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d2 / "model.safetensors"))}}}]}))
     rec2 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d2), checkpoints_manifest=str(man2)), prefix=PREFIX)
     assert rec2["complete"] is True and rec2["n_pinned"] == len(fields) + len(extra)
     by2 = {f["field"]: f for f in rec2["fields"]}
@@ -395,7 +404,7 @@ def test_f_r19_int_11_a_loader_placeholder_the_engine_deleted_after_loading_is_n
     d, man, t = checkpoint
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -438,7 +447,7 @@ def _quantized_prog_and_ck(t, tmp_path, extra_tensors: dict, sub: str, *, placeh
     d0 = tmp_path / "snap"                                                          # the fixture's checkpoint dir (config.json: tied lm_head)
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], placeholder_bits) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], placeholder_bits) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -453,8 +462,8 @@ def _quantized_prog_and_ck(t, tmp_path, extra_tensors: dict, sub: str, *, placeh
     write_safetensors(str(d2 / "model.safetensors"), t2)
     (d2 / "config.json").write_text((d0 / "config.json").read_text())
     man2 = tmp_path / f"{sub}.json"
-    json.dump({"checkpoints": [{"repo": f"test/{sub}", "revision": "abc", "local_path": str(d2),
-                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d2 / "model.safetensors"))}}}]}, open(man2, "w"))
+    Path(man2).write_text(json.dumps({"checkpoints": [{"repo": f"test/{sub}", "revision": "abc", "local_path": str(d2),
+                                                       "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d2 / "model.safetensors"))}}}]}))
     return prog, fields, L, WR.CheckpointIndex(str(d2), checkpoints_manifest=str(man2))
 
 
@@ -563,18 +572,18 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
     d, man, t = checkpoint
     L = "model.layers.0."
     qkv = {"weight": L + "self_attn.qkv_proj.weight", "shape": [(HQ + 2 * HKV) * D, H]}
-    program = {"calls": [{"op": "Embedding_v1", "reads": [{"value": "c00.input/ids", "width": 1},
-                                                           {"weight": "model.embed_tokens.weight", "shape": [V, H],
-                                                            "row_of": {"value": "c00.input/ids", "width": 1}}]},
-                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
-                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": I},
-                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]},
-                         {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
-                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * I, H]}]},
-                         {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
-                                                                {"weight": L + "input_layernorm.weight", "shape": [H]}]},
-                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
-               "logits": {"name": "logits_processor", "w": {"weight": "lm_head.weight", "shape": [V, H]}}}
+    program: dict[str, Any] = {"calls": [{"op": "Embedding_v1", "reads": [{"value": "c00.input/ids", "width": 1},
+                                                                           {"weight": "model.embed_tokens.weight", "shape": [V, H],
+                                                                            "row_of": {"value": "c00.input/ids", "width": 1}}]},
+                                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
+                                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": INTER},
+                                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]},
+                                         {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
+                                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * INTER, H]}]},
+                                         {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
+                                                                                {"weight": L + "input_layernorm.weight", "shape": [H]}]},
+                                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
+                               "logits": {"name": "logits_processor", "w": {"weight": "lm_head.weight", "shape": [V, H]}}}
     build = {"program": program, "program_digest": "b" * 128}
     assert [f for f, _s, _b in WR.served_weight_fields(program)] == ["model.embed_tokens.weight", L + "self_attn.qkv_proj.weight",
                                                                       L + "mlp.down_proj.weight", L + "mlp.gate_up_proj.weight",
@@ -591,8 +600,8 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
     res = WR.check(rec, live_digests(bad), program_digests_of_record={"b" * 128})
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [L + "mlp.gate_up_proj.weight"]
     assert WR.check(rec, live_digests(served), program_digests_of_record={"c" * 128})["result"] is False
-    program["calls"][2]["reads"][1]["shape"] = [I, H]
-    program["calls"].append({"op": "mm", "reads": [{"weight": L + "mlp.down_proj.weight", "shape": [H, I]}]})
+    program["calls"][2]["reads"][1]["shape"] = [INTER, H]
+    program["calls"].append({"op": "mm", "reads": [{"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]})
     with pytest.raises(ValueError, match="down_proj.weight is read at"):
         WR.served_weight_fields(program)
 
@@ -606,14 +615,14 @@ def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(che
     assert normalizer_word(2304) == 0x4240                              # Gemma-2-2B: sqrt(2304) = 48.0 exactly, bf16 0x4240
     d, man, t = checkpoint
     prog, fields = _program()
-    prog["instances"]["params"] = [["weights", "{model.model.embed_tokens.weight: Array<%d,Array<%d,Value<16>>>, model.model.normalizer: Value<16>, "
-                                    "model.model.norm.weight: Array<%d,Value<16>>}" % (V, H, H)]]
+    prog["instances"]["params"] = [["weights", (f"{{model.model.embed_tokens.weight: Array<{V},Array<{H},Value<16>>>, model.model.normalizer: Value<16>, "
+                                    f"model.model.norm.weight: Array<{H},Value<16>>}}")]]
     rec = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     assert rec["complete"] is True and rec["unresolved"] == [] and rec["unpinned"] == []
     by = {f["field"]: f for f in rec["fields"]}
     nf = by["model.model.normalizer"]
     assert nf["pinned"] is True and nf["served_name"] == "model.normalizer" and nf["sources"] == ["config.json:hidden_size"]
-    assert nf["rule"].startswith("config-derived: bf16(sqrt(hidden_size=%d))" % H)
+    assert nf["rule"].startswith(f"config-derived: bf16(sqrt(hidden_size={H}))")
     word = np.array(normalizer_word(H), dtype=np.uint16)
     assert nf["digest"] == hashlib.sha256(word.tobytes()).hexdigest()
     # the served buffer (named_buffers(): model.normalizer, 0-d bf16) is compared field by field like a weight ...
@@ -626,7 +635,7 @@ def test_gemma_normalizer_is_composed_from_config_and_compared_like_a_weight(che
     res = WR.check(rec, live_digests(bad))
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == ["model.normalizer"]
     # a normalizer declared at another width has no rule: unresolved, named, complete False (fail closed)
-    prog["instances"]["params"] = [["weights", "{model.model.normalizer: Value<32>, model.model.norm.weight: Array<%d,Value<16>>}" % H]]
+    prog["instances"]["params"] = [["weights", f"{{model.model.normalizer: Value<32>, model.model.norm.weight: Array<{H},Value<16>>}}"]]
     rec2 = WR.weights_of_record(prog, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man), verify_shards=False), prefix=PREFIX)
     assert rec2["complete"] is False and rec2["unresolved"][0]["field"] == "model.model.normalizer" and "one bf16 word" in rec2["unresolved"][0]["why"]
 
@@ -687,20 +696,18 @@ def test_verdict_reads_a_components_only_replay_by_its_method_rel_m0621():
 def test_cli_writes_the_record_beside_the_program(checkpoint, tmp_path):
     d, man, t = checkpoint
     prog, fields = _program()
-    import gzip
     pd = tmp_path / "build_request"
     pd.mkdir()
     with gzip.open(pd / "instances.json.gz", "wt") as f:
         json.dump(prog["instances"], f)
-    json.dump(prog["result"], open(pd / "result.json", "w"))
+    (pd / "result.json").write_text(json.dumps(prog["result"]))
     rc = cli.main(["weights-of-record", "--program-dir", str(pd), "--checkpoint-dir", str(d), "--checkpoints", str(man)])
     assert rc == 0
-    rec = json.load(open(pd / "weights_of_record.json"))
+    rec = json.loads((pd / "weights_of_record.json").read_text())
     assert rec["complete"] is True and rec["program_digest"] == "d" * 128 and rec["wrapper_prefix"] == PREFIX
 
 
 def _write_program(d, prog, digest, LP, T, extra_field=None):
-    import gzip
     d.mkdir(parents=True)
     inst = json.loads(json.dumps(prog["instances"]))
     inst["digest"] = digest
@@ -709,7 +716,7 @@ def _write_program(d, prog, digest, LP, T, extra_field=None):
         inst["params"] = [[n, (s[:-1] + f", {name}: {ty}}}") if n == "weights" else s] for n, s in inst["params"]]
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump(inst, f)
-    json.dump({"program_digest": digest, "ok": True, "LP": LP, "T": T}, open(d / "result.json", "w"))
+    (d / "result.json").write_text(json.dumps({"program_digest": digest, "ok": True, "LP": LP, "T": T}))
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
@@ -726,13 +733,12 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     _write_program(root / "build_request_LP9_T1", prog, B, 9, 1)
     _write_program(root / "build_request", prog, "d" * 128, 9, 2)             # the default wrapper shape: NOT a workload component
     (root / "build_workload").mkdir()
-    json.dump({"workload_digest": W}, open(root / "build_workload" / "workload_program.json", "w"))
-    json.dump({"program_digest": W, "component_digests": [A, B], "components": {"r0": {"program_digest": A, "LP": 4, "T": 2}, "r1": {"program_digest": B, "LP": 9, "T": 1}}},
-              open(root / "manifest.json", "w"))
+    (root / "build_workload" / "workload_program.json").write_text(json.dumps({"workload_digest": W}))
+    (root / "manifest.json").write_text(json.dumps({"program_digest": W, "component_digests": [A, B], "components": {"r0": {"program_digest": A, "LP": 4, "T": 2}, "r1": {"program_digest": B, "LP": 9, "T": 1}}}))
     # the CLI: derive from the first component, stamp the set, write beside the root
     out = tmp_path / "wor.json"
     rc = cli.main(["weights-of-record", "--programs-root", str(root), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out)])
-    rec = json.load(open(out))
+    rec = json.loads(Path(out).read_text())
     assert rc == 0 and rec["of_record"] is True and rec["program_digest"] == A and rec["program_dir"].endswith("build_request_LP4_T2")
     ors = rec["of_record_set"]
     # the default-shape build_request is struct-checked but NOT of record (not a workload component): its digest never joins the set
@@ -754,7 +760,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     # B1 shape of a row: only build_request under the root -> it IS of record (the manifest's program digest)
     r1 = tmp_path / "row_b1"
     _write_program(r1 / "build_request", prog, "d" * 128, 9, 2)
-    json.dump({"program_digest": "d" * 128}, open(r1 / "manifest.json", "w"))
+    (r1 / "manifest.json").write_text(json.dumps({"program_digest": "d" * 128}))
     rec1 = WR.stamp_of_record_set(WR.build_record(str(r1 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r1))
     assert rec1["of_record"] is True and rec1["of_record_set"]["program_digests"] == ["d" * 128]
     assert WR.check(rec1, live, program_digests_of_record={"d" * 128})["result"] is True
@@ -774,7 +780,7 @@ def test_of_record_set_is_stamped_from_every_component_and_checked_by_set_equali
     # a manifest carrying a truncated Program digest: the stamp is not of record, by name
     r2 = tmp_path / "row_short"
     _write_program(r2 / "build_request", prog, "d" * 128, 9, 2)
-    json.dump({"program_digest": "d" * 16}, open(r2 / "manifest.json", "w"))
+    (r2 / "manifest.json").write_text(json.dumps({"program_digest": "d" * 16}))
     rec4 = WR.stamp_of_record_set(WR.build_record(str(r2 / "build_request"), str(d), checkpoints_manifest=str(man)), str(r2))
     assert rec4["of_record"] is False and "not full sha512" in rec4["of_record_why"] and "d" * 16 in rec4["of_record_why"]
     # a root without any component Program is refused by the CLI
@@ -798,7 +804,7 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
     argv = ["--program-dir", str(pdir), "--checkpoint-dir", str(d), "--checkpoints", str(man), "--out", str(out), f"--supersedes={stale}"]
     monkeypatch.setattr("sys.argv", ["verity-vllm", "weights-of-record", *argv])
     assert cli.main() == 0
-    rec = json.load(open(out))
+    rec = json.loads(Path(out).read_text())
     dv = rec["derived"]
     assert dv["tool"] == "verity_vllm.check.weights_of_record" and dv["supersedes"] == str(stale) and dv["argv"] == argv
     assert dv["sources"]["program_dir"] == str(pdir) and dv["sources"]["program_files"] == ["instances.json.gz", "result.json"]
@@ -813,9 +819,6 @@ def test_cli_record_carries_its_derivation_provenance_and_names_what_it_supersed
 def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):
     """When code_version raises, derived.code_source says so: next to the git HEAD that replaced it, or, when git fails too, as the
     reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
-    import subprocess
-    import types
-
     import verity_vllm.pipeline.experiment as EX
 
     def broken(_root):
