@@ -13,6 +13,9 @@
 #   two_stage_small.py serve more; SMALL_FIRST and SMALL_SECOND="--firewall PATH" pass `first` and `second` more;
 #   SMALL_INLINE=1 runs the class as a served vocabulary's is, its block the check's body inlined, with `second
 #   --unlinked`: exit 0 when everything holds but round 2's wires (second-wires)
+#   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
+#   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
+#   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
