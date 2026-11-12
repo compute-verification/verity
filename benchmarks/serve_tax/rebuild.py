@@ -89,9 +89,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 import boundary as B  # noqa: E402 (beside this file)
 import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402

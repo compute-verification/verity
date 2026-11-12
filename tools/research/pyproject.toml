@@ -142,7 +142,7 @@ untraced = [
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
-          "pyproject.toml", "verity/configuration/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
+          "pyproject.toml", "tools/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/check/settings.py",
           "tools/verity/circuit_check/pyproject.toml",

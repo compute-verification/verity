@@ -2188,6 +2188,11 @@
       "paths": {
         "benchmarks/pouw/machine_model/": "benchmarks/machine_model/"
       }
+    },
+    {
+      "paths": {
+        "verity/configuration/config/": "tools/config/"
+      }
     }
   ]
 }

@@ -2330,7 +2330,7 @@ dev = [
     { name = "verity-bench", editable = "benchmarks/harness" },
     { name = "verity-circuit-check", editable = "tools/verity/circuit_check" },
     { name = "verity-cli", editable = "tools/verity/cli" },
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-difftest", editable = "verity/difftest" },
     { name = "verity-flock", editable = "verity/protocols/flock/prover" },
     { name = "verity-numerical", editable = "benchmarks/numerical" },
@@ -2351,7 +2351,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
     { name = "verity-vllm", editable = "adapters/vllm" },
 ]
 
@@ -2378,7 +2378,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "verity", editable = "." },
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
 ]
 
 [[package]]
@@ -2465,7 +2465,7 @@ requires-dist = [
 [[package]]
 name = "verity-config"
 version = "0.1.0"
-source = { editable = "verity/configuration/config" }
+source = { editable = "tools/config" }
 dependencies = [
     { name = "verity" },
 ]
@@ -2855,7 +2855,7 @@ requires-dist = [
     { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
-    { name = "verity-config", editable = "verity/configuration/config" },
+    { name = "verity-config", editable = "tools/config" },
 ]
 provides-extras = ["torch", "research"]
 

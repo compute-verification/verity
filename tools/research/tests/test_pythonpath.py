@@ -18,7 +18,7 @@ from waits import wait_runner
 REPO = Path(__file__).resolve().parents[3]
 SRC = str(Path(remote.__file__).resolve().parents[1])
 PY = sys.executable
-REAL_ROOTS = ["tools/research/src", "verity/configuration/config", "infra/cluster/src", "infra/ops", "benchmarks/numerical/python",
+REAL_ROOTS = ["tools/research/src", "tools/config", "infra/cluster/src", "infra/ops", "benchmarks/numerical/python",
               "benchmarks/harness", "adapters/vllm", "verity/protocols/flock/prover/python", "tools/verity/circuit_check/src",
               "benchmarks/machine_model", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq",
               "verity/difftest/python",

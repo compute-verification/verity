@@ -26,6 +26,6 @@ inputs = ["adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/co
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/engine/spec.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/records",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json",
-           "verity/configuration/config/verity_config", "benchmarks/specs/README.md", "verity/__init__.py", "verity/settings.py",
+           "tools/config/verity_config", "benchmarks/specs/README.md", "verity/__init__.py", "verity/settings.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/definitions/circuits/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
           "verity/definitions/__init__.py"]

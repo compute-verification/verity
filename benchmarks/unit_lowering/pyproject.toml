@@ -13,7 +13,7 @@ untraced = ["tests/test_unit_lowering.py"]
 # class_statement under it), which the AND-row test reads too; run.py reads the run's commit through verity_config.settings.
 inputs = ["verity", "benchmarks/pouw/h1_prove", "benchmarks/pouw/hidden_zk", "adapters/vllm/tests/__init__.py",
           "adapters/vllm/tests/protocols/__init__.py", "adapters/vllm/tests/protocols/pouw_h1_circuits.py",
-          "verity/configuration/config/verity_config"]
+          "tools/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

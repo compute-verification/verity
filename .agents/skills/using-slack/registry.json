@@ -513,7 +513,7 @@
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",

@@ -209,7 +209,7 @@ paths = [
     "*/pyproject.toml",
     "benchmarks/numerical/python/verity_numerical",
     "adapters/vllm/verity_vllm",
-    "verity/configuration/config/verity_config",
+    "tools/config/verity_config",
     "tools/research/src/research",
     "tools/verity/circuit_check/src/circuit_check",
     "verity",

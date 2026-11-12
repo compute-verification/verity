@@ -66,7 +66,7 @@ scratch=$(mktemp -d)
 site=$scratch/site/verity_route_capture-0.0.dist-info; mkdir -p "$site"
 printf 'Metadata-Version: 2.1\nName: verity-route-capture\nVersion: 0.0\n' > "$site/METADATA"
 printf '[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n' > "$site/entry_points.txt"
-export PYTHONPATH="$scratch/site:$here:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$scratch/site:$here:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 # only the capture's plugin loads, and the compile starts from empty caches so the generated code kept is this run's
 export VLLM_PLUGINS=verity_route_capture
 export VLLM_CACHE_ROOT=$scratch/cache/vllm TORCHINDUCTOR_CACHE_DIR=$scratch/cache/inductor TRITON_CACHE_DIR=$scratch/cache/triton

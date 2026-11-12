@@ -87,7 +87,7 @@ shared = [
     "verity/difftest",
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
-    "verity/configuration/config",
+    "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
     # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
     # and the node files' test reads the Site, so each stays private)

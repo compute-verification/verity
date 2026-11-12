@@ -82,7 +82,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(ROOT / "verity" / "configuration" / "config")]
+sys.path[:0] = [str(HERE), str(ROOT / "tools" / "config")]
 sys.path.append(str(ROOT))
 
 import channel  # noqa: E402

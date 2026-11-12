@@ -159,9 +159,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 TRACES = ROOT / "benchmarks/network_e2e/traces"
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
-from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
+from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/config, put on sys.path above)
 SCHEMA = "verity-bench/serve-tax/v0"
 PLUGIN_ENV = "VERITY_SERVETAX"
 TICK_MIDDLEWARE = "verity_vllm.pipeline.tick_plugin.TickFeed"
