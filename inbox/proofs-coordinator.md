@@ -93225,3 +93225,26 @@ I continue with the pull request (on the quick tier's result) and the design rea
 **The pull request.** #9357 is open as a draft, based on `main`, with no ready mark and no ready line from me [run: `gh pr view`: `draft=true`, no label]. I opened it as a draft because you wrote "do not open pull request 3 as ready"; the queue's own text says draft state is ignored and the ready label is what counts [read: `queue.py`]. Its body opens with the notice: the old and new statements, the six items with item 1's two sentences as you gave them, what is not established (with OUTBITS's sentence, naming the three templates, and without a worker's name), then the lock records that move, the cap's table and the checks. The quick suites' line says they were in flight; I mend it with `research queue edit` when the run ends.
 
 **What I wait for.** The quick suites `r20261112-160323-3a8c`. I ask no mark before your 18:00Z message, and I write a ready line only when you say.
+
+## CROSSCLOSE, Thu 12 Nov 16:36Z: #9075 with `7d09ccd7ccc2`: every suite passes but one test, which is a race in vllm's proof-server test on `main`'s own bytes; your call whether to mark on that
+
+**#9075, head `cbe0bcdd160d`, close `7d09ccd7ccc20cd9716df577b086520b3461f434`**
+
+- Tries: 4 Lean tries exit 0; selections 8 and 101 passed (2 selections; my 16:13Z entry said 3). Suites, `main`'s bytes of network's two files: 72 touched, 64 passed, 8 failed, the same 8 by the `Record` import. `r20261112-142500-cc58` [run]
+- On network's `295851c3cfd6` bytes, the 8 and the repository's suite: **8 of 9 passed, `verity-flock` failed 1 test** (1,464 passed, 1 failed, 30 skipped). `r20261112-161409-4c6e` [run] The other eight: `verity-network-traces` 629; `benchmarks/one_stage` 956; `verity-cli` 109; `verity-proof-throughput` 48; the certifier's verifier 1,374 and 1 skipped; `benchmarks/prove_path` 170; circuit-check's suite 368 and 2 skipped; the repository's 351.
+- **The one failure is not the close's and not the merge's.** `verity/protocols/flock/prover/tests/test_proof_server.py::test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session`, line 307: it wants `prover-cpu exited (rc 0) before its records` and got `verifier-eeeeeeeeeeeeeeee exited (rc -15) before its records`. [run]
+  - The test and `proof_server.py` on this tree are `main`'s bytes (`412976ca2b`, `aa8d29b355`); neither the crossed line nor #9075 changes them. [run: blobs compared] Both are #9232's, `Lane vllm`, on `main` since 11:47Z today. [read: the pull request]
+  - It is a race in `proof_server.py`'s `_exited`: the thread that ends the verifier is started before the loop that fails the prover's sessions, so the verifier's own exit (the `terminate`, rc -15) can fail the session first, and the test pins the prover's wording. [read: `proof_server.py` lines 516-535 and 537-546 on `main`]
+  - The same test on the same bytes passed in 9 other runs of mine today (`377e`, `40e3`, `cc58`, `f794`, `bbd9`, `a785`, `7cf7`, `2d9e`, `b901`). [run: each suite's log]
+- **Open choice for you:** mark #9075 on this, or wait. My reading: mark; nothing the close or the head touches failed. For the count only, the same suite runs again on the same tree: `r20261112-163523-6f8c` (`vy-nebius-cpu-9`), ETA 16:52Z [guess]. Whatever it shows, the failure above stands as a flake.
+- **One line for another owner, vllm:** that test flakes on `main` (owner vllm, files `verity/protocols/flock/prover/python/verity_flock/proof_server.py` and its test), about 1 run in 10 here. AGENTS.md has a flaking test deleted. It is in the quick tier of `verity-flock`, so a train can fail on it. I say nothing to them.
+
+**#9080's Lean (`r20261112-161131-8a97`), so far:** 5 of the 7 tries exit 0 (`WiredAt`, `WiredScope`, `Rewire`, `AddressesWired`, `WireMapRewires`); `RevealsWired.lean` and `Flock.lean` and the two suites still to come. [run]
+
+**Other**
+
+- `r20261112-145703-7cf7` (lean's line with `main` `06728b3b7c66` and my stand-in) ended 16:11Z: 71 suites, 69 passed, 2 failed, both known and closed elsewhere: the `paced` test (network's `295851c3cfd6`) and the `test_tick.py` token (lean's worker). [run]
+- For the order: `r20261112-161536-c09d` runs the merge whole at today's `main`: lean's trial `44d0bf03d49e` with `main` `87fec6c6491b` (no new stop [run: `git merge`]), our closes, network's two files and the `CV.Advice()` token; 125 suites touched, 41 passed, 0 failed so far. ETA 18:00Z [guess].
+- `main` is still `87fec6c6491b` (16:32Z). [run]
+
+Branches as at 16:13Z (`2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`, `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`). Running: `6f8c`, `8a97`, `c09d`.
