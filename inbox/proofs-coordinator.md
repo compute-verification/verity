@@ -109021,3 +109021,65 @@ My three runs on the cpu nodes never started, so I cancelled each one in the min
 **Not established:** as at 23:20Z.
 
 For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8592d9d7c429` | records `aceb`, quick tier `58bf`, tries `3394` waiting on vy-nebius-2 since 23:18Z | ready line by Fri 06:00Z | nothing needed.
+
+## WINDOWAT, Thu 12 Nov 23:32Z: two of my runs on vy-nebius-2 have waited over ten minutes for a Lean slot (14 and 21 checks ahead); SetsUp.lean and States.lean compiled and are committed
+
+Mailbox read at `611e76c48c` (last message: yours of 23:07Z). Heads: soundness `3e26cac7596a`, the lever
+`7d4e96a5fa07`, #9441 `ce41e7c92e8e`, all unchanged; `main` `7e70df68bd18`. [run: `git fetch`, 23:31Z]
+
+### 1. The wait you asked to be told of
+
+- `r20261112-231926-e80f` (the undrawn refusal's try, 24 GB) has waited since 23:19Z: "14 check(s) ahead in line".
+  `r20261112-232053-5e23` (the try of `MemberForm/Tree.lean`, 12 GB) has waited since 23:21Z: "21 check(s) ahead in
+  line". Neither has started. [run: the slot records of both, read 23:31Z]
+- `r20261112-231051-ac01`, launched 23:10Z, did not wait so: its first try was building at 23:15Z and all four had
+  ended when I polled at 23:27Z. [run: polled at those times]
+
+### 2. Done since 23:11Z
+
+- `MemberForm/SetsUp.lean` (10 theorems) and `MemberForm/States.lean` (4 theorems) elaborate with only `propext`,
+  `Classical.choice` and `Quot.sound`. [run: `r20261112-231051-ac01`, "axiom probe: none of its 10 theorems" and
+  "none of its 4 theorems"] Committed and pushed: `7baa619f8e` and `6ff56af5cf` on `cursor/proofs-windowat-5e4b`.
+- **Both commit messages describe their file loosely, and I cannot amend them** (no force push). What the files hold
+  is in their module docstrings: `SetsUp.lean` states the window's `SetsUp` at the per-member form and proves
+  `windowAt_members`; `States.lean` proves `statesMember` (the statement the form read for a member is
+  `StatesMember` of the window's member on the committed files). The message of `7baa619f8e` speaks of "each
+  session's position", which is not in that file. [read: the two files' docstrings against `git log -2`]
+- `MemberForm/Files.lean` failed at one step of `fileNamed_pairs` (line 121: `String.toUTF8` is not unfolded to
+  `toByteArray` across the module boundary). [run: `r20261112-231051-ac01`] Fixed with
+  `String.toUTF8_eq_toByteArray`; not yet tried again.
+- **The undrawn refusal's first try failed and is fixed.** Two `#guard`s of `Spot/OneStageZk.lean` that tested a later
+  check ran the members' run with no proved unit, which the refusal now stops first. [run:
+  `r20261112-231053-8366`, lines 1812 and 1815, cancelled after it] Commit `fd0515e77f` on
+  `cursor/proofs-windowat-undrawn-5e4b` gives them a drawn unit and adds two guards of the refusal at the run. Its
+  try is `r20261112-231926-e80f`, waiting as above. Nothing to open yet.
+
+### 3. D, as it now stands
+
+- Written, waiting on its try: `MemberForm/Tree.lean` (12 statements): a member's record held to its own tree
+  (`sessionTreeReason #[t.unclosed]`) gives, of `t` among the log's trees, each record round as an opening of `t`,
+  the record's streams as streams of `t`, at least the record's rounds opened, and `t` sampled with the session's
+  coin tree. [read: my file]
+- **What the `round` clause of `SessionOpens` needs that no file has**: that each opening the read shows of a tree is
+  a round `coinTreesOf` holds in that tree's `opened` (the lemmas on `main` go the other way, from `opened` to a
+  line), and that `sessionTreeReason`'s last test (`EXTRA_OPENING`) holds of the accepted record. [read:
+  `Lines.lean:638` `TreesOf.opened` asks for the line's `coins` as a string, which I found no lemma giving of an
+  accepted line; `Trees.lean:105` and `MovesReach.lean:536` read the loop and drop the test after it] Both are mine to write,
+  in a file of their own. The second is the fact the one-statement form takes today as the open premise
+  `LogOpensRecorded` [read: `security/lean-audit.json:3279`, issue PRF-579]; I say so under "To post".
+- The link clause still takes the hypothesis of 23:11Z's §1 (each session's tree's first opening is of its
+  `session` stream). No ruling read yet on who writes that refusal.
+
+### To post
+
+- To infra, through you: two runs of the proofs pool on vy-nebius-2 waited over ten minutes at 23:31Z with 14 and
+  21 checks ahead of them.
+- To soundness: the lemma "what `sessionTreeReason` accepts opens only the record's rounds" (from its last test,
+  `EXTRA_OPENING`) and the lemma "each opening the read shows is one its tree's `opened` holds" will be in
+  `MemberForm/` on my branch, stated of any trees. They are what `LogOpensRecorded` (PRF-579) asks at one session.
+
+### Not established
+
+- Whether `Files.lean` elaborates after its fix, and whether `Tree.lean` elaborates at all: neither has run.
+- Whether the undrawn refusal's try passes: it has not started.
+- D's lemma count: `Tree.lean` has 12 statements; the two lemmas above and the sessions' file are not written.
