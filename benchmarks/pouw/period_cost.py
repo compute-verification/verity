@@ -61,6 +61,15 @@ from pathlib import Path
 
 from verity_machine_model.headline import row
 
+#: what the tests read
+__all__ = [
+    "CUSTODY_GB", "Config", "EPS_FLAT", "LANE_OUTPUTS", "LAYERS", "LEVERS", "NEAR_TERM", "NODES", "NODE_GB", "RATES",
+    "ROUNDS", "ROWS", "R_SERVED", "SERVED_UNITS_PER_LAYER", "SPEND", "STATEMENT_LANES", "TARGET", "TODAY", "T_WINDOW",
+    "T_WINDOW_DITHER", "U_FULL", "U_TODAY", "all_skip_pays", "apply", "configurations", "credit", "eps", "first_credit",
+    "lam", "lam_limit", "lanes_per_unit", "least_one_window_k_d", "lever", "long_window", "main", "near_term", "period",
+    "route", "statement_lanes", "window_cost", "window_s", "windows",
+]
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
 DELTA_S_LOG2 = 40
 #: ε_♭ + ε_μ on sm_120's data sheet (H1 + fx1), the machine model's sheet row: ε_skip + ε_machine is Compose's ε_♭ and
