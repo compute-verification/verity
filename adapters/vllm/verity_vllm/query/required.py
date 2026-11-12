@@ -654,7 +654,10 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     sweep, wr = fmt.sweep_and_requests(workload)
     workload_request_id = wr[0].get("request_id") if wr and isinstance(wr[0], dict) else None
     request_id = fmt.request_label(request_id, workload)
-    k_req = int(request_id[1:])                            # `request_label` answers `r<k>` or refuses
+    numbered = fmt.REQ_RE.match(request_id)                # `request_label` answers `r-1` for a position below zero
+    if numbered is None:
+        raise ValueError(f"request id {request_id!r} is not `r<k>`, k the request's position in the workload manifest, zero or more")
+    k_req = int(numbered.group(1))
     if wr and k_req < len(wr) and isinstance(wr[k_req], dict) and str(wr[k_req].get("request_id")) != str(workload_request_id):
         workload_request_id = wr[k_req].get("request_id")
     arr = sweep.get("arrive_steps")                        # this request's, the first where the sweep lists fewer, step 0 where it lists none

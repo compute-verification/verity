@@ -54,8 +54,9 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity's count bound,
   `profile.Stratified.count_bound` over its sample: over the answer's own `strata`, which the quantity then carries,
   where its profile samples each stratum on its own, and over a uniform sample of the checked level otherwise; W_cert,
-  S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
-  and 1/10^6, its run ids, and `source: real|fixture`;
+  S0, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
+  and 1/10^6, its run ids, and `source: real|fixture`. S0 is PoUS's state bound ⌊ρ·|C|⌋; the schema also reads
+  `S_cert`, that quantity's older name, which nothing writes;
 - the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
   `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;

@@ -93,7 +93,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
     s.add(WIPE, sku="CARD B")
     s.labels[WIPE, "label"] = "full-fill wipe certified: foreign <= 8,589,934,592 bits (1.0737 GB) at eps 2^-128, M = 8,589,934,592 B"
     references = tmp_path / "references.json"
-    references.write_text(json.dumps({"PoUS memory held": POUS, "wipe residue": WIPE}))
+    references.write_text(json.dumps({"PoUS state bound": POUS, "wipe residue": WIPE}))
     monkeypatch.setattr(M, "REFERENCES", references)
     return s
 
@@ -249,10 +249,11 @@ def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsy
     store.add(RUN, {"out/verifier.json": a_record(a_session())})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[3] == f"  beside it, PoUS memory held: 0.750 (6.44 GB of 8.59 GB; {POUS}, 2000-01-02, CARD A)"
+    assert text[3] == f"  beside it, PoUS state bound: 0.750 (6.44 GB of 8.59 GB; {POUS}, 2000-01-02, CARD A)"
     assert text[4] == f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; {WIPE}, 2000-01-02, CARD B)"
     assert [(r["name"], r["value"], r["run"], r["date"], r["card"]) for r in doc["beside"]] == [
-        ("PoUS memory held", 0.75, POUS, "2000-01-02", "CARD A"), ("wipe residue", 0.125, WIPE, "2000-01-02", "CARD B")]
+        ("PoUS state bound", 0.75, POUS, "2000-01-02", "CARD A"), ("wipe residue", 0.125, WIPE, "2000-01-02", "CARD B")]
+    assert all(s in doc["beside"][0]["unit"] for s in ("S0 = floor(rho*|C|)", "not the device memory credited"))
 
 
 def test_a_reference_that_cannot_be_read_says_why_and_the_number_still_prints(store, capsys):
@@ -262,7 +263,7 @@ def test_a_reference_that_cannot_be_read_says_why_and_the_number_still_prints(st
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 0.25 and [r["value"] for r in doc["beside"]] == [None, None]
-    assert text[3] == f"  beside it, PoUS memory held: not read ({POUS}'s record certifies nothing)"
+    assert text[3] == f"  beside it, PoUS state bound: not read ({POUS}'s record certifies nothing)"
     assert text[4] == f"  beside it, wipe residue: not read ({WIPE}'s label doesn't state a residue: 'a wipe, no bound stated')"
 
 
@@ -280,7 +281,7 @@ def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_n
     assert M.main(["--loopback"], store_of=no_store, run=launch) == 0
     text, doc, _ = printed(capsys)
     assert doc["value"] == 4.5 and all(r["value"] is None for r in doc["beside"])
-    assert text[4] == "  beside it, PoUS memory held: not read (the evidence store's client isn't installed here)"
+    assert text[4] == "  beside it, PoUS state bound: not read (the evidence store's client isn't installed here)"
 
 
 def test_every_reference_of_the_tree_has_a_reader():
