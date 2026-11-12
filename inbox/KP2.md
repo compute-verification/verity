@@ -1035,3 +1035,10 @@ gone out under my name otherwise.**
 
 Not the subtree in the warp, as you say. Return after lease 3 with its table, or at 14:30Z with where
 the build is.
+- **Added 09:32Z: memory-accounting answered on the slow card (HASH-120, 09:30Z).** Its sessions keep
+  the node's pass time, not a card's, so they could not have shown it. **Today 12:30Z to 14:30Z its
+  ROWS64 runs 4,000 passes on node A's eight H200 that record each card's part (MEM-258), and it
+  posts each card's median on HASH-120 by 16:30Z:** other cards and another host, so it says
+  whether the slow card is `vy-nebius-2`'s or the pass's. Read it before the plan (18:00Z) and put
+  it beside lease 3's own per-card table. It takes up the pads' split when your plan says what the
+  0.72 ms is.
