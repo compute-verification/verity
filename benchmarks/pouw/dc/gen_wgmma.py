@@ -10,7 +10,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 
 #: (name, shape, PTX types, accumulator C type and constraint, extra immediates after scale-d, A from registers[, 2:4
-#: sparse A: wgmma.mma_async.sp with a metadata register and sparsity selector 0, K the logical depth])
+#: sparse A: wgmma.mma_async.sp with a metadata register and sparsity selector 0, K the logical depth]). An "f16" ctype
+#: is an f16x2 accumulator (uint32_t holding two outputs), so a thread writes half the registers of an f32 accumulate.
 FORMS = [
     *[(f"s8_n{n}", f"m64n{n}k32", "s32.s8.s8", "int", "r", "", False) for n in (8, 16, 32, 64, 128, 192, 256)],
     ("s8_n256_rs", "m64n256k32", "s32.s8.s8", "int", "r", "", True),
@@ -30,6 +31,15 @@ FORMS = [
     ("e4m3_n256_sp", "m64n256k64", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False, True),
     ("f16_n256_sp", "m64n256k32", "f32.f16.f16", "float", "f", ", 1, 1, 0, 0", False, True),
     ("s8_n256_rs_sp", "m64n256k64", "s32.s8.s8", "int", "r", "", True, True),
+    # H32's coverage (probes/sm90_h32_tc.cu): the FP kinds at small N, b1 at small N, and FP16 accumulate
+    *[(f"e4m3_n{n}", f"m64n{n}k32", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False) for n in (8, 16, 32, 64)],
+    *[(f"f16_n{n}", f"m64n{n}k16", "f32.f16.f16", "float", "f", ", 1, 1, 0, 0", False) for n in (8, 64, 128)],
+    *[(f"bf16_n{n}", f"m64n{n}k16", "f32.bf16.bf16", "float", "f", ", 1, 1, 0, 0", False) for n in (8, 64)],
+    *[(f"tf32_n{n}", f"m64n{n}k8", "f32.tf32.tf32", "float", "f", ", 1, 1", False) for n in (8, 64, 128)],
+    *[(f"b1_n{n}", f"m64n{n}k256", "s32.b1.b1.and.popc", "int", "r", "", False) for n in (8, 64, 128)],
+    *[(f"f16f16_n{n}", f"m64n{n}k16", "f16.f16.f16", "f16", "r", ", 1, 1, 0, 0", False) for n in (8, 256)],
+    *[(f"e4m3f16_n{n}", f"m64n{n}k32", "f16.e4m3.e4m3", "f16", "r", ", 1, 1", False) for n in (8, 256)],
+    ("e5m2f16_n256", "m64n256k32", "f16.e5m2.e5m2", "f16", "r", ", 1, 1", False),
 ]
 
 
@@ -38,7 +48,8 @@ def n_of(shape: str) -> int:
 
 
 def form(name, shape, types, ctype, con, extra, rs, sp=False) -> str:
-    nacc = 64 * n_of(shape) // 128
+    nacc = 64 * n_of(shape) // 128 // (2 if ctype == "f16" else 1)
+    ctype = "uint32_t" if ctype == "f16" else ctype
     regs = ", ".join(f"%{i}" for i in range(nacc))
     outs = ", ".join(f'"+{con}"(d[{i}])' for i in range(nacc))
     if rs:

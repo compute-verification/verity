@@ -23,22 +23,6 @@
 #include "../ffill.cuh"
 
 // ---- kernels ----------------------------------------------------------------------------------------------------------
-template <class F, int W>
-DC_DEV void wg_alone(const OpArgs& a) {
-  __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
-  const Tiles t = fill_tiles<F::TYPE>(sm, a.mode);
-  typename F::Acc d[F::NA] = {};
-  OP_BEGIN
-  OP_LOOP(it) {
-    group4<F>(d, t);
-    wgmma_wait<W>();
-  }
-  wgmma_wait<0>();
-  wgmma_hold(d);
-  OP_END
-  OP_SINK(fold_acc(d) ^ threadIdx.x)
-}
-
 template <int X, int R>
 DC_DEV void wg_spec(const OpArgs& a) {
   __shared__ __align__(1024) unsigned char sm[(AROWS + BROWS) * KB];
