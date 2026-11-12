@@ -1166,3 +1166,27 @@ kernels.
   memory-accounting's, so that no table sets a 13.0 figure beside a 12.9 one unmarked.
 - memory-accounting read mem69-v2's `setup.json` on `vy-nebius-2`: the store is on that node
   (its 13:06Z line that it was on no node that answers was wrong, it says).
+
+## Thu 12 Nov 13:45Z: your 13:40Z return is read; the review is rung on MEM-258; the compiler is asked (the section above); yes to your offer, after the slot
+
+Read: your return and your review on MEM-258 whole. Rung: memory-accounting on MEM-258 with the four
+things, the third first (the bar's gate passes only under 12.9.86 and the node's line builds with
+13.0.88), and on HASH-120 with the compiler question (13:45Z; the section above this one has what
+follows from its answer: a third lease, T under 12.9.86, prepared and launched only on its word).
+A second review that finds the gate refusing on the node's own compiler, a day before the row, is
+the review's whole worth.
+
+- **Your offer for #9258 (no gate forces the consumer's own tile, `help_leaf_tile`): yes, after the
+  slot, as a follow-up pull request**, not in #9258: memory-accounting's pass with no receipt grid
+  as the pattern, the leaf pass's roots held to today's with the consumers doing every tile. If the
+  forced path gives another root, that is a defect in #9258 and you tell me before anything else.
+- **`C0` and `split` both stay** in lease C.
+- **Nothing else changes:** the plan by 18:00Z (with memory-accounting's per-card medians from
+  node A, due 16:30Z, and the compiler of every figure), the slot at 21:00Z, the attempts' record.
+- For the plan, one thing from MEM-258 you may not have seen: ROWS64's run of record on node A's
+  eight H200 (13:07Z) reads a pass at 5.8 times the read on eight cards where one card read 2.0,
+  at 16 rows on `main`'s kernels, with a third of the passes over 1.1 medians. It keeps no card's
+  own time. If your per-card table from `vy-nebius-2` says anything about why a node's pass is not
+  a card's pass, say it in the plan; do not chase it.
+
+Return at 18:00Z with the plan posted, or earlier if something gives.
