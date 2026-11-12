@@ -4,6 +4,8 @@ known from the design and the previous adapter; `test_resolve_m1.py` checks the 
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from verity_vllm.observe.events import (
@@ -684,6 +686,18 @@ def test_attention_flags_must_match_the_registered_body():
     assert set(uns[0].consumed) == next(r for r in se.roots if r.op == uns[0].op).ids()
 
 
+def test_fa2_arguments_under_a_schema_that_names_none_are_unsupported_with_the_schema():
+    events, start = decode_step()
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "_vllm_fa2_C.varlen_fwd.default":
+            events[i] = dataclasses.replace(e, schema="_vllm_fa2_C::varlen_fwd(...)")
+    se = step_events(events)
+    (u,) = [r for r in resolve_step(se, context(start, se.sample)) if isinstance(r, Unsupported)]
+    assert u.op == "vllm.unified_attention_with_output.default" and u.reason.startswith("FA2 op arguments q/k/v/out not bound by name")
+    assert u.detail["schema"] == "_vllm_fa2_C::varlen_fwd(...)" and u.detail["names"][:4] == ["arg0", "arg1", "arg2", "arg3"]
+    assert len(u.detail["views"]) == 7 and set(u.consumed) == next(r for r in se.roots if r.op == u.op).ids()
+
+
 def test_silu_embedding_tokenselect_gather():
     events, start = decode_step()
     se = step_events(events)
@@ -750,6 +764,19 @@ def test_gemm_under_aten_mm_wrapper():
     assert not isinstance(g, ComputeGroup) or g.before == ()
 
 
+def test_a_wrapper_around_two_gemm_launches_is_unsupported_and_names_both():
+    """`GemmLaunch.match`: a wrapper call resolves only around exactly one batch-invariant launch."""
+    events, start = decode_step(mm_wrapper=True)
+    mm = next(e for e in events if isinstance(e, DispatchEnter) and e.op == "aten.mm.default")
+    at = next(i for i, e in enumerate(events) if isinstance(e, TritonLaunch) and e.parent == mm.id)
+    events.insert(at + 1, dataclasses.replace(events[at], id=events[at].id + 500))
+    se = step_events(events)
+    (u,) = [r for r in resolve_step(se, context(start, se.sample)) if isinstance(r, Unsupported)]
+    node = next(r for r in se.roots if r.op == "aten.mm.default")
+    assert u.reason == "aten.mm without exactly one batch-invariant matmul_kernel_persistent launch"
+    assert u.detail["launches"] == [events[at].fn] * 2 and set(u.consumed) == node.ids() and len(node.ids()) == 3
+
+
 def test_f32_logits_upcast_is_repointed_to_bf16_source():
     events, start = decode_step(f32_logits=True)
     se = step_events(events)
@@ -790,6 +817,37 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
     alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
     assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
+
+
+def _as_index_select(events, dim=0):
+    """The step's logits gather as `aten.index_select(hidden, dim, logits_indices)`."""
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "aten.index.Tensor":
+            src, (index,) = e.args
+            events[i] = dataclasses.replace(e, op="aten.index_select.default", args=[src, dim, index],
+                                            schema="aten::index_select(Tensor self, int dim, Tensor index) -> Tensor")
+    return events
+
+
+def _logits_gather(events, start):
+    se = step_events(events)
+    return [r for r in resolve_step(se, context(start, se.sample))
+            if isinstance(r, Unsupported) or isinstance(r, Transparent) and r.pattern == "sample.logits_gather"]
+
+
+def test_the_logits_gather_as_an_index_select_along_the_rows_is_the_same_move():
+    events, start = decode_step()
+    (want,) = _logits_gather(list(events), start)
+    (got,) = _logits_gather(_as_index_select(events), start)
+    assert isinstance(got, Transparent) and got.effect == "move" and isinstance(got.src, Gather) and got.src.indices == (0,)
+    assert (got.src, got.dst, got.rows, got.consumed, got.kernels) == (want.src, want.dst, want.rows, want.consumed, want.kernels)
+
+
+def test_an_index_select_along_another_axis_is_unsupported():
+    events, start = decode_step()
+    (u,) = _logits_gather(_as_index_select(events, dim=1), start)
+    assert isinstance(u, Unsupported) and u.op == "aten.index_select.default"
+    assert u.reason == "index_select not along the leading axis" and u.detail["dim"] == 1
 
 
 def test_integer_metadata_triton_kernel_is_noop():
