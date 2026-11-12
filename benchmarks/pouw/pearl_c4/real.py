@@ -182,7 +182,6 @@ def tile(job: Job, name: str, t: int) -> dict:
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
     fast = settings.PEARL_C4_F1 == "fast"
     if fast:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
     s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)

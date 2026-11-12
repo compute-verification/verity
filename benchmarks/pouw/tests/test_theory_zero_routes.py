@@ -1,10 +1,6 @@
-"""IDP.4A-made words pay on checked_strip's facets once the fold drops below where JI3e_0 binds honest's tile."""
+"""theory/zero_routes_check.py: IDP.4A-made words pay on checked_strip's facets once the fold drops below where JI3e_0
+binds honest's tile."""
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
 import zero_routes_check as zr
 

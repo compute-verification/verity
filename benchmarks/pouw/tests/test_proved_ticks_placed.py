@@ -5,10 +5,7 @@ compute, basis "proved"."""
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import proved_ticks as PT
 import pytest
 from datacenter import (FLEET_CLOSED, Assumption, Cadence, Computed, Credit, Datacenter, DeviceEntry, Interval, LinkEntry,
                         Plan, Zone, account, ands, crossings, names, place, register)
@@ -16,11 +13,6 @@ from datacenter.logical import census_of
 from datacenter.models import s8_grid
 from verity.protocols.pouw.prover.circuit import compile as pouw
 from verity.protocols.pouw.prover.circuit import h1tile
-
-spec = importlib.util.spec_from_file_location("pouw_proved_ticks", Path(__file__).parents[1] / "proved_ticks.py")
-PT = importlib.util.module_from_spec(spec)
-sys.modules["pouw_proved_ticks"] = PT
-spec.loader.exec_module(PT)
 
 EPOCH = Interval(0, 16)
 HBM, RESIDUAL = 6.4e10, 8e6
