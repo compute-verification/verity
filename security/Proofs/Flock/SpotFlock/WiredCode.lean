@@ -30,9 +30,11 @@ verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
   names is refused; the lemma's docstring says what ties that circuit's ports to the member's.
 
 The verifier is `V h` itself. Its check of the session statements (`stmtOk`) holds each session's reads to the
-links and wires the verifier holds (`readsOk`), and does not run round 2's check of the design itself
-(`SecondStage.designOk`): no run is refused for a design that fails one of the three conditions. So they are
-premises of each statement about the connected code, and such a statement says nothing at a held code that fails one.
+links and wires the verifier holds and runs round 2's check of the design on the run (`readsOk`,
+`SecondStage.designOk`). A statement about the connected code reads the three conditions wherever the design
+evaluates, at a statement no run accepted too (`rewires_of_two`), and the design's evaluation (`two h`) decides none
+of them. So they are premises of each statement about the connected code, and such a statement says nothing at a held
+code that fails one.
 -/
 
 @[expose] public section
@@ -103,9 +105,10 @@ noncomputable def rsConnected : (x : Msg) → (Fin ((codeConnected h).V.k x) →
 /-! ## The premises on the code's own wiring -/
 
 /-- **Each wire's writer's part is before its reader's** (`writersFirst`), as a premise. A wire whose writer names no
-template fails it. The deployed round 2 decides it (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`);
-the verifier a statement about the connected code is stated about, `V h`, does not run that check. With no wires held
-it holds, where `wiresOk` fails. -/
+template fails it. Round 2 decides it at a run's parts (`SecondStage.wiresOk`, fourth clause, refused as
+`second-wires`), and `V h` runs that check on each run (`readsOk`); a statement about the connected code reads the
+condition wherever the design evaluates, which `two h` does not decide. With no wires held it holds, where `wiresOk`
+fails. -/
 def WiresFirst : Prop := writersFirst h = true
 
 /-- **Every wired source bit has a gate to go to** (`wiresMove`), as a premise. Nothing the verifier runs decides

@@ -106,6 +106,11 @@ from verity.commitments.window import window_binding
 from .one_stage.verdict import Verdict, _Collect
 from .schedule import failure as schedule_failure
 
+#: `SecondStage.FORM`, off. Three things withhold a two-stage run's accept: SPOT[Flock]'s two-stage guarantee takes as
+#: a premise that each gate's value has one address fixed before the run, which nothing proves from round 2's check;
+#: no theorem says a run the verifier accepts is one the verifier that guarantee is stated about accepts; and the
+#: composite's sampled component has no two-stage form, nor a leg for one, under the one soundness theorem. It turns
+#: on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it on.
 FORM = False
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
             "soundness proof does not cover")
