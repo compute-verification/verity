@@ -1412,6 +1412,10 @@
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
   },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
+  },
   "Properties.NetworkPeriod.rowsOkHeld": {
    "honest": ["Properties.NetworkPeriod.rowsOkHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsOkHeld_nontrivial"
@@ -6073,6 +6077,15 @@
    },
    "type_hash": "08e4140be432a4b6f491c0ad10abdb5a721b3ed968e5a5f597c40c6148ec8cc1"
   },
+  "Properties.NetworkPeriod.rowsCircuitHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
@@ -6107,6 +6120,9 @@
    },
    "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
    "unfolded_hash": "3251577cd79f945a5c35049ecfa3a73e59648cc0157fc9c1dcebf35bb367ac36"
+  },
+  "Properties.NetworkPeriod.rowsStateEmpty": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateTied": {
    "owner": "@network-accounting",
@@ -13104,6 +13120,14 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.rowsOkHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsCircuitHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsStateEmpty": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
