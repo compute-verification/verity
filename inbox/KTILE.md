@@ -114,3 +114,52 @@ For each, on `main`:
 Nothing of this is timed, and nothing runs on node A or `vy-nebius-2`.
 
 Return by Fri 13 Nov 09:00Z with the two verdicts posted and any pull request opened.
+
+## Thu 12 Nov 22:48Z: both verdicts read; #9525 is MARKED. Next: A's pull request, opened unmarked now, so that benchmarks reads a diff and not a question
+
+Read by me: your return and the note whole; #9525's diff whole (5 files, +13, -28);
+`r20261112-220554-d7cb` (exit 0 at tree `10c3daffdf23`; `manifest.diff`: `ptxas.txt` and the three
+`row_table` entries and nothing else; "4 suites: 4 passed, 0 failed"). By me besides: #8671 and
+its crossed branch touch nothing under `torch_gpu`, KGATE's job does not use `s8_linear`'s ship,
+and `run.sh:31` was the ship's `row_table`'s only reader on `main`. **Saying that the manifests
+also differ by ptxas's compile-time lines, where my brief said "the `row_table` entries alone",
+is how a return should correct its brief.**
+- **#9525: marked ready at `10c3daffdf23` at 22:48:02Z** (the preflight collected the four
+  suites you ran, and no other).
+
+**A: I take your proposal: `attn_bf16/` goes whole.** It is kernels' own, nothing serves with
+it, nothing has run since 28 Oct, and its one reader was deleted as dead on 11 Nov. What is not
+ours is benchmarks' test, so (the friction skill: ask the owner and prepare the change
+meanwhile) **the pull request is opened now, unmarked, and is not marked without benchmarks'
+yes on its three files.**
+
+The pull request, on `main`, `Lane kernels`, `Refs HASH-127`:
+1. **Delete `benchmarks/torch_gpu/attn_bf16/`** (11 files).
+2. **benchmarks' three files, the smallest change that leaves the shared gate's test whole:**
+   `benchmarks/pouw/tests/test_mma_gate.py` (its `attn_bf16` case: `GATES`, `REAL_ARCH`,
+   `attn_bf16()`), `benchmarks/pouw/pyproject.toml:165` (the declared input),
+   `tests/fixtures/mma_gate/verdicts.json` (its pinned verdicts). **Say in the body, for
+   benchmarks, exactly what the shared gate (`mma_gate`) is still held to after the case goes**
+   (which gates and which architectures remain), and what, if anything, only this case
+   covered (an atom form, an architecture, a rule of the gate). If it was the only case of
+   something, say so in the body's first lines: that is what benchmarks decides on.
+3. **Every line that names it** (your list): `benchmarks/README.md:144`,
+   `benchmarks/torch_gpu/README.md:22,49,73`, `ship.sh:2`,
+   `benchmarks/pouw/harness/sass_gate.py:1745-1747` (the comment, with its stale `units/`),
+   `benchmarks/pouw/harness/README.md:19`, the two lint allowlists' entries, and
+   `tools/move/layout_one_map.toml:781-782` if a test holds the map's rows to files that exist
+   (if the map is a record of a finished move that no test reads against the tree, leave it
+   and say so).
+4. The suites the change touches, on a CPU node, at the pushed head.
+5. **The body's first lines:** "Not marked without benchmarks' yes"; what goes and why (no
+   loader, no run since 28 Oct, the reader deleted on 11 Nov); what changes in benchmarks'
+   files; how to bring it back (`git checkout <the commit before>^ -- benchmarks/torch_gpu/attn_bf16`).
+   No run ids of results in any file of the tree.
+6. One worker comment on HASH-127 with the pull request (at most 100 words). **Tell me, and
+   I ring benchmarks once, with the number.**
+
+If the test's case turns out to be the only thing holding a rule of the shared gate, or
+anything else says the directory is not dead (a reader you missed, a doc that promises it):
+**stop, delete nothing, and return with that.**
+
+Return by Fri 13 Nov 02:00Z with the pull request open, or with why not.
