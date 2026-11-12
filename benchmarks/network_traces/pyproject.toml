@@ -91,8 +91,10 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/certifier/verifier/network/tests/period_case.py", "verity/difftest/python/verity_difftest",
           "verity/__init__.py", "verity/composite/__init__.py", "verity/composite/device/__init__.py"]
 # The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
-# it before this suite).
-artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify"]
+# it before this suite), and network-rows, the compiled audit of the network certifier's records, which
+# test_certifier_piece builds in its package (as the piece does) and runs on the synthetic run's records.
+artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify",
+             "verity/protocols/certifier/verifier/lean/.lake/build/bin/network-rows"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

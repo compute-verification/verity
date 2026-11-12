@@ -2,13 +2,15 @@
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
 and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
 (the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
-`network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
+`network-period`'s answer only when `network-rows` accepted the run's records, the chain accepted and the window's
+requests are certified ones in the scan's link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, the checks on the developer's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
 is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
-each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
-rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+each Commit window's counts, stays in the kept run. A window request the warden didn't certify, and network certifier
+records that `network-rows` refuses, are rejected before any chain runs (`network-rows` itself accepts the synthetic
+run's records and refuses them with cells re-cut, re-clocked or reordered, a certificate of another key, a record changed
+under its head and a schedule with a response cap); a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
@@ -28,12 +30,14 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
 import sys
 import tarfile
 import threading
+from dataclasses import replace
 from pathlib import Path
 
 import jsonschema
@@ -45,10 +49,14 @@ sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "ben
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
+import warden_serve as WS  # noqa: E402
+from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.protocols.certifier.verifier import warden as W  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
@@ -149,13 +157,25 @@ def _stub_lean(tmp_path: Path, answer: dict) -> Path:
     return lean
 
 
-def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
-    """The piece's command, its `network-period` `_stub_lean`'s answering ``answer``."""
+def _stub_rows(tmp_path: Path, answer: dict | None = None) -> Path:
+    """A stand-in `network-rows` that answers ``answer``, by default its accept."""
+    rows, said = tmp_path / "network-rows", tmp_path / "rows-answer.json"
+    said.write_text(json.dumps(answer or {"protocol": CP.ROWS, "verdict": "accept", "reason": None}))
+    rows.write_text(f"#!/bin/sh\ncat {shlex.quote(str(said))}\n")
+    rows.chmod(0o755)
+    return rows
+
+
+def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None,
+               rows: Path | None = None) -> str:
+    """The piece's command, its `network-period` `_stub_lean`'s answering ``answer`` and its `network-rows`
+    `_stub_rows`' accept (or ``rows``)."""
     lean = lean or _stub_lean(tmp_path, answer)
+    rows = rows or _stub_rows(tmp_path)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
-            f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
+            f"--lean {shlex.quote(str(lean))} --rows {shlex.quote(str(rows))} --chain-cmd {shlex.quote(cmd)}")
 
 
 def _integrity() -> dict:
@@ -237,8 +257,25 @@ def test_a_window_request_the_warden_didnt_certify_is_rejected_before_any_chain(
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["the network certifier"])
     changed = dict(warden["records"][0], output=[*warden["records"][0]["output"], 7])
     d = _serve_dir(tmp_path / "changed", warden, [changed])
-    a, _ = CP.decide(d, K, tmp_path / "out", chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
+    a, _ = CP.decide(d, K, tmp_path / "out", chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {},
+                     rows=lambda run: None)
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
+
+
+def test_records_the_rows_audit_refuses_are_the_pieces_reject_before_any_chain(tmp_path, warden, capsys, monkeypatch):
+    """``network-rows`` refusing the network certifier's records (a stand-in's reject here) is the piece's reject,
+    its reason's numbers as N, before any chain runs, and the composite rejects with it."""
+    rows = _stub_rows(tmp_path, {"protocol": CP.ROWS, "verdict": "reject", "reason": "egress bucket 27 isn't the "
+                                 "schedule's"})
+    d = _serve_dir(tmp_path / "serve", warden)
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}, rows=rows))
+    got = S.pieces(d, K, tmp_path / "pieces", env=env)
+    a = json.loads((tmp_path / "pieces" / "certifier" / "answer.json").read_text())
+    why = "the network certifier's records, audited as rows: egress bucket N isn't the schedule's"
+    assert (a["verdict"], a["reason"]) == ("reject", why) and got["certifier"]["verdict"] == "reject"
+    assert why in got["certifier"]["reason"] and not (d / CP.PRIVATE / RUN / "chain").exists()
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    assert rec is None and (line["composed"], line["by"]) == ("reject", ["the network certifier"])
 
 
 def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=None):
@@ -250,7 +287,7 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
         return 0
     (tmp_path / "dir").mkdir()
     a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain, check=check or (lambda c, p: pytest.fail("no check")),
-                            case=lambda run, scan: {"params": {}, "commitment": "", "evidence": ""})
+                            rows=lambda run: None, case=lambda run, scan: {"params": {}, "commitment": "", "evidence": ""})
     assert unpacked is not None and unpacked.parent == d / CP.PRIVATE / RUN
     return a
 
@@ -315,11 +352,11 @@ def test_a_step_leaves_no_process_of_its_group_behind_however_it_ends(tmp_path, 
     assert CP._held is None
 
 
-@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "time limit",
-                                  "foreign answer"])
+@pytest.mark.parametrize("case", ["no kept run", "corrupt fetch", "no report", "no build", "no rows build",
+                                  "time limit", "foreign answer"])
 def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp_path, warden, capsys, monkeypatch):
     """The front's failures (the gate refusing or busy, its tunnel or ssh) keep no run; a corrupt fetch, a chain that
-    ends without a report, a missing Lean build, SIGTERM from the piece's time limit and a check that answers no
+    ends without a report, a missing Lean build (``network-period``'s or ``network-rows``'), SIGTERM from the piece's time limit and a check that answers no
     certifier/v0 verdict can't run: each leaves DIR/refused.txt and its log, no answer, and the certifier missing."""
     d = _serve_dir(tmp_path / "serve", warden, kept=case != "no kept run")
     if case == "corrupt fetch":
@@ -329,8 +366,9 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     cmd = {"no report": "exit 7", "time limit": f'({LOOP}) & echo "$$ $!" > {shlex.quote(str(pids))}; '
                                                 f'kill -TERM "$PPID"; {LOOP}'}.get(case)
     lean = tmp_path / "no-such-network-period" if case == "no build" else None
+    rows = tmp_path / "no-such-network-rows" if case == "no rows build" else None
     answer = {"verdict": "accept", "protocol": "other"} if case == "foreign answer" else {}
-    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean))
+    env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean, rows))
     S.pieces(d, K, tmp_path / "pieces", env=env)
     if case == "time limit":
         _gone(map(int, pids.read_text().split()))
@@ -339,7 +377,8 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}, why
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
     assert {"no kept run": "no warden run kept", "corrupt fetch": "fetch.tar.gz: ReadError", "no report": "the chain wrote no report (exit 7)",
-            "no build": "network-period check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
+            "no build": "network-period check: FileNotFoundError",
+            "no rows build": "network-rows check: FileNotFoundError", "time limit": "SIGTERM: the piece's time limit",
             "foreign answer": "no verity/certifier/v0 verdict"}[case] in why
     if case != "no kept run":
         assert not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
@@ -356,7 +395,8 @@ def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
     lean.chmod(0o755)
     cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = tmp_path / "pieces" / "certifier"
-    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--chain-cmd", cmd])
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--rows", str(_stub_rows(tmp_path)),
+                  "--chain-cmd", cmd])
     return rc, piece, d
 
 
@@ -413,7 +453,7 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
     a, _ = CP.decide(_serve_dir(tmp_path / "passed", warden, served), K, tmp_path / "out",
-                     chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
+                     chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {}, rows=lambda run: None)
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
 
 
@@ -440,6 +480,131 @@ def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path
             assert g == 3 and not (d / CP.CASE).exists()
             assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
             assert (tmp_path / "leaky-quarantine" / "files" / "period" / "evidence.json").is_file()
+
+
+def test_rows_check_takes_only_network_rows_verdict_and_leaves_no_case_behind(tmp_path, warden):
+    """`rows_check` on the kept run, its case read off the run's records under the record of its deployment:
+    ``network-rows``' accept passes and its reject is `Rejected`, as through `own_rows`; an answer of another protocol,
+    a check that exits past 2, a run re-signed under another key than the record's and a run whose case can't be read
+    are `NotRun`; and the case's scratch directory beside the run is gone however it ends."""
+    fetch = tmp_path / "fetch.tar.gz"
+    fetch.write_bytes(warden["fetch"].read_bytes())
+    unpacked, run = CP.unpack(fetch)
+    record = WC.own_record(run)
+    assert CP.rows_check(str(_stub_rows(tmp_path)), run, record) is None
+    assert CP.own_rows(str(_stub_rows(tmp_path)))(run) is None
+    reject = {"protocol": CP.ROWS, "verdict": "reject", "reason": "egress bucket 2: not r cells a connection in "
+              "ordinal order"}
+    for check in (lambda exe: CP.rows_check(exe, run, record), lambda exe: CP.own_rows(exe)(run)):
+        with pytest.raises(CP.Rejected, match=r"^the network certifier's records, audited as rows: egress bucket N: "
+                                              r"not r cells a connection in ordinal order$"):
+            check(str(_stub_rows(tmp_path, reject)))
+    with pytest.raises(CP.NotRun, match="network-rows answered no verity/network-rows/v1 accept or reject"):
+        CP.rows_check(str(_stub_rows(tmp_path, {"protocol": CP.PROTOCOL, "verdict": "accept"})), run, record)
+    failing = tmp_path / "failing" / "network-rows"
+    failing.parent.mkdir()
+    failing.write_text("#!/bin/sh\necho oops >&2\nexit 3\n")
+    failing.chmod(0o755)
+    with pytest.raises(CP.NotRun, match="network-rows check: SystemExit: network-rows check exited 3: oops"):
+        CP.rows_check(str(failing), run, record)
+    other = gate_run(tmp_path / "other", seed=b"another network certifier")
+    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*witness/deployment.json "
+                                        "names another key than the auditor's record's"):
+        CP.rows_check(str(_stub_rows(tmp_path)), other, record)
+    (WC.witness(run) / "certified.jsonl").unlink()
+    with pytest.raises(CP.NotRun, match="the network certifier's rows case: SystemExit: .*no certified.jsonl"):
+        CP.rows_check(str(_stub_rows(tmp_path)), run, record)
+    assert not list(unpacked.glob("rows-*"))
+
+
+@pytest.fixture(scope="module")
+def rows_exe() -> str:
+    """``network-rows``, built where the piece builds it."""
+    if shutil.which("lake") is None:
+        pytest.skip("no Lean toolchain")
+    return CP.lean_exe("network-rows", None)
+
+
+#: the synthetic run's cells a connection a bucket, and a cell's bytes
+R, B = sz.W63.params.slots, sz.W63.params.cell_bytes
+
+
+def _responses(edit):
+    """`published`'s ``change``: window 0's responses record with its grid (a list of rows of slots) edited in place
+    by ``edit``, every other record as served."""
+    def change(rec):
+        if (rec.link, rec.window) != (WS.EGRESS, 0):
+            return rec
+        grid = [list(row) for row in rec.grid]
+        edit(grid)
+        return replace(rec, grid=tuple(map(tuple, grid)))
+    return change
+
+
+def _recut(grid) -> None:
+    """Connection 1's second `DATA` cell made an `END` with its bytes."""
+    _, o, payload = W.read_cell(grid[27][1], B)
+    grid[27][1] = W.cell(W.END, o, payload, B)
+
+
+def _reclock(grid) -> None:
+    """Connection 1's lane, its one bucket past its delay (admitted at 0, D = 27), sent a bucket early, in its delay."""
+    grid[26][:R], grid[27][:R] = grid[27][:R], grid[26][:R]
+
+
+def _reorder(grid) -> None:
+    """Bucket 2's first two connections swapped."""
+    grid[2][:R], grid[2][R:2 * R] = grid[2][R:2 * R], grid[2][:R]
+
+
+@pytest.mark.slow
+def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_cut_clocked_or_ordered_otherwise(
+        tmp_path, rows_exe):
+    """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkCertifier.Rows.audit`) on the
+    records the network certifier's own publisher writes and signs, under the record of its deployment: the synthetic
+    run's accepted; the same run with a cell of window 0's egress re-cut, connection 1's cells re-clocked or a
+    bucket's connections reordered, signed by its key, refused by name, and `rows_check`'s `Rejected` for the piece;
+    the run re-signed under another key refused at the record, and, its deployment.json rewritten to the record's, by
+    the audit at its first certificate, which isn't the record's key's; a record changed after its certificate signed
+    it refused at its head; and the honest run's case under a schedule with a response cap refused by name, the audit
+    reading none. The one test that runs the case's encoding, the binding to the signed heads and the audit together
+    on real records, which the stand-ins above don't."""
+    honest = published(tmp_path / "honest")
+    record = WC.own_record(honest)
+    (rec,) = [r for r in WS.read_records(honest, sz.W63.params)[WS.EGRESS] if r.window == 0]
+    assert [W.read_cell(c, B)[:2] for c in rec.grid[27][:R]] == [(W.DATA, 1)] * (R - 1) + [(W.END, 1)]
+    assert [W.read_cell(c, B)[:2] for c in rec.grid[26][:R]] == [(W.PAD, 1)] * R
+    assert [W.read_cell(c, B)[1] for c in rec.grid[2] if c is not None] == [1] * R + [2] * R + [3] * R
+    case = WC.rows_audit_case(honest, record)
+    got = SP.lean_check(rows_exe, case, tmp_path / "case-honest")
+    assert (got["protocol"], got["verdict"], got["reason"]) == (CP.ROWS, "accept", None), got
+    assert got["profile"] == {"link": WS.LINK, "windows": sz.W63.windows} and got["public"] == {}
+    assert CP.rows_check(rows_exe, honest, record) is None
+    capped = {**case, "params": {**case["params"], "schedule": {**case["params"]["schedule"], "max_tokens_cap": 4}}}
+    got = SP.lean_check(rows_exe, capped, tmp_path / "case-capped")
+    assert (got["verdict"], got["reason"]) == ("reject", "params: schedule: the rows audit reads no response cap, so a "
+                                               "run under one isn't audited as rows"), got
+    for name, edit, why in (("re-cut", _recut, "egress bucket 27 isn't the schedule's"),
+                            ("re-clocked", _reclock, "egress bucket 26 isn't the schedule's"),
+                            ("reordered", _reorder, "egress bucket 2: not r cells a connection in ordinal order")):
+        run = published(tmp_path / name, change=_responses(edit))
+        got = SP.lean_check(rows_exe, WC.rows_audit_case(run, record), tmp_path / f"case-{name}")
+        assert (got["verdict"], got["reason"]) == ("reject", why), (name, got)
+        with pytest.raises(CP.Rejected, match=re.escape(re.sub(r"[0-9]+", "N", why))):
+            CP.rows_check(rows_exe, run, record)
+    resigned = published(tmp_path / "resigned", seed=b"another network certifier")
+    with pytest.raises(SystemExit, match="deployment.json names another key than the auditor's record's$"):
+        WC.rows_audit_case(resigned, record)
+    shutil.copyfile(honest / "deployment.json", resigned / "deployment.json")
+    got = SP.lean_check(rows_exe, WC.rows_audit_case(resigned, record), tmp_path / "case-resigned")
+    why = "requests window 0: the certificate isn't the key's in the session"
+    assert (got["verdict"], got["reason"]) == ("reject", why), got
+    with pytest.raises(CP.Rejected, match=re.escape(re.sub(r"[0-9]+", "N", why))):
+        CP.rows_check(rows_exe, resigned, record)
+    shutil.copyfile(tmp_path / "re-cut" / "responses.records", honest / "responses.records")
+    got = SP.lean_check(rows_exe, WC.rows_audit_case(honest, record), tmp_path / "case-changed")
+    assert (got["verdict"], got["reason"]) == ("reject", "responses window 0: the certified head isn't the record's")
+    assert not list(tmp_path.glob("rows-*"))
 
 
 def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refuses_without_the_session(tmp_path,
@@ -563,16 +728,17 @@ def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
 
 def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int = 0) -> list[str]:
     """``chain``'s arguments: a chain that leaves `_chain_out`'s report, its scan's summary naming V3c's window (``v3c``;
-    None: no V3c window), and notes what it was given in TMP/chain-args."""
+    None: no V3c window), and notes what it was given in TMP/chain-args; its `network-rows` `_stub_rows`' accept."""
     out = _chain_out(tmp_path / "chain", verdict, w)
     (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
-    return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
+    return ["--rows", str(_stub_rows(tmp_path)),
+            "--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
                            f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
 
 
 def _lean(tmp_path: Path, answer: dict) -> list[str]:
-    return ["--lean", str(_stub_lean(tmp_path, answer))]
+    return ["--lean", str(_stub_lean(tmp_path, answer)), "--rows", str(_stub_rows(tmp_path))]
 
 
 #: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
@@ -630,7 +796,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, wa
         tmp_path / "pieces" / "certifier"
     args = _chained(tmp_path, None if case == "a scan of no v3c" else v3c, w=warden["w"])
     if case == "time limit":
-        args = ["--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
+        args = ["--rows", str(_stub_rows(tmp_path)), "--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
     if case != "no chain step":
         _hook("chain", d, piece, v3c, *args)
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, {})) == 3
