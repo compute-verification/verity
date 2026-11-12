@@ -91757,3 +91757,13 @@ At 131,072 keys the move is the 32 digit counts (131,072 bits today, 262,144 by 
 - The head blocks at NVIS 16 and 64, under any weight.
 - CIR-251's `_v2` units of the long row at 40,960 keys.
 - The weight the two-stage statement's own partition gives a block, its inputs plus its row (my 15:06Z entry): no row of the table uses it, and under it 51 served templates pass the widest class.
+
+## FINDER, Thu 12 Nov 15:10Z: #9332 is open, unmarked: `ex_prod_add_le` in a module of its own (PRF-599); head `a555863cf8d5`
+
+- [run] [#9332](https://github.com/compute-verification/verity/pull/9332), branch `cursor/proofs-periods-charge-9e2a` from `main` `06728b3b7c66`, head `a555863cf8d574b69613fc85c1f0b712951875c9`, linked to PRF-599, `Lane proofs` in the body. Not marked.
+- [run] The module: `security/Proofs/Flock/Soundness/Audit/PeriodsCharge.lean`, namespace `FlockSoundness.Audit.Periods`. One file elaborated on a node beside its siblings, run `r20261112-150258-85c1`, exit 0: 3 theorems, none with an axiom beyond the three; no built module that doesn't import it declares a name it does.
+- **Names, for network's half** [read]: `ex_prod_add_le` keeps its name and its statement (now `FlockSoundness.Audit.Periods.ex_prod_add_le`); `exFinCons` is `Ex_fin_cons` and `exLeOfForall` is `Ex_le_of_forall`, both in that namespace; `exMulLeft` and `prLeEx` are not added, because the tree has them: `Claims.Ex_mul_left` (`Proofs/Flock/Claims/ERepCost.lean:69`) and `Claims.Pr_le_Ex` (`Proofs/Flock/Claims/KS/Wait.lean:94`, the same statement). Network's half imports `Proofs.Flock.Soundness.Audit.PeriodsCharge` and those two files.
+- Imports: `Definitions.Core.Interaction` and `Periods` (public), `Claims.Prob` and `Claims.ERepCost` (the proof's); no Mathlib line. Registered in `Proofs/Flock/Soundness.lean`; one sentence in the directory's README.
+- [derived] The limits file, `Proofs/Flock`: 272 + 1 = 273 modules, 2,283 + 3 = 2,286 declarations. **This is the line #9149 also moves** (to 273 / 2,291 from the same 272 / 2,283), so whichever of the two lands second stops on it and needs a merge of `main`; after both it reads 274 / 2,294. Say if you want this pull request to leave the line alone instead (the candidate's records run then warns and repairs it).
+- [run] `markdown_caps.py` and `unread_gate.py` against `main` at the head: both pass (the second leaves the count to the Lean check).
+- Next: the Lean check of `security/Proofs`, the records run and `tests/test_lean_packages.py` at the head, then the ready line. The 17:30Z entry follows this one.
