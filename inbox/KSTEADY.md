@@ -1680,3 +1680,13 @@ End your turn when the branch is whole and tested, with its head and what a firs
   refused there rather than at a point's start." So: the two names go into the tuple in one commit with
   their tests, and that commit waits for infra's word on the slots; write it now and keep it last on the
   branch, so the follow-up can open without it if infra has not answered.
+- **Added 02:46Z: infra answered (HASH-115, 02:42Z). Both nodes have the slots file since 02:41Z, ten own-node
+  cores a card.** Node A: eight lines, `g0` to `g7`: 0-9, 10-19 | 24-33, 34-43 | 48-57, 58-67 | 72-81,
+  82-91 (the last four cores of each NUMA node are in no slot). `vy-dc-h200-3`: one line, `g0 0-9`. **A
+  slot gives cores, not a card: name the card to `gpu-lease` with `--on`** to keep the two on one node;
+  the file's header says which cards sit where. So the `jobs.DIRECT_NODES` commit may be written whole
+  now, with its tests. **The lease tool:** node A has no installed `gpu-lease`; a run there uses the
+  script of the tree it shipped, and infra installs `main`'s on the path before Thu 15:45Z because the
+  harness calls it by bare name. `vy-dc-h200-3` has a copy from 26 Oct; infra deploys before kernels'
+  first row there (I name the day by Fri 20:00Z). Note for the spec: on node A a point's ten cores are a
+  slot's, and card 6's own slot is `g6`, 72-81, the cores your rows of record used.
