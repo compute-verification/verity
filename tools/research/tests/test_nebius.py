@@ -3323,6 +3323,24 @@ def test_n1_lease_lock_holders_lists_each_held_flocks_pid_under_its_inode_number
 
 
 @needs_flock
+def test_n1_lease_tells_its_fence_from_a_lease_by_the_command_line_of_the_locks_pid(monkeypatch, tmp_path, reap):
+    """A lock's pid is the controller's fence when its command line is a fence's on that GPU's lock, and a lease's otherwise:
+    a process that isn't a fence, a pid no process has (gpu-lease's `flock` helper, long gone), another GPU's fence.  The
+    fence is a real one; which pid holds which lock is given as `lock_holders` returns it, not read from the machine's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    t = 1_800_000_000.0
+    fence = m.fence(0, t)
+    assert fence
+    ino = [m.lock_path(i).stat().st_ino for i in range(4)]
+    gone = 5_000_000                                       # above the kernel's largest pid: no process of the machine's
+    monkeypatch.setattr(m, "lock_holders", lambda: {ino[0]: [fence], ino[1]: [os.getpid()], ino[2]: [gone], ino[3]: [fence]})
+    s = m.Controller().tick(t)
+    m.unfence([fence])
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fence], [], [], []]
+    assert ["lease" in g for g in s["gpus"]] == [False, True, True, True]
+
+
+@needs_flock
 def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
     keys(max=3)
