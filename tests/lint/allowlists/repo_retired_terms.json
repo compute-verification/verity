@@ -3336,7 +3336,7 @@
     {"file": "benchmarks/pouw/tests/test_period_cost.py", "count": 12},
     {"file": "benchmarks/pouw/tests/test_price_twins_accounting.py", "count": 41},
     {"file": "benchmarks/pouw/tests/test_proved_ticks.py", "count": 1},
-    {"file": "benchmarks/pouw/tests/test_salt_bind.py", "count": 2},
+    {"file": "benchmarks/pouw/tests/test_salt_bind.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_served_h1.py", "count": 71},
     {"file": "benchmarks/pouw/tests/test_served_units_summarize.py", "count": 2},
     {"file": "benchmarks/pouw/tests/test_served_zk.py", "count": 135},
