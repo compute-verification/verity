@@ -36,6 +36,9 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
 
+#: The names other modules and the tests read here; ``Options`` and ``main`` are the ``target-family`` command.
+__all__ = ["Options", "check", "declared_profile", "device_token_of_row", "main", "row_family", "summary_line"]
+
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
 
