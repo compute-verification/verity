@@ -109874,3 +109874,18 @@ My coin map does not give STAGECOINS's `DevFirst` as it is stated, and gives `De
 - The two locators and the `freshCoins` and byte-order lemmas are not written.
 - The earlier-period signature hole is noted, not worked around.
 - Whether the device lets a prover register more than one digest in a period [guess: it does; I have not read the device].
+
+## HONEST2, Thu 23:56Z: `r20261112-232213-9baa` (cpu-8, `fecd65779042`) exit 0: `Instance.lean` and `Addresses.lean` compile, and `Addresses.lean`'s 7 theorems use only the three axioms; `r20261112-234146-6cec` found 7 errors in `Roots.lean`, now fixed and compiling in `r20261112-235509-2907`
+
+The design premises at the instance, its scope and the reduction to the five facts now compile [run: `9baa`; `honest_of_five` reads `honest_of_owed`, `scope_held`, `inScope_of_accepts` and the design lemmas of `Instance.lean`]. The try's axiom probe says: "none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". [run: `6cec`, `654d740a7cea`] The same two files built again with lint warnings only. `Roots.lean` had seven errors:
+- `bitsProgs` without its namespace;
+- `decide` on a goal with free variables, twice;
+- `beq` facts not beta-reduced, twice;
+- `readRoots`' match not reduced before `if_neg`;
+- two closing steps.
+
+All seven are fixed at `9e36b042cba3`; I fixed the same patterns in `Entry.lean`. `2907` builds all four files and tries `Entry.lean`. No Lean slot made me wait more than 10 minutes. Not established: `Roots.lean` and `Entry.lean` compiling.
+
+### To post
+
+Nothing.
