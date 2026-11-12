@@ -4,12 +4,15 @@ its salt) passes only when its root is the frame-v3-sha512 root of those rows' `
 `registered.Registered.commit` roots them; ports without `known` are untouched. And the tree a statement publishes
 for such a port (`Registered.publishedRoot`, `Registered.knownTrees`): the value's own tree where the statement's
 table is the value's rows at the value's domain, another root at another domain or layout, and an entry of the
-verifier's list for each port at known content that the statement publishes a tree for.
+verifier's list for each port at known content that the statement publishes a tree for. The list the verifier writes
+(`Registered.knownList`) is the list the ZK server's release side reads (`Firewall.Salts.parseKnown`).
 -/
 module
 
 public import Flock.RegKnown
+public import Flock.Firewall.Salts
 meta import Flock.RegKnown
+meta import Flock.Firewall.Salts
 
 @[expose] public section
 
@@ -99,6 +102,19 @@ def trees (units : Array Nat) (ports : List String := ["o1"]) : Except String (A
 #guard (trees #[0, 1] ["i0"]).toOption == some #[]
 #guard Registered.knownList #[] == Flock.be32 0
 #guard ((trees #[0, 1]).toOption.map fun ts => (Registered.knownList (ts.map (·.2))).size) == some (4 + 137)
+/-- What the release side reads of the list the verifier writes for the statement at `units`: each entry's domain,
+row count, schema index and root. -/
+def listed (units : Array Nat) : Option (Array (ByteArray × Nat × Nat × ByteArray)) := do
+  let ts ← (trees units).toOption
+  let es ← (Firewall.Salts.parseKnown (Registered.knownList (ts.map (·.2)))).toOption
+  if es.map (·.bytes) != ts.map (·.2) then none
+  pure (es.map fun e => (e.t.dom, e.t.n, e.t.schema, e.root))
+
+-- the release side reads each entry as the verifier wrote it, and the list of none as none
+#guard listed #[1, 0] == some #[(pubDom, 2, 1, Registered.publishedRoot reg pubDom ks #[1, 0])]
+#guard listed #[1] == some #[(pubDom, 1, 1, Registered.publishedRoot reg pubDom ks #[1])]
+#guard ((Firewall.Salts.parseKnown (Registered.knownList #[])).toOption.map (·.size)) == some 0
+#guard ((Firewall.Salts.parseKnown .empty).toOption.map (·.size)) == some 0
 -- a file whose root is not its known rows' lists nothing
 #guard !(Registered.knownTreesOf (file (hexOf (Sha512.hash .empty)) (some (knownJ ks))) (header #[0, 1])).toBool
 -- an instance at a unit in which the program reads no row of the value
