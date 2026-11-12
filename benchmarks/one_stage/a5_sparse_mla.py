@@ -56,7 +56,8 @@ def cir242(form: str) -> tuple[str, dict, CS.Binding, TS.Served]:
 
     s, ts, caps, S = CW.zk_window(form)
     root = hashlib.sha512(f"verity/a5/sparse-mla-cir242/{form}/v1".encode()).hexdigest()
-    return root, {"fixture": "benchmarks/one_stage/cir242_window.py", "form": form, "statics": S}, CW.window(s, ts, caps), s
+    statics = {k: {"f64": v.hex()} if isinstance(v, float) else v for k, v in S.items()}
+    return root, {"fixture": "benchmarks/one_stage/cir242_window.py", "form": form, "statics": statics}, CW.window(s, ts, caps), s
 
 
 def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
