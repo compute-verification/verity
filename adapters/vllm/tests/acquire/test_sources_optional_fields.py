@@ -110,6 +110,15 @@ def test_a_rows_identity_that_is_no_mapping_is_refused_as_python_refuses_it(iden
         NR.applies(manifest)
 
 
+@pytest.mark.parametrize("row", ["x", 1, None])
+def test_a_row_that_is_no_mapping_is_refused_before_its_identity_is_read(row):
+    manifest = {"identities": [row]}
+    with pytest.raises(TypeError, match="is not a mapping"):
+        NR.manifest_sites(manifest)
+    with pytest.raises(TypeError, match="is not a mapping"):
+        NR.applies(manifest)
+
+
 @pytest.mark.parametrize("identities", [{}, {"identities": None}, {"identities": []}, None, *({"identities": v} for v in OTHER_EMPTY)])
 def test_a_rank_whose_manifest_names_no_identities_attaches_nothing_to_a_model_no_source_knows(tmp_path, identities):
     """`verity_vllm.acquire.sources.taps.attach_rank`: the rank's rows of a manifest file that leaves `identities` out, or of no file."""
