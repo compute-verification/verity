@@ -343,4 +343,94 @@ theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [N
         rw [add_assoc, add_comm (avg fun p : P => avg fun c : C => G (W p c)) (shortfall W)]
         exact congrArg (· + _) (congrArg avg (funext fun r => (e₁ r).symm))
 
+theorem law_congr {g : Game β} {s : Strategy g} {P P' : R → Tape g s → Tape g s} {G : ℝ≥0∞}
+    (hP : ∀ r t, P r t = P' r t) (h : LawHolds g s P' G) : LawHolds g s P G := by
+  have : P = P' := funext fun r => funext fun t => hP r t
+  subst this
+  exact h
+
+theorem splits_map {C D : Type} [Fintype C] [Fintype D] {v : R → C} {Rel : R → R → Prop} (h : Splits v Rel)
+    (φ : C ≃ D) : Splits (fun r => φ (v r)) Rel := fun F hF =>
+  calc avg (fun r => F (φ (v r)) r) = avg fun c => avg fun r => F (φ c) r :=
+        h (fun c r => F (φ c) r) fun c => hF (φ c)
+    _ = avg fun d => avg fun r => F d r := Tape.avg_equiv φ fun d => avg fun r => F d r
+
+theorem splits_congr {C : Type} [Fintype C] {v v' : R → C} {Rel : R → R → Prop} (hv : ∀ r, v' r = v r)
+    (h : Splits v Rel) : Splits v' Rel := by
+  have : v' = v := funext hv
+  subst this
+  exact h
+
+/-! ## The chunks a write reads -/
+
+/-- **Coins that agree off the chunk**: every element but round `i`'s `m` from `u`. -/
+def OffChunk {K : ℕ} (i : Fin K) (u m : ℕ) (r r' : Fin K → FlockDeploy.Coin) : Prop :=
+  ∀ (j : Fin K) (a : Fin 65536), ¬ (j = i ∧ u ≤ a.val ∧ a.val < u + m) → r j a = r' j a
+
+/-- **A chunk is uniform and independent of the coins off it.** -/
+theorem splits_chunk {K : ℕ} (i : Fin K) (u m : ℕ) (hm : u + m ≤ 65536) :
+    Splits (fun r : Fin K → FlockDeploy.Coin => fun q : Fin m => (r i ⟨u + q.val, by omega⟩ : FlockLevel3.GF128))
+      (OffChunk i u m) := by
+  classical
+  intro F hF
+  let e : (Fin K × Fin 65536 → FlockLevel3.GF128) ≃ (Fin K → FlockDeploy.Coin) :=
+    Equiv.curry (Fin K) (Fin 65536) FlockLevel3.GF128
+  let κ : Fin m → Fin K × Fin 65536 := fun q => (i, ⟨u + q.val, by omega⟩)
+  have hκ : Function.Injective κ := fun q q' h => by
+    have := congrArg (fun a => a.2.val) h
+    exact Fin.ext (by simpa [κ] using this)
+  let A : Fin K × Fin 65536 → Prop := fun a => a.1 = i ∧ u ≤ a.2.val ∧ a.2.val < u + m
+  let v' : (Fin K × Fin 65536 → FlockLevel3.GF128) → (Fin m → FlockLevel3.GF128) := fun ρ => ρ ∘ κ
+  have hvA : ∀ ρ ρ' : Fin K × Fin 65536 → FlockLevel3.GF128, (∀ a, A a → ρ a = ρ' a) → v' ρ = v' ρ' :=
+    fun ρ ρ' h => funext fun q => h (κ q) ⟨rfl, Nat.le_add_right _ _, by have := q.isLt; simp only; omega⟩
+  have hv : ∀ H : (Fin m → FlockLevel3.GF128) → ℝ≥0∞, avg (fun ρ => H (v' ρ)) = avg H := fun H =>
+    avg_restrict κ hκ H
+  calc avg (fun r : Fin K → FlockDeploy.Coin => F (fun q : Fin m => (r i ⟨u + q.val, by omega⟩ : FlockLevel3.GF128)) r)
+      = avg (fun ρ => F (v' ρ) (e ρ)) :=
+        (Tape.avg_equiv e fun r => F (fun q : Fin m => (r i ⟨u + q.val, by omega⟩ : FlockLevel3.GF128)) r).symm
+    _ = avg fun x => avg fun ρ => F x (e ρ) :=
+        avg_indep A v' hvA hv (fun x ρ => F x (e ρ)) fun x ρ ρ' h => hF x _ _ fun j a hn => h (j, a) hn
+    _ = avg fun x => avg fun r => F x r := congrArg avg (funext fun x => Tape.avg_equiv e (F x))
+
+/-- A fresh coin's 512 bits from its 4 elements. -/
+def freshEquiv : (Fin 4 → FlockLevel3.GF128) ≃ (Fin 512 → Bool) :=
+  ((Equiv.arrowCongr (Equiv.refl (Fin 4)) bitsEquiv).trans (Equiv.curry (Fin 4) (Fin 128) Bool).symm).trans
+    (Equiv.arrowCongr finProdFinEquiv (Equiv.refl Bool))
+
+theorem freshVal_eq (c : FlockDeploy.Coin) (u : ℕ) (hu : u + 4 ≤ 65536) :
+    freshVal c u = freshEquiv fun q : Fin 4 => (c ⟨u + q.val, by omega⟩ : FlockLevel3.GF128) := funext fun j => by
+  have h1 : (128 * u + j.val) / 128 = u + j.val / 128 := by omega
+  have h2 : (128 * u + j.val) % 128 = j.val % 128 := by omega
+  have h3 : u + j.val / 128 < 65536 := by have := j.isLt; omega
+  show (c.at ((128 * u + j.val) / 128)).bit ((128 * u + j.val) % 128) =
+    Flock.F128.bit (c ⟨u + (finProdFinEquiv.symm j).1.val, _⟩) (finProdFinEquiv.symm j).2.val
+  rw [h1, h2, finProdFinEquiv_symm_apply, Fin.coe_divNat, Fin.coe_modNat]
+  simp only [FlockDeploy.Coin.at, dif_pos h3]
+
+/-- **A fresh coin's write is uniform and independent of the coins off its chunk.** -/
+theorem splits_fresh {K : ℕ} (i : Fin K) (u : ℕ) (hu : u + 4 ≤ 65536) :
+    Splits (fun r : Fin K → FlockDeploy.Coin => freshVal (r i) u) (OffChunk i u 4) :=
+  splits_congr (fun r => freshVal_eq (r i) u hu) (splits_map (splits_chunk i u 4 hu) freshEquiv)
+
+/-- An opening's `n` elements, each as its 128 bits. -/
+def openElems (c : FlockDeploy.Coin) (u n : ℕ) : Fin n → Fin 128 → Bool := fun q b => (c.at (u + q.val)).bit b.val
+
+theorem openBits_eq (c : FlockDeploy.Coin) (u n : ℕ) : openBits c u n = bitsOf (openElems c u n) := by
+  unfold openBits bitsOf openElems coinBit
+  congr 1
+  funext t
+  have h1 : (128 * u + t.val) / 128 = u + t.val / 128 := by omega
+  have h2 : (128 * u + t.val) % 128 = t.val % 128 := by omega
+  rw [h1, h2]
+
+/-- **An opening's elements are uniform and independent of the coins off its chunk.** -/
+theorem splits_open {K : ℕ} (i : Fin K) (u n : ℕ) (hu : u + n ≤ 65536) :
+    Splits (fun r : Fin K → FlockDeploy.Coin => openElems (r i) u n) (OffChunk i u n) := by
+  refine splits_congr (fun r => funext fun q => ?_)
+    (splits_map (splits_chunk i u n hu) (Equiv.arrowCongr (Equiv.refl (Fin n)) bitsEquiv))
+  have h3 : u + q.val < 65536 := by have := q.isLt; omega
+  funext b
+  show (FlockDeploy.Coin.at (r i) (u + q.val)).bit b.val = Flock.F128.bit (r i ⟨u + q.val, h3⟩) b.val
+  simp only [FlockDeploy.Coin.at, dif_pos h3]
+
 end Verity.SampledTwo.CoinMap
