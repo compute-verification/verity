@@ -15,7 +15,8 @@ bucket held. A member's `o0` rows are committed under public salts (`salt`), eac
 tree, so the tree of a member whose every proof block is ok is one anyone computes: its `n` rows `OK_ROW` under salts
 `0 … n − 1`, at the member's `o0` frame domain (`domain`), which is its template's and its proof blocks' count's and
 names no run, round or execution phase. One execution phase's scan has the members `members` gives, a function of the
-schedule's `T` alone, so the roots are constants of `T` (`consts`).
+schedule's `T` alone, so the roots are constants of `T` (`consts`). A scan has at least two ticks: at `T = 1` its one
+bucket would be its first and its last, a member no scan is staged with, so `consts` refuses a `T` below 2.
 
 The period check (its rows form, `okChecks`) computes them once a period, from `T`, and holds every execution
 phase's scan's registration to them by comparison alone (`held`): its `roots` name each member's `<member>/o0` at the
@@ -80,7 +81,8 @@ def root (dom : ByteArray) (n : Nat) : ByteArray :=
 
 /-- `scan_ok.members`: one execution phase's scan's members, (name, template, proof blocks), in its Program's order:
 bucket 0's `first`; `ingress-0`, buckets `1 … T − 2`, and `last`, bucket `T − 1`, whose next state no state leaf holds,
-so it is a member of its own; and `egress-0`, the `T` egress buckets. `2T` proof blocks. -/
+so it is a member of its own; and `egress-0`, the `T` egress buckets. `2T` proof blocks. Read at `T ≥ 2`, where
+bucket 0 is not bucket `T − 1` (`consts`). -/
 def members (T : Nat) : Array (String × String × Nat) :=
   #[("first", "first", 1)] ++ (if 3 ≤ T then #[("ingress-0", "ingress", T - 2)] else #[]) ++
     (if 2 ≤ T then #[("last", "ingress", 1)] else #[]) ++ #[("egress-0", "egress", T)]
@@ -94,11 +96,18 @@ structure Const where
   root : String
   deriving Inhabited
 
-/-- `scan_ok.constants`: each member's constant at the schedule's `T` (`members`), in order. -/
+/-- The constant of the member `m` (name, template, proof blocks): its port `<name>/o0`, its proof blocks' count,
+and the frame domain (`domain`) and root (`root`) of its ok rows, in hex. -/
+def constOf (m : String × String × Nat) : V Const := do
+  let dom ← domain m.2.1 m.2.2
+  pure { port := m.1 ++ ("/" ++ PORT), leaves := m.2.2, domain := Flock.hexOf dom,
+         root := Flock.hexOf (root dom m.2.2) }
+
+/-- `scan_ok.constants`: each member's constant at the schedule's `T` (`members`, `constOf`), in order. A `T` below 2
+is refused: its bucket 0 would be the scan's first and its last, and no scan is staged with such a member. -/
 def consts (T : Nat) : V (Array Const) :=
-  (members T).mapM fun (name, template, n) => do
-    let dom ← domain template n
-    pure { port := s!"{name}/{PORT}", leaves := n, domain := Flock.hexOf dom, root := Flock.hexOf (root dom n) }
+  if T < 2 then throw s!"T = {T}: a scan has at least two ticks, its first bucket and its last"
+  else (members T).mapM constOf
 
 /-- `scan_ok.ok_port`: whether a `roots` entry's port is a proof block's public word, read over its characters: it
 ends `/o0`. -/
@@ -165,9 +174,14 @@ def calls (T : Nat) : Nat := (members T).foldl (fun acc m => acc + 3 + rootCalls
   ("egress-0/o0", 3,
     "f9b478b82e457b566f32ac528e447b185d1df3ba42eb792fed539e61867b9272\
       e2161f725b83ad09aeb6fd947d5a14c9e5caacff5129b9c4f6ef73e5cd788a53")]
--- the members are the schedule's 2T proof blocks: none of the ingress template's at T = 1, `last` alone at T = 2
-#guard (members 1).map (·.1) == #["first", "egress-0"] && (members 2).map (·.1) == #["first", "last", "egress-0"] &&
-  [1, 2, 3, 16, 32].all fun T => (members T).foldl (fun n m => n + m.2.2) 0 == 2 * T
+-- the members are the schedule's 2T proof blocks, of the ingress template `last` alone at T = 2; a schedule of fewer
+-- than two ticks has no constants, and its refusal names its T
+#guard (members 2).map (·.1) == #["first", "last", "egress-0"] &&
+  [2, 3, 16, 32].all fun T => (members T).foldl (fun n m => n + m.2.2) 0 == 2 * T
+#guard [0, 1].all fun T => match consts T with
+  | .error e => e == s!"T = {T}: a scan has at least two ticks, its first bucket and its last"
+  | .ok _ => false
+#guard ((consts 2).map fun cs => cs.map (·.port)).toOption == some #["first/o0", "last/o0", "egress-0/o0"]
 -- the cost: at T = 16 the four trees are 7 + 115 + 7 + 127 = 256 calls and at T = 32 they are 7 + 243 + 7 + 255 = 512,
 -- and each member's domain three more
 #guard rootCalls 1 == 7 && rootCalls 14 == 115 && rootCalls 16 == 127 && rootCalls 30 == 243 && rootCalls 32 == 255

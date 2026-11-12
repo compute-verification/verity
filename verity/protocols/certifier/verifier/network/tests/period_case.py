@@ -33,7 +33,8 @@ slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its o
 (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), and each member's ok bits
 (`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one execution phase's broken, `UNOKS`; `ok-equal`:
-a schedule of three ticks, where two members' are at one domain and root), answered by one-stage with a
+a schedule of three ticks, where two members' are at one domain and root; `one-tick`: a schedule of one tick, which
+has no constants), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
@@ -1049,6 +1050,8 @@ UNWIRED = "the scan's prog is no compute audit's slot entries"
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 #: `okCheck`'s refusal, after its execution phase's number.
 UNOK = "the scan's ok bits are not the schedule's constants"
+#: `okCheck`'s refusal where the schedule has no constants, after its execution phase's number and before why.
+UNCOMPUTED = "the scan's ok bits' constants do not compute"
 
 
 def clog2(x: int) -> int:
@@ -1136,10 +1139,16 @@ def check(p: Params, c: Commitment, e) -> tuple:
                      if not _wired(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {UNSTATED}") for i, reg in enumerate(c.windows)
                      if not _state_tied(p, c.audits, reg)]
-        # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them
-        consts = scan_ok.constants(p.schedule.window)
-        findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
-                     if not scan_ok.held(consts, reg)]
+        # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
+        # schedule with none refuses every registration
+        try:
+            consts = scan_ok.constants(p.schedule.window)
+        except scan_ok.FewTicks as few:
+            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNCOMPUTED}: {few}")
+                         for i in range(len(c.windows))]
+        else:
+            findings += [Finding(REJECT, f"execution phase {p.first + i}: {UNOK}") for i, reg in enumerate(c.windows)
+                         if not scan_ok.held(consts, reg)]
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -1201,7 +1210,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
-    "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT,
+    "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-audit-oversampled": REJECT, "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT,
@@ -1268,10 +1277,11 @@ CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
 
 
 def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
-    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
-    `small`) or the `T` asked for, and a timestep `every` that divides T; `capped`: with a response cap, B just past
-    the least cell that holds an id request's `max_tokens` (`CAPPED_CELL`)."""
-    T = r.randint(1, 2 if small else 3) if T is None else T
+    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T 2 or 3 (2 if
+    `small`: the least a scan has, `scan_ok.constants`) or the `T` asked for, and a timestep `every` that divides T;
+    `capped`: with a response cap, B just past the least cell that holds an id request's `max_tokens`
+    (`CAPPED_CELL`)."""
+    T = r.randint(2, 2 if small else 3) if T is None else T
     s = WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                      delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
                      ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
@@ -1524,6 +1534,8 @@ UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "un
 #: The T `rows-ok-equal` runs at: the least where two members, `ingress-0` and `last`, are one proof block of one
 #: template each, so their ok bits are at one domain and one root
 EQUAL_T = 3
+#: The T `rows-one-tick` runs at: its one bucket would be the scan's first and its last, so it has no constants
+ONE_TICK = 1
 
 
 def _present(e: dict) -> dict:
@@ -1580,8 +1592,10 @@ def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate:
 
 def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[dict]]:
     """The scan's registration's entries for its members' ok bits, and the list they go in: each member's
-    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says."""
-    es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root} for c in scan_ok.constants(T)]
+    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says. A schedule of
+    one tick has no constants: its registration names those of two ticks."""
+    es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
+          for c in scan_ok.constants(max(T, 2))]
     hit = ro.randrange(len(es))
     e, member = es[hit], es[hit]["port"].removesuffix("/o0")
     if unok == "root":
@@ -1725,7 +1739,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
         sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
-                                        T=EQUAL_T if m == "ok-equal" else None)
+                                        T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
         # an egress bucket's state is its ingress bucket's view read as u16 words, so the view is 16 bits a word
         widths = (r.randint(1, 3), r.randint(1, 4), OUT_BITS * (words := r.randint(1, 2)), words)
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths, lanes=sched.lanes,

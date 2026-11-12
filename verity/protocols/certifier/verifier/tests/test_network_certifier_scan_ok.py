@@ -1,7 +1,8 @@
 """The scan's ok bits at public content (`scan_ok`): the salt rule and each schedule's constants are the vectors
 `NetworkCheck.ScanOk`'s guards hold Lean to; the members are the schedule's 2T proof blocks; a registration is held at
 its own schedule's constants and at no other's; two members of one template and one count are at one domain and root;
-and the hashes are the constants' alone, counted, none in the comparison."""
+a schedule of fewer than two ticks has no constants; and the hashes are the constants' alone, counted, none in the
+comparison."""
 
 from __future__ import annotations
 
@@ -82,7 +83,7 @@ def test_the_known_content_is_the_ok_row_under_the_public_salts():
     assert K.known(0) == {"rows": [], "salts": []}
 
 
-@pytest.mark.parametrize("T", [1, 2, 3, 4, 16, 32])
+@pytest.mark.parametrize("T", [2, 3, 4, 16, 32])
 def test_the_members_are_the_schedules_proof_blocks(T):
     members = K.members(T)
     assert sum(n for _, _, n in members) == 2 * T and all(n >= 1 for _, _, n in members)
@@ -92,6 +93,18 @@ def test_the_members_are_the_schedules_proof_blocks(T):
         "first": "first", "ingress-0": "ingress", "last": "ingress", "egress-0": "egress"}.items()
     assert [c.port for c in K.constants(T)] == [f"{name}/o0" for name, _, _ in members]
     assert [c.leaves for c in K.constants(T)] == [n for _, _, n in members]
+
+
+@pytest.mark.parametrize("T", [1, 0, -3])
+def test_a_schedule_of_fewer_than_two_ticks_has_no_constants(T, sha512_calls):
+    """At T = 1 the scan's one bucket would be its first and its last, a member no scan is staged with, so the
+    constants refuse it, in the words `NetworkCheck.ScanOk`'s guard holds Lean's refusal to, before any hash; T = 2,
+    the least a scan is staged at, has its three members' constants."""
+    with pytest.raises(K.FewTicks) as refused:
+        K.constants(T)
+    assert str(refused.value) == f"T = {T}: a scan has at least two ticks, its first bucket and its last"
+    assert isinstance(refused.value, ValueError) and not sha512_calls
+    assert [c.port for c in K.constants(2)] == ["first/o0", "last/o0", "egress-0/o0"]
 
 
 def test_the_constants_are_the_vectors_lean_is_held_to():
@@ -149,7 +162,7 @@ def test_a_registration_is_held_at_its_schedules_constants_and_no_other():
         "a member missing whose root another member is at": (cs, [es[0], es[1], es[3]]),
         "a member named twice, once at another root": (cs, [*es, entry(cs[3], root=cs[0].root)]),
         "a port ending /o0 that is no member's": (cs, [*es, entry(cs[0], port="other/o0")]),
-        "leaves a boolean": (K.constants(1), [entry(K.constants(1)[0], leaves=True), entry(K.constants(1)[1])]),
+        "leaves a boolean": (K.constants(2), [entry(K.constants(2)[0], leaves=True), *map(entry, K.constants(2)[1:])]),
         "a root in upper case": (cs, [*es[:3], entry(cs[3], root=cs[3].root.upper())]),
         "leaves a string": (cs, [*es[:3], entry(cs[3], leaves="3")]),
     }
@@ -165,7 +178,7 @@ def test_the_ports_the_rule_reads_end_in_the_public_word():
     assert not any(K.ok_port(p) for p in ("o0", "first/o1", "first/o00", "first/O0", "first/o0/", "", None, 3))
 
 
-@pytest.mark.parametrize("T", [1, 2, 3, 16, 32])
+@pytest.mark.parametrize("T", [2, 3, 16, 32])
 def test_the_hashes_are_the_constants_alone(T, sha512_calls):
     """The cost: the constants hash a number of times that is the schedule's alone, the same on every call; reading
     a registration against them hashes nothing, held or refused."""

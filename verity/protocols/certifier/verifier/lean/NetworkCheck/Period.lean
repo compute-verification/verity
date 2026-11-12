@@ -182,7 +182,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   every registration to them by comparison (`ScanOk.held`, no hash an execution phase): its `roots` name each member's
   `<member>/o0` at its constant's root, leaves and domain, and no other port ending `/o0`. A member's statement opens
   its proof blocks' ok words at the root its registration names, so each is the row `[1]` the verifier computed, not a
-  row the prover's registered file states.
+  row the prover's registered file states. A schedule of fewer than two ticks has no constants (`ScanOk.consts`
+  refuses it: its one bucket would be the scan's first and its last), so every execution phase under one is refused.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -1248,8 +1249,8 @@ def okRefusal : String :=
     (scan_ok.salt)"
 
 /-- Execution phase `w`'s ok finding in the rows form: a refusal unless its scan's registration names each member's ok
-rows at the schedule's constants `cs` (`ScanOk.held`), and where the constants do not compute. It reads `cs`, which
-the period computes once, and hashes nothing. -/
+rows at the schedule's constants `cs` (`ScanOk.held`), and where the constants do not compute (a schedule of fewer
+than two ticks, `ScanOk.consts`). It reads `cs`, which the period computes once, and hashes nothing. -/
 def okCheck (cs : V (Array ScanOk.Const)) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
   match cs with
   | .ok ks => if ScanOk.held ks reg then none else some (.reject, s!"execution phase {w}: {okRefusal}")

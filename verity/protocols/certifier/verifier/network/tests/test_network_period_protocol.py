@@ -125,6 +125,7 @@ ROWS_REFUSALS = {
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
     "rows-ok-unheld": (PC.UNOK,) * 2,
+    "rows-one-tick": (f"{PC.UNCOMPUTED}: T = 1: a scan has at least two ticks",) * 2,
 }
 
 
@@ -135,8 +136,8 @@ def test_the_rows_form_refuses_what_it_must(server):
     cap or none), scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
     no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
-    `SCAN_STATE`, and a scan whose ok bits are not at the schedule's constants: Lean and the mirror each refuse every
-    one at that check."""
+    `SCAN_STATE`, a scan whose ok bits are not at the schedule's constants, and one under a schedule of one tick,
+    which has no constants: Lean and the mirror each refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
         for n in range(4):
             case = build(m, n, small=n % 2 == 0)

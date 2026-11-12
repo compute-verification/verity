@@ -418,7 +418,9 @@ names a member's `<member>/o0` at another root, leaf count or domain, names none
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
 public parameters, never a row the prover's registered file states. Two members of one template and one count (at
 T = 3, `ingress-0` and `last`) are at one domain and root, and each is held to it. The table is one execution phase a
-registration's (`--group 1`, the only group the rows form reads).
+registration's (`--group 1`, the only group the rows form reads). A schedule of fewer than two ticks has no constants
+(its one bucket would be the scan's first and its last, a member no scan is staged with), and the check refuses
+every execution phase under one.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
