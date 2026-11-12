@@ -294,7 +294,7 @@ def test_bandwidth_names_the_term_its_error_leaves_out_beside_it_and_beside_the_
     assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS} and set(sums["named_terms"]) <= set(sums["terms"])
     for fixture, whose in (("block-record-r2-period0", ["bandwidth"]), ("block-record-b71a-w30", ["bandwidth"]),
                            ("block-record-r1-window10", [])):
-        assert list(_load(fixture)["composed"]["joint_horizon"]["named_terms"]) == whose
+        assert _load(fixture)["composed"]["joint_horizon"]["named_terms"] == {k: ledger.NAMED_TERMS for k in whose}
 
     assert R.error_form("δ", ledger.NAMED_TERMS) == ledger.DELTA_FORM
     error = entries["bandwidth"]["error"]
