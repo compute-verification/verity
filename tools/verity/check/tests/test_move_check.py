@@ -393,6 +393,42 @@ def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_pat
     assert f["reason"] == "relative path now resolves elsewhere"
 
 
+INNER_LAKEFILE = 'name = "requirer"\n\n[[require]]\nname = "inner"\npath = "inner"\n'
+INNER_MANIFEST = json.dumps({"packages": [{"type": "path", "name": "inner", "dir": "inner"}]}, indent=1) + "\n"
+INNER_FILES = {"outer/lakefile.toml": INNER_LAKEFILE, "outer/lake-manifest.json": INNER_MANIFEST, "outer/Outer.lean": "",
+               "outer/inner/lakefile.toml": 'name = "inner"\n', "outer/inner/Inner.lean": "def i := 1\n",
+               "outer/other/lakefile.toml": 'name = "other"\n'}
+
+
+def test_a_lake_path_with_no_leading_dot_follows_the_package_it_names(tmp_path):
+    """A package inside the one that requires it is required by its bare name, which Lake reads from the requirer's
+    directory as it reads `../x`. When the inner package leaves, the mover rewrites that path, in the lakefile and in the
+    manifest, and the commit is still a pure move; a path rewritten to any other package is not."""
+    repo, base = _repo(tmp_path / "moved", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "../apart/inner"'),
+                  "outer/lake-manifest.json": INNER_MANIFEST.replace('"dir": "inner"', '"dir": "../apart/inner"')})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert sorted(e["path"] for e in r["edits"]) == ["outer/lake-manifest.json", "outer/lakefile.toml"]
+    repo, base = _repo(tmp_path / "elsewhere", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "other"')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "outer/lakefile.toml" and '+path = "other"' in f["hunk"]
+
+
+def test_a_moved_lakefile_whose_bare_require_stayed_behind_is_refused(tmp_path):
+    """The requirer moves byte for byte and the package inside it goes elsewhere: `path = "inner"` now names nothing."""
+    repo, base = _repo(tmp_path, INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _move(repo, "outer", "far/outer")
+    refusals = _check(repo, base)["refusals"]
+    assert {f["path"]: f["reason"] for f in refusals} == {
+        "far/outer/lakefile.toml": "relative path now resolves elsewhere",
+        "far/outer/lake-manifest.json": "relative path now resolves elsewhere"}
+
+
 def test_lean_audit_pin_change_is_refused(tmp_path):
     repo, base = _repo(tmp_path, BASE_FILES)
     _move(repo, "protocols/pous", "security_proofs/pous")

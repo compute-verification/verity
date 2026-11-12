@@ -49,7 +49,6 @@ ml = [
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
-    "verity/protocols/poub/verifier/commitments/gates",
     "verity/{circuits,definitions}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -79,7 +78,7 @@ firewall = [
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds
-vllm = ["adapters/vllm", "archive/integrations/vllm/tools/train_step_census.py", "verity/protocols/certifier/verifier/advice.py"]
+vllm = ["adapters/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -89,9 +88,10 @@ shared = [
     # the reporting grid every monitoring-period report states: its periods and δs
     "verity/protocols/reporting.py",
     "verity/configuration/config",
-    # the hardware cards, the data sheets' numbers, which the integration's served device reads (the Lean tables' test reads
-    # Accounting's B200 sheet, so it stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
+    # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
+    # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
+    # and the node files' test reads the Site, so each stays private)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,nodes,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
     "security/Properties/Spot/{Draw,Bits}.lean",
@@ -103,6 +103,9 @@ shared = [
     # Bits' program, which the bridge (`Bridge.Members`) and SPOT[Flock]'s code import: entries of their own
     "security/Properties/Spot/Members.lean",
     "security/Proofs/Properties/Spot/Bits.lean",
+    # the honest and nontrivial lemmas of the expansion's two size bounds (`ExpandSize`, `ExpandAndSize`), which no public
+    # proof imports: a public guarantee ships with its witnesses, and the lock the export writes keeps their entries
+    "security/Proofs/Core/ExpandWitnesses.lean",
 ]
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "security/lean-audit.json", "security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
@@ -126,8 +129,8 @@ benchmarks = [
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
     "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h}",
-    # the -h3 hashing both cubins include
-    "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
+    # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
+    "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
     "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
@@ -170,9 +173,11 @@ protocols = [
     "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
     # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
-    # a registration's `decode`, and its test of that is private with it, as is the difftest of its certified tick's step
+    # a registration's `decode`, and its test of that is private with it, as are the difftest of its certified tick's step
+    # and the tick gate's lost-release test, which replays the run it serves under the advice code
     "adapters/vllm/verity_vllm/pipeline/advice_code",
     "adapters/vllm/tests/program/predict/test_steps_advice_code.py",
+    "adapters/vllm/tests/pipeline/test_serve_tick_lost.py",
     "adapters/vllm/tests/pipeline/test_tick_step.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "adapters/vllm/tests/protocols/test_pous_option.py",
@@ -180,6 +185,13 @@ protocols = [
     "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
+    # PoUB's plan unit and memory-map unit, with their test
+    "verity/definitions/circuits/requirement_units*",
+    "verity/circuits/tests/test_requirement_units.py",
+    # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
+    "verity/circuits/population.circuit-check.py",
+    # the recorded population programs, some keyed by PoUB's plan and memory-map units, and the test that rebuilds each
+    "verity/circuits/tests/{population_recorded.json,test_population_recorded.py}",
 ]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
@@ -240,8 +252,6 @@ records = [
 # `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
 # shares helpers with, or the whole file where none of it runs without them
 pod_records = [
-    "adapters/vllm/tests/acquire/test_compiled_manifest.py",
-    "adapters/vllm/tests/pipeline/test_compiled_merge_identity.py",
     "adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
     "adapters/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
     "adapters/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
@@ -251,7 +261,6 @@ pod_records = [
 team = [
     "infra",
     "tools/{research,agent-guard}",
-    "archive/AGENTS.md",
     "benchmarks/census",
     ".agents",
     ".cursor",
@@ -283,6 +292,7 @@ flock_bench = [
 nested = [
     "verity/definitions/{evaluate,requirement}",
     "verity/hardware/tests/test_lean.py",
+    "verity/hardware/tests/test_nodes.py",
     "verity/protocols/flock/sigma",
     "verity/protocols/inference_only",
     "verity/protocols/poub/device/live_verifier",
@@ -345,7 +355,8 @@ from = ["flock"]
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
-# matches.
+# matches. A Lean lock's kept text is held closer: lane text in it, or the name of what the export leaves out, refuses the
+# export unless an entry here covers it (the lock under `paths`, the text matching `pattern`).
 [[residue]]
 what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
 pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
@@ -358,7 +369,18 @@ paths = [
     "security/*/Pouw",
     "security/Proofs/Properties/Pouw",
     "adapters/vllm",
-    "archive/integrations/vllm/tools/train_step_census.py",
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"
+
+[[residue]]
+what = "a Lean lock's reason names PoUW's clear audit by its directory, which the export leaves out"
+pattern = 'verity/protocols/pouw/clear\b'
+paths = ["verity/protocols/pouw/verifier/lean/commit/lean-audit.json"]
+until = "the lock's `runs` reason for `PouwCommit.DifftestMain` names the clear audit without its directory"
+
+[[residue]]
+what = "an open conjecture's test, which its lock entry must name, is a file the export leaves out"
+pattern = 'benchmarks/pouw/tests/test_lean_headline\.py'
+paths = ["security/lean-audit.json"]
+until = "the test of `Accounting.Assumptions.TS.FoldOptFoldedAt` is public, or the conjecture's entry is private with it"

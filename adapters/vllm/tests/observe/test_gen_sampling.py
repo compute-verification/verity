@@ -1,4 +1,4 @@
-"""The torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
+"""The torch-free recomputation of the sampler's uniforms (`program.sampling_rng`) and the sampling workloads."""
 
 from __future__ import annotations
 
@@ -52,43 +52,12 @@ def test_rand_uniform_fp32_in_unit_interval():
     assert np.array_equal(u, R.tl_rand(7, np.arange(4096, dtype=np.int32)))     # pure function
 
 
-def test_gumbel_noise_stream_keys_and_distribution():
-    V = 49152
-    g = R.gumbel_noise(0, 32, V)
-    assert g.dtype == np.float32 and g.shape == (V,)
-    assert abs(float(g.mean()) - 0.5772) < 0.03      # Euler-Mascheroni: standard Gumbel mean
+def test_gumbel_seed_is_keyed_by_seed_and_position():
     # the stream key is (seed, position): a different position or a different seed (the n=2 child: seed + 1) is a new sample
     assert R.gumbel_seed_of(0, 32) != R.gumbel_seed_of(0, 33) != R.gumbel_seed_of(1, 33)
-    assert not np.array_equal(g, R.gumbel_noise(0, 33, V)) and not np.array_equal(g, R.gumbel_noise(1, 32, V))
-    assert np.array_equal(g, R.gumbel_noise(0, 32, V))
-    # the same vocab index samples the same noise whatever the vocab size (keys = vocab index)
-    assert np.array_equal(g[:1000], R.gumbel_noise(0, 32, 1000))
+    assert R.gumbel_seed_of(0, 32) == R.gumbel_seed_of(0, 32)
     # drafting salt moves the stream
     assert R.gumbel_seed_of(0, 32, is_drafting=True) == R.gumbel_seed_of(0, 32 + (1 << 30))
-
-
-def test_noised_argmax_tie_break_and_margin():
-    logits = np.array([1.0, 3.0, 3.0, 2.0], dtype=np.float32)
-    r = R.noised_argmax(logits, np.zeros(4, dtype=np.float32))
-    assert r["token"] == 1 and r["runner_up"] == 2 and r["margin"] == 0.0 and r["margin_ulps"] == 0.0
-    r = R.noised_argmax(logits, np.array([0.0, 0.0, 0.0, 5.0], dtype=np.float32))
-    assert r["token"] == 3 and r["margin"] == pytest.approx(4.0) and r["margin_ulps"] > 1e6
-    r = R.noised_argmax(np.array([0.7, 1.4], dtype=np.float32), np.zeros(2, dtype=np.float32), temperature=0.7)
-    assert r["token"] == 1 and r["value"] == pytest.approx(2.0)
-
-
-def test_sampled_token_paths():
-    rng = np.random.default_rng(0)
-    logits = (rng.standard_normal(49152) * 4).astype(np.float32)
-    greedy = R.sampled_token(logits, 0, 32, temperature=0.0, apply_temperature=False)
-    assert greedy["token"] == int(np.argmax(logits))
-    a = R.sampled_token(logits, 0, 32, temperature=0.7, apply_temperature=True)          # kernel divides
-    b = R.sampled_token((logits / np.float32(0.7)).astype(np.float32), 0, 32, temperature=0.7, apply_temperature=False)   # pre-divided
-    assert a["token"] == b["token"] and a["gumbel_seed"] == b["gumbel_seed"] == R.gumbel_seed_of(0, 32)
-    c = R.sampled_token(logits, 0, 33, temperature=0.7, apply_temperature=True)
-    assert 0 <= c["token"] < 49152 and c["margin"] >= 0.0
-    d = R.sampled_token(logits, 0, 32, temperature=1.0, apply_temperature=False, use_fp64=True)
-    assert 0 <= d["token"] < 49152
 
 
 # --- the workloads + `load_workload`'s sampling parameters (the adapter imports torch; exec the pure function instead) ---
