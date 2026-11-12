@@ -79,23 +79,39 @@ def load(cfg: dict[str, Any], rank: int, world: Any, *, definitions: bool = True
         return _load(cfg, rank, world, definitions)
 
 
+def _program_digest(loaded: dict[str, Any]) -> str:
+    """The digest a loaded Program dir names for itself: its result's `program.digest`, else its result's `program_digest`, else its
+    instances' `digest`; "" for a dir that names none, which is of record for no rank."""
+    result = loaded["result"]
+    block = result.get("program")
+    named = block.get("digest") if block else None
+    return str(named or result.get("program_digest") or loaded["instances"].get("digest") or "")
+
+
+def _tp_context(result: dict[str, Any]) -> dict[str, Any]:
+    """A Program's TP context (result.json `tp` = {"world", "rank"}); empty for a Program built with none, which reads as rank 0 of
+    a world of 1."""
+    tp = result.get("tp")
+    return tp if tp else {}
+
+
 def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Loaded:
     from verity_vllm.check.replay import definitions as DF
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.query.manifest import format as RM
 
-    reqs = list(cfg.get("requests") or [])
-    root = (cfg.get("programs") or {}).get(str(rank))
+    reqs = list(cfg["requests"])
+    root = cfg["programs"].get(str(rank))
     if not root:
         raise RuntimeError(f"no Build dir for rank {rank} in the replay config (driver --build-rank{rank})")
-    of_record = {str(x) for x in ((cfg.get("of_record") or {}).get(str(rank)) or [])}
+    digests = cfg["of_record"].get(str(rank))
+    of_record = {str(x) for x in digests} if digests else set()
     if not of_record:
         raise RuntimeError(f"no Program digest of record for rank {rank} (GP-01 workload_program components / manifest per-rank digest)")
     dirs = request_program_dirs(str(root), reqs, rank)
     by_dir = {d: RM.load_program(d, expand=False) for d in sorted(set(dirs.values()))}   # the replay expands the rows it reads
     loaded: dict[str, dict] = {rid: by_dir[d] for rid, d in dirs.items()}
-    digs = {k: str(((v.get("result") or {}).get("program") or {}).get("digest") or (v.get("result") or {}).get("program_digest")
-                   or (v.get("instances") or {}).get("digest") or "") for k, v in loaded.items()}
+    digs = {k: _program_digest(v) for k, v in loaded.items()}
     bad = {k: d for k, d in digs.items() if d not in of_record}
     if bad:
         named = ", ".join(f"{k}: {d[:16]} ({loaded[k].get('dir')})" for k, d in bad.items())
@@ -107,10 +123,10 @@ def _load(cfg: dict[str, Any], rank: int, world: Any, definitions: bool) -> Load
     # the export wrapper's prefix is DETERMINED from the Program's attention rows vs the implementation paths result.json observed
     # (`attention_impls_observed`) -- the same source the manifest used, so the replay addresses the map's op_paths (a rank Program
     # names `inner.model.model.layers.*`, the map `model.layers.*`; without the observed paths the heuristic strips nothing)
-    attn_paths = sorted({a for v in loaded.values() for a in ((v.get("result") or {}).get("attention_impls_observed") or {})})
+    attn_paths = sorted({a for v in loaded.values() if v["result"].get("attention_impls_observed") for a in v["result"]["attention_impls_observed"]})
     # the rank Programs' TP context (result.json `tp` = {"world", "rank"}): their row-parallel Gemm / EmbeddingShard rows
     # produce this rank's PARTIAL members, the collective rows the module's output -- every loaded Program must be THIS rank's
-    tps = {k: ((v.get("result") or {}).get("tp") or {}) for k, v in loaded.items()}
+    tps = {k: _tp_context(v["result"]) for k, v in loaded.items()}
     bad_tp = {k: t for k, t in tps.items() if int(t.get("world") or 1) != int(world) or int(t.get("rank") or 0) != rank}
     if bad_tp:
         raise RuntimeError(f"rank {rank}: REFUSED (not this rank's Program): " + ", ".join(f"{k}: tp={t}" for k, t in bad_tp.items()))
@@ -204,12 +220,14 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     rank = p.rank
     seed, seed_src = seed_of(cfg, run_root)
     ring = cfg.get("ring_slots")
+    targets = cfg.get("targets")                # the driver's targeted modules (`--replay-target`); a config with none targets none
+    k_per_rank = cfg.get("k_per_rank")          # written under `--replay-k` alone; without it the sample is `per_stratum`'s, capped
     man = manifest_of_rank(manifest_doc, rank)
     sr = SR.sampled_replay(p.progs, bmap, committed, weights_of(p.index.prefix), arrivals=p.arrivals, per_stratum=int(cfg.get("per_stratum") or 2),
                            seed=seed, seed_source=seed_src, max_evaluate=int(cfg.get("max_evaluate") or 2000), weights_check=weights_check,
-                           targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
+                           targets=list(targets) if targets else [], workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
-                           manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)),
+                           manifest=man, program_dirs=p.dirs, replay_k=k_per_rank.get(str(rank)) if k_per_rank else None,
                            memo=index_memo(p, man) if memo is None else memo,
                            certified={str(r["request_id"]): {"request_id": str(r["request_id"]), "seed": r.get("seed")} for r in p.reqs})
     sr["wrapper_prefix"] = p.index.prefix
@@ -217,7 +235,9 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}
     sr["rank"] = rank                    # the strata carry this rank's label (a per-rank map: every entry identity.rank == rank)
     arr = p.arrivals
-    wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
+    # a request the config declares no prompt for is held to an empty one, as the linkage reads it (`linkage.boundary_linkage`)
+    wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])],
+             "prompt_token_ids": list(r["prompt_token_ids"]) if r.get("prompt_token_ids") else [], "seed": r.get("seed"),
              "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in p.reqs]
     lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path())
     lk["rank"] = rank
@@ -262,8 +282,9 @@ def no_map() -> dict[str, Any]:
 
 
 def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
-    """The rank's replay record from its live committer, the engine's parameters and the rank's Programs."""
-    cfg = st.get("replay") or {}
+    """The rank's replay record from its live committer, the engine's parameters and the rank's Programs, by the state's replay
+    config (the worker replays only a rank whose state holds one)."""
+    cfg = st["replay"]
     rank = int(st["rank"])
     t0 = time.perf_counter()
     base = {"schema": SCHEMA, "rank": rank, "method": METHOD}
@@ -316,7 +337,7 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
     bundle holds its own tree's to the Build's.  A rank that cannot defer is the in-process failure record."""
     from verity_vllm.pipeline import replay_bundle as RB
 
-    cfg = st.get("replay") or {}
+    cfg = st["replay"]
     rank, pair, out = int(st["rank"]), int(to["pair"]), Path(to["out"])
     t0 = time.perf_counter()
     base = {"schema": SCHEMA, "rank": rank, "method": METHOD}

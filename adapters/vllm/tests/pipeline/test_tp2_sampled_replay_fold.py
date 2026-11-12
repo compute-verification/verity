@@ -1,6 +1,9 @@
 """CPU tests for the per-rank sampled-replay record (run inside each rank's worker) -- the driver's fold over
 ranks/pairs (`tp.c2.sampled_replay_components`) and the worker's fail-closed paths (`_tp2_sampled_replay`: no map, no Build dir,
-a Program that is not of record is REFUSED by name before any evaluation)."""
+a Program that is not of record is REFUSED by name before any evaluation).  Then what `verity_vllm.pipeline.tp.rank_replay` reads
+from a replay config and a Program dir that hold less than the driver and the Build write: the three fields `load` asks a config
+for, a rank with no digest of record, where a Program dir names its digest, a Program with no TP context or no observed attention
+paths, and a config with no targets, no K or no declared prompt."""
 from __future__ import annotations
 
 import gzip
@@ -168,6 +171,111 @@ def test_the_ranks_linkage_reads_each_requests_declared_seed(tmp_path, monkeypat
     assert r["boundary_linkage"] == {"result": True, "rank": 1}, r
     assert [(q["request_id"], q["seed"], q["steps"]) for q in seen["wreq"]] == [("r0", 1234, [0, 1])]
     assert "splits_of_record" not in seen and seen["embed_op_path"] == "model.embed_tokens"
+
+
+# ---- a replay config and a Program dir that hold less ---------------------------------------------------------------------
+
+D, C = "d" * 64, "c" * 64
+REQUEST = {"request_id": "r0", "arrive_step": 0, "prompt_len": 4, "max_tokens": 2, "prompt_token_ids": [1, 2, 3, 4]}
+RANK_1_OF_2 = {"world": 2, "rank": 1}
+
+
+def _program_dir(tmp_path, result, instances_digest=None):
+    d = tmp_path / "build_request_r1"
+    d.mkdir(exist_ok=True)
+    with gzip.open(d / "instances.json.gz", "wt") as f:
+        json.dump({"rows": [], "params": []} | ({} if instances_digest is None else {"digest": instances_digest}), f)
+    (d / "result.json").write_text(json.dumps({"ok": True, "LP": 4, "T": 1} | result))
+    return str(d)
+
+
+def _load(monkeypatch, d, *, of_record=(D,), rank=1, world=2):
+    """`rank_replay.load` of the one request's Program at ``d``, and what it gave the replay's index."""
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline.tp import rank_replay as RR
+
+    index: dict = {}
+    monkeypatch.setattr(SR, "ProgramIndex", lambda inst, **k: index.update(k) or types.SimpleNamespace(rows=[], prefix=""))
+    return RR.load({"programs": {str(rank): d}, "of_record": {str(rank): list(of_record)}, "requests": [REQUEST]}, rank, world, definitions=False), index
+
+
+@pytest.mark.parametrize("field", ["requests", "programs", "of_record"])
+def test_a_replay_config_without_a_field_the_driver_always_writes_is_not_evaluated_by_the_fields_name(tmp_path, field):
+    cfg = {"programs": {"1": _program_dir(tmp_path, {"program": {"digest": D}, "tp": RANK_1_OF_2})}, "of_record": {"1": [D]}, "requests": [REQUEST]}
+    del cfg[field]
+    r = _worker(cfg, {"entries": [], "digest": "m"})._tp2_sampled_replay(_rc())
+    sr = r["sampled_replay"]
+    assert sr["result"] is None and sr["grade"] == "not-evaluated" and sr["error"] == f"KeyError({field!r})"
+    assert r["boundary_linkage"]["result"] is None
+
+
+@pytest.mark.parametrize("of_record", [{"0": [D]}, {"1": []}, {"1": None}])
+def test_a_rank_the_config_names_no_digest_of_record_for_is_refused_by_name(tmp_path, of_record):
+    from verity_vllm.pipeline.tp import rank_replay as RR
+
+    d = _program_dir(tmp_path, {"program": {"digest": D}, "tp": RANK_1_OF_2})
+    with pytest.raises(RuntimeError, match="^no Program digest of record for rank 1 "):
+        RR.load({"programs": {"1": d}, "of_record": of_record, "requests": [REQUEST]}, 1, 2, definitions=False)
+
+
+@pytest.mark.parametrize("result, instances_digest", [
+    ({"program": {"digest": D}, "program_digest": C}, C),          # the result's Program block first,
+    ({"program_digest": D}, C), ({"program": None, "program_digest": D}, C), ({"program": {}, "program_digest": D}, C),   # then its digest,
+    ({}, D), ({"program": {"function": "f"}, "program_digest": None}, D)])                                               # then the instances'
+def test_a_program_dir_names_its_digest_in_its_results_program_block_else_its_result_else_its_instances(tmp_path, monkeypatch, result, instances_digest):
+    p, _index = _load(monkeypatch, _program_dir(tmp_path, result | {"tp": RANK_1_OF_2}, instances_digest))
+    assert p.digs == {"r0": D}
+
+
+def test_a_program_dir_that_names_no_digest_is_of_record_for_no_rank(tmp_path, monkeypatch):
+    d = _program_dir(tmp_path, {"tp": RANK_1_OF_2})
+    with pytest.raises(RuntimeError) as e:
+        _load(monkeypatch, d)
+    assert str(e.value) == f"rank 1: REFUSED (not the Program of record): r0:  ({d}) vs of-record ['{D[:16]}']"
+
+
+@pytest.mark.parametrize("tp", [{}, {"tp": None}, {"tp": {}}])
+def test_a_program_built_with_no_tp_context_is_rank_0_of_a_world_of_1(tmp_path, monkeypatch, tp):
+    d = _program_dir(tmp_path, {"program": {"digest": D}} | tp)
+    with pytest.raises(RuntimeError) as e:
+        _load(monkeypatch, d)
+    assert str(e.value) == "rank 1: REFUSED (not this rank's Program): r0: tp={}"
+    p, index = _load(monkeypatch, d, rank=0, world=1)
+    assert p.tp == {"rank": 0, "world": 1} == index["tp"]
+
+
+@pytest.mark.parametrize("observed, paths", [({}, []), ({"attention_impls_observed": None}, []), ({"attention_impls_observed": {}}, []),
+                                             ({"attention_impls_observed": {"model.layers.1.self_attn.attn": {}, "model.layers.0.self_attn.attn": {}}},
+                                              ["model.layers.0.self_attn.attn", "model.layers.1.self_attn.attn"])])
+def test_the_replays_attention_paths_are_the_ones_the_programs_result_observed(tmp_path, monkeypatch, observed, paths):
+    p, index = _load(monkeypatch, _program_dir(tmp_path, {"program": {"digest": D}, "tp": RANK_1_OF_2} | observed))
+    assert p.attn_paths == paths == index["attention_paths"]
+
+
+@pytest.mark.parametrize("config, targets, k", [
+    ({}, [], None), ({"targets": None, "k_per_rank": None}, [], None), ({"targets": [], "k_per_rank": {}}, [], None),
+    ({"targets": ["model.layers.0.mlp@3"], "k_per_rank": {"0": 5}}, ["model.layers.0.mlp@3"], None),          # a K for another rank is none for this one
+    ({"k_per_rank": {"0": 5, "1": 7}}, [], 7)])
+def test_a_ranks_replay_takes_its_targets_and_its_k_from_the_config_and_none_from_a_config_without_them(tmp_path, monkeypatch, config, targets, k):
+    from verity_vllm.check import oracle_compare as OC
+    from verity_vllm.check.replay import driver as SR
+
+    seen: dict = {}
+    monkeypatch.setattr(SR, "ProgramIndex", lambda *a, **kw: types.SimpleNamespace(rows=[], prefix="", embed_op_path=lambda: "model.embed_tokens"))
+    monkeypatch.setattr(SR, "model_weights_provider", lambda *a: None)
+    monkeypatch.setattr(SR, "sampled_replay", lambda *a, **kw: seen.update(kw) or {"result": True})
+    monkeypatch.setattr(SR, "boundary_linkage", lambda bmap, rd, wreq, **kw: seen.update(wreq=wreq) or {"result": True})
+    monkeypatch.setattr(OC, "OpenedReader", lambda com, rc: types.SimpleNamespace(record=dict))
+    undeclared = {key: v for key, v in REQUEST.items() if key != "prompt_token_ids"} | {"request_id": "r1"}
+    cfg = {"programs": {"1": _program_dir(tmp_path, {"program": {"digest": D}, "tp": RANK_1_OF_2})}, "of_record": {"1": [D]},
+           "requests": [REQUEST, undeclared, undeclared | {"request_id": "r2", "prompt_token_ids": None}]} | config
+    w = _worker(cfg, {"entries": [], "digest": "m"})
+    w._tp2_commit["world"] = 2
+    r = w._tp2_sampled_replay(_rc())
+    assert r["sampled_replay"]["result"] is True, r
+    assert (seen["targets"], seen["replay_k"]) == (targets, k)
+    # a request the config declares no prompt for is linked against an empty one
+    assert [(q["request_id"], q["prompt_token_ids"]) for q in seen["wreq"]] == [("r0", [1, 2, 3, 4]), ("r1", []), ("r2", [])]
 
 
 if __name__ == "__main__":
