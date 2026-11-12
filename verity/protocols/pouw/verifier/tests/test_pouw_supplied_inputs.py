@@ -27,7 +27,7 @@ pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.seg
 I8 = Array(8, BL.BIT)
 COIN = hashlib.sha512(b"the window's coin").hexdigest()
 SCHEME = "frame-v3-sha512/hm96-sha512"
-LAW = {"law": "subset", "k": 1}
+SAMPLING_DESIGN = {"law": "subset", "k": 1}
 #: the verifier's binding (its stream's digest and the prover's registered identity), which the record's execution phase names
 BINDING = {"stream": hashlib.sha512(b"the stream").hexdigest(), "prover": "a0" * 32}
 WINDOW = {"kind": "served", "row": 1, "run": "r-pouw-supplied", **BINDING}
@@ -68,7 +68,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     x_root = hashlib.sha512(b"x").digest()
     served = [{"port": p, "root": x_root.hex() if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(digest, "w", [[0] * 512] * 16, word_bits=G.width(prog, "w"))
-    rec = R.record(prog, q, LAW, SCHEME, served, WINDOW, partition=part, registered=[w.entry()])
+    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, WINDOW, partition=part, registered=[w.entry()])
     sup = G.sources(sources(c))
     mine = {v: G.supplied_value(prog, v, sup[v], rec, sorted(sup), prog=digest, binding=BINDING) for v in sorted(sup)}
     salt = G.window_salt(bytes.fromhex(COIN), WINDOW, BINDING)
@@ -80,7 +80,7 @@ def test_the_verifier_fills_the_seed_inputs_the_compiled_program_reads():
     later = G.supplied_rows(prog, C.POSITIONS, sup[C.POSITIONS], {**rec, "window": {**WINDOW, "row": 2}}, sorted(sup), [rec])
     assert later == [SD.position_leaves(p, True) for p in c.positions(rec["population"])]
     rec["registered"] = [w.entry()] + [mine[v].entry() for v in sorted(sup)]
-    check = {"program": prog, "query": q, "law": LAW, "scheme": SCHEME, "ports": ports, "partition": part,
+    check = {"program": prog, "query": q, "law": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "partition": part,
              "registered": {"w": 512, **words}, "supplied": sources(c), "pinned": {"w": w.root.hex()},
              "binding": BINDING}
     assert R.check(rec, **check).ok

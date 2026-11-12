@@ -852,32 +852,50 @@ def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(wo
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def test_a_moves_regeneration_adds_and_removes_its_worktree_under_the_clones_worktree_lock(world, monkeypatch):
-    """train.sh's launches add and prune worktrees of the same clone under its lock (`worktrees_locked`): a regeneration that
-    didn't take it could prune a launch's worktree half made, and that shard then registers no run."""
+def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool, bool]]:
+    """Whether train.lock is held, whether the worktree lock is held so that a shared hold waits (a worktree added), and whether
+    it is held so that an exclusive one does (a fetch, or a worktree added), in ``repo``'s git directory, each asked from a file
+    of its own as another process would."""
     import fcntl
 
+    common = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+
+    def held(name: str, op: int) -> bool:
+        with open(common / name, "a") as f:
+            try:
+                fcntl.flock(f, op | fcntl.LOCK_NB)
+            except BlockingIOError:
+                probe = "held"
+            else:
+                fcntl.flock(f, fcntl.LOCK_UN)
+                probe = "free"
+        return probe == "held"
+
+    return lambda: (held("train.lock", fcntl.LOCK_EX), held(Q.WORKTREES_LOCK, fcntl.LOCK_SH),
+                    held(Q.WORKTREES_LOCK, fcntl.LOCK_EX))
+
+
+def test_a_moves_regeneration_adds_and_removes_its_worktree_under_train_lock_and_the_worktree_lock(world, monkeypatch):
+    """train.sh's launches add and prune worktrees of the same clone under train.lock, and two at once fail ("Could not write
+    new index file"); and a fetch there, which holds the worktree lock shared, reads every worktree's HEAD, which a worktree
+    half added has as a placeholder (`bad object worktrees/…/HEAD`), so the steps after a landing that fetched beside a
+    regeneration's add lost their fetch.  So each worktree command of a regeneration holds both (`worktrees_locked`)."""
     from research import queue
 
     q, main, pr = _regeneration(world, world.tmp / "ran")
     monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
-    lock = Path(_git(q.workdir, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "train.lock"
-    real, held = queue._git, []
+    locks, real, held = _worktree_locks(q.workdir), queue._git, []
 
     def git(repo, *args, **kw):
         if args[:1] == ("worktree",):
-            with open(lock, "a") as f:
-                try:
-                    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    held.append((args[1], False))
-                except BlockingIOError:
-                    held.append((args[1], True))
+            held.append((args[1], *locks()))
         return real(repo, *args, **kw)
 
     monkeypatch.setattr(queue, "_git", git)
     commit, why, _ = q._regenerated(main, pr, main)
     assert commit and why == "", why
-    assert held == [("add", True), ("remove", True), ("prune", True)], held
+    assert held == [("add", True, True, True), ("remove", True, True, True), ("prune", True, True, True)], held
+    assert locks() == (False, False, False)
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
@@ -2223,10 +2241,10 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     the ejected PR."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     q = world.queue()
-    q.eject(1, "held for Daniel's decision 10", "memory-accounting")
+    q.eject(1, "held for a decision", "memory-accounting")
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
-    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for a decision")
 
 
 def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
