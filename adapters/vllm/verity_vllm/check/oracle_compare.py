@@ -89,10 +89,10 @@ class MatchOracle:
 
     def __init__(self, match_dir: str) -> None:
         self.dir = match_dir
-        cap = os.path.join(match_dir, "capture")
-        self.snap_path = os.path.join(cap, "snapshots.json")
+        capture_dir = os.path.join(match_dir, "capture")
+        self.snap_path = os.path.join(capture_dir, "snapshots.json")
         self.inst_path = os.path.join(match_dir, "instances.jsonl")
-        self.log_path = os.path.join(cap, "log.jsonl.gz")
+        self.log_path = os.path.join(capture_dir, "log.jsonl.gz")
         for p in (self.snap_path, self.inst_path, self.log_path):
             if not os.path.exists(p):
                 raise FileNotFoundError(f"match oracle: {p} missing (Match stage of this attempt did not write it)")
@@ -155,7 +155,7 @@ class MatchOracle:
         # demand for the promoted members' dataflow resolution (`_promoted_instances`); a small cache, the compare walks the map by step
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         self._families_at: dict[tuple[int, str], frozenset[str]] = {}
-        tok = os.path.join(cap, "tokens.json")
+        tok = os.path.join(capture_dir, "tokens.json")
         self.tokens_sha256 = hashlib.sha256(Path(tok).read_bytes()).hexdigest() if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
         # -- the runner's ids buffer is a Root of the capture (prompt_token roots), so it is never in a snapshot; this IS its value record
@@ -177,7 +177,7 @@ class MatchOracle:
     # ------------------------------------------------------------------ workload identity
     def workload_check(self, workload: dict[str, Any] | None) -> dict[str, Any]:
         """Is this Match record THIS workload's?  Compared BY NAME before any value compare: the run's declared requests (workload uuid ->
-        r<index>, prompt_len, max_tokens) against the fold header's request table and tokens.json (prompt ids per request; generated <= cap).
+        r<index>, prompt_len, max_tokens) against the fold header's request table and tokens.json (prompt ids per request; generated <= max_tokens).
         A Match record of another workload (another row's --match-dir) is refused named -- never a 'value mismatch' that happens to point
         the right way.  Returns {"ok", "problems", "compared"}; ok is None when the run passed no workload (not checked, said so)."""
         if not workload:
