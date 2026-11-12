@@ -1,7 +1,8 @@
 """A window of one member through the records audit on the window's own challenger session, then the compiled check,
 `sampled-proofs-one-stage-zk check`, on the case the audit writes (``case-v2.json``). It is `test_audit_two_members`'s
 audit (its `_audit` and `binaries`) on a window of one template and one proof block (``ScaledMmS8Coordinate`` at
-K = 128) of two instances under ``subset:1``, the plain random subset the one-statement theorem covers, under FLOCK_CHALLENGER=1 and a local key at the deployed parameters
+K = 128) of one instance under ``subset:1``, the plain random subset the one-statement theorem covers (a design by
+strata or by work is the several-statement form's), under FLOCK_CHALLENGER=1 and a local key at the deployed parameters
 (``--deployed-key``), so the session takes its coin tree through the audit's relay with no closing round
 (`a5.closes_trees`) and the case names the challenger and carries its coins.
 
@@ -32,8 +33,8 @@ import member_trees as MT  # beside a5, on the path `test_audit_two_members` put
 pytestmark = pytest.mark.slow
 
 
-#: The sampling design: the plain random subset, of one instance of the two
-DESIGN, N = "subset:1", 2
+#: The sampling design, the plain random subset, and the window's one instance, which its sample is
+DESIGN, N = "subset:1", 1
 
 
 def _window(d: Path) -> Path:
@@ -48,16 +49,14 @@ def _window(d: Path) -> Path:
     return d
 
 
-def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check(tmp_path, binaries,
-                                                                                       monkeypatch):
+def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check(tmp_path, binaries):
     """The audit accepts with the member's ``challenger`` verdict; the release log holds the sample, then the session's
     one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, crediting the
     drawn unit as proved."""
-    monkeypatch.setattr(T, "DESIGN", DESIGN)
     rc, row, out, said = T._audit(tmp_path, _window(tmp_path / "window"), binaries, "--deployed-key",
-                                  more={"FLOCK_CHALLENGER": "1"})
+                                  more={"FLOCK_CHALLENGER": "1"}, design=DESIGN)
     assert rc == 0 and row.get("ok") is True, said
-    assert row["draw"] in ([0], [1]) and row["audit"]["accepted"] is True, (row["audit"], said)
+    assert row["draw"] == [0] and row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m0": True for v in (*T.VERDICTS, "challenger")}
     assert row["coins_session"]["error"] is None, row["coins_session"]
 
@@ -79,4 +78,4 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
                        capture_output=True, text=True)
     answer = json.loads(p.stdout.strip().splitlines()[-1])
     assert (p.returncode, answer["verdict"]) == (0, "accept"), (answer, p.stderr[-2000:])
-    assert answer["public"]["drawn"] == answer["public"]["proved"] == row["draw"], answer
+    assert answer["public"]["drawn"] == answer["public"]["proved"] == [0], answer
