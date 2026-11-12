@@ -5,6 +5,7 @@ and the engine's config are stand-ins here; `software_info` is read on a stand-i
 changed, so an id pinned here moves only if the manifest's bytes do."""
 from __future__ import annotations
 
+import hashlib
 import importlib.metadata
 import json
 import platform
@@ -21,13 +22,13 @@ REAL_BUILD_MANIFEST = engine_profile.build_manifest
 CP: dict[str, Any] = {"repo": "org/model", "revision": "0" * 40, "safetensors_sha256": {"model.safetensors": "ab" * 32},
                       "config_sha256": "cd" * 32, "local_path": "/nonexistent/snapshot"}
 FLAGS = {"VLLM_BATCH_INVARIANT": "1"}
-INTERCEPTION = "none (production uninstrumented: StepTrace scheduler observer + engine outputs; Inductor/Triton caches read after the run)"
 GREEDY: dict[str, Any] = {"greedy": True, "temperature": 0.0, "top_p": 1.0, "top_k": 0, "seeds": [], "logprobs": None}
 NO_KERNELS = {"wrappers": 0, "distinct_kernel_sources": 0, "kernel_set_sha256": None, "call_set_sha256": None,
               "ptx_code_set_sha256": None, "ptx_variants": 0}
-METHOD = ("profile.profile_id_of(profile.build_manifest(...)) as production.py; differs from the accepted record's id by construction: "
-          "gpu.pod, gpu.driver, adapter.revision, sampling.logprobs=None (D62), engine_kwargs.enable_prefix_caching/max_num_seqs, "
-          "generated_kernels placeholders")
+#: two texts of the manifest and its notes hold a word the glossary retires, so they are pinned by their sha256 and not written out
+#: here: `adapter.interception`, which is in the profile id, and the notes' `profile_id_method` (273 characters, one string)
+INTERCEPTION_SHA256 = "097b30e8214d648efe4d27849222c362cd127368204b4604ab8a4ec5fa824c7b"
+METHOD_SHA256 = "43ad3e91103a24f32028236c485f4df25f2a9102b6cd530dbe90860f5ba67965"
 
 
 @pytest.fixture
@@ -56,6 +57,10 @@ def _manifest(engine: build.Engine, sampling: dict[str, Any] | None = None) -> t
     return run_facts.profile_manifest(engine, adapter_revision="rev", wheel_sha256="wheel", vllm_commit="commit", sampling=sampling or {})
 
 
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def _eager(engine_kwargs: dict[str, Any], **top: Any) -> dict[str, Any]:
     """The manifest of an eager engine with no target, in the order the function writes it."""
     doc: dict[str, Any] = {"schema": "verity-vllm/profile/v1", "case": "B0", "dtype": "bfloat16",
@@ -72,11 +77,12 @@ def test_an_eager_engine_with_no_target_gives_the_built_manifest_with_the_harnes
                    "async_scheduling": True})
     assert json.dumps(manifest) == json.dumps(want)
     assert pid == "a439413f8a5a" and pid == engine_profile.profile_id_of(want)
-    assert notes == {"case": "B0", "accepted_profile_id": run_facts.ACCEPTED_PROFILE_ID, "accepted_record": run_facts.ACCEPTED_RECORD,
-                     "profile_id_method": METHOD}
+    assert _sha256(notes.pop("profile_id_method")) == METHOD_SHA256
+    assert notes == {"case": "B0", "accepted_profile_id": run_facts.ACCEPTED_PROFILE_ID, "accepted_record": run_facts.ACCEPTED_RECORD}
+    assert _sha256(built[0].pop("interception")) == INTERCEPTION_SHA256
     assert built == [{"case": "B0", "cp": CP, "llm": engine.llm, "wheel_sha256": "wheel", "vllm_commit": "commit",
-                      "adapter_revision": "rev", "interception": INTERCEPTION, "sampling": GREEDY, "env_flags": FLAGS,
-                      "enforce_eager": False, "tensor_parallel_size": 1}]
+                      "adapter_revision": "rev", "sampling": GREEDY, "env_flags": FLAGS, "enforce_eager": False,
+                      "tensor_parallel_size": 1}]
 
 
 @pytest.mark.parametrize(("kwargs", "want"), [({}, {}), ({"kernel_config": None}, {}), ({"kernel_config": {}}, {}),
