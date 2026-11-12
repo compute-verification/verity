@@ -45,11 +45,56 @@ namespace CheckedRun
 
 variable {h} {r : CheckedRun h.stage}
 
+/-- **An accepted run's checked unit's session's statement circuit is its template's member circuit**: the pin holds the
+session statement to its template's reference statement but for its run's fields (`pin_of_stmtOkAt`), so their
+statement circuits are one (`stmt_of_pin`), and the reference statement's is the member's (`templateOk_facts`). -/
+theorem stmt_member (hr : r.Ok h) :
+    ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.p.toRead.stmt = m.1 := by
+  obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
+  have hokAt := stmtOkAt_unit h hx hok hu
+  have hT := fun t (ht : t < h.ms.length) => templateOk_facts h (templateOk_of_two h h2 ht) ht
+  obtain ⟨t, ht, k, hut, -, -⟩ :=
+    shape_of_checked h (fun t ht => ⟨(hT t ht).2.1, (hT t ht).2.2⟩) hx hP h2 hin hb hρ
+  have htu : templateOf h.ms r.u = t := by
+    rw [hut]
+    exact templateOf_unitBase ht k.isLt
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, -, -, -⟩ := parsed_of_stmtOkAt h hokAt hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    obtain ⟨w, w₀, hw, hw₀, he⟩ := pin_of_stmtOkAt h hokAt
+    rw [htu] at hw₀ ⊢
+    have hst₀ := (hT t ht).1
+    cases hr₀ : FlockDeploy.readOf true (h.xS₀ t) with
+    | none => rw [hr₀] at hst₀; cases hst₀
+    | some r₀ =>
+      rw [hr₀] at hst₀
+      have hm : r₀.stmt = h.ms[t].1 := by simpa using hst₀
+      exact ⟨h.ms[t], List.getElem?_eq_getElem ht, (stmt_of_pin hw hw₀ he (readOf_of_parseBytes hpb) hr₀).trans hm⟩
+
 /-- **An accepted run's checked unit's session has its template's member circuit's ports** in its first table: the
 table's circuit is the one the scope check parses (`accepted_check`), which unrolls, ports and all (`unrolled_ports`), to
-its template's reference statement's statement circuit (`pin_of_stmtOkAt`, `stmt_of_pin`), the member's
-(`templateOk_facts`). -/
+the session's statement circuit, the member's (`stmt_member`). -/
 theorem ports_member (hr : r.Ok h) :
+    ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.sts[0]!.c.ports = m.1.ports := by
+  have hj := sts_pos hr
+  obtain ⟨m, hm, hs⟩ := stmt_member hr
+  obtain ⟨_, _, _, hx, -, -, -, hok, hu, hck, -, -, -, hset⟩ := hr
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, hpp, hc, hh⟩ := parsed_of_stmtOkAt h (stmtOkAt_unit h hx hok hu) hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    obtain ⟨T, a, hst0, -, hcirc, -⟩ := accepted_check hpp hc hh hj
+    refine ⟨m, hm, ?_⟩
+    calc r.sts[0]!.c.ports = a.st.c.ports := by rw [(getElem!_pos r.sts 0 hj).trans hst0.symm]
+      _ = (_root_.Flock.HmOut.unrolled a.st.c).ports := (FlockSoundness.unrolled_ports a.st.c).symm
+      _ = m.1.ports := by
+        rw [← hcirc]
+        exact congrArg _root_.Flock.Circuit.ports hs
+
+theorem ports_member_old (hr : r.Ok h) :
     ∃ m, h.ms[templateOf h.ms r.u]? = some m ∧ r.sts[0]!.c.ports = m.1.ports := by
   have hj := sts_pos hr
   obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
