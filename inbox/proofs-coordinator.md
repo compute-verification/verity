@@ -101768,3 +101768,62 @@ In plain words. The code's module compiled as first written, and the twelve figu
 - [run] The branch `cursor/proofs-period-once-6b3f` is pushed at that head, its first push. No pull request is open and nothing is marked.
 - [read] The mailbox's newest section is still yours of 18:30Z, so my four questions of 19:18Z stand.
 - Next: read `ed38`; fix what it reports or, if it passes, run the quick tier at the same head, open the pull request unmarked and send the ready line.
+
+## CLOSEROUND, Thu 12 Nov 21:13Z: READY LINE for #9230 at `737f5707134e` (`b76f`: 64 suites, 64 passed); #9466 holds your 21:02Z ruling at `f21a30f274aa`, its two runs out until about 22:15Z
+
+#9230 is ready to mark: its quick tier `r20261112-192909-b76f` ended exit 0 with `64 suites: 64 passed (0 cached), 0
+failed`, read whole, and its body is updated with the three trailer lines kept. Your 21:02Z ruling on #9466 is applied
+in one new commit, no force push: `R7-history` where the Lean itself refused, for any reason; `disagree` where it gave
+no answer or accepted; the nine texts and their tests are back to `main`'s. Its head is now `f21a30f274aa`, its title
+and body say the new rule and that agreement on the reason is not tested today. I cancelled the two runs of the old
+head and launched two at the new one: `r20261112-210926-dd1e` and `r20261112-210958-cb09`, each behind three others for
+a slot at 21:12Z, about 22:15Z [guess]. #9452 is unchanged and waits on #9375, which is not on `main`. Nothing marked,
+nothing posted.
+
+Mailbox read 21:12Z, newest section yours of 21:02Z, which the shell hook also delivered at 21:05Z. Tags: [run] a
+command I ran and read now; [read]; [derived]; [guess].
+
+**READY LINE, #9230 (the twin)**
+
+- **Head** `737f5707134e5fcf8787098a84874f43292dd2c4` [run: `git ls-remote`, 21:12Z], unmarked. Nine files, 1,052 added
+  and 19 removed against `main`; no Lean file, lock, lakefile or cap [run].
+- **The run, read whole** [run]: `r20261112-192909-b76f`, `suites.py --changed 4a90174415b7 --quick` at the head: done,
+  rc 0, `64 suites: 64 passed (0 cached), 0 failed`. Its four test files ran whole with their slow tests. Among the
+  suites: `verity-core-sampled-proofs` 311 passed and 2 skipped; `verity/protocols/spot/verifier` 907;
+  `benchmarks/one_stage` 640; `repository` 352; `benchmarks/prove_path` 155; `verity-flock` 1,456 and 30 skipped;
+  `verity-vllm` 14,344 and 401 skipped.
+- **Merge-trees at 21:12Z** [run]: clean onto `main` at `5f0c008aa040`, #9375 at `bafae2eaec2e` and #9237 at
+  `9d4aec0111fb`. `main` has not moved since the run's base was merged in but for files that are not the nine [run at
+  19:48Z; `main` is still `5f0c008aa040`].
+- **Body** updated at 21:12Z [run: `research queue edit 9230`]: the run of record first, #9199 said as landed, the
+  no-growth lint's count now 15 (it was 22 with #9199's 7). `Lane proofs`, `Refs PRF-371`,
+  `Goal proofs/sampled-audits-sound` kept.
+- **Not run:** the full check; the Lean check's kernel replay (no Lean file changes).
+
+**#9466, your 21:02Z ruling: applied, not ready**
+
+- **Head** `f21a30f274aa39eda335d44283397d0039d37dff`, pushed 21:09Z, one commit on `83026ce77384` [run].
+- **What the commit does** [run: the diff]: `check` tests `"refused" in got and got.get("answered", True)`; it
+  reverts `7efe82c1f1`, so `history.py`, `test_interface.py` and `test_history_difftest.py` are `main`'s again, and
+  `registration.py` too; the new test's "another reason" case expects `R7-history` with both reasons in the detail.
+  The dead-Lean half and "a Lean accepting is `disagree`" are as built. The test is now named
+  `test_a_history_table_is_r7_history_only_where_the_lean_itself_refused`.
+- **Its own change** is now seven files, 67 added and 29 removed; against `main`, with #9452's, eight files, 161 added
+  and 29 removed [run].
+- **Title and body** edited at 21:11Z [run]: the title says "only where the Lean itself refused it"; the body has a
+  section saying that the two reasons being one is not tested today and why.
+- **On the VM, the Lean's answer replaced** [run]: a Lean that can't run is `disagree` (it is `R7-history` on `main`),
+  also when its error text is the Python's reason; a Lean that refuses is `R7-history` for the Python's reason and for
+  another; a Lean that accepts is `disagree`.
+- **Merge-trees at 21:11Z** [run]: clean onto `main`, #9237, #9230 and #9452; the one `a5.py` stop against #9375 and
+  against #9319 that #9452 already has.
+- **Runs:** `r20261112-203652-d5e4` and `r20261112-203722-00a6`, of the old head, cancelled at 21:06Z after 8 and 9
+  minutes in their slots, nothing read from them [run]. At the new head: `r20261112-210926-dd1e` (vy-nebius-cpu-12),
+  `suites.py --changed 5f0c008aa040 --quick`; `r20261112-210958-cb09` (vy-nebius-cpu-10), the three slow one-stage
+  tests and the adapters' `test_a_table_round_1_did_not_register_is_refused` with the real Lean. Each waits behind
+  three runs [run]. About 22:15Z [guess: the old pair waited 20 minutes for a slot].
+- **Not established:** anything about #9466 with the real Lean.
+
+**#9452:** as my 20:46Z entry has it; head `378fcba9dae6`, not marked by agreement, waiting on #9375.
+
+**Next:** read `dd1e` and `cb09`, then #9466's ready line or a fix; `git log origin/main` for #9375 at each step.
