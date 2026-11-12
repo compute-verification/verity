@@ -1,7 +1,8 @@
 """The schema ids of the records that have no type in this package yet: the string a record carries as ``schema``.
 
 Each id is written once, here; its writers and readers read the constant.  Beside each: the record, and what writes it.
-An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.
+An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.  One constant
+is no ``schema``: `SERVED_REQUIRED_MANIFEST_KIND`, the ``kind`` a served Build carries beside its ``schema``.
 """
 from __future__ import annotations
 
@@ -22,6 +23,12 @@ COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 #: the record of `verity-vllm gate call-boundaries` (`acquire.gate.CALL_BOUNDARIES_SCHEMA`), which `call_boundaries_of`
 #: writes
 CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+#: what the acquisition plan's hooks saw in one run, occurrence counts and shapes only, which
+#: `acquire.install.OccurrenceSink.to_json` builds and the capture writes as `acquisition_observed.json`
+ACQUISITION_OBSERVED_SCHEMA = "verity-vllm/acquisition-observed/v1"
+#: the `kind` of a served Build (`acquire.served.KIND`), a manifest of `query.manifest.format.SCHEMA`, which
+#: `acquire.served.assemble` writes
+SERVED_REQUIRED_MANIFEST_KIND = "verity/served-required-manifest/v1"
 
 # --- the Commit (`verity_vllm.commit`)
 #: a dumped store's `store.json` (`commit.store_dump.SCHEMA`), which `dump_files` writes and `load` refuses any other
