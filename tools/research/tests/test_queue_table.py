@@ -238,15 +238,16 @@ SLOTS_ROW = "Slots busy over slots, the check nodes"
 
 def slots_doc() -> dict:
     """The day on three CPU nodes, cpu-1 and cpu-7 the check nodes. Every run in line for a check slot is on cpu-7, while
-    cpu-1 has one free; the shared pool is full on both, with most of its line on cpu-7, and its free slots are on cpu-3,
-    which is no check node; lean-train, a lane's own pool, is idle on both cpu-1 and cpu-3; kernels lists no slot."""
+    cpu-1 has one free; the shared pool is full on cpu-7, which holds most of its line, and has one slot free on cpu-1,
+    where no run is in line, and three on cpu-3, which is no check node, beside a line of its own; lean-train, a lane's own
+    pool, is idle on both cpu-1 and cpu-3; kernels lists no slot."""
     d = doc()
     cpu1 = d["nodes"]["vy-nebius-cpu-1"]
 
     def slots(*pools: tuple) -> list[dict]:
         return [dict(zip(("pool", "slots", "busy", "blocked", "waiting"), p), mem={}) for p in pools]
 
-    cpu1["slots"] = slots(("check", 2, 1, 0, 0), ("executor", 4, 1, 0, 3), ("research", 4, 4, 0, 1), ("lean-train", 3, 0, 1, 0))
+    cpu1["slots"] = slots(("check", 2, 1, 0, 0), ("executor", 4, 1, 0, 3), ("research", 4, 3, 0, 0), ("lean-train", 3, 0, 1, 0))
     d["check_nodes"] = ["vy-nebius-cpu-1", "vy-nebius-cpu-7"]
     d["nodes"]["vy-nebius-cpu-7"] = dict(cpu1, runs=[], slots=slots(("check", 2, 2, 0, 3), ("executor", 2, 0, 0, 0),
                                                                     ("research", 12, 12, 0, 5), ("kernels", 0, 0, 0, 0)))
@@ -261,19 +262,20 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     executor = "executor slots: 1 of 6 busy, 0 free but blocked, 3 runs in line"            # as it was: its line names no node
     shared = "research slots, the shared pool `--on auto` places runs in, on every CPU node with one (3): "
     own = "lean-train slots, a lane's own pool: 0 of 3 busy, 1 free but blocked, 0 runs in line"     # cpu-3's nine are no check node's
-    text = f"{check}; {executor}; {shared}18 of 22 busy, 1 free but blocked, 3 free, 7 runs in line, 5 of them on cpu-7; {own}"
+    text = (f"{check}; {executor}; {shared}17 of 22 busy, 1 free but blocked, 4 free, 1 of them with no line on their node, "
+            f"6 runs in line, 5 of them on cpu-7; {own}")
     row = {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]
     assert row["now"] == text
     assert "the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU node read" in row["how"]
     groups = [
         {"group": "check", "pools": ["check"], "nodes": 2, "slots": 4, "busy": 3, "blocked": 0, "waiting": 3, "free": 1,
-         "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}, "unread": []},
+         "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}, "unread": []},
         {"group": "executor", "pools": ["executor"], "nodes": 2, "slots": 6, "busy": 1, "blocked": 0, "waiting": 3, "free": 5,
-         "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}, "unread": []},
-        {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 18, "blocked": 1, "waiting": 7, "free": 3,
-         "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}, "unread": []},
+         "free_no_line": 2, "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}, "unread": []},
+        {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 17, "blocked": 1, "waiting": 6, "free": 4,
+         "free_no_line": 1, "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}, "unread": []},
         {"group": "own", "pools": ["lean-train"], "nodes": 1, "slots": 3, "busy": 0, "blocked": 1, "waiting": 0, "free": 2,
-         "longest": None, "unread": []}]
+         "free_no_line": 2, "longest": None, "unread": []}]
     assert qt.slot_groups(d) == groups
 
     # the command's own output: the row as printed, and as JSON beside the nodes' slots files, whose fields are as they were
@@ -288,9 +290,11 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
                                                                   "waiting": 5, "mem": {}}
     assert all(set(s) == {"pool", "slots", "busy", "blocked", "waiting", "mem"} for n in out["data"]["nodes"].values() for s in n["slots"])
 
-    # a line no node holds over half of names none, and the node with the longest stays in the JSON
-    d["nodes"]["vy-nebius-cpu-3"]["slots"][1]["waiting"] = 4
-    assert f"{shared}18 of 22 busy, 1 free but blocked, 3 free, 10 runs in line; " in {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"]
+    # a line no node holds over half of names none, and the node with the longest stays in the JSON; a slot free beside
+    # a line is that line's first, so with a line on every node that has one free, none is a place for a run launched now
+    d["nodes"]["vy-nebius-cpu-1"]["slots"][2]["waiting"], d["nodes"]["vy-nebius-cpu-3"]["slots"][1]["waiting"] = 2, 4
+    assert (f"{shared}17 of 22 busy, 1 free but blocked, 4 free, 0 of them with no line on their node, 11 runs in line; "
+            in {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"])
     assert qt.slot_groups(d)[2]["longest"] == {"node": "vy-nebius-cpu-7", "waiting": 5}
 
     # past `OWN_POOLS_NAMED` the lanes' own pools are one sum, with their names
@@ -308,8 +312,8 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     d["nodes"]["vy-nebius-cpu-3"]["slots_unread"] = [dict(slow, pool="research"), dict(slow, pool="lean-train")]
     d["nodes"]["vy-nebius-cpu-7"]["slots_unread"] = [dict(slow, pool="proofs")]
     assert {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"] == (
-        f"{check}; {executor}; research slots, the shared pool `--on auto` places runs in, on every CPU node with one (2): 16 of 16 "
-        f"busy, 0 free but blocked, 0 free, 6 runs in line, 5 of them on cpu-7, not read: cpu-3 (no answer in 30 s); {own}; "
+        f"{check}; {executor}; research slots, the shared pool `--on auto` places runs in, on every CPU node with one (2): 15 of 16 "
+        f"busy, 0 free but blocked, 1 free, 5 runs in line, 5 of them on cpu-7, not read: cpu-3 (no answer in 30 s); {own}; "
         "proofs slots, a lane's own pool: 0 of 0 busy, 0 free but blocked, 0 runs in line, not read: cpu-7 (no answer in 30 s)")
     assert qt.slot_groups(d)[2]["unread"] == [{"node": "vy-nebius-cpu-3", "pool": "research", "why": "no answer in 30 s"}]
 

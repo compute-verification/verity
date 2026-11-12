@@ -905,12 +905,13 @@ def slot_groups(doc: dict) -> list[dict]:
     finds a place.  Every other pool but the check slots and the executor's is a lane's own: a run takes its slots only when
     sent to it by name (`research run --pool`), so its free slots start no run that waits in the shared pool's line.
 
-    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, longest, unread}`: `group` is `check`, `executor`,
-    `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are the slots
-    nothing holds and nothing blocks; `longest` is the node with the longest line and the runs in it, None with no run in
-    line; `unread` are its slots files that gave no answer, each `{node, pool, why}`, whose slots none of its numbers
-    count.  A run waits in the line it joined, one node's and one pool's, so a slot free on another node starts none of
-    them either."""
+    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, free_no_line, longest, unread}`: `group` is `check`,
+    `executor`, `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are
+    the slots nothing holds and nothing blocks, and `free_no_line` those of them with no run in line on their node;
+    `longest` is the node with the longest line and the runs in it, None with no run in line; `unread` are its slots files
+    that gave no answer, each `{node, pool, why}`, whose slots none of its numbers count.  A run waits in the line it
+    joined, one node's and one pool's, so a slot free on another node starts none of them either, and a slot free beside
+    a line goes to that line first."""
     checks = set(doc["check_nodes"])
     found: dict[tuple[str, str], list[tuple[str, dict]]] = {}
     unread: dict[tuple[str, str], list[dict]] = {}
@@ -938,8 +939,9 @@ def slot_groups(doc: dict) -> list[dict]:
             line[n] = line.get(n, 0) + s["waiting"]
         total = {k: sum(s[k] for _, s in entries) for k in ("slots", "busy", "blocked", "waiting")}
         node = max(sorted(line), key=line.get, default=None)
+        free = [(s["slots"] - s["busy"] - s["blocked"], s["waiting"]) for _, s in entries]
         out.append({"group": group, "pools": pools, "nodes": len({n for n, s in entries if s["slots"]}), **total,
-                    "free": total["slots"] - total["busy"] - total["blocked"],
+                    "free": sum(f for f, _ in free), "free_no_line": sum(f for f, waiting in free if not waiting),
                     "longest": {"node": node, "waiting": line[node]} if node and line[node] else None, "unread": missing})
 
     add("check", ["check"])
@@ -954,15 +956,18 @@ def slot_groups(doc: dict) -> list[dict]:
 
 
 def slots_text(g: dict) -> str:
-    """One of `slot_groups` in the table's words.  The shared pool's free slots are counted out, being the places a run
-    launched with `--on auto` can take now; the shared pool's line and the check slots' name the node that holds over half
-    of it; and a slots file that gave no answer is named, since its slots are in none of the numbers."""
+    """One of `slot_groups` in the table's words.  The shared pool's free slots are counted out, with how many of them have
+    no line on their node, being the places a run launched with `--on auto` can take now; the shared pool's line and the
+    check slots' name the node that holds over half of it; and a slots file that gave no answer is named, since its slots
+    are in none of the numbers."""
     pools, longest = g["pools"], g["longest"]
     name = {"check": "check slots", "executor": "executor slots",
             "shared": f"{pools[0]} slots, the shared pool `--on auto` places runs in, on every CPU node with one ({g['nodes']})"
             }.get(g["group"]) or (f"{pools[0]} slots, a lane's own pool" if len(pools) == 1 else
                                   f"lanes' own pools, which `--on auto` places no run in ({', '.join(pools)})")
     free = f"{g['free']} free, " if g["group"] == "shared" else ""
+    if free and g["free_no_line"] < g["free"]:
+        free += f"{g['free_no_line']} of them with no line on their node, "
     line = f"{g['waiting']} runs in line"
     if g["group"] in ("check", "shared") and longest and 2 * longest["waiting"] > g["waiting"]:
         line += f", {longest['waiting']} of them on {longest['node'].replace('vy-nebius-', '')}"
@@ -1273,11 +1278,12 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "on the check nodes; the shared pool, the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU "
         "node read, since a launch asks each of them; and the lanes' own pools, on the check nodes, each taking only the runs "
         "sent to it by name (`--pool`). A slots file that gave no answer (in 30 s) is named as not read, and no number counts its "
-        "slots. Free: nothing holds the slot and nothing blocks it, though a run asking more memory than "
-        "the slot reserves may still wait; node 2's share, which takes an `--on auto` run when no pool has a place for it, is not "
-        "read. A run waits in the line it joined, one node's and one pool's, so a slot free elsewhere starts none of the runs in "
-        "line: a node is named when over half of a line is its own. The pools share cores with each other and with the check "
-        "slots, so slots add up to more than the cores")
+        "slots. Free: nothing holds the slot and nothing blocks it. A run waits in the line it joined, one node's and one pool's, "
+        "so a slot free on another node starts none of the runs in line, and one free on its own node starts a run only once the "
+        "memory that run asks is free there too: the free slots with no line on their node are the ones a run launched now can "
+        "take. A node is named when over half of a line is its own. Node 2's share, which takes an `--on auto` run when no pool "
+        "has a place for it, is not read. The pools share cores with each other and with the check slots, so slots add up to "
+        "more than the cores")
     mem = {(n, name_): gb for n, d in doc["nodes"].items() for s in d["slots"] for name_, gb in (s.get("mem") or {}).items()}
     going = [dict(r, cores=r["scope_cpu_s"] / (doc["nodes"][r["node"]]["now"] - r["took"])) for r in runs.values()
              if r["kind"] == "shard" and r.get("scope_cpu_s") and r.get("took") and doc["nodes"][r["node"]]["now"] > r["took"]]
