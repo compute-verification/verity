@@ -22,8 +22,7 @@ those functions, and takes no premise. It has three parts:
   once, in order, with the verifier's work and the floor `Rate.floor NUM DEN n_s f`, at which Flock's work rule
   (`Flock.Draw.workK`) gives the stratum a count `k_s` with `NUM·n_s ≤ DEN·k_s` under any `K` and any population work
   (`TableAtRate`);
-* a rule object whose design text is a fixed count, `subset:K`, `stratified:K` or `work:K`, is refused with `FIXED`
-  (`FixedRefused`).
+* a rule object whose design text is a fixed count, `subset:K`, `stratified:K` or `work:K`, is refused with `FIXED`.
 
 Each bound is on the count a rule names, for every population and every strata, so the prover's choice of them moves
 none: it holds at a population the prover picks after seeing the coins of earlier windows too.
@@ -116,22 +115,18 @@ def ruleOfText (t : String) : Json := Json.mkObj [("rule", "law"), ("law", Json.
 /-- The fixed counts' design texts at `K`: `subset:K`, `stratified:K` and `work:K`. -/
 def fixedTexts (K : Nat) : List String := [s!"subset:{K}", s!"stratified:{K}", s!"work:{K}"]
 
-/-- **A fixed count is refused**: at every `K`, the rule object whose design text is `subset:K`, `stratified:K` or
-`work:K` is refused with `FIXED`. -/
-def FixedRefused : Prop :=
-  ∀ K, ∀ t ∈ fixedTexts K, Select.Rule.ofJson (ruleOfText t) = .error (Select.FIXED t)
-
 /-- **A parsed rule samples at least its rate over whatever the prover registers.** For every rule object `j` that
 `Rule.ofJson` parses as `rule`, every `n` and every `sizes`, where `Rule.over` gives the rule `r` over `n` units in
 strata of `sizes` units, `r` is `AtRate`'s: the count it names is at least the rate's share of `n`, and of each
 stratum. For every design text, program, query and work table, where `Rule.tableOver` gives a table under the rule
-`law t`, that table is `TableAtRate`'s: each stratum's floor is at the rate. And a fixed count is refused
-(`FixedRefused`). -/
+`law t`, that table is `TableAtRate`'s: each stratum's floor is at the rate. And a fixed count is refused: at every
+`K`, the rule object whose design text is `subset:K`, `stratified:K` or `work:K` (`fixedTexts`) is refused with
+`FIXED`. -/
 def RuleAtRate : Prop :=
   (∀ (j : Json) (rule : Select.Rule) (n : Nat) (sizes : List Nat) (r : Select.Rule),
     Select.Rule.ofJson j = .ok rule → rule.over n sizes = some r → AtRate rule r n sizes) ∧
   (∀ (t : String) (p : Program) (query : Json) (table out : Option Json),
     (Select.Rule.law t).tableOver p query table = .ok out → TableAtRate t p query out) ∧
-  FixedRefused
+  ∀ K, ∀ t ∈ fixedTexts K, Select.Rule.ofJson (ruleOfText t) = .error (Select.FIXED t)
 
 end Properties.Spot
