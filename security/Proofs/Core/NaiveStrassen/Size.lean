@@ -5,9 +5,10 @@ public import Proofs.Core.NaiveStrassen.Sound
 /-!
 # Dominance and the size form (NaiveStrassen)
 
-The other three instances reach the RTX PRO 6000 sheet's table through `Dom`: each of their atoms is covered by one of
-the sheet's, no heavier and holding wherever it holds (`covers`). The size form follows from `bound`: Theorem 1 to
-`thmL = 12`, the least cost above `8^13` at depth 13, and `cost ≥ 7^l` from depth 14 on, where `7^14 > 2^39`.
+A table reaches the RTX PRO 6000 sheet's table through `Dom`, which holds of one each of whose atoms is covered by one
+of the sheet's, no heavier and holding wherever it holds (`covers`, `dom_of_covers`). The size form follows from
+`bound`: Theorem 1 to `thmL = 12`, the least cost above `8^13` at depth 13, and `cost ≥ 7^l` from depth 14 on, where
+`7^14 > 2^39`.
 -/
 
 @[expose] public section
@@ -51,9 +52,15 @@ theorem dom_rtx6000Sheet : Dom rtx6000Sheet := fun _ hf _ _ h => atomMin_le hf h
 
 theorem dom_h200Sheet : Dom h200Sheet := dom_of_covers (by decide)
 
-theorem dom_h200Measured : Dom h200Measured := dom_of_covers (by decide)
-
-theorem dom_rtx6000Measured : Dom rtx6000Measured := dom_of_covers (by decide)
+/-- Every atom of a table the sheet dominates weighs at least an eighth of an s8 MAC: every atom holds at `(0, 0)`,
+where the sheet's lightest atom is b1. -/
+theorem weight_pos_of_dom {fs : List Atom} (hD : Dom fs) : ∀ f ∈ fs, 1 ≤ f.weight8 := by
+  intro f hf
+  have h0 : f.holds 0 0 = true := by
+    rcases f with ⟨x, c, _ | ⟨k, w⟩⟩ <;> first | simp [Atom.holds] | decide
+  have h1 : atomMin rtx6000Sheet 0 0 ≤ f.weight8 := hD f hf 0 0 h0
+  have e : atomMin rtx6000Sheet 0 0 = 1 := by decide
+  omega
 
 /-! ## Every schedule costs at least `7^l` -/
 

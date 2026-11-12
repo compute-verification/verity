@@ -1,5 +1,5 @@
 """The encoded stack (`benchmarks/vllm_encoded/stack.py`, its arm `stack` or the plain `pstack`) in this directory's
-engines (`serve.py`, `step_profile.py`): installed at the end of vLLM's `load_model`, as `vllm_encoded/serve.py` installs
+engine (`serve.py`): installed at the end of vLLM's `load_model`, as `vllm_encoded/serve.py` installs
 it, with its gates (every linear, the lm_head's decode, a step's receipts against the driver's) before the engine
 profiles memory. The stack captures its own decode sizes (`CAPTURE`, up to 128 rows); a larger batch runs eager, its
 linears decoded into the stack's ephemeral scratch.

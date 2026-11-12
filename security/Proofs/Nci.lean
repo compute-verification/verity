@@ -4,6 +4,8 @@ public import Proofs.Nci.Inequalities
 public import Proofs.Nci.LoomisWhitney
 public import Proofs.Nci.Cut
 public import Proofs.Nci.CutWitness
+public import Proofs.Nci.Untied
+public import Proofs.Nci.CutCharged
 public import Proofs.Core
 public import Proofs.Nci.Chain
 public import Proofs.Nci.Throttling
@@ -22,18 +24,14 @@ public import Proofs.Nci.FitRate
 public import Proofs.Nci.FitWitness
 public import Proofs.Nci.Dampener
 public import Proofs.Nci.Info
-public import Proofs.Nci.Transfers
 public import Proofs.Nci.Fmt
 public import Proofs.Nci.Fmt2
 public import Proofs.Nci.Training
-public import Proofs.Nci.Packed
-public import Proofs.Nci.PackedTraining
 public import Proofs.Nci.Remote
 public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability
 public import Proofs.Nci.Verdict
 public import Proofs.Nci.DescVerdict
-public import Proofs.Nci.Activations
 public import Proofs.Nci.Covering
 public import Proofs.Nci.CoveringWitness
 public import Proofs.Nci.CoveringTwoCosts
