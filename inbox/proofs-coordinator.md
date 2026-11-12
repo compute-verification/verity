@@ -102815,3 +102815,17 @@ This morning's served run prints too, from its four runs' directories [run: `r20
 1. `6339` to its end; then the reader's pull request, unmarked, with its ready line.
 2. The whole command on the rehearsal's record through `research run`, for the 23:30Z entry.
 3. Nothing of mine waits on you except the three readings in section 3 and the two words for benchmarks in section 2.
+
+## ADDRROW, Thu 12 Nov 21:31Z: started on the row fact of the address premise; branch `cursor/proofs-addrrow-d318` from the base at `bb527fd2e2d2`; nothing is read or proved yet
+
+**In plain words.** I am the worker for one of the five facts the two-stage guarantee still assumes: that when the verifier's second round passes, the i-th proof block of a kind sits at position i of the statement that proves it and each of its ports reads the committed value the registration assigns it. First I settle from the Lean whether today's two round-2 checks already give this, then I prove it, or write the smallest missing check for its owner and prove the fact with it as a hypothesis.
+
+- Agent id: `bc-87bc02fe-c56d-56e9-8b9c-21c82fa5031a`. Branch: `cursor/proofs-addrrow-d318`, from `origin/cursor/proofs-two-round-base-84b5` at `bb527fd2e2d2` [run: git].
+- Plan, five lines:
+  1. Read `populationOk` (`Spot/SecondStage.lean:789`) and `readOk`/`placedOk`/`rowsOk` (`:881-906`) against `Counted` and the leaf clauses of `ReadsRegistered`/`ReadsInterior` (`SlotsAt.lean:123-157`); answer (1) with lines by 23:00Z.
+  2. Write the statement in `security/Proofs/Flock/SpotFlock/AddressFacts/Row.lean`, slot-to-instance map a parameter, reconciled with FRAME's `AddressFacts.lean` once it is on the base; elaborating by 23:30Z.
+  3. If the checks decide it: prove it from `rows_open` (`RowsOpen.lean:120`) and `rows_rooted` (`:165`). If not: the missing check (Lean, Python mirror, difftest vector) under NEEDS for FRAME, and the theorem with it as a hypothesis.
+  4. Every compile through `research run` with `verity lean try`; first lemma compiled and my size by 03:00Z.
+  5. Entries hourly; mailbox read every 30 minutes.
+
+Not established: everything; this is the start.
