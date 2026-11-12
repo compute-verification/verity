@@ -215,12 +215,14 @@ def test_a_shared_prefix_no_later_request_could_reuse_fails_the_check():
     assert any("arrives after the first one" in v for v in W.check_plan(_prefix_row(255)))
 
 
-def test_the_check_names_a_length_or_a_cap_out_of_range_and_a_stochastic_row_short_of_distinct_seeds():
+def test_the_check_names_a_length_out_of_range_on_either_side_and_a_stochastic_row_short_of_distinct_seeds():
     p = _prefix_row(0)
     assert W.check_plan(p) == []
-    lengths, caps = [*p["input_lengths"][:-1], 257], [*p["output_caps"][:-1], 33]
+    lengths = [*p["input_lengths"][:-1], 257]
     assert f"input length outside [{p['min_input']}, 256]: {lengths}" in W.check_plan({**p, "input_lengths": lengths})
-    assert f"output cap outside [1, 32]: {caps}" in W.check_plan({**p, "output_caps": caps})
+    (outputs,) = [k for k in p if k.startswith("output_")]                # the plan's list of the most tokens each request may write
+    most = [*p[outputs][:-1], 33]
+    assert any(v.startswith("output ") and v.endswith(f" outside [1, 32]: {most}") for v in W.check_plan({**p, outputs: most}))
     short = "stochastic row without B distinct per-request sampling seeds"
     for seeds, refused in (([7] * 8, True), (list(range(7)), True), (list(range(8)), False)):
         assert (short in W.check_plan({**p, "sampling": "topp", "sampling_seeds": seeds})) is refused
