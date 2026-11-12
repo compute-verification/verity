@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 import torch
 
+from tests import fake_vllm
 from verity_vllm.engine import build, engine_profile, run_facts
 
 REAL_BUILD_MANIFEST = engine_profile.build_manifest
@@ -190,7 +191,7 @@ def test_where_the_profile_cannot_be_built_the_fallback_document_is_the_manifest
         raise RuntimeError("no device")
 
     monkeypatch.setattr(engine_profile, "build_manifest", refuses)
-    monkeypatch.setitem(sys.modules, "vllm", NS(__version__="0.28.1rc1-test"))
+    fake_vllm.install(monkeypatch)["vllm"].__version__ = "0.28.1rc1-test"
     monkeypatch.setitem(sys.modules, "triton", NS(__version__="3.4.0-test"))
     monkeypatch.setattr(run_facts, "torch", NS(__version__="2.14.0-test", version=NS(cuda="12.8")))
     engine = _engine({"model": "/snapshot", "tokenizer": "/snapshot", "max_num_seqs": 8, "seed": 0})
@@ -279,7 +280,7 @@ def test_software_info_names_vllm_as_given_the_python_side_by_installed_version_
             raise importlib.metadata.PackageNotFoundError(name)
         return versions[name]
 
-    monkeypatch.setitem(sys.modules, "vllm", NS(__version__="0.28.1rc1-test"))
+    fake_vllm.install(monkeypatch)["vllm"].__version__ = "0.28.1rc1-test"
     monkeypatch.setattr(importlib.metadata, "version", version)
     monkeypatch.setattr(engine_profile, "dist_identity", lambda name: {"installed": name == "torch"})
     assert json.dumps(engine_profile.software_info("wheel", None)) == json.dumps({
