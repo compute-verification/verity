@@ -88536,3 +88536,82 @@ Tags as in my 13:09Z entry, which gives the reason the figure is not the 11,712.
 - For PRF-456: the run is `r20261112-124742-a3fe` at `main` `1885cf1fe08c`, record `art:a48cb83580fdc561f1c9d134a67e1aa1b9602356b9d8e5f9cfb5be7c563232e3`.
 
 **Not established:** nothing ran on the served engine; the figure is the cost model's. No run is out.
+
+## CROSSCLOSE, Thu 12 Nov 13:11Z: the 13:30Z table: by name, none in a file of ours (one real hit, vllm's, closed by vllm); every close of ours serves the tips as they are (lean `f3837f57d113`, `main` `1cfd02137251`); the merge with every owner's close plus `main` at `c330688b9582` passes 127 of 127 suites
+
+Tips at 13:11Z [run: fetch]: merge branch `f3837f57d113` (unchanged since 09:06Z); `main` `1cfd02137251` (three commits past `57d5b5bb7717`, which the counts below were taken on; none touches a closed file or adds a stop); lean's trial `cursor/lean-remote-merge-trial-fc8d` `44d0bf03d49e` (it merges `main` at `33faab2be81c`). Landing branch `cursor/proofs-landing-closes-99d1` is at `0add9868cafe8419702fec25d7236b72502484ea`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c`.
+
+### A. By name (your 07:59Z ask)
+
+Lean's diff `d6075b75d289..f3837f57d113` removes or renames [run: script over the diff]: 112 Python top-level names, 72 class members, 39 parameters, 34 parameters now required, 36 positional lists that no longer extend the old one, 0 Python modules, 373 Lean declarations, 23 Lean modules. Each head's added lines are read against that list, and what each head removes against lean's 103,515 added lines.
+
+| head | added lines | candidates | real | close |
+|---|---|---|---|---|
+| #8950 `787faa474cbf` | 63 | 0 | none | none needed |
+| #9116 `3a580254f8bf` | 329 | 1 (`SS.check`, another module's `check`) | none | none needed by name |
+| #9091 `675dea740d6a` | 7,794 | 0 | none | none needed by name |
+| #9173 `54c9370d08e5` | 200 | 0 | none | none needed |
+| #9075 `ad209cd579d3` | 1,536 | 1 (`SS.check`) | none | none needed by name |
+| #9081 `ad9af609f4ee` | 1,450 | 1 (`BR.Layout`, another module's `Layout`) | none | none needed |
+| #9190 `f6d1341b8529` | 946 | 1 (`rss`, a local) | none | none needed by name |
+| #9149 `328c0e6fb2ca` | 2,964 | 0 | none | none needed |
+| #9220 `a5858d735fc3` | 24 | 0 | none | none needed |
+| #9087 `fd9cf8cd6023` | 4,407 | 0 | none | none needed |
+| #9199 `7a528d6b1c01` | 1,481 | 3 ("Session" in a docstring) | none | none needed |
+| #9234 `95fe2956f926` | 1,370 | 1 (`rss`) | none | none needed by name |
+| #9215 `205129204ded` | 639 | 0 | none | none needed |
+| #9253 `cf5587e21642` | 1,266 | 1 (`rss`) | none | none needed by name |
+| landed since the pass began: #9112, #9185, #9202, #9178, #9027, #9047, #9084, #9174, #9196 | | 0 real | none | |
+| `main`'s own lines, `d6075b75d289..57d5b5bb7717` | 78,240 | 15 | **1** in code, vllm's; 1 in a docstring, lean's | vllm's `76d4f89516`; lean's own file |
+
+- [run] every count above is the script's on the head named; every candidate was read. The other way (what a head removes, in lean's added lines): no real hit for any head (false: `.split`, `math.comb`); `main`'s removals in lean's lines: none real in a file of ours.
+- [run] the one real hit: `main`'s `adapters/vllm/tests/pipeline/served_experts.py:240` calls `step_rows.weights_tree` with five positional arguments and the crossed line drops its `names_digest`. Shown by `aa34`'s vllm suite (`TypeError`, three tests); @vllm's file, closed by their `76d4f89516`; with it in, `verity-vllm` passes (parts `ddd3`, `f5ee` below).
+- [read] one docstring, lean's own file: `main`'s `security/Definitions/Accounting.lean:89` (#8510) names `Bandwidth.Guarantees.AuditRO`, which lean's side no longer declares in `Guarantees/Bandwidth.lean`. That file stops against lean's tip since #8510 anyway.
+- [derived] what the pass cannot see: a meaning that changes under an unchanged name, and a count that crosses a cap. Those came from the runs, not the script: (a) #9047 × the crossed line's `population` benchmark → `199bb09f8a3c`; (b) the overlong cap, 727 > 725 for #9234's old head without #9190, gone now that its head holds #9190 (717, 718 with #9253); (c) #9185 × #9087's `test_each_line_starts_at_its_own_tax`, gone in #9087's head `fd9cf8cd6023` ([run] local on the closed merge with it in: `test_total_cost.py` 24 passed).
+
+### B. Our closes, each against the tips as they are
+
+`main` × lean's tip now stops in 31 files [run: `git merge-tree`]. Ours are seven; the rest are other owners' (new since my last entry: vllm's `window_rows.py`, `test_window_rows.py`, `benchmarks/prove_path/prove_path.py` from #9252 and `benchmarks/prove_path/run.sh` from #9262; lean's `security/Definitions/Accounting.lean` and PoUS's `TRUSTED.sha256` from #8510; the root `pyproject.toml` from #9231's move of `benchmarks/pouw/machine_model/`).
+
+| row | pull request, head | on `main` now | file(s) | close | what ran on it |
+|---|---|---|---|---|---|
+| 1 | #9027 | yes | `benchmarks/verifier_cost/whole_run.py` | `d22d1644ce14` | `aa34`: `test_mains.py` 9 passed; C below |
+| 2 | #9047 (no stop) | yes | `benchmarks/verifier_cost/population.sh`, `population/Main.lean` | `199bb09f8a3c` | same test; C |
+| 3 | the first merge's three | yes | `benchmarks/one_stage/a5.py`, `tests/test_a5_wiring.py`, spot's `lean/tests/test_difftest.py` | `6248c84064e7` | `aa34`: `test_a5_wiring.py` 6 passed, difftest selection 6 passed; C |
+| 4 | #9175 | yes | spot's verifier `README.md` | `5a04c87c6ee8` | C (`repository` passes) |
+| 5 | #9112 `862a214346`, #9185 `8b536f5c1d` | **yes, since 12:00Z** | `verity/protocols/spot/optimize.py`, spot's `tests/test_optimize.py` | `f58b4a3ef6e9` (before `862a214346`: `43aee125f46c`, `test_optimize.py` alone) | `fc27` ended: selections exit 0, 58 of 60 suites, the 2 failures item D's; C |
+| 6 | #9116 `3a580254f8bf` | no | spot's `test_difftest.py` | `494bd85fb553` | `7348`: 65 of 67 suites, the 2 failures item D's |
+| 7 | #9075 `ad209cd579d3` (holds #9116's head) | no | spot's `test_difftest.py` | `1d9bf7eaa19e` | `0233`, `07a7`: four tries, both selections exit 0; `07a7` suites 17 passed, none failed, of 72, running |
+| 8 | #9091 `675dea740d6a` | no | `verity/protocols/pous/lean/TRUSTED.sha256` | **`0add9868cafe`** from #8510 (`8a61d0cb0d`) on; `01dea4d2566f` before it | local: the pin by its command, `test_pous_trusted.py` 9 passed, `pins.py --stale` exit 0; `279b` running |
+| 9 | #9190 `f6d1341b8529` | no | `FlockVerify.lean` | `a8c9ac795709` | `d64d`: tries exit 0, 62 of 62 suites |
+| 10 | #9253 `cf5587e21642` (on #9190) | no | `FlockVerify.lean` | `b58ece80e982` | `9949`, `474f`: four tries, three flock prover tests, cap test exit 0; `474f` suites 53 passed, none failed, of 63, running |
+| 11 | #9234 `95fe2956f926` (holds #9190's head) | no | `FlockVerify.lean` | `b7fb9c30eab1`; with #9253 too: `fed2063c5d79` | `0008`: eight tries, three selections exit 0, 68 suites passed, 1 failed (D's first), of 74; `a91e` (all three in): six tries, tests, cap exit 0, 51 passed, none failed, of 63, running |
+
+- [run] every closed file above is byte for byte the same on `main` at `33faab2be81c` and at `1cfd02137251`, except rows 5's two (changed by #9112, which the close was cut for) and row 8's pin (changed by #8510). Lean's tip has not moved. Heads fetched at 13:11Z: #9075 moved to `ad209cd579d3` (merged `main`, its `test_difftest.py` unchanged, so `1d9bf7eaa19e` stands), #9087 to `fd9cf8cd6023`, #9091 to `675dea740d6a`.
+- [run] lean's trial `44d0bf03d49e` holds rows 1 to 4's eight files byte for byte as my closes have them. It has not merged a `main` with #9112, so **what lean needs beyond what it took at 10:12Z is row 5: `f58b4a3ef6e9`'s two paths**, for a merge with `main` at or past `862a214346`.
+- **Row 8, #9091's redone close.** [run] at its head `6227b8397518`, then `675dea740d6a`, on `main` before #8510: the pin by its command is `01dea4d2566f`'s blob `42fdc26ab089`, so that close stood. #8510 then rewrote `security/Definitions/Pous.lean`'s docstring, a pinned file, so from `8a61d0cb0d` on the pin is another file: `0add9868cafe8419702fec25d7236b72502484ea` (blob `d6666a763607`), the command's output on the merge with #9091 in. One line differs from `01dea4d2566f` (`security/Definitions/Pous.lean`) and one from the merge's own pin without #9091 (`security/Proofs/lakefile.toml`). [run] `r20261112-130251-279b` (trial `56ec45258a67`): the try of `security/Proofs/Flock/Claims/Sampling/Select/Second.lean` exit 0, four more tries, the pin test and the suites running. REFUSE's verdict on the three `Second*` modules under `security/Proofs/Properties/Spot/` has not reached me; I did not duplicate it.
+- [run] `FlockVerify.lean` by landing order: #9190 → `a8c9ac795709` (2015 lines); + #9253 → `b58ece80e982` (2016); #9190 + #9234 → `b7fb9c30eab1` (2017); all three → `fed2063c5d79` (2018). The cap of 725 holds for each (715 to 718).
+- [run] heads with no stop against the closed merge or `main`: #9173, #9081, #9149, #9220, #9087, #9199, #9215. #8950 stops against `main` itself (`benchmarks/spot_figures/breakeven/headline.py`, since #9112), its owner's to merge.
+
+### C. The merge whole, on `main` at `c330688b9582`
+
+- [run] tree `e7b659068f2e`: lean's trial `f1c9670a85d3` (every owner's close, `main` `33faab2be81c`) merged with `main` `c330688b9582`; two stops, `optimize.py` and `test_optimize.py`, closed by `f58b4a3ef6e9`. It differs from my own closed merge in exactly the twelve files where I had stand-ins for other owners.
+- [run] `suites.py --changed f3837f57d113 --quick` in six parts: `r20261112-121320-ddd3` 19 passed, `121349-f5ee` 19, `121419-2a21` 22, `121451-22cd` 23, `121505-48da` 23, `121537-2a74` 22 (one of them a pass kept from the same inputs). **127 of 127 suites pass, none failed**; all six done exit 0.
+- [derived] what that is and is not: the quick suites the merge touches, with the test modules it reaches run whole, on a tree I assembled, not lean's merge commit; no Lean check, no `circuit-check`, no lean-agreement. `main` has moved 44 commits since (`1cfd02137251`), with seven new stops in other owners' files, so a whole run on today's `main` waits on their closes.
+
+### D. `aa34`, `fc27` and the failures, none in a file of ours
+
+- [run] `r20261112-094921-aa34` (my closed merge `e7343acc7c0d`, `main` `33faab2be81c`): four selections exit 0 (`test_optimize.py` 55, `test_a5_wiring.py` 6, `test_mains.py` 9, difftest selection 6); 34 suites passed, 3 failed of 126 when I cancelled it at 12:12Z (a slot of two processes; C replaces it).
+- [run] `r20261112-095455-fc27` (`f58b4a3ef6e9`'s files with #9112 and #9185 in): ended; three selections exit 0; 58 suites passed, 2 failed of 60.
+- Every failure in `aa34`, `fc27`, `7b52` (73 passed, 4 failed of 77, ended), `02ef` (69 passed, 4 failed of 73, ended), `0008`:
+  - `repository`, `test_public_boundary.py`: my stand-in for @memory-accounting's `tools/verity/check/public_boundary.toml`. [run] passes in C with their close.
+  - `verity/protocols/pous/verifier`, 5 tests: my stand-in for @memory-accounting's `test_pous_wipe_monitoring.py`. [run] passes in C.
+  - `verity-vllm`: `serve_openai.py` `main` 151 lines, `dead_code_keep.json`, `weights_tree`: closed by vllm's `7e9dea87f792`, `0a8d2b647b9`, `76d4f89516`. [run] passes in C.
+  - `verity-network-traces` in `02ef`: #9091's old head; its head lists the file since `6227b8397518`.
+  - `benchmarks/spot_figures` in `7b52`: the #9185 × #9087 test, cured by #9087's head (A, c).
+
+### Runs live
+
+`07a7` (#9075), `474f` (#9253), `a91e` (three flock heads), `279b` (#9091's pin), `0008`: all on slots of four processes; `474f` and `a91e` should end by about 13:40Z, `07a7` and `279b` by about 14:15Z. Cancelled by me as superseded, with what they reached above: `aa34`, `9949`, `0233`, `c21e`, `bece`, and six part runs launched at 12:09Z on the tree with my stand-ins (`d9b0`, `281e`, `8ba1`, `ae4d`, `ccf8`, `27b5`).
+
+No open choice. I write one line per run as each ends, and redo a row when its head, lean's tip or a closed file on `main` moves.
