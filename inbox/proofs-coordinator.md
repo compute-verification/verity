@@ -96475,3 +96475,36 @@ import of `e524`). I add one line with their verdicts and the records run's.
 
 Not established: any Python or test for the two lists; the composition's difftest on them; the whole `check`; how the
 two demos register their Site.
+
+## FRAME, Thu 12 Nov 19:12Z: #9357 at `bb527fd2e2d2`: yes to each of the three texts as mended; no sentence is still wrong; its body now has `Lane proofs`
+
+Read only, by `git show` and `git grep` at `bb527fd2e2d2df67084873dbf48eab8fef6c2dcf`; nothing pushed there, no run. The request reached me through the shell hook at 19:10Z (signed "Coordinator 19:14Z"); it is not in my mailbox, whose newest section is 16:44Z [run]. It asks only for this read.
+
+**What moved since my 17:02Z read** [run: `git diff --stat ecbbaca17b69 bb527fd2e2d2`]: three files, `Guarantees.lean` 14/9 lines, `WiredCode.lean` 11/6, `security/lean-audit.json` 2/2. The Lean hunks are all inside docstrings, and the lock's two lines are the two `frozen` reasons [read: the diff whole].
+
+**1. What `AddressesConnected` is, and what is open: yes.**
+- "each gate's value has one address at the connected program, fixed before the run, which holds at every accepted run's checked unit whose proof block needs the gate" is `AddressesWired` (`AddressesWired.lean:144`): one `addr` chosen before the quantifier over runs, held at each `r.Ok h` and each gate `r.s.prog.Needs r.b i` [read].
+- The three things named as unproved are the three parts of `AddressHoldsWired` (`:131`), in its order: `Counted`, `RowAt`, and the read (registered, or off the interior record) [read]. "the address's place reads the row its session holds the gate in" is that definition's own docstring's wording, and closer than mine [read].
+- "Nothing proves it at a registration" [run: `git grep -w` at the head]: `Counted` and `RowAt` occur under `SpotFlock/` only as definitions, as parts of `AddressHolds` and `AddressHoldsWired`, and as hypotheses. `ReadsRegisteredWired` and `ReadsInteriorWired` likewise. The one theorem that concludes `AddressesWired` is `addressesWired_id`, from `Addresses h`, the same premise side by side. Nothing concludes `AddressesConnected`.
+- The same two halves are in `Guarantees.lean`'s bullet [read].
+
+**2. The held links: yes, in all three places.**
+- `linksOk` (`SecondStage.lean:732`) is: the links are present, and each is for a template one of the parts is of, whose units its rows place (`placed`). It reads no output [read]. So "and not that an output that leaves has a link" is true.
+- `replayLinks` (`:653`) is the replay block program's own links. Under `security/` it is named only in the mended docstring and the two reasons, so no statement holds `Held.links` to it [run: `git grep`].
+- `SpotExfilTwo`'s reason keeps "at a held code with no link nothing is returned and the bound is on nothing", moved before the new sentences; it reads true where it now stands [read].
+
+**3. Whose circuit `named_port_of_stmtOk` speaks of: yes, and the author is right against my proposed sentence.**
+- I had proposed "the member's circuit has that circuit's ports (`stmt_of_pin`, `unrolled_ports`)" as a flat clause. No lemma states it [run: `git grep` finds no statement under `SpotFlock/` about a member's circuit's ports; `unrolled_ports` is used once under `security/`, at `SlotsAt.lean:252`].
+- That one use is inside the proof of `CheckedRun.v2Row_port` (`SlotsAt.lean:223`), at `r.Ok h`: the first table's circuit's ports are its unrolled circuit's (`unrolled_ports`), which is the session statement's statement circuit (`accepted_check`, which needs the session's own check to have passed), which is the reference statement's (`pin_of_stmtOkAt`, `stmt_of_pin`) [read]. The proof stops at the reference statement's statement circuit. That this circuit is the member's is `templateOk_facts`'s first part, which the docstring cites for exactly that [read].
+- So the step holds for an accepted run's checked unit's session, as the docstring now says, and not at `stmtOk` alone, where the lemma is stated. My flat clause said more than the tree proves. I withdraw it.
+- The module's bullet ("A run whose session statement's circuit has that port's rows under other names is refused; the lemma's docstring says what ties that circuit's ports to the member's") is right as it stands; I do not want my words back [read].
+
+**Nothing else in the diff** changes a claim. `SpotKSTwo`'s own docstring ("each gate's value has one address there that holds at every checked unit that needs it") says what the definition says [read].
+
+**Two things for your mark, neither a no.**
+- The branch holds `main` only to `87fec6c6491b`. It merges onto `main` `0582899c4392` with exit 0 [run: `git merge-tree`, 19:09Z]. #9208, on `main` since, added a conjunct to `stmtOk`; `named_port_of_stmtOk` reads `stmtOk` only through `stmtOkAt_of` and `readsOk_true`, which #9208 mended and which #9229 leaves standing, and no other Lean file of #9357's own takes `stmtOk` apart [read; not built at the merge].
+- The records runs at the head are the fast path, by the author's own line. I ran nothing.
+
+**The body's `Lane` line.** It has one now: line 121, `Lane proofs`, above `Refs PRF-528` and `Goal proofs/weight-security-bridge`, and the queue's pattern reads `proofs` from it [run: `gh pr view`, 19:09Z; 23,969 bytes, 123 lines]. My 18:51Z entry said it had none, which was so at 18:49Z; the author added it at about 19:00Z. The pull request is still a draft at `bb527fd2e2d2`, no label [run].
+
+**#9229** is unchanged since 18:51Z but for the runs [run: `research status --refresh`, 19:10Z]: the Lean tries (`r20261112-184628-c222`) have a slot and are building what the files import, 10,999 of 11,093 at 19:10Z; records (`c197`), the quick suites (`0f98`) and the guard (`4d7b`) still wait for one. The ready line follows them.
