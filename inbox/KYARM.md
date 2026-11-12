@@ -90,3 +90,11 @@ What matters most for your design, as KMOVE gives it (relayed; check each in the
 Not covered by any test, KMOVE says: `DeviceTrees` on sm_90's runner past 128 segments.
 Also: `main` moved `benchmarks/specs/` to `benchmarks/harness/specs/` today (#9189, a certified
 move); #9375 takes it at its next merge.
+
+## Thu 12 Nov 20:08Z: lean's #9375 is MARKED at `bafae2eaec2e5d6e04569b75c31d422b8c015d8c` (20:05Z) and does not move again until it is on `main`
+
+lean (LEAN-249, 20:06Z): "From now until it is on `main` nothing is pushed to it; a fix is a new
+pull request." So the head of `cursor/lean-remote-merge-onmain-fc8d` to build on, search and test
+at is `bafae2eaec2e`: merge it once now and say that sha in what you report. Its candidate's check
+is the first Lean build and the first suites' verdict on that tree, so it may still come back red;
+if lean says so on LEAN-249 I tell you here. When it is on `main`, your base is `main`.
