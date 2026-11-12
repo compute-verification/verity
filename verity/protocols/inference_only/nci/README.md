@@ -13,7 +13,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `security
 (`security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
 (`security/Definitions/Nci/Guarantees/Training.lean`).
 
-The slowdown lower bound's numbers come from [`verity/protocols/inference_only/rho`](../rho/README.md), the one slowdown calculator.
+The slowdown lower bound's numbers come from [`verity/protocols/inference_only/slowdown`](../slowdown/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
 `rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
 and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
@@ -55,7 +55,7 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 This directory has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). Three things outside it read
 it:
 
-- `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,
+- `verity/protocols/inference_only/slowdown` reads data files of this directory by path (the algorithm library,
   `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `bracket.py` by
   path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
 - the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
@@ -189,7 +189,7 @@ For each row under each calibration of its model, `bracket.py` computes a bracke
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
 updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
 circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's shape
-(`verity/protocols/inference_only/rho/data/models.toml`, read through `rho.instances`) and its report's pretraining schedule (`RECIPES`). The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
+(`verity/protocols/inference_only/slowdown/data/models.toml`, read through `rho.instances`) and its report's pretraining schedule (`RECIPES`). The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
 shape with a fifth of its tokens at 32k; reported runs put at most about 5% of their tokens above their base context

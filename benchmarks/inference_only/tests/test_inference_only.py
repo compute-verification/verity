@@ -10,7 +10,7 @@ import built as B
 import policy as P
 import pytest
 import report
-from rho import min_cut
+from slowdown import min_cut
 from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 

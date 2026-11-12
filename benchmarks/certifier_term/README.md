@@ -77,7 +77,7 @@ target.
 
 ## Where the scale comes from
 
-- The world is rho's world fleet (`verity/protocols/inference_only/rho/data/reference.toml`, `fleet.world-h200`): the census's inference
+- The world is rho's world fleet (`verity/protocols/inference_only/slowdown/data/reference.toml`, `fleet.world-h200`): the census's inference
   (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
   reference datacenter (`benchmarks/census/deployments.json`).
 - The requests follow from the census's tokens a request, the H200's dense FP8 peak (the H100 SXM5's entry of
