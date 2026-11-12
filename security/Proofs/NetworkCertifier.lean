@@ -7,6 +7,7 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.PooledReg
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -38,6 +39,8 @@ public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.PeriodCheckedChecks
+public import Proofs.NetworkCertifier.PooledReg
+public import Proofs.NetworkCertifier.WitnessesPooledReg
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -104,6 +107,11 @@ each hold a pool of their own (`pooledLeakChecked_of_carried`). `WitnessesCarrie
 `SampledLeakCarried`'s honest one. `PoolRoots` proves the period bound's premise on the opened rows' roots
 (`CarriedRoots`) from each run's in-circuit check of its roots (`CheckedRoots`) and the record rule (`PoolChained`), as
 the lemma `rootsOfChecked`.
+`PooledReg` proves the period's bound at the trace with the registered openings (`PooledLeakRegistered`), where the
+incorrect proof blocks are those of the trace read at each statement with its registered openings: `PooledRegSample`
+bounds each execution phase's verdict by the sample's term and an event, `PooledRegEvent` bounds that event, and
+`PooledRegLeak` proves each accepted phase's leak relation with no error. `WitnessesPooledReg` gives its honest and
+nontrivial lemmas.
 -/
 
 @[expose] public section
@@ -180,5 +188,6 @@ theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTimin
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked
 theorem SampledLeakCarried : NetTiming.Guarantees.SampledLeakCarried := NetTiming.sampledLeakCarried
 theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
+theorem PooledLeakRegistered : NetTiming.Guarantees.PooledLeakRegistered := NetTiming.pooledLeakRegistered
 
 end NetTiming.SecurityProofs
