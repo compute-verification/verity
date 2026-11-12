@@ -4,20 +4,13 @@ receipt) or when the device's own verdicts are negative. A judge that passes eve
 the GPU run's gate."""
 from __future__ import annotations
 
-import importlib.util
 import json
 import struct
-import sys
 from pathlib import Path
 
+import d2sgemm_ref as R
 import numpy as np
 import pytest
-
-HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("d2sgemm_ref", HERE.parent / "d2sgemm_ref.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
 
 T = R.T
 KEY = [0x0123456789ABCDEF, 0xFEDCBA9876543210, 0x0F1E2D3C4B5A6978, 0x8796A5B4C3D2E1F0]
