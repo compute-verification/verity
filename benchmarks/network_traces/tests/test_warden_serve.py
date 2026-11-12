@@ -1,8 +1,9 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
 an LMS key: the check accepts the run, whose server got each request with its release order and bucket under the run
-id `deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's; a window in which the network certifier refused a connection is
+id `deployment.json` names, and refuses a deployment whose start isn't the one certified, a record that isn't what
+was certified, a cell that reached its client in another bucket, and a response that isn't the record's; a window in
+which the network certifier refused a connection is
 certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
 certifier's process, moves no tick in `serve`'s publisher process."""
 
@@ -593,7 +594,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
          id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
-    `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`,
+    `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
+    before any record, each window committed by `commit`,
     `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response
     read id-form at P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order.
     Returns the network certifier."""
@@ -602,13 +604,14 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, 5 if load_heads else 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
-        public = publisher.key
+        public, start = publisher.key, publisher.start
     else:
         signer = ws.cs.signer(key, 4)
         publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold}, signer.public_key()
+        start = ws.start_json(ws.certify_start(publisher.issuer, 0, params))
     answers = iter(responses)
 
     async def connect():
@@ -651,7 +654,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     publisher.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows,
                                       listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
-                                      run_id=warden.run_id)
+                                      run_id=warden.run_id, start=start, origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -688,7 +691,8 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     assert s["cells_in_their_bucket"][0] == s["cells_in_their_bucket"][1] > 0
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
-    assert "ACCEPTED: 3/3 ended" in ws.table(result)
+    assert "ACCEPTED: 3/3 ended" in ws.table(result) and "start at 0 ms of the key's life" in ws.table(result)
+    assert s["start"] == {"base_ms": 0, "certified": True}
     assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows", "row_bytes")} == \
         {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
     assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
@@ -712,6 +716,16 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
         ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+
+    def edit_start(change) -> None:
+        doc = json.loads((out / "deployment.json").read_text())
+        change(doc)
+        (out / "deployment.json").write_text(json.dumps(doc))
+
+    assert refused(lambda: edit_start(lambda d: d.pop("start"))) == \
+        ["the session's start isn't certified (no start's certificate)"]
+    assert refused(lambda: edit_start(lambda d: d["start"].update(base_ms=PARAMS.window * PARAMS.bucket_ms))) == \
+        ["the session's start isn't certified (opening)"]
 
     problems = refused(flip_record)
     assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems

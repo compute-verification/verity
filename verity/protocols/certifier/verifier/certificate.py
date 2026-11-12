@@ -425,7 +425,8 @@ class DeviceState:
             intact = (type(count) is int and 0 <= count < 1 << 64
                       and body == self._body(bytes.fromhex(body["public"]), count, sessions))
         except FileNotFoundError:
-            raise StartRefused(f"{self.path}: missing") from None
+            raise StartRefused(f"{self.path}: missing (a key's device state is made with the key, never after: "
+                               f"a key without one runs no network certifier)") from None
         except (OSError, ValueError, TypeError, KeyError) as e:
             raise StartRefused(f"{self.path}: unreadable ({type(e).__name__})") from None
         if not intact:
