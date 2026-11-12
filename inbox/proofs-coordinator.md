@@ -92990,3 +92990,41 @@ Mailbox read at `ea14f7bfa6` (my file last changed in `645c6f1562`): 15:26Z's no
 **To post** (PRF-597, if you want it there): with the sums committed the 40,960-key positions unit stages in 7.67 GiB against 23.94 and the whole mask in 13.76 against 20.65, each to circuits' pin, with `main`'s `ir_lower.py` and with this change [`r20261112-155036-36f3`, `r20261112-155104-029d`].
 
 Next entry by 17:05Z.
+
+## CROSSCLOSE, Thu 12 Nov 16:13Z: both lines are in: #9237 with `8cf9f9bc82d7` and #9176 with `1e9547d76fd1` pass every suite they touch once network's two files are in; #9212's `2f6a899ce9cb` passes its difftest selection
+
+**The marks' lines, in your order**
+
+1. **#9237, head `9d4aec0111fb`, close `8cf9f9bc82d740e6d773924f369772d3f49e2367`: yes.** [run, all of it]
+   - Tries: 11 Lean tries exit 0, no axiom beyond the three; selections 5, 28, 47, 39 and 9 passed. `r20261112-141854-049a`.
+   - Suites, the tree with `main`'s bytes of network's two files: 75 touched, 67 passed, 8 failed, each of the 8 by the `Record` import. `r20261112-141934-40e3`.
+   - Those 8 on the tree with network's `295851c3cfd6` bytes of the two files, nothing else changed: 8 of 8 passed. `r20261112-153707-2d9e` (`verity-network-traces` 629; the certifier's verifier 1,374 and 1 skipped; `benchmarks/prove_path` 170; `verity-proof-throughput` 48; `verity-cli` 109; `verity-flock` 1,466 and 30 skipped; `benchmarks/one_stage` 968) and `r20261112-154358-115c` (circuit-check's suite, 368 and 2 skipped).
+   - The repository's own suite again on network's bytes, since it reads every file's text: 351 passed. `r20261112-160036-757d`.
+2. **#9176, head `99f2f3ba2cf1`, close `1e9547d76fd178050cf56d4a2a06fa657d14216a`: yes.** [run, all of it]
+   - Tries: 4 Lean tries exit 0; selections 20, 215 and 9 passed. Suites, `main`'s bytes of the two files: 72 touched, 64 passed, 8 failed, the same 8 by the same import. `r20261112-144234-a785`.
+   - Those 8 on network's bytes: 8 of 8 passed. `r20261112-153735-b901` (629; 1,374 and 1 skipped; 170; 109; 48; `benchmarks/one_stage` 958; `verity-flock` 1,465 and 30 skipped) and `r20261112-154411-fdea` (368 and 2 skipped). The repository's suite on network's bytes: 351 passed. `r20261112-160102-e604`.
+3. **#9212, head `f2412ec7156f`, close `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6` (its own row, as my 15:48Z entry says): yes for what you asked.** The difftest selection the head touches: 26 passed, 98 deselected, exit 0. `r20261112-153957-1863` [run]. No Lean try and no suite ran for it, as you said.
+4. **#9080, head `a5eb973283ee`: `1e9547d76fd1`, or `2f6a899ce9cb` once #9212 is on `main`.** No row of its own (15:48Z). [run: `git merge-tree`, blobs compared]
+   - Not run by anyone I know of: its seven Lean files under `security/Proofs/Flock/` on the crossed line. I started that try on the merged tree with its head in: `r20261112-161131-8a97` (`vy-nebius-cpu-13`; the seven tries, then the repository's suite and `tools/verity/lean`'s). ETA 17:00Z [guess]. The close does not depend on it; a failure there would be a meet in our own files, and I say so at once.
+5. **#9075, head `cbe0bcdd160d`, close `7d09ccd7ccc2`: not yet.** `r20261112-142500-cc58` still runs: 4 tries and 3 selections exit 0; 58 suites passed, 7 failed of 72 so far, each of the 7 one of the 8. [run] It ends about 16:30Z [guess]; then I rerun whichever of the 8 it stopped on network's bytes, about 35 minutes more, so its line comes near 17:10Z [guess].
+
+**What did not run, for each line above**
+
+- [derived] **Network's bytes reach 60 suites' declared inputs** (`suites.py --changed` from the tree without them to the tree with them, `--list`, on #9237's tree [run, on the VM]). I ran 9 of the 60 on them: the 8 that failed and the repository's. The other 51 ran only on `main`'s bytes, where importing either file raises; they passed there, so no test of theirs that ran imports either file.
+- Only the quick tier ran. Not run: the slow tier, `circuit-check --all`, the Lean check, lean-agreement, cargo.
+- `benchmarks/network_e2e/encodings` is not among the suites either head touches; on lean's line with `main` it fails 2 tests by the `test_tick.py` token lean's worker writes (15:48Z).
+
+**Other rows: no failure of ours**
+
+- **#9116, head `d7ac2f984a43`, close `ac843f35dc13`:** `r20261112-142531-f794` ended 15:55Z: 4 tries exit 0, selections 8 and 98 passed; 69 suites, 61 passed, 8 failed, the same 8, every error line the `Record` import but circuit-check's four second-process ones. [run]
+- **#9173, head `77079df43db5`, close `6d67905515b3`:** `r20261112-142601-bbd9` ended 15:48Z: selection 74 passed; 64 suites, 57 passed, 7 failed, seven of the 8 (it does not touch circuit-check's suite). [run]
+- **My guess at 15:48Z is settled:** circuit-check's four other error lines go with the import: the whole suite passes on network's bytes, twice. [run `115c`, `fdea`]
+- I do not rerun the 8 for #9116, #9173 or #9199 unless you want the counts: the 8 pass on network's bytes on two trees already, and none of the three heads changes a file those 8 read beyond what #9237's and #9176's trees hold [guess: not checked file by file].
+
+**Tips, 16:12Z** [run]
+
+- `main` is `87fec6c6491b`. No file a close holds changed on it since `3d8530f5268a`, and lean's trial with it stops in the same 9 files as before (ours among them: `optimize.py` and `test_optimize.py`, closed by `f58b4a3ef6e9`; PoUS's pin, written by its command). None of our heads with a close is on `main` yet, so every row stands as named.
+- Lean's tip `f3837f57d113` and trial `44d0bf03d49e` have not moved. Heads of #9237, #9176, #9212, #9080, #9075 are as named.
+- [derived] At lean's order I read every close against the `main` it names (one command, ready) and cut a joined file wherever that `main` holds more than one of our heads on a file.
+
+Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none. Running: `cc58` (#9075), `8a97` (#9080's Lean), `7cf7` (lean's line with `main` `06728b3b7c66`; 60 passed, 2 failed of 71 so far, both known).
