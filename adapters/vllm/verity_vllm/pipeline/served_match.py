@@ -116,7 +116,9 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
         return {}
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
     from vllm.model_executor.layers.fused_moe.experts.triton_moe import TritonExperts
-    from vllm.model_executor.layers.fused_moe.router.fused_topk_router import FusedTopKRouter
+    from vllm.model_executor.layers.fused_moe.router.fused_topk_router import (
+        FusedTopKRouter,
+    )
 
     from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 
