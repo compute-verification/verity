@@ -41,7 +41,7 @@
   research keep PATH --owner @LANE --expires DATE|never --priority low|normal|high|keep [--regenerate CMD] [--art ART | --preserve] [--why T]
   research keep show PATH                        # a node path's retention record (research/retention/v0, a sidecar), explicit or implicit
   research retention report [--root R] [--depth N] [--json]   # every recorded path and every unowned area, unowned and expired first
-  research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+  research retention gc [--root R] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--unpreserved-runs] [--json] [--apply]
                                                  # policy default: delete only what a record allows; a dry run unless --apply (research/retention.py)
   research retention rm PATH... --approved-by @OWNER --ref REF [--apply]   # delete chosen paths with the owner's yes, which every record
                                                  # covering them must name; never a `keep`; each --apply decision goes to the deletion log

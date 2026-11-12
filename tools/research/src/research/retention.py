@@ -5,7 +5,7 @@
     research keep show PATH [--root R]
     research retention report [--root R] [--depth N] [--json]
     research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--max-paths 200] [--jobs-dir D]...
-                          [--store S] [--json] [--apply]
+                          [--store S] [--unpreserved-runs] [--json] [--apply]
     research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
@@ -17,13 +17,36 @@ A directory whose `.custody` marker (store.custody) says `preserved: true` and w
 (`implicit`): owner its job.json's lane, else its campaign, else `runner`; `preserved` the marker's run record; `expires`
 RUN_EXPIRY after the marker's `verified_utc`; priority `normal`. Nothing is written for it, and a sidecar always wins.
 
+A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires
+UNPRESERVED_RUN_EXPIRY (7 days) after the run directory's last write, so the collector takes it. That record is implicit too
+(`implicit`, source UNPRESERVED), with the same owner; `preserved` and `regenerate` are null, since the directory is the run's only
+copy. A directory has it only when all of these hold. It is a run directory: named as a run id, holding the job.json of that id
+whose `run.runs_root` is the directory it lies in, and neither a launcher's `remote.json` nor the `preserved.json` of a fetched
+copy (`custody.has_custody`). Its run has ended (`evict._run_state`): its status.json is final, or it was refused, or its status
+is `running` and the pid it records, at the start time it records, is gone from this host's process table (`evict._gone`), read
+only for a run its job.json places on this host and from a table that shows pid 1, so one that hides other users' processes
+shows nobody dead. Custody did not preserve it: it has no `.custody`, or one that says `preserved: false`; a marker that can't be
+read gives no record. Neither it nor a directory above it has a sidecar: an explicit record always wins, whatever its priority
+or expiry. No directory above it is named as a run id: a run inside another run's directory is that run's data. Its last write
+is the newest mtime of the directory and of every directory and file under it (`_last_write`: one scandir and lstat walk that
+follows no symlink). The record never expires before the custody key its runner publishes with does (`<request
+dir>/custody/cred.json`, which the runner deletes when it is done), so not while that runner may still be publishing, which it
+does after the status is final. A run that waits in a slot line is `running`, and one still queued has no job.json, so neither
+has a record. A run directory whose status, files or custody key can't be read has no record either: it is listed as invalid
+with what could not be read, since whether it may go is unknown, and is never deleted.
+gc deletes these runs only with --unpreserved-runs: without it a pass lists them apart and leaves them, so a machine's first pass
+can be read before anything goes. `research keep RUNDIR ...` before the 7 days are over keeps a run, and so does preserving it
+(`research data custody RUN --publish`).
+
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
 --max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
-implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable; and no file in the job-script
-directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run dir
-(`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
+implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
+--unpreserved-runs; and no file in the job-script directories may name it (`JobScripts`). A preserved run's implicit record also
+needs its marker to still vouch for the run dir (`custody.marker_problem`), and an unpreserved run goes only when this user can
+write into every directory in it: one it can't is left and named, and takes none of the pass's --max-paths. A path holding a
+nested record is left whole. A dry run (the default) reads no remote.
 
 A record's expiry is its owner's word that the data may go. The remote check (`store_check`, just before each deletion of a
 preserved path) is there so that gc never deletes the only copy of data somebody still promises to keep. Its answer is one of
@@ -57,6 +80,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 import re
 import shutil
@@ -65,12 +89,13 @@ import stat
 import sys
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
+from .store import evict as EV
 from .store import ids
 from .store import sealed as SL
 from .telemetry.job import write_json_atomic
@@ -81,6 +106,16 @@ FIELDS = ("schema", "path", "node", "owner", "by", "created", "expires", "priori
 PRIORITIES = ("low", "normal", "high", "keep")
 COLLECTABLE = ("low", "normal")
 RUN_EXPIRY = timedelta(hours=48)
+#: How long after its last write the directory of an ended run that custody did not preserve keeps its implicit record (module
+#: docstring): the one number of that rule, which the record's `why`, gc's lines and the README state.
+UNPRESERVED_RUN_EXPIRY = timedelta(days=7)
+#: The source (`Found.source`, `Row.source`) of that record.
+UNPRESERVED = "unpreserved"
+#: What the report calls an implicit record, by its source.
+IMPLICIT = {"custody": ".custody", UNPRESERVED: "unpreserved run"}
+#: The line the report and gc print above the unpreserved runs, which they list after every other path.
+UNPRESERVED_HEAD = (f"unpreserved runs (ended, and custody did not preserve them: each directory is its run's only copy, and expires "
+                    f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
 DEFAULT_ROOT = Path("/workspace")
 DEFAULT_JOBS_DIRS = (Path("/workspace/pouw/fill/queue"), Path("/workspace/pouw/fill/running"))
 POLICY = "default/v0"
@@ -101,6 +136,8 @@ TS = "%Y-%m-%dT%H:%M:%SZ"
 NAME_CHAR = r"[\w.-]"
 
 disk_usage = shutil.disk_usage
+#: The process table a recorded runner's death is read from (`_ended`).
+PROC = Path("/proc")
 
 
 def inode_usage(path: Path) -> tuple[int, int]:
@@ -257,34 +294,119 @@ def _read_json(p: Path) -> dict | None:
     return d if isinstance(d, dict) else None
 
 
-def implicit(run_dir: Path, rel: str) -> dict | None:
-    """The record a directory with a preserved `.custody` marker has without a sidecar (module docstring); None for any other."""
-    m = _read_json(Path(run_dir) / CU.MARKER)
-    if not m or m.get("schema") != CU.SCHEMA or m.get("preserved") is not True:
+def _last_write(path: Path) -> float:
+    """The newest mtime of the directory `path` and of every directory and file under it, by os.scandir and lstat (no symlink is
+    followed); OSError when any of it can't be read, so a directory never reads as older than it is."""
+    newest, stack = os.lstat(path).st_mtime, [str(path)]
+    while stack:
+        with os.scandir(stack.pop()) as it:
+            for e in it:
+                newest = max(newest, e.stat(follow_symlinks=False).st_mtime)
+                if e.is_dir(follow_symlinks=False):
+                    stack.append(e.path)
+    return newest
+
+
+def _ended(run_dir: Path, host: Any) -> str | None:
+    """The state the run of `run_dir` ended in (one of `evict.ENDED`), or None while nothing shows that it ended: a state that is
+    not final, or a `running` whose runner is not known gone. A recorded runner is gone as `evict._gone` decides it, and only
+    where this host's process table can say (module docstring); `host` is job.json's. `evict.Unestablished` when its status
+    can't be read."""
+    state = EV._run_state(run_dir, PROC)
+    if state == EV.LOST and (host != socket.gethostname() or not (PROC / "1" / "stat").is_file()):
         return None
-    job = _read_json(Path(run_dir) / "job.json") or {}
-    store = job.get("store") or {}
-    owner = ((job.get("ownership") or {}).get("lane") or store.get("campaign") or (store.get("conditions") or {}).get("exec.campaign")
+    return state if state in EV.ENDED else None
+
+
+def _unpreserved(d: Path, rel: str, job: dict, owner: str) -> dict | None:
+    """The record of an ended run that custody did not preserve (module docstring), given that `.custody` doesn't say preserved;
+    None for a directory that is not such a run's. RecordError when it is a run directory and what decides whether it may go
+    can't be read: its status, something under it, or its runner's custody key."""
+    run_id, runs_root, host = EV._get(job, "run", "id"), EV._get(job, "run", "runs_root"), EV._get(job, "environment", "hostname")
+    if run_id != d.name or not ids.is_run_id(run_id) or not isinstance(host, str) or not host:
+        return None
+    if not isinstance(runs_root, str) or not os.path.isabs(runs_root) or os.path.realpath(runs_root) != os.path.realpath(d.parent):
+        return None
+    above = d.parents[:rel.count("/")]
+    if os.path.lexists(d / CU.LAUNCHER_RECORD) or any(ids.is_run_id(a.name) or any(map(os.path.lexists, _places(a))) for a in above):
+        return None
+    try:
+        if CU.has_custody(d)[0] or (state := _ended(d, host)) is None:
+            return None
+    except EV.Unestablished as e:
+        raise RecordError(f"whether the run of {d} ended can't be read ({str(e).partition(': ')[2]})") from None
+    except OSError as e:
+        raise RecordError(f"whether the run of {d} ended can't be read ({e})") from None
+    try:
+        expires = datetime.fromtimestamp(math.ceil(_last_write(d)), UTC) + UNPRESERVED_RUN_EXPIRY
+    except (OSError, OverflowError, ValueError) as e:
+        raise RecordError(f"when {d} was last written can't be read ({e})") from None
+    request = EV._get(job, "run", "remote", "request")
+    if isinstance(request, str):
+        key = Path(request).parent / CU.DIR_NAME / CU.CRED_FILE
+        try:
+            held = EV._quiet(lambda: os.lstat(key)) is not None
+        except OSError as e:
+            raise RecordError(f"whether the runner of {d} still holds its custody key can't be read ({e})") from None
+        if held:
+            key_expires = _utc_or_none(CU._key_expiry(key.parent))
+            if key_expires is None:
+                raise RecordError(f"the expiry of the custody key {key} can't be read, so whether the runner of {d} still publishes is unknown")
+            expires = max(expires, key_expires)
+    created = _utc_or_none(EV._get(job, "run", "created_utc"))
+    ended = "its runner is gone" if state == EV.LOST else f"it ended {state}"
+    return {"schema": SCHEMA, "path": rel, "node": host, "owner": owner, "by": None, "created": fmt_utc(created) if created else None,
+            "expires": fmt_utc(expires), "priority": PRIORITIES[0], "preserved": None, "regenerate": None,
+            "why": f"no run custody ({ended}): this directory is the run's only copy, and it expires "
+                   f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write"}
+
+
+def _implicit(run_dir: Path, rel: str) -> tuple[dict, str] | None:
+    """`implicit`'s record with its source: "custody" for a preserved run's, UNPRESERVED for an ended, unpreserved one's;
+    `_unpreserved`'s RecordError."""
+    d = Path(run_dir)
+    m = _read_json(d / CU.MARKER)
+    if m is None:
+        # a marker that can't be read says nothing of what custody did; and only a directory named as a run can be an unpreserved one
+        if os.path.lexists(d / CU.MARKER) or not ids.is_run_id(d.name):
+            return None
+    elif m.get("schema") != CU.SCHEMA or not isinstance(m.get("preserved"), bool):
+        return None
+    job = _read_json(d / "job.json") or {}
+    owner = (EV._get(job, "ownership", "lane") or EV._get(job, "store", "campaign") or EV._get(job, "store", "conditions", "exec.campaign")
              or "runner")
+    if m is None or not m["preserved"]:
+        rec = _unpreserved(d, rel, job, owner)
+        return (rec, UNPRESERVED) if rec else None
     verified = _utc_or_none(m.get("verified_utc"))
-    created = _utc_or_none((job.get("run") or {}).get("created_utc")) or verified
+    created = _utc_or_none(EV._get(job, "run", "created_utc")) or verified
     rr = m.get("run_record")
-    return {"schema": SCHEMA, "path": rel, "node": m.get("host"), "owner": owner, "by": None,
-            "created": fmt_utc(created) if created else None, "expires": fmt_utc(verified + RUN_EXPIRY) if verified else None,
-            "priority": "normal", "preserved": rr if ids.is_art(rr) else None, "regenerate": None,
-            "why": f"run custody: the run record is on the remote, and the local copy expires {RUN_EXPIRY // timedelta(hours=1)} h after it"}
+    rec = {"schema": SCHEMA, "path": rel, "node": m.get("host"), "owner": owner, "by": None,
+           "created": fmt_utc(created) if created else None, "expires": fmt_utc(verified + RUN_EXPIRY) if verified else None,
+           "priority": "normal", "preserved": rr if ids.is_art(rr) else None, "regenerate": None,
+           "why": f"run custody: the run record is on the remote, and the local copy expires {RUN_EXPIRY // timedelta(hours=1)} h after it"}
+    return rec, "custody"
+
+
+def implicit(run_dir: Path, rel: str) -> dict | None:
+    """The record a run directory has without a sidecar (module docstring): a preserved run's, from its `.custody` marker, or an
+    ended run's that custody did not preserve; None for any other directory. RecordError for a run directory whose status, files
+    or custody key can't be read, so that whether it may go is unknown."""
+    found = _implicit(run_dir, rel)
+    return found[0] if found else None
 
 
 @dataclass
 class Found:
     path: Path
     record: dict | None
-    source: str                  # "sidecar" | "custody"
-    error: str | None = None     # an invalid sidecar's problems
+    source: str                  # "sidecar" | "custody" | UNPRESERVED
+    error: str | None = None     # an invalid sidecar's problems, or what of an unpreserved run can't be read (then no record)
 
 
 def record_at(path: Path, rel: str) -> Found | None:
-    """The record of exactly `path` (its sidecar, else a directory's implicit one), or None."""
+    """The record of exactly `path` (its sidecar, else a directory's implicit one), or None. A sidecar that is invalid, and a run
+    directory of which too little can be read to say whether it may go, is a Found with its `error` and no record."""
     p = Path(path)
     try:
         doc = load(p)
@@ -292,8 +414,13 @@ def record_at(path: Path, rel: str) -> Found | None:
         return Found(p, None, "sidecar", str(e))
     if doc is not None:
         return Found(p, doc, "sidecar")
-    if p.is_dir() and not p.is_symlink() and (doc := implicit(p, rel)) is not None:
-        return Found(p, doc, "custody")
+    if p.is_dir() and not p.is_symlink():
+        try:
+            found = _implicit(p, rel)
+        except RecordError as e:
+            return Found(p, None, UNPRESERVED, str(e))
+        if found is not None:
+            return Found(p, *found)
     return None
 
 
@@ -361,10 +488,11 @@ class Row:
     bytes: int = 0
     files: int = 0
     record: dict | None = None
-    source: str | None = None            # "sidecar" | "custody"; None: no record
+    source: str | None = None            # "sidecar" | "custody" | UNPRESERVED; None: no record
     error: str | None = None
     nested: list[str] = field(default_factory=list)
     rest: bool = False                   # an unowned row for the unrecorded rest of a partly recorded area
+    dirs: int = 0                        # the directories among a recorded path's inodes, itself included
 
     def state(self, now: datetime) -> str:
         if self.error:
@@ -375,7 +503,8 @@ class Row:
 
     def doc(self, now: datetime) -> dict[str, Any]:
         r = self.record or {}
-        return {"path": self.path, "state": self.state(now), "bytes": self.bytes, "files": self.files, "source": self.source,
+        return {"path": self.path, "state": self.state(now), "bytes": self.bytes, "files": self.files,
+                "inodes": self.files + self.dirs if self.source else None, "source": self.source,
                 "owner": r.get("owner"), "expires": r.get("expires"), "priority": r.get("priority"), "preserved": r.get("preserved"),
                 "regenerable": bool((r.get("regenerate") or "").strip()), "expired": bool(self.record) and expired(self.record, now),
                 "rest": self.rest, "nested": self.nested, "error": self.error, "record": self.record}
@@ -386,19 +515,20 @@ def expired(record: dict, now: datetime) -> bool:
     return e is not None and e <= now
 
 
-def measure(path: Path, errors: list[str]) -> tuple[int, int, list[Path]]:
-    """(apparent bytes and count of every non-directory entry under `path`, the sidecars beneath its own), by os.scandir and
-    lstat; symlinks are never followed."""
+def measure(path: Path, errors: list[str]) -> tuple[int, int, int, list[Path]]:
+    """(apparent bytes and count of every non-directory entry under `path`, the count of its directories with itself, the sidecars
+    beneath its own), by os.scandir and lstat; symlinks are never followed."""
     try:
         st = os.lstat(path)
     except OSError as e:
         errors.append(f"{path}: {e.strerror or e}")
-        return 0, 0, []
+        return 0, 0, 0, []
     if not stat.S_ISDIR(st.st_mode):
-        return st.st_size, 1, []
-    total, n, nested, stack = 0, 0, [], [str(path)]
+        return st.st_size, 1, 0, []
+    total, n, dirs, nested, stack = 0, 0, 0, [], [str(path)]
     while stack:
         d = stack.pop()
+        dirs += 1
         try:
             with os.scandir(d) as it:
                 for e in it:
@@ -414,7 +544,7 @@ def measure(path: Path, errors: list[str]) -> tuple[int, int, list[Path]]:
                         nested.append(Path(e.path))
         except OSError as x:
             errors.append(f"{d}: {x.strerror or x}")
-    return total, n, sorted(nested)
+    return total, n, dirs, sorted(nested)
 
 
 @dataclass
@@ -455,8 +585,8 @@ def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2) -> Scan:
                     errors.append(f"{e.path} records {e.name[: -len(SIDECAR)]}, which is gone")
             found = record_at(Path(e.path), r) if is_dir or e.name + SIDECAR in names else None
             if found:
-                b, n, nested = measure(Path(e.path), errors)
-                rows.append(Row(r, b, n, found.record, found.source, found.error, [relative(x, root) for x in nested]))
+                b, n, dirs, nested = measure(Path(e.path), errors)
+                rows.append(Row(r, b, n, found.record, found.source, found.error, [relative(x, root) for x in nested], dirs=dirs))
                 has = True
             elif is_dir:
                 b, n, sub = walk(Path(e.path), r, level + 1)
@@ -485,9 +615,22 @@ def scan(root: Path | str = DEFAULT_ROOT, depth: int = 2) -> Scan:
 ORDER = {"invalid": 0, "unowned": 0, "expired": 1, "recorded": 2}
 
 
+def unpreserved_runs(docs: Sequence[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    """The unpreserved runs among the rows `docs` (`Row.doc`), counted apart from every other path: the `expired` ones, past
+    UNPRESERVED_RUN_EXPIRY after their last write, the `recorded` ones, still inside it, and the `invalid` ones, run directories
+    with no record because too little of them can be read; each with its paths, bytes and inodes."""
+    out = {state: {"paths": 0, "bytes": 0, "inodes": 0} for state in ("expired", "recorded", "invalid")}
+    for d in docs:
+        if d["source"] == UNPRESERVED:
+            for k, v in (("paths", 1), ("bytes", d["bytes"]), ("inodes", d["inodes"])):
+                out[d["state"]][k] += v
+    return out
+
+
 def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[], datetime] = utc_now,
            usage: Callable[[Path], Any] = shutil.disk_usage, node: str | None = None) -> dict[str, Any]:
-    """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size."""
+    """`research retention report --json`: unowned (and invalid) areas first, then expired paths, then the rest, each by size.
+    `unpreserved` counts the unpreserved runs apart (`unpreserved_runs`)."""
     t = now()
     sc = scan(root, depth)
     docs = sorted((r.doc(t) for r in sc.rows), key=lambda d: (ORDER[d["state"]], -d["bytes"], d["path"]))
@@ -501,7 +644,7 @@ def report(root: Path | str = DEFAULT_ROOT, depth: int = 2, *, now: Callable[[],
     total, used, _ = usage(Path(root))
     return {"schema": "research/retention-report/v0", "root": str(root), "node": node or socket.gethostname(), "now": fmt_utc(t),
             "depth": depth, "filesystem": {"total": total, "used": used, "pct": round(100 * used / total, 2) if total else None},
-            "rows": docs, "totals": totals, "errors": sc.errors}
+            "rows": docs, "totals": totals, "unpreserved": unpreserved_runs(docs), "errors": sc.errors}
 
 
 # ---- gc -----------------------------------------------------------------------------------------------------------------------------------
@@ -668,7 +811,7 @@ def ineligible(row: Row, now: datetime, node: str) -> str | None:
     """Why the policy never deletes `row`'s path, from its record alone; None when it may."""
     rec = row.record
     if row.error:
-        return f"invalid record: {row.error}"
+        return f"no record: {row.error}" if row.source == UNPRESERVED else f"invalid record: {row.error}"
     if rec is None:
         return "no record: a path without one is never deleted (`research keep PATH ...` gives it one)"
     if rec["priority"] not in COLLECTABLE:
@@ -677,7 +820,7 @@ def ineligible(row: Row, now: datetime, node: str) -> str | None:
         return "never expires"
     if not expired(rec, now):
         return f"not expired: expires {rec['expires']}"
-    if not rec.get("preserved") and not (rec.get("regenerate") or "").strip():
+    if row.source != UNPRESERVED and not rec.get("preserved") and not (rec.get("regenerate") or "").strip():
         return "neither preserved nor regenerable: nothing would bring it back"
     if rec.get("node") and rec["node"] != node:
         return f"recorded on {rec['node']}, and this is {node}: `research keep` it here"
@@ -686,10 +829,21 @@ def ineligible(row: Row, now: datetime, node: str) -> str | None:
     return None
 
 
-def _why_deletable(rec: dict, found: Stored | None) -> str:
-    how = f"preserved {rec['preserved']}" + (f" ({found.why})" if found else ", checked on the remote just before an --apply deletes it") \
-        if rec.get("preserved") else "regenerable"
+def _why_deletable(row: Row, found: Stored | None) -> str:
+    rec = row.record
+    if row.source == UNPRESERVED:
+        how = "the only copy of a run that custody did not preserve"
+    elif rec.get("preserved"):
+        how = f"preserved {rec['preserved']}" + (f" ({found.why})" if found else ", checked on the remote just before an --apply deletes it")
+    else:
+        how = "regenerable"
     return f"{rec['priority']}, expired {rec['expires']}, {how}"
+
+
+def keeping(run_dir: Path) -> str:
+    """The two ways its lane keeps an unpreserved run's directory, as gc prints them for a run it has not deleted."""
+    return (f"to keep it: `research keep {run_dir} --owner @LANE --expires DATE --priority P`, or preserve it: `research data custody "
+            f"{run_dir.name} --publish`")
 
 
 def _read_only_dir(path: Path) -> str | None:
@@ -697,6 +851,15 @@ def _read_only_dir(path: Path) -> str | None:
         if not os.access(base, os.W_OK | os.X_OK):
             return base
     return None
+
+
+def _unwritable(path: Path) -> str | None:
+    """Why this user can't remove the tree `path` whole (a directory in it that it can't write into, or can't read), or None."""
+    try:
+        ro = _read_only_dir(path)
+    except OSError as e:
+        return f"can't read all of it ({e}), so it can't be removed whole"
+    return f"{ro} can't be written by this user, so the tree can't be removed whole: its owner makes it writable, or removes it" if ro else None
 
 
 def _in_sealed(path: Path) -> str | None:
@@ -805,12 +968,15 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
        now: Callable[[], datetime] = utc_now, usage: Callable[[Path], Any] = shutil.disk_usage,
        remote_check: Callable[[str, Path], Stored] | None = None, in_use: Callable[[Path], str | None] | None = None,
        node: str | None = None, store_root: str | None = None,
-       inodes: Callable[[Path], tuple[int, int]] | None = None, max_paths: int | None = None) -> dict[str, Any]:
+       inodes: Callable[[Path], tuple[int, int]] | None = None, max_paths: int | None = None,
+       unpreserved: bool = False) -> dict[str, Any]:
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
     DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
-    `max_paths` caps the paths this pass deletes, None not at all. The plan's `stored` counts the remote check's answers (STORED)
-    over the paths an --apply asked about, and `capped` the paths the cap left for the next pass."""
+    `max_paths` caps the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
+    unpreserved runs, which it otherwise lists and leaves. The plan's `stored` counts the remote check's answers (STORED)
+    over the paths an --apply asked about, `capped` the paths the cap left for the next pass, and `unpreserved` the unpreserved
+    runs, apart from every other path (`unpreserved_runs`), with the `deleted` ones this pass deleted, or in a dry run would."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -828,7 +994,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
                             "apply": apply, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2),
                             "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
                             "max_paths": max_paths, "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": [],
-                            "stored": dict.fromkeys(STORED, 0), "capped": 0}
+                            "stored": dict.fromkeys(STORED, 0), "capped": 0, "deletes_unpreserved": unpreserved,
+                            "unpreserved": {**unpreserved_runs([]), "deleted": unpreserved_runs([])["expired"]}}
     if not plan["acting"]:
         plan["pct_after"] = plan["pct_before"]
         return plan
@@ -845,6 +1012,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             why = f"its custody marker no longer vouches for it: {problem}"
         if why is None and (u := in_use(root / row.path)):
             why = f"in use: {u}"
+        if why is None and row.source == UNPRESERVED and not unpreserved:
+            why = f"left: {_why_deletable(row, None)}, which only --unpreserved-runs deletes"
         if why:
             skips.append(Action(row, "skip", why))
         else:
@@ -868,6 +1037,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             why = f"in use: {u}"
         elif u := lean_in_use(p, root):
             why = f"in use: {u}"
+        elif row.source == UNPRESERVED and (u := _unwritable(p)):
+            why = u
         elif apply and row.record.get("preserved"):
             found = remote_check(row.record["preserved"], p)
             plan["stored"][found.state] += 1
@@ -879,19 +1050,24 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         deletions += 1
         if not apply:
             used -= row.bytes
-            iused -= row.files
+            iused -= row.files + row.dirs
             pct = fullness()
-            acts.append(Action(row, "delete", "would delete: " + _why_deletable(row.record, None), round(pct, 2)))
+            acts.append(Action(row, "delete", "would delete: " + _why_deletable(row, None), round(pct, 2)))
             plan["freed_bytes"] += row.bytes
             continue
         err = _delete(root, p)
         total, used, _ = usage(root)
         itotal, iused = inodes(root) if inodes else (0, 0)
         pct = fullness()
-        acts.append(Action(row, "delete", "deleted: " + _why_deletable(row.record, found), round(pct, 2), err, found and found.state))
+        acts.append(Action(row, "delete", "deleted: " + _why_deletable(row, found), round(pct, 2), err, found and found.state))
         if not err:
             plan["freed_bytes"] += row.bytes
+    for a in acts + skips:
+        if a.row.source == UNPRESERVED and not (apply and a.action == "delete" and not a.error):
+            a.reason += f"; {keeping(root / a.row.path)}"
     plan["actions"] = [a.doc(t) for a in acts + skips]
+    plan["unpreserved"] = {**unpreserved_runs(plan["actions"]),
+                           "deleted": unpreserved_runs([a for a in plan["actions"] if a["action"] == "delete" and not a["error"]])["expired"]}
     plan["pct_after"] = round(pct, 2)
     return plan
 
@@ -904,7 +1080,8 @@ def _handle(owner: Any) -> str:
 
 
 def beneath(path: Path, root: Path) -> list[Found]:
-    """Every record strictly beneath `path`: each sidecar's, and the implicit record of each preserved `.custody` marker without one.
+    """Every record strictly beneath `path`: each sidecar's, and the implicit record of each preserved `.custody` marker without one
+    (an unpreserved run has no record beneath a recorded path or another run's directory, `_unpreserved`).
     Symlinks are never followed; OSError when a directory can't be read."""
     p = Path(path)
     if not p.is_dir() or p.is_symlink():
@@ -1048,7 +1225,7 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
             if os.path.ismount(p):
                 raise RecordError(f"{p} is a mount point")
             errors: list[str] = []
-            act["bytes"], act["files"], _ = measure(p, errors)
+            act["bytes"], act["files"], _, _ = measure(p, errors)
             if errors:
                 raise RecordError(f"can't read all of it ({errors[0]}), so what it holds is unknown")
             top, below = _covering(p, root)
@@ -1109,7 +1286,21 @@ def _row_line(d: dict[str, Any]) -> str:
         return f"{d['state'].upper():<9} {_size(d['bytes']):>10}  {'-':<22} {'-':<20} {'-':<8} {'-':<16} {'-':<5}  {path}{tail}"
     return (f"{'EXPIRED' if d['expired'] else 'recorded':<9} {_size(d['bytes']):>10}  {str(d['owner'])[:22]:<22} "
             f"{str(d['expires'] or 'never'):<20} {d['priority']:<8} {_short(d['preserved']):<16} {'yes' if d['regenerable'] else 'no':<5}  "
-            f"{path}" + (" (implicit: .custody)" if d["source"] == "custody" else "") + (f"  [{len(d['nested'])} nested]" if d["nested"] else ""))
+            f"{path}" + (f" (implicit: {IMPLICIT[d['source']]})" if d["source"] in IMPLICIT else "")
+            + (f"  [{len(d['nested'])} nested]" if d["nested"] else ""))
+
+
+def _apart(rows: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """`rows` without the unpreserved runs, and those: the report and gc print them after every other path, under UNPRESERVED_HEAD."""
+    return [d for d in rows if d["source"] != UNPRESERVED], [d for d in rows if d["source"] == UNPRESERVED]
+
+
+def _counted(c: dict[str, int]) -> str:
+    return f"{c['paths']} run(s), {_size(c['bytes'])}, {c['inodes']} inode(s)"
+
+
+def _unread(c: dict[str, int]) -> str:
+    return f"; {_counted(c)} with no record, since what decides it can't be read" if c["paths"] else ""
 
 
 def keep_main(argv: list[str]) -> int:
@@ -1198,6 +1389,9 @@ def _show(argv: list[str]) -> int:
     doc = dict(found.record)
     if found.source == "custody":
         doc["implicit"] = str(found.path / CU.MARKER)
+    elif found.source == UNPRESERVED:
+        doc["implicit"] = IMPLICIT[UNPRESERVED]
+        print(f"research keep show: {keeping(found.path)}", file=sys.stderr)
     print(json.dumps(doc, indent=2))
     return 0
 
@@ -1224,12 +1418,21 @@ def main(argv: list[str]) -> int:
         print(f"research retention report: {rep['root']} on {rep['node']} at {rep['now']}; filesystem {_size(fs['used'])} of "
               f"{_size(fs['total'])} used ({fs['pct']}%)")
         print(f"{'state':<9} {'size':>10}  {'owner':<22} {'expires':<20} {'priority':<8} {'preserved':<16} {'regen':<5}  path")
-        for d in rep["rows"]:
+        rows, runs = _apart(rep["rows"])
+        for d in rows:
             print(_row_line(d))
+        if runs:
+            print(UNPRESERVED_HEAD)
+            for d in runs:
+                print(_row_line(d))
         tt = rep["totals"]
         print("totals: " + ", ".join(f"{k} {_size(v['bytes'])} in {v['paths']}" for k, v in tt.items() if k != "collectable" and v["paths"])
               + f"; collectable when the disk is full (expired, low or normal, preserved or regenerable): {_size(tt['collectable']['bytes'])} "
                 f"in {tt['collectable']['paths']}")
+        if runs:
+            print(f"unpreserved runs, counted in the totals above: {_counted(rep['unpreserved']['expired'])} expired, which `research "
+                  f"retention gc --unpreserved-runs` takes when the disk is full; {_counted(rep['unpreserved']['recorded'])} not yet expired"
+                  + _unread(rep["unpreserved"]["invalid"]))
         for e in rep["errors"]:
             print(f"error: {e}", file=sys.stderr)
         return 0
@@ -1247,6 +1450,9 @@ def main(argv: list[str]) -> int:
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
                         "stored copy (default $RESEARCH_STORE or ~/.research/store; on a node, the node's: /workspace/research/store)")
+        ap.add_argument("--unpreserved-runs", action="store_true", help="take the unpreserved runs too: ended runs that custody did not "
+                        f"preserve, each directory its run's only copy, expired {UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its "
+                        "last write. Without it they are listed, apart, and left")
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read. Exit 1 "
                         "when a deletion failed or a stored copy could not be asked about")
@@ -1261,7 +1467,7 @@ def main(argv: list[str]) -> int:
         try:
             plan = gc(ns.root, policy=ns.policy, high_pct=ns.high_pct, low_pct=ns.low_pct, force=ns.force, apply=ns.apply,
                       now=utc_now, usage=disk_usage, remote_check=store_check(ns.store, utc_now), in_use=JobScripts(jobs, ns.root),
-                      inodes=inode_usage, max_paths=ns.max_paths or None)
+                      inodes=inode_usage, max_paths=ns.max_paths or None, unpreserved=ns.unpreserved_runs)
         except ValueError as e:
             print(f"research retention gc: {e}", file=sys.stderr)
             return 2
@@ -1276,15 +1482,29 @@ def main(argv: list[str]) -> int:
             print(f"{head}, not over {ns.high_pct:g}%: nothing to do (--force acts anyway)")
             return 0
         print(f"{head} (acts over {ns.high_pct:g}%{', forced' if ns.force else ''}; deletes until under {ns.low_pct:g}%)")
-        for a in plan["actions"]:
+        def line(a: dict[str, Any]) -> str:
             verb = "DELETE" if a["action"] == "delete" and not a["error"] else "FAILED" if a["error"] else "skip"
             tail = f"  -> {a['pct_after']}%" if a["pct_after"] is not None else ""
             path = f"{a['path']}/* (unrecorded rest)" if a["rest"] else a["path"]
-            print(f"{verb:<7} {_size(a['bytes']):>10}  {path}  {a['reason']}{tail}" + (f"  ERROR {a['error']}" if a["error"] else ""))
+            return f"{verb:<7} {_size(a['bytes']):>10}  {path}  {a['reason']}{tail}" + (f"  ERROR {a['error']}" if a["error"] else "")
+
+        rows, runs = _apart(plan["actions"])
+        for a in rows:
+            print(line(a))
+        if runs:
+            print(UNPRESERVED_HEAD)
+            for a in runs:
+                print(line(a))
         n = sum(1 for a in plan["actions"] if a["action"] == "delete" and not a["error"])
         print(f"{'deleted' if ns.apply else 'would delete'} {n} path(s), {_size(plan['freed_bytes'])}: {plan['pct_before']}% -> "
               f"{plan['pct_after']}%" + ("" if ns.apply else "; nothing was deleted") + (f"; {len(failed)} deletion(s) failed" if failed else "")
               + (f"; {plan['capped']} more path(s) left for the next pass (--max-paths {ns.max_paths})" if plan["capped"] else ""))
+        if runs:
+            u = plan["unpreserved"]
+            took = (f"of which this pass {'deleted' if ns.apply else 'would delete'} {_counted(u['deleted'])}" if ns.unpreserved_runs
+                    else "none of which goes without --unpreserved-runs")
+            print(f"unpreserved runs, of the paths above: {_counted(u['expired'])} expired, {took}; {_counted(u['recorded'])} not yet expired"
+                  + _unread(u["invalid"]))
         if ns.apply:
             count = lambda states: ", ".join(f"{plan['stored'][k]} {k}" for k in states)  # noqa: E731
             print(f"stored copies of the preserved paths it asked about: {count(COLLECTED)} (deleted); {count(STORED[len(COLLECTED):])} (kept)"
@@ -1337,5 +1557,6 @@ def main(argv: list[str]) -> int:
 
 
 __all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "MAX_PATHS", "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA",
-           "SIDECAR", "STORED", "RecordError", "Stored", "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
-           "sidecar", "store_check", "target", "write"]
+           "SIDECAR", "STORED", "UNPRESERVED", "UNPRESERVED_RUN_EXPIRY", "RecordError", "Stored", "beside", "check", "covers", "find", "gc",
+           "implicit", "keep", "keep_main", "keeping", "load", "main", "problems", "record_at", "report", "scan", "sidecar", "store_check",
+           "target", "unpreserved_runs", "write"]
