@@ -382,7 +382,7 @@ CASES |= {f"{'async' if asy else 'sync'}-draft{k}{'-prefix-cache' if cache else 
 # a token budget under the running rows' (the budget cuts a row's drafts, and leaves a request out of a step); and a
 # light load of short outputs, where the engine goes quiet and a request arrives after a schedule with no tokens
 CASES |= {
-    "sync-draft1-tight": (_draft(1, False, seqs=16, budget=9, blocks=40), _DRAFT | dict(rate=60.0, output=(1, 60))),
+    "sync-draft1-tight": (_draft(1, False, seqs=8, budget=9, blocks=40), _DRAFT | dict(rate=60.0, output=(1, 60))),
     "sync-draft5-tight": (_draft(5, False, budget=32), _DRAFT | dict(rate=60.0, output=(1, 60))),
     "async-draft3-prefix-cache-tight": (_draft(3, True, True, budget=32, blocks=48),
                                         _DRAFT | dict(rate=60.0, output=(1, 60)) | _SHARED),
