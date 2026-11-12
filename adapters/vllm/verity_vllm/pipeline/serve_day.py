@@ -21,6 +21,12 @@ the one circuit it serves that day in the deployment's registration log, and eve
   entry or of the challenger device's signed one, so both paths name it alike. Before an R is named the window's Commit
   record, its ``program`` must be the day's (`Day.refusal`): the server's own guard, the window's visible refusal. What counts is R2's (sampled proofs' ``R2-declared``, which the audit
   runs with the day and the log's declarations).
+* **The registered compiler.** The log registers B once, as an information entry's item of kind ``builder``. The run
+  knows its compiler where it binds its advice (`advice.write`), so that is where `register_compiler` registers the
+  item, in the log the run's `FILE` names, before any advice is bound: under the log's lock, appended only once core's
+  check accepts the log with it, and only to the log that holds the run's declaration. A log that already registers the
+  same item is read again, unchanged; one that registers another compiler refuses this one by core's name,
+  ``duplicate-information``, and the run binds no advice under a compiler its log doesn't register.
 
 Without ``--day`` nothing here runs, and every byte the server writes is as before.
 """
@@ -30,7 +36,8 @@ import fcntl
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -153,21 +160,12 @@ def append(path: Path, declaration: G.Declaration, params: tuple[str, S.Auditor]
     day's `Day`. A log that already declares the day the same circuit is read again, unchanged. `registration.Refused`
     when the check refuses it (``duplicate-declaration`` for another circuit that day), ValueError for a log that isn't
     one or isn't ``params``' composite."""
-    with open(path.with_name(path.name + ".lock"), "a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        composite, log = _read(path, params)
-        auditor = params[1] if params is not None else S.Auditor()
-        try:
-            G.check(auditor, composite, log)
-        except G.Refused as e:
-            raise ValueError(f"the log as it stands is refused, {e} (its site entries need --day-params' auditor)") from None
+    with _held(path, params) as (composite, log, auditor):
         same = [e for e in log if isinstance(e, G.Declaration) and e.day == declaration.day
                 and (e.program, e.blocks) == (declaration.program, declaration.blocks)]
         if same:
             return Day(same[0], named(same[0]), G.head(composite, log), path, "earlier")
-        entry = G.chain(composite, [*log, declaration])[-1]
-        G.check(auditor, composite, [*log, entry])
-        _write(path, G.committed(composite, [*log, entry]))
+        entry = _chained(path, composite, log, auditor, declaration)
         return Day(entry, named(entry), entry.digest(), path, "now")
 
 
@@ -176,6 +174,95 @@ def named(entry: G.Declaration) -> str:
     and blocks alone, which R2 rebuilds alike from the prover's log and from the challenger device's signed entry. The log's
     own chained entry (its ``previous`` set) is the log's, not what a window names."""
     return G.Declaration(entry.day, entry.program, entry.blocks).digest()
+
+
+@dataclass(frozen=True)
+class Item:
+    """An information item as the log registers it: the item, the log's head, and whether this call registered it
+    (``now``) or the log held it already (``earlier``)."""
+
+    item: Mapping[str, Any]
+    head: str
+    log: Path
+    registered: str
+
+    def describe(self) -> dict[str, Any]:
+        return {"item": dict(self.item), "log": str(self.log), "head": self.head, "registered": self.registered}
+
+
+def register(path: Path, item: Mapping[str, Any], params: tuple[str, S.Auditor] | None = None,
+             declaration: str | None = None) -> Item:
+    """``item`` (an information entry's, as `registration.item_of` decodes it) registered in the log at ``path``, in an
+    information entry of its own appended once core's check accepts the log with it, under the log's lock. A log that
+    already registers the same item is read again, unchanged. Given ``declaration`` (the digest a window names a day's
+    by, `named`), only a log that holds it takes the item. ValueError for a log that isn't there, isn't one, isn't
+    ``params``' composite or doesn't hold ``declaration``, and, naming core's refusal (``duplicate-information``), for
+    one that registers another item under this one's key (`registration.item_key`): the log registers each once."""
+    item = G.item_of(dict(item))
+    if not path.exists():
+        raise ValueError("no log there")
+    with _held(path, params) as (composite, log, auditor):
+        if declaration is not None and declaration not in {named(e) for e in log if isinstance(e, G.Declaration)}:
+            raise ValueError(f"the log holds no declaration {declaration[:16]}…")
+        key = G.item_key(item)
+        held = [dict(i) for e in log if isinstance(e, G.Information) for i in e.items if G.item_key(i) == key]
+        if held == [item]:
+            return Item(item, G.head(composite, log), path, "earlier")
+        try:
+            entry = _chained(path, composite, log, auditor, G.Information((item,)))
+        except G.Refused as e:
+            was = f": it registers {json.dumps(held[0], sort_keys=True)} already, and registers each item once" if held else ""
+            raise ValueError(f"the log refuses the item, {e}{was}") from None
+        return Item(item, entry.digest(), path, "now")
+
+
+def register_compiler(run: Path, item: Mapping[str, Any], log: str | os.PathLike | None = None,
+                      params: str | os.PathLike | None = None) -> Item | None:
+    """B's item (kind ``builder``) registered in the log the serve run ``run`` declared its day in (module docstring):
+    the log its `FILE` names, or ``log``, a copy of it, held to the declaration `FILE` names, under ``params`` (the
+    log's parameters, as ``--day-params``). None for a run that declared no day and is given no ``log``: nothing is
+    registered. ValueError, naming the log, where it isn't the run's or refuses the item (`register`)."""
+    file = Path(run) / FILE
+    if not file.exists():
+        if log is None and params is None:
+            return None
+        raise ValueError(f"--day-log and --day-params go with a run that declared a day (serve-openai --day), and "
+                         f"{run} holds no {FILE}")
+    try:
+        day = json.loads(file.read_text())
+        path, declaration = Path(log if log is not None else day["log"]), str(day["declaration"])
+        got = G.params_of(json.loads(Path(params).read_text())) if params is not None else None
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"the run's {FILE} and --day-params: {type(e).__name__}: {e}") from None
+    try:
+        return register(path, item, got, declaration)
+    except (OSError, ValueError) as e:
+        raise ValueError(f"the registration log {path} (the run's {FILE} names day {day.get('day')}'s declaration "
+                         f"{declaration[:16]}… in it; --day-log gives a copy of it): {e}") from None
+
+
+@contextmanager
+def _held(path: Path, params: tuple[str, S.Auditor] | None) -> Iterator[tuple[str, list[G.Entry], S.Auditor]]:
+    """The log at ``path`` under its exclusive lock, read and held to core's check as it stands: its composite, its
+    entries and the auditor it is checked under (``params``', else an empty one)."""
+    with open(path.with_name(path.name + ".lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        composite, log = _read(path, params)
+        auditor = params[1] if params is not None else S.Auditor()
+        try:
+            G.check(auditor, composite, log)
+        except G.Refused as e:
+            raise ValueError(f"the log as it stands is refused, {e} (its site entries need --day-params' auditor)") from None
+        yield composite, log, auditor
+
+
+def _chained(path: Path, composite: str, log: list[G.Entry], auditor: S.Auditor, entry: G.Entry) -> G.Entry:
+    """``entry`` chained after ``log`` and the log written with it, once core's check accepts the log with it:
+    `registration.Refused` otherwise, and nothing written."""
+    entry = G.chain(composite, [*log, entry])[-1]
+    G.check(auditor, composite, [*log, entry])
+    _write(path, G.committed(composite, [*log, entry]))
+    return entry
 
 
 def _read(path: Path, params: tuple[str, S.Auditor] | None) -> tuple[str, list[G.Entry]]:
@@ -195,4 +282,4 @@ def _write(path: Path, body: bytes) -> None:
     os.replace(tmp, path)
 
 
-__all__ = ["FILE", "Day", "DayOptions", "append", "declare", "named", "refusal"]
+__all__ = ["FILE", "Day", "DayOptions", "Item", "append", "declare", "named", "refusal", "register", "register_compiler"]
