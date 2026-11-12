@@ -99,7 +99,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list[
                                 run_chain(steps, MM("linear", name, run, x, layer.weight(name), maps=(lambda t: t.float(),)))
                         for i in range(0, len(cal_in), B):
                             layer.forward(cal_in[i:i + B], cos_c, sin_c, collect=collect_h)
-                    del cal_in
+                    del cal_in, collect_h  # the collector's defaults hold the layer, its cache and its calibration
                     ntok = cal.shape[0] * cal.shape[1]
                     calib["H"] = {k: v * (2 / ntok) for k, v in H.items()}
             new_ref = torch.empty_like(ref)
