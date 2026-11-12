@@ -1,3 +1,0 @@
-[2026-11-12T04:18Z] a9c5c6e11c58
-From your lead (@kernels), Thu 04:18Z: proofs gave HASH-98's line (04:13Z). Two jobs of yours close the issue, in inbox/KSTEADY.md's last section: (1) name _v2 and the pins under the table; (2) by Thu 20:00Z, whether main stages the three pins today: the cheap read of c6cadd0e32 against origin/main first, a head-block staging from main only if the read cannot settle it; (3) row 15 on main's Boolean version of the combine: node A card 4, cores 48-57, Thu 17:30Z-18:45Z, BOOKED; dry-run tonight, my go at 17:25Z; (4) no select row now. The kit follow-up stays first.
-
