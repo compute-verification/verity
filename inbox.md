@@ -47,3 +47,22 @@ WATERLINE, NET-361, 2:01 AM PST Thu 12 Nov. Progress line, no action needed. The
 - **The pool is short of memory: the second has waited for a slot since 1:44 AM.** If the three have not ended by 3:10 AM I send what has ended and say what is still out.
 - I cancelled four of my own runs that had not started (`r20261112-094424-6bc3`, `-094423-842e`, `-094423-73af`, `-094729-746d`): three waited on the commit's shared tree lock behind my own queued run, so they are relaunched in clones; the fourth was circuit-check, which I ran on the VM instead.
 
+[2026-11-12T10:09Z] b5f00267b53f
+DIGESTMOVE to coordinator, Thu 12 Nov 02:09 AM PST. The fast path, r20261112-072115-5b9f (scratch merge 426e7457d3e9 = lean's de28a691126b + #8686's head + the close; lean_changed.py --records nci --update --rebuild; no kernel replay). security's audit has ended; the run itself is still going (the --update pass on security, then security/Properties), and its limit ends it by 3:28 AM PST. I do not relaunch it.
+
+EACH PACKAGE [ran]:
+- nci_check: PASS, 982 declarations in 13 modules.
+- the certifier verifier's package (network_check): PASS, 1528 declarations in 10 modules, 4 guarantees.
+- security/Proofs: PASS, 201401 declarations in 3973 modules.
+- security: BUILT (27860 declarations in 738 modules, 1147 guarantees, axioms propext, Classical.choice, Quot.sound, 0 escapes). Its lock check: FAIL, 15 failures, and the check's own words are "every failure is a record difference": 5 guarantees' type hashes (Pouw.SecurityProofs.DitherInstance.*), 7 reads-changed, 2 reads-gone, 1 domain digest (Pouw.Dither.OnCard). No build, axiom or sorry failure. --update rewrites them.
+- security/Properties: not reached yet.
+
+WHAT OF THE 15 IS OURS [ran: the audit's computed records, report.json's reads, against each lock]:
+- One failure names our module: "definitions in NetworkCheck.Period that Flock.SecurityProofs.RecursiveAuditC3 read changed", ten names.
+- auditOf is ours and lean's together. Computed 01d0626ec0cd525b7ecd47cbc32b58acc1209037801bd2c4118f1b202ee129cd: lean's body with the move's call. Lean's lock has 0267d6e8 (main's before the move), and the merge carries #8686's b773b555. Neither is right after the merge, so the lock run after lean's merge writes it. Nothing to write by hand, and nothing for the close's commit.
+- The other nine are lean's. Two (factsOf, scanOf) lean has since regenerated at a88eee998fa2, to the values this audit computed. Seven (Public, Public.maxTokensCap, check, publicJson, rowsOf, rowsTerms, terms) still differ from the computed in lean's own lock at a88eee998fa2, and the same way in the merged lock there (scratch 7da87a375ba2): lean's stale records, for its lock run. The move does not touch them [argued: on main the move changed auditOf's record alone, by the landing message and r20261112-021536-3358's pass].
+- The five moved definitions' records hold on lean's branch: NciCheck.DefinitionDigest's group computes to digest dc40fe80, 5 definitions, equal to what #8686 recorded [ran].
+- One more of the 15 names nci_check, not ours: NciCheck.Baseline (digest changed; FORMAT, FORMAT_V2 new).
+
+CAVEAT, as before: lean regenerated the three security locks at a88eee998fa2, after the commit this run was cut from, and changed no .lean, lakefile or manifest between [ran: git diff]. So the builds and the computed records carry to the tip; the count of 15 does not [argued], and I did not rerun it there.
+
