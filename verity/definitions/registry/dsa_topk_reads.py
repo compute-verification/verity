@@ -31,6 +31,20 @@ and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, eac
 So where every ok is 1, kv[j] is the row the table holds at the mask's j-th member: today's long row's kv when the table holds
 the history (`DsaButterflyRowsPad_v1` over the counted mask's settings), which the definitions' tests hold it to.  `values` is
 the index units' twin.
+
+`DsaPositionsMerge_v1` is one traced circuit, so its description is every gate of it.  ``DsaPositionsMerge_v2{M,K}`` is the
+same function written as Calls, with `_v1`'s signature and its ANDs: a block's kept list is a batch of `DsaPositionsKeep_v1`
+over its slots, on the bits of `DsaRowValid_v2{K}`; each stage of its shift is a batch of `DsaPositionsShift_v1` over the
+slots that have one the stage's distance below and one of `DsaPositionsShiftIn_v1` over the rest; the offsets are
+`DsaPositionsFirstOffset_v1{K}` and `DsaPositionsOffset_v1{K}`; and the lists are XORed a gate a bit.  Its description is those
+rows and the pieces: with K it grows by a row for each bit of K (a stage of the shift, a level of `DsaRowValid_v2{K}`'s trie).
+
+`DsaMaskPositions_v1` is Calls, but its tags (`DsaButterflyTagBits_v1`) and its count (`DsaTopKPopCount_v1`) are traced and
+its positions are a constant a bit.  ``DsaMaskPositions_v2{N,AT,K}`` is the same function with `_v1`'s signature: the tags
+and the count are one tree of counts written as Calls (`boolean_dsa_topk_mask.DsaButterflyTagsCount_v1`), and the positions
+AT .. AT+N-1 are runs of 2^L that start at a multiple of 2^L, each `DsaPositionWord_v1{L,HI}` over the indices of
+`DsaIndexBits_v1{L}`, which are those of L - 1 bits twice with a bit after each (`DsaBitAppend_v1`).  The cut names the
+`_v1` units; a `_v2` serves only a caller that binds it.
 """
 from __future__ import annotations
 
@@ -47,6 +61,7 @@ from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_dsa_topk_mask as BM
 from verity.definitions.registry import dsa_topk_mask as M
 from verity.definitions.registry import dsa_topk_mask_cut as X
+from verity.definitions.registry.boolean_dsa import own_gates
 from verity.definitions.registry.dsa_topk import check_statics
 
 BIT = BL.BIT
@@ -98,6 +113,62 @@ DsaMaskPositions = CompositeDefinition(
         "count")
 
 
+def _bit_append(S):
+    """`DsaBitAppend_v1{W}`: a row of W bits and one more after them (no gate)."""
+    return lambda C, x, b: [[*x, b[0]]]
+
+
+def _position_word(S):
+    """`DsaPositionWord_v1{L,HI}`: the position HI 2^L + i (u32) of an index i of L bits (no gate)."""
+    return lambda C, i: [[*i, *const_bits(S.HI, 32 - S.L)]]
+
+
+def _index_bits(B, S, zero, one):
+    """`DsaIndexBits_v1{L}`: the indices 0 .. 2^L - 1, L bits each LSB first, from the two constant bits: those of L - 1
+    bits twice, a 0 after each and then a 1 (`DsaBitAppend_v1`, a batch each)."""
+    if S.L == 1:
+        return Coll(Array(2, Array(1, BIT)), concat([zero.refs, one.refs]))
+    low = B.call(bind(DsaIndexBits, L=S.L - 1), zero, one)
+    return Coll(Array(1 << S.L, Array(S.L, BIT)),
+                concat([B.batch(bind(DsaBitAppend, W=S.L - 1), low, b, axes=(0, None)).refs for b in (zero, one)]))
+
+
+def _positions_of(B, N: int, AT: int) -> Coll:
+    """The positions AT .. AT+N-1 (u32 each) from the constant bits: the block in runs of 2^L positions that start at a
+    multiple of 2^L, each a batch of `DsaPositionWord_v1` over `DsaIndexBits_v1{L}`, and a run of one position its bits."""
+    zero, one = B.call(BL.constant(0)), B.call(BL.constant(1))
+    parts, a, end = [], AT, AT + N
+    while a < end:
+        L = min((a & -a).bit_length() - 1 if a else 31, (end - a).bit_length() - 1)
+        if L:
+            parts.append(B.batch(bind(DsaPositionWord, L=L, HI=a >> L), B.call(bind(DsaIndexBits, L=L), zero, one), axes=(0,)).refs)
+        else:
+            parts.append(concat([(one if a >> i & 1 else zero).refs for i in range(32)]))
+        a += 1 << L
+    return Coll(Array(N, Array(1, I32)), concat(parts))
+
+
+def _positions_calls(B, S, mask):
+    """`DsaMaskPositions_v2{N,AT,K}`: `DsaMaskPositions_v1` with each traced part written as Calls: the tags of
+    `DsaButterflySettings_v2{N,K}` and the count are one tree of counts (`DsaButterflyTagsCount_v1{N,K}`), the switches are
+    set from those tags as that Definition sets them (`dsa_topk_mask.settings` of `DsaButterflyCtl_v1`), and the positions
+    are `_positions_of`'s runs and not a constant a bit."""
+    mask, kb = X.low(mask, S.N), M.rank_bits(S.K)
+    tags = B.call(bind(BM.DsaButterflyTagsCount, N=S.N, K=S.K), mask)
+    n = S.N * (1 + kb)
+    sw = M.settings(B, S.N, S.K, BM._tag(S.K), Coll(Array(S.N, BM._tag(S.K)), tags.refs.slice(0, n)), B.call(BL.constant(0)),
+                    lambda t, two: bind(BM.DsaButterflyCtl, T=t, KB=kb, TWO=int(two)))
+    pos = B.call(bind(BM.DsaButterflyRowsV2, N=S.N, K=S.K, W=1, E=32), sw, _positions_of(B, S.N, S.AT))
+    return tuple_of(Coll(Array(S.K, I32), pos.refs), Coll(I32, tags.refs.slice(n, n + 32)))
+
+
+def _clamp(C, x, K: int) -> list:
+    """min(x, K) in K.bit_length() bits, x an unsigned word."""
+    RB = K.bit_length()
+    below = sub(C, x, const_bits(K, len(x)), len(x))[1]
+    return mux(C, below, (list(x) + [ZERO] * RB)[:RB], const_bits(K, RB))
+
+
 def _merge(S):
     """`DsaPositionsMerge_v1{M,K}` (pos_0..pos_{M-1}, count_0..count_{M-1}) -> Array<K, I32>: block b's list pos_b,
     its slots s < min(count_b, K) kept (`DsaRowValid_v1{K}`'s trie over count_b) and the rest 0, shifted up by
@@ -107,8 +178,7 @@ def _merge(S):
     kept = BM._row_valid(SimpleNamespace(N=S.K))
 
     def clamp(C, x):
-        below = sub(C, x, const_bits(S.K, len(x)), len(x))[1]
-        return mux(C, below, (list(x) + [ZERO] * RB)[:RB], const_bits(S.K, RB))
+        return _clamp(C, x, S.K)
 
     def build(C, *els):
         pos, counts = els[:S.M * S.K], els[S.M * S.K:]
@@ -146,6 +216,97 @@ DsaPositionsMerge = EW.specialized(
     "DsaPositionsMerge", 1, ["M", "K"], _merge, _merge_sig, doc=_merge.__doc__, refuse=_refuse_merge,
     conformance="exact-model-tested: held to merge, the blocks' lists one after another, by the definitions' "
                 "test_dsa_topk_reads.py")
+
+
+# --- the merge as Calls ------------------------------------------------------------------------------------------------------
+
+def _piece(name: str, statics: Sequence[str], build, signature, doc: str) -> CompositeDefinition:
+    """``name_v1{statics}``, a piece of the merge written as Calls: ``build`` traced per binding (`EW.specialized`); Flock lowers
+    an activation by its own gates (`boolean_dsa.own_gates`)."""
+    d = EW.specialized(name, 1, statics, build, signature, doc=doc)
+    d.build = own_gates(d)  # type: ignore[attr-defined]
+    return d
+
+
+def _offsets(S) -> Array:
+    return Array(S.K.bit_length(), BIT)
+
+
+def _next_offset(C, off, count, K: int) -> list:
+    """min(off + min(count, K), K), the merge's offset past one more block."""
+    return [_clamp(C, add(C, off, _clamp(C, count, K), width=K.bit_length() + 1), K)]
+
+
+DsaPositionsKeep = _piece(
+    "DsaPositionsKeep", (), lambda S: lambda C, k, w: [[C.AND(k[0], b) for b in w]], lambda S: ((("k", BIT), ("w", I32)), I32),
+    "a slot of a block's list where its keep bit k is 1, else 0: one bit of DsaRowValid_v2{K} over the block's count")
+DsaPositionsShift = _piece(
+    "DsaPositionsShift", (), lambda S: lambda C, s, a, w: [mux(C, s[0], a, w)],
+    lambda S: ((("s", BIT), ("a", I32), ("w", I32)), I32),
+    "a slot past one stage of the merge's barrel shifter: a, the slot the stage's distance below, where the offset's bit s is "
+    "1, else w, the slot itself")
+DsaPositionsShiftIn = _piece(
+    "DsaPositionsShiftIn", (), lambda S: lambda C, s, w: [mux(C, s[0], [ZERO] * 32, w)], lambda S: ((("s", BIT), ("w", I32)), I32),
+    "DsaPositionsShift_v1 at a slot with none the stage's distance below: 0 where the offset's bit s is 1, else w")
+DsaPositionsFirstOffset = _piece(
+    "DsaPositionsFirstOffset", ("K",), lambda S: lambda C, count: _next_offset(C, [ZERO] * S.K.bit_length(), count, S.K),
+    lambda S: ((("count", I32),), _offsets(S)), "the merge's offset past its first block: min(count, K)")
+DsaPositionsOffset = _piece(
+    "DsaPositionsOffset", ("K",), lambda S: lambda C, off, count: _next_offset(C, off, count, S.K),
+    lambda S: ((("off", _offsets(S)), ("count", I32)), _offsets(S)),
+    "the merge's offset past one more block: min(off + min(count, K), K)")
+
+
+DsaBitAppend = _piece("DsaBitAppend", ["W"], _bit_append, lambda S: ((("x", Array(S.W, BIT)), ("b", BIT)), Array(S.W + 1, BIT)),
+                      _bit_append.__doc__)
+DsaPositionWord = _piece("DsaPositionWord", ["L", "HI"], _position_word, lambda S: ((("i", Array(S.L, BIT)),), I32),
+                         _position_word.__doc__)
+DsaIndexBits = CompositeDefinition("DsaIndexBits", 1, ("L",),
+                                   lambda S: ((("zero", BIT), ("one", BIT)), Array(1 << S.L, Array(S.L, BIT))), _index_bits,
+                                   doc=_index_bits.__doc__, conformance="protocol-defined")
+DsaMaskPositionsV2 = CompositeDefinition(
+    "DsaMaskPositions", 2, ("N", "AT", "K"),
+    lambda S: ((("mask", X.words(S.N)),), Tuple(Array(S.K, I32), I32)), _positions_calls,
+    conformance="exact-model-tested: held to DsaMaskPositions_v1 and to the index units' twin by "
+                "adapters/vllm/tests/program/test_dsa_long_row_calls.py",
+    refuse=_refuse_positions, doc=_positions_calls.__doc__)
+
+
+def _merge_calls(B, S, *ports):
+    """`DsaPositionsMerge_v1{M,K}`'s function as Calls, a row of them a step of `_merge`: a block's keep bits are
+    `DsaRowValid_v2{K}` of its count and its kept list a batch of `DsaPositionsKeep_v1` over the K slots; stage i of its
+    shift is a batch of `DsaPositionsShift_v1` over the slots 2^i and up, each on the slot 2^i below it, and one of
+    `DsaPositionsShiftIn_v1` over the slots below 2^i, both on bit i of the offset; the lists are XORed a bit a gate; and the
+    offset past each block is `DsaPositionsFirstOffset_v1{K}` and then `DsaPositionsOffset_v1{K}`."""
+    pos, counts = ports[:S.M], ports[S.M:]
+    K = S.K
+
+    def words(refs, n: int = K) -> Coll:
+        return Coll(Array(n, I32), refs)
+    out = off = None
+    for b in range(S.M):
+        x = B.batch(DsaPositionsKeep, B.call(bind(BM.DsaRowValidV2, N=K), counts[b]), pos[b], axes=(0, 0))
+        if out is None:
+            out = x
+        else:
+            for i in range(K.bit_length()):
+                d, s = min(1 << i, K), Coll(BIT, off.refs.slice(i, i + 1))
+                parts = [B.batch(DsaPositionsShiftIn, s, words(x.refs.slice(0, 32 * d), d), axes=(None, 0)).refs]
+                if d < K:
+                    parts.append(B.batch(DsaPositionsShift, s, words(x.refs.slice(0, 32 * (K - d)), K - d),
+                                         words(x.refs.slice(32 * d, 32 * K), K - d), axes=(None, 0, 0)).refs)
+                x = words(concat(parts))
+            out = words(B.batch(BL.XOR, Coll(Array(2, Array(32 * K, BIT)), concat([out.refs, x.refs])), axes=(1,)).refs)
+        if b + 1 < S.M:
+            off = (B.call(bind(DsaPositionsFirstOffset, K=K), counts[b]) if off is None
+                   else B.call(bind(DsaPositionsOffset, K=K), off, counts[b]))
+    return out
+
+
+DsaPositionsMergeV2 = CompositeDefinition(
+    "DsaPositionsMerge", 2, ("M", "K"), _merge_sig, _merge_calls, refuse=_refuse_merge, doc=_merge.__doc__,
+    conformance="exact-model-tested: held to merge and to DsaPositionsMerge_v1, whose ANDs it has count for count, by "
+                "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _select(C, rows: list[list], idx: list) -> list:
@@ -293,7 +454,9 @@ DsaTopKReadRows = CompositeDefinition(
         "ascending, from the table of root and domain (DsaMaskPositions_v1 a block of index_block(N, TOPK, BLOCK) keys, "
         "DsaPositionsMerge_v1), ok[j] read j's verdict")
 
-DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlot, DsaTopKReadRows]
+DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPositionsSlot, DsaTopKReadRows, DsaPositionsKeep,
+                  DsaPositionsShift, DsaPositionsShiftIn, DsaPositionsFirstOffset, DsaPositionsOffset, DsaPositionsMergeV2,
+                  DsaBitAppend, DsaPositionWord, DsaIndexBits, DsaMaskPositionsV2]
 
 
 def cut(t) -> list[tuple[Any, int]]:

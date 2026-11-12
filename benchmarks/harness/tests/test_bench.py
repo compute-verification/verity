@@ -18,7 +18,7 @@ import pytest
 
 from verity_config import Admission
 
-from verity_bench import jobs
+from verity_bench import jobs, steady_spec
 from verity_bench.cli import _parser, main
 from verity_bench.vllm.arms import Arm, resolve_arms
 from verity_bench.vllm.presets import (
@@ -146,6 +146,9 @@ def test_every_toml_spec_strictly_loads():
     loaded = []
     for path in sorted(SPEC_ROOT.glob("*.toml")):
         if path.name == "pyproject.toml":   # the specs' own suite
+            continue
+        if steady_spec.is_steady(path):
+            assert steady_spec.load_spec(path).id == path.stem
             continue
         first = path.read_text().splitlines()[0]
         loaded.append(load_sweep(path.stem) if "vllm-sweep/v0" in first else load_spec(path))
