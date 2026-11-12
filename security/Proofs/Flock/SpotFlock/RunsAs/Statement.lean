@@ -163,14 +163,24 @@ def SessionsAccept (h : Held) (H : Msg → Msg) (ss : Array Json) (m₂ : Msg) (
 
 /-! ## The coins -/
 
-/-- **The play's coins start with the bytes the run read**: round 0's coin's bytes start with the challenger's bytes
-the first stage holds (`i.source`), and the second stage's coins', coin by coin, with the interior's (`it.source`).
-What follows is never read: each stage's select read only a prefix of its bytes. `RunCoinsFromDevice` says the bytes
-read are the device's coins released after the boundary record's digest and after the interior record's, or a
+/-- **`ξ'` starts with `ξ`'s first `R` bytes.** -/
+structure AgreesTo (ξ ξ' : ByteArray) (R : ℕ) : Prop where
+  size_le : R ≤ ξ'.size
+  extract_eq : ξ'.extract 0 R = ξ.extract 0 R
+
+/-- **The play's coins carry the bytes the run's samples read**: where the first stage, on the bytes the run holds
+(`i.source`), reads `read` bytes, round 0's coin's bytes start with those `read` bytes; and where the second stage, on
+the interior's bytes (`it.source`), reads `read` bytes, the second stage's coins' bytes, coin by coin, start with
+those. These are the bytes `Run.coinsHold` holds to the challenger's released coins; a sample reads no other byte
+(`select_read`, `selectSecond_read`), and nothing about the rest of a coin is assumed. `RunCoinsFromDevice` says the
+bytes read are the device's coins released after the boundary record's digest and after the interior record's, or a
 break. -/
 def PlayCoins (h : Held) (i : Spot.Run.Input) (it : Spot.Run.Interior) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
     Prop :=
-  (∃ t, src c₀ = i.source ++ t) ∧ ∃ t, stageSrc c₁ = it.source ++ t
+  (∀ draw proved read, Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
+      h.reg.first.closure i.source = .ok (draw, proved, read) → AgreesTo i.source (src c₀) read) ∧
+    ∀ draw read, Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks it.source = .ok (draw, read) →
+      AgreesTo it.source (stageSrc c₁) read
 
 /-- **`b` is the start of `ξ`.** -/
 def Starts (b ξ : ByteArray) : Prop := b.size ≤ ξ.size ∧ ξ.extract 0 b.size = b

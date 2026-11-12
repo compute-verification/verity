@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.RunsAs.Samples
+public import Proofs.Flock.SpotFlock.RunsAs.Released
 public import Proofs.Flock.SpotFlock.RunsAs.Proved
 
 /-!
@@ -8,8 +8,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Proved
 
 `spotRunAcceptsPlay` assembles the parts. The accepted run's steps (part 5, `accepted_steps`) give the first stage's
 select, the second stage's and round 2's check with no code. The held copies agree with what the run reads
-(`HeldMatches`), so the model's replay sample on round 0's coin is the select's units (part 1, `sample_pad`), which are
-the units the draw proves (`proved_select`), and the model's second draw is the run's (part 2, `secondDraw_pad`). What
+(`HeldMatches`), so the model's replay sample on round 0's coin is the select's units (part 1, `sample_read`), which are
+the units the draw proves (`proved_select`), and the model's second draw is the run's (part 2, `secondDraw_read`). What
 the verifier holds is the model's (`OwnAgrees`), round 2 had statements (`statements_some`), and round 2's check gives
 the model's statement check (part 3, `RoundTwo`). The sessions accept (`SessionsAccept`), so the play accepts on its
 coins (part 4, `accepts_seqCoins`). The clauses round 2 does not make are the statement's premises.
@@ -73,7 +73,6 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
   intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm htwo hnd hrec hnone hx hm₁ hr2 hsa hpc
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, hns, hids, hks, hss, -, hstrata, hcodes⟩ := accepted_steps ha
-  obtain ⟨⟨t₀, ht₀⟩, ⟨t₁, ht₁⟩⟩ := hpc
   obtain ⟨n, rule, law, workTable', resolved', -, -, -, ht', hres', hreg⟩ := hm.first
   have hwt : workTable' = workTable := Except.ok.inj (ht'.symm.trans ht)
   have hrs : resolved' = resolved := Except.ok.inj (hres'.symm.trans hres)
@@ -82,9 +81,8 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
       h.reg.first.closure i.source = .ok (draw, rest, read) := by
     rw [hreg]
     exact hsel
-  have hsample : h.reg.sample (src c₀) = rest := by
-    rw [ht₀]
-    exact sample_pad t₀ (by rw [hreg]; exact hcl) hsel'
+  have hsample : h.reg.sample (src c₀) = rest :=
+    sample_read (by rw [hreg]; exact hcl) hsel' (hpc.1 _ _ _ hsel')
   have hsel0 := hsel
   rw [hcl] at hsel0
   have hproved : (Spot.Draw.proved draw).map Int.toNat = rest := proved_select (resolve_ne_all hrule hres) hsel0
@@ -96,10 +94,10 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
   subst hid
   rw [← hns'] at hks'
   have hks'' : ks = h.reg.ks := Except.ok.inj (hks.symm.trans hks')
-  have hsd : secondDraw h c₀ c₁ = some draw₂ := by
-    apply secondDraw_pad h c₀ c₁ t₁ _ ht₁
+  have hss' : Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks it.source = .ok (draw₂, read₂) := by
     rw [hsample, ← hproved, ← hns', ← hks'']
     exact hss
+  have hsd : secondDraw h c₀ c₁ = some draw₂ := secondDraw_read h c₀ c₁ hss' (hpc.2 _ _ hss')
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
     unfold OwnAgrees core runOwn ownOf
