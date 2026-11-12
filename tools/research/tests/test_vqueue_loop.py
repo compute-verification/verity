@@ -939,20 +939,24 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
     assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and loop.tick() == []
 
 
-#: `research data export` as a script: each call's arguments appended to `<script>.calls`; while `<script>.fail` exists it
-#: fails, naming each id as one no source holds, as the export prints it
+#: `research data export` as a script: each call's arguments appended to `<script>.calls`.  It sends every id it is named
+#: but those `<script>.fail` lists, each printed as one no source holds, and those `<script>.upload` lists, each an upload's
+#: error naming no id, as the export prints them; it exits 1 if any failed
 EXPORT = '''
 import json, os, sys
 with open(sys.argv[0] + ".calls", "a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
-if os.path.exists(sys.argv[0] + ".fail"):
-    for a in sys.argv[1:]:
-        if a.startswith("--id="):
-            print("ERROR  not local and not on any source: " + a[5:])
-    sys.exit(1)
+def listed(kind):
+    p = sys.argv[0] + "." + kind
+    return open(p).read().split() if os.path.exists(p) else []
+ids = [a[5:] for a in sys.argv[1:] if a.startswith("--id=")]
+bad = [("ERROR  not local and not on any source: " + x) for x in ids if x in listed("fail")]
+bad += [("ERROR  objects/sha256/" + x[4:] + ": error: AccessDenied") for x in ids if x in listed("upload")]
+print("\\n".join(bad))
+sys.exit(1 if bad else 0)
 '''
 #: fetched fixtures (their paths in no tree) and a tracked one (`small.json`, committed beside the registry)
-BASE_FX, NEW_FX, TRACKED_FX = (f"art:{c * 64}" for c in "bcd")
+BASE_FX, NEW_FX, TRACKED_FX, OTHER_FX = (f"art:{c * 64}" for c in "bcde")
 
 
 def _registry(entries: dict[str, str], **files: str) -> dict[str, str]:
@@ -1018,10 +1022,10 @@ def test_a_member_whose_fixture_s_export_failed_is_left_out_its_owner_told_once_
 
     loop = env.loop(stack)
     script = _exports(env, loop)
-    Path(f"{script}.fail").touch()
+    Path(f"{script}.fail").write_text(NEW_FX)
     exported, skip, built = loop.tick()
     assert (exported["action"], exported["ids"], exported["members"], exported["done"]) == ("fixtures", [NEW_FX], [1], False)
-    assert exported["why"] == f"`research data export` exited 1; the store holds none of {NEW_FX}", exported
+    assert exported["unsent"] == {NEW_FX: "`research data export` exited 1; the store holds none of it"}, exported
     assert (skip["action"], skip["number"], skip["heads"], skip["fixtures"], skip["done"]) == ("skip", 1, [one], [NEW_FX], True)
     (post,) = env.posts
     assert f"#1 at {one[:12]} is left out" in post and NEW_FX in post and "preflight-fixtures" in post, post
@@ -1036,6 +1040,31 @@ def test_a_member_whose_fixture_s_export_failed_is_left_out_its_owner_told_once_
     exported, last = loop.tick()
     assert (exported["done"], last["members"], last["base"], last["enqueued"]) == (True, [1], built["sha"], True), last
     assert len(_calls(script)) == 3 and len(env.posts) == 1 and len(env.graph2.enqueued()) == 2
+
+
+@pytest.mark.parametrize("how", ["fail", "upload"])
+def test_of_two_members_exported_at_once_only_the_one_whose_own_fixture_failed_is_left_out_and_its_owner_alone_told(env, how):
+    """#1 registers `NEW_FX`, whose export fails, and #2 `OTHER_FX`, whose export passes, in one call: #2 is built and
+    enqueued, #1 left out, and only #1's owner told, naming `NEW_FX` alone.  An export that names the id no source holds
+    (``fail``) is read in that one call; one whose error names no id (``upload``) is done again an id at a time."""
+    filler = {f"art:{c * 64}": f"data/{c}.bin" for c in "0123"}
+    _main_to(env, _registry({BASE_FX: "data/old.bin", **filler}))
+    one = env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/new.bin", **filler}))
+    two = env.put(2, _registry({BASE_FX: "data/old.bin", **filler, OTHER_FX: "data/other.bin"}))
+    loop = env.loop(policy)
+    loop.world.handle = lambda n: f"lane-{n}"
+    script = _exports(env, loop)
+    Path(f"{script}.{how}").write_text(NEW_FX)
+    exported, skip, built = loop.tick()
+    assert _calls(script) == [["--no-registry", f"--id={NEW_FX}", f"--id={OTHER_FX}"]] + (
+        [["--no-registry", f"--id={NEW_FX}"], ["--no-registry", f"--id={OTHER_FX}"]] if how == "upload" else [])
+    assert (exported["ids"], exported["exported"], list(exported["unsent"]), exported["members"]) \
+        == ([NEW_FX, OTHER_FX], [OTHER_FX], [NEW_FX], [1, 2]), exported
+    assert (skip["action"], skip["number"], skip["heads"], skip["fixtures"]) == ("skip", 1, [one], [NEW_FX]), skip
+    (post,) = env.posts
+    assert post.startswith("@lane-1 ") and NEW_FX in post and OTHER_FX not in post, post
+    assert (built["action"], built["members"], built["heads"], built["enqueued"]) == ("build", [2], [two], True), built
+    assert OTHER_FX in loop.world._registry(built["sha"]) and [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"]
 
 
 GRAPH2 = '''

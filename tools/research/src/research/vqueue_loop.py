@@ -215,6 +215,8 @@ EXPORT = ("sh", "-c", "set -a; . /root/.config/verity/r2.env; set +a; "
           "exec python3.12 -m research data export --store /data/infra/fixtures-export-store \"$@\"", "export")
 #: how long an export of a candidate's fixtures may take before it counts as failed (`World.export_fixtures`)
 EXPORT_S = 600
+#: how `research data export` starts each error's line on stdout (`store.cli.cmd_export`)
+EXPORT_ERROR = "ERROR  "
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
@@ -526,7 +528,7 @@ class Past:
 
     def exported(self) -> set[str]:
         """The fixtures a build's export put in the public export (`Loop._exported`)."""
-        return {x for r in self.of("fixtures") if r.get("done") for x in r.get("ids") or ()}
+        return {x for r in self.of("fixtures") for x in r.get("exported") or ()}
 
     def moved(self) -> list[tuple[dict, list[str]]]:
         """Each advance that pushed `main` and logged drive's steps after it as their own (`on_main`) with no record of them
@@ -1543,22 +1545,29 @@ class World:
             self._registries[sha] = fixture_entries(doc) if isinstance(doc, dict) else {}
         return self._registries[sha]
 
-    def export_fixtures(self, ids: list[str]) -> str | None:
+    def export_fixtures(self, ids: list[str]) -> dict[str, str]:
         """`research data export` of fixtures ``ids`` alone (``export``, then `--no-registry` and an `--id` each), stopped after
-        `EXPORT_S`: None once it exported them, else why not, which names those the store holds none of.  Its output stays
-        unread: it names the export's bucket and endpoint."""
+        `EXPORT_S`: {id: why} of each whose own export failed, {} once all were sent.  The export sends every id it can and
+        prints an error naming each one no source holds, so when those are all its errors only they failed; a multi-id export
+        failing otherwise (an upload, a crash) is done again an id at a time, and one that never ended or started fails each.
+        Only its error lines are read, never logged: the rest names the export's bucket and endpoint."""
         try:
             r = subprocess.run([*self.export, "--no-registry", *(f"--id={x}" for x in ids)], stdin=subprocess.DEVNULL,
                                capture_output=True, text=True, errors="replace", timeout=EXPORT_S)
         except subprocess.TimeoutExpired:
-            return f"`research data export` still running after {EXPORT_S} s"
+            return dict.fromkeys(ids, f"`research data export` still running after {EXPORT_S} s")
         except OSError as e:
-            return f"`research data export` didn't start ({type(e).__name__})"
+            return dict.fromkeys(ids, f"`research data export` didn't start ({type(e).__name__})")
         if not r.returncode:
-            return None
-        lost = [x for x in ids if f"{UNSOURCED}: {x}" in r.stdout]
-        return f"`research data export` exited {r.returncode}" + (
-            f"; the store holds none of {', '.join(lost)}" if lost else "")
+            return {}
+        why = f"`research data export` exited {r.returncode}"
+        errors = [x[len(EXPORT_ERROR):] for x in r.stdout.splitlines() if x.startswith(EXPORT_ERROR)]
+        lost = [x for x in ids if f"{UNSOURCED}: {x}" in errors]
+        if errors and len(lost) == len(errors):
+            return dict.fromkeys(lost, f"{why}; the store holds none of it")
+        if len(ids) > 1:
+            return {x: w for one in ids for x, w in self.export_fixtures([one]).items()}
+        return dict.fromkeys(ids, why)
 
     def main_now(self) -> str:
         """origin's `main` fetched again (into `MAIN_NOW`)."""
@@ -2485,14 +2494,14 @@ class Loop:
         done, failed, out, by = t.past.exported(), {}, {}, {p.number: p for p in prs}
         while added := [(m, ids) for m, ids in w.fixtures_added(base, merged) if ids]:
             if todo := list(dict.fromkeys(x for _, ids in added for x in ids if x not in done and x not in failed)):
-                why = w.export_fixtures(todo)
+                fails = w.export_fixtures(todo)
+                sent = [x for x in todo if x not in fails]
                 who = [m for m, ids in added if set(ids) & set(todo)]
                 recs.append(self.record(t, "fixtures", base=base, members=[m.pr for m in who], heads=[m.head for m in who],
-                                        ids=todo, why=why or "exported", done=why is None))
-                if why is None:
-                    done.update(todo)
-                else:
-                    failed.update(dict.fromkeys(todo, why))
+                                        ids=todo, exported=sent, unsent=fails, done=not fails,
+                                        why=f"{len(fails)} of {len(todo)} failed" if fails else "exported"))
+                done.update(sent)
+                failed.update(fails)
             held = {m.pr: Skip(by[m.pr], f"it registers {', '.join(bad)}, which the public export doesn't hold and whose "
                                          f"export failed: {failed[bad[0]]}", fixtures=tuple(bad))
                     for m, ids in added if (bad := [x for x in ids if x in failed])}
