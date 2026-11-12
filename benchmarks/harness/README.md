@@ -360,9 +360,6 @@ is the run's own gates, never a protocol's security verdict: its status is `pass
 the whole guard, and its detail says in the gates' own words what passed or failed. A result holds one run's measurements,
 one a name, and one validation.
 
-`kit.SHARED` is the five measurement names each resource's front door writes: `metric`, `verified`, `capacity`, `free`
-and `error`. A protocol's own name for its error (`delta_s`, `eps`) goes in that measurement's `inputs`.
-
 ## Out of scope here
 
 Kernel-level timing, meaning whether a timed CUDA loop measures what it claims (opcodes in the loop, bank conflicts, live

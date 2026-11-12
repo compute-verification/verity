@@ -59,8 +59,6 @@ OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejec
 #: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
 #: result with no validation)
 VALIDATION_STATUSES = ("passed", "failed")
-#: the measurement names each resource's front door writes; a protocol's name for its error (`delta_s`, `eps`) goes in `inputs`
-SHARED = ("metric", "verified", "capacity", "free", "error")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------

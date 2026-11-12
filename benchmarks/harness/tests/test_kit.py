@@ -364,10 +364,6 @@ def test_the_writer_refuses_what_isnt_a_measurement_of_this_run(tmp_path, no_gpu
         assert (other / kit.RESULT).read_text() == text
 
 
-def test_the_shared_measurement_names_are_these_five_in_this_order():
-    assert kit.SHARED == ("metric", "verified", "capacity", "free", "error")
-
-
 def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():
     from verity_bench import overhead
 
