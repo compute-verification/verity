@@ -83,6 +83,18 @@ mark to its certificate through that opening (`CertifiedMark.refusal`). The dige
 certificate opens as a record's or a clock's, or either of those as a mark's, only on a SHA-512 collision.
 `Issuer.mark` is the signing step alone: the execution phase is its caller's to give.
 
+**A certificate's bytes** (`Certificate.encode`, its inverse `Certificate.decode`) are its one serialization, every
+field fixed-width or length-prefixed:
+
+    u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖ u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖
+    signed digest (64) ‖ u32be len(signature) ‖ signature
+
+They are the bytes a certified record's leaf ends with, after its head and its salt (`service.encode`), where the Lean
+reads them (`NetworkCheck.Check`'s commitment). `encode` refuses a certificate the layout cannot hold, and `decode`
+bytes that end inside a part, a length that names more bytes than are left, bytes left after the signature, a
+direction code other than 0 and 1 and a link that is not UTF-8. So a certificate has one encoding and an encoding one
+certificate, and SHA-512 of these bytes names a certificate up to a collision.
+
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
@@ -451,6 +463,65 @@ class Certificate:
     window: int
     digest: bytes
     signature: bytes
+
+    def encode(self) -> bytes:
+        """The certificate's bytes, its one serialization: u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖
+        u8 direction (0 egress, 1 ingress) ‖ u64be execution phase ‖ signed digest (64) ‖ u32be len(signature) ‖
+        signature. Raises `ValueError` on a certificate the layout cannot hold: a field of another type, a key id,
+        link or signature too long for its length, an execution phase that is not a u64, a digest that is not 64
+        bytes."""
+        if not (type(self.key_id) is bytes and type(self.link) is str and type(self.direction) is Direction
+                and type(self.digest) is bytes and type(self.signature) is bytes):
+            raise ValueError("a certificate's key id, digest and signature are bytes, its link a string and its "
+                             "direction a Direction")
+        if len(self.digest) != DIGEST_BYTES:
+            raise ValueError(f"a certificate's digest is {DIGEST_BYTES} bytes, not {len(self.digest)}")
+        return b"".join([
+            _u(len(self.key_id), 2, "len(I)"), self.key_id, _text(self.link, "link"),
+            _u(self.direction.code, 1, "direction"), _u(self.window, 8, "a certificate's execution phase"),
+            self.digest, _u(len(self.signature), 4, "len(signature)"), self.signature])
+
+    @classmethod
+    def decode(cls, data: bytes) -> Certificate:
+        """The certificate whose bytes `data` is, `encode`'s inverse. Raises `ValueError`, saying which, on bytes that
+        end inside a fixed-width part (a short buffer), on a length that names more bytes than are left (a length that
+        does not fit), on bytes left after the signature (trailing bytes), on a direction code other than 0 and 1, on
+        a link that is not UTF-8 and on anything that is not bytes."""
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise ValueError(f"a certificate's bytes are bytes, not a {type(data).__name__}")
+        data, at = bytes(data), 0
+
+        def fixed(n: int, what: str) -> bytes:
+            nonlocal at
+            if len(data) - at < n:
+                raise ValueError(f"a certificate's bytes end inside its {what}: it is {n} bytes from offset {at}, and "
+                                 f"{len(data) - at} are left")
+            at += n
+            return data[at - n:at]
+
+        def sized(width: int, what: str) -> bytes:
+            nonlocal at
+            n = int.from_bytes(fixed(width, f"{what}'s length"), "big")
+            if len(data) - at < n:
+                raise ValueError(f"a certificate's {what} does not fit: it is {n} bytes by its length, and "
+                                 f"{len(data) - at} are left")
+            at += n
+            return data[at - n:at]
+
+        key_id = sized(2, "key id")
+        try:
+            link = sized(2, "link").decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("a certificate's link is not UTF-8") from None
+        code = fixed(1, "direction")[0]
+        if code > 1:
+            raise ValueError(f"a certificate's direction code is 0 or 1, not {code}")
+        window = int.from_bytes(fixed(8, "execution phase"), "big")
+        digest = fixed(DIGEST_BYTES, "digest")
+        signature = sized(4, "signature")
+        if at != len(data):
+            raise ValueError(f"{len(data) - at} bytes are left after a certificate's signature")
+        return cls(key_id, link, (Direction.EGRESS, Direction.INGRESS)[code], window, digest, signature)
 
     def message(self, session: bytes) -> bytes:
         """The message the certificate signs in certifier session ``session``."""
