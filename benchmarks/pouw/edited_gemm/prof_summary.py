@@ -33,7 +33,7 @@ def main(out: str) -> None:
         for k, v in arms.items():
             print(f"| {k} | {v:.4f} | {v / p:.3f} | {mhz[k]:.0f} |")
 
-        def g(k: str) -> float:
+        def g(k: str, arms: dict = arms) -> float:
             return arms.get(k, float("nan"))
 
         parts = [

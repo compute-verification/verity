@@ -41,10 +41,15 @@ def _thread_args(V, W, b, c, U, z, ks, ctid):
     """Thread ``ctid``'s `PouwCallCheck_v1` operand and coin ports (receipt rows are V's, columns W's)."""
     warp, lane = divmod(ctid, 32)
     wm, wn, g, q = warp // 4, warp % 4, lane >> 2, lane & 3
-    enc = lambda a: (np.asarray(a) & 0xFF).tolist()  # noqa: E731
     rows = [32 * wm + g + 8 * r for r in range(4)]
     cols = [32 * wn + 2 * q + 8 * (k >> 1) + (k & 1) for k in range(8)]
-    seg = lambda M, i, s: M[i, 32 * s:32 * s + 32].tolist()  # noqa: E731
+
+    def enc(a) -> list:
+        return (np.asarray(a) & 0xFF).tolist()
+
+    def seg(M, i: int, s: int) -> list:
+        return M[i, 32 * s:32 * s + 32].tolist()
+
     return ([enc(V[64 * (wm // 2):64 * (wm // 2) + 64, 32 * s:32 * s + 32]) for s in range(ks)],
             [int(i == 8 * (wm % 2) + g) for i in range(16)],
             [[seg(b, i, s) for i in rows] for s in range(ks)],

@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+__all__ = ["stage"]
+
 
 def stage(kind: str, k: int, r: int, c: int, scratch: Path, tree: Path) -> Any:
     """``kind``'s `UnitStager` at K on the R x C leaf, its circuit written under ``scratch``, with whatever staging this process

@@ -3,13 +3,8 @@ small circuit) and the guard at the smallest shape the H1 tile takes."""
 from __future__ import annotations
 
 import hashlib
-import sys
-from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import run
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import ONE, Circuit
