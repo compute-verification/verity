@@ -4,16 +4,20 @@ from __future__ import annotations
 
 from collections import deque
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.binder import (
     KERNEL_BLOCK_SIZES, Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
 )
-from verity_vllm.protocols.remote_bandwidth.interface import Append  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.interface import Append
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 

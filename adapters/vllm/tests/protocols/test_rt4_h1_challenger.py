@@ -28,25 +28,29 @@ import socket
 import threading
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.spot.device import challenger as LC  # noqa: E402
-from verity.protocols.spot.device import remote as R  # noqa: E402
-from verity.protocols.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.spot.device import challenger as LC
+from verity.protocols.spot.device import remote as R
+from verity.protocols.spot.device.challenger import LiveCommitment, record_message
+from verity.commitments.crypto import lms
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols import test_pouw_h1 as T  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols import test_pouw_h1 as T
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -670,7 +674,9 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     window = ledger.window(root)
     assert window["open"]["session"] == sid and window["open"]["seq"] == 8
     assert window["open"]["body"]["host"] == f"vy-challenger-1.{sid}" and window["end"]["body"]["complete"] is True
-    fetch = lambda s: SMOKE / s if (SMOKE / s).is_dir() else None  # noqa: E731
+
+    def fetch(s):
+        return SMOKE / s if (SMOKE / s).is_dir() else None
     given = {"session": sid, "seq": 8, "root": root, "commitment": commitment}
     assert PHC.held(given, ledger, root) == (None, window)
     smoke = {"coin_source": "challenger", "session": given}
