@@ -22,4 +22,4 @@ where another package reads one. `BlockClass`, `BlockJudgment`, `RULES` and `sha
 `RUNNER_PATH`, `mro_names`, `runtime_tree_of` and `runtime_tree_from_paths` of `runtime_tree`; `ServedRequest` and
 `ServedTokens` of `served_tokens`; `WeightsRegistration` of `weights_registration`; `SCHEMA`, `Workload` and
 `WorkloadSampling` of `workload`; `RecordError` of `fields`; and every constant of `schema_ids`. Each module but
-`boundary_commit`, `required_manifest` and `schema_ids` lists its names in `__all__`.
+`boundary_commit` and `schema_ids` lists its names in `__all__`.

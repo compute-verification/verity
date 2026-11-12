@@ -71,3 +71,38 @@ def test_read_program_dir_through_the_stream(tmp_path):
     assert table is not None and dg == digest and problem and "correspondence_digest" in problem
     (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d"}}))
     assert RC.read_program_dir(str(tmp_path)) == (None, None, None)
+
+
+def test_the_plain_descriptor_is_read_where_no_gzipped_one_is(tmp_path):
+    desc = descriptor(3)
+    doc, digest = desc["annotations"][RC.NAMESPACE], RC.correspondence_digest(desc)
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d", "correspondence_digest": digest}}))
+    (tmp_path / "descriptor.json").write_text(json.dumps(desc))
+    assert RC.read_program_document(str(tmp_path)) == (doc, digest, None)
+    table, dg, problem = RC.read_program_dir(str(tmp_path))
+    assert problem is None and dg == digest and table is not None and table.doc == doc
+    other = descriptor(5)                                                          # beside a gzipped descriptor the plain one is not read
+    with gzip.open(tmp_path / "descriptor.json.gz", "wt") as f:
+        json.dump(other, f)
+    got, dg, problem = RC.read_program_document(str(tmp_path))
+    assert got == other["annotations"][RC.NAMESPACE] and dg == RC.correspondence_digest(other) != digest
+    assert problem and "correspondence_digest" in problem                          # the result records the plain one's digest
+
+
+def test_a_program_dir_with_no_descriptor_or_no_record_in_it(tmp_path):
+    assert RC.read_program_document(str(tmp_path)) == (None, None, None)           # nothing beside it: no record, and no problem
+    assert RC.read_program_dir(str(tmp_path)) == (None, None, None)
+    bare = tmp_path / "bare"                                                       # a descriptor that carries no record, and no result
+    bare.mkdir()
+    (bare / "descriptor.json").write_text(json.dumps({"schema": "x", "annotations": {"node_hints": {}}}))
+    assert RC.read_program_document(str(bare)) == (None, None, None)
+    # a result that records the record's digest is a problem where no descriptor is beside it, and where the descriptor carries no record
+    recorded = json.dumps({"program": {"digest": "d", "correspondence_digest": "0" * 64}})
+    (tmp_path / "result.json").write_text(recorded)
+    problem = f"{tmp_path}: result.json records a correspondence_digest but no descriptor is beside it"
+    assert RC.read_program_document(str(tmp_path)) == (None, None, problem)
+    assert RC.read_program_dir(str(tmp_path)) == (None, None, problem)
+    (bare / "result.json").write_text(recorded)
+    doc, digest, problem = RC.read_program_document(str(bare))
+    assert doc is None and digest is None
+    assert problem == f"{bare}: result.json records a correspondence_digest but the descriptor carries no {RC.NAMESPACE!r} annotation"

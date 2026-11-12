@@ -14,7 +14,7 @@ from verity_vllm.acquire import plan as PL
 from verity_vllm.acquire.sources import router_softmax_source as S
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -127,10 +127,10 @@ def test_the_plan_anchors_the_tap_on_the_moe_module():
     mod = next(x["moe_module"] for x in man["identities"] if x["family"] == RS.FAMILY)
     rt = runtime_tree_from_paths({"": ["M"], mod: ["FusedMoE"]}, buffers=[], runner={"sample": True}, source="synthetic")
     (v,) = [v for v in PL.value_classes(man) if v.family == RS.FAMILY]
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(rt, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
     assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", "moe/L1", RS.MEMBER)] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and "is not a module of the runtime tree" in refused[0]["why"]
 
 

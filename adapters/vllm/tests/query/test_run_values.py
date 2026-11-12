@@ -17,7 +17,7 @@ from verity.definitions.registry import prims
 
 from verity_vllm.acquire import plan as PL
 from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
+    AcquireCorrespondence,
     runtime_tree_from_paths,
 )
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -140,8 +140,8 @@ def test_the_plan_anchors_one_value_class_per_layer_on_its_readers_module():
     (v,) = [v for v in PL.value_classes(m) if v.family == fmt.RUN_FAMILY]
     assert (v.op_path, v.output_member, v.identities, v.anchor) == (ATTN, "*", 2, ATTN)
     rt = runtime_tree_from_paths({"": ["M"], ATTN: ["DeepseekV32Attention"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(rt, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(rt, wrapper_prefix="", aliases={}))
     assert [(s.kind, s.module, s.slot) for s in legal] == [("native_tap", ATTN, "*")] and not refused
     gone = runtime_tree_from_paths({"": ["M"]}, buffers=[], runner={"sample": True}, source="synthetic")
-    legal, refused = PL.sites_of(v, AnnotationCorrespondence(gone, wrapper_prefix="", aliases={}))
+    legal, refused = PL.sites_of(v, AcquireCorrespondence(gone, wrapper_prefix="", aliases={}))
     assert not legal and "is not a module of the runtime tree" in refused[0]["why"]

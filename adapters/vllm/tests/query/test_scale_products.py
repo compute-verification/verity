@@ -17,7 +17,7 @@ from verity.definitions import word as W_
 from verity.definitions.numerics import fp8_twins
 from verity.definitions.registry import fp8
 
-from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
+from tests.check.test_sampled_replay_fp8 import INTER, G, H, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from verity_vllm.acquire import plan
 from verity_vllm.check import oracle_compare as OC
@@ -80,7 +80,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     inst = fp8_program(True)
     off, on = _v2_manifest(inst, taps=()), _v2_manifest(inst, taps=(SP.POLICY,))
     rows = [x for x in on["identities"] if x["family"] == SP.FAMILY]
-    dn, gu = (H // G) * (I // G), (2 * I // G) * (H // G)
+    dn, gu = (H // G) * (INTER // G), (2 * INTER // G) * (H // G)
     assert [(x["step"], x["op_path"], x["rows"], x["width"]) for x in rows] == [
         (0, DN, 2, dn), (0, GU, 2, gu), (1, DN, 1, dn), (1, GU, 1, gu), (2, DN, 1, dn), (2, GU, 1, gu)]
     assert all(x["output_member"] == SP.MEMBER and x["dtype"] == "f32" and x["element_range"] == [0, x["rows"] * x["width"]]
@@ -91,7 +91,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     assert strip(on) == strip(off) and on["complete"]
     assert SP.policy_of(on) and not SP.policy_of(off)
     assert on["query"]["scale_products"]["words"] == 4 * (dn + gu) and on["query"]["required_families"][-1] == SP.FAMILY
-    assert SP.manifest_sites(on) == {GU: {"n_blocks": 2 * I // G, "k_blocks": H // G}, DN: {"n_blocks": H // G, "k_blocks": I // G}}
+    assert SP.manifest_sites(on) == {GU: {"n_blocks": 2 * INTER // G, "k_blocks": H // G}, DN: {"n_blocks": H // G, "k_blocks": INTER // G}}
 
 
 def test_a_program_without_the_shared_tile_is_unchanged():
