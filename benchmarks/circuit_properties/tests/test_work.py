@@ -435,6 +435,50 @@ def test_an_update_by_a_stated_zero_leaves_a_weight_thetas():
     assert g.weight == (True, True) and cancel.N == (T - 1) * K * N and cancel.left_out["theta"] == K * N
 
 
+#: a score row is D words, so that P V^T is paid (D ≥ K*)
+LIN_S = bind(RP.LinearRef, K=K, N=D, DT="f32", BIAS=False)
+LIN_P = bind(RP.LinearRef, K=D, N=K, DT="f32", BIAS=False)
+LIN_A = bind(RP.LinearRef, K=K, N=PN, DT="f32", BIAS=False)
+SOFTMAX = bind(RP.SoftmaxRef, N=D, DT="f32")
+S_T, V_T = Array(D, F32), Array(K, Array(D, F32))
+
+
+def _attention_loop() -> Program:
+    """Each iteration looks up PN rows of the carried table by its tokens, each times the carried g (so a block pays
+    for its words), scores them by the carried W1 under a causal mask, and multiplies each score row's softmax P by the carried V1 and V2: O1 = P V1^T and O2 = P V2^T are
+    specific, so O1 Wo^T is a token-indexed product of an activation by a weight and O1 O2^T one of two activations.
+    Wo is updated by the sum of O1's rows over the positions, as a gradient is; the others by an input."""
+    def step(B, c, tok, z, zn):
+        table, g, w1, v1, v2, wo = c
+        rows = _mul(B, Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)])), g)
+        s = B.batch(LIN_S, rows, w1, axes=(0, None))
+        mask = concat([B.call(const(32, 0 if j <= p else 0xFF800000)).refs for p in range(PN) for j in range(D)])
+        flat = Array(PN * D, F32)
+        h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
+        p_ = B.batch(SOFTMAX, h, axes=(0,))
+        o1, o2 = (B.batch(LIN_P, p_, v, axes=(0, None)) for v in (v1, v2))
+        y = concat([B.batch(LIN, o1, wo, axes=(0, None)).refs, B.batch(LIN_A, o1, o2, axes=(0, None)).refs])
+        new = (_add(B, table, z), _add(B, g, z), _add(B, w1, z), _add(B, v1, zn), _add(B, v2, zn),
+               _add(B, wo, _add(B, o1[0], o1[1])))
+        return new, Coll(Array(PN * (N + PN), F32), y)
+
+    return _loop("Attention", (("table", TABLE_T), ("g", X_T), ("w1", Array(D, X_T)), ("v1", V_T), ("v2", V_T), ("wo", W_T)),
+                 (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN * (N + PN), F32), step)
+
+
+def test_a_token_indexed_product_is_charged_at_keep_and_two_activations_are_left_out():
+    """O1 Wo^T is charged, its MACs at `keep` in the bound's N, Wo a weight though a sum over the positions reaches it;
+    O1 O2^T is left out as two activations, whose dims allow a sequence of PN; the products of P and of the gathered
+    rows are left out as gathered."""
+    w = WK.read(_attention_loop(), KB)
+    (g,) = w.groups
+    macs = (T - 1) * PN * K * N
+    assert g.weight == (False, True) and w.N == macs and w.keep == 1 - WK.SHARED_PREFIX / PN
+    assert WK.bound(w, C).N == pytest.approx(w.keep * macs)
+    assert w.left_out == {"theta": PN * K * (3 * D + N + PN), "gathered": 3 * (T - 1) * PN * K * D, "self": 0,
+                          "activations": (T - 1) * PN * K * PN}
+
+
 def test_clique():
     tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
     assert WK.clique(tri) == 3
