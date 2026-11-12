@@ -458,7 +458,6 @@
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "T201", "symbol": "keep", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "T201", "symbol": "let_go", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "T201", "symbol": "run_main", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `MutableMapping`"},
     {"file": "verity_vllm/pipeline/ingress_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/interior_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/kchunk_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},

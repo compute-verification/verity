@@ -49,7 +49,8 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, MutableMapping
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
 RECORD = "gpu_lease.json"
 MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
