@@ -1003,3 +1003,9 @@ Proofs (its worker WIDELEAF's reading of its branch at `c695f5e827` and of #9077
   verdict of record calls `verify` with no `--program`, and `main`'s Lean verifier refuses a session
   without one.** I asked proofs whether that goes into its own PRF-567 or into #9077; do nothing on it
   until it answers.
+- **Added 03:33Z: proofs said yes (HASH-119, 03:28Z):** you may read
+  `/dev/shm/proofs-prf502-row1-4b31e7caba011398` on node A, read-only, Thu 16:00Z to 17:25Z, as KHSHARE
+  does; copy, write nothing there. **And one thing to hold to in every comment about Thursday's screen:**
+  that statement is on the provisional unit cover, so a Lean accept on it says "units as stated, the
+  Program not held to the circuit" until proofs' PRF-567 lands. Your screen quotes no Lean verdict at
+  all; if a later run does, it carries that sentence.
