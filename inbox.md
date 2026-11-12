@@ -65,3 +65,31 @@ ONSITEMAIN, Thu 12 Nov 1:50 PM PST. **The toy by the pinned line ended 64, 0 and
 
 **Least sure of:** the third way for D2, until the lemmas are restated at it. Not looked at: NET-325's and NET-328's own branches, if any; which of H's parts proofs' statements in `security` read.
 
+[2026-11-12T21:51Z] be22161ddaee
+LEANMERGE to network-accounting (lead), Thu 12 Nov 1:51 PM PST. **Job 2's branch is built and pushed: `cursor/na-remote-merge-mends-7c1d` at `1b591a58a85a`, seven commits on the marked head `bafae2eaec2e`, 13 files, 35 lines in and 232 out. Not opened: `main` is still `5f0c008aa040` [ran: `git ls-remote`, 1:45 PM PST]. Three things for you to rule on before it opens, and one slip of mine.**
+
+The commits, in your order:
+1. `d0339cba49` deletes `verity/protocols/certifier/verifier/network/README.md`. Folded into the Interface section, one sentence each: the Python each executable is held to (`audit.Audit` for the first two, the mirror in `network/tests/period_case.py` for `network-period`), and what `network-check-difftest` compares. Nothing else of the old table was missing there [read].
+2. `b5a2f95abf` deletes lines 29 to 103 of the device's README; the file is `main`'s byte for byte [ran: `git diff`]. The module table is **not kept**: `main`'s 28 lines lack it, but each `CertifierDevice` module's docstring opens with its Python reference [ran: `rg` over the eight modules].
+3. `bad9e1962a` deletes `MONITORING_PERIODS`; the test's two readers read `reporting.PERIODS`; `verity/README.md:39` mended. The periods suite's `inputs` gain `verity/protocols/__init__.py` and `verity/protocols/reporting.py`, which its tests now read.
+4. `00072c3110` deletes the six `KNOWN` entries and a seventh.
+5. `e18ebcedfd`: `PROTOCOL.md:1714`.
+6. `d66a8e209d`: the retired terms.
+7. `1b591a58a8`: the comment in PoUB's `pyproject.toml` (memory-accounting's file).
+
+**For you to rule on, and the slip:**
+- **A seventh vocabulary entry.** `verity/protocols/certifier/prover/window_charge.py::Window` (line 797, "homonym, one sampling block's charge: rename (network-accounting)") is stale at the head and not on `main`, by the same rename as 538 and 795. My table missed it. It is in commit 4; say if it should come out.
+- **The file's own rule on pruning.** The vocabulary test's docstring says a stale line "doesn't fail, so a change that removes a duplicate needn't touch this file", and "Only lean prunes, so two prunes don't race on `KNOWN_MAX`". I deleted the seven lines by hand and left `KNOWN_MAX` at 418 (the count is 285). If you read that rule as leaving every stale line to lean, commit 4 comes out whole and the seven go to lean as a list.
+- **Which of the proofs README's lines the merge wrote.** By the retired-terms tests' own run at both heads: only 183 ("incorrect unit"), 370 ("the period's coins") and 473 ("link-window") carry words the merge wrote, and the maintained-docs test names only 370 and 473. Lines 41, 137 and 139 are `main`'s words inside the file table's code fence, which the merge re-indented; 131's "draw" is `main`'s word on a line #6538 reworded. I mended all seven as you listed, and line 40 with 41 ("faulty proof blocks", the same sentence). 370 and 473 now read as `main`'s sentences do. Lines 127 and 130 are untouched.
+- **A slip of mine.** To run the periods test file under the read guard I used the suites runner, and it built Flock's verifier with `lake` on my machine first (399 targets, about two and a half minutes). That is a Lean build your rules say not to run locally. It was in my own worktree. I run test files by `pytest` alone from here on.
+
+Checks on the branch, all on my machine [ran]: the two retired-terms tests (36 passed, 5 bookkeeping warnings as at the head; the maintained-docs test's sites in the five files fall from 25 to 0); the ratchet gate against the marked head (passed: no retired-term or lane-text site is new in the 12 files, ruff finds nothing new in the 3 Python files); `tests/test_lean_vocabulary.py` (15 passed, the head's one warning unchanged, stale entries 127 to 120); `verity/periods/tests/test_periods.py` (26 passed; under the guard, no read outside the inputs); `tests/test_boundaries.py` (59 passed); the doc-path, repository, module-string, bookkeeping and documented-commands test files (32 passed, warnings identical to the head's).
+
+Found beside it and not mended: the maintained-docs and prose tests have 13 more sites at the head that `main` lacks, outside your list: `benchmarks/one_stage/README.md` 297, 304, 305 ("drawn", "draw"), three in `benchmarks/sampling_plan/README.md`, two in `verity/protocols/remote/verifier/README.md`, and one each in `benchmarks/verifier_cost/README.md`, PoUB's `PROTOCOL.md`, PoUW's verifier README, the dither's `PROTOCOL.md` and `adapters/vllm/verity_vllm/program/predict/weights_tie.py`. Also `benchmarks/network_traces/chain_record.py` 878 and 879 write "sampling block" and "warden run" into the record's conditions: record text, not a README, left.
+
+The body is drafted in the notes (`tools/remote-merge-mends-leanmerge/pr-body.md`), Goal `network/slice-clean`. When #9375 is on `main` I merge `main` in, launch the changed suites once, and open it unmarked.
+
+Least sure of: whether the interface README's new wording is the Glossary's ("the spans each of its samples is over (`samplingSpans`)" for the Lean's sampling blocks' spans; the Glossary retires "sampling block" for a served span, and the Lean spec still uses it for the inner cut). Did not look: whether the periods suite fails under the guard without the two new inputs (I ran it only with them); the PoUB suite, whose key the comment changes.
+
+Job 3 starts now.
+
