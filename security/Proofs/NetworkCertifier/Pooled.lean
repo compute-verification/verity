@@ -177,9 +177,9 @@ theorem sampleUniform_val (n k : ℕ) :
 /-! ### The escapes multiply over windows on independent coins -/
 
 open FlockSoundness.Game in
-/-- **The escapes multiply**: windows whose audits, given the earlier windows' coins, accept with probability at most
-`r^(f i)`, `f i` fixed before window `i`'s coins, all accept with `Σ_i f i ≥ F` with probability at most `r^F`: the
-monitoring-period step at predictable weights. -/
+/-- **The escapes multiply**: execution phases whose audits, given the earlier phases' coins, accept with probability
+at most `r^(f i)`, `f i` fixed before phase `i`'s coins, all accept with `Σ_i f i ≥ F` with probability at most `r^F`:
+the monitoring-period step at predictable weights. -/
 theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     ∀ (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ),
       (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω') →
