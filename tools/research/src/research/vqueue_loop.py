@@ -23,7 +23,9 @@ merge trusted ones, `Landing._carried_from`, each decision logged once a head: `
 on `main`'s chain it isn't a member of (one that is reaches `main` with that candidate: it is logged once a head and
 candidate, `riding`, and nobody is told); `files` is its change against its merge base with `main`, `lean` drive's
 Lean-change test (`queue.lean_change`) of a change that compiles (a lock's alone doesn't), and `conflict` whether
-`Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
+`Queue._merge` merges it onto `main`, kept by (head, `main`); `crosses` is the heads of the move PRs, ready or in flight at
+their heads as built, whose maps retire nothing its own change names (`queue.crossed`, `World.crossing`): a batch on such a
+move may take it (`vqueue.decide`).  The owner of one that doesn't merge is told once a head the files it
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze, a move `main` landed that it lacks whose retired
@@ -211,7 +213,7 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
-from .queue import Retired, lacked_moves, lacks_why
+from .queue import Retired, crossed, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -899,9 +901,11 @@ class World:
         #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
-        #: by (head, `main`), the moves it lacks that its change names (`_lacks`); by (base, map), what a move's map retires
+        #: by (head, `main`), the moves it lacks that its change names (`_lacks`); by (where, map), what a move's map retires;
+        #: by (head, `main`, the move PRs' heads and maps), the moves in flight it crosses (`crossing`)
         self._lacked: dict[tuple[str, str], list[tuple[str, str, list[str] | None]]] = {}
         self._retires: dict[tuple[str, str], Retired | None] = {}
+        self._crossings: dict[tuple[str, str, frozenset[tuple[str, str]]], frozenset[str]] = {}
         #: each `carry.delta` judged, by its arguments (`_delta`)
         self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
@@ -1019,6 +1023,7 @@ class World:
         flags = flags_at(self.repo, main)
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
         self._lacked = {k: v for k, v in self._lacked.items() if k[1] == main}
+        self._crossings = {k: v for k, v in self._crossings.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
@@ -1281,6 +1286,22 @@ class World:
         if (key := (head, main)) not in self._lacked:
             self._lacked[key] = lacked_moves(self.repo, main, head, files, self._retires)
         return self._lacked[key]
+
+    def crossing(self, main: str, ready: list[Ready], moves: dict[str, str]) -> list[Ready]:
+        """``ready`` with each PR's `Ready.crosses`: those of ``moves`` ({a move PR's head, ready or in flight: its map's path})
+        whose map retires nothing its own change against ``main`` names (`queue.crossed`), kept by its head, ``main`` and
+        ``moves``, each map read once.  A move PR crosses none."""
+        if not moves:
+            return ready
+        rows = frozenset(moves.items())
+
+        def of(x: Ready) -> Ready:
+            if (key := (x.head, main, rows)) not in self._crossings:
+                self._crossings[key] = crossed(self.repo, main, x.head, sorted(rows), x.files, self._retires)
+            return replace(x, crosses=self._crossings[key])
+
+        with concurrent.futures.ThreadPoolExecutor(JOBS) as pool:
+            return list(pool.map(lambda x: x if x.move else of(x), ready))
 
     def _tree(self, sha: str) -> list[str]:
         """The files of ``sha``'s tree, as `_changed` names them."""
@@ -2432,6 +2453,8 @@ class Loop:
         flying = {(m, h) for c in cands if c.sha in chain for m, h in zip(c.members, c.heads) if (m, h) not in at}
         gone = w._missing(h for _, h in flying)
         left.update(taken := w.taken({(m, h) for m, h in flying if m not in w.pulled}, main))
+        ready = w.crossing(main, ready, {h: p.move for m, h in sorted(at | flying)
+                                         if (p := w.open().get(m)) is not None and p.move})
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,

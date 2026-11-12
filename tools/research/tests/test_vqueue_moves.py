@@ -21,6 +21,8 @@ from research.executor import Executor
 from test_vqueue_loop import Env, Fake, _acts, _git, _main_to, _move, env, policy  # noqa: F401 -- env is a fixture
 
 MAP = "tools/move/x_map.toml"
+#: the map `Moved` puts on `main`: `old/` moves to `new/`, and the word `oldword` becomes `newword`
+MAP_ROWS = '[words]\n"old/" = "new/"\n"oldword" = "newword"\n'
 
 
 def mv(n: int, **kw) -> Ready:
@@ -29,6 +31,11 @@ def mv(n: int, **kw) -> Ready:
 
 def sc(n: int, **kw) -> Ready:
     return replace(pr(n, f"h{n}", "tools/move/rename.py", **kw), scripts=True)
+
+
+def x(n: int, *moves: str, **kw) -> Ready:
+    """PR ``n``, whose own change names nothing the maps of the move PRs at heads ``moves`` retire (`Ready.crosses`)."""
+    return replace(pr(n, **kw), crosses=frozenset(moves))
 
 
 # ---- decide -------------------------------------------------------------------------------------------------------------------
@@ -49,7 +56,7 @@ def test_a_move_is_left_out_of_a_batch_holding_a_pr_that_changes_the_move_script
     assert b.members == (2, 3), b
 
 
-def test_nothing_is_built_above_a_move_in_flight():
+def test_nothing_that_doesnt_cross_a_move_in_flight_is_built_above_it():
     s = snap(cand("q1", MAIN, 1), ready=[pr(2)], flying=(mv(1),), depth=3)
     assert not [a for a in decide(s) if isinstance(a, Build)]
     s = snap(cand("q1", MAIN, 1), ready=[pr(2)], flying=(pr(1),), depth=3)
@@ -63,7 +70,7 @@ def test_a_move_isnt_built_above_a_pr_in_flight_that_changes_the_move_scripts_an
     assert not [a for a in decide(s) if isinstance(a, Build)]
 
 
-def test_nothing_is_built_in_the_tick_that_advances_main_to_a_move():
+def test_nothing_that_doesnt_cross_a_move_is_built_in_the_tick_that_advances_main_to_it():
     s = snap(cand("q1", MAIN, 1, state=PASS), ready=[mv(1), pr(2)], depth=3)
     acts = decide(s)
     assert Advance("q1") in acts and not [a for a in acts if isinstance(a, Build)], acts
@@ -74,7 +81,7 @@ def test_nothing_is_built_in_the_tick_that_advances_main_to_a_move():
     assert Advance("q1") in acts and Advance("q2") in acts and not [a for a in acts if isinstance(a, Build)], acts
 
 
-def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_on_it():
+def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_that_doesnt_cross_it_on_it():
     left = ((1, "h1", "its ready mark was withdrawn by lane-1"),)
     for top, above in ((mv(3), []), (pr(3), [Build((4,), "q2", 1)])):
         s = snap(cand("q1", MAIN, 1, 2), cand("q2", "q1", 3), ready=[pr(2), top, pr(4)], left=left, pulled=frozenset({1}),
@@ -83,13 +90,60 @@ def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_on
                                                                   Build((3,), "q1", 2, replaces="q2"), *above]
 
 
-def test_a_staged_batch_rebuilt_on_the_chain_holding_a_move_has_nothing_built_on_it():
+def test_a_staged_batch_rebuilt_on_the_chain_holding_a_move_has_nothing_that_doesnt_cross_it_built_on_it():
     """A passed staged batch whose Lean member isn't marked at the head it was staged at is built again without it on the
-    chain's top; holding a move, nothing is built on that rebuild, as on any candidate holding one."""
+    chain's top; holding a move, nothing that doesn't cross it is built on that rebuild, as on any candidate holding one."""
     passed = waiting("s1", MAIN, 1, 2, records=RecordsRun(PASS))
     for two, above in ((mv(2), []), (pr(2), [Build((1,), "s1", 1, records=True), Build((4,), "s1", 1)])):
         s = snap(passed, cand("c2", MAIN, 3), ready=[pr(1, "h1b", lean=True), two, pr(3), pr(4)], records=True, depth=3)
         assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), "c2", 2, replaces="s1"), *above]
+
+
+def _builds_of(acts: list) -> list[tuple[tuple[int, ...], str]]:
+    return [(a.members, a.base) for a in acts if isinstance(a, Build)]
+
+
+def test_a_batch_above_a_move_in_flight_takes_only_the_prs_that_cross_it_at_its_head_as_built_and_no_second_move():
+    """Above a candidate holding a move, ready or in flight, a batch takes the PRs whose own change names nothing the move's
+    map retires at the head it was built at (`Ready.crosses`), and no move, whatever it crosses; the rest wait for it to
+    land, higher up the chain too."""
+    for flying in ((mv(1),), ()):
+        ready = [*(() if flying else (mv(1),)), x(2, "h1"), pr(3), x(4, "h1x"), replace(mv(5), crosses=frozenset({"h1"})),
+                 x(6, "h1", "h9")]
+        s = snap(cand("q1", MAIN, 1), ready=ready, flying=flying, depth=3, batch=6)
+        assert _builds_of(decide(s)) == [((2, 6), "q1")], flying
+    s = snap(cand("q1", MAIN, 1), cand("q2", "q1", 2), ready=[mv(1), x(2, "h1"), x(3, "h1"), pr(4)], depth=3)
+    assert _builds_of(decide(s)) == [((3,), "q2")]
+
+
+def test_the_tick_that_advances_main_to_a_move_builds_on_it_only_the_prs_that_cross_it():
+    """The ready PRs were read on the `main` below the move, so those its map can't clear wait a tick for `ready` to read them
+    on the moved `main`; the ones it clears were cleared against it, and are built on it at once."""
+    s = snap(cand("q1", MAIN, 1, state=PASS), ready=[mv(1), x(2, "h1"), pr(3)], depth=3)
+    acts = decide(s)
+    assert Advance("q1") in acts and _builds_of(acts) == [((2,), "q1")], acts
+
+
+def test_a_batch_above_a_move_is_built_again_on_what_is_left_when_the_move_s_candidate_drops():
+    """A leaver below the move drops its candidate and the batch above it: the same tick builds the move again on what is
+    left and the batch above again on that, its members crossing the move, while a PR that doesn't cross it waits; with the
+    move itself taken out, the batch above goes on `main` and that PR is built on it."""
+    left = ((7, "h7", "its ready mark was withdrawn by lane-7"),)
+    s = snap(cand("q1", MAIN, 7, 1), cand("q2", "q1", 2), ready=[mv(1), x(2, "h1"), pr(3)], left=left,
+             pulled=frozenset({7}), depth=3)
+    assert [a for a in decide(s) if isinstance(a, Build)] == [Build((1,), MAIN, 3, replaces="q1"),
+                                                              Build((2,), "q1", 2, replaces="q2")]
+    left = ((1, "h1", "held (by lane-9): not yet"),)
+    s = snap(cand("q1", MAIN, 1), cand("q2", "q1", 2), ready=[x(2, "h1"), pr(3)], flying=(mv(1),), left=left,
+             pulled=frozenset({1}), depth=3)
+    assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), MAIN, 3, replaces="q2"), Build((3,), "q2", 2)]
+
+
+def test_a_staged_batch_goes_onto_a_move_on_the_chain_s_top_only_when_its_members_cross_it():
+    passed = waiting("s1", MAIN, 2, records=RecordsRun(PASS))
+    for two, commit in ((replace(lean(2), crosses=frozenset({"h1"})), [Commit("s1", "q1", 2)]), (lean(2), [])):
+        s = snap(passed, cand("q1", MAIN, 1), ready=[mv(1), two], records=True, depth=3)
+        assert [a for a in decide(s) if isinstance(a, Commit)] == commit, two
 
 
 def test_a_staged_batch_dropped_in_the_tick_that_advances_main_to_a_move_is_not_built_again_in_it():
@@ -110,7 +164,9 @@ class Moves(World):
     `tools/move/`'s scripts.  A move is certified (it lands on its mark), holds a land verdict (an uncertified one is merged
     by its head), is refused on its tip (taken on its mark alone, its build leaves it out and the loop never takes it again
     on that `main`'s refusal) or is withheld (no land verdict and its map isn't on `main`: never ready).  Its head never
-    conflicts, being only the request, unless its land verdict merges it.  `check` adds the move rules to every invariant."""
+    conflicts, being only the request, unless its land verdict merges it.  About half the PRs that are no move name nothing
+    any move's map retires (`crossing`: `Ready.crosses` holds every move's head, ready or in flight).  `check` adds the move
+    rules to every invariant."""
 
     def __init__(self, seed: int, **kw):
         super().__init__(seed, **kw)
@@ -126,28 +182,53 @@ class Moves(World):
             self.marks[m] = replace(self.marks[m], files=self.marks[m].files | {"tools/move/rename.py"}, scripts=True)
         self.left_out = {m for m, k in self.kind.items() if k == "withheld"}
         self.good -= {m for m, k in self.kind.items() if k in ("withheld", "refused")}
+        others = random.Random(f"{seed} crossing")
+        self.crossing = {m for m in sorted(set(self.marks) - set(movers)) if others.random() < 0.5}
 
     def ready(self) -> tuple[Ready, ...]:
         return tuple(r for r in super().ready() if r.number not in self.left_out)
 
-    def pool(self, s: Snapshot, acts: list, aside: bool = False) -> list[Ready]:
-        """`World.pool` without the moves while a PR in flight below a build changes the move scripts."""
-        built = {r.number: r for r in (*s.ready, *s.flying)}
-        scripts = [m for c in self.chain(s, acts) for m in c.members if built[m].scripts]
-        return [r for r in super().pool(s, acts, aside) if not (r.move and scripts)]
+    def snapshot(self) -> Snapshot:
+        s = super().snapshot()
+        moves = frozenset(r.head for r in (*s.ready, *s.flying) if r.move)
+        return replace(s, ready=tuple(replace(r, crosses=moves) if r.number in self.crossing else r for r in s.ready))
 
-    def admits(self, s: Snapshot, acts: list, where: str) -> None:
-        """`World.admits`, but a tick that advances to a candidate holding a move builds and commits nothing, and one whose
-        chain holds a move in flight, the batch its `Commit` puts there among it, builds nothing."""
+    def crosses(self, r: Ready) -> bool:
+        return not r.move and r.number in self.crossing
+
+    def moving(self, s: Snapshot, acts: list, put: bool = True) -> bool:
+        """Whether a move holds the tick's builds: one on main's chain once ``acts`` are applied (without the batches their
+        `Commit`s put there, unless ``put``), or one ``acts`` advances to."""
         built = {r.number: r for r in (*s.ready, *s.flying)}
         advancing = [m for c in s.candidates if Advance(c.sha) in acts for m in c.members]
-        flying = [m for c in self.chain(s, acts) for m in c.members]
-        if any(built[m].move for m in (*advancing, *flying)):
-            assert not [a for a in acts if isinstance(a, Build) and a.replaces is None] and not (
-                [m for m in advancing if built[m].move] and any(isinstance(a, Commit) for a in acts)), (
-                f"{where}: built or committed while a move holds the builds")
+        commits = set() if put else {a.sha for a in acts if isinstance(a, Commit)}
+        chain = [m for c in self.chain(s, acts) if c.sha not in commits for m in c.members]
+        return any(built[m].move for m in (*advancing, *chain))
+
+    def pool(self, s: Snapshot, acts: list, aside: bool = False) -> list[Ready]:
+        """`World.pool` without the moves while a PR in flight below a build changes the move scripts, and only the PRs that
+        cross the moves while one holds the builds."""
+        built = {r.number: r for r in (*s.ready, *s.flying)}
+        scripts = [m for c in self.chain(s, acts) for m in c.members if built[m].scripts]
+        moving = self.moving(s, acts)
+        return [r for r in super().pool(s, acts, aside) if not (r.move and scripts) and (not moving or self.crosses(r))]
+
+    def admits(self, s: Snapshot, acts: list, where: str) -> None:
+        """`World.admits` of the PRs `pool` leaves, so while a move holds the builds (the tick advances to one, or the chain,
+        the batch its `Commit` puts there among it, holds one in flight) a PR that crosses it is built as any is while it
+        waits, and only such a PR is built or committed."""
+        ready = {r.number: r for r in s.ready}
+        if self.moving(s, acts):
+            built = [m for a in acts if isinstance(a, Build) and a.replaces is None for m in a.members]
+            assert all(self.crosses(ready[m]) for m in built), f"{where}: built above a move what doesn't cross it"
             self.seen["a tick's builds held for a move"] += 1
-            return
+            self.seen["a PR built above a move"] += bool(built)
+        if self.moving(s, acts, put=False):
+            commits = {a.sha for a in acts if isinstance(a, Commit)}
+            put = [(m, h) for c in s.candidates if c.sha in commits for m, h in zip(c.members, c.heads)]
+            assert all(m in ready and ready[m].head == h and self.crosses(ready[m]) for m, h in put), (
+                f"{where}: committed above a move what doesn't cross it")
+            self.seen["a staged batch put above a move"] += bool(put)
         super().admits(s, acts, where)
 
     def check(self, s: Snapshot, acts: list, moved: str | None) -> None:
@@ -163,17 +244,21 @@ class Moves(World):
                 next((c.members for c in s.candidates if c.sha == a.after), ()))
             assert not set(a.members) & self.left_out, f"{where}: a move with no land verdict whose map isn't on main built"
             assert len(moves) <= 1 and (not moves or a.members[-1] == moves[0]), f"{where}: a move not last and alone"
-            assert not [m for m in below if built[m].move], f"{where}: built above a move in flight"
+            assert not [m for m in below if built[m].move] or all(self.crosses(ready[m]) for m in a.members), (
+                f"{where}: built above a move in flight what doesn't cross it")
             assert not moves or not [m for m in (*a.members, *below) if built[m].scripts], (
                 f"{where}: a move built with what judges it changed below it")
-            assert not [m for m in advancing if built[m].move], f"{where}: built in the tick main advances to a move"
+            assert not [m for m in advancing if built[m].move] or all(self.crosses(ready[m]) for m in a.members), (
+                f"{where}: built in the tick main advances to a move what doesn't cross it")
             self.seen["a move built"] += bool(moves)
             self.seen["a move built on a candidate"] += bool(moves and below)
             self.seen["a move built behind other members"] += bool(moves and len(a.members) > 1)
+            self.seen["a PR built in the tick main advances to a move"] += bool([m for m in advancing if built[m].move])
         pool = [r for r in World.pool(self, s, acts) if r.move]
         flying = {m for c in s.candidates for m in c.members if c.sha not in {a.sha for a in acts if isinstance(a, Drop)}}
         self.seen["a move waited for the move scripts"] += bool(pool and [m for m in flying if built[m].scripts])
-        self.seen["a PR waited above a move"] += bool([m for m in flying if built[m].move] and self.pool(s, acts))
+        self.seen["a PR waited above a move"] += bool([m for m in flying if built[m].move] and [
+            r for r in World.pool(self, s, acts) if not self.crosses(r)])
 
     def apply(self, a) -> None:
         if isinstance(a, Build) and (refused := [m for m in a.members if self.kind.get(m) == "refused"]):
@@ -192,12 +277,12 @@ class Moves(World):
 
 def test_the_simulated_queue_with_moves_builds_each_last_alone_and_on_no_move_script_change_and_settles():
     """With moves and PRs that change the move scripts among the PRs: every invariant holds, and a move is last and the only
-    move in its batch, nothing is built above it or in the tick `main` advances to it, it isn't built on or beside a PR that
-    changes `tools/move/`'s scripts, one with no land verdict lands only certified, and every scenario settles within
-    `ticks`."""
+    move in its batch, only the PRs that cross it are built above it or in the tick `main` advances to it, and each as soon
+    as a batch may take it, it isn't built on or beside a PR that changes `tools/move/`'s scripts, one with no land verdict
+    lands only certified, and every scenario settles within `ticks`."""
     seen: Counter[str] = Counter()
     for seed in SEEDS:
-        w = Moves(seed)
+        w = Moves(seed, records=seed % 3 == 0)
         while not w.done():
             assert w.tick < ticks(w), (f"seed {seed}: not settled after {ticks(w)} ticks: merged {sorted(w.merged)} of "
                                        f"{sorted(w.good)}, live {list(w.cands.values())}")
@@ -205,13 +290,17 @@ def test_the_simulated_queue_with_moves_builds_each_last_alone_and_on_no_move_sc
         seen.update(w.seen)
     for what in ("a move built", "a move built on a candidate", "a move built behind other members", "a move refused on its tip",
                  "a certified move landed", "a verdict move landed", "a move waited for the move scripts",
-                 "a PR waited above a move"):
+                 "a PR waited above a move", "a PR built above a move", "a PR built in the tick main advances to a move",
+                 "a staged batch put above a move"):
         assert seen[what], f"no seed exercised: {what}"
 
 
 MOVE_MISREADS = {
     "no PR as a move": lambda s: replace(s, ready=tuple(replace(r, move=False) for r in s.ready),
                                          flying=tuple(replace(r, move=False) for r in s.flying)),
+    "every PR as crossing every move": lambda s: replace(s, ready=tuple(
+        replace(r, crosses=frozenset(q.head for q in (*s.ready, *s.flying))) for r in s.ready)),
+    "no PR as crossing a move": lambda s: replace(s, ready=tuple(replace(r, crosses=frozenset()) for r in s.ready)),
     "no PR as changing the move scripts": lambda s: replace(s, ready=tuple(replace(r, scripts=False) for r in s.ready),
                                                             flying=tuple(replace(r, scripts=False) for r in s.flying)),
     "no move in flight": lambda s: replace(s, flying=tuple(replace(r, move=False) for r in s.flying)),
@@ -221,7 +310,8 @@ MOVE_MISREADS = {
 
 @pytest.mark.parametrize("misread", MOVE_MISREADS)
 def test_decide_misreading_a_move_field_breaks_an_invariant_of_the_simulated_queue_with_moves(misread):
-    """The move invariants hold `decide` to `Ready.move` and `Ready.scripts`, of the ready PRs and of those in flight."""
+    """The move invariants hold `decide` to `Ready.move` and `Ready.scripts`, of the ready PRs and of those in flight, and to
+    `Ready.crosses`."""
     with pytest.raises(AssertionError):
         for seed in SEEDS:
             w = Moves(seed, policy=lambda s: decide(MOVE_MISREADS[misread](s)))
@@ -298,7 +388,7 @@ class Moved:
         check = CHECK.replace("LOG", repr(str(self.log))).replace("REFUSE", repr(str(self.refuse)))
         files = {Q.RENAME: RENAME, Q.MOVE_CHECK: check, "old/a.txt": "oldword in old/a.txt\n"}
         if map_on_main:
-            files[MAP] = '[words]\n"old/" = "new/"\n"oldword" = "newword"\n'
+            files[MAP] = MAP_ROWS
         self.main = _main_to(env, files)
         self.closed: list[tuple[int, str]] = []
         env.o.gh.close = lambda n, comment: self.closed.append((n, comment)) or env.o.gh.prs.pop(n)
@@ -481,17 +571,55 @@ def test_a_move_s_conflicting_head_doesnt_hold_it_once_its_move_is_regenerated(e
 
 
 @pytest.mark.parametrize("unmark", [False, True])
-def test_nothing_is_built_above_a_move_in_flight_marked_or_not(env, unmark):
+def test_only_a_pr_crossing_a_move_in_flight_is_built_above_it_marked_or_not(env, unmark):
     """`decide` reads a move in flight from the ready PRs (`World.ready`) or, once its mark is gone, from the PRs in flight
-    (`Snapshot.flying`, its PR's `Move:` line): nothing is built above it either way."""
+    (`Snapshot.flying`, its PR's `Move:` line), and the loop its map at its head as built: above it a PR whose own change
+    names nothing that map retires is built, merged onto the moved tree, and a PR that names a path or a word it retires, in
+    a file it changes or a line it adds, waits, as does a second move, in the tick that advances `main` to it too; on the
+    moved `main` those two are left out for the move they lack (`queue.lacked_moves`)."""
     m = Moved(env)
     head = m.move(1, verdict=True)
     loop = env.loop(decide)
-    assert [b["members"] for b in _builds(loop.tick())] == [[1]]
+    (first,) = _builds(loop.tick())
+    assert first["members"] == [1]
     if unmark:
         env.o.gh.ready.discard((1, head))
-    env.put(2, {"b.txt": "2\n"})
-    assert not _builds(loop.tick())
+    two = env.put(2, {"b.txt": "2\n"})
+    three, four = env.put(3, {"old/b.txt": "3\n"}), env.put(4, {"c.txt": "reads OldWord\n"})
+    _move(env, 5, {"d.txt": "5\n"})
+    (above,) = _builds(loop.tick())
+    assert (above["members"], above["heads"], above["base"]) == ([2], [two], first["sha"]), above
+    assert {"new/a.txt", "b.txt"} <= set(_files(env, above["sha"])) and "old/a.txt" not in _files(env, above["sha"])
+    _passes(env, first["sha"])
+    recs = loop.tick()
+    assert "advance" in _acts(recs) and env.main() == first["sha"] and not _builds(recs), recs
+    loop.world.ready(env.main())
+    assert {n: loop.world.left[n][1].split(":")[0] for n in (3, 4)} == {
+        n: f"it lacks the move {first['sha'][:12]} `main` landed ({MAP}), whose retired names its own change names (`{w}`)"
+        for n, w in ((3, "old/"), (4, "oldword"))}, loop.world.left
+    assert (loop.world.left[3][0], loop.world.left[4][0]) == (three, four)
+
+
+@pytest.mark.parametrize("why", ["it doesn't parse", "it's missing", "the change can't be read"])
+def test_a_pr_waits_above_a_move_whose_map_can_t_be_read_at_its_head_or_while_its_own_change_can_t_be_read(
+        env, monkeypatch, why):
+    """Fail closed: a move whose map doesn't parse at its head or is missing there is crossed by nothing, whatever `main`'s
+    copy says, so nothing is built above it; and a PR whose own change can't be read crosses no move, while another is built
+    above it."""
+    Moved(env)
+    files = {"old/a.txt": None, "new/a.txt": "newword in new/a.txt\n"}
+    _move(env, 1, {**files, MAP: {"it doesn't parse": "[words\n", "it's missing": None}.get(why, MAP_ROWS)})
+    loop = env.loop(decide)
+    (first,) = _builds(loop.tick())
+    assert first["members"] == [1] and Q.move_of(env.o.origin, first["sha"]) == MAP, first
+    two, six = env.put(2, {"b.txt": "2\n"}), env.put(6, {"f.txt": "6\n"})
+    if why == "the change can't be read":
+        own = Q.own_text
+        monkeypatch.setattr(Q, "own_text", lambda repo, main, head, files=None: (
+            (_ for _ in ()).throw(Q.QueueError("git diff: bad object")) if head == two else own(repo, main, head, files)))
+    builds = _builds(loop.tick())
+    assert [(b["members"], b["heads"], b["base"]) for b in builds] == (
+        [([6], [six], first["sha"])] if why == "the change can't be read" else []), builds
 
 
 @pytest.mark.parametrize("unmark", [False, True])

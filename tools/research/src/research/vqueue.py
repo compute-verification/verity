@@ -105,8 +105,12 @@ class Ready:
                                    # Lean change or not: no batch takes it beside a staged batch (`_pool`), and with no Lean
                                    # change no Lean batch is staged while it waits (`_next`)
     move: bool = False             # a move PR, whose move the loop regenerates on what its batch merged below it: a batch
-                                   # holds at most one, last, and nothing is built on a candidate holding one (`_moves_last`)
+                                   # holds at most one, last (`_moves_last`), and one on a candidate holding one takes only
+                                   # the PRs that cross it (`_crossing`)
     scripts: bool = False          # it changes `tools/move/`'s scripts (`queue.MOVE_SCRIPTS`): no move is built on or beside it
+    crosses: frozenset[str] = frozenset()  # the heads of the move PRs, ready or in flight, whose maps retire nothing its own
+                                   # change names (`queue.crossed`): a batch on a candidate holding such a move, at such a
+                                   # head, or in the tick that advances to one, may take it (`_crossing`)
 
 
 @dataclass(frozen=True)
@@ -349,9 +353,13 @@ def decide(s: Snapshot) -> list[Action]:
     (`Snapshot.wide`), no Lean batch opens: built on it, a Lean change would build again what the wide one built; nor while
     it holds a PR set aside before that changes a Lean input (`_next`); and while Lean PRs wait so with no PR with no Lean
     change to take, nothing is built and `Wait` says why.  A batch holds at most one move PR (`Ready.move`), last, and none
-    beside or on a member that changes `tools/move/`'s scripts (`Ready.scripts`, `_moves_last`); nothing is built on a
-    candidate holding a move, nor in the tick that advances to one, since the ready PRs were read on the `main` before it and
-    may lack its move: no batch, no rebuild (`_restack`) and no `Commit`, and none after a `Commit` that puts one there.
+    beside or on a member that changes `tools/move/`'s scripts (`Ready.scripts`, `_moves_last`).  A batch on a candidate
+    holding a move takes only the PRs that cross it (`_crossing`): no move, and only a PR whose own change names nothing its
+    map retires, at the head it was built at (`Ready.crosses`), which merges onto the moved tree as onto `main`; so too a
+    rebuild there (`_restack`), a `Commit` there and the builds after a `Commit` that puts a move there.  The tick that
+    advances to a move builds on it so too: the ready PRs were read on the `main` before it, and those it lets through were
+    judged against that move, as on its candidate a tick before; the rest wait for the next tick to read them on the moved
+    `main`, where `queue.lacked_moves` judges them.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -376,7 +384,7 @@ def decide(s: Snapshot) -> list[Action]:
     acts: list[Action] = []
     chain, landed, staged, rest = _chain(s, ready, acts)
     whole = list(chain)
-    main, ejected, out, hold = s.main, set(), set(), False
+    main, ejected, out, hold = s.main, set(), set(), frozenset()
     c1 = chain[0] if chain else None
     if c1 is not None:
         reading = _reading(c1.verdict)
@@ -388,7 +396,7 @@ def decide(s: Snapshot) -> list[Action]:
                 c, chain = chain[0], chain[1:]
                 acts += _red(c, _outcomes(s, acts))
                 acts += [Advance(c.sha), Drop(c.sha, ON_MAIN, _passed(c))]
-                main, landed, hold = c.sha, landed | set(c.members), hold or _moving(c, built)
+                main, landed, hold = c.sha, landed | set(c.members), hold | _moves((c,), built)
         elif reading == FAIL and (rerun := _rerun(c1, built)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
@@ -459,10 +467,11 @@ def decide(s: Snapshot) -> list[Action]:
             rest.append(c)
     n = len(acts)
     kept += _restack(s, ready, chain, rest, landed | ejected | out, main, acts, kept, hold)
-    flying = {m for d in chain for m in d.members if m in built}
-    if not held and not hold and not any(built[m].move for m in flying):
-        base, after = chain[-1].sha if chain else main, None
-        if passed and len(chain) < s.depth and len(acts) == n:
+    if not held:
+        base, after, moves = chain[-1].sha if chain else main, None, hold | _moves(chain, built)
+        if passed and len(chain) < s.depth and len(acts) == n and all(
+                _crossing(r if (r := ready.get(m)) is not None and r.head == h else None, moves)
+                for m, h in zip(passed[0].members, passed[0].heads)):
             c = passed[0]
             kept.remove(c)
             if c.base == base or (gone := _unmarked(c, ready)) is None:
@@ -473,22 +482,20 @@ def decide(s: Snapshot) -> list[Action]:
                          else f"#{gone} isn't marked at the head it was staged at")
                 acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
                                         "other members are built again"))
-                kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept)
+                kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept, hold)
                 base = chain[-1].sha if chain else main
-            flying = {m for d in chain for m in d.members if m in built}
-            if any(built[m].move for m in flying):
-                return acts
-        scripts = any(built[m].scripts for m in flying)
+            moves = hold | _moves(chain, built)
+        scripts = any(built[m].scripts for d in chain for m in d.members if m in built)
         outcomes, room, priority = _outcomes(s, acts), len(chain) < s.depth, max(s.depth - len(chain), 0)
         busy = landed | ejected | {m for d in (*chain, *kept) for m in d.members}
-        pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts)]
+        pool = [r for r in _pool(ready, busy, bool(kept)) if not (r.move and scripts) and _crossing(r, moves)]
         lean, why = _next(s, pool, outcomes, chain, built)
         lean = _moves_last(lean, ready)
         builds = [Build(lean, base, priority, s.records, after)] if lean and (s.records or room) else []
         if room and (s.records or not lean):
             beside = bool(kept or lean)
-            plain = _batch([r for r in _pool(ready, busy | set(lean), beside) if not (r.move and scripts)], outcomes,
-                           s.batch, 0, s.wide)
+            plain = _batch([r for r in _pool(ready, busy | set(lean), beside) if not (r.move and scripts)
+                            and _crossing(r, moves)], outcomes, s.batch, 0, s.wide)
             plain = _moves_last(plain, ready)
             if plain and not (beside and _aside(plain, ready, outcomes)):
                 builds.append(Build(plain, base, priority, after=after))
@@ -824,17 +831,16 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
     candidate below or a staged batch kept (``staged``) holds; one with none left is not built.  ``chain`` gains each, as a
     candidate at its old sha, which a Build on it names, but for one with a Lean member: that one is staged off the chain,
     its records run first (`Build.records`), and those after it go on the chain's top as before; while another batch stays
-    staged it is not built, and its members wait for a Lean batch, as one is staged at a time.  None is built in a tick that
-    advanced to a candidate holding a move (``hold``) nor on a top holding one (`decide`): their members wait in the pool
-    until it is on `main`.  What it stages."""
+    staged it is not built, and its members wait for a Lean batch, as one is staged at a time.  On a move, in flight below
+    it or advanced to this tick (``hold``: the moves' heads), each keeps only the members that cross it (`_crossing`, as
+    `decide` builds there): the rest wait in the pool until it is on `main`.  What it stages."""
     base, below = chain[-1].sha if chain else main, {m for c in [*chain, *staged] for m in c.members}
     built = {**ready, **{r.number: r for r in s.flying}}
     again: list[Candidate] = []
     for c in rest:
-        if hold or (chain and _moving(chain[-1], built)):
-            break
+        moves = hold | _moves(chain, built)
         keep = [(m, h) for m, h in zip(c.members, c.heads) if m not in out and m not in below and m in ready
-                and ready[m].head == h]
+                and ready[m].head == h and _crossing(ready[m], moves)]
         if not keep:
             continue
         members, heads = tuple(m for m, _ in keep), tuple(h for _, h in keep)
@@ -930,16 +936,22 @@ def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[C
                 f"while {held}, and no PR with no Lean change is ready to take")
 
 
-def _moving(c: Candidate, built: dict[int, Ready]) -> bool:
-    """Whether candidate ``c`` holds a move PR (`Ready.move`), on which nothing is built (`decide`)."""
-    return any(m in built and built[m].move for m in c.members)
+def _moves(cs: Iterable[Candidate], built: dict[int, Ready]) -> frozenset[str]:
+    """The heads, as built, of the move PRs (`Ready.move`) candidates ``cs`` hold."""
+    return frozenset(h for c in cs for m, h in zip(c.members, c.heads) if m in built and built[m].move)
+
+
+def _crossing(r: Ready | None, moves: frozenset[str]) -> bool:
+    """Whether a batch on the moves ``moves`` (their PRs' heads as built: on a candidate holding them, or in the tick that
+    advances to one) may take ``r``: any PR with none; else no move, and only one that crosses each (`Ready.crosses`)."""
+    return not moves or r is not None and not r.move and moves <= r.crosses
 
 
 def _moves_last(members: tuple[int, ...], ready: dict[int, Ready]) -> tuple[int, ...]:
     """``members`` with their first move PR (`Ready.move`) last, the loop regenerating its move on what the rest merged, and
     any other move left for a later batch; with no move at all beside a member that changes `tools/move/`'s scripts
-    (`Ready.scripts`), since a move and the restacks across it run `main`'s.  A candidate holding a move has none built on it
-    (`decide`), so no PR lacking the move merges above it."""
+    (`Ready.scripts`), since a move and the restacks across it run `main`'s.  A batch on a candidate holding a move takes
+    only the PRs that cross it (`_crossing`, `decide`), so no PR naming what it retires merges above it."""
     moves = [m for m in members if ready[m].move]
     rest = tuple(m for m in members if not ready[m].move)
     return rest if not moves or any(ready[m].scripts for m in rest) else (*rest, moves[0])

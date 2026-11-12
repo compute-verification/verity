@@ -4150,9 +4150,7 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
     if not (moves := moves_between(repo, main, head)):
         return []
     maps = {} if maps is None else maps
-    files = own_files(repo, main, head) if files is None else files
-    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
-    text = "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+    text = own_text(repo, main, head, files)
     out = []
     for commit, parents in moves:
         if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
@@ -4162,6 +4160,43 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
         if (got := maps[key]) is None or (names := got.named(text)):
             out.append((commit, m[1], None if got is None else names))
     return out
+
+
+def own_text(repo: Path, main: str, head: str, files: Iterable[str] | None = None) -> str:
+    """What `Retired.named` reads of ``head``'s own change, against its merge base with ``main``: its files (``files``, else
+    `own_files`) and its added lines."""
+    files = own_files(repo, main, head) if files is None else files
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    return "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+
+
+def crossed(repo: Path, main: str, head: str, moves: Iterable[tuple[str, str]], files: Iterable[str] | None = None,
+            maps: dict[tuple[str, str], Retired | None] | None = None) -> frozenset[str]:
+    """The heads of the move PRs of ``moves`` (each a head and its map's path) that ``head`` may be built above before they
+    land: those whose map retires nothing ``head``'s own change names (`own_text`), as `lacked_moves` judges a move `main`
+    landed.  A map is read at its PR's head and, where ``main`` has one at that path, there too, since a move regenerated on
+    its batch's tip runs the tip's (`map_retires`, kept in ``maps`` by where and path); a move whose map can't be read at its
+    head is crossed by nothing, and nothing is crossed while ``head``'s own change can't be read."""
+    maps = {} if maps is None else maps
+    try:
+        text = own_text(repo, main, head, files)
+    except QueueError:
+        return frozenset()
+
+    def read(at: str, path: str) -> Retired | None:
+        if (at, path) not in maps:
+            maps[at, path] = map_retires(repo, at, path)
+        return maps[at, path]
+
+    out = set()
+    for move, path in moves:
+        if (got := read(move, path)) is None:
+            continue
+        if (also := read(main, path)) is not None:
+            got = Retired(got.names | also.names, got.words | also.words)
+        if not got.named(text):
+            out.add(move)
+    return frozenset(out)
 
 
 def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
