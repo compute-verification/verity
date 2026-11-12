@@ -4199,10 +4199,6 @@
    "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
    "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
   },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
-   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
-  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": {
    "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest"],
    "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
@@ -21818,160 +21814,6 @@
    "type_hash": "db701ed287a7e3e3106dab9ae644604bd14a0d7239c570cfeae582ff7ad4a15f",
    "unfolded_hash": "6597197cd72d99a894102682fe0d2bb74e13a8e65d45bb37bb750bec2fc9c17f"
   },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.Salt.keyed_leaf_binds : Pouw.Guarantees.KeyedLeaf.Binds"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Pouw.Assumptions.SaltDerivation", "Pouw.Assumptions.SubtreeLayout"],
-    "reads": []
-   },
-   "type_hash": "f734dbf1781cd0675eafa3674cda7f5ab1421c60c79c903e57e0c6159ab37f4d",
-   "unfolded_hash": "690ffff36892dafa75a7b72c8472de9034c06d717b87f687acac32736579b059"
-  },
-  "Pouw.Salt.keyed_leaf_binds_honest": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.Salt.keyed_leaf_binds_honest :",
-    "  And",
-    "    (Pouw.Assumptions.SubtreeLayout",
-    "      (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (fun x => 3)",
-    "      (fun x => { id := fun x => 4, count := 2, position := fun r => r }) \"row\"",
-    "      (fun x =>",
-    "        Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "          (fun x => 1) (fun x => 3)",
-    "          (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
-    "            (Hash.Keyed.Top.node 0",
-    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                  (List.cons 5 List.nil)))",
-    "              ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                  (List.cons 6 List.nil))))))",
-    "      fun pos rank v ks y sibs =>",
-    "      And (Eq pos 0)",
-    "        (And (Eq ks fun x => 1)",
-    "          (And (Eq y (List.replicate 192 2))",
-    "            (Or",
-    "              (And (Eq rank 0)",
-    "                (And (Eq v (List.cons 5 List.nil))",
-    "                  (Eq sibs",
-    "                    (List.cons",
-    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                          (List.cons 6 List.nil)))",
-    "                      List.nil))))",
-    "              (And (Eq rank 1)",
-    "                (And (Eq v (List.cons 6 List.nil))",
-    "                  (Eq sibs",
-    "                    (List.cons",
-    "                      ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                        (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                          (List.cons 5 List.nil)))",
-    "                      List.nil))))))))",
-    "    (And",
-    "      (Pouw.Assumptions.SaltDerivation",
-    "        (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8) (List.replicate 64 0)",
-    "        (Hash.Hm96.leaf (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "          (List.replicate 64 0) (fun x => 1) (List.replicate 192 2))",
-    "        fun pos rank v ks y sibs =>",
-    "        And (Eq pos 0)",
-    "          (And (Eq ks fun x => 1)",
-    "            (And (Eq y (List.replicate 192 2))",
-    "              (Or",
-    "                (And (Eq rank 0)",
-    "                  (And (Eq v (List.cons 5 List.nil))",
-    "                    (Eq sibs",
-    "                      (List.cons",
-    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                            (List.cons 6 List.nil)))",
-    "                        List.nil))))",
-    "                (And (Eq rank 1)",
-    "                  (And (Eq v (List.cons 6 List.nil))",
-    "                    (Eq sibs",
-    "                      (List.cons",
-    "                        ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                          (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                            (List.cons 5 List.nil)))",
-    "                        List.nil))))))))",
-    "      (Hash.Keyed.accepts (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "        (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r }",
-    "        ((fun x =>",
-    "            Hash.Keyed.digest (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "              (fun x => 1) (fun x => 3)",
-    "              (Hash.Keyed.Top.msg { id := fun x => 4, count := 2, position := fun r => r }",
-    "                (Hash.Keyed.Top.node 0",
-    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                      (List.cons 5 List.nil)))",
-    "                  ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                    (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\"",
-    "                      (List.cons 6 List.nil))))))",
-    "          0)",
-    "        0 (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 5 List.nil))",
-    "        (List.cons",
-    "          ((fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 1 \"row\" (List.cons 6 List.nil)))",
-    "          List.nil)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": ["Pouw.Assumptions.SaltDerivation", "Pouw.Assumptions.SubtreeLayout"]
-   },
-   "type_hash": "4f330ccf8e8c5a8f710b588d272a5f6b9c4610aec5049ad4d3255df691316893"
-  },
-  "Pouw.Salt.keyed_leaf_binds_nontrivial": {
-   "owner": "@compute-research",
-   "signature": [
-    "Pouw.Salt.keyed_leaf_binds_nontrivial :",
-    "  Not",
-    "    (Or (Eq (List.cons 0 List.nil) (List.cons 1 List.nil))",
-    "      (Hash.CollisionIn (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "        (instHAppendOfAppend.hAppend",
-    "          (instHAppendOfAppend.hAppend",
-    "            (instHAppendOfAppend.hAppend",
-    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                List.nil (fun x => 1) List.nil)",
-    "              (Hash.Hm96.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "                List.nil (fun x => 1) List.nil))",
-    "            (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "              (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
-    "              (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\"",
-    "                (List.cons 0 List.nil))",
-    "              List.nil))",
-    "          (Hash.Keyed.hashed (fun x i => ((Pouw.PearlC.Sha512.digest (List.map UInt8.toNat x)).getD i.val 0).toUInt8)",
-    "            (fun x => 1) (fun x => 3) { id := fun x => 4, count := 2, position := fun r => r } 0",
-    "            (Hash.Tree.leafMsg { id := fun x => 4, count := 2, position := fun r => r } 0 \"row\" (List.cons 1 List.nil))",
-    "            List.nil))))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "a8787fde9876c5e02b4089181424c8b10f87bf2f68024780c491298e25ba2430"
-  },
-  "Pouw.Salt.keyed_leaf_hides": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.Salt.keyed_leaf_hides : Pouw.Guarantees.KeyedLeaf.Hides"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "7d9ff460b3191531e0e4b5e53a4fabdf12460143d1283a8dafd0ce23ee5eb3ef",
-   "unfolded_hash": "910de22cf4970922814ec7b85865eaa139f726120397f7033ce8337e667815e2"
-  },
   "Pouw.SecurityProofs.Dither.FleetSound": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.FleetSound : Pouw.Guarantees.Dither.FleetSound"],
@@ -27386,7 +27228,6 @@
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Nci.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
-   "Definitions.Pouw.Assumptions.LeadCommit",
    "Proofs.Accounting.TS.Session.Group.Premises"
   ],
   "properties": {
@@ -27661,14 +27502,6 @@
    "Hash.SecurityProofs.EmbeddingReadBinding": {
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
-   },
-   "Pouw.Salt.keyed_leaf_hides": {
-    "function": "Hash.Keyed.digest",
-    "outcome": "none"
-   },
-   "Pouw.Salt.keyed_leaf_binds": {
-    "function": "Hash.Keyed.accepts",
-    "outcome": "none"
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
@@ -59847,8 +59680,6 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "four_names_except": {
-  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it",
-  "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; `--moved` renames it `Pouw.SecurityProofs.KeyedLeaf.Binds`",
-  "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; `--moved` renames it `Pouw.SecurityProofs.KeyedLeaf.Hides`"
+  "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
  }
 }
