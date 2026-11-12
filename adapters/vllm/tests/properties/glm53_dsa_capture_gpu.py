@@ -651,7 +651,9 @@ def selection() -> dict[str, Any]:
     order = [c.backend.name for c in sorted(valid, key=lambda c: c.priority)]
     rec: dict[str, Any] = {"valid": order, "invalid": {b.name: r for b, r in invalid.items()}}
     try:
-        from vllm.models.deepseek_v32.nvidia.ops.fused_q_cutedsl import is_fused_q_cutedsl_supported
+        from vllm.models.deepseek_v32.nvidia.ops.fused_q_cutedsl import (
+            is_fused_q_cutedsl_supported,
+        )
 
         q_pe = torch.empty(1, NH, DR, dtype=torch.bfloat16, device="cuda")
         rec["fused_q_cutedsl"] = bool(is_fused_q_cutedsl_supported(q_pe, torch.empty(1, H, D, dtype=torch.bfloat16, device="cuda"),
@@ -841,7 +843,9 @@ def prefill_calls(seq: int, chunk: int, max_logits_bytes: int, workspace: int, s
     import torch
 
     if split is None:
-        from vllm.v1.attention.backends.mla.indexer import split_indexer_prefill_chunks as split
+        from vllm.v1.attention.backends.mla.indexer import (
+            split_indexer_prefill_chunks as split,
+        )
     calls = []
     for a, b in _chunks(seq, chunk):
         for _, rows in split(torch.tensor([b]), torch.tensor([b - a]), workspace, max_logits_bytes):
@@ -855,7 +859,11 @@ def phase_logits(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[s
     import torch
     import vllm.envs as envs
     from vllm import _custom_ops as ops
-    from vllm.utils.deep_gemm import fp8_fp4_mqa_logits, fp8_fp4_paged_mqa_logits, get_paged_mqa_logits_metadata
+    from vllm.utils.deep_gemm import (
+        fp8_fp4_mqa_logits,
+        fp8_fp4_paged_mqa_logits,
+        get_paged_mqa_logits_metadata,
+    )
     from vllm.utils.platform_utils import num_compute_units
 
     size = o["size"]
@@ -1070,7 +1078,10 @@ def phase_attn(work: Path, o: dict[str, Any], kst: dict[str, Any], qst: dict[str
     the heuristic on the same call is recorded beside it (``heuristic_differs``), not checked."""
     import torch
     from vllm.v1.attention.backends.mla import flashattn_mla_sparse as FMS
-    from vllm.v1.attention.backends.mla.sparse_utils import flat_kv_row_view, triton_convert_req_index_to_global_index
+    from vllm.v1.attention.backends.mla.sparse_utils import (
+        flat_kv_row_view,
+        triton_convert_req_index_to_global_index,
+    )
 
     from verity_vllm.engine import sparse_mla
 

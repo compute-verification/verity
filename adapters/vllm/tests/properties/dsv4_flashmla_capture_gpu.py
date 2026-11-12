@@ -689,7 +689,6 @@ def stack() -> dict[str, Any]:
     """What the kernels of record came from: torch, vLLM, the `_flashmla_C` library and its SASS architectures."""
     import torch
     import vllm
-
     import vllm._flashmla_C as FC
 
     rec: dict[str, Any] = {"torch": torch.__version__, "cuda": torch.version.cuda, "vllm": getattr(vllm, "__version__", None),
