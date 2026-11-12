@@ -266,12 +266,15 @@ class TileAnchors:
         of a transposed operand) or two instances swapped is refused, at the first word that differs."""
         own_head, own_body = self.public_inputs(role, indexes, segment).split(b"\n", 1)
         head, sep, body = data.partition(b"\n")
+        refused = "--public-inputs: its header (format, instances, ports) is not the verifier's"
+        if sep != b"\n":
+            raise DomainError(refused)
         try:
-            same = sep == b"\n" and json.loads(head) == json.loads(own_head)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            same = False
-        if not same:
-            raise DomainError("--public-inputs: its header (format, instances, ports) is not the verifier's")
+            theirs = json.loads(head)
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise DomainError(refused) from e
+        if theirs != json.loads(own_head):
+            raise DomainError(refused)
         if len(body) != len(own_body):
             raise DomainError("--public-inputs: length")
         if body == own_body:
