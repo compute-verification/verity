@@ -399,7 +399,7 @@ def test_flipped_committed_output_byte_fails_named_at_the_request_and_row(world)
         b[pos] ^= 0x01
         store[k] = bytes(b)
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = [x for x in rep["mismatch"] if x["spec"].startswith("Gemm_v1{K=16,N=32}")]
     assert m and all(x["request_id"] == "r1" and x["step"] == 0 for x in m)
@@ -416,7 +416,7 @@ def test_equal_shape_request_swap_of_an_input_member_fails_named(world):
         half = len(b) // 2
         store[k] = bytes(b[half:] + b[:half])
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False
     specs = {x["spec"].split("{")[0] for x in rep["mismatch"]}
     # the norm rows themselves (inputs = embeddings of the right request) and the gate_up Gemm rows (input = the other request's norm) fail
@@ -436,7 +436,7 @@ def test_wrong_member_bytes_fail_named(world):
     def mutate(store, entries):
         store[(0, "model.norm/1")] = store[(0, "model.norm/0")]     # the residual member carries the normed rows
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False
     fused = [x for x in rep["mismatch"] if x["spec"].startswith("RMSNormFusedCuda")]
     assert fused and all(any(o["member"] == "1" and not o["equal"] for o in x["outputs"]) for x in fused)
@@ -447,7 +447,7 @@ def test_missing_committed_input_is_partial_never_pass(world):
     def mutate(store, entries):
         del store[(1, "model.layers.0.mlp.act_fn/out")]
     bmap, committed = world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is None and rep["grade"] == "partial"
     assert any("not retained" in x["why"] for x in rep["not_evaluated"])
     assert any(k.split("|")[3] == "first-decode" for k in rep["strata_unevaluated"])
@@ -478,7 +478,7 @@ def test_boundary_linkage_positive_and_negatives(world):
     assert u["request_id"] == "r0" and u["engine_step"] == 2 and u["kind"] == "chain" and "!= committed sampled id" in u["why"]
     # the replay reads the Embedding VU's input from the Program's dataflow (the previous step's committed sampled id), so a forged `in`
     # member is invisible to it -- the exhaustive linkage is the check that names it; the two are graded separately (R2)
-    rep = SR.sampled_replay(_programs(world), bmap3, committed3, _weights(world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(world), bmap3, committed3, _weights(world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is True
 
 
@@ -1032,7 +1032,7 @@ def test_rope_v1_is_registered_and_the_rows_are_in_the_population_not_named_away
 
 def test_rope_v1_honest_program_replays_bit_exactly_with_the_cache_row_read_from_weights(rope_world):
     bmap, committed = rope_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"]
     assert {f"RoPE_v1{{NHEADS={NH},D={DH}}}", f"RoPE_v1{{NHEADS={KVH},D={DH}}}"} <= set(rep["population"]["by_family"]) or "RoPE_v1" in rep["population"]["by_family"]
@@ -1050,7 +1050,7 @@ def test_rope_v1_flipped_committed_output_word_fails_named_at_the_rope_row(rope_
         b[(e["element_offset"] + 1 * KVH * DH + 3) * 2 + 1] ^= 0x01               # r1, prompt row 1, word 3: one exponent/mantissa bit
         store[k] = bytes(b)
     bmap, committed = rope_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(rope_world), bmap, committed, _weights(rope_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert m and all(x["spec"] == f"RoPE_v1{{NHEADS={KVH},D={DH}}}" and x["request_id"] == "r1" and x["row"] == 1 and x["step"] == 0 for x in m), m
@@ -1069,7 +1069,7 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
             r["args"][1][0][3] += DH
         progs[rid] = inst
     bmap, committed = rope_world.bmap_and_reader()
-    rep = SR.sampled_replay(progs, bmap, committed, _weights(rope_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(progs, bmap, committed, _weights(rope_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     assert rep["mismatch"] and all(x["spec"] == f"RoPE_v1{{NHEADS={NH},D={DH}}}" and x["request_id"] == "r0" and x["row"] == 1 and x["step"] == 0
                                    for x in rep["mismatch"]), rep["mismatch"]
@@ -1120,7 +1120,7 @@ def test_attention_rows_are_registered_units_of_the_population_and_the_interior_
     n_att = sum(1 for r in attn_world.pi.rows if r["spec"].startswith("Attention_v3"))
     assert n_att == LP + T
     bmap, committed = attn_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5, workers=0)
     assert "Attention_v3" not in rep["population"]["not_evaluable_by_family"]
     assert not any("K/V history" in k or "state-linked" in k for k in rep["population"]["not_evaluable"]), rep["population"]["not_evaluable"]
     assert rep["population"]["by_family"].get("Attention_v3") == 2 * n_att
@@ -1174,7 +1174,7 @@ def test_registered_values_program_replays_like_its_constants_twin(attn_world):
 
 def test_attention_v3_honest_program_replays_bit_exactly_from_the_committed_kv_history(attn_world):
     bmap, committed = attn_world.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps(rep, indent=1, default=str)[:3000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"]
     at = {k: v for k, v in rep["strata"].items() if k.startswith("Attention_v3")}
@@ -1216,7 +1216,7 @@ def test_attention_v3_flipped_committed_output_word_fails_named_at_the_attention
         b[(e["element_offset"] + 5) * 2 + 1] ^= 0x01                              # r1, head 0 word 5: one exponent/mantissa bit
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert m and all(x["spec"].startswith(f"Attention_v3{{T={LP + T},") and x["request_id"] == "r1" and x["step"] == T for x in m), m
@@ -1233,7 +1233,7 @@ def test_attention_v3_flipped_key_word_of_an_earlier_step_is_named_at_the_rows_t
         b[(e["element_offset"] + 1 * KVH * DH + 2) * 2] ^= 0x40                    # r0, prompt row 1, word 2: a mantissa bit
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=1, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     fams = {(x["spec"].split("{")[0], x["step"]) for x in m}
@@ -1254,7 +1254,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
         b[(e["element_offset"] + 0 * (NH + 2 * KVH) * DH + (NH + KVH) * DH + 4) * 2 + 1] ^= 0x01   # r1, prompt row 0, V word 4
         store[k] = bytes(b)
     bmap, committed = attn_world.bmap_and_reader(mutate=mutate)
-    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=3)
+    rep = SR.sampled_replay(_programs(attn_world), bmap, committed, _weights(attn_world), per_stratum=8, seed=3, workers=0)
     assert rep["result"] is False and rep["grade"] == "mismatch"
     m = rep["mismatch"]
     assert all(x["request_id"] == "r1" for x in m), m
@@ -1506,7 +1506,7 @@ def test_moe_plane_rows_are_addressed_at_their_planes_and_the_honest_program_rep
     assert {v["family"] for v in vus} >= MOE_FAMS | {"SiluMul_v1", "RMSNormFusedCuda_v2"}
     assert {v["op_path"] for v in vus if v["family"] in MOE_FAMS - {"MoeSum_v1"} or v["family"] == "SiluMul_v1"} == {"moe/L0"}
     bmap, committed = w.bmap_and_reader()
-    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=2, seed=5)
+    rep = SR.sampled_replay(_programs(w), bmap, committed, _weights(w), per_stratum=2, seed=5, workers=0)
     assert rep["result"] is True and rep["grade"] == "complete", json.dumps({k: rep[k] for k in ("why", "mismatch", "not_evaluated", "population")}, indent=1, default=str)[:4000]
     assert rep["sample"]["mismatch_n"] == 0 and rep["sample"]["evaluated"] == rep["sample"]["picked"] > 0
     assert set(rep["population"]["by_family"]) >= MOE_FAMS and all(v["evaluated"] >= 1 for v in rep["strata"].values())
@@ -1888,7 +1888,7 @@ def test_a_fault_on_some_picks_inside_an_evaluated_stratum_is_partial_named_neve
     ok, why = commit_verdict({**base, "binding": _bnd(2), "sampled_replay": rep}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # the honest replay of the same world is still complete
-    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1)
+    rep_ok = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=64, seed=1, workers=1)
     assert rep_ok["result"] is True and rep_ok["grade"] == "complete" and rep_ok["sample"]["not_evaluated_n"] == 0
 
 
