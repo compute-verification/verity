@@ -173,7 +173,7 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
         bound_with.update(_FN.findall(fid))
         params, _ret = signature_of(t)
         statics = statics_of(t)
-        inputs = (reg.core.sample or sample_uniform)(np.random.default_rng(0), SAMPLES, params, **statics)
+        inputs = (reg.core.sample or sample_uniform)(CH.generator(0), SAMPLES, params, **statics)
         args = [np.asarray(a).reshape(SAMPLES, *type_shape(pt)).astype(type_dtype(pt), copy=False) for a, pt in zip(inputs, params)]
         got = reg.core.fn(*args, **statics)
         vals, declined = (None, np.ones(SAMPLES, dtype=bool)) if got is NotImplemented else got
