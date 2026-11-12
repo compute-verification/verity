@@ -1,7 +1,7 @@
 """`verity_vllm.pipeline.tp.fold_match` on documents that hold less than a finished stage's: a fold that left no summary or a
 summary without its statistics, a compare or a GM-01 that wrote no document, a decomposition whose requests state no totals, a
 rank with no observer log (so no compare and no GM-01), a cross-rank check that stopped before it listed what failed, and the
-legs that check could not run.  No stage's subprocess runs here: `_run` only returns a code, and `main` runs on stand-in stages."""
+inputs that check was not given.  No stage's subprocess runs here: `_run` only returns a code, and `main` runs on stand-in stages."""
 from __future__ import annotations
 
 import json
@@ -145,7 +145,7 @@ def test_a_compare_record_is_asked_for_its_requests_by_name(tmp_path):
 
 # the cross-rank check's record
 
-def test_a_leg_the_cross_rank_check_could_not_run_fails_it_by_name_beside_what_it_failed_itself():
+def test_an_input_the_cross_rank_check_was_not_given_fails_it_by_name_beside_what_it_failed_itself():
     whole: dict[str, Any] = {"verdict": "PASS", "checks": [], "failed": []}
     FM._fails_too(whole, "recorder_missing")
     assert whole == {"verdict": "FAIL", "checks": [], "failed": ["recorder_missing"]}
@@ -155,7 +155,7 @@ def test_a_leg_the_cross_rank_check_could_not_run_fails_it_by_name_beside_what_i
     assert failed == {"verdict": "FAIL", "failed": ["count", "peer", "links_missing", "provenance_missing"]}
 
 
-def test_a_cross_rank_check_that_stopped_before_listing_what_failed_lists_the_missing_leg_alone():
+def test_a_cross_rank_check_that_stopped_before_listing_what_failed_lists_the_missing_input_alone():
     stopped: dict[str, Any] = {"verdict": "FAIL", "checks": [{"name": "ranks", "pass": False}]}
     FM._fails_too(stopped, "recorder_missing")
     assert stopped["failed"] == ["recorder_missing"] and stopped["verdict"] == "FAIL"
@@ -169,6 +169,11 @@ def test_a_rank_that_did_not_run_a_stage_has_an_empty_record_of_it(record):
 
 # the whole command, on stand-in stages
 
+def _by_stage(doc: dict) -> dict:
+    """The verdict document's block of verdicts by stage: the one that holds `fold_per_rank`."""
+    return next(block for block in doc.values() if isinstance(block, dict) and "fold_per_rank" in block)
+
+
 FOLD = {"rc": 0, "seconds": 0.0, "ok": True, "kept": False, "errors": 0, "unresolved": 0, "unsupported": 0, "n_instances": 9, "n_steps": 3, "digest": "dd",
         "collectives": 2, "collectives_by_kind": {"all_reduce": 2}, "error_examples": []}
 CHECKED = {"verdict": "PASS", "checks": [{"name": "count", "pass": True}], "failed": [], "n_collectives": {"0": 2, "1": 2}, "peer_binding": {"a": 1, "b": 2}}
@@ -177,7 +182,7 @@ CHECKED = {"verdict": "PASS", "checks": [{"name": "count", "pass": True}], "fail
 def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(0, 1), gprog: bool = True, provenance: bool = True,
           checked: dict | None = None, summary: dict | None = None, states: dict | None = None) -> tuple[int, dict, dict, list]:
     """`tp-fold-match` of a two-rank capture whose stages are stand-ins: (exit code, tp2_fold_match.json, tp2_rank_match.json or {},
-    the collectives the cross-rank check was given and which of its legs it got)."""
+    the collectives the cross-rank check was given and which of its other inputs it got)."""
     capture, out = tmp_path / "capture", tmp_path / "out"
     given: list = []
     capture.mkdir()
@@ -199,8 +204,8 @@ def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(
         (rank_dir / "fold_summary.json").write_text(json.dumps(SUMMARY if summary is None else summary))
         return dict(FOLD, tp={"rank": rank, "world": 2} if states is None else states)
 
-    def cross_rank_check(colls, **legs):
-        given.append((colls, sorted(name for name in ("recorder", "links", "provenance", "recorder_sha256") if legs[name] is not None)))
+    def cross_rank_check(colls, **inputs):
+        given.append((colls, sorted(name for name in ("recorder", "links", "provenance", "recorder_sha256") if inputs[name] is not None)))
         return json.loads(json.dumps(CHECKED if checked is None else checked))
 
     monkeypatch.setattr(FM, "fold_rank", fold_rank)
@@ -219,7 +224,7 @@ def _main(tmp_path: Path, monkeypatch, *, logs=(0, 1), recorders=(0, 1), links=(
 def test_a_fold_match_whose_every_stage_passes_passes_and_counts_the_peer_bindings(tmp_path, monkeypatch):
     rc, doc, rank_match, given = _main(tmp_path, monkeypatch)
     assert rc == 0 and doc["pass"] is True and doc["problems"] == []
-    assert doc["legs"] == {"fold_per_rank": {"0": True, "1": True}, "compare_per_rank": {"0": "PASS", "1": "PASS"},
+    assert _by_stage(doc) == {"fold_per_rank": {"0": True, "1": True}, "compare_per_rank": {"0": "PASS", "1": "PASS"},
                            "global_match_per_rank": {"0": "PASS", "1": "PASS"}, "cross_rank": "PASS"}
     assert doc["cross_rank"]["peer_binding_n"] == 2 and "peer_binding" not in doc["cross_rank"] and rank_match["peer_binding"] == {"a": 1, "b": 2}
     assert given == [({0: SUMMARY["fold"]["collectives"], 1: SUMMARY["fold"]["collectives"]}, ["links", "provenance", "recorder", "recorder_sha256"])]
@@ -233,7 +238,7 @@ def test_a_rank_whose_fold_summary_lists_no_collective_gives_the_cross_rank_chec
 def test_a_rank_with_no_observer_log_fails_the_match_and_ran_no_compare_and_no_global_match(tmp_path, monkeypatch):
     rc, doc, rank_match, given = _main(tmp_path, monkeypatch, logs=(0,))
     assert rc == 1 and doc["pass"] is False and doc["problems"] == ["rank 1: partner rank missing (no log.rank1.jsonl.gz)"]
-    assert doc["legs"] == {"fold_per_rank": {"0": True, "1": False}, "compare_per_rank": {"0": "PASS", "1": None},
+    assert _by_stage(doc) == {"fold_per_rank": {"0": True, "1": False}, "compare_per_rank": {"0": "PASS", "1": None},
                            "global_match_per_rank": {"0": "PASS", "1": None}, "cross_rank": "FAIL"}
     assert doc["cross_rank"]["failed"] == ["partner_rank"] and doc["cross_rank"]["peer_binding_n"] == 0
     assert rank_match == {} and given == []
@@ -241,7 +246,7 @@ def test_a_rank_with_no_observer_log_fails_the_match_and_ran_no_compare_and_no_g
 
 def test_a_rank_given_no_global_program_fails_the_match_with_no_global_match_record(tmp_path, monkeypatch):
     rc, doc, _, _ = _main(tmp_path, monkeypatch, gprog=False)
-    assert rc == 1 and doc["legs"]["global_match_per_rank"] == {"0": None, "1": None} and doc["legs"]["cross_rank"] == "PASS"
+    assert rc == 1 and _by_stage(doc)["global_match_per_rank"] == {"0": None, "1": None} and _by_stage(doc)["cross_rank"] == "PASS"
     assert [p.split(":")[0] + ":" + p.split(":")[1].split("(")[0] for p in doc["problems"]] == ["rank 0: GM-01 stage not run ", "rank 1: GM-01 stage not run "]
 
 
@@ -256,11 +261,11 @@ STOPPED = {"verdict": "FAIL", "checks": [{"name": "count", "pass": False, "fails
 
 @pytest.mark.parametrize("checked, own", [(None, []), (dict(CHECKED, verdict="FAIL", failed=["peer"]), ["peer"]), (STOPPED, [])],
                          ids=["a check that passed", "a check that failed", "a check that stopped early"])
-def test_the_legs_the_cross_rank_check_was_not_given_fail_it_by_name_after_its_own(tmp_path, monkeypatch, checked, own):
+def test_the_inputs_the_cross_rank_check_was_not_given_fail_it_by_name_after_its_own(tmp_path, monkeypatch, checked, own):
     rc, doc, rank_match, given = _main(tmp_path, monkeypatch, recorders=(0,), links=(1,), provenance=False, checked=checked)
     assert rc == 1 and given[0][1] == []
     assert doc["cross_rank"]["failed"] == own + ["recorder_missing", "links_missing", "provenance_missing"] == rank_match["failed"]
-    assert doc["cross_rank"]["verdict"] == "FAIL" == rank_match["verdict"] and doc["legs"]["cross_rank"] == "FAIL"
+    assert doc["cross_rank"]["verdict"] == "FAIL" == rank_match["verdict"] and _by_stage(doc)["cross_rank"] == "FAIL"
     assert doc["cross_rank"]["peer_binding_n"] == (0 if checked is STOPPED else 2)
     assert [p for p in doc["problems"] if "cannot run" in p or "REQUIRED" in p] == [
         "rank 0: no tp_links.json for the rank Program(s); the link check cannot run",

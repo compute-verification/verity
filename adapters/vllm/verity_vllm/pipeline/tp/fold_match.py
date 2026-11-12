@@ -259,8 +259,8 @@ def _stage(per_rank: dict[str, dict], r: int, name: str) -> dict:
 
 
 def _fails_too(xr: dict[str, Any], name: str) -> None:
-    """Fails the cross-rank check ``xr`` by ``name``, a leg it could not run for want of its input, beside the checks it failed
-    itself (it lists none when it stopped at the ranks or at a rank's duplicate collective)."""
+    """Fails the cross-rank check ``xr`` by ``name``, an input it was not given, beside the checks it failed itself (it lists none
+    when it stopped at the ranks or at a rank's duplicate collective)."""
     xr["failed"] = list(_listed(xr, "failed")) + [name]
     xr["verdict"] = "FAIL"
 
