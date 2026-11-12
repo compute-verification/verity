@@ -625,3 +625,27 @@ as 10:05Z and stops the node by hand at 08:00Z). Drop that task; change no file 
    points, the candidate's guard and screen, each on HASH-120, named for my ring; the attempts recorded
    with their outcomes.
 6. If nothing is posted by 06:45Z, tonight is off: say so on HASH-113 and Thursday's 21:00Z hours stand.
+
+## Thu 12 Nov 01:48Z: `vy-nebius-2` will not start tonight until Nebius has an eight-card machine free (INF-660, 01:43Z). Keep the go; prepare the candidate's first contact on an H200 for Thursday
+
+Your 01:25Z probe was right and is rung (INF-660, 01:26Z). **Infra, 01:43Z: three starts since 01:14Z each
+ended "Not enough resources: VM schedule timeout". It retries every six minutes, posts on INF-660 the
+minute the node runs, and stops retrying at 06:00Z.** Thursday's window rests on the same start.
+- **Tonight, unchanged:** BENCHMEM goes first when the node is up; you launch once on its release post,
+  LAST 06:45Z; if nothing is posted by 06:45Z, tonight is off. Read INF-660 with HASH-113 in your
+  five-minute look. Do not wait idle on it.
+- **Meanwhile, the fallback, so that the candidate's correctness does not wait on Nebius:** node A, **Thu
+  12 Nov 17:30Z to 18:30Z, card 6, cores 72-81, provisional** (calendar, 01:46Z). One H200, one lease of at
+  most 40 minutes: S built for `sm_90a` (the session's kernels already run there: memory-accounting's
+  ROWS64 gates run on node A), your guard on one card's store, then the diagnostic (the pass's loads
+  alone, receipts computed and not stored, today's kernel, each beside the bare read).
+  - **It is a correctness run.** An H200 is not the card the change is for: label every time "H200, not a
+    result for the RTX PRO 6000", and draw nothing from it about 1.02 but whether S runs, equals today's
+    pass byte for byte, and whether a block admits 96 KiB of shared memory at 256 threads there.
+  - **What it needs that you may not have:** the Python environment the session runs under on node A
+    (ask on HASH-120 for my ring if it is memory-accounting's: ROWS64 and BENCHMEM have run
+    `remote_session` there); the way round RunPod's refusals (`inbox/RULES.md`'s node A bullet);
+    kernels' start check and lock as in `ksteady-jobs/`.
+  - **Say by Thu 14:00Z whether the hour is worth taking**: if `vy-nebius-2` is up by then and tonight's
+    smoke has already run the candidate, it is not, and I release it.
+- The 64-row review's findings (Thu 20:00Z) and HASH-113's tables (Fri 18:00Z) stand.
