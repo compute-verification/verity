@@ -91,7 +91,11 @@ moved; one failing for any other reason fails. With `--moved` too, each requirer
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
 failures are judged. The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
-dependencies there drops the rest first.
+dependencies there drops the rest first: every copy its `links.json` lists but those of the packages in the `closure` of
+one this run audits (a prover's among them), which its check.py builds, so that dropping one would only have it cloned
+again. Such a copy is kept while its entry is the key its manifest and toolchain give now and it holds every package the
+manifest names (`cache.py`'s `fetched_deps`), and dropped otherwise. Each drop says one line: the package, and whether
+it was outside this run's packages, under another key, or incomplete (`drops`).
 
 A record difference is not a failure of the run. A package that any other run of check.py fails only on record differences
 (check.py's report names the record that settles them, `regenerated`) has that record kept the same way, so a run without
@@ -392,6 +396,24 @@ def drop_incomplete(pkg: str, tree: Path, links: dict[str, str], log=print) -> N
         write_links(tree, links)
         log(f"lean-records: {pkg}: its fetched dependencies lacked {what}, as a run killed while Lake cloned them leaves "
             "them; they were dropped, and are taken whole or not at all")
+
+
+def drops(pkg: str, todo: list[str], tree: Path, links: dict[str, str]) -> dict[str, str]:
+    """{package: why} for each package of ``links`` whose copy of its fetched dependencies a records run of ``todo`` drops
+    before it audits ``pkg``. The run keeps the copy of each package in the `closure` of one it audits, which its check.py
+    builds (a prover's among them), while its entry is the key its manifest and toolchain give now and it `lacks` nothing:
+    dropped, check.py would clone it again. Every other copy goes when ``pkg`` fetches dependencies, for the inodes."""
+    mine = {c for t in todo for c in closure(t)}
+    why = {}
+    for q, k in links.items():
+        if q not in mine:
+            if LA.deps_key(tree / pkg):
+                why[q] = "outside this run's packages"
+        elif k != (now := LA.deps_key(tree / q)):
+            why[q] = f"another key: {LINKS} has {str(k)[:12]}, and its manifest and toolchain now give {now[:12] if now else 'none'}"
+        elif what := lacks(q, tree):
+            why[q] = f"incomplete: it lacks {what}"
+    return why
 
 
 def read_links(tree: Path) -> dict[str, str]:
@@ -1355,7 +1377,11 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     the tree (`put_left`). In a run, the module versions it added go into ``out``
     in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
     sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
-    (`LakeArtifacts.take`), so its builds restore what they compiled."""
+    (`LakeArtifacts.take`), so its builds restore what they compiled.
+    Before each package's audit, the copies of fetched dependencies `LINKS` lists that this run does not keep go, each
+    with a line naming the package and why (`drops`). It keeps those of the packages in the `closure` of one it audits,
+    each while its entry is the key its manifest and toolchain give now and it holds every package the manifest names;
+    the others go when the package about to be audited fetches dependencies."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
@@ -1429,7 +1455,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 else:
                     repair(tree, closure(p), links, None, log)
                 mark(tree, package=p, phase="deps")
-                for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
+                for other, why in drops(p, todo, tree, links).items():
+                    log(f"lean-records: {other}: its fetched dependencies are dropped from {tree} ({why})")
                     unlink(other, tree, links)
                 if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
                     links[p] = k

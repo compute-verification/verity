@@ -1068,6 +1068,56 @@ def test_in_the_sandbox_a_dependency_still_missing_ends_the_try_before_lake_and_
     assert "this node keeps no dependencies (Mathlib)" in why and records in why
 
 
+def test_a_records_run_keeps_the_whole_dependencies_of_the_packages_it_audits_and_says_why_it_drops_any_other(
+        pair, tmp_path, monkeypatch):
+    """`--records s` audits `s/proofs` beside `s` (`proved_in`), so its check.py builds it. A tree kept only the copies of
+    the packages a run named, so this run dropped the one a run of `s/proofs` had taken, its check.py cloned the
+    dependencies again, and a kill while it did left a directory lacking some. The run keeps the copy of each package in
+    the `closure` of one it audits while its entry in `links.json` is the key its manifest and toolchain give now and it
+    holds every package the manifest names, and says of each copy it drops which package and why."""
+    root, _, _ = pair
+    git = [{"type": "git", "name": "dep", "rev": "abc"}, {"type": "git", "name": "«doc-gen4»", "rev": "def"}]
+    more = {"s/lean-toolchain": "v1\n", "s/lake-manifest.json": json.dumps({"packages": git[:1]}),
+            "s/proofs/lean-toolchain": "v1\n",
+            "s/proofs/lake-manifest.json": json.dumps({"packages": [
+                *git, *json.loads(PAIR["s/proofs/lake-manifest.json"])["packages"]]})}
+    for f, text in more.items():
+        (root / f).write_text(text)
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: sorted({*PAIR, *more}))
+    tree, deps = tmp_path / "cache" / LC.RECORDS / "local", tmp_path / "deps"
+    ks, kp = LC.LA.deps_key(root / "s"), LC.LA.deps_key(root / "s/proofs")
+    (deps / ks / "dep").mkdir(parents=True)
+    theirs, other = tree / "s/proofs/.lake/packages", tree / "x/.lake/packages"
+
+    def audited(links: dict[str, str], out: str) -> list[str]:
+        """The lines of a records run of `s` on the tree whose `links.json` is ``links``, each drop's."""
+        (tree / LC.LINKS).write_text(json.dumps(links))
+        said = []
+        assert LC.audit_records(S, deps, out=tmp_path / out, log=said.append, rebuild=True) == 0, said
+        return [s.removeprefix("lean-records: ") for s in said if "its fetched dependencies are dropped" in s]
+
+    for d in (theirs / "dep" / "cloned-here", theirs / "doc-gen4", other / "dep"):
+        d.mkdir(parents=True)
+    assert audited({"s/proofs": kp, "x": "kx"}, "out") == [
+        f"x: its fetched dependencies are dropped from {tree} (outside this run's packages)"]
+    assert not other.exists() and (theirs / "dep" / "cloned-here").is_dir() and (theirs / "doc-gen4").is_dir(), \
+        "the prover's copy stays in place"
+    assert LC.read_links(tree) == {S: ks, "s/proofs": kp} and (tree / S / ".lake/packages/dep").is_dir()
+
+    shutil.rmtree(theirs / "doc-gen4")                          # as a run killed while Lake cloned them leaves it
+    assert audited({S: ks, "s/proofs": kp}, "out2") == [
+        f"s/proofs: its fetched dependencies are dropped from {tree} (incomplete: it lacks 1 of the packages its manifest "
+        "names (doc-gen4))"]
+    assert not theirs.exists() and LC.read_links(tree) == {S: ks}
+
+    for d in (theirs / "dep", theirs / "doc-gen4"):
+        d.mkdir(parents=True)
+    assert audited({S: ks, "s/proofs": "0" * 64}, "out3") == [
+        f"s/proofs: its fetched dependencies are dropped from {tree} (another key: {LC.LINKS} has 000000000000, and its "
+        f"manifest and toolchain now give {kp[:12]})"]
+    assert not theirs.exists() and LC.read_links(tree) == {S: ks}
+
+
 MISMATCH = "sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean differ)"
 
 
