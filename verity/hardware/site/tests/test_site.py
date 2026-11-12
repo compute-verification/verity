@@ -353,7 +353,10 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _node_entry(device={"sku": "sim-file", "count": _entry(1.5)}), "whole number"),
     (lambda: _node_entry(device={"sku": "sim-int8-a", "count": _entry(1)}), "the card given"),
     (lambda: _node_entry(memory={"dram": {"tier": "dram"}}), "bytes"),
-    (lambda: _node_entry(memory={"dram": {"tier": "sram", "bytes": _entry(1)}}), "tier"),
+    (lambda: _node_entry(memory={**NODE_FILE["memory"], "x": {"tier": "sram", "bytes": _entry(1)}}), "tier"),
+    (lambda: _node_entry(memory={"vda": NODE_FILE["memory"]["vda"]}), "no dram leaf"),
+    (lambda: _node_entry(memory={"dram": NODE_FILE["memory"]["dram"]}), "no disk leaf"),
+    (lambda: _node_entry(memory={}), "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d"),
 ])
 def test_what_no_site_holds_is_malformed(make, what: str) -> None:
     with pytest.raises(Malformed, match=what):

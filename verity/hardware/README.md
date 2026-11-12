@@ -98,7 +98,8 @@ card of its kind. `nodes.kinds()` lists the files. `Registration.node_entry(node
 (`site/__init__.py`), gives the entry a node file's table and its GPU card's table register, under the host id its
 caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the sheet's device
 memory, and the host's leaves `host/NAME`. The sheet is built from the card file when the entry is, so no digest is
-kept in the tree.
+kept in the tree. It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check
+and state a host with less memory than the node has. Its message gives the commands that read both on the node.
 
 ~~~python
 from verity.hardware import cards, nodes
@@ -109,5 +110,6 @@ log = Registration("remote")
 site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
 ~~~
 
-`remote` accepts either node's log against the auditor the GPU card files give. `onsite` refuses it by
-`challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).
+`remote` accepts the eight-card node's log against the auditor the GPU card files give. `onsite` refuses it by
+`challenger-reach` until a memory challenger is registered with a link to the host. The H200 node gives no entry until
+its file states its host's DRAM and disks (`tests/test_nodes.py`).

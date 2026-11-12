@@ -7,7 +7,8 @@ A node is a host and the GPUs it carries. Its file names the GPU card and how ma
 ``store.dram``, whole, and no rate, clock or peak is here: those are the cards'. Every number is an entry
 ``{value, unit, mark, source}`` under the cards' rules (``verity.hardware.cards``), and a leaf no run has read has no
 entry. A kind is the card and its count, never a host's name: whoever registers a node gives its host's id
-(``verity.hardware.site.Registration.node_entry``). Stdlib and the cards only.
+(``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram`` or no ``disk``
+leaf). Stdlib and the cards only.
 
 ~~~python
 from verity.hardware import cards, nodes

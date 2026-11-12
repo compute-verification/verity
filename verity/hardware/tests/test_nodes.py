@@ -1,6 +1,6 @@
-"""The node files: every number an entry under the cards' rules, each naming a GPU card and a host card, and the log
-each gives accepted for `remote` against the auditor the card files give, and refused for `onsite` until a memory
-challenger is registered."""
+"""The node files: every number an entry under the cards' rules, each naming a GPU card and a host card. A node whose
+host's DRAM and disks a run has read gives a log accepted for `remote` against the auditor the card files give, and
+refused for `onsite` until a memory challenger is registered; a node whose host no run has read gives no entry."""
 
 from __future__ import annotations
 
@@ -12,11 +12,15 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import TIERS, Auditor, Link, Loc, Refused, Registration, Sheet, check
+from verity.hardware.site import TIERS, Auditor, Link, Loc, Malformed, Refused, Registration, Sheet, check
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
 CHALLENGER = "challenger0"
+READ = [kind for kind in nodes.kinds()
+        if {"dram", "disk"} <= {leaf["tier"] for leaf in nodes.load(kind).get("memory", {}).values()}]
+"""The nodes whose file states the host's DRAM and a disk: the ones an entry can be built of."""
+UNREAD = sorted(set(nodes.kinds()) - set(READ))
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -43,7 +47,9 @@ def log_of(kind: str, composite: str) -> Registration:
 
 
 def test_the_nodes_we_run() -> None:
-    assert nodes.kinds() == ["h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
+    """A node moves from the second list to the first with the rows a run read on it, and the acceptance tests below
+    then hold its log."""
+    assert READ == ["rtx-pro-6000-server-x8"] and UNREAD == ["h200-sxm-141gb-x1"]
 
 
 @pytest.mark.parametrize("kind", nodes.kinds())
@@ -76,7 +82,7 @@ def test_every_number_is_sourced_as_a_cards_is(kind: str) -> None:
                          "measured each to its source as art:<12 hex>, or leave the leaf out until a run reads it")
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", READ)
 def test_remote_accepts_a_nodes_log(kind: str) -> None:
     """The site holds the node's count of devices, each naming the sheet its card file gives and holding that sheet's
     device memory, whole, and the host's leaves at the file's bytes, by tier."""
@@ -91,7 +97,7 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
     assert site.links == () and site.boundary() == []
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", READ)
 def test_onsite_refuses_a_nodes_log_until_a_challenger_is_registered(kind: str) -> None:
     """No node file has a memory challenger's row, so no challenger reaches the host that holds the node's memory. With
     one of the auditor's linked to the host, the same entry is accepted."""
@@ -106,13 +112,20 @@ def test_onsite_refuses_a_nodes_log_until_a_challenger_is_registered(kind: str) 
         log_of(kind, "remote"), auditor()).units
 
 
+@pytest.mark.parametrize("kind", UNREAD)
+@pytest.mark.parametrize("composite", ["remote", "onsite"])
+def test_a_node_whose_host_no_run_has_read_gives_no_entry(kind: str, composite: str) -> None:
+    """Its file states the card, the count and the host card. An entry of those alone would pass `check` for `remote`
+    with a host holding no DRAM and no disk, so the builder refuses it and says what to read."""
+    assert not nodes.load(kind).get("memory")
+    with pytest.raises(Malformed, match="no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d -n -o NAME,SIZE"):
+        log_of(kind, composite)
+
+
 def test_the_quoted_bytes() -> None:
-    """The eight-card node's tiers, so a changed entry is a changed number here; the H200 node states no leaf of its
-    host's yet."""
+    """The eight-card node's tiers, so a changed entry is a changed number here."""
     assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).tiers(HOST) == {
         "hbm": 8 * 103_079_215_104, "dram": 1_872_605_741_056, "disk": 274_877_906_944 + 1_048_576 + 5_991_479_377_920}
-    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).tiers(HOST) == {
-        "hbm": 151_397_597_184, "dram": 0, "disk": 0}
 
 
 def test_an_unknown_node_names_the_nodes() -> None:

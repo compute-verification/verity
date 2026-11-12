@@ -449,7 +449,11 @@ class Registration:
         `host/gpuI/hbm` holding the sheet's device memory, whole; and for each `memory.NAME` of the file a leaf
         `host/NAME` under the host, at the tier and bytes it states, in the file's order. The file names no host, so
         the caller gives its id, and every id under it starts with that. The entry holds no link and none of the
-        auditor's devices."""
+        auditor's devices.
+
+        A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
+        a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
+        than it is."""
         try:
             sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
             leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
@@ -457,6 +461,12 @@ class Registration:
         except (AttributeError, KeyError, TypeError) as e:
             raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count and, for each memory.NAME, "
                             "a tier and bytes") from None
+        unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
+        if unread:
+            raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
+                            "understate the node's memory; read them on a node of its kind (`lsmem -b --summary=only; "
+                            "lsblk -b -d -n -o NAME,SIZE,TYPE` under `research run --on NODE`) and state each as a "
+                            "memory.NAME table: the memory the host is given, and every block device")
         sheet = Sheet.of_file(card, tick)
         if sheet.sku != sku:
             raise Malformed(f"the node's devices are {sku!r}, and the card given is {sheet.sku!r}'s")

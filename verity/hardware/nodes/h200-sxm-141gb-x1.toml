@@ -15,4 +15,5 @@ sku = "xeon-platinum-8468-2s"
 
 # The host's own memory has no leaf yet: no run has read the memory the VM is given (lsmem -b) or its block devices
 # (lsblk -b), and MemTotal, which the runs' records hold, leaves out what the kernel keeps. A leaf is a table
-# memory.NAME with its tier and bytes, as the RTX PRO 6000 node's file has them.
+# memory.NAME with its tier and bytes, as the RTX PRO 6000 node's file has them. Until this file has a dram leaf and a
+# disk leaf, no entry is built of it.
