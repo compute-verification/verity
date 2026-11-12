@@ -78789,3 +78789,148 @@ Tags and times as in my 08:22Z entry. Mailbox read at 08:20Z: nothing new.
 **5. For REDRAW.** The branch by name is now `2011220faf`. `7393f47f04b1` is the families change alone; `2011220faf` adds only the rename in the four files. Either is a fast-forward of `dd89861a3e`.
 
 **6. Two executions, still.** Both of us are live and split the work through a file on the VM: the other has the four files and the two runs at `2011220faf`; I have this entry, the run at `7393f47f04b1` and the follow-up. One entry per subject comes from the two of us.
+
+## SESSIONS, Thu 12 Nov 08:27Z: item 1 and the first column of item 2: the count `main` proves charges each sampled proof block its own classes and reads no session, so against it the reruns-times-gates term gains the whole factor (2.00, 4.00, 6.00 bits at 4, 16, 64 tables a session) at any placement; by a model of the counter's layout a gate's proof blocks sit at one table in the prover's order, parameters and a table's edges apart, and no placement keeps every gate at one table; as the proof stands T tables a session cost log2 T bits
+
+Tags: [run] with the run's id; [read] with the place; [relayed] another lane's statement I did not check; [derived] arithmetic on tagged figures; [guess]. Times are from `date -u`. Mailbox read at 08:27Z: the 08:11Z section (the release log's limits), answered in section 3; none newer.
+
+**Nothing here ran on the served engine and no session of these shapes has run. Every figure is modeled**: designs of the cost model, arithmetic on `hashBound`, and for the multiplicity a model of the class counter's layout, not a count from a wiring.
+
+Run: `r20261112-081540-7ffe` (`vy-nebius-cpu-14`, exit 0, record `art:6ef4446fef7bf1c6a64800ff2aadf75474d64f2d2d8c760f934cad6d9926d7f6`), script `wires_tables.py` beside my earlier ones, on COUNT's kit of run `8921` unchanged at tree `c8b46edd10e4`. 106 designs and 8 searches. Controls: the 12 one-table rows (A at 459, B, C; three configurations; two heads for the best designed) give back run `8921`'s K, GB, sampled proof blocks and sessions and run `bd0d`'s bits; 0 differ [run].
+
+### 1. The multiplicity
+
+**1.1 How tables are placed in sessions** [read, `main` `bcaf58a45d` and the planner's tree `c8b46edd10e4`].
+
+- The plan places nothing, it counts: a block type's sampled proof blocks of the verification phase go into sessions of at most J tables of the type, as many as hold them, padded to one size (`benchmarks/spot_figures/total_cost.py:617-618`, `cap = j * c.table`; `verity/protocols/spot/optimize.py:1360`, `count = ceil(blocks / c.cap)`). No file of the plan names which proof block goes to which table.
+- The prover places them, and the verifier derives the same: "the units split into `count` equal consecutive parts, and table `j` proves part `j` as a subset sample of the population" (`verity/protocols/flock/prover/live/src/bin/flock-circuit.rs:488-494`, `side_tables` at `:529-568`, `units.chunks(k)` at `:549`); the units are the sample's, ascending in the registered population (`verity/protocols/spot/verifier/one_stage/draw.py:3`, `:50-52`; Lean `Draw.tablesWhy`, `Stmt.setupTables` at `Flock/HmRow.lean:2432`). It refuses a count that does not divide the sample and more than 64 tables (`MAX_TABLES`, `flock-circuit.rs:58`), and only the CPU prover takes `--session-tables` above 1.
+- The two-stage verifier of `main` takes none of this: one session of one table a template (`second-tables`, `Spot/SecondStage.lean:22-23`; `SpotFlock.ref_one_table`, `security/Proofs/Flock/SpotFlock/Accepting.lean:83`). So "T tables a session" below is the prover's rule applied to a second stage that `main` refuses.
+
+**1.2 What the bound counts, and why the placement does not enter it** [read; the last step derived].
+
+- In the binding error's expected calls the two counts that read a session are the sessions of a sample and the classes the sample's sessions need, session by session (`security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean:117-131`). With reruns charged a table each table is a session of the compiled layer, so both then count tables [relayed: LAND2's 08:10Z entry, (e); TABLEEXT's 07:35Z entry].
+- What `main` proves about them at SPOT[Flock]'s code is a sum over the checked proof blocks, with no session in it: sessions at most the sampled proof blocks (`SpotFlock/Counts.lean:123`, `code_hNs`), classes at most each sampled proof block's own classes summed (`SpotFlock/ClassCounts.lean:62`, `code_hKm_cls`: `K · Σ_t k_t · M t`). Both rest on lemmas stated for any compiled verifier over any proof system: `Compiled.sum_first_sessNeeds_le` and `card_firstSlots_le` (`SamplingGeneric/SessCount.lean:105`, `:122`). Every figure I gave since 05:11Z charges these sums.
+- So [derived] the same sums bound the counts taken table by table, whatever table a proof block is at, and the figure charged does not move with the placement: **against `main`'s count the reruns-times-gates term, and the reruns-times-sessions term, gain the whole factor**, log2 of the largest session's tables. What is not built is the instance: the code's count lemmas are proved over the whole-session proof system, and the ones over the table's are TABLEEXT's open step [relayed].
+- The multiplicity matters only against a sharper count that credits a class once a session when several of the session's proof blocks need it. Nobody has proved or made that count; 1.3 models what it would be worth.
+
+**1.3 At how many tables of one session a gate's proof blocks sit, modeled** [run `7ffe`; the layout is run `c59e`'s reading of the counter, `exact_classes.py`].
+
+What the model holds: a column of the K = 2,048 linear (2,050 classes a block: its row's 2,048 input words, one weight slice, one of its own; 1,024 columns a row; a table of 2,048 columns) shares the 2,048 with its row's other columns and the weight slice with the same column of every other row and replay block. It carries 48.3% of the classes charged in the best designed configuration (21.3% in the other two). A row's columns are adjacent in the population, so the prover's rule puts a row's sampled columns at one table unless a table's edge falls among them, and at most one row an edge.
+
+| configuration, row | T | block types with a session of more than one table | the column type's share of the classes charged | sampled columns in a row that has one | tables they sit at: the prover's order | the worst order | classes at a table's edge, at most | parameters' classes | block types with no breakdown | gain in bits: against `main`'s count | against a count by session, the prover's order | the worst order |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| best designed, A | 4 | 257 of 258 | 48.3% | 1.283 | 1 (at most 1.0005) | 1.283 | 0.084% | 0.191% | 34.1% | 2.00 | 2.000 | 1.838 |
+| best designed, A | 16 | 257 of 258 | 48.3% | 1.136 | 1 (at most 1.0005) | 1.136 | 0.105% | 0.191% | 34.1% | 4.00 | 4.000 | 3.914 |
+| best designed, A | 64 | 257 of 258 | 48.3% | 1.136 | 1 (at most 1.0005) | 1.136 | 0.110% | 0.191% | 34.1% | 6.00 | 6.000 | 5.914 |
+| best designed, B | 4 | 255 of 258 | 48.3% | 1.283 | 1 (at most 1.0005) | 1.283 | 0.084% | 0.191% | 34.1% | 2.00 | 2.000 | 1.838 |
+| best designed, B | 16 | 255 of 258 | 48.3% | 1.283 | 1 (at most 1.0006) | 1.283 | 0.104% | 0.191% | 34.1% | 4.00 | 4.000 | 3.837 |
+| best designed, B | 64 | 255 of 258 | 48.3% | 1.283 | 1 (at most 1.0006) | 1.283 | 0.110% | 0.191% | 34.1% | 6.00 | 6.000 | 5.837 |
+| best designed, C | 4 | 256 of 258 | 48.3% | 1.283 | 1 (at most 1.0005) | 1.283 | 0.084% | 0.191% | 34.1% | 2.00 | 2.000 | 1.838 |
+| best designed, C | 16 | 256 of 258 | 48.3% | 1.283 | 1 (at most 1.0006) | 1.283 | 0.104% | 0.191% | 34.1% | 4.00 | 4.000 | 3.837 |
+| best designed, C | 64 | 256 of 258 | 48.3% | 1.283 | 1 (at most 1.0006) | 1.283 | 0.110% | 0.191% | 34.1% | 6.00 | 6.000 | 5.837 |
+| `main`'s driver, A | 4 | 173 of 193 | 21.3% | 1.016 | 1 (at most 1.0004) | 1.016 | 0.217% | 0.084% | 0.5% | 2.00 | 2.000 | 1.995 |
+| `main`'s driver, A | 16 | 185 of 193 | 21.3% | 1.284 | 1 (at most 1.0006) | 1.284 | 0.271% | 0.084% | 0.5% | 4.00 | 4.000 | 3.930 |
+| `main`'s driver, A | 64 | 185 of 193 | 21.3% | 1.016 | 1 (at most 1.0005) | 1.016 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.995 |
+| `main`'s driver, B | 4 | 184 of 193 | 21.3% | 1.016 | 1 (at most 1.0004) | 1.016 | 0.217% | 0.084% | 0.5% | 2.00 | 2.000 | 1.995 |
+| `main`'s driver, B | 16 | 184 of 193 | 21.3% | 1.016 | 1 (at most 1.0005) | 1.016 | 0.271% | 0.084% | 0.5% | 4.00 | 4.000 | 3.995 |
+| `main`'s driver, B | 64 | 184 of 193 | 21.3% | 1.016 | 1 (at most 1.0005) | 1.016 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.995 |
+| `main`'s driver, C | 4 | 189 of 193 | 21.3% | 1.136 | 1 (at most 1.0004) | 1.136 | 0.216% | 0.084% | 0.5% | 2.00 | 2.000 | 1.963 |
+| `main`'s driver, C | 16 | 189 of 193 | 21.3% | 1.136 | 1 (at most 1.0005) | 1.136 | 0.270% | 0.084% | 0.5% | 4.00 | 4.000 | 3.963 |
+| `main`'s driver, C | 64 | 189 of 193 | 21.3% | 1.136 | 1 (at most 1.0005) | 1.136 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.963 |
+| plan of record, A | 4 | 184 of 193 | 21.3% | 1.016 | 1 (at most 1.0004) | 1.016 | 0.217% | 0.084% | 0.5% | 2.00 | 2.000 | 1.995 |
+| plan of record, A | 16 | 188 of 193 | 21.3% | 1.016 | 1 (at most 1.0005) | 1.016 | 0.271% | 0.084% | 0.5% | 4.00 | 4.000 | 3.995 |
+| plan of record, A | 64 | 188 of 193 | 21.3% | 1.016 | 1 (at most 1.0005) | 1.016 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.995 |
+| plan of record, B | 4 | 184 of 193 | 21.3% | 1.284 | 1 (at most 1.0005) | 1.283 | 0.217% | 0.084% | 0.5% | 2.00 | 2.000 | 1.931 |
+| plan of record, B | 16 | 184 of 193 | 21.3% | 1.284 | 1 (at most 1.0006) | 1.284 | 0.271% | 0.084% | 0.5% | 4.00 | 4.000 | 3.930 |
+| plan of record, B | 64 | 184 of 193 | 21.3% | 1.284 | 1 (at most 1.0006) | 1.284 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.930 |
+| plan of record, C | 4 | 189 of 193 | 21.3% | 1.067 | 1 (at most 1.0004) | 1.067 | 0.216% | 0.084% | 0.5% | 2.00 | 2.000 | 1.981 |
+| plan of record, C | 16 | 189 of 193 | 21.3% | 1.067 | 1 (at most 1.0005) | 1.067 | 0.270% | 0.084% | 0.5% | 4.00 | 4.000 | 3.981 |
+| plan of record, C | 64 | 189 of 193 | 21.3% | 1.067 | 1 (at most 1.0005) | 1.067 | 0.284% | 0.084% | 0.5% | 6.00 | 6.000 | 5.981 |
+
+- **A gate of a row is needed by 1.02 to 1.28 sampled proof blocks, not by T**: the sample takes 0.03 to 0.52 of a column a row, so a row that has a sampled column has 1.02 to 1.28 of them. They sit at one table in the prover's order (a table's edge falls among them for at most 0.06% of the rows) and at 1.02 to 1.28 tables in the worst order, at every T [run].
+- **Parameters' classes can sit at every table of a session**: one class a parameter slice, needed by blocks of other rows and other replay blocks. They are 0.19% of the classes charged (best designed; 0.08% in the other two), among the block types the counter breaks down [run].
+- **Not modeled**: the block types whose count is not a counted kind's, 34.1% of the classes charged in the best designed configuration (the scores and values units a head block is split into, at 836 and 67 classes; the fused and page-copy types) and 0.5% in the other two; and the uncut head blocks' two groups (a row and head's blocks share 513 query classes, the 8 heads' blocks at a key block share 128), which one order cannot both keep adjacent [derived from the layout].
+- **The term's gain against a count by session** (the last two columns; the other block types counted by proof block on both sides): the whole factor in the prover's order, and the whole factor less 0.005 to 0.16 bit in the worst order. The 0.16 is all the sharper count could ever be worth at these samples, at one table a session too [run].
+
+**1.4 Does a placement exist that keeps every gate's proof blocks inside one table?** No, at any T above 1 at these samples [derived, on the model]. A row's gates want a row's columns together and a weight slice's gate wants one column of every row together; row B samples 41.7 million columns of this type in 20,379 tables, and they share 1,024 column places a linear, so a weight slice is read by many sampled columns of different rows; with 28% more sampled columns than rows that have one, the two wants link far more columns than a table's 2,048. A placement can keep the rows' gates (the prover's order: all but the weight slice, 1 class in 2,050) or the parameters' gates, not both. Any order but the prover's also needs a change on both sides (`side_tables`, `Stmt.setupTables`). By 1.2 the bound as `main` counts it does not need one.
+
+**1.5 What a count in place of the model needs.** The counter writes each kind's count, not which blocks need a class. A count needs it changed to write each class's needers at the plan's replay block (its run `153e` took 879 s on 16 cores [relayed]) and a sample drawn at a design's rates. I did not do it; say if you want it.
+
+### 2. Bits at T tables a session, the first column: as the proof stands
+
+A phase in calls (`T = c = 513·2^80`). Arithmetic on `hashBound` (`security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbers.lean:50`, on `main`) with reruns `1 + 210·⌈4·h·2^23/e⌉` at the design's largest session of h tables, the sampled proof blocks for the sessions and each sampled block's own classes summed. The statement on `main` that charges these is about the code at one table a session only (`SpotFlock.code_eventTwoX_le_cls_at_budget`, `SpotFlock/FirstHitClassAt.lean:56`; `ref_one_table`), and the numeric instance on `main` is at one table (`hashBound_table1_513`, `:102`). At T above 1 the column is arithmetic on the same formula with no instance on `main` and no verifier that accepts the session.
+
+Priced a table: every table pays the fixed seconds a one-table session pays on both sides, and a session pays once only the program's read (row A, at 459 core-seconds). So rows B and C are the same design at every T and only their sessions change; row A's design moves with T.
+
+| configuration, head statement | row | T | K | GB (×1.05) | sampled proof blocks | tables | sessions | largest session, tables | bits as the proof stands |
+|---|---|---|---|---|---|---|---|---|---|
+| best designed, 160 | A | 1 | 86 | 2,942.0 (3,089.1) | 336,170,646 | 277,518 | 277,518 | 1 | 98.01 |
+| best designed, 160 | A | 4 | 12 | 1,480.9 (1,555.0) | 750,498,216 | 619,336 | 154,921 | 4 | 94.85 |
+| best designed, 160 | A | 16 | 30 | 1,182.8 (1,242.0) | 938,124,810 | 774,162 | 48,518 | 16 | 92.53 |
+| best designed, 160 | A | 64 | 32 | 1,108.9 (1,164.4) | 1,000,666,464 | 825,778 | 13,073 | 64 | 90.43 |
+| best designed, 160 | B | 1 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 877,309 | 877,309 | 1 | 96.35 |
+| best designed, 160 | B | 4 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 877,309 | 220,163 | 4 | 94.35 |
+| best designed, 160 | B | 16 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 877,309 | 56,302 | 16 | 92.35 |
+| best designed, 160 | B | 64 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 877,309 | 15,566 | 64 | 90.35 |
+| best designed, 160 | C | 1 | 22 | 807.8 (848.2) | 1,375,913,396 | 1,135,341 | 1,135,341 | 1 | 95.97 |
+| best designed, 160 | C | 4 | 22 | 807.8 (848.2) | 1,375,913,396 | 1,135,341 | 284,923 | 4 | 93.97 |
+| best designed, 160 | C | 16 | 22 | 807.8 (848.2) | 1,375,913,396 | 1,135,341 | 72,862 | 16 | 91.97 |
+| best designed, 160 | C | 64 | 22 | 807.8 (848.2) | 1,375,913,396 | 1,135,341 | 20,109 | 64 | 89.97 |
+| best designed, 287.5 | A | 1 | 79 | 3,202.7 (3,362.8) | 308,807,919 | 254,935 | 254,935 | 1 | 98.13 |
+| best designed, 287.5 | A | 4 | 19 | 1,867.6 (1,961.0) | 594,145,713 | 490,339 | 122,645 | 4 | 95.19 |
+| best designed, 287.5 | A | 16 | 12 | 1,480.9 (1,555.0) | 750,498,216 | 619,346 | 38,816 | 16 | 92.85 |
+| best designed, 287.5 | A | 64 | 25 | 1,419.4 (1,490.4) | 781,770,675 | 645,164 | 10,262 | 64 | 90.79 |
+| best designed, 287.5 | B | 1 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 670,907 | 670,907 | 1 | 96.73 |
+| best designed, 287.5 | B | 4 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 670,907 | 168,388 | 4 | 94.73 |
+| best designed, 287.5 | B | 16 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 670,907 | 43,096 | 16 | 92.73 |
+| best designed, 287.5 | B | 64 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 670,907 | 11,945 | 64 | 90.73 |
+| best designed, 287.5 | C | 1 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 928,932 | 928,932 | 1 | 96.26 |
+| best designed, 287.5 | C | 4 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 928,932 | 233,109 | 4 | 94.26 |
+| best designed, 287.5 | C | 16 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 928,932 | 59,609 | 16 | 92.26 |
+| best designed, 287.5 | C | 64 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 928,932 | 16,475 | 64 | 90.26 |
+| `main`'s driver, 160 | A | 1 | 36 | 7,046.7 (7,399.1) | 135,959,292 | 268,836 | 268,836 | 1 | 98.09 |
+| `main`'s driver, 160 | A | 4 | 59 | 4,299.7 (4,514.7) | 222,822,173 | 440,537 | 110,196 | 4 | 95.38 |
+| `main`'s driver, 160 | A | 16 | 5 | 3,581.5 (3,760.6) | 302,124,910 | 597,300 | 37,428 | 16 | 92.94 |
+| `main`'s driver, 160 | A | 64 | 74 | 3,428.1 (3,599.6) | 279,471,878 | 552,530 | 8,762 | 64 | 91.05 |
+| `main`'s driver, 160 | B | 1 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 559,985 | 559,985 | 1 | 97.03 |
+| `main`'s driver, 160 | B | 4 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 559,985 | 140,382 | 4 | 95.03 |
+| `main`'s driver, 160 | B | 16 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 559,985 | 36,000 | 16 | 93.03 |
+| `main`'s driver, 160 | B | 64 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 559,985 | 10,323 | 64 | 91.03 |
+| `main`'s driver, 160 | C | 1 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 776,423 | 776,423 | 1 | 96.56 |
+| `main`'s driver, 160 | C | 4 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 776,423 | 194,378 | 4 | 94.56 |
+| `main`'s driver, 160 | C | 16 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 776,423 | 49,439 | 16 | 92.56 |
+| `main`'s driver, 160 | C | 64 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 776,423 | 13,318 | 64 | 90.56 |
+| plan of record, 60.56 | A | 1 | 40 | 6,342.1 (6,659.2) | 151,065,880 | 298,692 | 298,692 | 1 | 97.94 |
+| plan of record, 60.56 | A | 4 | 71 | 3,573.0 (3,751.6) | 268,141,937 | 530,131 | 132,592 | 4 | 95.11 |
+| plan of record, 60.56 | A | 16 | 88 | 2,882.8 (3,026.9) | 332,344,936 | 657,044 | 41,169 | 16 | 92.80 |
+| plan of record, 60.56 | A | 64 | 94 | 2,698.8 (2,833.7) | 355,004,818 | 701,832 | 11,080 | 64 | 90.70 |
+| plan of record, 60.56 | B | 1 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 836,124 | 836,124 | 1 | 96.45 |
+| plan of record, 60.56 | B | 4 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 836,124 | 209,265 | 4 | 94.45 |
+| plan of record, 60.56 | B | 16 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 836,124 | 52,864 | 16 | 92.45 |
+| plan of record, 60.56 | B | 64 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 836,124 | 13,918 | 64 | 90.45 |
+| plan of record, 60.56 | C | 1 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 895,873 | 895,873 | 1 | 96.35 |
+| plan of record, 60.56 | C | 4 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 895,873 | 225,059 | 4 | 94.35 |
+| plan of record, 60.56 | C | 16 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 895,873 | 58,015 | 16 | 92.35 |
+| plan of record, 60.56 | C | 64 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 895,873 | 16,482 | 64 | 90.35 |
+
+- **As the proof stands a session of T tables costs log2 T bits at the same sample: 2.00, 4.00, 6.00** (rows B and C, where the sample does not move). In row A the sample grows as well (the program's read is paid by fewer sessions), so it loses 3.2, 5.5 and 7.6 bits and its GB fall from 2,942.0 to 1,480.9, 1,182.8 and 1,108.9: still above row B's 1,045.4 [run].
+- No row reaches 100 bits in this column at any T: 98.13 at the most (row A at the 287.5 head, one table), 89.97 at the least (row C, 64 tables) [run].
+- The least GB with 100 bits or more in this column, by the planner's own design at a smaller budget (an upper bound of the least: a search that priced classes could do better [guess]), row B's pricing, head at 160: one table a session 14,065.4 GB (K 10; 78,178,000 sampled proof blocks; 64,614 sessions; 100.11 bits); 4 tables 63,250.7 GB (K 4; 15,635,844; 3,454 sessions); 16 tables 251,827.7 GB (K 2; 3,909,090; 459 sessions); 64 tables none found [run] (the design at one sampled replay block is at about 99.4 bits [derived]).
+
+### 3. The limits, restated against `main`'s release log (your 08:11Z correction)
+
+- Read by me too on `main` `0c0efe136a`: `verity/protocols/spot/device/challenger.py:247` `MAX_TREE_LINES = 1 << 23`, `:223` `MAX_COINS = 1 << 24` of 64 bytes. The planner's tree I run on (`c8b46edd10e4`) still holds 2^20 lines and 2^26 bytes; my rows carry the first limit at both.
+- The sentence of my 06:32Z entry, restated: the design of row C needs a release log that holds its 197.5 million lines of session coins where `main`'s holds 8,388,608 (23.5 times over, not 188); rows A and B 48.3 and 152.7 million (5.8 and 18.2 times over).
+- **No design's first limit met changes, at T = 1, 4, 16 or 64** [run]. At one table a session all 16 priced designs write 44.4 to 197.6 million lines, over both; the 100-bit design of section 2 writes 11.24 million, over both. At 4, 16 and 64 tables the first limit met is the tables a session (the GPU prover's 1) at both, and behind it the lines are 71.2 to 204.7 million, over both. Lines follow tables (172 a table, 2 a session), so larger sessions take off 1% at most.
+- The one design whose lines change sides: the 100-bit design at 4 tables a session as the proof stands (2,252,706 lines, over 1,048,576 and under 8,388,608); its first limit is still the tables. A design under 8,388,608 lines holds at most about 48,200 tables, about 58 million sampled proof blocks, which is about 19,000 GB by the 05:48Z relation [derived].
+- No GB or bits figure moved.
+
+### For Daniel
+
+- The trade you asked about has two parts. The first is the count of reruns: today it is charged for a whole session, so a session of 4, 16 or 64 tables loses 2, 4 or 6 bits. If the reruns are charged for one table, that loss goes away entirely, and it goes away however the proof blocks are arranged in tables, because what we charge for the gates is already one count per sampled proof block and never looked at sessions.
+- I checked, by a model and not by a count, whether a finer accounting would change that: it would not. A gate is needed by one sampled proof block in most cases and by 1.3 at the most on average, never by one in every table.
+- Nothing in this entry was served or proved; the one-table change is on a branch and its use here is arithmetic. The cost side (whether larger sessions save any GB) is the next entry.
+
+### Next
+
+Items 2 (the other three columns), 3 (the GB) and 4 by 11:00Z, from the same run.
