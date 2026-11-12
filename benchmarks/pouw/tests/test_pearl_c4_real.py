@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -122,3 +124,16 @@ def test_an_npz_capture_is_read_as_its_linears(tmp_path, replayed):
     assert b["inputs"][NAME + ".npy"] == a["inputs"]["L000-attn.npy"] and b["weights"] == a["weights"]
     untimed = lambda s: {n: [{k: v for k, v in t.items() if k != "seconds"} for t in ts] for n, ts in s["tiles"].items()}  # noqa: E731
     assert untimed(b) == untimed(a)
+
+
+@pytest.mark.slow
+def test_started_by_its_command_line_the_fast_f1_is_the_file_beside_it(tmp_path):
+    """`real.py CAPTURE OUT --f1 fast` by its command line: a worker's `tile` imports `f1_fast` from the script's own
+    directory, which a started script has first on its path, and the tile says its check was the fast one. Only a start
+    by the command line shows it: in this process the suite's path holds the directory."""
+    captured, out = capture(tmp_path), tmp_path / "out"
+    p = subprocess.run([sys.executable, R.__file__, str(captured), str(out), "--tiles", "1", "--workers", "2", "--f1", "fast"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    (tile,) = json.loads((out / "summary.json").read_text())["tiles"][NAME]
+    assert tile["f1"] == "fast" and tile["rejected"] == ""
