@@ -308,6 +308,7 @@ def _read_as_json_load_plain(q) -> None:
     assert read_instances(str(q), expand=False) == json.loads(q.read_text())
 
 
+@pytest.mark.slow
 def test_read_instances_shares_equal_items_and_holds_a_fraction_of_json_loads_memory(tmp_path):
     """Equal argument items are one list, so a causal attention's rows (each key operand the row before's plus one item) hold each
     item once: at 192 rows of 2 heads json.load's document is about 7 times the shared one, and the ratio grows with the rows (the

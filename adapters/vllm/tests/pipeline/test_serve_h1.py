@@ -85,6 +85,7 @@ class _Server:
         return run
 
 
+@pytest.mark.slow
 def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_that_credit_nothing(tmp_path, monkeypatch):
     """Two Commit windows, each one H1 window over the committer's steps 0 and 1: each window's A tables and input ids are
     the rows the server's Commit acquired (ROOTS1 tied, none of the Commit's own trees), under the period's one Program and

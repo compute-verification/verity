@@ -78,7 +78,7 @@ def test_the_export_is_fixed_by_the_root_and_content_addressed(attn_world, tmp_p
 
 
 def test_a_gemm_coordinate_is_the_row_word(attn_world, tmp_path):
-    _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, gemm_coords_per_row=1000))
+    _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, workers=1, gemm_coords_per_row=1000))
     d = tmp_path / "sets" / f"gemm-coordinate-ampere-bf16-k{H}"
     man = json.loads((d / "manifest.json").read_text())
     x: np.ndarray = np.frombuffer((d / "x.u16").read_bytes(), "<u2").reshape(man["n"], H)
@@ -152,14 +152,16 @@ def test_after_replay_exports_only_a_passing_pair_zero(attn_world, tmp_path):
     assert VS.after_replay(str(tmp_path), {"result": None}, 0, ROOT, *args) is None
     assert VS.after_replay(str(tmp_path), {"result": True}, 1, ROOT, *args) is None and not (tmp_path / "export.json").exists()
     (tmp_path / "provenance.json").write_text(json.dumps({"row": 101, "research_run": "r-test"}))
-    (tmp_path / "limits.json").write_text(json.dumps({"per_family": 3}))
+    (tmp_path / "limits.json").write_text(json.dumps({"per_family": 3, "workers": 1}))
     s = VS.after_replay(str(tmp_path), {"result": True}, 0, ROOT, *args)
     p = s["provenance"]
     assert p["row"] == 101 and p["research_run"] == "r-test" and p["model"] == "tiny/model" and p["versions"] == {"git_head": "f00"}
     assert all(c["drawn"] <= 3 for c in s["by_family"].values()) and VX.verify(tmp_path)["ok"]
 
 
+@pytest.mark.slow
 def test_a_spent_time_budget_stops_the_draw_by_name(attn_world, tmp_path):
+    """The forked pool's check of the budget (`Limits.workers` is 8 unless set); `test_vu_store_budget` holds the serial one's."""
     s = _export(attn_world, tmp_path, limits=VX.Limits(per_family=64, max_seconds=0.0))
     assert s["sets"] == [] and s["by_family"]
     assert all(c.get("drawn", 0) == 0 and c["not_drawn_time_budget"] > 0 for c in s["by_family"].values())
@@ -176,6 +178,7 @@ def test_families_are_interleaved_in_the_draw(attn_world):
     assert len(set(fams[:n])) == n                         # the first round holds one VU of every family
 
 
+@pytest.mark.slow
 def test_the_forked_pool_writes_the_serial_sets(attn_world, tmp_path):
     a = _export(attn_world, tmp_path / "serial")
     b = _export(attn_world, tmp_path / "forked", limits=VX.Limits(per_family=64, workers=2))

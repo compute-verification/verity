@@ -163,6 +163,7 @@ def test_the_gemm_s_coordinates_of_c_outputs_cover_its_outputs_and_compute_them(
     assert y.reshape(-1).tolist() == x["out"].tolist()
 
 
+@pytest.mark.slow
 def test_a_window_s_caps_make_both_parts_chunks_of_the_stager_s_bit_rows(row):
     """With the partition file's ``chunk_cap`` naming them, the quantisation (``part``) and the GEMM's coordinates (``coord``) are
     each chunks on `UnitStager`'s bit rows, which a5 composes from the template alone; a part that is no chunk needs an input set
