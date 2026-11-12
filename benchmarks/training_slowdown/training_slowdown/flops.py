@@ -158,7 +158,7 @@ GATHER_INDEX_BITS, GATHER_CHUNK_BITS = 32, 10
 
 
 def mux_tree(n: int, k: int) -> int:
-    """The multiplexers per word bit of `verity.ml.circuits.boolean.gather`'s tree over n words by a k-bit index: at each
+    """The multiplexers per word bit of `verity.circuits.boolean.gather`'s tree over n words by a k-bit index: at each
     level the words meet in pairs, one without a partner meeting the fill word."""
     out = 0
     for _ in range(k):

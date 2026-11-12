@@ -3,10 +3,10 @@ Flock has no piece for on this branch (core's own are to land). `stage.py` puts 
 row units only, and every result staged with them is labelled 'core3 scratch'. E4m3ToF32 is a 256-entry table read
 (`fp.lookup`, 201 ANDs, checked on every byte); F32ToE2m1Sat is seven threshold comparisons and a NaN select (180 ANDs,
 checked on 40k words)."""
-from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.silicon import fp
-from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, sub
-from verity.ml.circuits.silicon import cast
+from verity.definitions.ops import prims as P
+from verity.definitions.silicon import fp
+from verity.circuits.boolean.forms import NOT, const_bits, mux, sub
+from verity.definitions.silicon import cast
 
 E4M3_TABLE = [cast.e4m3_to_f32_word(b) for b in range(256)]
 

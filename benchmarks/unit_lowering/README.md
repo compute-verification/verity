@@ -6,10 +6,10 @@ What writing a PoUW H1 circuit file costs, and the file it writes, for three sta
   8 columns, with the lane index a public input.
 - `combine`: the leaf's `PouwH1Combine_v1{TILE}`, which joins the lanes.
 - `tile`: the whole H1 tile unit, the auditor's lowering whose file a PoUW period-open commits as `k<K>`
-  (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `integrations/vllm`).
+  (`python -m tests.protocols.pouw_h1_circuits --lower K R C BIND PATH` from `adapters/vllm`).
 
 The tile is a parameter. 32 × 32 is the H1 kernel's warp tile, never a choice made for proving. The lane and the combine are
-what can be proved once the tile is past the block (`verity/core/protocols/pouw/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
+what can be proved once the tile is past the block (`verity/protocols/pouw/verifier/leaf_lanes.py`, `benchmarks/pouw/h1_lanes/`).
 `lanes.py` stages each one as `h1_lanes/run.py`'s `stager` does, with its `RC` set to the leaf, bound to the Program a served
 window's verifier derives for it. They exist only at an R that is a multiple of 16: a lane reads the leaf's R admit bits as
 one row, and a row is whole 16-bit words (`h1zy._leaf`). So at 4 × 8 and 8 × 8 the tile itself is the statement; a 4 × 8 tile

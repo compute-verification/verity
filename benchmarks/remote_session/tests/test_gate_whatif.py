@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
 import gate_whatif as gw  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 from test_challengers import PINS, analysed, host  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 

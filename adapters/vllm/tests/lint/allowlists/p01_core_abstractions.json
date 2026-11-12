@@ -1,0 +1,13 @@
+{
+  "rule": "P1 (use core's abstractions; never copy or patch them)",
+  "entries": [
+    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.circuits.codec._as_specialized"},
+    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.circuits.codec._static_functions"},
+    {"file": "verity_vllm/program/frontend/correspond.py", "kind": "core-private", "symbol": "_statics_diff", "detail": "verity.circuits.defs._plain_static"},
+    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.circuits.defs._static_key"},
+    {"file": "verity/definitions/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.circuits.defs.REGISTRY.add()"},
+    {"file": "verity_vllm/program/workload.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.circuits.codec._spec_id"},
+    {"file": "verity_vllm/program/shared_definitions.py", "kind": "core-private", "symbol": "canonicalize", "detail": "verity.circuits.codec._encode_definition"},
+    {"file": "verity/definitions/call_scope.py", "kind": "core-private", "symbol": "spec_statics", "detail": "verity.circuits.codec._split_record"}
+  ]
+}

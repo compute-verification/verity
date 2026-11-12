@@ -28,12 +28,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.ml.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.device import remote
 
 TREE = Path(__file__).resolve().parents[3]
 

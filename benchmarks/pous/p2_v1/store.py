@@ -21,7 +21,7 @@ no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
 `--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
-(`Generated`: `e2e_h200.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+(`Generated`: `benchmarks.torch_gpu.p2_stage.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
@@ -100,13 +100,13 @@ if __package__ in (None, ""):
 else:
     from . import reference
 
-from verity.core.protocols.pous import setup, verifier
-from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.layout import Layout
-from verity.core.protocols.pous.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
+from verity.protocols.pous.verifier import setup, verifier
+from verity.protocols.pous.verifier.labels import salt_value, tag
+from verity.protocols.pous.verifier.layout import Layout
+from verity.protocols.pous.verifier.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
                                                     expand_prefix, stream)
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
@@ -122,7 +122,7 @@ STAGING_ALIGN = 256
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 SETUP_FORMAT = "verity-pous/p2/store/v1"
-GENERATOR = "e2e_h200.served_weights"
+GENERATOR = "benchmarks.torch_gpu.p2_stage.served_weights"
 TIE_TAG = "verity-pous/p2/store-tie/v1"
 TIE_FIELDS = ("manifest", "program", "stream_bytes", "layout_sha512", "commitment", "salt", "root", "w_root", "registration")
 SPOTS_PER_SEGMENT = 2
@@ -392,7 +392,7 @@ def git_blob(path: str) -> str | None:
 
 
 class Generated:
-    """`W` from a seeded weights generator (`e2e_h200.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    """`W` from a seeded weights generator (`benchmarks.torch_gpu.p2_stage.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
     `program`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
     back to back, each part an s8 tensor of the layout tensor's `K` columns."""
 

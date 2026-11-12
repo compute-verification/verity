@@ -150,7 +150,7 @@
     "source": {
       "row": 57,
       "class": "FAIL",
-      "expected": "integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
       "records": "art:f6512887b6c0a9e88be9ef2dc5a31d0e35c16fb5aec11d6b4c2495bc87033645",
       "programs": "art:5e925a59d73127305b8f6065c2ee519097c22b45c1e9d3452db338a39b65122d",
       "program_digest": "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53",
@@ -170,7 +170,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #57; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #57; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -523,7 +523,7 @@
     "source": {
       "row": 101,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
       "records": "art:a4ea1a18cfa0c841b77c9e05f98a22bc1fd20588c061005fb3244199bcc8e0e0",
       "programs": "art:a9be8f7c514fc61cabcf913946a17f9d349a00ef3386fd33093ee186790b1802",
       "program_digest": "079ee0a8e3e0355b2600b8576588edb4d5df56bb21f3ff707e9117a8e843c1de",
@@ -537,7 +537,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json, row #101; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json, row #101; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -2936,7 +2936,7 @@
     "source": {
       "row": 11,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
       "records": "art:bb37177f464bb0122c93724b13e91738fd5d19b24d0a84a5629c9e4e78894228",
       "programs": "art:db4499e73020f5d761b55a801bc4d926eaad36c15099d90f170ffe00928aaaf7",
       "program_digest": "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590",
@@ -2956,7 +2956,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #11; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #11; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -3819,7 +3819,7 @@
     "source": {
       "row": 60,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
       "records": "art:a3c0e7c3063e3984320eae61c28fea17ccb22eb76888c2886c597c5f82511c04",
       "programs": "art:7d8d822f5f033d24cdc4a4e3c5d960db3fd93e00cfa5161a04b209f5d27f2580",
       "program_digest": "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501",
@@ -3842,7 +3842,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #60; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #60; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -4699,7 +4699,7 @@
     "source": {
       "row": 68,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json",
       "records": "art:f17e1728043793540e35184977d16f501c9c69adf9516ea22dfe0ea20ae5fe4f",
       "programs": "art:d3fa83361d58c702318733f7382fc41b47800ebe401c6d772e6caaad6ed72737",
       "program_digest": "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf",
@@ -4719,7 +4719,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json, row #68; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager.json, row #68; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -5576,7 +5576,7 @@
     "source": {
       "row": 67,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json",
       "records": "art:ca12debfd2b43a47f416f69e5539bb72f51a5b449745569faa53fe3164a7e8a2",
       "programs": "art:a31f7b72eb62f9d66af6f4fc861b6b351f790ece9e730dd359c2a697898292b2",
       "program_digest": "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72",
@@ -5596,7 +5596,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json, row #67; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager.json, row #67; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -10224,7 +10224,7 @@
     "source": {
       "row": 39,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
       "records": "art:38586a214c3026a002d6ee7eb5e0a0ae09668d2e6deb157676e4d8980158706c",
       "programs": "art:37cd49bd1fd652447ac421ffc6967798f67fb9b1c2d9bd13aa0d3422d15cd905",
       "program_digest": "fdb622a62644af5569b29096730aa26ddcb1b367de449d432b695ee7dd7eb443",
@@ -10244,7 +10244,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #39; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json, row #39; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -10818,7 +10818,7 @@
     "source": {
       "row": 74,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
       "records": "art:85924a1f3056537448b92cc012c7c3ea4721a82de3df90309cb47023ef26b627",
       "programs": "art:9d14bd1194738e46c0c4e56b16ecb44187e19b77389f93fd19d7cb3f5d629eda",
       "program_digest": "8159a2500a4a55b31912243e35d17d310d76496d3d160aca56e55e149f3b2ad7",
@@ -10841,7 +10841,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #74; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/qwen3-4b-fp8__fp8__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #74; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   },
@@ -11432,7 +11432,7 @@
     "source": {
       "row": 73,
       "class": "GREEN",
-      "expected": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
+      "expected": "adapters/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
       "records": "art:da7b7474aba6ead45158276697675b0d85a5c8c79e2415e85830963cb6f63d01",
       "programs": "art:91fac396ce4189b8bbb84e85f0cf62d23f660596e882b73c936b4624292da31d",
       "program_digest": "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262",
@@ -11455,7 +11455,7 @@
     },
     "sources": [
       {
-        "label": "replay_partition.strata (population per VU family and bound parameters) of integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #73; the counts docs/vllm-subcircuit-coverage.md cites"
+        "label": "replay_partition.strata (population per VU family and bound parameters) of adapters/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json, row #73; the counts docs/vllm-subcircuit-coverage.md cites"
       }
     ]
   }

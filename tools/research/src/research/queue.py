@@ -383,7 +383,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
+PORTED_ROOTS = ("Security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -957,7 +957,7 @@ class DriveFlags:
                 if not (isinstance(v, list) and all(isinstance(x, str) and GATE_PATH_RE.fullmatch(x) and ".." not in x.split("/")
                                                     for x in v)):
                     raise bad(k, "a list of Python scripts by their path from the repository's root, as "
-                                 "[\"integrations/x/tools/gate.py\"]")
+                                 "[\"adapters/x/tools/gate.py\"]")
                 got[k] = tuple(v)
         if "warn_steps" in doc:
             if not (isinstance(doc["warn_steps"], list) and all(x in CHECK_STEPS for x in doc["warn_steps"])):
@@ -2903,9 +2903,9 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
-                  "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
-                  "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
+_COLD_PREFIXES = ("verity/circuits/", "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/",
+                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/", "verity/protocols/flock/prover/python/",
+                  "verity/commitments/", "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
 
 
 def contained_first(entries: dict[int, Entry]) -> list[int]:
@@ -3487,7 +3487,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/core/service/flock",)
+LEAN_BUILDS = ("verity/protocols/flock/verifier",)
 
 
 def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
@@ -3839,7 +3839,7 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
 #: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)

@@ -17,7 +17,7 @@ import free_codec as FC  # noqa: E402
 import gates as G  # noqa: E402
 import renorm as R  # noqa: E402
 import squaring as S  # noqa: E402
-from verity.ml.circuits.evaluation.reference import evaluate  # noqa: E402
+from verity.circuits.evaluation.reference import evaluate  # noqa: E402
 
 PINS = {
     "gathers": "eb1a6b31264359d8",

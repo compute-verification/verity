@@ -74,7 +74,7 @@ CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 if mkdir -p "$CR_CACHE" 2>/dev/null && [ -w "$CR_CACHE" ]; then export HZ_CACHE=$CR_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python:$SRC/tools/research/src
 CR=benchmarks/network_traces/chain_record.py
 
 # ---- the record's leak guard ---------------------------------------------------------------------------------------
@@ -158,10 +158,10 @@ mkdir -p "$OUT/gates"
   ! -name plan.json ! -name probe.json ! -name io.json ! -name out-witness.jsonl -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
-(cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
+(cd verity/protocols/certifier/verifier/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
-export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-records
-[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/core/protocols/network/lean/.lake/build/bin/network-period
+export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/certifier/verifier/lean/.lake/build/bin/network-records
+[ -z "${CR_PERIOD_ANSWER:-}" ] || export VERITY_NETWORK_PERIOD_EXE=$SRC/verity/protocols/certifier/verifier/lean/.lake/build/bin/network-period
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
 if [ "${CR_PATH:-}" = warden ]; then
   "$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
@@ -200,7 +200,7 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

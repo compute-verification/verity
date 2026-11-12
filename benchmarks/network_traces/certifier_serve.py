@@ -24,7 +24,7 @@ namespace has no other interface. On real hosts it is only the route of the meas
   PoUW's registration of the window, which opens the window's salt;
 - the reveal deadline covers the whole run and a margin (`REVEAL_MARGIN_S`), where a deployment's covers one PoUW
   window; and the keys are LMS at H = `HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the
-  deployed key's is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
+  deployed key's is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
 
 **The served plan** (`plan`, `served_plan`). The endpoint is probed with the one request body every session sends,
 straight from the host, `--in-flight` requests at a time after one uncounted round: `/v1/completions`, streamed, a
@@ -225,21 +225,21 @@ from fractions import Fraction
 from pathlib import Path
 
 import active_replay as ar
-from verity.ml.crypto import lms
-from verity.core.protocols.certifier import calibration, out_commit
-from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
+from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import calibration, out_commit
+from verity.protocols.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
+from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
-from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
-from verity.core.protocols.certifier.audit import certificate_refusals
-from verity.core.protocols.certifier.lean_audit import DISAGREEMENT, Audit
-from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
-from verity.core.protocols.certifier.served import Admission, ServedProfile
-from verity.core.protocols.certifier.service import LinkWindows
-from verity.core.protocols.spot.one_stage import registration as R
-from verity.core.protocols.spot.service import WindowCommitmentRecord
+from verity.protocols.certifier.verifier.grid import COMPLETE, Reason, Status, occupancy, row_count
+from verity.protocols.certifier.verifier.audit import certificate_refusals
+from verity.protocols.certifier.verifier.lean_audit import DISAGREEMENT, Audit
+from verity.protocols.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
+from verity.protocols.certifier.verifier.served import Admission, ServedProfile
+from verity.protocols.certifier.verifier.service import LinkWindows
+from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.spot.verifier.service import WindowCommitmentRecord
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -297,7 +297,7 @@ NO_N2 = ("no verdict on the advice profile: the egress counts derive from the in
 def load_key(directory: Path, height: int = HEIGHT) -> lms.PrivateKey:
     """The LMS key (N = 64, W = 1) in `directory`, made there first at `height` when absent (above `HEIGHT` in
     `KEYGEN_WORKERS` processes), in the challengers' layout
-    (`benchmarks/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
+    (`verity/composite/device/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
     (its tree, checked against `public` and `tree.sha512`), its leaf state `state.json`, and `public.json`, the public
     key as a deployment record carries it."""
     import hashlib
@@ -1605,8 +1605,8 @@ def parse_prompts(text: str) -> list[list[int]]:
 
 
 def rehearse(args) -> int:
-    from verity.core.protocols.certifier import lean_audit
-    from verity.core.protocols.spot.one_stage import verifier
+    from verity.protocols.certifier.verifier import lean_audit
+    from verity.protocols.spot.verifier.one_stage import verifier
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)

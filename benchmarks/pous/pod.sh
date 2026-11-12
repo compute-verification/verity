@@ -60,7 +60,7 @@
 #
 # vllm-gpu bootstraps the implementation tree's Python 3.12 environment (its ops/pod_bootstrap.sh --cpu: the venv, torch cu129,
 # vLLM, the QWEN05 checkpoint; no native taps, which this benchmark does not use), then runs bench.py, which drives that tree's
-# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.core.protocols.pous. reference runs
+# frozen harness (pous-dense-bench) and gates and profiles its result with this tree's verity.protocols.pous.verifier. reference runs
 # bench.py's CPU reference on the pod's cores in a plain Python 3.12 venv. band-gpu needs no implementation tree: a Python 3.12
 # venv with torch built for the pod's CUDA toolkit (TORCH_CUDA=cuNNN overrides), numpy and ninja, and this tree's band_gpu/.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -71,7 +71,7 @@ IMPL=${IMPL:-vllm-gpu}; WS=${WS:-qwen2.5-0.5b/linears+head}
 # challenger's Lean verdict (its Server and build need only the stdlib)
 export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 # Every entry must exist: importlib.metadata opens a missing one as a zip, and the suite guard counts that open as a read.
-export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/python
+export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
 # (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
@@ -80,8 +80,8 @@ export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/verity/core/difftest/pyth
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
 if [ "${PREPARE:-0}" = 1 ]; then
   case $IMPL in
-    p2-v3-mc-gpu) set -- verity/core/devices/memory_challenger/lean memory-challenger-verdict ;;
-    p2-v3-gpu) set -- verity/core/protocols/pous/check pous-timed-audit ;;
+    p2-v3-mc-gpu) set -- verity/protocols/pous/device/lean memory-challenger-verdict ;;
+    p2-v3-gpu) set -- verity/protocols/pous/verifier/check pous-timed-audit ;;
     *) exit 0 ;;
   esac
   grep -q "^name = \"$2\"" "$1/lakefile.toml" || exit 0

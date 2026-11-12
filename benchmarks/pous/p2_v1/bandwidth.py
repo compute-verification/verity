@@ -1,5 +1,5 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
-`verity.core.protocols.remote_bandwidth.p2_party`, whose verifier runs on another host.
+`verity.protocols.poub.verifier.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
@@ -74,11 +74,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(STAGE))
 
-from verity.core.protocols.pous import verifier as V
-from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
-from verity.ml.commitments.merkle import merkle_depth
+from verity.protocols.pous.verifier import verifier as V
+from verity.protocols.pous.verifier.labels import salt_value, tag
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES
