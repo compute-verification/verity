@@ -1778,8 +1778,8 @@ def test_a_member_counts_toward_the_lean_cap_only_when_its_lean_change_compiles(
 def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that_isnt_a_pr_number_fails_the_tick(env):
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
     (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
-    batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
-    A wide PR fills its batch's cap, once the PR with no Lean change has gone in a batch of its own."""
+    Lean batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is
+    fixed.  A wide PR fills its batch's cap; the PR with no Lean change goes in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"security/Definitions/D.lean": "-- d\n"})
@@ -1792,12 +1792,11 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     loop.tick()
     assert [s.wide for s in seen] == [frozenset(), frozenset()]
     assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
-    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
-    leans = replace(seen[-1], ready=seen[-1].ready[:2])
-    assert vqueue.decide(leans) == [Build((1, 2), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(seen[-1]) == [Build((1, 2), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(replace(seen[-1], ready=seen[-1].ready[2:])) == [Build((3,), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n\n1\n")
     loop.tick()
-    assert seen[-1].wide == {1} and vqueue.decide(replace(leans, wide=seen[-1].wide)) == [Build((1,), leans.main, L.DEPTH)]
+    assert seen[-1].wide == {1} and vqueue.decide(seen[-1]) == [Build((1,), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n#2\n")
     with pytest.raises(Q.QueueError) as e:
         loop.tick()
@@ -1827,31 +1826,35 @@ def test_the_pins_file_is_read_each_tick_with_its_comments_and_a_word_that_isnt_
 
 
 @pytest.mark.parametrize("priority", [None, "", "99\n", "1\n"], ids=["none", "empty", "stale", "lean first"])
-def test_a_lean_pr_ranked_first_by_mark_time_or_the_priority_file_opens_no_batch_until_the_pins_file_names_it(env, priority):
+def test_at_lean_0_a_lean_pr_opens_no_batch_whatever_its_rank_until_the_pins_file_names_it_and_under_a_cap_it_opens_one(
+        env, priority):
     """Rank is the priority file, then mark time: with none, an empty one, a stale one naming only PRs gone, or one listing
-    the Lean PR first, the Lean PR marked longest ago ranks first, and still goes in no batch while a PR with no Lean change
-    waits.  Once the pins file names it, it goes in a batch of its own, leaving that PR for the next."""
+    the Lean PR first, the Lean PR marked longest ago ranks first.  At `--lean 0` it still goes in no batch, and the PR with
+    no Lean change is built; once the pins file names it, it goes in a batch of its own, leaving that PR for the next.
+    Under a `--lean` cap above 0 it opens that batch with no pin."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(3, {"a.txt": "3\n"})
     seen: list[Snapshot] = []
-    loop = env.loop(lambda s: seen.append(s) or [], lean=3)
+    loop = env.loop(lambda s: seen.append(s) or [], lean=0)
     if priority is not None:
         (prio := env.tmp / "priority").write_text(priority)
         loop.world.priority_file = prio
     loop.tick()
-    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (3, False)]
+    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (3, False)] and seen[-1].lean == 0
     assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    assert vqueue.decide(replace(seen[-1], lean=1)) == [Build((1,), seen[-1].main, L.DEPTH)]
     (pins := env.tmp / "pins").write_text("1\n")
     loop.world.pins_file = pins
     loop.tick()
     assert vqueue.decide(seen[-1]) == [Build((1,), seen[-1].main, L.DEPTH)]
 
 
-def test_a_pinned_lean_pr_waits_for_a_candidate_with_no_lean_change_and_a_tick_building_nothing_logs_why_once(env):
-    """End to end, at most every second build is pinned: the pinned #1 goes alone on `main` (`--batch` 1); #2, pinned too,
-    waits on #1's candidate, which holds a Lean change, and with no PR with no Lean change to take, the tick builds nothing
-    and logs why (`wait`), once while that why holds; #3, with none, goes on #1's candidate, and #2 on #3's."""
+def test_with_no_records_run_a_lean_pr_waits_for_a_candidate_with_no_lean_change_and_a_tick_building_nothing_logs_why_once(env):
+    """End to end with no records run, where a Lean batch takes a place on main's chain, at most every second build is one:
+    the pinned #1 goes alone on `main` (`--batch` 1); #2, pinned too, waits on #1's candidate, which holds a Lean change,
+    and with no PR with no Lean change to take, the tick builds nothing and logs why (`wait`), once while that why holds;
+    #3, with none, goes on #1's candidate, and #2 on #3's."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n", "pkg/B.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"pkg/B.lean": "-- b\n"})
@@ -1865,7 +1868,7 @@ def test_a_pinned_lean_pr_waits_for_a_candidate_with_no_lean_change_and_a_tick_b
     loop.tick()
     lines = [r for r in env.lines() if r["action"] in ("build", "wait")]
     assert [(r["action"], r["members"]) for r in lines] == [("build", [1]), ("wait", []), ("build", [3]), ("build", [2])]
-    assert lines[1]["why"] == (f"nothing built: pinned with a Lean change, #2 waits while the newest candidate, "
+    assert lines[1]["why"] == (f"nothing built: with a Lean change, #2 waits while the newest candidate, "
                                f"{lines[0]['sha'][:12]}, holds #1's Lean change, and no PR with no Lean change is ready to take")
     assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
 
@@ -3145,8 +3148,8 @@ def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_o
     """`Ready.lean_input` is a PR's own change meeting the Lean inputs (`vqueue_slim.lean_inputs`) of `main`'s tree with the
     ready PRs' changes in it: check's `common.py`, or a script of a Lake package, here the one the staged Lean PR adds.  Neither
     is built beside the staged batch, which would change the Lean inputs of the top it goes onto and start its records run
-    again there; a PR touching none is.  Once the batch is on main's chain, its records carried onto that PR's candidate,
-    the two are built on it."""
+    again there; a PR touching none is.  The tick that puts the batch on main's chain, its records carried onto that PR's
+    candidate, builds the two on it."""
     main = env.main()
     loop, records, sha, one, _ = _records_loop(env)
     env.put(2, {"pkg/notes.py": "2\n"})
@@ -3158,13 +3161,111 @@ def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_o
         1: (True, True), 2: (False, True), 3: (False, True), 4: (False, False)}
     assert loop.tick() == []
     records.verdicts["regen-1"] = RecordsRun(PASS)
-    judged, fixed = loop.tick()
+    judged, fixed, built = loop.tick()
     assert (fixed["action"], fixed["base"], fixed["members"], fixed["repairs"], fixed["enqueued"]) == (
         "build", four["sha"], [1], sha, True), fixed
-    drop, built = loop.tick()
-    assert (drop["action"], drop["sha"], built["members"], built["base"], built["enqueued"]) == (
-        "drop", sha, [2, 3], fixed["sha"], True), built
-    assert len(records.started) == 1
+    assert (built["action"], built["members"], built["base"], built["enqueued"]) == ("build", [2, 3], fixed["sha"], True), built
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["sha"]) == ("drop", sha) and len(records.started) == 1
+
+
+def test_the_tick_that_stages_a_lean_batch_builds_the_prs_with_no_lean_change_beside_it_on_the_same_base(env):
+    """Staging takes no build from the PRs with no Lean change: the tick that stages the Lean batch, its records run started
+    and no check of it enqueued, builds theirs on the same base, its check enqueued at once."""
+    main = env.main()
+    env.put(2, {"b.txt": "2\n"})
+    loop, records, sha, _, first = _records_loop(env)
+    staged, started, beside = first
+    assert (staged["action"], staged["members"], staged["base"], staged["records_first"], staged["enqueued"]) == (
+        "build", [1], main, True, False), staged
+    assert (started["action"], started["sha"]) == ("regenerate", sha) and records.started == [("drive", sha)]
+    assert (beside["action"], beside["members"], beside["base"], beside["enqueued"]) == ("build", [2], main, True), beside
+    assert _checks(env) == [f"ready:{beside['sha']}"] and loop.tick() == []
+
+
+@pytest.mark.parametrize("regenerated", [True, False])
+def test_the_tick_that_puts_a_staged_batch_on_main_s_chain_builds_on_what_it_put_there(env, regenerated):
+    """`Build.after`: once the staged batch's records run passed, the tick that puts it on main's chain, as its records
+    commit or, its run having regenerated nothing, as built, stages the next Lean batch on that candidate, its records run
+    started, and builds the PRs with no Lean change on it, their check enqueued: neither waits for the next tick."""
+    loop, records, sha, _, _ = _records_loop(env)
+    if not regenerated:
+        records.files = {}
+    env.put(2, {"other/B.lean": "theorem b : True := trivial\n", "other/lean-audit.json": '{"records": 1}\n'})
+    env.put(3, {"c.txt": "3\n"})
+    (three,) = loop.tick()
+    assert (three["members"], three["enqueued"]) == ([3], True), three
+    env.put(4, {"d.txt": "4\n"})
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed, staged, started, built = loop.tick()
+    on = fixed["sha"]
+    assert (judged["why"], fixed["action"], fixed["members"], fixed["base"], fixed["enqueued"], fixed.get("repairs")) == (
+        "judged pass", "build", [1], three["sha"], True, sha), fixed
+    assert (staged["action"], staged["members"], staged["base"], staged["records_first"], staged["enqueued"]) == (
+        "build", [2], on, True, False), staged
+    assert (started["action"], started["sha"]) == ("regenerate", staged["sha"])
+    assert (built["action"], built["members"], built["base"], built["enqueued"]) == ("build", [4], on, True), built
+    assert records.started == [("drive", sha), ("drive", staged["sha"])]
+    assert _checks(env) == [f"ready:{c}" for c in (three["sha"], on, built["sha"])]
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["sha"]) == ("drop", sha)
+
+
+def test_at_lean_0_a_pin_puts_no_lean_batch_ahead_of_a_pr_changing_a_lean_input_which_is_built_before_the_next_is_staged(env):
+    """End to end at `--lean 0`, pinned Lean batches back to back: #2 is pinned while pinned #1 is staged, and #3, which
+    changes check's code, a Lean input, is marked beside it and kept out of every build.  The tick that puts #1 on main's
+    chain stages no batch of #2: #3 goes first, built on #1's candidate, and the next tick stages #2 on #3's, its records
+    run started then."""
+    head = env.put(1, LEAN)
+    env.put(2, {"other/B.lean": "theorem b : True := trivial\n", "other/lean-audit.json": '{"records": 1}\n'})
+    (pins := env.tmp / "pins").write_text("1\n")
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records, lean=0)
+    loop.world.slim_driver, loop.world.pins_file = (lambda: "drive"), pins
+    staged, started = loop.tick()
+    sha = staged["sha"]
+    assert (staged["members"], staged["heads"], staged["records_first"], started["action"]) == ([1], [head], True, "regenerate")
+    pins.write_text("1\n2\n")
+    env.put(3, {"tools/verity/check/notes.txt": "3\n"})
+    assert loop.tick() == [] and records.started == [("drive", sha)]
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed, built = loop.tick()
+    assert (fixed["action"], fixed["members"], fixed["repairs"], fixed["enqueued"]) == ("build", [1], sha, True), fixed
+    assert (built["action"], built["members"], built["base"], built["enqueued"]) == ("build", [3], fixed["sha"], True), built
+    assert records.started == [("drive", sha)]
+    drop, next_, began = loop.tick()
+    assert (drop["action"], drop["sha"]) == ("drop", sha)
+    assert (next_["action"], next_["members"], next_["base"], next_["records_first"], next_["enqueued"]) == (
+        "build", [2], built["sha"], True, False), next_
+    assert (began["action"], began["sha"]) == ("regenerate", next_["sha"])
+    assert records.started == [("drive", sha), ("drive", next_["sha"])]
+
+
+def test_a_tick_whose_commit_stages_its_batch_again_or_is_held_builds_nothing_after_it(env):
+    """A build after a Commit goes on what the Commit put on main's chain.  Staged again on a top whose Lean inputs aren't
+    the batch's, or its records commit held, it put nothing there: the tick builds nothing after it, logs nothing of that
+    build, and the next tick builds beside the batch still staged."""
+    loop, records, sha, _, _ = _records_loop(env)
+    moved = _main_to(env, {"pkg/notes.txt": "2\n"})
+    env.put(2, {"b.txt": "2\n"})
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, again, started = loop.tick()
+    assert (again["action"], again["base"], again["members"], again["repairs"], again["records_first"]) == (
+        "build", moved, [1], sha, True), again
+    assert (started["action"], started["sha"]) == ("regenerate", again["sha"])
+    drop, beside = loop.tick()
+    assert (drop["action"], drop["sha"]) == ("drop", sha)
+    assert (beside["action"], beside["members"], beside["base"], beside["enqueued"]) == ("build", [2], moved, True), beside
+    records.verdicts["regen-2"], records.held = RecordsRun(PASS), "its records commit can't be made yet"
+    env.put(3, {"c.txt": "3\n"})
+    judged, held, ring = loop.tick()
+    assert (judged["why"], held["action"], held["sha"], held["done"], ring["action"]) == (
+        "judged pass", "commit", again["sha"], False, "ring"), held
+    records.held = None
+    lines = loop.tick()
+    fixed, built = (r for r in lines if r["action"] == "build")
+    assert (fixed["members"], fixed["base"], fixed["repairs"], built["members"], built["base"]) == (
+        [1], beside["sha"], again["sha"], [3], fixed["sha"]), lines
 
 
 def test_a_staged_batch_whose_chain_top_changed_its_lean_inputs_is_staged_again_there_its_records_run_first(env):
@@ -3488,7 +3589,7 @@ def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env)
     records = Records(env.tmp / "clone")
     dry = env.loop(vqueue.decide, clone="dry", records=records, dry_run=True)
     assert dry.tick() == [] and records.started == [] and env.lines() == []
-    assert any("would build: Build(members=(1,), " in x and "records=True" in x for x in env.out), env.out
+    assert any("would build: Build(members=(1,), " in x and "records=True, after=None" in x for x in env.out), env.out
     loop = env.loop(vqueue.decide, records=records)
     loop.world.slim_driver = lambda: "drive"
     loop.tick()
@@ -4367,6 +4468,28 @@ def test_under_gate_check_a_lean_candidate_s_sharded_check_starts_only_once_its_
     assert env.main() == target and env.withdrawn == [] and len(runs.launches) == 6
     assert _git(env.o.origin, "rev-parse", "main^" if regenerated else "main") == sha
     assert [x for x in env.lines() if x["action"] == "advance"][0]["heads"] == [head]
+
+
+def test_under_gate_check_a_batch_built_in_the_tick_that_commits_a_lean_one_takes_lean_audit_from_its_check_as_started(
+        env, monkeypatch):
+    """The tick that puts a staged Lean batch on main's chain builds the PRs with no Lean change on it (`Build.after`).  Its
+    check started in that tick, so it is judged by none yet: the check of the batch built on it reads its record as
+    started, and, its member changing no Lean input, takes its verdict on lean-audit rather than running the step."""
+    from research.landing import AFTER_LANDING
+
+    env.put(1, LEAN)
+    loop, runs = _check(env, monkeypatch, records=(records := Records(env.tmp / "clone")))
+    _, staged, _ = loop.tick()
+    env.put(2, {"b.txt": "2\n"})
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    judged, fixed, began, built, started = loop.tick()
+    on, top = fixed["sha"], built["sha"]
+    assert (fixed["action"], fixed["repairs"], fixed["enqueued"], began["action"], began["sha"]) == (
+        "build", staged["sha"], True, "slim", on), fixed
+    assert (built["action"], built["members"], built["base"], built["enqueued"]) == ("build", [2], on, True), built
+    assert (started["action"], started["sha"], started["record"].get("lean_audit_from")) == ("slim", top, on), started
+    every, free = ",".join(AFTER_LANDING), ",".join(x for x in AFTER_LANDING if x != "lean-audit")
+    assert [_steps(runs, c) for c in (on, top)] == [[every] * 3, [free] * 3]
 
 
 #: circuit-check's targets in these tests: the head check's, which its sidecar's pins file pins; one no pins file pins, whose
