@@ -1,1 +1,1 @@
-2026-11-12T16:13Z CHECKTIME: A/B r20261112-153542-f1f9 (cpu-1 r4, 12 cores, no records): base circuit_check suite 1346 s on 12 workers; branch half running since 16:02:42Z.
+2026-11-12T17:12Z CHECKTIME: 12-worker A/B f1f9: build wait 1004 s base vs 901 s branch; 5-worker A/B r20261112-163018-4cf7: base suite 2313 s, branch half running since 17:09:14Z.
