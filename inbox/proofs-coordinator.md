@@ -68238,3 +68238,44 @@ Before its ready line, which is yours to act on: this build clean; WIDEZK's bran
 - I have not edited the ask page or a binding table. Kernels' number is on a branch (#9079 and #9077, not marked), on CPUs, not the served engine.
 
 **6. Other.** [run] This VM reset a third time before this turn; nothing unpushed was lost. No lock touched. No records run, no Lean check, no suites at any head of this branch.
+
+## LAND3, Thu 12 Nov 02:53Z: the hazard table with its test counts: at the present heads no pull request breaks another that it merges with; the only conflicts are `cursor/proofs-count-71ac` against the planner's four; #8950 is linked to PRF-566 and waits on its quick tier `4636`
+
+Your 02:40Z section is read. [run] `research queue link 8950 --issue PRF-566`: "linked to PRF-566 through the Linear app". `research queue status` (02:44Z) still lists #8950 under "no Linear issue named", because it reads the body; the body I send when `4636` passes ends with `Refs PRF-566`.
+
+**The table, against `main` at `be9a3d566905`, heads read at 02:51Z** (none has moved since my 02:23Z entry).
+
+- [run] "Merges" is `git merge-tree` onto `main`. Every one of the nine merges onto `main` today.
+- [run] The two counts are local runs on the pull request merged onto `main`, slow tests not run. Figures: `test_figure1.py`, `test_headline.py`, `test_binding.py` of `benchmarks/spot_figures`. Planner: `test_plancheck.py`, `test_optimize.py` of `verity/protocols/spot/verifier`. `main` alone gives 97 and 68. Ruff is clean on every tree below.
+- [run] No one of the nine edits `tools/verity/lean/unread-caps.json`. Of ours only #9043 (265 to 270 modules, 2130 to 2272 declarations) and #9080 (265 to 272, 2130 to 2336) edit its `Proofs/Flock` entry, the same two lines, so those two conflict with each other there.
+
+| pull request | head | figures | planner | tried together with, and the counts | what it breaks or is broken by |
+|---|---|---:|---:|---|---|
+| #9066 | `23b637d143c7`, marked | 97 | 69 | #9051: 97, 69. `cursor/proofs-count-71ac`: 97, 71. Both: 97, 71 | Nothing at the present heads. It broke the earlier heads of the planner's four, which now hold it |
+| #8878 | `10d1060dd899`, marked | 98 | 70 | #9051: 98, 70 | Holds #9066, so it lands with or after it. Text conflict with `cursor/proofs-count-71ac` |
+| #8893 | `7644eae26591`, marked | 98 | 71 | | Holds #8878. The same conflict |
+| #8904 | `bce41b2dafb3`, marked | 98 | 72 | | Holds #8893. The same conflict |
+| #8950 | `ae26265a8e09`, not marked | 99 | 72 | #9051: 99, 72 | Holds #8904. The same conflict, in two files more |
+| #9027 | `ff8f3ea94705` | not touched | not touched | | Nothing found. It touches three files of `benchmarks/verifier_cost` only |
+| #9047 | `40157cc66775` | not touched | not touched | #9066, its own suite: the Python test passes alone and with #9066 (1 passed each); the seven Lean files it elaborates: run `r20261112-024232-e71a`, not ended | Holds #9027. Nothing found so far |
+| `cursor/proofs-count-71ac` | `c401de8495ac` | 97 | 70 | #9066: 97, 71. #9051: 97, 70 | Text conflict with each of the planner's four |
+| #9051 (mine) | `88372b58943e`, marked | 97 with #9066 | 69 with #9066 | as in the rows above; alone, its quick tier `r20261112-015203-3a29` passed | Nothing found |
+
+**What it says.**
+
+1. **No hidden break at the present heads.** Every pair that merges as text passes, and the counts add up: #9066 adds one planner test, each of the planner's three adds one, `cursor/proofs-count-71ac` adds two, and a merge of two has the sum.
+2. **One order is forced:** #9066, then #8878, #8893, #8904, #8950, each holding the one before. #9027 before #9047.
+3. **One hand merge is coming.** [run] `cursor/proofs-count-71ac` (13 commits past `main`, the last at 02:07Z) conflicts with #8904 in `verity/protocols/spot/optimize.py` (6 places, 142 lines inside them), its test file (3 places, 168 lines) and `benchmarks/spot_figures/figure1.py` (2 places, 30 lines); with #8950 also in `breakeven/headline.py` (2 places, 7 lines) and `tests/test_headline.py` (1 place, 50 lines). Whichever side lands second does it. [guess] The planner's four are marked and that branch has no pull request yet, so it is that branch's.
+4. **Not tested:** the slow tests; any Lean for #9066 beyond its own runs; the pairs that conflict.
+5. **One cell is open:** `e71a`, #9047's whole suite on `main` with #9047 and #9066 merged (cpu-6, in its slot since about 02:50Z, building Flock's verifier first). [guess] About 03:20Z. I add its verdict in one line.
+
+The logs are in my artifacts (`hazard-table-merges-and-tests.log` and one log a tree).
+
+**#8950.** `r20261112-021851-4636` (cpu-7) took its slot at 02:38Z and runs 62 suites, because the head holds #9066's Lean; 3 had passed and none failed at 02:52Z. [guess] It ends about 03:30Z. The two sections of the body are drafted. Two things you should know before the ready line:
+
+- **The body's table of figures was printed at the old head** `f8b6e599b19b` (runs `8e11`, `1c0f`), before `main`'s change to the planner's check and before #9066. The new section says so in plain words. Unless you say no, at the head that is marked (after #9066 lands and `main` is merged) I run the command once beside the quick tier, and replace the table if a figure differs.
+- **Its title and the rest of its body still use the lane's labels** ("a held kappa", the rows' names). At that same head I replace them as was done for #8904, keeping the rows' names only where they are the literal the command takes.
+
+**The retired terms in `TwoAt.lean`, read ahead** [read, at #8940's head]. The file has 25 sites: 16 are the binder `cap` of four theorems (`ksTwo_atOrder` and `sessionsTwo_atOrder` from before #8934, `ksTwo_stage` and `sessionsTwo_stage` new), 2 are prose, 6 are `ReplayCap`, 1 is the field `stage2`. The lock names none of the four theorems and no caller passes the binder by name, so renaming it moves no record. The pull request takes the file from 25 to 7 (the 6 of `ReplayCap` and `stage2`, listed with their reason), not only the ten new ones. It opens when #8934 and #8940 are on `main`.
+
+**Waiting on:** `r20261112-021851-4636` (about 03:30Z), then #8950's body; `r20261112-024232-e71a` (about 03:20Z), then the table's last cell.
