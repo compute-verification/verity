@@ -85224,3 +85224,59 @@ Clock read: 11:20Z. Read first: network-accounting's comments on NET-352 of 09:4
 - The sum has a second lever, item 4's "a stratum a member": fewer members, fewer terms.
 
 **Not established:** nothing of items 2 to 6 is compiled or run; item 4's per-class argument is a sketch; item 5's "one value name" is not located; PRF-586 is unwritten, and its rule is soundness's to accept.
+
+
+## KEPT, Thu 12 Nov 11:20Z: #9190's body has the two sentences, its head unmoved (`f6d1341b85` before and after); the served-size run is `r20261112-110219-e495` on vy-nebius-cpu-14, about 12:35Z [guess]; the line joined with #9234 is `let handed := program.map read.digest`, which passes the try on a local trial merge; the suites on it are out (`r20261112-111653-9c21`, about 12:40Z [guess]); #9253 gets it by merging #9190's new head, nothing pushed
+
+Tags: [run] a command I ran and read now (a run's id, or the git command on the agent VM); [read] a place I read now; [relayed] another lane's statement I did not check; [derived] my arithmetic or inference; [guess] mine. Times from `date -u`. Mailbox read 10:59Z and 11:18Z: nothing after your 08:27Z section. `origin/main` was `afa939410f` at 10:59Z, `5a6330f1a4` at 11:02Z and `33866d93e6` at 11:18Z; its AGENTS.md is `33faab2be8`'s [run: `git diff`]. The VM was replaced again; worktrees remade, nothing unpushed was lost. GB is 10^6 kB.
+
+**1. #9190's body: done, the head did not move.**
+
+- Head before: `f6d1341b8529f86c38c61fdae0ae922886c02df3` [run: `gh pr view 9190 --json headRefOid`, 11:00Z]. Head after: `f6d1341b8529f86c38c61fdae0ae922886c02df3` [run: the same, 11:00Z].
+- `research queue edit 9190 --body-file … --by proofs`: "body replaced (15519 bytes)" [run]. The body read back is the file I sent [run: `diff`]. No push.
+- The queue still has it "ready … admitted" at `f6d1341b` [run: `research queue status`, 11:19Z].
+- One bullet, added under "Risks" after "Memory beside the next member's prover" [run]: "**At a served window's program the memory is far larger, and what a kept process holds there is not measured.** At the served sparse-attention window's program (2,765,984,170 bytes) the verifier's three readings of its program peak at 108.3 GB [run: `r20261112-075056-d29f`; `main`'s verifier, one core of a loaded node, two reads in one run, no statement and no session]. A kept process holds its peak between members under `MIMALLOC_PURGE_DELAY=-1` and about a quarter of it under the allocator's default, measured at a 141 MB program (5.33 GB and 1.43 GB of a 5.34 GB peak) [run: `r20261112-104515-e07e`, this head]: about 108 GB and 28 GB at the served program by proportion, not measured."
+
+**2. The run: `r20261112-110219-e495`, out. About 12:35Z [guess].**
+
+- **Where** [run]: `--on auto` put it on vy-nebius-cpu-14's `research` pool (192 CPUs, 792,536,256 kB, 652.9 GB available, load 73). It took slot r0 at 11:02:48Z with 224.4 GB reserved. Detached. Source: #9190's head `f6d1341b85`.
+- **Flags** [run]: `--on auto --mem-gb 224 --timeout 9000`; the limit counts from the slot, so 13:32Z.
+- **One thing I did not take from your line: `--cwd clone`, not `--cwd source`.** The job builds the verifier's `.lake` and a `.venv` in its tree; the writing-runs skill gives such a job a clone [read: `.agents/skills/writing-runs/SKILL.md`, norm 1], and on a node every run of a commit shares its source tree, so a build there would sit in the tree the queue's own check of #9190 uses [derived]. `e07e` ran the same way. Say so if you want it otherwise.
+- **What it runs:** `e07e`'s reader with one change: it reports what is held eight times, each after a round of allocation and pauses (about 2 s a round), so memory that comes back slowly shows as a falling series. First the 141.2 MB program, two reads each way, as the check against `e07e`. Then the served sparse-attention program, built as `d29f` built it (the partition file is `main`'s, byte for byte [run: `git diff`]), **one read each way**: under `MIMALLOC_PURGE_DELAY=-1`, then under the default.
+- **Why one read each way at the served size** [derived]: two would make it about 105 minutes, and you said about 75. What is held did not differ between reads at the small size (5,202 and 5,202 MiB; 1,398 and 1,399 MiB in `e07e`). The seconds of one read on a loaded node are one sample; I will label them so.
+- **Read so far** [run, 11:18Z]: the reader compiled (11:04:44Z). At the 141.2 MB program, two reads each way. Under the setting: 5,202 MiB held at every one of the eight rounds in the first read and 5,201 MiB at every one in the second; peaks 5,342,712 and 5,341,768 kB. Under the default: 1,400 MiB at round one to 1,399 MiB at round eight, then 1,399 to 1,398 MiB; peaks 5,343,200 and 5,342,868 kB. Those are `e07e`'s 5.33 GB and 1.43 GB of a 5.34 GB peak, and nothing more comes back over the eight rounds. The served program's build began at 11:09:32Z (load 60).
+- **ETA** [guess]: the program's build took 47 minutes on cpu-11 at load 40; this node is at load 60 to 73, so 50 to 60 minutes from 11:10Z; then two reads of 10 to 17 minutes each. About 12:35Z.
+- **What I give you at its end:** the program's bytes and SHA-512 against `d29f`'s; each way the peak, what is held at each round, and the seconds; then the two figures in place of "by proportion, not measured" in both bodies, on your word.
+
+**3. For VLLM-335:** the run's id is `r20261112-110219-e495`; its result follows at its end, in my next entry. I post nothing there.
+
+**4. #9253: held, as you say.** I push nothing to `cursor/proofs-keptcircuit-7c1e`, and nothing to `cursor/proofs-keptverify-604f` while #9190 is marked.
+
+**5. #9190 against #9234 (`9cfb18bdaa9a`).**
+
+- **The queue as it stands** [run: `research queue status`, 11:08Z and 11:19Z, the same]: #9190 "ready … admitted"; #9234 "refused: conflicts with `main` in `benchmarks/one_stage/README.md`, `benchmarks/one_stage/server_rate.py`, `benchmarks/one_stage/tests/test_server_rate.py`: merge `main` into the branch and re-mark it". So #9234's owner merges `main` in any case, and can join this line in that merge [derived].
+- **The stop** [run: `git merge-tree --write-tree --name-only 9cfb18bdaa9a… HEAD` at `f6d1341b85`]: one file, `FlockVerify.lean`, "1 conflict(s) beyond import lists": the line you quote.
+- **The joined line:**
+  `  let handed := program.map read.digest  -- `some none`: bytes that are no descriptor`
+- **Why that is theirs and mine at once** [read]:
+  - types: after #9190 `read` is a `ProgramRead.Readers`, whose `digest : ByteArray → Option String` (`Flock/ProgramRead.lean:157-160` at `f6d1341b85`); `program : Option ByteArray`; so `handed : Option (Option String)`, which is what `ProvedScope.programBound parsed handed` and `ProvedScope.programFields parsed handed` take (`Flock/ProvedScope.lean:622, 681` at `9cfb18bdaa`);
+  - value: theirs is `programDigestOf (read.jsonAt b)`, which is `ProvedScope.programDigest b` (`jsonAt_of`, `programDigest_eq_of`); mine is `read.digest b`, which is `ProvedScope.programDigest b` for a call's own readers and for a kept program's (`ProgramRead.readers_eq`). Their own test states `handed` as `program.map ProvedScope.programDigest` (`Flock/Test/ProgramHeld.lean:45`).
+- **Nothing else needs a hand** [run: the trial merge read]: `programSha` had one other use, the verdict's field, and their change replaces that line (`ProvedScope.programFields parsed handed ++`) where mine left it alone; `jsonAt`, which #9190 removes, is named nowhere in their tree but that one line and `main`'s `ProgramRead.lean`, which #9190 rewrites. The joined `FlockVerify.lean` is 1,987 lines, under the 2,000 cap.
+- **Checked on a local trial merge, pushed nowhere** [run]: commit `f7a4a12ca6`, parents `f6d1341b85` and `9cfb18bdaa`, that one line set as above. It holds `main` as #9234's branch has it (merge base with `main`: `d6075b75d2`).
+  - **The try of `FlockVerify.lean` on it passed**: `r20261112-110622-6ad1` (vy-nebius-cpu-1), exit 0: "lean exit 0 in 26 s"; "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", `verifyMember_eq` among the nine. The try builds the file's imports first, so their `Flock/ProvedScope.lean` and my `Flock/ProgramRead.lean` built together.
+  - **The tests: no verdict yet, and my first run of them tells nothing.** `r20261112-110958-2192` (vy-nebius-cpu-10) ran `pytest tests/test_lean_verify_members.py` directly: 1 passed, 1 skipped, 3 failed, each of the three with `FileNotFoundError` on `tests/fixtures/plain-tree/session`. That fixture is fetched by `suites.py` before a suite runs, and my command did not fetch it: the fault is my command's, and the failures say nothing about the join. The run's exit code reads 0 only because my command piped pytest through `tail`; it is not a pass.
+  - **The rerun is the quick tier, as `a0e1` ran it for #9190**: `r20261112-111653-9c21` (vy-nebius-cpu-2, slot r9 at 11:17Z, 64 GB reserved), `suites.py --changed f6d1341b8529f86c38c61fdae0ae922886c02df3 --quick` on the trial commit. About 12:40Z [guess: `a0e1` took about 80 minutes]; limit 14:17Z.
+  - **What I expect of my test under their change** [read; a guess until `9c21` says]: the member handed another program is still refused by the session's setup, in the words the test looks for ("the verifier's program is not the one the partition object names"), because their `programBound` is among the refusals that run only on a session the setup passed (`checked.map refusals`, `FlockVerify.lean:1159-1168` of the trial tree). That member's verdict then carries its digest as `program_handed_sha512` and no `program_sha512`, so the test's next line (`.get("program_sha512") != the accepted member's`) still holds, but says less than its comment: it should then compare `program_handed_sha512`. One line of the test, for the merge that joins the two; I push nothing now.
+  - **Against `origin/main`'s tip `33866d93e6`** [run: `git merge-tree`]: #9190's head, no conflict; the trial commit stops only in #9234's own three benchmark files, the ones the queue refuses #9234 for, and in nothing of #9190's.
+  - **Not run: a records run on a joined tree.** The Lean order gives one records run to the head that will be marked, and there is no such head yet.
+- **Does #9253 need the same join: yes, the same one line, and it gets it from #9190's new head** [run]:
+  - #9253's head against `9cfb18bdaa` stops at that line and nowhere else (`git merge-tree`); `parsed` is there for their two new lines;
+  - #9253's head against the trial commit (#9190's head with #9234 joined): **no conflict** (`git merge-tree`, exit 0), because #9253's line is #9190's. So #9253 needs no join of its own if it merges #9190's new head; if it merged `main` first it would need the same line by hand. Its joined `FlockVerify.lean` would be 1,988 lines [derived].
+  - Either is a push to #9253's branch, which you hold. I do nothing until you say.
+- **If #9234 is the one left out** (what the queue's state points to), the line is the same for its owner: on `main` after #9190 there is no `read.jsonAt`, and `let handed := program.map read.digest` is the whole join [derived].
+
+**6. Runs out, with when I expect them.**
+
+- `r20261112-110219-e495` (the served-size held memory, vy-nebius-cpu-14): about 12:35Z [guess]; limit 13:32Z.
+- `r20261112-111653-9c21` (the quick tier on the local trial merge, vy-nebius-cpu-2): about 12:40Z [guess]; limit 14:17Z. Its verdict changes nothing on a branch: it says whether the joined line and the two changes pass the suites together.
+- Ended: `r20261112-110622-6ad1` (the try, exit 0); `r20261112-110958-2192` (no verdict, as section 5 says).
