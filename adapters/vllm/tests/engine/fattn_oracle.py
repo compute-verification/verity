@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -29,8 +30,9 @@ LUT = np.rint(127.0 * np.exp2(-np.arange(256) / 16.0)).astype(np.int64)
 LOG2E = 1.4426950408889634
 
 
-def quant(x: np.ndarray, axis: int | None, scale: np.float32 | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """(integers int64, float32 scales): amax over `axis` floored at 1e-30, / 127 (or the given scale), round half even, clamp."""
+def quant(x: np.ndarray, axis: int | None, scale: np.float32 | None = None) -> tuple[np.ndarray, Any]:
+    """(integers int64, float32 scales): amax over `axis` floored at 1e-30, / 127 (or the given scale), round half even, clamp.
+    The scales are one float32 for a given scale or no axis, and an array over `axis` otherwise."""
     s = scale if scale is not None else np.maximum(np.abs(x).max(axis=axis, keepdims=True), f32(1e-30)) / f32(127)
     return np.clip(np.rint(x / f32(s)), -127, 127).astype(np.int64), f32(s) if np.ndim(s) == 0 else s.astype(f32)
 

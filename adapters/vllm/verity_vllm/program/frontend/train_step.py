@@ -33,8 +33,10 @@ import keyword
 import os
 import re
 import sys
+import types
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import cast
 
 import torch
 from torch.func import functional_call, grad_and_value
@@ -168,7 +170,8 @@ def _patched(owner, name: str, value):
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
     meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
-    base = torch._C.TensorBase.is_cuda
+    # read from the class this is the descriptor, where torch's stubs give the bool an instance answers with
+    base = cast(types.GetSetDescriptorType, torch._C.TensorBase.is_cuda)
 
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
@@ -221,7 +224,8 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
               + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
-    with sdpa_kernel(SDPBackend.MATH), (_gpu_branches() if gpu else contextlib.nullcontext(set())) as tf32:
+    branches: contextlib.AbstractContextManager[set[bool]] = _gpu_branches() if gpu else contextlib.nullcontext(set())
+    with sdpa_kernel(SDPBackend.MATH), branches as tf32:
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
     if len(tf32) > 1:
         raise ValueError("export_step: the step changes cuda.matmul.allow_tf32 between its calls, and the rules take one setting "
