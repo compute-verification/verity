@@ -33,14 +33,19 @@ def value(card: dict, key: str) -> Fraction:
 def test_the_cards_we_run() -> None:
     assert skus("gpu") == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
     assert skus("host") == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
-    assert skus() == sorted(skus("gpu") + skus("host"))
+    assert skus("server") == ["dgx-h200"]
+    assert skus() == sorted(skus("gpu") + skus("host") + skus("server"))
+
+
+#: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
+FEWEST = {"gpu": 20, "host": 20, "server": 4}
 
 
 @pytest.mark.parametrize("sku", skus())
 def test_every_number_is_sourced_and_marked(sku: str) -> None:
     card = load(sku)
     numbers = entries(card)
-    assert len(numbers) >= 20
+    assert len(numbers) >= FEWEST[card["kind"]]
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
 
 
@@ -142,6 +147,14 @@ def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
     assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
 
 
+@pytest.mark.parametrize("sku", skus("server"))
+def test_derived_server_numbers(sku: str) -> None:
+    """A server's line rate is its network ports' together, every class of them, each in bits a second."""
+    link = load(sku)["link"]
+    assert {e["unit"] for e in link.values()} == {"bit/s"}
+    assert value(link, "rate") == sum(value(link, k) for k in link if k != "rate")
+
+
 def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
     that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
@@ -190,7 +203,8 @@ def test_the_rates_readers_quote() -> None:
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    every = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s",
+             "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
 

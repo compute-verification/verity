@@ -35,9 +35,9 @@ what the layout's design has and the tree does not.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU or host model), `site` (its
-    types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in one file of `verity/`.
+  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model), `site`
+    (its types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets
+    in a top-level `hardware/` that holds data only, and the types in one file of `verity/`.
   - `verity/configuration/`: `wire` (the wire every party speaks), `deploy` (parties, channels, the configuration and
     the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
