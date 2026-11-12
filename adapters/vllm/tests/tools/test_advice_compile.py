@@ -71,7 +71,7 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     committed. Another coin gives another seed for the same id, the rest of the body none; a window whose line names no coin (a
     server that filled in `DEFAULT_SEED`) is refused by name, and a seed the engine drew is not the one the compile derives.
     The compile is read at its plan (`plan_steps`: `compile_steps` up to building Programs), which settles each request's seed
-    and every refusal; the test below builds the Program."""
+    and refuses a request that has none; the test below builds the Program."""
     from tests.program.predict.test_steps import _registered
     from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.build import Unexpressible
