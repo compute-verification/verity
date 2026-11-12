@@ -460,7 +460,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     text = E.render(wide)
     assert ("- **the network certifier's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
             "as the scan's check charges it today, 26.83 bits a request, and 1,857,720 GB as N2 charges it today, ") in text
-    assert ("1,847,615 GB by the design no run has behind it, once a served audit has drawn a stop block, each at D_j = 2, "
+    assert ("1,847,615 GB by the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, "
             "its term of record.\n") in text
     assert "assumes by default" not in text
 
@@ -474,14 +474,14 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     text = E.render(doc)
     assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
             "as the scan's check charges it today, 22.83 bits a request, and 1,857,720 GB as N2 charges it today, "
-            "26,300,627 GB by the design no run has behind it, before a served audit has drawn a stop block, 1,847,615 GB by "
-            "the design no run has behind it, once a served audit has drawn a stop block, each at D_j = 2, its term of "
+            "26,300,627 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,847,615 GB by "
+            "the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, its term of "
             "record. On the class of at most 4,096 ids a response that `verity bench certifier_term` assumes by default, "
             "the scan's is 59,645,644 GB.\n") in text
     assert ("at D_j = 2, with no advice priced and with a response's output count taken at 0 under `all three` and `design`: "
             "50,767,879 GB as the scan's check charges it today; 1,871,959 GB as N2 charges it today; 26,314,867 GB by the "
-            "design no run has behind it, before a served audit has drawn a stop block; 1,861,855 GB by the design no run "
-            "has behind it, once a served audit has drawn a stop block.\n") in text
+            "design no run has behind it, before a served audit has sampled a stop block; 1,861,855 GB by the design no run "
+            "has behind it, once a served audit has sampled a stop block.\n") in text
     assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 50,753,639 | 1,857,720 | 26,300,627 | 1,847,615 | "
             "50,767,879 | 1,871,959 | 26,314,867 | 1,861,855 | 24,453,012 |") in text
     assert "| scan | 24,453,012 | 24,453,012 | 50,753,639 | 134,745 | 48,906,024 | 4.108e+10 |" in text
@@ -524,8 +524,8 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     assert ("- together, with a set-time card (not yet tested): 14,240 GB with the lengths held by a stop block, the timing "
             "taken once and the entries charged through the compute audit; and at D_j = 1, 48,920,264 GB as the scan's "
             "check charges it today; 24,344 GB as N2 charges it today; 24,467,252 GB by the design no run has behind it, "
-            "before a served audit has drawn a stop block; 14,240 GB by the design no run has behind it, once a served "
-            "audit has drawn a stop block.\n") in text
+            "before a served audit has sampled a stop block; 14,240 GB by the design no run has behind it, once a served "
+            "audit has sampled a stop block.\n") in text
     assert "| all three, with a set-time card (not yet tested) | 0 | 0 | 0 | 0 | 0 | the compute side's |" in text
     assert "\n## Each monitoring period over all compute, with a set-time card (not yet tested): in GB\n" in text
     assert "| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,453,012 | 0 | 48,920,264 | 24,344 | 24,467,252 | 14,240 |" in text
@@ -540,7 +540,7 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
 
 
 def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path):
-    """Until a served audit has drawn a stop block the server chooses a response's output count. The network
+    """Until a served audit has sampled a stop block the server chooses a response's output count. The network
     certifier's row for the design before its stop block charges it, as its schedules, and the command reads it from
     there: beside the sums under the rows whose schedules are 0, which take it at 0, marked assumed, in every
     monitoring period and where the print says no advice is priced."""
@@ -562,12 +562,12 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path):
     by = {i["input"]: i for i in doc["inputs"]}
     assert (by["output_count"]["part"], by["output_count"]["value"], by["output_count"]["mark"]) == ("network certifier", 0, "assumed")
     assert by["output_count"]["source"] == (
-        "not counted in the sums under `all three` and `design`: until a served audit has drawn a stop block the server "
+        "not counted in the sums under `all three` and `design`: until a served audit has sampled a stop block the server "
         "chooses a response's output count, which the network certifier's row `design, no stop block` charges 11 bits a "
         "request as its schedules")
     text = E.render(doc)
     assert "with no advice priced and with a response's output count taken at 0 under `all three` and `design`: " in text
-    assert ("- the output count: 24,453,012 GB (assumed), 11 bits a request. Until a served audit has drawn a stop block the "
+    assert ("- the output count: 24,453,012 GB (assumed), 11 bits a request. Until a served audit has sampled a stop block the "
             "server chooses a response's output count, and the network certifier's row `design, no stop block` charges it "
             "as its schedules. The sums under `all three` and `design` take it at 0, as they price no advice.\n") in text
     assert "| together, design | output count (assumed) |\n" in text and "the sum under `design` takes it at 0." in text

@@ -28,8 +28,8 @@ verity bench exfiltration --help          every parameter and its default
   `--step` take another case of the plan.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
-  under each change to its check, and for the design with no run behind it, before a served audit has drawn a stop
-  block and once one has. The command reads that command's document (`certifier-term/v2`) and refuses another
+  under each change to its check, and for the design with no run behind it, before a served audit has sampled a
+  stop block and once one has. The command reads that command's document (`certifier-term/v2`) and refuses another
   schema.
   - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
     record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
@@ -49,7 +49,7 @@ and they are fewer than the compute audit's part, they stand in its place. The c
 so among its inputs.
 
 The sums under the rows whose schedules are 0 (`all three`, `design`) take a response's output count at 0: a stop
-block, sampled on a served audit, holds that count to the response's ids. Until a served audit has drawn one the
+block, sampled on a served audit, holds that count to the response's ids. Until a served audit has sampled one the
 server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
 The command reads the output count from that row and prints it beside those sums, marked assumed, in every
 monitoring period and where it says no advice is priced.

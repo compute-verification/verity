@@ -38,7 +38,7 @@ bits at δ). The first three are the network certifier's part, the last term's s
 part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
 `TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice. The
 sums under the rows whose schedules are 0, the lengths held by a stop block, take a response's output count at 0.
-Until a served audit has drawn a stop block the server chooses that count, which the network certifier's row
+Until a served audit has sampled a stop block the server chooses that count, which the network certifier's row
 `OUTPUT_COUNT` charges as its schedules: the command prints it beside those sums, marked assumed.
 
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
@@ -93,10 +93,10 @@ PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
 TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges it today",
             "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
                          "the compute audit",
-            "design, no stop block": "by the design no run has behind it, before a served audit has drawn a stop block",
-            "design": "by the design no run has behind it, once a served audit has drawn a stop block"}
+            "design, no stop block": "by the design no run has behind it, before a served audit has sampled a stop block",
+            "design": "by the design no run has behind it, once a served audit has sampled a stop block"}
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
-#: it: the design before a served audit has drawn a stop block
+#: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
 MARKS = ("measured", "modeled", "assumed")
@@ -384,7 +384,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             "count (--network-check-share)"),
         one(audit, "advice", 0, "bit", "assumed", "not counted: no input here prices the advice"),
         one(net, "output_count", 0, "bit/request", "assumed",
-            f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has drawn a stop block "
+            f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a stop block "
             f"the server chooses a response's output count, which the network certifier's row `{OUTPUT_COUNT}` "
             f"charges {_n(count['bits_a_request'])} bits a request as its schedules"),
     ]
@@ -610,7 +610,7 @@ def render(doc: Mapping[str, Any]) -> str:
         + "; ".join(f"{_n(sums[name]['GB'])} GB {TOGETHER[name]}" for name in record) + ".",
         *(f"- together, {clause}." for clause in _labelled(year, "GB", set_time)),
         f"- the output count: {_n(count['GB'])} GB ({count['mark']}), {_n(count['bits_a_request'])} bits a request. Until "
-        "a served audit has drawn a stop block the server chooses a response's output count, and the network "
+        "a served audit has sampled a stop block the server chooses a response's output count, and the network "
         f"certifier's row `{count['row']}` charges it as its schedules. The sums under {_names(count['at_zero_in'])} "
         "take it at 0, as they price no advice.",
         f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The scan's ε "
