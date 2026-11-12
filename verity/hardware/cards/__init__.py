@@ -2,12 +2,12 @@
 
 A card is a GPU's (``kind = "gpu"``), a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
 carries) or a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs). Every
-number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU and
-firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower bound on the
-ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an ``art:`` id (a run's
-record), and a node by its kind, never its host name. The Lean card tables (``security/Definitions/Core/Accel``) are
-held to the GPU cards that name one (``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib only,
-and it imports no other unit.
+number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU
+exceeds it, whatever firmware it runs: what the model's premises need), ``measurement`` (a measured value, so only a
+lower bound on the ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an
+``art:`` id (a run's record), and a node by its kind, never its host name. The Lean card tables
+(``security/Definitions/Core/Accel``) are held to the GPU cards that name one (``lean``), number by number
+(``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.

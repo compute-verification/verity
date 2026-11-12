@@ -7,7 +7,7 @@ import all Init.Data.Array.QSort.Basic
 /-!
 # The executable sample escapes no more often than the model's
 
-`Flock.Draw.subset k n src` is the verifier's executable sampler (`backends/flock/verifier/lean/Flock/Draw.lean`): a
+`Flock.Draw.subset k n src` is the verifier's executable sampler (`verity/commitments/lean/Commitments/Draw.lean`): a
 partial Fisher–Yates over a `Std.HashMap` of swaps, each index sampled by `Flock.Draw.uniform`, an exact rejection sampler
 on big-endian words, and the `k` values sorted by `Array.qsort`. `Law.subset_exec_escape_le`: over a uniform stream of
 bytes, it returns a sample that misses `B` with probability at most `(Law.subset n k hk).escape B`, the model's uniform
