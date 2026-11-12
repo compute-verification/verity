@@ -115,15 +115,15 @@ def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
     the engine served in the kernels' own order; a ValueError for a rank the world doesn't have."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 
-    rec = meta.get("engine_record") or {}
-    kw = rec.get("engine_kwargs") or {}
-    world = int(kw.get("tensor_parallel_size") or 1)
+    rec = meta.get("engine_record")
+    kw = None if rec is None else rec.get("engine_kwargs")
+    world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
-    engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
-    if "env_flags" in rec:
-        flags = rec["env_flags"] or {}
-        engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
+    engine = {} if kw is None else {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if rec is not None and "env_flags" in rec:
+        flags = rec["env_flags"]
+        engine["env"] = {} if flags is None else {k: flags[k] for k in DSA_TOPK_ENV if k in flags}
     return {"world": world, "rank": rank}, engine
 
 
@@ -134,8 +134,8 @@ def checkpoint_dtype(hf_config: Mapping[str, Any]) -> str | None:
     config's shape implies (bfloat16, or int8)."""
     from verity_vllm.config import DTYPES
 
-    q = hf_config.get("quantization_config") or {}
-    return DTYPES["fp8"] if q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
+    q = hf_config.get("quantization_config")
+    return DTYPES["fp8"] if q is not None and q.get("quant_method") == "fp8" and q.get("fmt", "e4m3") == "e4m3" else None
 
 
 def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int = 0) -> Phi:
