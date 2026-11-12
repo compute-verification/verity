@@ -27,12 +27,13 @@
 # --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
 # of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
-# PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own
-# (serve_tax.parse_pass_prompts): for a ladder past the rungs the load's own prompts can hold, and the same for every
-# arm of a cost. After the table it prints the cost of
+# PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
+# NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
+# rungs the load's own prompts can hold, and the same for every arm of a cost. After the table it prints the cost of
 # ARMS's last arm over the stock arm it is made from, compiled or, for the arms at vLLM's recipe's settings, prod
-# (serve_tax.py cost, serve_tax.root_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
-# agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
+# (serve_tax.py cost, serve_tax.stock_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
+# agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes
+# OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
@@ -54,7 +55,10 @@
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
 # linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that fit its
 # share of the minutes left, equal among the arms still to serve (serve_tax.py fit, from the arm before it), and one if
-# none does, since reps are cut and never an arm (OUT/arms.txt says what was cut).
+# none does, since reps are cut and never an arm (OUT/arms.txt says what was cut). STOP_AT=TIME (with its zone, as
+# 2030-01-01T00:00:00Z) is the time the job's GPUs are another's: an arm starts no pass it can't expect to finish and stop
+# its server by then (serve_tax.stop_before), keeps the passes it served, and its meta.json says where it stopped
+# (stopped); an arm whose turn comes after TIME is not served. The job ends between two passes and exits as if whole.
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
@@ -187,6 +191,7 @@ if [ "${1:-}" = leased ]; then
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
   last=; to_serve=$(wc -w <<< "${ARMS:-}")
+  [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "serve-tax: STOP_AT=$STOP_AT is not a time"; exit 2; }
   for arm in ${ARMS:-}; do
     reps=$REPS
     if [ -n "${BUDGET_MIN:-}" ] && [ -n "$last" ]; then
@@ -197,8 +202,12 @@ if [ "${1:-}" = leased ]; then
       [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit its $((left / 60)) min, an equal share for each of the $to_serve arms left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
       [ "$reps" -lt 1 ] && { reps=1; echo "== $arm: serving 1 rep anyway (reps are cut, never an arm)" | tee -a "$OUT/arms.txt"; }
     fi
+    if [ -n "${STOP_AT:-}" ] && [ "$(date +%s)" -ge "$stop_at" ]; then
+      echo "== $arm and the arms after it: not served, STOP_AT=$STOP_AT has passed" | tee -a "$OUT/arms.txt"
+      break
+    fi
     echo "== $arm $(date -u +%FT%TZ)"
-    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" \
+    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
@@ -278,10 +287,12 @@ gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-# the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on a stock arm (a
-# calibration of its rungs) has none. WITH: the out/
-# directories of earlier jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != prod ]; then
+# the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on stock has
+# none: compiled alone (a calibration of its rungs), or published or prod, which are stock under other settings and
+# no arm of ours. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
+# joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+    && [ "${ARMS##* }" != prod ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1

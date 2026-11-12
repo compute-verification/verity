@@ -29,11 +29,15 @@ and its schedule: the engine's counters on ``/metrics`` before and after it (`SC
 
 The arms, each one engine configuration; each adds its change to the arm it names as its parent:
 
-- ``compiled``: stock vLLM at the pin, its defaults (torch.compile and CUDA graphs, chunked prefill, prefix caching,
-  async scheduling), FP8 where the checkpoint is FP8;
+- ``compiled``: stock vLLM at the pin, its defaults (CUDA graphs, with torch.compile on the architectures vLLM
+  compiles, which are not the ones it captures breakable CUDA graphs for, GLM-5.3's among them; chunked prefill,
+  prefix caching, async scheduling), FP8 where the checkpoint is FP8;
 - ``compiled-again``: ``compiled`` in a second server lifetime, which changes nothing: what two starts of one engine
   differ by, the noise floor of a cost (`cost_report`);
 - ``no-prefix-cache``: ``--no-enable-prefix-caching``;
+- ``published``: ``compiled`` started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags
+  and context limit, and vLLM's own cap on the requests it runs at once in place of `BASE_ARGS`'s. What stock vLLM
+  serves under the settings its authors publish, where ``compiled`` is stock under the settings the other arms share;
 - ``eager``: ``--enforce-eager``, the tax if commits or replay force eager;
 - ``bi-compiled``: ``compiled`` with ``VLLM_BATCH_INVARIANT=1``, vLLM's batch-invariant kernels;
 - ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
@@ -64,9 +68,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
   is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
-- ``prod``: stock vLLM at the recipe's settings, vLLM's own recipe for GLM-5.3 on eight H200s as the pin spells it
-  (`PROD`): prefix caching, an FP8 KV cache, speculative decoding by the checkpoint's own MTP layer, and the model's
-  parsers. It has no parent: the arms on it are costed over it, at the same settings (`root_of`);
+- ``prod``: ``published`` with the speculative decoding of vLLM's recipe for GLM-5.3 on eight H200s (`MTP`): drafts
+  from the checkpoint's own MTP layer, five a step. Stock vLLM as that recipe starts it, and the stock arm the arms
+  made from it are costed over, at the same settings (`STOCK`, `stock_of`);
 - ``prod-again``: ``prod`` in a second server lifetime, the noise floor of a cost over ``prod``;
 - ``prod-record``: ``prod`` with the scheduler's step trace, as ``record`` is ``compiled`` with it.
 
@@ -155,6 +159,7 @@ import urllib.request
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -195,6 +200,10 @@ class Arm:
     #: the boundary commitment's object, for an arm whose plugin has ``boundary_rows`` (`servetax_plugin`), less its check
     #: template, the model's (`Model.check`), and its window, the run's; `PRIVATE` as in ``env``
     rows: dict = field(default_factory=dict)
+    #: whether the server starts as vLLM's recipe for the model starts it: the model's published flags added
+    #: (`Model.published`), at the recipe's context limit (`published_context`), and the flags of `BASE_ARGS` no recipe
+    #: sets left to vLLM's own defaults (`UNPUBLISHED`)
+    published: bool = False
 
 
 BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
@@ -212,19 +221,15 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
-#: the recipe's settings: what vLLM's own recipe for GLM-5.3 on eight H200s adds to its serve line, as the pin spells it:
-#: prefix caching (the engine's default, said), an FP8 KV cache, 95% of each card's memory, speculative decoding by the
-#: checkpoint's own MTP layer at five draft tokens a step, and the model's tool-call and reasoning parsers. The README
-#: lists where an arm of these differs from the recipe, each with its reason
-PROD = ("--enable-prefix-caching", "--kv-cache-dtype", "fp8", "--gpu-memory-utilization", "0.95",
-        "--speculative-config", '{"method": "mtp", "num_speculative_tokens": 5}',
-        "--tool-call-parser", "glm47", "--reasoning-parser", "glm47", "--enable-auto-tool-choice")
-#: the model `PROD` is the recipe of: an arm that holds it serves no other (`check_model`)
-PROD_MODEL = "glm53"
+#: speculative decoding as vLLM's recipe for GLM-5.3 on eight H200s spells it: drafts from the checkpoint's own MTP
+#: layer, five a step
+MTP = ("--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", "5")
 ARMS = {
-    "compiled": Arm(None, "stock vLLM, compiled (torch.compile, CUDA graphs)"),
+    "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
     "no-prefix-cache": Arm("compiled", "prefix caching off", ("--no-enable-prefix-caching",)),
+    "published": Arm("compiled", "stock vLLM as its recipe for the model starts it: the recipe's flags and context limit, "
+                     "and vLLM's own cap on the requests it runs at once in place of this file's", published=True),
     "eager": Arm("compiled", "stock vLLM, eager", ("--enforce-eager",)),
     "bi-compiled": Arm("compiled", "+ vLLM's batch-invariant kernels", env=BATCH_INVARIANT),
     "bi-eager": Arm("eager", "eager with vLLM's batch-invariant kernels: the committing path's execution (TargetProfile's "
@@ -259,11 +264,14 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
-    "prod": Arm(None, "stock vLLM at the recipe's settings: vLLM's own recipe for the model on these cards (PROD)", PROD),
-    "prod-again": Arm("prod", "stock vLLM at the recipe's settings in a second server lifetime: what two starts of that "
-                      "engine differ by", PROD),
-    "prod-record": Arm("prod", "the recipe's settings + the scheduler's step trace (StepTrace)", PROD, plugin=("record",)),
+    "prod": Arm("published", "+ the recipe's speculative decoding: drafts from the model's own MTP layer, five a step",
+                MTP, published=True),
+    "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by", MTP,
+                      published=True),
+    "prod-record": Arm("prod", "+ the scheduler's step trace (StepTrace)", MTP, plugin=("record",), published=True),
 }
+#: the stock arms, vLLM with no change of ours: an arm's cost is over the nearest of them above it (`stock_of`)
+STOCK = ("compiled", "published", "prod")
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
 #: what a part of a model's target (`Part`) is of
 CHANGES: dict[str, Callable[[Arm], bool]] = {
@@ -277,21 +285,14 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
 }
 
 
-def root_of(arm: str) -> str:
-    """The stock engine an arm is made from: the arm its parents lead to (itself where it has none), which its cost
-    is over. An arm this file doesn't define is costed over `REFERENCE`."""
-    if arm not in ARMS:
-        return REFERENCE
-    while ARMS[arm].parent is not None:
+def stock_of(arm: str) -> str:
+    """The stock arm an arm is made from, which its cost is over: the nearest of `STOCK` above it, so an arm at the
+    recipe's settings is costed over stock at those settings. `REFERENCE` for an arm with none above it or that this
+    file doesn't define."""
+    arm = ARMS[arm].parent if arm in ARMS else None
+    while arm is not None and arm not in STOCK:
         arm = ARMS[arm].parent
-    return arm
-
-
-def check_model(arm: str, model_id: str | None) -> None:
-    """Refuse an arm of the recipe's settings (`PROD`) for a model they are not the recipe of."""
-    if ARMS[arm].args[:len(PROD)] == PROD and model_id != PROD_MODEL:
-        raise SystemExit(f"arm {arm} holds vLLM's recipe for {PROD_MODEL} (PROD), and the model is {model_id or 'not named'}: "
-                         f"serve it with --model-id {PROD_MODEL}")
+    return arm or REFERENCE
 
 
 def changes_of(arm: str) -> list[str]:
@@ -339,6 +340,11 @@ class Model:
     metric: str | None = None
     #: the check template its boundary commitment's replay block is made of, a serving template's descriptor id
     check: str | None = None
+    #: what the command of vLLM's recipe for the model (recipes.vllm.ai) adds to ``args``, for the cards this file
+    #: serves the model on, and that command's context limit: the ``published`` arm's server (`Arm.published`). What
+    #: of the recipe the integration's pin can't run is not in it, and the README says what that is
+    published: tuple[str, ...] = ()
+    published_context: int | None = None
 
     def __post_init__(self) -> None:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
@@ -356,6 +362,9 @@ class Model:
 #: every arm's engine: vLLM's defaults but for the context (the plan's longest request is 1,024 + 256 tokens), the batch
 #: cap (pinned, so that a saturated load hits the same cap on every vLLM build) and the seed
 BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log")
+#: the flags of `BASE_ARGS` no recipe of vLLM's sets, which the ``published`` arm leaves to vLLM's own defaults: the
+#: batch cap, so that its server runs as many requests at once as vLLM itself allows on the hardware
+UNPUBLISHED = ("--max-num-seqs",)
 #: what makes vLLM write a request's or a response's text to the server's log, which a run publishes: the flags no arm
 #: or model may carry, and the variable a server's environment never keeps
 LOGS_TEXT_ARGS = ("--enable-log-requests", "--enable-log-outputs")
@@ -379,7 +388,12 @@ MODELS = {
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}"),
+                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
+                   # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm: its command for one node of eight H200s,
+                   # the FP8 checkpoint, tensor parallel, without speculative decoding, which the recipe has opt-in
+                   published=("--kv-cache-dtype", "fp8", "--tool-call-parser", "glm47", "--enable-auto-tool-choice",
+                              "--reasoning-parser", "glm47"),
+                   published_context=262144),
 }
 
 
@@ -463,18 +477,39 @@ def _private(x: object, private: Path | None) -> object:
     return [_private(v, private) for v in x] if isinstance(x, (list, tuple)) else x
 
 
-def base_args(max_model_len: int | None = None) -> tuple[str, ...]:
-    """`BASE_ARGS`, with the context limit ``max_model_len`` where one is given (a plan with longer prompts)."""
-    if max_model_len is None:
-        return BASE_ARGS
-    i = BASE_ARGS.index("--max-model-len")
-    return (*BASE_ARGS[:i + 1], str(max_model_len), *BASE_ARGS[i + 2:])
+def base_args(max_model_len: int | None = None, without: Sequence[str] = ()) -> tuple[str, ...]:
+    """`BASE_ARGS`, with the context limit ``max_model_len`` where one is given (a plan with longer prompts), less the
+    flags ``without``, each with its value."""
+    args = list(BASE_ARGS)
+    if max_model_len is not None:
+        args[args.index("--max-model-len") + 1] = str(max_model_len)
+    for flag in without:
+        i = args.index(flag)
+        del args[i:i + 2]
+    return tuple(args)
+
+
+def published_context(arm: str, model_id: str | None, given: int | None) -> int:
+    """The context limit of an arm that starts the server as vLLM's recipe for the model does (`Arm.published`): the
+    recipe's (`Model.published_context`). Refused for a model whose recipe this file doesn't hold, and under a
+    ``--max-model-len`` that isn't the recipe's, since the arm's server would then be neither."""
+    model = MODELS.get(model_id or "")
+    if model is None or not model.published or model.published_context is None:
+        held = ", ".join(n for n, m in MODELS.items() if m.published)
+        raise SystemExit(f"arm {arm} starts the server as vLLM's recipe for the model does, and this file holds no recipe "
+                         f"for {model_id or 'no model'} (Model.published; it holds {held}'s)")
+    if given is not None and given != model.published_context:
+        raise SystemExit(f"arm {arm}: the recipe's context limit is {model.published_context}, not --max-model-len "
+                         f"{given}: MAX_MODEL_LEN={model.published_context}, for every arm of the job, or none")
+    return model.published_context
 
 
 def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
                 max_model_len: int | None = None) -> list[str]:
+    base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     return [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
-            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *base_args(max_model_len), *arm.args,
+            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args,
+            *(model.published if arm.published else ()), *base, *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
 
@@ -545,10 +580,13 @@ def reset_prefix_cache(port: int, tries: int = 30) -> bool:
 
 #: a load's schedule, from the engine's counters on the server's Prometheus /metrics (summed over engines): its steps
 #: (each step with outputs observes ``iteration_tokens_total`` once), the tokens they scheduled and sampled, the prompt
-#: tokens the prefix cache served, and preemptions
+#: tokens the prefix cache served, preemptions, and, where the engine decodes speculatively, its drafts, the tokens
+#: they proposed and the tokens of them the model accepted
 SCHEDULE = {"steps": "vllm:iteration_tokens_total_count", "step_tokens": "vllm:iteration_tokens_total_sum",
             "generation_tokens": "vllm:generation_tokens_total", "prompt_tokens": "vllm:prompt_tokens_total",
-            "prompt_tokens_cached": "vllm:prompt_tokens_cached_total", "preemptions": "vllm:num_preemptions_total"}
+            "prompt_tokens_cached": "vllm:prompt_tokens_cached_total", "preemptions": "vllm:num_preemptions_total",
+            "drafts": "vllm:spec_decode_num_drafts_total", "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+            "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total"}
 
 
 def counters(text: str) -> dict[str, float]:
@@ -1089,9 +1127,10 @@ def passes_of(loads: dict[str, tuple[int, ...]], datasets: dict[str, str],
 
 
 def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None,
-                 prompts: int | None = None) -> int:
-    """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`) or the
-    load's, the same at every rung, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
+                 prompts: int | str | None = None) -> int:
+    """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`: a
+    number, the same at every rung, or ``Kx``, K for each request the rung holds in flight and the load's own at
+    least) or the load's, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
     (``warm_s``) sends two for each request held in flight, the load's own prompts at most, or the lines that arrive
     in its first ``warm_s`` seconds, one at least. A sessions load's are the turns each of its users sends: a
     warm-up's are `SESSION_TURNS`, each user's first session's opening and the first prompt that carries its
@@ -1100,27 +1139,34 @@ def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: fl
         return (prompts or load.prompts) if warm_s is None else min(SESSION_TURNS, prompts or load.prompts)
     if rung == ARRIVING:
         return len(lines) if warm_s is None else max(1, sum(x["timestamp"] <= warm_s for x in lines))
-    return (prompts or load.prompts) if warm_s is None else min(load.prompts, prompts or load.prompts, 2 * rung)
+    n = max(load.prompts, int(prompts[:-1]) * rung) if isinstance(prompts, str) else prompts or load.prompts
+    return n if warm_s is None else min(load.prompts, n, 2 * rung)
 
 
-def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int]:
+def parse_pass_prompts(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict[str, int | str]:
     """``NAME=N,...`` (``--pass-prompts``): the prompts a pass of load NAME sends, in place of the load's own, at
-    every rung alike. A load's own prompts are few for a high rung: the client starts a pass with ``rung`` requests
+    every rung alike; or ``NAME=Kx``, K prompts for each request the rung holds in flight, the load's own at least
+    (`pass_prompts`). A load's own prompts are few for a high rung: the client starts a pass with ``rung`` requests
     and ends it with its last ones draining a few at a time, so 200 prompts at rung 96 hold 96 for part of the pass
     only, and no rung shows more than the load's prompts in flight. A ladder that climbs past them needs longer
-    passes, and the same length at every rung: the draining end is a smaller share of a longer pass, so passes of two
-    sizes differ in tokens a second by their size alone. Refused for a load that is not of ``loads`` or that is sent
-    as planned, whose passes are its plan's."""
-    out: dict[str, int] = {}
+    passes. N is the same length at every rung: the draining end is a smaller share of a longer pass, so passes of two
+    sizes at one rung differ in tokens a second by their size alone, and under one N that share grows with the rung.
+    ``Kx`` sizes each rung's pass by the rung, so that the draining end is the same share of the pass at every rung:
+    for a ladder read for the rung where tokens a second stop rising, at a fraction of the time one N large enough
+    for its top rung takes at its low ones. Either way a rung has one size, the same for every arm. Refused for a
+    load that is not of ``loads`` or that is sent as planned, whose passes are its plan's."""
+    out: dict[str, int | str] = {}
     for part in filter(None, (p.strip() for p in (text or "").split(","))):
         name, _, n = part.partition("=")
         if name not in loads:
             raise SystemExit(f"--pass-prompts: {name!r} is not a load of --loads ({', '.join(loads)})")
         if LOADS[name].plan:
             raise SystemExit(f"--pass-prompts: {name}'s requests are sent as planned: a pass of it is its plan's")
-        if not n.isdigit() or int(n) < 1:
-            raise SystemExit(f"--pass-prompts: {part!r}: NAME=N, the prompts a pass of the load sends, 1 or more")
-        out[name] = int(n)
+        k = n.removesuffix("x")
+        if not k.isdigit() or int(k) < 1:
+            raise SystemExit(f"--pass-prompts: {part!r}: NAME=N, the prompts a pass of the load sends, or NAME=Kx, K "
+                             "for each request its rung holds in flight, 1 or more")
+        out[name] = int(n) if n == k else f"{int(k)}x"
     return out
 
 
@@ -1191,7 +1237,12 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
             "--goodput", *(f"{k}:{round(slo[k] * 1e3)}" for k in load.slo),
             "--percentile-metrics", "ttft,tpot,itl,e2el", "--metric-percentiles", "99",
             "--request-id-prefix", f"{tag}-", "--ready-check-timeout-sec", "0", "--disable-tqdm",
-            "--save-result", "--result-dir", str(d), "--result-filename", RESULT]
+            "--save-result", "--save-detailed", "--result-dir", str(d), "--result-filename", RESULT]
+
+
+#: what the client's detailed result holds that no run keeps: each request's generated text, which is a served
+#: request's content, and its inter-token times, a number for every token, which the client's percentiles summarize
+UNKEPT = frozenset({"generated_texts", "itls"})
 
 
 def merged(results: Sequence[dict]) -> dict:
@@ -1199,17 +1250,27 @@ def merged(results: Sequence[dict]) -> dict:
     (`bench_metrics`): requests and tokens summed, and each rate the sum of the users' rates. A user's rate is of its
     own requests over its own time, from its first send to its last answer, so the seconds a client takes to start
     are in no rate, and the sum is what the engine serves with every user in flight. ``duration`` is the longest
-    user's, ``met`` the requests within the SLO; it has no median or percentile, which the users' own don't give."""
+    user's, ``met`` the requests within the SLO. Where each result is the client's detailed one, the time to the first
+    token and the time a token after it (a request's latency past its first token over its other tokens, as the
+    client has it) are over every user's requests, under the client's names: their medians, P90s and P99s, in
+    milliseconds. It has no other median or percentile, which the users' own don't give."""
     def total(key: str) -> float:
         return sum(r[key] for r in results)
 
     good = [r.get("request_goodput") for r in results]
-    return {"users": len(results), "completed": total("completed"), "failed": sum(int(r.get("failed") or 0) for r in results),
-            "total_output_tokens": total("total_output_tokens"), "total_input_tokens": total("total_input_tokens"),
-            "duration": max(r["duration"] for r in results), "output_throughput": total("output_throughput"),
-            "total_token_throughput": total("total_token_throughput"), "request_throughput": total("request_throughput"),
-            "request_goodput": None if None in good else sum(good),
-            "met": None if None in good else sum(round(g * r["duration"]) for g, r in zip(good, results))}
+    out = {"users": len(results), "completed": total("completed"), "failed": sum(int(r.get("failed") or 0) for r in results),
+           "total_output_tokens": total("total_output_tokens"), "total_input_tokens": total("total_input_tokens"),
+           "duration": max(r["duration"] for r in results), "output_throughput": total("output_throughput"),
+           "total_token_throughput": total("total_token_throughput"), "request_throughput": total("request_throughput"),
+           "request_goodput": None if None in good else sum(good),
+           "met": None if None in good else sum(round(g * r["duration"]) for g, r in zip(good, results))}
+    if all(isinstance(r.get(k), list) for r in results for k in ("ttfts", "latencies", "output_lens")):
+        first = [1e3 * x for r in results for x in r["ttfts"]]
+        after = [1e3 * (whole - x) / (n - 1) for r in results
+                 for whole, x, n in zip(r["latencies"], r["ttfts"], r["output_lens"]) if n > 1]
+        for name, xs in (("ttft", first), ("tpot", after)):
+            out |= {f"median_{name}_ms": pct(xs, 0.5), f"p90_{name}_ms": pct(xs, 0.9), f"p99_{name}_ms": pct(xs, 0.99)}
+    return out
 
 
 def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
@@ -1217,36 +1278,51 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
     """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
-    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved). A pass
-    of a sessions load is sent by ``rung`` clients at once, a client a user (`user_files`), each with one request in
-    flight and ``prompts`` turns to send, its log and result in d/user-<j>/: d/result.json is theirs as one
-    (`merged`)."""
+    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved). The
+    result is the client's detailed one, each request's lengths, start, first-token time and latency in the order
+    sent, less what no run keeps (`UNKEPT`): the client saves it in a directory outside the run's, removed when the
+    pass ends, so that the generated texts never lie under ``d`` whatever stops the pass. A pass of a sessions load
+    is sent by ``rung`` clients at once, a client a user (`user_files`), each with one request in flight and
+    ``prompts`` turns to send, its log and result in d/user-<j>/: d/result.json is theirs as one (`merged`)."""
     d.mkdir(parents=True, exist_ok=True)
     if load.sessions:
         jobs = [(d / f"user-{j}", f"{tag}-u{j}", 1, f) for j, f in enumerate(user_files(dataset, rung))]
     else:
         jobs = [(d, tag, rung, dataset)]
-    argvs = [bench_argv(model, checkpoint, port, load, c, u, name, f, prompts, seed) for u, name, c, f in jobs]
+    with tempfile.TemporaryDirectory(prefix="serve-tax-result.") as tmp:
+        saved, held = Path(tmp).resolve(), SHARED.RESEARCH_RUN_DIR
+        if any(saved.is_relative_to(p) for p in (d.resolve(), *([Path(held).resolve()] if held else []))):
+            raise RuntimeError(f"the client's result would be saved in {saved}, inside the run's directory, which leaves "
+                               "the node with each request's generated text: TMPDIR, outside every run's directory")
+        to = [saved / u.name if load.sessions else saved for u, *_ in jobs]
+        argvs = [bench_argv(model, checkpoint, port, load, c, to[k], name, f, prompts, seed)
+                 for k, (_, name, c, f) in enumerate(jobs)]
 
-    def client(k: int) -> int:
-        jobs[k][0].mkdir(parents=True, exist_ok=True)
-        with open(jobs[k][0] / "bench.log", "wb") as log:
-            return run(argvs[k], stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
+        def client(k: int) -> int:
+            jobs[k][0].mkdir(parents=True, exist_ok=True)
+            to[k].mkdir(parents=True, exist_ok=True)
+            with open(jobs[k][0] / "bench.log", "wb") as log:
+                return run(argvs[k], stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
 
-    t, t0 = clock(), now()
-    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy:
-        if len(jobs) == 1:
-            rcs = [client(0)]
-        else:
-            with ThreadPoolExecutor(len(jobs)) as pool:
-                rcs = list(pool.map(client, range(len(jobs))))
-    wall = clock() - t
-    for (u, *_), rc in zip(jobs, rcs):
-        if rc or not (u / RESULT).exists():
-            raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {u / 'bench.log'}")
+        t, t0 = clock(), now()
+        with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy:
+            if len(jobs) == 1:
+                rcs = [client(0)]
+            else:
+                with ThreadPoolExecutor(len(jobs)) as pool:
+                    rcs = list(pool.map(client, range(len(jobs))))
+        wall = clock() - t
+        results = []
+        for (u, *_), f, rc in zip(jobs, to, rcs):
+            if rc or not (f / RESULT).exists():
+                raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {u / 'bench.log'}")
+            results.append({k: v for k, v in json.loads((f / RESULT).read_text()).items() if k not in UNKEPT})
+    for (u, *_), r in zip(jobs, results):
+        (u / RESULT).write_text(json.dumps(r))
+    r = results[0]
     if load.sessions:
-        (d / RESULT).write_text(json.dumps(merged([json.loads((u / RESULT).read_text()) for u, *_ in jobs]), indent=1))
-    r = json.loads((d / RESULT).read_text())
+        r = merged(results)
+        (d / RESULT).write_text(json.dumps(r))
     failed = int(r.get("failed") or 0)
     meta = {"tag": tag, "client": BENCH, "concurrency": rung, "rate": None, "requests": r["completed"] + failed,
             "unfinished": failed, "unserved": failed, "wall_s": round(wall, 3), "t0_unix": t0, "argv": argvs[0][1:],
@@ -1273,7 +1349,8 @@ def bench_metrics(r: dict) -> dict:
             "req_per_s": r["request_throughput"], "goodput_req_per_s": good, "met": met,
             "slo_attained": met / sent if met is not None and sent else None,
             "ttft_p50_s": s("median_ttft_ms"), "ttft_p99_s": s("p99_ttft_ms"), "itl_p50_s": s("median_itl_ms"),
-            "itl_p99_s": s("p99_itl_ms"), "tpot_p50_s": s("median_tpot_ms"), "tpot_p99_s": s("p99_tpot_ms")}
+            "itl_p99_s": s("p99_itl_ms"), "tpot_p50_s": s("median_tpot_ms"), "tpot_p99_s": s("p99_tpot_ms"),
+            **({"tpot_p90_s": s("p90_tpot_ms")} if "p90_tpot_ms" in r else {})}
 
 
 def await_commits(d: Path, n: int, wait_s: float, clock: Callable[[], float] = time.monotonic,
@@ -1398,12 +1475,13 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
 
     signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
+    stop_at = parse_stop_at(a.stop_at)
     arm, model = ARMS[a.arm], MODELS[a.model_id]
-    check_model(a.arm, a.model_id)
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     bench = a.client == BENCH
+    given = published_context(a.arm, a.model_id, a.max_model_len) if arm.published else a.max_model_len
     if bench:
         if arm.tick or arm.sampling != "greedy" or arm.logprobs:
             raise SystemExit(f"arm {a.arm} needs the corpus client (the certifier's stand-in feed, or its sampling): "
@@ -1416,13 +1494,13 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         loads, lines = passes_of(loads, datasets, sizes)
         traces = {n: write_trace(out / f"{n}.trace.jsonl", x) for n, x in lines.items()}
         sent = client_files(datasets, traces)
-        context = context_of(loads, a.max_model_len)
+        context = context_of(loads, given)
         passes = {pass_name(n, c): (n, c) for n, rungs in loads.items() for c in rungs}
         rates, plan = {}, []
     else:
         if not a.rates or not a.c4:
             raise SystemExit(f"--client {CORPUS} serves --rates NAME=REQ_PER_S,... of the --c4 shard's plan")
-        passes, context, traces, lines, sent, sizes = {}, a.max_model_len, {}, {}, {}, {}
+        passes, context, traces, lines, sent, sizes = {}, given, {}, {}, {}, {}
         rates = parse_rates(a.rates)
         t = time.monotonic()
         plan = plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
@@ -1490,22 +1568,27 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             w = send(next(iter(passes or rates)), "warm", out / "warm", None, warm=True)
             finished += w["requests"] - w["unfinished"]
             print(f"[serve-tax] warm-up: {w['requests']} requests, unfinished {w['unfinished']}", flush=True)
-        for rep in range(1, a.reps + 1):
-            for name in passes or rates:
-                ok = reset_prefix_cache(port)
-                d = out / name / f"rep-{rep}"
-                before = scrape(port)
-                m = send(name, load_tag(name, rep, bench), d, lib)
-                after = scrape(port)
-                m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
-                      "schedule": {k: after[k] - before[k] for k in after}}
-                (d / "meta.json").write_text(json.dumps(m, indent=1))
-                meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
-                (out / "meta.json").write_text(json.dumps(meta, indent=1))
-                at = at_rung(m["concurrency"]) if bench else f"at {m['rate']:g}/s"
-                print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests {at}, wall {m['wall_s']} s, "
-                      f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
-                finished += m["requests"] - m["unfinished"]
+        for rep, name in ((r, n) for r in range(1, a.reps + 1) for n in passes or rates):
+            need = stop_before(meta["loads"], name, None if stop_at is None else stop_at - time.time())
+            if need is not None:
+                meta["stopped"] = {"before": name, "rep": rep, "need_s": round(need, 1), "stop_at": a.stop_at}
+                print(f"[serve-tax] {a.arm}: stopped before {name} rep {rep}: the pass and the server's stop need "
+                      f"{need:.0f} s, more than is left to --stop-at {a.stop_at}", flush=True)
+                break
+            ok = reset_prefix_cache(port)
+            d = out / name / f"rep-{rep}"
+            before = scrape(port)
+            m = send(name, load_tag(name, rep, bench), d, lib)
+            after = scrape(port)
+            m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
+                  "schedule": {k: after[k] - before[k] for k in after}}
+            (d / "meta.json").write_text(json.dumps(m, indent=1))
+            meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
+            (out / "meta.json").write_text(json.dumps(meta, indent=1))
+            at = at_rung(m["concurrency"]) if bench else f"at {m['rate']:g}/s"
+            print(f"[serve-tax] {name} rep {rep}: {m['requests']} requests {at}, wall {m['wall_s']} s, "
+                  f"unfinished {m['unfinished']}, unserved {m['unserved']}", flush=True)
+            finished += m["requests"] - m["unfinished"]
         if "boundary_rows" in arm.plugin:
             meta["boundary_commits"] = await_commits(srv, finished, a.commit_wait_s)
             print(f"[serve-tax] boundary commits: {meta['boundary_commits']}", flush=True)
@@ -1667,12 +1750,17 @@ def edge_windows(arm_dir: Path, load: str, rep: int = 1) -> list[tuple[float, fl
 
 def schedule_metrics(s: dict | None) -> dict:
     """A load's schedule from its counters (`SCHEDULE`): its engine steps, the tokens each scheduled and the rows each
-    sampled (one per request that emitted a token), its preemptions and the prompt's share served from the prefix cache."""
+    sampled (one per request that emitted a token), its preemptions and the prompt's share served from the prefix cache.
+    Where the engine drafted (speculative decoding), the share of its draft tokens the model accepted and the tokens
+    a draft gave, the accepted ones and the model's own one; None where it drafted nothing."""
     if not s or not s.get("steps"):
         return {}
+    drafts, proposed, accepted = (s.get(k) or 0 for k in ("drafts", "draft_tokens", "accepted_tokens"))
     return {"steps": s["steps"], "tokens_per_step": s["step_tokens"] / s["steps"],
             "rows_per_step": s["generation_tokens"] / s["steps"], "preemptions": s["preemptions"],
-            "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None}
+            "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None,
+            "draft_accepted_share": accepted / proposed if proposed else None,
+            "tokens_per_draft": 1 + accepted / drafts if drafts else None}
 
 
 def edge_records(arm_dir: Path) -> list[dict]:
@@ -2193,8 +2281,11 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     them: the share of its prompt tokens the load plans to repeat (`planned`), the share each side's prefix cache
     served in fact, from the engine's own counters, and whether each side served every request of every rep.
     ``same_work`` says whether both did and their caches served the same share of the same prompts in every rep:
-    where it is false the two sides did not do the same work, and the verdict is "cannot tell". None where ``reference`` served no sessions
-    load; refused where ``arm`` did not serve it, or served another plan."""
+    where it is false the two sides did not do the same work, and the verdict is "cannot tell". Each side also has
+    its prompt and output tokens a second a GPU, the output tokens a second a user gets at the P90 time a token
+    (`merged`), and, where it decodes speculatively, the share of its draft tokens accepted and the tokens a draft
+    gave (`schedule_metrics`). None where ``reference`` served no sessions load; refused where ``arm`` did not serve
+    it or served another plan, or where the arms were served by different builds of vLLM."""
     by = joined(arms)
     if reference not in by:
         raise SystemExit(f"cost: no directory of arm {reference} (given: {', '.join(by) or 'none'})")
@@ -2213,6 +2304,12 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     rung = c["rung"]
     twin = next((x for x in by.values() if x["arm"] not in (reference, arm) and same_engine(x["arm"], reference)
                  and rung in bench_rungs(x, load)), None)
+    built = {x["arm"]: x.get("vllm") for x in (ref, by[arm], *([twin] if twin else []))}
+    if len(set(built.values())) > 1:
+        raise SystemExit("cost: the arms were served by different builds of vLLM ("
+                         + ", ".join(f"{n}: {v}" for n, v in built.items()) + "): a cost is over stock from the same "
+                         "environment (run.sh: VENV)")
+    gpus = tp_size(MODELS[by[arm]["model_id"]])
     noise = serving_cost(ref, twin, load, rung) if twin else None
     floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
     a, b = ({r["rep"]: r for r in bench_rungs(x, load)[rung]} for x in (ref, by[arm]))
@@ -2220,9 +2317,16 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     sent = rung * plan["requests"] // plan["users"]
 
     def side(rs: dict[int, dict], of: dict) -> dict:
-        cached = [rs[k].get("prompt_cached_share") for k in reps]
-        return {**of, "cached_share": None if None in cached else _pct(statistics.fmean(cached)),
-                "served_all": all(rs[k].get("ok") == rs[k].get("sent") == sent for k in reps)}
+        def mean(key: str) -> float | None:
+            xs = [rs[k].get(key) for k in reps]
+            return None if None in xs else statistics.fmean(xs)
+
+        whole, slow = mean("total_tok_per_s"), mean("tpot_p90_s")
+        return {**of, "cached_share": _pct(mean("prompt_cached_share")),
+                "served_all": all(rs[k].get("ok") == rs[k].get("sent") == sent for k in reps),
+                "tok_per_s_a_gpu": None if whole is None else whole / gpus,
+                "user_tok_per_s_p90": 1 / slow if slow else None,
+                "draft_accepted_share": _pct(mean("draft_accepted_share")), "tokens_per_draft": mean("tokens_per_draft")}
 
     sa, sb = side(a, c["reference"]), side(b, c["arm"])
     cached = [(a[k].get("prompt_cached_share"), b[k].get("prompt_cached_share")) for k in reps]
@@ -2236,7 +2340,7 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"],
             "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
             "noise_floor": {"arm": twin["arm"], **_cost(noise), "reps": noise["reps"]} if noise else None,
-            "sides": {"reference": sa, "arm": sb}, "vllm": by[arm].get("vllm"), "gpus": tp_size(MODELS[by[arm]["model_id"]]),
+            "sides": {"reference": sa, "arm": sb}, "vllm": by[arm].get("vllm"), "gpus": gpus,
             "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
 
 
@@ -2245,7 +2349,12 @@ def session_text(r: dict) -> str:
     def rate(x: dict) -> str:
         cached = "its prefix cache's share unread" if x["cached_share"] is None else \
             f"{x['cached_share']:.2f}% of its prompt tokens from its prefix cache"
-        return (f"{x['arm']}: {x['output_tok_per_s']:,.1f} output tokens a second, {cached}, "
+        each = "" if x["tok_per_s_a_gpu"] is None else f" ({x['tok_per_s_a_gpu']:,.1f} prompt and output tokens a second a GPU)"
+        user = "" if x["user_tok_per_s_p90"] is None else \
+            f", {x['user_tok_per_s_p90']:,.1f} output tokens a second a user at the P90 time a token"
+        drafts = ", no drafts" if x["tokens_per_draft"] is None else \
+            f", {x['draft_accepted_share']:.2f}% of its draft tokens accepted, {x['tokens_per_draft']:.2f} tokens a draft"
+        return (f"{x['arm']}: {x['output_tok_per_s']:,.1f} output tokens a second{each}{user}, {cached}{drafts}, "
                 f"{'every request served' if x['served_all'] else 'NOT every request served'}")
 
     n = r["noise_floor"]
@@ -2698,6 +2807,34 @@ def _gb(x: float | None) -> float | None:
 LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
 
 
+def parse_stop_at(text: str | None) -> float | None:
+    """``--stop-at``: a time with its zone, as ``2030-01-01T00:00:00Z``, in seconds since the epoch."""
+    if text is None:
+        return None
+    no = SystemExit(f"--stop-at {text!r}: a time with its zone, as 2030-01-01T00:00:00Z (run.sh: STOP_AT)")
+    try:
+        at = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        raise no from None
+    if at.tzinfo is None:
+        raise no
+    return at.timestamp()
+
+
+def stop_before(served: Sequence[dict], name: str, left_s: float | None, margin: float = 1.1) -> float | None:
+    """Whether an arm with ``left_s`` seconds to the time it stops by (``--stop-at``; None: it has none) starts no
+    further pass, ``name`` being its next: the seconds that pass and the server's stop need where ``left_s`` is fewer,
+    else None. A pass needs its own longest wall time among the passes ``served`` (the arm's ``meta["loads"]``), or
+    where it has none yet the longest of any pass, ``margin`` times as long. An arm's first pass has nothing to go by
+    and starts whenever the stop alone fits. The arm then stops between two passes and keeps every pass it served,
+    where a signal at the time itself would lose the pass in flight."""
+    if left_s is None:
+        return None
+    walls = [x["wall_s"] for x in served if x["load"] == name] or [x["wall_s"] for x in served]
+    need = ((max(walls) + LOAD_OVERHEAD_S) * margin if walls else 0.0) + STOP_S
+    return need if need > left_s else None
+
+
 def reps_that_fit(meta: dict, warm_wall_s: float, budget_s: float, reps: int, margin: float = 1.1) -> int:
     """How many of ``reps`` reps an arm like the one ``meta`` records fits in ``budget_s`` seconds: its startup, its
     warm-up's ``warm_wall_s`` and its longest rep's loads, each ``margin`` times as long; ``reps`` when ``meta`` has no
@@ -2727,10 +2864,13 @@ def main(argv: list[str] | None = None) -> int:
                    help=f"vLLM's client: the loads ({', '.join(sorted(LOADS))}) in the order each rep serves them, each at "
                         "its rungs (concurrencies) or the ones given")
     r.add_argument("--dataset", action="append", metavar="NAME=FILE", help="vLLM's client: a load's dataset file")
-    r.add_argument("--pass-prompts", metavar="NAME=N,...",
-                   help="vLLM's client: the prompts a pass of a load sends at every rung, in place of the load's own "
-                        "(parse_pass_prompts)")
+    r.add_argument("--pass-prompts", metavar="NAME=N|Kx,...",
+                   help="vLLM's client: the prompts a pass of a load sends in place of the load's own: N at every rung, "
+                        "or Kx, K for each request its rung holds in flight (parse_pass_prompts)")
     r.add_argument("--reps", type=int, default=3)
+    r.add_argument("--stop-at", metavar="TIME",
+                   help="the time the arm stops by, with its zone (2030-01-01T00:00:00Z): it starts no pass that it "
+                        "can't expect to finish by then, and keeps the passes it served (stop_before)")
     r.add_argument("--span-s", type=float, default=90.0, help="each load's arrivals span")
     r.add_argument("--requests", type=int, help="each load's request count instead of --span-s's")
     r.add_argument("--warm-s", type=float, default=20.0,
@@ -2781,7 +2921,7 @@ def main(argv: list[str] | None = None) -> int:
                                        "checked, before any GPU is held")
     ps.add_argument("--loads", required=True)
     ps.add_argument("--dataset", action="append")
-    ps.add_argument("--pass-prompts", metavar="NAME=N,...")
+    ps.add_argument("--pass-prompts", metavar="NAME=N|Kx,...")
     ps.add_argument("--fetch", action="store_true", help="download a pinned dataset file the node's cache doesn't hold")
     ps.add_argument("--arms", default="", help="the arms that will serve them, each checked against --model-id")
     ps.add_argument("--model-id", choices=sorted(MODELS))
@@ -2793,7 +2933,7 @@ def main(argv: list[str] | None = None) -> int:
     co = sub.add_parser("cost", help="the serving cost of --arm over --reference from arms served by vLLM's client")
     co.add_argument("dirs", nargs="+", type=Path)
     co.add_argument("--arm", default=OURS)
-    co.add_argument("--reference", help="the arm it is costed over (default: the stock engine --arm is made from, root_of)")
+    co.add_argument("--reference", help="the arm it is costed over (default: the stock arm --arm is made from, stock_of)")
     co.add_argument("--target", type=float, metavar="PERCENT",
                     help="the most it may cost (default: the model's; on a sessions load, SESSION_TARGET)")
     co.add_argument("--json", action="store_true", help="print the JSON object alone")
@@ -2853,12 +2993,13 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
             if arm.tick or arm.sampling != "greedy" or arm.logprobs:
                 raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's")
-            check_model(name, a.model_id)
             if ("boundary_rows" in arm.plugin and not (a.boundary_rows or {}).get("check")
                     and not (a.model_id and MODELS[a.model_id].check)):
                 raise SystemExit(f"--arms: {name}'s boundary commitment needs a check template, and "
                                  f"{a.model_id or 'no model'} names none (Model.check): BOUNDARY_ROWS, a JSON object "
                                  "with check")
+            if arm.published:
+                context_of(loads, published_context(name, a.model_id, a.max_model_len))
         context_of(loads, a.max_model_len)
         files = parse_datasets(a.dataset, loads, a.fetch)
         sizes = parse_pass_prompts(a.pass_prompts, loads)
@@ -2868,8 +3009,9 @@ def main(argv: list[str] | None = None) -> int:
             arriving = rungs == (ARRIVING,)
             digest = (None if n not in files else f"SHA-512 {LOADS[n].file.sha512[:16]}" if LOADS[n].file else
                       f"SHA-256 {file_digest(Path(files[n]))[:16]}")
+            each = [pass_prompts(LOADS[n], c, lines.get(n), prompts=sizes.get(n)) for c in rungs]
             print(f"[serve-tax] load {n}: {GIVEN if arriving else LOADS[n].what}; "
-                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n), prompts=sizes.get(n)):,} "
+                  f"{', '.join(f'{x:,}' for x in (each if len(set(each)) > 1 else each[:1]))} "
                   f"{'turns a user' if LOADS[n].sessions else 'prompts'} a pass "
                   f"{at_rung(ARRIVING) if arriving else ('of users ' if LOADS[n].sessions else 'at concurrency ') + ', '.join(map(str, rungs))}"
                   + (f" (--pass-prompts: the load's own are {LOADS[n].prompts:,})" if n in sizes else "")
@@ -2881,7 +3023,7 @@ def main(argv: list[str] | None = None) -> int:
     slo = (a.slo_ttft_s, a.slo_tpot_s) if a.cmd != "cost" and a.slo_ttft_s and a.slo_tpot_s else None
     arms = [json.loads(d.read_text()) if d.is_file() else arm_metrics(d, slo) for d in a.dirs]
     if a.cmd == "cost":
-        reference = a.reference or root_of(a.arm)
+        reference = a.reference or stock_of(a.arm)
         rep = session_cost(arms, a.arm, reference, a.target)
         text = session_text(rep) if rep else None
         if rep is None:

@@ -13,33 +13,36 @@ import serve_tax as S
 GLM = S.MODELS["glm53"]
 
 
-def test_the_prod_arms_are_the_recipes_settings_and_are_costed_over_prod():
+def test_the_prod_arms_are_the_published_arm_with_the_recipes_drafts_and_are_costed_over_prod():
     prod, again, record = (S.ARMS[n] for n in ("prod", "prod-again", "prod-record"))
-    assert prod.parent is None and again.parent == record.parent == "prod"
-    assert prod.args == again.args == record.args == S.PROD and record.plugin == ("record",) and not prod.plugin
-    argv = S.server_argv(prod, GLM, Path("/ck"), 8000, max_model_len=131072)
-    assert S.server_argv(record, GLM, Path("/ck"), 8000, max_model_len=131072) == argv
-    # the recipe's settings, as the pin spells them, on the engine every arm starts
-    for flag, value in (("--kv-cache-dtype", "fp8"), ("--gpu-memory-utilization", "0.95"), ("--tool-call-parser", "glm47"),
-                        ("--reasoning-parser", "glm47"), ("--tensor-parallel-size", "8"), ("--max-num-seqs", "256"),
-                        ("--max-model-len", "131072")):
+    assert prod.parent == "published" and again.parent == record.parent == "prod"
+    assert prod.args == again.args == record.args == S.MTP and record.plugin == ("record",) and not prod.plugin
+    assert prod.published and again.published and record.published
+    context = S.published_context("prod", "glm53", None)
+    argv = S.server_argv(prod, GLM, Path("/ck"), 8000, max_model_len=context)
+    assert S.server_argv(record, GLM, Path("/ck"), 8000, max_model_len=context) == argv
+    # the published arm's line, then the recipe's speculative decoding as the recipe spells it
+    assert argv == [*S.server_argv(S.ARMS["published"], GLM, Path("/ck"), 8000, max_model_len=context),
+                    "--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", "5"]
+    for flag, value in (("--kv-cache-dtype", "fp8"), ("--tool-call-parser", "glm47"), ("--reasoning-parser", "glm47"),
+                        ("--tensor-parallel-size", "8"), ("--max-model-len", str(GLM.published_context))):
         assert argv[argv.index(flag) + 1] == value, flag
-    assert "--enable-prefix-caching" in argv and "--enable-auto-tool-choice" in argv
-    assert "--no-enable-prefix-caching" not in argv and "--enforce-eager" not in argv
-    assert json.loads(argv[argv.index("--speculative-config") + 1]) == {"method": "mtp", "num_speculative_tokens": 5}
-    # a second lifetime starts the same engine, the record another; and stock at vLLM's defaults is not this engine
+    # what the recipe leaves to vLLM stays vLLM's: the requests at once, each card's memory, the prefix cache, the mode
+    assert not {"--max-num-seqs", "--gpu-memory-utilization", "--no-enable-prefix-caching", "--enforce-eager"} & set(argv)
+    # a second lifetime starts the same engine, the record another; and the published arm is not this engine
     assert S.same_engine("prod", "prod-again") and not S.same_engine("prod", "prod-record")
-    assert not S.same_engine("prod", "compiled") and not S.same_engine("prod-again", "compiled-again")
+    assert not S.same_engine("prod", "published") and not S.same_engine("prod-again", "compiled-again")
     assert S.changes_of("prod") == S.changes_of("prod-again") == [] and S.changes_of("prod-record") == ["the step record"]
-    # an arm is costed over the stock engine it is made from
-    assert [S.root_of(a) for a in ("prod", "prod-again", "prod-record")] == ["prod"] * 3
-    assert {S.root_of(a) for a in S.ARMS if not a.startswith("prod")} == {"compiled"} == {S.root_of("no such arm")}
-    # the settings are one model's recipe
+    # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
+    assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
+    assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record")} == {"compiled"}
+    assert S.stock_of("no such arm") == "compiled" and all(n in S.ARMS and not S.changes_of(n) for n in S.STOCK)
+    # the recipe is one model's, and is served at its context limit alone
     for arm in ("prod", "prod-again", "prod-record"):
-        S.check_model(arm, "glm53")
-        with pytest.raises(SystemExit, match=f"arm {arm} holds vLLM's recipe for glm53.*the model is moonlight"):
-            S.check_model(arm, "moonlight")
-    S.check_model("compiled", "moonlight")
+        with pytest.raises(SystemExit, match=f"arm {arm} starts the server as vLLM's recipe.*no recipe for moonlight"):
+            S.published_context(arm, "moonlight", None)
+        with pytest.raises(SystemExit, match=f"arm {arm}: the recipe's context limit is 262144, not --max-model-len 131072"):
+            S.published_context(arm, "glm53", 131072)
 
 
 def test_the_pinned_corpus_is_a_whole_sha512_and_a_commit_of_its_repository():
@@ -152,37 +155,56 @@ def result(completed: int, duration: float, tok: float, good: float | None, fail
             "total_token_throughput": tok + 500.0, "median_ttft_ms": 400.0, "p99_itl_ms": 70.0}
 
 
-def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_users_sum(tmp_path: Path):
+def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_users_sum(tmp_path: Path, monkeypatch):
+    (tmp_path / "tmp").mkdir()
+    monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
     whole = S.write_trace(tmp_path / "agentic.trace.jsonl", S.session_lines(corpus(tmp_path), 2, 3, 400))
-    users = {"u0": result(3, 60.0, 100.0, 3.0), "u1": result(2, 80.0, 50.0, 1.0, failed=1)}
-    calls = []
+    # the client's detailed result: one user's requests take 20 ms a token after the first, the other's 40 ms, and
+    # its last request has one token, which has no time a token
+    users = {"u0": result(3, 60.0, 100.0, 3.0) | {"ttfts": [0.4] * 3, "latencies": [0.4 + 0.02 * 99] * 3, "output_lens": [100] * 3},
+             "u1": result(2, 80.0, 50.0, 1.0, failed=1) | {"ttfts": [0.8] * 2, "latencies": [0.8 + 0.04 * 49, 0.8],
+                                                           "output_lens": [50, 1]}}
+    calls, saved = [], []
 
     def run(argv, stdout, stderr, env):
         calls.append(argv)
         assert env["PYTHONHASHSEED"] == "0"
         d = Path(argv[argv.index("--result-dir") + 1])
+        saved.append(d)
         user = argv[argv.index("--request-id-prefix") + 1].split("-")[-2]
-        (d / S.RESULT).write_text(json.dumps(users[user]))
+        (d / S.RESULT).write_text(json.dumps(users[user] | {"generated_texts": ["a served answer"], "itls": [[0.02]]}))
         return NS(returncode=0)
 
-    d = tmp_path / "agentic@2" / "rep-1"
+    d = tmp_path / "run" / "agentic@2" / "rep-1"
     m = S.drive_bench(8000, GLM, Path("/ck"), S.LOADS[S.AGENTIC], 2, "agentic@2-r1", d, dataset=whole, prompts=3, run=run,
                       clock=iter([0.0, 90.0]).__next__, now=lambda: 1700.0)
     files = S.user_files(whole, 2)
-    want = [S.bench_argv(GLM, Path("/ck"), 8000, S.LOADS[S.AGENTIC], 1, d / f"user-{j}", f"agentic@2-r1-u{j}", files[j], 3)
+    held = sorted(saved)
+    # each client saved its result outside the run's directory, in a directory gone when the pass ends
+    assert [x.name for x in held] == ["user-0", "user-1"] and held[0].parent == held[1].parent
+    assert held[0].parent.parent == (tmp_path / "tmp").resolve() and not held[0].parent.exists()
+    want = [S.bench_argv(GLM, Path("/ck"), 8000, S.LOADS[S.AGENTIC], 1, held[j], f"agentic@2-r1-u{j}", files[j], 3)
             for j in (0, 1)]
     assert sorted(calls) == sorted(want) and m["argv"] == want[0][1:]
     assert (m["requests"], m["unfinished"], m["concurrency"], m["wall_s"], m["tag"]) == (6, 1, 2, 90.0, "agentic@2-r1")
+    each = [json.loads((d / f"user-{j}" / S.RESULT).read_text()) for j in (0, 1)]
     r = json.loads((d / S.RESULT).read_text())
-    assert r == S.merged([users["u0"], users["u1"]]) and (d / "user-1" / "bench.log").exists()
+    assert each == [users["u0"], users["u1"]] and r == S.merged(each) and (d / "user-1" / "bench.log").exists()
+    assert "a served answer" not in "".join(f.read_text() for f in d.rglob("*") if f.is_file())
     assert (r["users"], r["completed"], r["failed"], r["duration"], r["total_output_tokens"]) == (2, 5, 1, 80.0, 10000)
     # a user's rate is over its own time, and the pass's is their sum
     assert (r["output_throughput"], r["total_token_throughput"]) == (150.0, 1150.0)
     assert r["request_throughput"] == pytest.approx(3 / 60 + 2 / 80) and r["request_goodput"] == pytest.approx(3 / 60 + 1 / 80)
+    # the times are over every user's requests: first tokens after 0.4 s (three) and 0.8 s; 20, 20, 20 and 40 ms a token
+    assert (r["median_ttft_ms"], r["p90_ttft_ms"]) == (pytest.approx(400.0), pytest.approx(800.0))
+    assert (r["median_tpot_ms"], r["p90_tpot_ms"], r["p99_tpot_ms"]) == tuple(map(pytest.approx, (20.0, 34.0, 39.4)))
     b = S.bench_metrics(r)
     assert (b["sent"], b["ok"], b["met"], b["output_tok_per_s"], b["prompt_tok_per_s"]) == (6, 5, 4, 150.0, 1000.0)
-    assert b["ttft_p50_s"] is None and b["itl_p99_s"] is None and b["slo_attained"] == pytest.approx(4 / 6)
-    assert S.merged([result(3, 60.0, 100.0, None), users["u1"]])["met"] is None
+    assert b["ttft_p50_s"] == pytest.approx(0.4) and b["tpot_p90_s"] == pytest.approx(0.034)
+    assert b["itl_p99_s"] is None and b["slo_attained"] == pytest.approx(4 / 6)
+    # a result that is not the detailed one gives no time, and one with no goodput no count within the SLO
+    bare = S.merged([result(3, 60.0, 100.0, None), users["u1"]])
+    assert bare["met"] is None and "p90_tpot_ms" not in bare and "tpot_p90_s" not in S.bench_metrics(bare)
     # one user's client that fails fails the pass
     with pytest.raises(RuntimeError, match="exited 1"):
         S.drive_bench(8000, GLM, Path("/ck"), S.LOADS[S.AGENTIC], 2, "x", tmp_path / "bad", dataset=whole, prompts=3,
@@ -195,10 +217,12 @@ PLAN = {"requests": 96, "prompt_tokens": 8000000, "repeated_tokens": 7600000, "s
 
 def served(name: str, rates: list[float], load: str = S.AGENTIC, cached: float = 0.94, ok: int = 96, plan: dict = PLAN) -> dict:
     """An arm's metrics with a sessions load served by four users, a rep each rate, in thousands of output tokens a
-    second, each rep with the share of its prompt tokens the prefix cache served."""
+    second, each rep with the share of its prompt tokens the prefix cache served, 52,000 prompt and output tokens a
+    second, 25 ms a token at the P90, and half its draft tokens accepted."""
     reps = [{"rep": i + 1, "rate": None, "concurrency": 4, "sent": 96, "ok": ok, "met": ok, "goodput_req_per_s": 0.5,
              "req_per_s": 0.5, "output_tok_per_s": 1000 * r, "prompt_tok_per_s": 50000.0, "output_tokens": 60000,
-             "prompt_tokens": 8000000, "prompt_cached_share": cached} for i, r in enumerate(rates)]
+             "prompt_tokens": 8000000, "prompt_cached_share": cached, "total_tok_per_s": 52000.0, "tpot_p90_s": 0.025,
+             "draft_accepted_share": 0.5, "tokens_per_draft": 3.5} for i, r in enumerate(rates)]
     return {"arm": name, "parent": S.ARMS[name].parent, "what": name, "run_id": "r-1", "commit": "c" * 40,
             "vllm": "0.1+gd9105ea8", "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
             "loads": {S.pass_name(load, 4): reps}, "planned": {load: plan}}
@@ -224,11 +248,19 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert S.session_cost(arms(), "prod-record", "prod", target=0.65)["verdict"] == "cannot tell"      # 0.6 + 0.1 is over
     assert S.session_cost(arms(), "prod-record", "prod", target=0.25)["verdict"] == "misses"           # 0.4 - 0.1 is over
     assert r["planned"]["repeated_share"] == 95.0 and r["sides"]["arm"]["cached_share"] == 94.0
-    assert r["sides"]["reference"]["served_all"] and r["sides"]["reference"]["output_tok_per_s"] == pytest.approx(2000.0)
+    stock = r["sides"]["reference"]
+    assert stock["served_all"] and stock["output_tok_per_s"] == pytest.approx(2000.0)
+    # beside the rate: tokens a second a GPU of the model's eight, a user's tokens a second at the P90 time a token,
+    # and what the engine's drafts gave
+    assert (stock["tok_per_s_a_gpu"], stock["user_tok_per_s_p90"]) == (6500.0, 40.0) and r["gpus"] == 8
+    assert (stock["draft_accepted_share"], stock["tokens_per_draft"]) == (50.0, 3.5)
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.40%, 0.60%] of stock's "
                                     "serving compute, 6 reps, 4 users; target 1%: meets")
     assert "noise floor: prod-again over prod: 0.10% [0.10%, 0.10%], 6 reps" in text and "95.00% of them planned to repeat" in text
+    assert ("  prod: 2,000.0 output tokens a second (6,500.0 prompt and output tokens a second a GPU), 40.0 output tokens "
+            "a second a user at the P90 time a token, 94.00% of its prompt tokens from its prefix cache, 50.00% of its "
+            "draft tokens accepted, 3.50 tokens a draft, every request served\n") in text
     # with no second lifetime the floor is not measured, and the cost of the second lifetime itself has none
     alone = S.session_cost(arms()[:2], "prod-record", "prod")
     assert alone["noise_floor"] is None and alone["verdict"] == "meets" and "noise floor: not measured" in S.session_text(alone)
@@ -248,7 +280,17 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     assert "did not do the same work" in S.session_text(r)
     short = S.session_cost([ref, served("prod-record", OURS, ok=95)], "prod-record", "prod")
     assert not short["sides"]["arm"]["served_all"] and short["verdict"] == "cannot tell"
-    assert "prod-record: 1,990.0 output tokens a second, 94.00% of its prompt tokens from its prefix cache, NOT every" in S.session_text(short)
+    assert "3.50 tokens a draft, NOT every request served" in S.session_text(short)
+    # an engine that drafts nothing, and a pass without the client's per-request record, say so and give no figure
+    plain = [served(n, x) for n, x in (("prod", [2.0] * 6), ("prod-record", OURS))]
+    for a in plain:
+        for rep in a["loads"]["agentic@4"]:
+            rep |= {"draft_accepted_share": None, "tokens_per_draft": None, "tpot_p90_s": None}
+    text = S.session_text(S.session_cost(plain, "prod-record", "prod"))
+    assert "a GPU), 94.00% of its prompt tokens from its prefix cache, no drafts, every request served" in text
+    # a cost is over stock from the same environment
+    with pytest.raises(SystemExit, match=r"different builds of vLLM \(prod: 0.1\+gd9105ea8, prod-record: 0.2\)"):
+        S.session_cost([ref, served("prod-record", OURS) | {"vllm": "0.2"}], "prod-record", "prod")
     with pytest.raises(SystemExit, match="prod and prod-record served load agentic from different plans"):
         S.session_cost([ref, served("prod-record", OURS, plan=PLAN | {"sha256": "b" * 64})], "prod-record", "prod")
     with pytest.raises(SystemExit, match="prod served load agentic and prod-record did not"):
