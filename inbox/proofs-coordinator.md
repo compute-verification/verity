@@ -79097,3 +79097,158 @@ The tool is in the notes, `lanes/proofs/20261112T0450Z-fixedcost/`: `FoldMain.le
 **#9196's body** has a `Goal` line now, and the head did not move (`7480db20877e`) [run: `research queue edit 9196 --body-file`]. **The line is `Goal top/architecture-signed`, and that is my reading, not a fact** [derived]: no live goal's text names the carve, MEM-279 or ASK-288 [run: `research goals show --json`, 213 live goals searched]. I took top's "Open architecture choices decided" because it says "a different answer is a later, smaller move", and `top/repo-cleaned-up` counts "the moves his answers need are on main" under it [read: both descriptions]. The other candidate is `compute-research/accounting-plan-agreed`, MEM-279's own lead's goal. #9202's body carries the same line. If it is wrong, one `research queue edit` each corrects it; say the id. #9174 and #9178 have no `Goal` line [read: their bodies].
 
 **Correction to my 07:55Z entry:** I wrote "five files" for the step and the count was right then; `main` has moved twice since, and the lists above are today's.
+
+## SESSIONS, Thu 12 Nov 08:33Z: the whole: with reruns charged a table no term that binds reads the tables a session (the hash term is the one-table figure of the same sample at every T; only the square-root term still reads T, and it sits 10 bits or more below); and larger sessions buy no GB, since both sides pay a session's fixed seconds once a table: no design under 300 GB at 100 bits or more exists on what is measured, the least is 807.8 GB at 102.69 bits (771.4 to 887.1 at 4 to 64 tables a session) and needs six things that are not on `main`
+
+Tags: [run] with the run's id; [read] with the place; [relayed] another lane's statement I did not check; [derived] arithmetic on tagged figures; [guess]. Times are from `date -u`. Mailbox read at 08:33Z: nothing after the 08:11Z section, which my 08:27Z entry answers.
+
+**Nothing here ran on the served engine and no session of these shapes has run. Every GB and every bit below is modeled**: designs of the cost model priced with measured seconds, and arithmetic on `hashBound`. The seconds I price with are other lanes' measurements, each named with its entry and run.
+
+Run: `r20261112-081540-7ffe` (`vy-nebius-cpu-14`, exit 0, record `art:6ef4446fef7bf1c6a64800ff2aadf75474d64f2d2d8c760f934cad6d9926d7f6`), script `wires_tables.py`, on COUNT's kit of run `8921` unchanged at tree `c8b46edd10e4`; 106 designs, 8 searches; the 12 one-table rows give back run `8921`'s designs and run `bd0d`'s bits [run]. Item 1 is my 08:27Z entry (line 78793); its answer in one line: the count `main` proves charges each sampled proof block its own classes and reads no session, so the reruns-times-gates term gains the whole factor at any placement.
+
+### 2. Bits at T tables a session, an execution phase in calls
+
+**Which statement each column is arithmetic on.**
+
+| column | reruns | the statement | where it is |
+|---|---|---|---|
+| as the proof stands | `1 + 210·⌈4·h·2^23/e⌉`, h the largest session's tables | `hashBound` with the code's counts (`SpotFlock.code_eventTwoX_le_cls_at_budget`, `SpotFlock/FirstHitClassAt.lean:56`; `TwoFirstHitClassNumbers.lean:50`, instance `hashBound_table1_513` at `:102`) | on `main` at one table a session, the only session its two-stage verifier accepts (`ref_one_table`); the guarantee that states it is #8915, open [read: `gh pr view`]. At T above 1: arithmetic, no instance on `main` |
+| reruns a table | 2,592,237,061 at every T | TABLEEXT's `FlockRerunsAt`, `KSAt` over `Arg.ofFlockAt` (`cursor/proofs-tableext-7c3e` at `5972af2daf`) | compiled on a branch: every file elaborates with a clean axiom probe, not replayed by the full check [relayed]. The second read so far: right for knowledge soundness, a gap for completeness and zero knowledge at two or more tables, and no compiled verifier over it is built, nor the code's three count bounds over it [relayed: LAND2 08:10Z]. So the binding error with these reruns is stated nowhere: arithmetic |
+| reruns a table, one-wait trace | 12,343,987, the bound doubled | FINDER's `SpotOneWaitTwo` (#9149, open, ready line posted, not marked [relayed: 08:02Z]) at one table a session; with reruns a table at T above 1 | at T = 1 compiled on #9149's branch; at T above 1 neither: nobody has elaborated the two together [relayed: TABLEEXT] |
+| all changes | `1 + ⌈4·2^19/e⌉` = 771,501, doubled | the same with the wide level-0 leaves (#9108, open; its records run failed at one proof and is being mended [relayed: WIDEZK 08:15Z]) | neither: arithmetic on a definition |
+
+Rows priced a table (every table pays the fixed seconds of a one-table session on both sides; a session pays once only the program's read, row A at 459 core-seconds). Rows B and C are one design at every T; row A's design moves with T.
+
+| configuration, head statement | row | T | K | GB (×1.05) | sampled proof blocks | sessions | as the proof stands | reruns a table | reruns a table, one-wait trace | all changes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| best designed, 160 | A | 1 | 86 | 2,942.0 (3,089.1) | 336,170,646 | 277,518 | 98.01 | 98.01 | 104.72 | 108.72 |
+| best designed, 160 | A | 4 | 12 | 1,480.9 (1,555.0) | 750,498,216 | 154,921 | 94.85 | 96.85 | 103.56 | 107.56 |
+| best designed, 160 | A | 16 | 30 | 1,182.8 (1,242.0) | 938,124,810 | 48,518 | 92.53 | 96.53 | 103.24 | 107.24 |
+| best designed, 160 | A | 64 | 32 | 1,108.9 (1,164.4) | 1,000,666,464 | 13,073 | 90.43 | 96.43 | 103.15 | 107.15 |
+| best designed, 160 | B | 1 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 877,309 | 96.35 | 96.35 | 103.06 | 107.06 |
+| best designed, 160 | B | 4 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 220,163 | 94.35 | 96.35 | 103.06 | 107.06 |
+| best designed, 160 | B | 16 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 56,302 | 92.35 | 96.35 | 103.06 | 107.06 |
+| best designed, 160 | B | 64 | 17 | 1,045.4 (1,097.6) | 1,063,205,806 | 15,566 | 90.35 | 96.35 | 103.06 | 107.06 |
+| best designed, 160 | C | 1 | 22 | 807.8 (848.2) | 1,375,913,396 | 1,135,341 | 95.97 | 95.97 | 102.69 | 106.69 |
+| best designed, 160 | C | 4 | 22 | 807.8 (848.2) | 1,375,913,396 | 284,923 | 93.97 | 95.97 | 102.69 | 106.69 |
+| best designed, 160 | C | 16 | 22 | 807.8 (848.2) | 1,375,913,396 | 72,862 | 91.97 | 95.97 | 102.69 | 106.69 |
+| best designed, 160 | C | 64 | 22 | 807.8 (848.2) | 1,375,913,396 | 20,109 | 89.97 | 95.97 | 102.69 | 106.69 |
+| best designed, 287.5 | A | 1 | 79 | 3,202.7 (3,362.8) | 308,807,919 | 254,935 | 98.13 | 98.13 | 104.84 | 108.84 |
+| best designed, 287.5 | A | 4 | 19 | 1,867.6 (1,961.0) | 594,145,713 | 122,645 | 95.19 | 97.19 | 103.90 | 107.90 |
+| best designed, 287.5 | A | 16 | 12 | 1,480.9 (1,555.0) | 750,498,216 | 38,816 | 92.85 | 96.85 | 103.56 | 107.56 |
+| best designed, 287.5 | A | 64 | 25 | 1,419.4 (1,490.4) | 781,770,675 | 10,262 | 90.79 | 96.79 | 103.50 | 107.50 |
+| best designed, 287.5 | B | 1 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 670,907 | 96.73 | 96.73 | 103.45 | 107.45 |
+| best designed, 287.5 | B | 4 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 168,388 | 94.73 | 96.73 | 103.45 | 107.45 |
+| best designed, 287.5 | B | 16 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 43,096 | 92.73 | 96.73 | 103.45 | 107.45 |
+| best designed, 287.5 | B | 64 | 13 | 1,367.0 (1,435.4) | 813,039,734 | 11,945 | 90.73 | 96.73 | 103.45 | 107.45 |
+| best designed, 287.5 | C | 1 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 928,932 | 96.26 | 96.26 | 102.98 | 106.98 |
+| best designed, 287.5 | C | 4 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 233,109 | 94.26 | 96.26 | 102.98 | 106.98 |
+| best designed, 287.5 | C | 16 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 59,609 | 92.26 | 96.26 | 102.98 | 106.98 |
+| best designed, 287.5 | C | 64 | 18 | 987.3 (1,036.6) | 1,125,747,324 | 16,475 | 90.26 | 96.26 | 102.98 | 106.98 |
+| `main`'s driver, 160 | A | 1 | 36 | 7,046.7 (7,399.1) | 135,959,292 | 268,836 | 98.09 | 98.09 | 104.80 | 108.80 |
+| `main`'s driver, 160 | A | 4 | 59 | 4,299.7 (4,514.7) | 222,822,173 | 110,196 | 95.38 | 97.38 | 104.09 | 108.09 |
+| `main`'s driver, 160 | A | 16 | 5 | 3,581.5 (3,760.6) | 302,124,910 | 37,428 | 92.94 | 96.94 | 103.65 | 107.65 |
+| `main`'s driver, 160 | A | 64 | 74 | 3,428.1 (3,599.6) | 279,471,878 | 8,762 | 91.05 | 97.05 | 103.76 | 107.76 |
+| `main`'s driver, 160 | B | 1 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 559,985 | 97.03 | 97.03 | 103.74 | 107.74 |
+| `main`'s driver, 160 | B | 4 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 140,382 | 95.03 | 97.03 | 103.74 | 107.74 |
+| `main`'s driver, 160 | B | 16 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 36,000 | 93.03 | 97.03 | 103.74 | 107.74 |
+| `main`'s driver, 160 | B | 64 | 75 | 3,382.4 (3,551.6) | 283,248,525 | 10,323 | 91.03 | 97.03 | 103.74 | 107.74 |
+| `main`'s driver, 160 | C | 1 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 776,423 | 96.56 | 96.56 | 103.27 | 107.27 |
+| `main`'s driver, 160 | C | 4 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 194,378 | 94.56 | 96.56 | 103.27 | 107.27 |
+| `main`'s driver, 160 | C | 16 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 49,439 | 92.56 | 96.56 | 103.27 | 107.27 |
+| `main`'s driver, 160 | C | 64 | 13 | 2,749.0 (2,886.5) | 392,762,994 | 13,318 | 90.56 | 96.56 | 103.27 | 107.27 |
+| plan of record, 60.56 | A | 1 | 40 | 6,342.1 (6,659.2) | 151,065,880 | 298,692 | 97.94 | 97.94 | 104.65 | 108.65 |
+| plan of record, 60.56 | A | 4 | 71 | 3,573.0 (3,751.6) | 268,141,937 | 132,592 | 95.11 | 97.11 | 103.82 | 107.82 |
+| plan of record, 60.56 | A | 16 | 88 | 2,882.8 (3,026.9) | 332,344,936 | 41,169 | 92.80 | 96.80 | 103.51 | 107.51 |
+| plan of record, 60.56 | A | 64 | 94 | 2,698.8 (2,833.7) | 355,004,818 | 11,080 | 90.70 | 96.70 | 103.42 | 107.42 |
+| plan of record, 60.56 | B | 1 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 836,124 | 96.45 | 96.45 | 103.17 | 107.17 |
+| plan of record, 60.56 | B | 4 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 209,265 | 94.45 | 96.45 | 103.17 | 107.17 |
+| plan of record, 60.56 | B | 16 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 52,864 | 92.45 | 96.45 | 103.17 | 107.17 |
+| plan of record, 60.56 | B | 64 | 7 | 2,558.2 (2,686.2) | 422,974,874 | 13,918 | 90.45 | 96.45 | 103.17 | 107.17 |
+| plan of record, 60.56 | C | 1 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 895,873 | 96.35 | 96.35 | 103.07 | 107.07 |
+| plan of record, 60.56 | C | 4 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 225,059 | 94.35 | 96.35 | 103.07 | 107.07 |
+| plan of record, 60.56 | C | 16 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 58,015 | 92.35 | 96.35 | 103.07 | 107.07 |
+| plan of record, 60.56 | C | 64 | 30 | 2,372.3 (2,491.0) | 453,189,300 | 16,482 | 90.35 | 96.35 | 103.07 | 107.07 |
+
+- **With reruns charged a table the bits at T tables a session are the one-table bits of the same sample**, at every T: 96.35 (row B) and 95.97 (row C) where the proof as it stands reads 94.35, 92.35, 90.35 and 93.97, 91.97, 89.97 at 4, 16, 64 [run]. That is the whole of what the change buys: log2 T bits back, and nothing beyond the one-table figure.
+- **No column but the two with the one-wait trace reaches 100 bits on any priced row**: the best without it is 98.13 (row A at the 287.5 head, one table). With it every row is over 100 at every T (102.62 to 104.84), and with all changes 106.6 to 108.8 [run].
+- In row A more tables a session also enlarge the sample (the program's read is paid by fewer sessions), so its bits fall by 1.0 to 1.6 from one table to 64 even with reruns a table (98.01 to 96.43 in the best designed configuration at the 160 head) [run].
+
+### 3. The GB at T tables a session
+
+**3.1 What a session's fixed seconds become when T tables share it, from what is measured.**
+
+| side | what was measured | a table of a T-table session against a one-table session | entry, run |
+|---|---|---|---|
+| Lean verifier of `main`, one core, GEMM K=512 (112 MB circuit file) | the call reads the file once (2.02 to 2.19 s); each table then parses it again (1.60 to 1.73 s) and is checked (2.01 to 2.42 s against 1.95 to 2.48 alone); 2.5 s at one table, 8.0 at 2, 14.7 at 4, 59.1 at 16, 239 at 64 | 0.84 to 0.94 of a fresh process (its read and its session); 1.6 to 1.9 of a later session of a kept call; the check alone 0.98 to 1.02 [derived] | FIXEDCOST 06:28Z, `r20261112-051610-2254` |
+| the same, the MoE type (1.79 GB file) | the call's read 18.9 to 20.2 s; each table's parse 25.6 to 26.6 s, its check 21.1 to 22.7 s against 20.6 to 22.4 alone; 22 s at one table, 95 at 2, 189 at 4, 789 at 16 | 1.10 to 1.26 of a fresh process; 2.1 to 2.3 of a later session of a kept call; the check alone 0.98 to 1.08 [derived] | FIXEDCOST 06:28Z, `r20261112-051610-ffdb` |
+| the same, two tables in one session, GEMM | 7.99 to 8.05 s against 4.89 to 5.06 s for two one-table sessions, 3.12 to 3.16 s of it the circuit file read again in setup; a table's check about 2.3 s | 1.6 of a later one-table session | FLOCKPKG 07:29Z, `r20261112-062447-792e` |
+| the same, the head type (12.19 GB file) | **nothing at more than one table**. One table: read 127.6 s, session 154.8 s, a later session 155.9 s (idle core); 122.6 s under the allocator setting `main`'s runners use, the MoE type 18.5 s | bracket: 0.84 to 1.26 of a fresh process, the two types measured [guess] | FIXEDCOST 06:28Z and 07:31Z, `52e3` [read by it], `r20261112-064329-1ad4`, `r20261112-064329-ab25` |
+| verifier's memory | 0.53 GiB at one table to 10.2 GiB at 64 (GEMM); 7.1 to 29.8 GiB at 16 (MoE): every table keeps its own parse | grows by table | FIXEDCOST 06:28Z, `2254`, `ffdb` |
+| CPU prover, a fresh process a session | J tables cost 0.80 to 0.96 of J one-table sessions (GEMM), 1.03 to 1.08 (MoE) | 0.80 to 1.08 | FIXEDCOST 06:28Z, `2254`, `ffdb` |
+| GPU prover (what the cost model prices) | **nothing at more than one table: it proves one table a session** (`flock-circuit.rs:7640` [read]). One table: a later session of the kept proof server 3.58 s (head), 4.71 (MoE), 2.77 (GEMM) | bracket: the CPU prover's 0.80 to 1.08 [guess] | FIXEDCOST 06:28Z, `38d6`, `0dcd`, `fe31` [read by it] |
+
+- **Nothing a session pays is paid once a session rather than once a table**, on either side. What is paid once is paid once a call (the process): the program's read and the call's own read of the circuit file [relayed: FIXEDCOST, `FlockVerify.lean:1104-1150`]. So T tables a session save GB only where a session is a fresh process (row A), and there a kept process saves more.
+- On `main` a table of a several-table session costs the verifier **more** than a later one-table session of a kept call, 1.6 to 2.3 times, because each table parses the circuit file again [derived from `2254`, `ffdb`, `792e`]. Setting each table up from the call's parsed circuit would remove that; it is not built [relayed: FIXEDCOST 07:31Z, its lever 5].
+
+**3.2 The GB, priced with those.** Best designed configuration; each cell is GB (K; sampled proof blocks; bits with reruns a table and the one-wait trace). In the cost model a block type's own Lean seconds v are a fresh process's read and session. Row A: a table v, a session the program's read. Row B: a table v. Row C: a type's tables after its first 0.5 v (0.43 under the allocator setting). The readings of a table of a several-table session: "the least" and "the most measured" are the brackets of 3.1 (prover 0.80 and 1.08; verifier 0.84 and 1.26 of v with the call's read once a session, or 0.98 and 1.08 of the check alone).
+
+| head statement | row | reading of a table of a several-table session | T = 1 | T = 4 | T = 16 | T = 64 |
+|---|---|---|---|---|---|---|
+| 160 | A | as a one-table session | 2,942.0 (K 86; 336 M; 104.72) | 1,480.9 (K 12; 750 M; 103.56) | 1,182.8 (K 30; 938 M; 103.24) | 1,108.9 (K 32; 1,001 M; 103.15) |
+| 160 | A | the least measured | 2,942.0 (K 86; 336 M; 104.72) | 1,478.5 (K 24; 750 M; 103.56) | 1,045.4 (K 17; 1,063 M; 103.06) | 935.3 (K 19; 1,188 M; 102.90) |
+| 160 | A | the most measured | 2,942.0 (K 86; 336 M; 104.72) | 1,768.8 (K 40; 625 M; 103.83) | 1,364.8 (K 26; 813 M; 103.45) | 1,267.3 (K 28; 876 M; 103.34) |
+| 160 | B | as a one-table session | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) |
+| 160 | B | the least measured | 1,045.4 (K 17; 1,063 M; 103.06) | 985.7 (K 36; 1,126 M; 102.98) | 935.3 (K 19; 1,188 M; 102.90) | 935.3 (K 19; 1,188 M; 102.90) |
+| 160 | B | the most measured | 1,045.4 (K 17; 1,063 M; 103.06) | 1,267.3 (K 28; 876 M; 103.34) | 1,267.3 (K 28; 876 M; 103.34) | 1,223.6 (K 29; 907 M; 103.29) |
+| 160 | C | as `main` sets a table up (the circuit file parsed again) | 807.8 (K 22; 1,376 M; 102.69) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) |
+| 160 | C | the check alone, as a later one-table session (not built) | 807.8 (K 22; 1,376 M; 102.69) | 807.8 (K 22; 1,376 M; 102.69) | 807.8 (K 22; 1,376 M; 102.69) | 807.8 (K 22; 1,376 M; 102.69) |
+| 160 | C | the same, the least measured | 807.8 (K 22; 1,376 M; 102.69) | 771.4 (K 46; 1,438 M; 102.62) | 771.4 (K 46; 1,438 M; 102.62) | 771.4 (K 46; 1,438 M; 102.62) |
+| 160 | C | the same, the most measured | 807.8 (K 22; 1,376 M; 102.69) | 887.1 (K 40; 1,251 M; 102.83) | 887.1 (K 40; 1,251 M; 102.83) | 887.1 (K 40; 1,251 M; 102.83) |
+| 160 | C at 0.43 | the check alone at 0.43 (not built) | 806.5 (K 44; 1,376 M; 102.69) | 806.5 (K 44; 1,376 M; 102.69) | 806.5 (K 44; 1,376 M; 102.69) | 806.5 (K 44; 1,376 M; 102.69) |
+| 287.5 | A | as a one-table session | 3,202.7 (K 79; 309 M; 104.84) | 1,867.6 (K 19; 594 M; 103.90) | 1,480.9 (K 12; 750 M; 103.56) | 1,419.4 (K 25; 782 M; 103.50) |
+| 287.5 | A | the least measured | 3,202.7 (K 79; 309 M; 104.84) | 1,774.3 (K 20; 625 M; 103.83) | 1,364.8 (K 26; 813 M; 103.45) | 1,267.3 (K 28; 876 M; 103.34) |
+| 287.5 | A | the most measured | 3,202.7 (K 79; 309 M; 104.84) | 2,211.0 (K 32; 500 M; 104.15) | 1,774.3 (K 20; 625 M; 103.83) | 1,615.6 (K 11; 688 M; 103.69) |
+| 287.5 | B | as a one-table session | 1,367.0 (K 13; 813 M; 103.45) | 1,367.0 (K 13; 813 M; 103.45) | 1,367.0 (K 13; 813 M; 103.45) | 1,367.0 (K 13; 813 M; 103.45) |
+| 287.5 | B | the least measured | 1,367.0 (K 13; 813 M; 103.45) | 1,269.4 (K 14; 876 M; 103.34) | 1,223.6 (K 29; 907 M; 103.29) | 1,184.7 (K 15; 938 M; 103.24) |
+| 287.5 | B | the most measured | 1,367.0 (K 13; 813 M; 103.45) | 1,768.8 (K 40; 625 M; 103.83) | 1,615.6 (K 11; 688 M; 103.69) | 1,615.6 (K 11; 688 M; 103.69) |
+| 287.5 | C | as `main` sets a table up (the circuit file parsed again) | 987.3 (K 18; 1,126 M; 102.98) | 1,367.0 (K 13; 813 M; 103.45) | 1,367.0 (K 13; 813 M; 103.45) | 1,367.0 (K 13; 813 M; 103.45) |
+| 287.5 | C | the check alone, as a later one-table session (not built) | 987.3 (K 18; 1,126 M; 102.98) | 987.3 (K 18; 1,126 M; 102.98) | 987.3 (K 18; 1,126 M; 102.98) | 987.3 (K 18; 1,126 M; 102.98) |
+| 287.5 | C | the same, the least measured | 987.3 (K 18; 1,126 M; 102.98) | 933.8 (K 38; 1,188 M; 102.90) | 933.8 (K 38; 1,188 M; 102.90) | 933.8 (K 38; 1,188 M; 102.90) |
+| 287.5 | C | the same, the most measured | 987.3 (K 18; 1,126 M; 102.98) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) | 1,045.4 (K 17; 1,063 M; 103.06) |
+| 287.5 | C at 0.43 | the check alone at 0.43 (not built) | 935.3 (K 19; 1,188 M; 102.90) | 935.3 (K 19; 1,188 M; 102.90) | 935.3 (K 19; 1,188 M; 102.90) | 935.3 (K 19; 1,188 M; 102.90) |
+
+- **Rows B and C do not move with T** when a table costs what a one-table session costs: 1,045.4 and 807.8 GB at every T (1,367.0 and 987.3 at the 287.5 head). Within what is measured T tables a session move row C between 771.4 and 887.1 GB, and as `main` sets a table up they raise it to 1,045.4 [run].
+- **Row A falls toward row B and stays above it**: 2,942.0 GB at one table, 1,480.9, 1,182.8 and 1,108.9 at 4, 16, 64 (935.3 to 1,267.3 at 64 across the readings) [run].
+- **Nothing is under 300 GB at any T.** The least of all 106 designs is 771.4 GB [run]. The designs under 300 GB of the 06:02Z grid need a session's fixed seconds at 0.05 of the verifier's and none of the prover's (or 0.01 and 0.05); a table of a larger session pays 0.8 to 1.3 of them, so larger sessions do not reach that grid [derived].
+
+**3.3 The least GB at 100 bits or more, for each T** (head at 160; modeled).
+
+| T | as the proof stands | reruns a table | reruns a table and the one-wait trace (all changes) |
+|---|---|---|---|
+| 1 | 14,065.4 GB: K 10; 78,178,000 sampled proof blocks; 64,614 sessions; 100.11 bits | the same design | 807.8 GB: K 22; 1,375,913,396; 1,135,341 sessions; 102.69 (106.69) |
+| 4 | 63,250.7 GB: K 4; 15,635,844; 3,454 sessions; 100.43 | 14,065.4 GB, the one-table design in sessions of 4 tables | 807.8 GB (771.4 to 887.1): K 22 (46; 40); 1,375,913,396 (1,438,458,042; 1,250,833,080); 284,923 sessions; 102.69 (102.62; 102.83) |
+| 16 | 251,827.7 GB: K 2; 3,909,090; 459 sessions; 100.43 | 14,065.4 GB | the same, 72,862 sessions |
+| 64 | none found; one sampled replay block is at about 99.4 bits [derived] | 14,065.4 GB | the same, 20,109 sessions |
+
+- The first two columns are the planner's own design at a smaller budget, row B's pricing (row C's gives 14,150.5 GB, a coarser step of K): an upper bound of the least, since a search that priced classes could do better [guess]. That the one-table design serves at every T with reruns a table is [derived] from rows B and C not moving with T.
+- **What the 807.8 GB design needs that is not on `main`**, at one table a session: (1) the one-wait trace (#9149, open); (2) the guarantee whose binding error is this hash term (#8915, open); (3) a kept verifier process (#9190, open [relayed: KEPT 08:03Z]) and (4) the circuit file kept across a type's sessions (a second branch [relayed]); (5) a release log for its 197.5 million lines of session coins where `main`'s holds 8,388,608, or as many challenger sessions; (6) the best designed configuration itself, which no driver builds (its Definitions are on `main`, #8917). And nothing has timed these sessions on the served engine.
+- **At T above 1 it needs, besides those**: reruns charged a table (a branch, second read under way) and its use with the one-wait trace (nobody's); a second stage that accepts a session of several tables (`main` refuses, `second-tables`); a GPU prover that proves several tables a session (it proves one); each table set up from the call's parsed circuit (not built; without it 1,045.4 GB). It gains nothing for them: the same 807.8 GB and the same 102.69 bits.
+- **The 14,065.4 GB design** (no one-wait trace) needs (2) to (6), with 11.24 million lines against 8,388,608.
+
+### 4. The sentence for Daniel
+
+**Which terms still read the number of tables a session once reruns are charged a table.** Modeled, and nothing of it is on `main`: the hash term no longer does (its reruns read one table's length, and its sessions and gates are charged a sampled proof block), and neither does a session's knowledge error (one table's own, 2^-203.0, where `main` has T times that) [relayed: TABLEEXT, LAND2]; **the square-root term still does**, because it keeps the whole session's collision weight (2^50.1, 2^54.1, 2^58.1, 2^62.1 at 1, 4, 16, 64 tables) and so loses about log2 T bits, but it is 2^-124 at one table and 2^-117 at 64 for an execution phase in calls, 10 bits or more below the hash term on every row [derived at my 05:48Z designs from `main`'s lemma forms, not recomputed here; small only under the strict birthday bound]; and the code still does: the Lean verifier refuses a session above 64 tables, the GPU prover proves one, `main`'s second stage accepts one, and the verifier's memory grows by table. So the trade between the tables in a session and the binding error is not fundamental: it is the reruns being counted for the session, which a statement compiled on a branch removes.
+
+**Whether any design under 300 GB at 100 bits or more exists on what is measured.** No. On what is measured the least bound at 100 bits or more is 807.8 GB at 102.69 bits for an execution phase in calls (987.3 GB with the head's read of its circuit file counted; 771.4 to 887.1 GB at 4 to 64 tables a session), and it needs the six things of 3.3; without the one-wait trace it is 14,065.4 GB. Under 300 GB needs a session's fixed seconds near zero, and larger sessions do not give that, because both the prover and the verifier pay them once a table: what would is fewer fixed seconds a table or more proof blocks a table, and a table is already at the proof system's 2^35 bits on the three timed statements [relayed: FIXEDCOST].
+
+### For Daniel
+
+- Is the trade between tables in a session and the binding error fundamental? No. The bits a larger session loses today come from one thing, counting the reruns for the whole session. A statement that counts them for one table compiles on a branch (not on `main`, second read not finished). With it a session of any size reads the same bits as one-table sessions of the same sample. The one remaining term that grows with the session is far too small to matter.
+- But larger sessions do not make the bound cheaper either. Measured tonight, the prover and the verifier each pay a session's fixed seconds once for every table in it, so 4, 16 or 64 tables in a session cost what that many one-table sessions cost, and with today's verifier a little more.
+- So the answer to "is there a design under 300 GB at 100 bits" stays no on what is measured. The cheapest bound over 100 bits is about 808 GB, and it needs the one-wait trace, a verifier process kept between sessions, a larger release log and a configuration no driver builds yet. All of it is modeled; none of these sessions has run.
+- What would move the GB is not the size of a session but the fixed seconds of a table, or more proof blocks in a table.
+
+### What I wait for
+
+Nothing blocks me. Three things would change figures here: a measurement of the GPU prover and of the head type at more than one table a session (none exists; I bracketed both); the second read of the table statement (LAND2, by 11:15Z); and a count of shared classes from the wiring in place of my model, if you want it (section 1.5 of the 08:27Z entry).
