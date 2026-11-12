@@ -129,7 +129,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     ruleset = rules if rules is not None else DEFAULT_RULES
     vocab = vocabulary_for(mode, profile)
     allowed_dims, config, theta = dict(allowed_dims or {}), dict(config or {}), tuple(theta)
-    name = name or (type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived"))
+    source_name: str = type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived")
+    name = name or source_name
     source_desc = _describe_source(source, example_inputs, mode, profile, config, allowed_dims)
     prov: dict[str, Any] = {"schema": "verity_ir/derive-provenance/v1", "frontend": FRONTEND_VERSION, "derive": DERIVE_VERSION,
                             "torch": torch.__version__, "mode": mode, "profile": profile, "vocabulary": vocab.to_json(),
@@ -140,7 +141,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
-        head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
+        head = (dict(prov), dict(ctx.unresolved_module_paths))
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, correspondence=correspondence, theta=theta)
         if session is not None:
             session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, theta))
@@ -404,6 +405,7 @@ def _translate(ctx: Ctx) -> Coll:
             if node.name in ctx.user_inputs:
                 ctx.env[node] = ctx.user_inputs[node.name]
             elif node.name in ctx.placeholder_to_weight:
+                assert ctx.weights_coll is not None
                 w = ctx.weights[ctx.placeholder_to_weight[node.name]]
                 ctx.env[node] = ctx.weights_coll[w.index]
             elif node.name in ctx.lifted_constants:
