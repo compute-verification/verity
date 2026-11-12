@@ -1,0 +1,2 @@
+fp8	fp8-coord:K=256	2
+silu	census:SiluMul_v2{I=256}	2
