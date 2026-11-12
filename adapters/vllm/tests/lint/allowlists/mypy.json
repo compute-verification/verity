@@ -1676,8 +1676,6 @@
     {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "union-attr", "symbol": "_static_positions_source", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "union-attr", "symbol": "_through_views", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "index", "symbol": "RmsNormRule.applies", "detail": ""},
-    {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "attr-defined", "symbol": "LayerNormRefRule.emit", "detail": ""},
-    {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "attr-defined", "symbol": "RMSNormRefRule.emit", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/attention.py", "kind": "index", "symbol": "KvCacheUpdateRule.emit", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/bf16_gemm.py", "kind": "index", "symbol": "LlBf16GemmRule.emit", "detail": ""},
     {"file": "verity_vllm/program/frontend/rules/vllm_bindings/bf16_gemm.py", "kind": "misc", "symbol": "CublasLinearRule.emit", "detail": ""},
