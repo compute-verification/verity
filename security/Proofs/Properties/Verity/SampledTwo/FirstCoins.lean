@@ -4,6 +4,7 @@ public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.SpotFlock.Jeq
 import all Spot.Run
 
 /-!
@@ -167,7 +168,7 @@ theorem run_firstRead {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Ru
     (hs : Spot.jeq (Spot.getD j "symbol") (Json.str "accept") = true) : ∃ read, FirstRead i read := by
   rcases run_path h with ⟨step, codes, rfl⟩ | ⟨wt, res, draw, rest, read, h1, -, h2, h3, h4, -⟩
   · rw [symbol_refused] at hs
-    exact absurd hs (by decide)
+    cases SpotFlock.str_of_jeq (SpotFlock.jeq_symm hs)
   · exact ⟨read, wt, res, draw, rest, h1, h2, h3, by simpa using h4⟩
 
 /-- **The run of record's input on an accepted case** is the one the check ran and accepted. -/
@@ -233,7 +234,7 @@ theorem coinsAgree_first (A : Live₂) (C : CaseOf) (S : SessionReading)
     CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .first := by
   intro o ha hg n _ hgn c hc c' hd
   obtain rfl := groupOf_first hgn
-  simp only [formReading, ↓reduceIte] at hc hd ⊢
+  simp only [formReading, ↓reduceIte, eq_self_iff_true, if_true] at hc hd ⊢
   obtain ⟨i, hi, hci⟩ := Option.bind_eq_some_iff.1 hc
   refine ⟨i, hi, ?_⟩
   obtain ⟨hL, hcs⟩ := coinOf_src hB hci
