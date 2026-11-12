@@ -298,7 +298,7 @@ def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict
     from verity.definitions.registry import sparse_mla_split as W
 
     jobs: list[dict[str, Any]] = []
-    m = np.arange(1 << 23, dtype=np.uint32)
+    m: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     exps = QUICK_LG2_EXPONENTS if quick else LG2_EXPONENTS
     band = {}
     for e in exps:
@@ -310,7 +310,7 @@ def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict
     jobs += lg2_jobs(work, "sweep", ys, x=sweep)
     powers = np.arange(1, 127, dtype=np.uint32) << np.uint32(23)
     yp = _mufu("lg2_ftz", powers)
-    exact = (np.float32(np.arange(1, 127)) - np.float32(127)).view(np.uint32)
+    exact: np.ndarray = (np.float32(np.arange(1, 127)) - np.float32(127)).view(np.uint32)
     prov = W.lg2_table()["provenance"]["measured"]
     sm120 = {"mantissas": prov["mantissas"].rsplit(" ", 1)[1], "sweep": prov["sweep"].rsplit(" ", 1)[1]}
     lg2 = {"phase": "mufu", "case": "lg2", "exponents": list(exps), "sweep_in": _sha(sweep), "sweep_out": _sha(ys),
@@ -320,7 +320,7 @@ def phase_mufu(work: Path, quick: bool) -> tuple[list[dict[str, Any]], list[dict
            "same_as_sm120": {"sweep": _sha(ys) == sm120["sweep"], "mantissas": _sha(band[127]) == sm120["mantissas"] if 127 in band else None},
            "checks": {"sweep_input": _sha(sweep) in prov["sweep"], "open_are_the_powers": bool(TW.undetermined_words(powers).all())}}
     recs = [lg2]
-    j = np.arange(1 << 23, dtype=np.uint32)
+    j: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     domains = {"ex2": (j.astype(np.float64) / (1 << 23)).astype(np.float32).view(np.uint32), "rcp": np.uint32(0x3F800000) | j}
     for op in ("ex2", "rcp"):
         y = _mufu(f"{op}_ftz", domains[op])
@@ -385,7 +385,7 @@ def bind_check() -> dict[str, Any]:
                f"SparseMlaSplit_v1{{T={TOPK},NS=16,NH={NH},...}}": lambda: bind(W.SparseMlaSplit, T=TOPK, NS=16, **M.SPARSE_MLA_GLM53)}
     for T, NS in ((130, 2), (1001, 8), (TOPK, 16), (TOPK, 28)):
         targets[f"SparseMlaHeadSplit_v1{{T={T},NS={NS},...}}"] = lambda T=T, NS=NS: bind(W.SparseMlaHeadSplit, T=T, NS=NS, **mla)
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

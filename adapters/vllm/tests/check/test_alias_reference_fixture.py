@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -114,7 +115,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
             data = words(0, k, member, 0).tobytes()
             sha = hashlib.sha256(data).hexdigest()
             fn = f"values/0/{sha[:16]}_{k}_{member}.bin"
-            open(os.path.join(d, "capture", fn), "wb").write(data)
+            Path(os.path.join(d, "capture", fn)).write_bytes(data)
             alloc = 10 + 2 * k + MEMBERS.index(member)
             entries.append({"event": ev, "path": "outs", "view": {"$v": [alloc, 0, [1, W], [W, 1], "bfloat16", "cuda:0"]}, "dtype": "bfloat16",
                             "shape": [1, W], "strides": [W, 1], "byte_offset": 0, "nbytes": len(data), "layout": "spanned-storage-bytes",
@@ -123,7 +124,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
                           "hint": f"{per_layer_path(k)}/{HINT[member]}", "request": U0, "position": 0, "operand_views": [],
                           "output_views": [{"alloc": alloc, "offset": 0, "shape": [W], "strides": [1], "dtype": "bfloat16", "device": "cuda:0"}]})
             ev += 1
-    json.dump({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}, open(os.path.join(d, "capture", "snapshots.json"), "w"))
+    Path(os.path.join(d, "capture", "snapshots.json")).write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "steps": [0], "entries": entries}))
     with open(os.path.join(d, "instances.jsonl"), "w") as f:
         f.write(json.dumps({"schema": "verity-gen/instances/v1", "digest": "f" * 64, "n_instances": len(insts),
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": 1, "served_samples": 1, "max_tokens": 1}]}) + "\n")
@@ -133,7 +134,7 @@ def make_match(tmp: str, n_layers: int, *, words=expected_words) -> str:
         f.write(json.dumps({"$e": "RunHeader", "schema": "verity-capture/log/v1", "created_utc": "2026-09-20T23:00:00Z", "profile_id": "abc", "profile": {"vllm": {"version": "t"}}}) + "\n")
         f.write(json.dumps({"$e": "StepStart", "step": 0, "rows": [[U0, 0]]}) + "\n")
         f.write(json.dumps({"$e": "SampleEnd", "step": 0, "sampled_token_ids": [5]}) + "\n")
-    json.dump({"requests": [{"request_id": U0, "prompt_token_ids": [1], "generated_token_ids": [5]}]}, open(os.path.join(d, "capture", "tokens.json"), "w"))
+    Path(os.path.join(d, "capture", "tokens.json")).write_text(json.dumps({"requests": [{"request_id": U0, "prompt_token_ids": [1], "generated_token_ids": [5]}]}))
     return d
 
 

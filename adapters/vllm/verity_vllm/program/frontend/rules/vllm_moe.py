@@ -673,9 +673,9 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
             return f"a strides {sc.get('stride_am')},{sc.get('stride_ak')} are not row-major [rows, K]"
         if (sc.get("stride_be"), sc.get("stride_bk"), sc.get("stride_bn")) != (N * K, 1, K):
-            return f"b strides are not a contiguous [E, N, K] stack"
+            return "b strides are not a contiguous [E, N, K] stack"
         if (sc.get("stride_cm"), sc.get("stride_cn")) != (N, 1):
-            return f"c strides are not row-major rows of N"
+            return "c strides are not row-major rows of N"
         if K % sc.get("BLOCK_SIZE_K"):
             return f"BLOCK_SIZE_K={sc.get('BLOCK_SIZE_K')!r} does not divide K={K}"
         route = self._route(node, ctx, meta, sc, nv)
@@ -884,4 +884,4 @@ VLLM_MOE_RULES = [PaddedTopkSoftmaxRule(), PaddedMoeAlignBlockSizeRule(), Padded
 __all__ = ["VLLM_MOE_RULES", "TopkSoftmaxRule", "MoeAlignBlockSizeRule", "FusedMoeKernelRule", "MoeSumRule", "MoeSchedule", "DeadOutput",
            "PaddedTopkSoftmaxRule", "PaddedMoeAlignBlockSizeRule", "PaddedFusedMoeKernelRule", "PaddedViewRule", "PaddedSiluAndMulRule", "PaddedMoeSumRule",
            "PaddedRoute", "PaddedStage", "PaddedSchedule", "PaddedUp", "PaddedAct", "PaddedDown", "active_moe_construction", "INDEXED_READ", "PADDED",
-           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED"]
+           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED", "INDEXED_READ_ORDERED"]

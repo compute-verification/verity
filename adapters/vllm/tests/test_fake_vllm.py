@@ -101,6 +101,49 @@ def test_a_name_the_test_did_not_set_refuses_every_use_and_names_its_entry(monke
     assert not hasattr(LLM, "__wrapped__")
 
 
+def test_reading_off_a_module_what_no_test_set_is_an_attribute_error_that_says_what_to_do(monkeypatch):
+    """`tests.fake_vllm.Module`: the error is the one any module gives, so ``hasattr``, a ``getattr`` with a default and an
+    import of a name the surface lacks answer as before; its message names the assignment that sets the attribute and the
+    other way out, for a library module that read it as it was itself imported."""
+    fake = fake_vllm.install(monkeypatch)
+    envs = fake["vllm.envs"]
+
+    def read(name: str) -> object:
+        return getattr(envs, name)
+
+    with pytest.raises(AttributeError) as refused:
+        read("NOT_SET")
+    said = str(refused.value)
+    assert said.startswith("vllm.envs.NOT_SET was read, and this test did not set it: fake['vllm.envs'].NOT_SET = value. ")
+    assert "import it before fake_vllm.install" in said
+    assert not hasattr(envs, "NOT_SET") and getattr(envs, "NOT_SET", 7) == 7
+    with pytest.raises(AttributeError, match="^module 'vllm.envs' has no attribute '__wrapped__'$"):
+        read("__wrapped__")
+    with pytest.raises(ImportError, match="NOT_SET"):
+        _import("vllm.envs:NOT_SET")
+    envs.NOT_SET = 1
+    assert envs.NOT_SET == 1 and _import("vllm.envs:NOT_SET") == 1
+
+
+def test_a_module_that_acts_on_an_imported_vllm_module_is_imported_before_the_install(monkeypatch):
+    """`tests.fake_vllm.install`: every module of the surface is imported from then on.  A switch that patches its site now
+    when the site is imported, and waits for the site's import otherwise, patches nothing when it is armed before the
+    install, as under the hand-written stub of ``vllm`` alone; armed after it, it reads a module on which nothing is set."""
+    site, patched = "vllm.v1.sample.ops.topk_topp_triton", []
+
+    def arm() -> None:
+        if site in sys.modules:
+            patched.append(sys.modules[site].kernel)
+
+    for name in _vllm_modules():
+        monkeypatch.delitem(sys.modules, name)
+    arm()
+    fake_vllm.install(monkeypatch)
+    assert patched == [] and site in sys.modules
+    with pytest.raises(AttributeError, match="import it before fake_vllm.install"):
+        arm()
+
+
 def test_a_test_sets_only_names_and_reads_only_modules_of_the_surface(monkeypatch):
     fake = fake_vllm.install(monkeypatch)
 

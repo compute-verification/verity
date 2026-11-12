@@ -13,7 +13,9 @@ from typing import Any
 
 from verity.commitments.windows.rows import ORDER, Member
 
-INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
+from verity_vllm.records.schema_ids import SERVING_ROWS_INDEX_SCHEMA
+
+INDEX_SCHEMA = SERVING_ROWS_INDEX_SCHEMA
 COLUMNS = ("lo", "hi", "request", "engine_step", "layer", "op_path", "member", "token_row", "program_row")
 
 

@@ -223,7 +223,8 @@ def test_a_run_is_put_on_the_preserve_list_once(tmp_path, capsys, caplog):
 
 def test_a_row_json_that_does_not_parse_is_said_and_left_as_it_is(tmp_path, capsys, caplog):
     R._row_json(str(tmp_path), ("stages", "build"), {"rc": 0})
-    assert json.loads((tmp_path / "row.json").read_text())["stages"] == {"build": {"rc": 0}} and _said(capsys, caplog) == ""
+    assert json.loads((tmp_path / "row.json").read_text()) == {"schema": "verity-sweep/row-v2/v1", "stages": {"build": {"rc": 0}}}
+    assert _said(capsys, caplog) == ""
     (tmp_path / "row.json").write_text("{")
     R._row_json(str(tmp_path), ("stages", "match"), {"rc": 0})
     assert "row.json not updated" in _said(capsys, caplog) and (tmp_path / "row.json").read_text() == "{"
