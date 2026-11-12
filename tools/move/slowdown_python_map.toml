@@ -73,6 +73,11 @@ words = { "Overhead.rho" = "Slowdown.value", "Overhead" = "Slowdown", "theorem.o
 files = ["benchmarks/circuit_properties/circuit_properties/references.py"]
 words = { "rho_models" = "slowdown_models", "rho" = "calculator" }
 
+# the module its docstring names is the calculator's package, so that row stands before the local's
+[[words_in]]
+files = ["benchmarks/circuit_properties/circuit_properties/work.py"]
+words = { "`rho.min_cut`" = "`slowdown.min_cut`", "rho" = "calculator" }
+
 [[words_in]]
 files = ["benchmarks/circuit_properties/run.py", "benchmarks/circuit_properties/pyproject.toml"]
 words = { "rho_shapes" = "slowdown_shapes", "rho" = "shapes" }
