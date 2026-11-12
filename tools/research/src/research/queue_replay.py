@@ -1142,7 +1142,7 @@ class Replay:
             self.counts["unions"] += 1
             self.counts["same_file"] += bool(mine & theirs)
             self.union_s.append(took)
-            self._use(self.t, self.t + took, 1)
+            self._use(self.t, self.t + took, SHARDS)
             c.union = max([self.t + took, *(u.union for u in ahead)])
         return self.t >= c.union
 
@@ -1246,6 +1246,7 @@ def measure(tr: Trace, run: Replay) -> dict:
     minutes = sorted(wait.values())
     lean = [wait[ch.key] <= qt.TARGET_MIN for ch in who if ch.lean]
     other = [wait[ch.key] <= qt.TARGET_MIN for ch in who if not ch.lean]
+    new = [wait[ch.key] <= qt.TARGET_MIN for ch in who if ch.mark >= tr.start - 60 * qt.TARGET_MIN]
     red = sorted(run.red)
     merged: list[list[float]] = []
     for a, b in red:
@@ -1257,6 +1258,7 @@ def measure(tr: Trace, run: Replay) -> dict:
             "p50": qt.pct(minutes, .5), "p90": qt.pct(minutes, .9), "unlanded": sum(1 for m in minutes if m == float("inf")),
             "lost": sum(run.lost.values()), "by_cause": dict(run.lost), **run.counts, **peak(run.places, tr.start, tr.end),
             "within_lean": sum(lean) / len(lean) if lean else 0.0, "within_other": sum(other) / len(other) if other else 0.0,
+            "within_new": sum(new) / len(new) if new else 0.0,
             "landed_all": len(run.landed), "red_times": len(merged), "red_min": sum(b - a for a, b in merged) / 60,
             "union_min": (qt.pct(run.union_s, .5) or 0.0) / 60}
 
@@ -1267,11 +1269,13 @@ def measured(tr: Trace) -> dict:
     minutes = m["minutes"]
     who = [ch for ch in tr.changes.values() if ch.landed is not None and ch.mark is not None and tr.start <= ch.landed <= tr.end]
     kind = {k: [(ch.landed - ch.mark) / 60 <= qt.TARGET_MIN for ch in who if ch.lean == k] for k in (True, False)}
+    new = [(ch.landed - ch.mark) / 60 <= qt.TARGET_MIN for ch in who if ch.mark >= tr.start - 60 * qt.TARGET_MIN]
     return {"n": len(minutes), "within": sum(1 for x in minutes if x <= qt.TARGET_MIN) / len(minutes) if minutes else 0.0,
             "p50": qt.pct(minutes, .5), "p90": qt.pct(minutes, .9), "lost": sum(m["lost"].values()), "by_cause": m["lost"],
             "built": m["built"], "reds": m["reds"], "moves": m["moves"], "landed": m["landed"],
             "within_lean": sum(kind[True]) / len(kind[True]) if kind[True] else 0.0, "n_lean": len(kind[True]),
-            "within_other": sum(kind[False]) / len(kind[False]) if kind[False] else 0.0}
+            "within_other": sum(kind[False]) / len(kind[False]) if kind[False] else 0.0,
+            "within_new": sum(new) / len(new) if new else 0.0, "n_new": len(new)}
 
 
 def row(tr: Trace, rule: Rule, seeds: int) -> dict:
@@ -1386,15 +1390,24 @@ RULES = (
 
 ASSUMPTIONS = (
     "Owners mark when they did; a change at fault is fixed as long after it leaves the queue as it really was.",
-    "A check takes as long as one of the real checks of its kind (Lean change or not) built nearest that time, drawn at random.",
+    "The queue can take a change from its mark and its land verdict on, or from when the loop first built it if that was "
+    "sooner (a change admitted with no verdict), while it was not held and its mark stood.",
+    "A check takes as long as one of the real checks of its kind (Lean change or not) built nearest that time, drawn at "
+    "random; a failing one shows as soon as one of the real failed checks nearest that time did; a records run takes as long "
+    "as one of the real ones that passed.",
     "A change a real check failed on fails every check that holds it; no other change fails.  Each real check that failed "
     "with nobody at fault fails the first check started after it was built.",
     "A change conflicts with `main` when it really did, whatever landed before it in the replay.",
     "The queue's order is the order the loop first built the changes in (its priority file's history is not kept).",
-    "Check places are not rationed: a rule's peak is reported against the places there are.",
+    "Check places are not rationed: a rule's peak is reported against the places there are.  A check holds three places, a "
+    "records run one, a union's check three.",
     "Every Lean change the queue may take is pinned; in the rows that say pins as they were, one is pinned while a real "
     "candidate held it, and from its last build on if it landed.  One Lean batch is in its records run at a time; side by "
-    "side, one in its records run or its check.  A records run takes as long as one of the real ones that passed.",
+    "side, one in its records run or its check.",
+    "A kept pass: a candidate rebuilt without some changes ends when its check would have, or after a check of the suites "
+    "that read the removed files, whichever is later.  A union's check never fails.",
+    "Landing before the check: a check of `main` covers what landed since the one before it and fails only for a change at "
+    "fault among those; a red is found when that check fails.",
 )
 
 
@@ -1409,21 +1422,23 @@ def render(tr: Trace, rows: list[dict], extra: dict, held: list[dict]) -> str:
     def fmt(x):
         return "not by the window's end" if x != x or x == float("inf") else f"{x:.0f}"
 
-    out = [f"Window: {span:.0f} hours, {len(tr.ticks)} ticks of the loop, {m['n']} changes landed with a mark, {m['n_lean']} of "
-           f"them Lean changes (a Lean source that compiles); {len(tr.faults)} "
+    out = [f"Window: {span:.0f} hours, {len(tr.ticks)} ticks of the loop, {m['n']} changes landed with a mark, {m['n_new']} of "
+           f"them marked in the window or less than two hours before it, {m['n_lean']} of them Lean changes (a Lean source that "
+           f"compiles); {len(tr.faults)} "
            f"failed checks with a change at fault ({', '.join(f'{n} {how}' for how, n in sorted(found.items()))}), {len(tr.flakes)} "
            "with nobody at fault.", "",
-           "| Rule | On `main` within 2 h of the mark | Of the Lean changes, of the others | Mark to `main`, median (min) | Ninth "
-           f"decile (min) | PR-rounds lost | Landed in the window | Check places at peak (of {PLACES}, soon {PLACES_SOON}) | "
-           "`main` red |", "|---|---|---|---|---|---|---|---|---|",
-           f"| Measured | {m['within']:.0%} | {m['within_lean']:.0%}, {m['within_other']:.0%} | {fmt(m['p50'])} | {fmt(m['p90'])} | "
-           f"{m['lost']} | {m['landed']} | not read | never |"]
+           "| Rule | On `main` within 2 h of the mark | Of those marked in the window; of the Lean changes; of the others | Mark "
+           "to `main`, median (min) | Ninth decile (min) | PR-rounds lost | Landed in the window | Check places at peak (of "
+           f"{PLACES}, soon {PLACES_SOON}) | `main` red |", "|---|---|---|---|---|---|---|---|---|",
+           f"| Measured | {m['within']:.0%} | {m['within_new']:.0%}; {m['within_lean']:.0%}; {m['within_other']:.0%} | "
+           f"{fmt(m['p50'])} | {fmt(m['p90'])} | {m['lost']} | {m['landed']} | not read | never |"]
     for r in rows:
         red = (f"{r['red_times']:.0f} times, {r['red_min']:.0f} min in all; {r['on_red']:.0f} changes landed on a red `main`; "
                f"{r['reverts']:.0f} reverts") if r["reverts"] or r["red_times"] else "never"
         over = f", over {PLACES} for {r['over']:.0%} of the time" if r["over"] >= 0.005 else ""
         out.append(f"| {r['rule']} | {r['within']:.0%} ({r['within_range'][0]:.0%} to {r['within_range'][1]:.0%}) | "
-                   f"{r['within_lean']:.0%}, {r['within_other']:.0%} | {fmt(r['p50'])} | {fmt(r['p90'])} | {r['lost']:.0f} | "
+                   f"{r['within_new']:.0%}; {r['within_lean']:.0%}; {r['within_other']:.0%} | {fmt(r['p50'])} | {fmt(r['p90'])} | "
+                   f"{r['lost']:.0f} | "
                    f"{r['landed_all']:.0f} | {r['peak']:.0f}{over} | {red} |")
     out += ["", f"Each replayed row is the mean of {rows[0]['seeds'] if rows else 0} runs; in brackets, the least and the most of "
             "the runs.", "",
@@ -1436,7 +1451,8 @@ def render(tr: Trace, rows: list[dict], extra: dict, held: list[dict]) -> str:
         out += [f"Lean batches whose records run came first: {len(held)}.  Until the loop next built a batch with a plain change: "
                 f"{', '.join(f'{h['minutes']:.0f}' for h in held)} minutes, with {min(h['plain_waiting'] for h in held)} to "
                 f"{max(h['plain_waiting'] for h in held)} plain changes the queue could take in no candidate.  Built with nothing "
-                f"else in the queue: {len(alone)} ({', '.join(f'{h['minutes']:.0f}' for h in alone)} minutes).", ""]
+                f"else in the queue: {len(alone)} ({', '.join(f'{h['minutes']:.0f}' for h in alone)} minutes); within five minutes "
+                f"of a drop: {sum(1 for h in held if h['after_drop'])}.", ""]
     out += ["Assumptions:", *(f"- {a}" for a in ASSUMPTIONS)]
     return "\n".join(out)
 
