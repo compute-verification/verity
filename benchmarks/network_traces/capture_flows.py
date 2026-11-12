@@ -37,9 +37,11 @@ returns and a `write` is handed), so the capture's matching sum is `stream_bytes
   on a connection that ended in `END` this is every byte the server sent;
 - certifier to server: the length of the request as the server gets it at its release, `release.with_release` of the
   signed ingress record's request under its place in the release order, the run's id (`deployment.json`) and its
-  release bucket; nothing for a request that was never released. The watermark stream's is its head, a chunk a tick
-  and its end, t and n read from the ingress record; the lost releases and whether it stopped are `warden.json`'s,
-  which nothing signs.
+  release bucket; nothing for a request that was never released. A request's place in the release order is its `END`
+  cell's among the `END` cells of the ingress records, in the records' order, and its release bucket that cell's:
+  the place is a decimal header of the request, so its length follows it. The watermark stream's is its head, a chunk
+  a tick and its end, t and n read from the ingress record; the lost releases and whether it stopped are
+  `warden.json`'s, which nothing signs.
 A header, an ACK without data, a SYN and a FIN are in `wire_bytes` alone. A retransmitted segment is on the wire twice
 and in the stream once. A packet lost before the capture point is seen only as its retransmission, and one lost after
 it twice; neither moves `stream_bytes`. So on a connection that ended in `END`, in a capture that holds the flow's SYN
@@ -375,9 +377,10 @@ def read_flows(paths: list[Path], servers: list[tuple[bytes, int | None]],
 def record_counts(run: Path) -> dict:
     """What the network certifier's record of the run in `run` (`warden_serve.py serve`'s directory) says each of its
     connections to the server carried (the module docstring's "Which bytes are compared"): each admitted connection's
-    `to_server` and `from_server`, whether they are `exact`, and `why` not (then the first is a ceiling and the second
-    a floor); the watermark stream's where `warden.json` has one, its `from_server` None; and how many of the records
-    it read, each execution phase's ingress, egress and reasons, are certified under the deployment's key."""
+    `release` (its place in the release order, None if it was never released), `to_server` and `from_server`, whether
+    they are `exact`, and `why` not (then the first is a ceiling and the second a floor); the watermark stream's where
+    `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
+    phase's ingress, egress and reasons, are certified under the deployment's key."""
     import warden_serve as ws
     from verity.protocols.certifier.verifier.active import DATA
     from verity.protocols.certifier.verifier.certificate import record_head
@@ -399,8 +402,12 @@ def record_counts(run: Path) -> dict:
             windows += bool(c is not None and c.verify(key, session) and c.head == record_head(
                 link, direction, record.window, record.grid, record.status, grid, params.digest))
     requests: dict[int, bytearray] = defaultdict(bytearray)
+    # each released connection's (N, a): its `END` cell's place among the ingress records' `END` cells, in the
+    # records' order, and that cell's bucket
+    released: dict[int, tuple[int, int]] = {}
+    ends = 0
     for record in sorted(records[ws.INGRESS], key=lambda r: r.window):
-        for row in record.grid:
+        for b, row in enumerate(record.grid):
             for frame in row[:row_count(row)]:
                 try:
                     kind, ordinal, payload = read_cell(frame, params.cell_bytes)
@@ -408,31 +415,34 @@ def record_counts(run: Path) -> dict:
                     raise Refused(f"{run.name}'s ingress record holds a frame that isn't a cell: {e}") from None
                 if kind in (DATA, END):
                     requests[ordinal] += payload
+                if kind == END:
+                    released.setdefault(ordinal, (ends, record.window * params.window + b))
+                    ends += 1
     connections = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])["connections"]
-    released = sorted((c["ingress_end"], c["ordinal"]) for c in connections if c["ingress_end"] is not None)
-    order = {ordinal: n for n, (_, ordinal) in enumerate(released)}
     log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
     mark = log.get("watermark") or {}
     lost = set(mark.get("lost") or ())
     out = []
     for c in connections:
-        o, a = c["ordinal"], c["ingress_end"]
+        o = c["ordinal"]
+        n, a = released.get(o, (None, None))
         why = [] if c["failed"] is None and c["ended"] is not None else \
             [f"failed ({c['failed']})" if c["failed"] else "not ended"]
-        if order.get(o) in lost:
+        if n in lost:
             why.append("its release was lost")
-        out.append({"connection": o, "exact": not why, "why": ", ".join(why) or None,
-                    "to_server": 0 if a is None else len(with_release(bytes(requests[o]), order[o], run_id, a)),
+        out.append({"connection": o, "release": n, "exact": not why, "why": ", ".join(why) or None,
+                    "to_server": 0 if n is None else len(with_release(bytes(requests[o]), n, run_id, a)),
                     "from_server": c["egress_bytes"]})
     if mark.get("last"):
-        buckets, at = [a for a, _ in released], defaultdict(list)
-        for a, o in released:
-            if order[o] in lost:
-                at[a].append(order[o])
+        buckets, at = [a for _, a in sorted(released.values())], defaultdict(list)
+        for n, a in sorted(released.values()):
+            if n in lost:
+                at[a].append(n)
         size = len(watermark_head(run_id)) + sum(len(watermark_chunk(t, bisect.bisect_right(buckets, t), at[t]))
                                                  for t in range(mark["last"][0] + 1))
         stopped = mark.get("error")
-        out.append({"connection": "watermark", "exact": stopped is None, "why": stopped and f"stopped ({stopped})",
+        out.append({"connection": "watermark", "release": None, "exact": stopped is None,
+                    "why": stopped and f"stopped ({stopped})",
                     "to_server": size + (0 if stopped else len(WATERMARK_END)), "from_server": None})
     return {"phase_records": {"certified": windows, "of": len(ws.CERTIFIED) * dep["windows"]}, "connections": out}
 

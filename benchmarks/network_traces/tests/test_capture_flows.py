@@ -7,11 +7,13 @@ and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreeme
 every capture format read to the same sums, and each thing the reader doesn't read refused by its name. Then a run of
 the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
-on it in no sum, and a connection that failed is a bound."""
+on it in no sum; a request's place in the release order is its `END` cell's in the ingress record, where a bucket's
+are not in their ordinals' order; and a connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import sys
@@ -23,7 +25,7 @@ from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.active import VirtualClock
 from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.certifier.verifier.warden import Warden, cells
+from verity.protocols.certifier.verifier.warden import Warden, WardenParams, cells
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -505,16 +507,27 @@ def test_a_foreign_fragment_and_a_frame_that_isnt_ip_are_skipped_only_when_told_
 
 # --- against a run of the network certifier ---------------------------------------------------------------------------
 
+class _Uncommitted(ws.Publisher):
+    """`Publisher` with no commitment to a record's rows (`attest`): each record kept and certified, as `keep` does."""
+
+    def attest(self, record, link, direction, withheld=False) -> None:
+        pass
+
+
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
-            watermark: bool = True) -> tuple[Warden, list[_Writer], _Writer]:
-    """One window of the network certifier at `PARAMS` on a `VirtualClock`, published as `serve` publishes a run: its
+            watermark: bool = True, params: WardenParams = PARAMS,
+            order=None) -> tuple[Warden, list[_Writer], _Writer]:
+    """One window of the network certifier at `params` on a `VirtualClock`, published as `serve` publishes a run: its
     records and certificates through `Publisher`, `deployment.json`, and `warden.json`'s connections and, with
     `watermark`, its watermark. The server answers connection k (in connect order, from 0) `responses[k]` and ends,
-    or for k in `held` sends it and never ends. Returns the network certifier, the server's side of each connection
-    in connect order, and its side of the watermark stream."""
-    tau = PARAMS.bucket_ms / 1000
+    or for k in `held` sends it and never ends. With `order`, the network certifier's connections are sorted by it
+    once they are admitted, so it cuts each bucket's cells, and releases its `END`s, in that order and not in their
+    ordinals'; its records are then kept and certified with no commitment to their rows, which refuses cells that
+    aren't where the schedule lays them. Returns the network certifier, the server's side of each connection in
+    connect order, and its side of the watermark stream."""
+    tau = params.bucket_ms / 1000
     signer = ws.cs.signer(key, 4)
-    publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, WR.Cells.of)
+    publisher = (ws.Publisher if order is None else _Uncommitted)(out, ws.Issuer(signer, SESSION), params, WR.Cells.of)
     servers: list[_Writer] = []
     mark = _Writer()
 
@@ -535,20 +548,23 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
 
     async def main() -> Warden:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=open_watermark if watermark else None)
         running = asyncio.create_task(warden.run())
         tasks = []
         for request in requests:
             reader = asyncio.StreamReader()
-            reader.feed_data(cells(request, PARAMS.cell_bytes))
+            reader.feed_data(cells(request, params.cell_bytes))
             reader.feed_eof()
             tasks.append(asyncio.create_task(warden.handle(reader, _Writer(warden))))
         await warden.until(lambda w: w.ordinals + w.refused == len(requests))
-        for t in range(PARAMS.window):
+        for t in range(params.window):
             await warden.until(settled)
             clock.advance(t * tau)
             await warden.until(lambda w, t=t: w.ticks > t)
+            if t == 0 and order is not None:
+                assert len(warden.active) == len(requests)
+                warden.active.sort(key=order)
         await running
         await asyncio.gather(*tasks)
         return warden
@@ -556,7 +572,7 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     warden = asyncio.run(main())
     publisher.close()
     (out / "deployment.json").write_text(json.dumps(ws.deployment_record(
-        PARAMS, signer.public_key(), SESSION, origin_unix=0.0, windows=1, listen=(CERTIFIER[0], 1), upstream=SERVER,
+        params, signer.public_key(), SESSION, origin_unix=0.0, windows=1, listen=(CERTIFIER[0], 1), upstream=SERVER,
         slack=warden.slack, run_id=warden.run_id)))
     log: dict = {"connections": warden.log}
     if watermark:
@@ -603,9 +619,10 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
     record = cf.record_counts(out)
     assert record["phase_records"] == {"certified": 3, "of": 3}
     assert record["connections"] == [
-        *({"connection": k + 1, "exact": True, "why": None, "to_server": len(_sent(s)), "from_server": len(r)}
-          for k, (s, r) in enumerate(zip(servers, responses))),
-        {"connection": "watermark", "exact": True, "why": None, "to_server": len(_sent(mark)), "from_server": None}]
+        *({"connection": k + 1, "release": release[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
+           "from_server": len(r)} for k, (s, r) in enumerate(zip(servers, responses))),
+        {"connection": "watermark", "release": None, "exact": True, "why": None, "to_server": len(_sent(mark)),
+         "from_server": None}]
     seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)])
     result = cf.read([seen], *_given(), run=out)
     got = result["compared"]
@@ -634,6 +651,43 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
                        f"no sum above"
     assert lines[9] == "no other flow has a given address on one side"
     assert not any(a in text for a in ADDRESSES for text in ("\n".join(lines), path.read_text()))
+
+
+def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
+    """Twelve requests at once through a network certifier of twelve lanes, six that end their ingress in one bucket
+    and six in the next. A request's place N in the release order is a decimal header of the request as the server
+    gets it, so past ten releases its length follows its place. The device keeps its connections in the order it
+    admitted them, their ordinals'; its audit flags a bucket whose cells are in any other, and its commitment to a
+    record's rows refuses one. Here they are sorted the other way once admitted, so each bucket's `END`s are in its
+    row, and released, by falling ordinal. The reader's place of each connection is the one the device logged and its
+    count the bytes that connection's server got, where the order by bucket and then ordinal has four of them a byte
+    off; a capture of what the servers got agrees and pairs every connection."""
+    out, key = tmp_path / "run", tmp_path / "key"
+    out.mkdir()
+    params = dataclasses.replace(PARAMS, lanes=12, queue=12)
+    requests = [ws.http_request({"prompt": "x" * (10 + k if k % 2 == 0 else 100 + 5 * k)}, "h:1") for k in range(12)]
+    responses = [_response([" w"] * (k + 1)) for k in range(12)]
+    warden, servers, mark = _served(out, key, requests, responses, params=params, order=lambda c: -c.ordinal)
+    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    by_bucket: dict[int, list[int]] = {}
+    for o in sorted(logged, key=lambda o: logged[o][0]):
+        by_bucket.setdefault(logged[o][1], []).append(o)
+    assert list(by_bucket.values()) == [[11, 9, 7, 5, 3, 1], [12, 10, 8, 6, 4, 2]]
+    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], warden.run_id, logged[k + 1][1])
+                                           for k, r in enumerate(requests)]
+    record = cf.record_counts(out)
+    assert record["phase_records"] == {"certified": 3, "of": 3}
+    assert {c["connection"]: c["release"] for c in record["connections"][:-1]} == {o: n for o, (n, _) in logged.items()}
+    assert [c["to_server"] for c in record["connections"]] == [*(len(_sent(s)) for s in servers), len(_sent(mark))]
+    assert all(c["exact"] for c in record["connections"])
+    by_ordinal = {o: n for n, (_, o) in enumerate(sorted((a, o) for o, (_, a) in logged.items()))}
+    assert [o for o in sorted(logged) if len(with_release(requests[o - 1], by_ordinal[o], warden.run_id, logged[o][1]))
+            != len(_sent(servers[o - 1]))] == [2, 4, 10, 12]
+    seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), b"")])
+    got = cf.read([seen], *_given(), run=out)["compared"]
+    assert (got["to_server"]["says"], got["from_server"]["says"]) == ("agrees", "agrees")
+    assert got["pairing"] == {"connections": 13, "flows": 13, "pairs": 13, "pairs_inside_bounds": 0,
+                              "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
 
 
 def test_a_byte_the_record_doesnt_hold_and_a_flow_it_doesnt_hold_are_differences(tmp_path):
@@ -682,9 +736,9 @@ def test_a_connection_that_failed_is_a_bound_and_an_uncertified_record_is_said(t
     assert 0 < payload < 100
     record = cf.record_counts(out)
     assert record["connections"] == [
-        {"connection": 1, "exact": True, "why": None, "to_server": len(_sent(servers[0])),
+        {"connection": 1, "release": 0, "exact": True, "why": None, "to_server": len(_sent(servers[0])),
          "from_server": len(responses[0])},
-        {"connection": 2, "exact": False, "why": "failed (late)", "to_server": len(_sent(servers[1])),
+        {"connection": 2, "release": 1, "exact": False, "why": "failed (late)", "to_server": len(_sent(servers[1])),
          "from_server": payload}]
     seen = _seen(tmp_path, [(_sent(s), r) for s, r in zip(servers, responses)])
     result = cf.read([seen], *_given(), run=out)
