@@ -1080,7 +1080,6 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/graphs.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/pouw/pearl_c/screen_kernels.py", "kind": "SIM108", "symbol": "scatter", "detail": "Use ternary operator `row = tl.load(at + p) if GATHER else p` instead of `if`-`else`-block"},
     {"file": "verity_vllm/protocols/remote_bandwidth/binder.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/protocols/remote_bandwidth/registry.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "B023", "symbol": "Phases.summary", "detail": "Function definition does not bind loop variable `ms`", "count": 3},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "SIM105", "symbol": "prove", "detail": "Use `contextlib.suppress(OSError)` instead of `try`-`except`-`pass`"},
