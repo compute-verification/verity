@@ -7,10 +7,12 @@ import json
 
 import numpy as np
 import pytest
-
-from verity_vllm.check.replay import cached_prefix as CP, evaluate as EV, linkage as LK
-from verity_vllm.pipeline import c2_replay as C2
 from verity.definitions.numerics.kernel_registry import Declined
+
+from verity_vllm.check.replay import cached_prefix as CP
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import linkage as LK
+from verity_vllm.pipeline import c2_replay as C2
 
 C, RL, BS = 4, 4, 2          # cached rows, key / value leaves per row (KVH*D), block size
 ROPE, QKV = "model.layers.{l}.self_attn.rotary_emb", "model.layers.{l}.self_attn.qkv_proj"

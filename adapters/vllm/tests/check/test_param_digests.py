@@ -7,10 +7,10 @@ import hashlib
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
-
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.param_digests import param_digests
+
+torch = pytest.importorskip("torch")
 
 
 def reference(model, *, include_buffers=True, raw_for=WR.ENGINE_ROTARY_RE):

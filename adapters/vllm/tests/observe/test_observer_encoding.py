@@ -3,12 +3,27 @@ without torch): encode_arg, StorageAdapter.view_of / generations / pending drain
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Note, StorageAlloc, StorageFree, ViewDesc  # noqa: E402
-from verity_vllm.observe.observer import EmptyMode, Observer, Recorder, encode_arg, op_name  # noqa: E402
+from verity_vllm.observe.events import (  # noqa: E402
+    DispatchEnter,
+    DispatchExit,
+    Note,
+    StorageAlloc,
+    StorageFree,
+    ViewDesc,
+)
+from verity_vllm.observe.observer import (  # noqa: E402
+    EmptyMode,
+    Observer,
+    Recorder,
+    encode_arg,
+    op_name,
+)
 from verity_vllm.observe.storage import StorageAdapter  # noqa: E402
 
 
@@ -33,6 +48,20 @@ def test_encode_scalars_and_containers():
     assert encode_arg(torch.strided, st) == "torch.strided"
     other = encode_arg(object(), st)
     assert isinstance(other, dict) and set(other) == {"$repr"} and len(other["$repr"]) <= 200
+
+
+def test_encode_symbolic_scalars():
+    """A symbol with a value encodes as that number; one without (int() and float() of it raise) as its repr."""
+    from torch._dynamo.source import ConstantSource
+    from torch.fx.experimental.symbolic_shapes import ShapeEnv
+
+    st, env = StorageAdapter(), ShapeEnv()
+    src = ConstantSource("n")
+    backed = env.create_symintnode(env.create_symbol(7, source=src), hint=7, source=src)
+    assert isinstance(backed, torch.SymInt) and encode_arg(backed, st) == 7
+    for x in (env.create_unbacked_symint(), env.create_unbacked_symfloat(), env.create_unbacked_symbool()):
+        assert encode_arg(x, st) == {"$repr": repr(x)[:200]}
+    assert encode_arg([backed, env.create_unbacked_symint()], st)[0] == 7
 
 
 def test_view_of_fields_and_shared_storage():
@@ -92,6 +121,34 @@ def test_generation_bump_on_pointer_reuse_raw():
     assert st.live_count() == 1
 
 
+def test_weakref_probe_answers_no_without_torch_or_weakrefs(monkeypatch):
+    """`use_weakrefs` is off where torch is absent, where a storage is not one preserved object, and where it takes no
+    weakref; a `StorageAdapter` made there falls back to implied frees."""
+    from verity_vllm.observe import storage as S
+
+    class NoWeakref:
+        @staticmethod
+        def ref(_obj):
+            raise TypeError("cannot create weak reference to 'UntypedStorage' object")
+
+    def absent(_self):
+        raise AttributeError("'Tensor' object has no attribute 'untyped_storage'")
+
+    with monkeypatch.context() as m:
+        m.setattr(S, "weakref", NoWeakref)
+        assert S._probe_weakrefs() is False and StorageAdapter().use_weakrefs is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", lambda self: object())
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", property(absent))
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setitem(sys.modules, "torch", None)
+        assert S._probe_weakrefs() is False
+    assert S._probe_weakrefs() is StorageAdapter().use_weakrefs
+
+
 def test_weakref_death_is_a_direct_free_and_reuse_bumps_generation():
     st = StorageAdapter()
     if not st.use_weakrefs:
@@ -144,9 +201,8 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
     # its func(...) call reaches the outer mode, whose record has the inner call as parent
     rec, events = _rec()
     a = torch.randn(2, 2)
-    with Observer(rec):
-        with Observer(rec):
-            torch.mm(a, a)
+    with Observer(rec), Observer(rec):
+        torch.mm(a, a)
     enters = [e for e in events if isinstance(e, DispatchEnter)]
     assert len(enters) == 2 and enters[0].parent is None and enters[1].parent == enters[0].id
     exits = [e.id for e in events if isinstance(e, DispatchExit)]
@@ -155,9 +211,8 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
 
 def test_exception_survives_with_a_note():
     rec, events = _rec()
-    with Observer(rec):
-        with pytest.raises(RuntimeError):
-            torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
+    with Observer(rec), pytest.raises(RuntimeError):
+        torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
     notes = [e for e in events if isinstance(e, Note)]
     assert notes and notes[0].text == "exception in dispatcher call" and notes[0].data["op"] == "aten.mm.default"
     assert [e for e in events if isinstance(e, DispatchExit)][-1].outs is None

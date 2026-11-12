@@ -37,7 +37,7 @@ def test_the_dump_hashes_every_step_file_as_it_writes_it(tmp_path, monkeypatch):
     import hashlib
     monkeypatch.setattr(SD, "FLUSH", 100)                            # a flush between the chunks of every step
     com, rc = commit_steps(STEPS)
-    got = {}
+    got: dict[str, str] = {}
     SD.dump(com, rc, tmp_path, threads=3, digests=got)
     files = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.bin"))
     assert sorted(got) == files and len(files) == 2 * len(STEPS) + 1

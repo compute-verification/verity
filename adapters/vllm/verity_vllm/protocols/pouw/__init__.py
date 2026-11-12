@@ -56,6 +56,7 @@ import numpy as np
 from verity.commitments import MerkleTree
 from verity.protocols.pouw.prover import circuit as pouw_circuit
 from verity.protocols.pouw.prover import schemes as pouw_schemes
+from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -68,25 +69,24 @@ from verity.protocols.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
 from verity.protocols.pouw.verifier.protocol import Context as UnitContext
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
 
+from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import device as PD
 from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import settings as PHS
-from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw import lead as PL
 from verity_vllm.protocols.pouw import native as PN
+from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import settings as PHS
+from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
 from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, stack_y
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw import lead as PL
-from verity_vllm.protocols.interface import Context, Option, Target
 
 NAME = "pouw"
 DEFAULT_SCHEME = "ncp-v1"
@@ -116,9 +116,9 @@ TAMPERS = ("tile", "bias")
 DEVICES = ("cuda",)
 PLACEHOLDER = (
     "a forward's weight is not re-checked against the root committed at install",
-    "not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
-    "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
-    "for the life of the install",
+    ("not auditable yet: one epoch per install (no rotation), activation rows kept only in memory for the last "
+     "`retain_steps` units (0 by default) and never persisted, no opener, and the transcript's leaves grow without bound "
+     "for the life of the install"),
     "the executor runs on the host in numpy, not a native route-U kernel",
 )
 #: The transforms Pearl-C's executor applies to a checkpoint's weights before committing them: none.  The keyed 8-block
@@ -652,9 +652,9 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     served); a config's own ``coins``, or its auditor host's ``challenger`` (the coins' one source), is kept alone. The
     lead takes no salt coin (its coins come off its coin link), so under it nothing is added."""
     out = {k: dict(v) for k, v in settings.items()}
-    if any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ())):
-        if not {"coins", "challenger"} & set(out.get(NAME, {})):
-            out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
+    takes_salt = any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ()))
+    if takes_salt and not {"coins", "challenger"} & set(out.get(NAME, {})):
+        out.setdefault(NAME, {})["coins"] = Challenger(epoch, verifier.coins)
     return out
 
 

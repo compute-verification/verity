@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.pipeline import report as CARD
 from verity_vllm.check import gates as G
+from verity_vllm.pipeline import report as CARD
 
 RID = "req-0"
 NL = 28
@@ -699,6 +699,15 @@ def test_G8_malformed_is_error_not_skipped(tmp_path):
     write_run(tmp_path, arts)
     (tmp_path / "query_use.json").write_text("{not json")
     assert G.gate_G8(G.RunArtifacts(tmp_path)).status == "error"
+
+
+def test_reference_integrity_names_error_classes_it_cannot_sum():
+    counts = {"errors": 0, "unresolved": 0, "unsupported": 0}
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": "one"}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes has non-integer counts"])
+    status, problems, detail = G.fold_integrity({**counts, "error_classes": {"TokenWiring": 1}})
+    assert (status, problems, detail["unverified"]) == ("unverified", [], ["fold_summary.error_classes sums to 1, errors = 0"])
+    assert G.fold_integrity({**counts, "error_classes": {"TokenWiring": 0}})[0] == "pass"
 
 
 def test_G8_never_changes_G1_G7_or_their_frozen_set():

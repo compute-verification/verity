@@ -12,10 +12,10 @@ from verity_vllm.program.frontend import vllm_meta
 
 def _stub_vllm(monkeypatch, init):
     cfg = types.ModuleType("vllm.config")
-    cfg.set_current_vllm_config = lambda _c: contextlib.nullcontext()
+    monkeypatch.setattr(cfg, "set_current_vllm_config", lambda _c: contextlib.nullcontext(), raising=False)
     dist = types.ModuleType("vllm.distributed")
-    dist.init_distributed_environment = init
-    dist.ensure_model_parallel_initialized = lambda *_a: None
+    monkeypatch.setattr(dist, "init_distributed_environment", init, raising=False)
+    monkeypatch.setattr(dist, "ensure_model_parallel_initialized", lambda *_a: None, raising=False)
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", cfg)
     monkeypatch.setitem(sys.modules, "vllm.distributed", dist)

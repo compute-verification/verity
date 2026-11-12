@@ -7,10 +7,18 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity_vllm.check.replay import (compare as CMP, coverage as COV, driver as SR, evaluate as EV, index as IX, linkage as LK,
-                                      opening as OP, population as POP, replay_codes as RC, sample as SM)
 from verity.definitions.numerics import rows as RK
+
+from verity_vllm.check.replay import compare as CMP
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import linkage as LK
+from verity_vllm.check.replay import opening as OP
+from verity_vllm.check.replay import population as POP
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.check.replay import sample as SM
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
@@ -32,8 +40,8 @@ def v2_manifest(inst: dict, request_ids=("r0",), *, digest: str = "t" * 64) -> d
     """The required-value manifest of record (`verity_vllm.query`) of `inst` for each request id: one request manifest, or (several requests of
     the same Program, arriving together at engine step 0) their global composition, as `query.cli build-global` writes it."""
     from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity_vllm.query.program_view import from_instances
     from verity_vllm.query.compose import compose_global
+    from verity_vllm.query.program_view import from_instances
     from verity_vllm.query.required import request_manifest
     res = {"program": {"digest": digest, "function": "Derived[vLLMRequest[Test]]"}, "wrapper": "request", "LP": LP, "T": T,
            "target": {"declared": {"compute_capability": [8, 9]}}}
@@ -111,13 +119,13 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
     norm_t, norm_f = (f"RMSNormTriton_v3{{N={H}}}", f"RMSNormFusedCuda_v4{{N={H}}}") if registered else \
         (f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}")
     eps_arg = [VAL["eps"]] if registered else []
-    prev_norm_out = None                                       # (row, member offset) of the last fused norm (residual stream)
+    sel_prev = None                                            # the row that selected the previous step's token
     kv_rows: list[tuple[int, int]] = []                        # attn: (key RoPE row, qkv row) per position, in position order
     for s in range(1 + T):
         toks = list(range(LP)) if s == 0 else [0]
         norm_rows = []
         for k in toks:
-            ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]  # noqa: F821  -- sel_prev set after step 0
+            ids = [["p", 0, k, k + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{k}]", [ids, W("model.model.embed_tokens.weight")])
             if scale:                                                  # the root module's own scaling of the embedding: read by the child norms
                 e = add(f"Bf16MulScalarTensor_v1{{N={H}}}", f"model/mul_{s}[{k}]", [[["n", e, 0, H]], W("model.normalizer")])
@@ -1182,7 +1190,10 @@ def test_attention_stratum_key_keeps_the_block_count_and_the_full_or_partial_las
     lane sums); the key carries `last=full|partial` so the full-block chain is a stratum of its own again (<= +1 stratum per formerly mixed
     stratum).  The VU keeps its spec (T); only the stratum key changes.  Every other family's spec is its own key."""
     spec = "Attention_v3{T=%d,NH=32,KVH=8,D=64,BN=128}"
-    key = lambda t, bn=128: POP._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
+
+    def key(t, bn=128):
+        return POP._stratum_spec("Attention_v3", spec % t, {"T": t, "NH": 32, "KVH": 8, "D": 64, "BN": bn})
+
     assert key(128) == "Attention_v3{NB=1,last=full,NH=32,KVH=8,D=64,BN=128}"
     assert key(127) == "Attention_v3{NB=1,last=partial,NH=32,KVH=8,D=64,BN=128}"
     assert key(1) == key(127) and key(129) == "Attention_v3{NB=2,last=partial,NH=32,KVH=8,D=64,BN=128}"
@@ -1422,11 +1433,12 @@ def _moe_program():
 
     W = lambda n: [["p", 1, woff[n][0], woff[n][1]]]  # noqa: E731
     X = "model.model.layers.0.mlp.experts"
+    sel_prev = None                                            # the row that selected the previous step's token
     for s in range(1 + T):
         toks = list(range(LP)) if s == 0 else [0]
-        norm_rows, sum_rows, dn_rows = [], [], []
+        norm_rows = []
         for t in toks:
-            ids = [["p", 0, t, t + 1]] if s == 0 else [["n", sel_prev, 0, 1]]  # noqa: F821
+            ids = [["p", 0, t, t + 1]] if s == 0 else [["n", sel_prev, 0, 1]]
             e = add(f"Embedding_v1{{V={V},H={H}}}", f"model.model.embed_tokens/embedding_{s}[{t}]", [ids, W("model.model.embed_tokens.weight")])
             ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{t}]",
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
@@ -1689,7 +1701,9 @@ def test_tensor_core_evaluators_name_the_measured_total_family_of_their_k16_step
     `HOPPER_WGMMA_FAMILY_VERSION`, restated by `registry.tc_total`) of the k16 step it replays through, so two Definitions of one
     name with different non-finite content are told apart on the record itself.  The strings are literals (EVALUATORS must import
     without verity.circuits); this test holds them equal to the constants the step is evaluated with."""
-    from verity.definitions.silicon import total as TC   # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    from verity.definitions.silicon import (
+        total as TC,  # the step's definition of record; the record literal keeps its historical `registry.tc_total` prefix
+    )
 
     ampere = f"registry.tc_total {TC.AMPERE_BF16_DOT16_TOTAL.name} total family v{TC.TOTAL_FAMILY_VERSION}"
     hopper = f"registry.tc_total {TC.HOPPER_BF16_WGMMA_K16.name} family v{TC.HOPPER_WGMMA_FAMILY_VERSION}"
@@ -1706,8 +1720,8 @@ def test_moe_evaluators_equal_the_registered_definitions():
     words -- router (renormalize False / True, a tie), sum, up and down expert GEMMs (the gather by the committed expert id)."""
     from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.definitions.registry import moe as R
     from verity.definitions.numerics.serve3_reference import materialize
+    from verity.definitions.registry import moe as R
 
     def ref(fn, inputs):
         P = Program(fn)
@@ -1747,6 +1761,7 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     is staged: the first builder stops half-way through its write until five more have found the library missing and reached its lock."""
     import contextlib
     import multiprocessing as mp
+
     from verity.definitions.numerics import _jit
 
     lib = tmp_path / "libtwin.so"
