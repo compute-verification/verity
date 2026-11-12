@@ -1572,15 +1572,15 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
         rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
     if a.out:
         a.out.write_text(json.dumps(rep, indent=1) + "\n")
+    note = UN.untaken_note(rep)
     print("circuit-check --records-only: "
           + (f"{len(rep['rebuilt'])} catalog binding(s) built ({len(rep.get('skipped', []))} of them held a record that did "
-             f"not count), {rep['reused']} reused, " if "rebuilt" in rep else "")
+             f"not count), {rep['reused']} reused{f' ({note})' if note else ''}, " if "rebuilt" in rep else "")
           + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s"
           + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
              if "bytes" in rep else "")
           + (f"; {rep['slices']['bindings']} bindings' slices in {a.slices} ({rep['slices']['bytes']} bytes, the shared part "
-             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else "")
-          + UN.untaken_note(rep))
+             f"{rep['slices']['shared_bytes']})" if "slices" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
     return 1 if "why" in rep else 0
 
 
@@ -1606,10 +1606,11 @@ def _cache_lines(rep: dict) -> None:
     """What the run reused: its catalog bindings' records (and, when it took none of those the cache held, the names of the
     variables its keys hold, `units.untaken_note`), and its targets' cache entries."""
     if u := (rep.get("cache") or {}).get("units"):
+        note = UN.untaken_note(u)
         print("circuit-check: catalog bindings: " + (f"{u['reused']} reused, {len(u['rebuilt'])} built ({', '.join(u['rebuilt'][:8])}"
               f"{', ...' if len(u['rebuilt']) > 8 else ''}), " if "reused" in u else "whole catalog built, ")
               + f"{u['stored']} records stored" + (f" ({u['why']})" if u.get("why") else "")
-              + (f"; records stale ({u['stale']})" if u.get("stale") else "") + UN.untaken_note(u))
+              + (f"; records stale ({u['stale']})" if u.get("stale") else "") + (f"; {note}" if note else ""))
     if c := rep.get("cache"):
         print(f"circuit-check: {c['hits']} of {len(rep['targets'])} targets reused (every file, listing, probe, catalog unit and pin their checks read or resolved is "
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "

@@ -2099,13 +2099,13 @@ def version() -> str:
         _INTERNAL.pop()
 
 
-#: variables of the keyed prefixes that no check or build reads, so no key holds them.  Where test results are kept: a check
-#: slot sets its own `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in
-#: another.  Where this package's suite reads and lists the catalog bindings' records (its ``tests/conftest.py``), and which of
-#: its tests run (a ``skipif``): with them keyed, a record the suite's session has built would never count in `check`'s
-#: circuit-check, nor that one's in the session
-UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S", "CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST",
-                     "VERITY_CIRCUIT_CHECK_SLOW"})
+#: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
+#: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+#: and those only this package's suite reads: where its session reads and lists the catalog bindings' records (its
+#: ``tests/conftest.py``), and which of its tests run (a ``skipif``).  With them keyed, a record the suite's session has built
+#: would never count in `check`'s circuit-check, nor that one's in the session
+UNKEYED |= {"CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST", "VERITY_CIRCUIT_CHECK_SLOW"}
 #: the suite runner's own variables (tools/verity/check/suites.py and its guard set them for a suite's tests and every Python
 #: they start): how a suite runs, which only the runner and tests read
 UNKEYED_PREFIXES = ("VERITY_SUITE_",)

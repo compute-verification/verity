@@ -1340,7 +1340,7 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
     A run that takes a record names none, nor does one whose cache held no record."""
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
-    note = ("; no record was taken though the cache holds records of this version: one counts only under the same keyed "
+    note = ("no record was taken though the cache holds records of this version: one counts only under the same keyed "
             "variables, set alike, and this process's are ")
     first, line = _records_main(root, tmp_path / "out.json")
     assert len(first["rebuilt"]) == 5 and "keyed" not in first and note not in line
@@ -1355,7 +1355,7 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
     assert "VERITY_ONE_MORE" in keyed(env)
     other, line = _records_main(root, tmp_path / "out.json", tmp_path / "listed.json", env=env)
     assert other["reused"] == 0 and len(other["rebuilt"]) == 5 and other["keyed"] == keyed(env) and "skipped" not in other, other
-    assert line.endswith(note + ", ".join(keyed(env))), line
+    assert f"), 0 reused ({note}{', '.join(keyed(env))}), 5 record(s) stored in " in line, line
     listed = (tmp_path / "listed.json").read_text()
     assert json.loads(listed)["environment"] == keyed(env)
     # the next run with that variable takes the records the last one stored, and says nothing
@@ -1364,7 +1364,7 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
 
     env["VERITY_TWO_MORE"] = "a-value-no-line-shows"
     how = _session(root, env=env)["how"]
-    assert "0 of 5 bindings reused, 5 built and stored in " in how and how.endswith(note + ", ".join(keyed(env))), how
+    assert "0 of 5 bindings reused, 5 built and stored in " in how and how.endswith("; " + note + ", ".join(keyed(env))), how
     env["VERITY_THREE_MORE"] = "a-value-no-line-shows"
     forked = _run(root, FORKED, env=env)["stats"]["units"]
     assert forked["reused"] == 0 and len(forked["rebuilt"]) == 5 and forked["keyed"] == keyed(env) and forked["stored"] == 5
@@ -1378,7 +1378,7 @@ def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys
         cli._cache_lines({"cache": {"units": u, "hits": 0, "stored": 0, "untraced": [], "errors": [], "changed": []}, "targets": []})
     lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("circuit-check: catalog bindings: ")]
     assert len(lines) == 2, lines
-    assert lines[0].endswith(note + ", ".join(forked["keyed"])) and lines[1].endswith(note + ", ".join(here["keyed"])), lines
+    assert [ln.partition("; " + note)[2] for ln in lines] == [", ".join(forked["keyed"]), ", ".join(here["keyed"])], lines
     assert not [text for text in (line, json.dumps(other), listed, how, json.dumps([forked, here]), *lines)
                 if "a-value-no-line-shows" in text]
 

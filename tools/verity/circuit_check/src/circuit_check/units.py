@@ -1124,11 +1124,11 @@ def untaken(cache: Path | None, entries: list[Entry]) -> dict:
 
 
 def untaken_note(stats: dict) -> str:
-    """What a run's line on its bindings ends with when no record was taken though there were some (`untaken`'s finding in
+    """What a run's line on its bindings says when no record was taken though there were some (`untaken`'s finding in
     ``stats``); else nothing."""
     if "keyed" not in stats:
         return ""
-    return ("; no record was taken though the cache holds records of this version: one counts only under the same keyed "
+    return ("no record was taken though the cache holds records of this version: one counts only under the same keyed "
             f"variables, set alike, and this process's are {', '.join(stats['keyed']) or 'none'}")
 
 

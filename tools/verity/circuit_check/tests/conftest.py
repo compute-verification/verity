@@ -139,26 +139,28 @@ def _counted(lookup: Callable, cache: Path, repo: Path, e: UN.Entry) -> Any:
     return hit
 
 
-def _from_records(cache: Path) -> tuple[UN.Plan | None, str | None]:
+def _from_records(cache: Path, handed: bool = False) -> tuple[UN.Plan | None, str | None]:
     """The catalog's plan from the bindings' records (`units.plan`) when every binding's counts; else None and why: there is
-    no record under this process's keys, one doesn't count or one is stale.  Either way before any binding they miss is built here:
-    `units.plan` builds such a binding in the process that calls it, which under xdist is every worker of the session at once,
-    each holding what the heaviest binding's build holds.  So the first record that doesn't count ends the plan (`_counted`),
-    and the one build the session shares (`_recorded`) makes them all.  A target is taken as its record describes it, as
-    `cli._planned` takes a target whose result it reuses: holding each one to its descriptor (`cache.descriptor`, as
-    `cli._made` does for one it checks) walks all it reaches."""
+    no record under this process's keys, one doesn't count or one is stale (the reason names the directory, as the one the
+    session was ``handed`` where it was).  Either way before any binding they miss is built here: `units.plan` builds such
+    a binding in the process that calls it, which under xdist is every worker of the session at once, each holding what the
+    heaviest binding's build holds.
+    So the first record that doesn't count ends the plan (`_counted`), and the one build the session shares (`_recorded`) makes
+    them all.  A target is taken as its record describes it, as `cli._planned` takes a target whose result it reuses: holding
+    each one to its descriptor (`cache.descriptor`, as `cli._made` does for one it checks) walks all it reaches."""
     with pytest.MonkeyPatch.context() as mp:
         # the records were made traced, so a function they read (a kernel's) is named by its module's digest, which
         # `cache._where` gives only under the tracer's root: without it, by path and line, and no such record counts
         mp.setattr(CC, "_ROOT", [cli.REPO.resolve()])
         mp.setattr(UN, "_lookup", functools.partial(_counted, UN._lookup))
+        where = f"{cache}, the directory `CIRCUIT_CHECK_RECORDS` names," if handed else str(cache)
         try:
             plan = UN.plan(cache, cli.REPO)
-            return plan, None if plan is not None else (f"{cache} holds no record under this process's keys (this "
+            return plan, None if plan is not None else (f"{where} holds no record under this process's keys (this "
                                                         "circuit-check's version, `cache.version`, and its keyed variables)")
         except (UN.Stale, _Missed) as e:
             TG.BINDINGS.clear()
-            return None, str(e)
+            return None, f"in {where} {e}"
 
 
 def _catalog(plan: UN.Plan, how: str) -> Catalog:
@@ -298,22 +300,22 @@ def _listed(cache: Path, plan: UN.Plan) -> dict:
 def _how(got: dict) -> str:
     """The catalog's line for what the session's records gave (`_recorded`'s report, or `_listed`'s), with the names of the
     variables the build's keys hold when it took no record though there were some (`units.untaken_note`)."""
-    built, skipped = got["rebuilt"], got.get("skipped", [])
+    built, skipped, note = got["rebuilt"], got.get("skipped", []), UN.untaken_note(got)
     how = f"from records: {got['reused']} of {got['reused'] + len(built)} bindings reused, {len(built)} built"
     if not built:
         return how
     return (f"{how} and stored in {got.get('seconds', '?')}s by one process for the session ({len(skipped)} of them held a "
-            f"record that did not count): {', '.join(built[:3])}{', ...' if len(built) > 3 else ''}{UN.untaken_note(got)}")
+            f"record that did not count): {', '.join(built[:3])}{', ...' if len(built) > 3 else ''}{f'; {note}' if note else ''}")
 
 
-def _taken(cache: Path, shared: Path | None, jobs: int) -> Catalog:
-    """The catalog from the records in ``cache``: each one that counts taken, and every other binding built and its record
-    stored there by the session's one build (`_recorded`), then taken too.  Where that leaves a binding without a record
-    that counts, the catalog without records (`_apart`), saying why."""
-    plan, why = _from_records(cache)
+def _taken(cache: Path, shared: Path | None, jobs: int, handed: bool = False) -> Catalog:
+    """The catalog from the records in ``cache`` (``handed``: the directory `CIRCUIT_CHECK_RECORDS` names): each one that
+    counts taken, and every other binding built and its record stored there by the session's one build (`_recorded`), then
+    taken too.  Where that leaves a binding without a record that counts, the catalog without records (`_apart`), saying why."""
+    plan, why = _from_records(cache, handed)
     got = _once(shared, RECORDED, lambda: _listed(cache, plan) if plan is not None else _recorded(cache, jobs))
     if plan is None and "why" not in got:
-        plan, why = _from_records(cache)
+        plan, why = _from_records(cache, handed)
     if plan is None:
         return _apart(shared, jobs, got.get("why") or why)
     if "why" in got:                 # this process took them all, whatever the session's build stored
@@ -324,7 +326,8 @@ def _taken(cache: Path, shared: Path | None, jobs: int) -> Catalog:
 def build() -> Catalog:
     """This process's catalog: built the first time it is asked for, from the records (`_taken`)."""
     if not _BUILT:
-        _BUILT.append(_taken(RECORDS, _SHARED[0] if _SHARED else None, _jobs(os.environ)))
+        _BUILT.append(_taken(RECORDS, _SHARED[0] if _SHARED else None, _jobs(os.environ),
+                             handed=bool(os.environ.get("CIRCUIT_CHECK_RECORDS"))))
         print(_line(_BUILT[0]), flush=True)
     return _BUILT[0]
 
