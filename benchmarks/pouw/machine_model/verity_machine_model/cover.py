@@ -19,6 +19,7 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, card, device, kind_lists
@@ -49,7 +50,7 @@ class Row:
     envelope: str
     raw: dict = field(compare=False, repr=False)
 
-    def get(self, k: str, dev: str | None = None):
+    def get(self, k: str, dev: str | None = None) -> Any:
         v = self.raw.get(k)
         return v.get(dev) if isinstance(v, dict) and dev is not None else v
 
@@ -84,7 +85,7 @@ def _base(op: str) -> str:
     return op if op in ("UIADD3.64", "UMOV.64") else op.split(".")[0]
 
 
-def as_list(v) -> list:
+def as_list(v: Any) -> list:
     return [] if v is None else list(v) if isinstance(v, list) else [v]
 
 

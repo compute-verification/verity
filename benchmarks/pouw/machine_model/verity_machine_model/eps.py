@@ -752,7 +752,7 @@ class Setup:
                        tensor_mma=self.honest.tensor(self.operands, d.floor), budget=budget(d) if luck else 0.0,
                        table=self.table, forms=self.forms)
 
-    def machine_eps(self, q: float, **routes) -> float:
+    def machine_eps(self, q: float, **routes: bool | float | None) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
 
     def floor(self) -> float:
@@ -903,7 +903,7 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
                clock=d.clock.eps if credit == "H" else 0.0, adapt=adapt)
 
 
-def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes) -> float | None:
+def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes: bool | float | None) -> float | None:
     """The least q* at which ε_machine reaches its floor (to 1e-6), or None when it hasn't at q* = hi."""
     floor = s.floor()
 
