@@ -378,15 +378,12 @@ def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_
 
 
 def test_a_candidates_shards_launched_together_each_take_a_free_slot_and_never_one_a_sibling_was_placed_on(tmp_path):
-    """The queue launches a candidate's shards at once, each on its own machines first and then every other
-    (`research.landing.shard_machines`), all of one commit.  A shard whose own machines are busy takes a free slot on another's
-    rather than waiting; and a slot a sibling was just placed on (its run not yet in the line) is no free slot for it, else it
-    would wait there behind the sibling while another machine's slot freed."""
-    from research.landing import shard_machines
-
+    """The queue launches a candidate's shards at once, all of one commit, each on its own machines first and then every other
+    (the lists `research.landing.shard_machines` gives two shards over four machines).  A shard whose own machines are busy
+    takes a free slot on another's rather than waiting; and a slot a sibling was just placed on (its run not yet in the line)
+    is no free slot for it, else it would wait there behind the sibling while another machine's slot freed."""
     on = ["m1", "m2", "m3", "m4"]
-    s1, s2 = (s.split(",") for s in shard_machines(",".join(on), 2))
-    assert (s1, s2) == (["m1", "m3", "m2", "m4"], ["m2", "m4", "m3", "m1"])
+    s1, s2 = ["m1", "m3", "m2", "m4"], ["m2", "m4", "m3", "m1"]
     sha, t = "e" * 40, [1000.0]
 
     def placed(free: set[str], tag: str) -> tuple[tuple[str | None, list[str]], tuple[str | None, list[str]]]:

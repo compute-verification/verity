@@ -3923,9 +3923,9 @@ def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Run
 @pytest.mark.parametrize("graph2", ["pending", "fail", "pass"])
 def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatever_graph2_says_and_the_two_are_compared(
         env, monkeypatch, graph2):
-    """The check that gates is the after-landing run of the candidate, every step as three shards, a machine each; graph2's
-    check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances once every
-    shard passed, and once both ended one line says whether they agree."""
+    """The check that gates is the after-landing run of the candidate, every step as three shards, each on its own machine
+    first; graph2's check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances
+    once every shard passed, and once both ended one line says whether they agree."""
     from research.landing import AFTER_LANDING
 
     main = env.main()
@@ -3934,7 +3934,7 @@ def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatev
     below, built, started = loop.tick()
     sha = built["sha"]
     assert [(c, m, kw["shard"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
+        (c, ",".join(f"m{(k - 1 + i) % 3 + 1}" for i in range(3)), f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
     assert all(steps == ",".join(AFTER_LANDING) and kw["no_regenerate"] and not kw["agreement"]
                for _, _, steps, kw in runs.launches) and [kw["base"] for *_, kw in runs.launches[3:]] == [main] * 3
     assert started["record"]["gate"] == "check" and started["record"]["groups"] == [["c-4"], ["c-5"], ["c-6"]]
@@ -4878,8 +4878,9 @@ def test_under_gate_check_a_ring_off_the_gate_whose_post_failed_is_rung_again_by
 def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a_candidate_dropped_while_it_is_made_launches_none(
         env, monkeypatch):
     """`--shards auto:6`: each check, `main`'s and the candidate's, has the auto plan of its tree made first, and the first tick
-    that finds it made launches its 6 shards `--shard auto:K/6` with its file, a machine each; the candidate advances once
-    every shard passed.  One dropped while its plan is made launches none, the plan given up (`vqueue_slim.abandon`)."""
+    that finds it made launches its 6 shards `--shard auto:K/6` with its file, each on its own machine first; the candidate
+    advances once every shard passed.  One dropped while its plan is made launches none, the plan given up
+    (`vqueue_slim.abandon`)."""
     from research.landing import AFTER_LANDING, AUTO_PLAN
     from test_landing import _plan_doc
     from test_vqueue_slim import Plans
@@ -4896,7 +4897,8 @@ def test_under_gate_check_auto_shards_launch_once_each_checks_plan_is_made_and_a
     plans.answers.update({str(plans.tmp / f"plan-{k}"): (_plan_doc(6), None) for k in (1, 2)})
     assert _acts(loop.tick()) == ["slim", "slim"]
     assert [(c, m, kw["shard"], kw["shard_plan"]) for c, m, _, kw in runs.launches] == [
-        (c, f"m{k}", f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN)) for p, c in ((1, main), (2, sha))
+        (c, ",".join(f"m{(k - 1 + i) % 6 + 1}" for i in range(6)), f"auto:{k}/6", str(plans.tmp / f"plan-{p}" / AUTO_PLAN))
+        for p, c in ((1, main), (2, sha))
         for k in range(1, 7)]
     assert not any((plans.tmp / f"plan-{k}").exists() for k in (1, 2)) and loop.tick() == []
     runs.end(main, plan=PLAN6)
