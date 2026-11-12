@@ -29,8 +29,8 @@ What the run does not decide, each a named premise of `RunAcceptsPlay`:
   verdict of record (`flock-verify`'s) says, taken as given;
 * `ScopeHolds`: the held copies are in the two-stage scope the model decides (`two`: `scopeOk`, `filesOk`,
   `templateOk`), a property of the registration that `Run.run` does not check;
-* `Fits`: each stage's sample reads no more bytes than the model's coins for it hold (round 0's one coin, and the
-  second stage's `stage` coins).
+* `Fits`: the challenger's bytes the run holds for each stage fit the model's coins for it (round 0's one coin, and
+  the second stage's `stage` coins).
 -/
 
 @[expose] public section
@@ -84,15 +84,11 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
 hold. -/
 def ScopeHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 
-/-- **Each stage reads no more than the model's coins hold**: the sample of record `Run.run` takes reads at most `L`
-bytes, the model's round-0 coin's, and the second stage at most `stage · L`, its `stage` rounds' coins'. `Run.run`
-bounds neither read. -/
+/-- **Each stage's bytes fit the model's coins**: the challenger's bytes the run holds for the first stage
+(`i.source`) are at most `L`, the model's round-0 coin's, and those for the second stage (`it.source`) at most
+`stage · L`, its `stage` rounds' coins'. `Run.run` bounds neither. -/
 def Fits (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop :=
-  (∀ resolved workTable draw rest read,
-    Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
-      .ok (draw, rest, read) → read ≤ L) ∧
-  ∀ sample draw read, Spot.Select.selectSecond sample h.reg.ns h.reg.ks it.source = .ok (draw, read) →
-    read ≤ h.stage * L
+  i.source.size ≤ L ∧ it.source.size ≤ h.stage * L
 
 /-! ## Round 2: the hand-off -/
 
@@ -155,14 +151,54 @@ def playCoin (h : Held) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (cs : ℕ →
 
 /-! ## The coins -/
 
-/-- **The play's coins are the bytes the run read**: round 0's coin begins with the bytes the first stage read of the
-challenger's (`i.source`), and the second stage's coins, coin by coin, with those it read of the interior's
-(`it.source`). With `coinsHold` passing on each (`Run.run`'s `coins` check) and the challenger's premises, those are
+/-- **The play's coins are the bytes the run read**: round 0's coin is the challenger's bytes the first stage read
+(`i.source`) and then zeros, and the second stage's coins, coin by coin, those of the interior's (`it.source`) and then
+zeros. With `coinsHold` passing on each (`Run.run`'s `coins` check) and the challenger's premises, those are
 the challenger's coins released after the boundary record's digest and after the interior record's. -/
 def PlayCoins (h : Held) (i : Spot.Run.Input) (it : Spot.Run.Interior) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) :
     Prop :=
-  src c₀ = (i.source ++ ⟨Array.replicate L 0⟩).extract 0 L ∧
-    stageSrc c₁ = (it.source ++ ⟨Array.replicate (h.stage * L) 0⟩).extract 0 (h.stage * L)
+  src c₀ = i.source ++ ⟨Array.replicate (L - i.source.size) 0⟩ ∧
+    stageSrc c₁ = it.source ++ ⟨Array.replicate (h.stage * L - it.source.size) 0⟩
+
+/-- **`b` is the start of the coins `cs`**, concatenated: of the first `n` of them, for some `n`. -/
+def StartOf (cs : List ByteArray) (b : ByteArray) : Prop :=
+  ∃ n, b.size ≤ ((cs.take n).foldl (· ++ ·) ByteArray.empty).size ∧
+    ((cs.take n).foldl (· ++ ·) ByteArray.empty).extract 0 b.size = b
+
+/-- **`b` is the start of the coins the challenger's log released after it recorded `after`**: of the coins from its
+coin `k` on, where the log holds the record of `after` before coin `k` (`Log.before`). -/
+def ReleasedAfter (log : Verity.Challenger.Log ByteArray ByteArray) (after : ByteArray) (b : ByteArray) : Prop :=
+  ∃ k, Verity.Challenger.Entry.recorded after ∈ log.before k ∧ StartOf (log.coins.drop k) b
+
+/-- **Coin evidence the run accepts shows the challenger's log** (an open premise, not one of the challenger's three):
+where `Challenger.coinsReason` finds no reason against the evidence `coins` for the window `w` the verifier holds, the
+bytes `read` are the start of the coins the challenger's log `log` released after it recorded `after`. The evidence is
+the challenger's signed ledger, its commitment and the openings checked against it, so this holds up to a forged
+signature or a SHA-512 collision the evidence exhibits; it is stated here as what the check means. -/
+def EvidenceIsLog (log : Verity.Challenger.Log ByteArray ByteArray) (w : String) : Prop :=
+  ∀ (coins : Json) (after read : ByteArray), Spot.Challenger.coinsReason coins w after read = none →
+    ReleasedAfter log after read
+
+/-- **The run's coins come in the order the two-stage guarantee assumes**: at an accepted two-stage run whose verifier
+holds the windows `w₁` (the boundary registration's) and `w₂` (the interior's), where the coin evidence of each shows
+the challenger's log (`EvidenceIsLog`), the bytes the first stage read are the start of the coins the log released after
+it recorded the boundary record's digest, and those the second stage read the start of those released after it
+recorded the interior record's digest. With the challenger's premises (`ChallengerLogsCoins`: those coins are its
+flips, in order; `FlipsAfterRecorded`: each record is fixed before the flips that follow it; `VerifierReadsLog`: the
+verifier's coins are those) each stage's sample is the one `SampleAfterRecorded` speaks of. The sessions' coins are not
+read by `Run.run`; they are the coins of the Flock runs `SessionsAccept` names. -/
+def RunCoinsInOrder : Prop :=
+  ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (log : Verity.Challenger.Log ByteArray ByteArray)
+    (w₁ w₂ : String),
+    AcceptedTwo i it j → i.params.verifier.windowRoot = some w₁ → it.params.verifier.windowRoot = some w₂ →
+    EvidenceIsLog log w₁ → EvidenceIsLog log w₂ →
+    ∃ (read₁ read₂ : ℕ) (d₁ d₂ : ByteArray),
+      Spot.Registration.digest i.record = .ok d₁ ∧ Spot.Registration.digest it.record = .ok d₂ ∧
+      (∃ resolved workTable draw rest, Spot.Select.select resolved i.params.verifier.program
+        i.params.verifier.query workTable i.closure i.source = .ok (draw, rest, read₁)) ∧
+      (∃ sample ns ks draw, Spot.Select.selectSecond sample ns ks it.source = .ok (draw, read₂)) ∧
+      (0 < read₁ → ReleasedAfter log d₁ (i.source.extract 0 read₁)) ∧
+      (0 < read₂ → ReleasedAfter log d₂ (it.source.extract 0 read₂))
 
 /-! ## The top statement -/
 
