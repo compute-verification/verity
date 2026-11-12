@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """Judge two recorded runs: refuse unless they are the same campaign number; otherwise ratios and fingerprint deltas.
 
-    uv run python benchmarks/judge.py BASELINE CANDIDATE [--allow FIELD ...] [--runs-dir DIR] [--json]
+    verity bench numerical judge BASELINE CANDIDATE [--allow FIELD ...] [--runs-dir DIR] [--json]
 
 ``BASELINE`` and ``CANDIDATE`` are run ids (or unique prefixes) under ``~/.research/runs`` (``$RESEARCH_RUNS`` or
 ``--runs-dir``), or directories holding a ``result.json``.
 
 ``research compare`` shows every recorded difference between two runs and leaves to the workload whether a difference
-invalidates the comparison.  This script is that judgment for the proof campaign.  Two results are comparable only
+invalidates the comparison.  This job is that judgment for the proof campaign.  Two results are comparable only
 when they agree on the contract's identity fields -- ``proof_class``, ``authentication``, ``profile``, ``domain``,
 ``K`` (``verity_numerical.bench.contract.IDENTITY_FIELDS``; never compare across ``proof_class``).  A field either result lacks counts as a disagreement.  On disagreement the judge REFUSES (exit 2)
 and prints nothing that looks like a ratio.  ``--allow K`` (repeatable) lets a named identity field differ when that
@@ -25,25 +24,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
-REPO = Path(__file__).resolve().parents[1]
-for candidate, module in ((REPO, "verity"), (REPO / "benchmarks" / "numerical" / "python", "verity_numerical")):
-    try:
-        __import__(module)
-    except ImportError:
-        sys.path.insert(0, str(candidate))
-
-from verity_numerical.bench import contract  # noqa: E402
+from .. import settings
+from . import contract
 
 EX_REFUSED = 2
 
 
 def runs_root(arg: str | None) -> Path:
-    return Path(arg or os.environ.get("RESEARCH_RUNS") or Path.home() / ".research" / "runs").expanduser()
+    return Path(arg or settings.RESEARCH_RUNS).expanduser()
 
 
 def resolve(ref: str, root: Path) -> Path:
@@ -176,7 +168,8 @@ def render(rep: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="verity bench numerical judge", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("baseline")
     ap.add_argument("candidate")
     ap.add_argument("--allow", action="append", default=[], metavar="FIELD", help=f"let this identity field differ (one of {', '.join(contract.IDENTITY_FIELDS)}); repeatable")

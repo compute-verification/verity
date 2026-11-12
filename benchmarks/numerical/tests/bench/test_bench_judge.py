@@ -1,25 +1,33 @@
-"""``benchmarks/judge.py``: refuses across identity fields, and judges otherwise."""
+"""``verity bench numerical judge``: refuses across identity fields, and judges otherwise."""
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
-import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-from conftest import JUDGE, conforming_result, write_run
+from conftest import conforming_result, write_run
 
+from verity_numerical import __main__ as jobs
 from verity_numerical.bench import contract
 
 
 def judge(*args: str, runs_dir: Path | None = None) -> subprocess.CompletedProcess:
-    cmd = [sys.executable, str(JUDGE), *args]
+    """The job ``judge`` run with ``args``: its exit code, and what it wrote to each stream."""
+    argv = ["judge", *args]
     if runs_dir is not None:
-        cmd += ["--runs-dir", str(runs_dir)]
-    return subprocess.run(cmd, capture_output=True, text=True, env={**os.environ})
+        argv += ["--runs-dir", str(runs_dir)]
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            code = jobs.main(argv)
+        except SystemExit as refused:  # argparse leaves this way on an argument it does not take
+            code = refused.code
+    return subprocess.CompletedProcess(argv, code, out.getvalue(), err.getvalue())
 
 
 @pytest.fixture
