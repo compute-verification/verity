@@ -939,3 +939,25 @@ differs is the check that makes Thursday's hour worth a card.
 - **Not yet tried by any of kernels:** a `research run` launched through the ssh entry. If Thursday's
   launch fails to connect, stop and say so in your return's first line; do not try another address.
 - Until 15:30Z: the design note toward Thu 18:00Z; nothing on a card.
+
+## Thu 12 Nov 02:03Z: until Thursday's hour, two things that Friday's timed rows need and no card does
+
+You are idle until 15:30Z and Friday's rows are a timed run. Your own note names what could make Friday
+slip; two of those need no card:
+1. **The SASS gate for the walk's kernels in the prover's binary.** A timed run must pass it (the
+   kernel-engineering skill), and your note says you have not read it for a Flock prover binary. Read how
+   `benchmarks/pouw/harness/sass_gate.py` and its manifests are used, say what the gate would hold for
+   `fc_walk_seed`, `fc_walk_level`, `fc_walk_level_warp` and `fc_walk_slots` built for `sm_90`, and run
+   what can run on a CPU node (the cubin's SASS is read without a card). If the gate has no form for a
+   Flock prover binary, say so on HASH-112 for my ring with what the smallest honest substitute is: I
+   decide with proofs whether Friday's rows are timed results or a screen. Do not write a new gate
+   tonight.
+2. **Friday's job, dry-run:** one lease on card 6, cores 72-81, 15:45Z to 19:45Z; steps own, kernel, own,
+   kernel at four provers first, then two and one if the hours allow; whole bursts in each window; the
+   ten checks told on each step; the node's free memory beside each step; `steady.sh`'s `STEPS` with
+   `FC_UNIT_WALK=1` as the step's variable (KMOVE is adding a step option for `--wide-leaf` to the same
+   script tonight and says so on HASH-115: read it before you use the script). Say what the row's record
+   must carry for benchmarks' reader to price it, and what it cannot carry.
+3. If proofs answers on the firewall's missing test or on any of the five points before 15:30Z, I pass it
+   to you here.
+End your turn when 1 and 2 are done. Push at each step. Nothing on a card.
