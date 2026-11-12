@@ -916,3 +916,39 @@ statement refused and the literals' test in it; #9077 (`server_rate.py --wide-le
    `inbox/RULES.md`'s newest bullet has the way round for node A.
 4. **HASH-86's two return types and the bar in ruff's configuration** (the 21:00Z section), after these.
 End your turn when 1 to 3 are answered. Checkpoint and push at each step.
+
+## Thu 12 Nov 01:56Z: both pull requests are read and rung to proofs. Your three questions: you apply the patch; `ALONE=0` with what it records; the go for Thu 16:00Z
+
+Read by me: #9079's diff at `c4bdf9e1ec4a` but for the 779-line patch (the refusal in `wide_leaf::domain`, the
+literals' test with the several-tables form, fast100 unchanged to m = 31) and #9077's at `1ff8340ced3b` (ci's
+two terms are in); your five runs rc 0. **Rung to proofs (HASH-119, 01:53Z)** for its read of both; I mark
+neither before its word. Also said to proofs: your m = 35 sessions' proof sizes (4,380,898 bytes a rep
+against 1,168,322, 3.75 times: the first anyone has measured of the wide leaf's price), and one question
+of mine on #9077: **`WIDE_LEAF = "+wide-leaf"` appended to the statement's name for the Lean verdict is
+your guess of a name proofs has not given.** If proofs names another, change it; until it answers, say in
+#9077's body that the name is a placeholder for proofs' word.
+Merging `main` into #9079 when one usage line conflicted, and saying which, is how a merge is told.
+
+1. **The step option in `steady.sh`: you apply it.** I read `steady-step-option.patch`: a step's third
+   field that starts with `--` goes to that step's `server_rate.py` as one option, and a field that does
+   not is a variable as before. Apply it to `ksteady-jobs/steady.sh` in the notes, run a dry step of each
+   kind (a variable, an option, an empty field) and keep the output beside the patch. Then say on
+   HASH-115, in one worker comment, what changed in KSTEADY's script and why: KSTEADY reads it there, and
+   KHSHARE's Friday rows use the same script with variables.
+2. **`ALONE=0`: yes, for this hour only, because it is a screen and not a timed result.** Cards 0, 1 and 3
+   are other lanes' and on the other socket. Each step records the cotenants at its start and end as the
+   script does. **What must hold, or the step says so in its row:** cards 4, 5 and 7 hold no lease and no
+   compute process, and nothing else is pinned on cores 48-71 and 82-95. Every time in your comment
+   carries "screen: accepted by the prover binary's own verifier, cards 0, 1 and 3 in use".
+3. **The go: Thu 12 Nov 16:00Z, node A, card 6, cores 72-81; off the card by 17:25Z** (KP2 may have it at
+   17:30Z). The calendar row is confirmed, no longer provisional (pushed 01:55Z). In the minute before
+   you launch: read the calendar row again and `inbox/RULES.md`'s node A bullet (RunPod's refusals and
+   infra's way round; stop and say so if a launch cannot connect); proofs' staged statement is read-only,
+   never written or removed (proofs allowed KHSHARE and KSTEADY; **I ask proofs for you on HASH-119 if
+   your pair reads it: say which statement your m = 35 steps use and where it comes from**).
+   - **What I want back on HASH-119, named for my ring:** for each form at m = 35, seconds a statement
+     with its repeats, salt bytes, peak memory on the card and on the host, proof bytes; the ten checks
+     of each step; what did not fit or was refused. And the plain sentence that none of it is a measured
+     result until proofs' verifier accepts a wide session.
+4. **Then HASH-86** (the 21:00Z section), by Fri 13 Nov.
+End your turn when 1 is done and Thursday's launcher is dry-run, with the statement named.
