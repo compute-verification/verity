@@ -3,8 +3,9 @@ with the kernel's dQ buffers at that B and H, and refuses the rest.  The Definit
 (`fixtures/fa2_train_bwd_sm120.npz`, cut by `fixtures/fa2_train_bwd_sm120.py` from the capture `cc12_fa2_backward_capture`
 cites) on rows and keys that reach each part of the kernel: rows that see one, a few and every key of their diagonal block, a
 row over two key blocks, a row over five whose word tells the kernel's buffers from the sum in the key blocks' order, and a key
-block through its two query blocks, the one on the diagonal last.  A small head is its rows and keys in the kernel's order, and
-each Definition on bits (`boolean_fa2_train_bwd`) gives its words on random inputs."""
+block through its two query blocks, the one on the diagonal last.  A small head is its rows and keys in the kernel's order, the
+head at a stand-in shape's statics keeps its signature and builds, and each Definition on bits (`boolean_fa2_train_bwd`) gives
+its words on random inputs."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,8 +16,10 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
+from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_fa2_train_bwd as BX
 from verity.definitions.registry import fa2_train_bwd as W
+from verity.definitions.registry.prims import BF16, F32
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fa2_train_bwd_sm120.npz"
 BM, BN = 64, 128
@@ -136,6 +139,31 @@ def test_a_head_is_its_rows_and_keys_in_the_kernels_order() -> None:
     assert head[:T * D] == dq
     assert head[T * D:2 * T * D] == [x for row in dk for x in row]
     assert head[2 * T * D:] == [x for row in dv for x in row]
+
+
+def test_the_head_at_a_stand_in_shape_keeps_its_signature_and_builds(monkeypatch) -> None:
+    """At T = 16, D = 32 and blocks of 16, the statics a training step's frontend binds the head at when a test makes its shape a
+    route: a stand-in entry of `TRAIN_SDPA_BWD` binds through `train_sdpa_backward`, the head takes (dO, q, k, v, O, LSE) and
+    returns (dQ, dK, dV) in the op's order, it builds on words and on bits, and on words it is the kernel's loop at those statics
+    with one dQ buffer as with the stand-in's."""
+    T, D, bm = 16, 32, 16
+    monkeypatch.setitem(W.TRAIN_SDPA_BWD, (2, 2, T, D), (bm, bm))
+    stand_in = W.train_sdpa_backward(2, 2, T, D)
+    one = bind(W.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1)
+    assert stand_in.id == f"Fa2TrainBwdHead_v1{{T={T},D={D},BM={bm},BN={bm},NS=47}}"
+    rows = Array(T, Array(D, BF16))
+    for head in (stand_in, one):
+        assert head.signature() == (tuple((n, rows) for n in ("do", "q", "k", "v", "o")) + (("lse", Array(T, F32)),),
+                                    Tuple(rows, rows, rows))
+    assert bind(BX.Fa2TrainBwdHead, T=T, D=D, BM=bm, BN=bm, NS=1).gates > one.gates > 0
+    rng = np.random.default_rng(4207)
+    do, q, k, v, o = (_bf16(rng, (T, D)) for _ in range(5))
+    lse = _f32(rng, (T,), 2.0)
+    parts, dk, dv = _loop(q, k, v, do, o, lse, bm, bm)
+    want = [x for r in range(T) for x in _ints(evaluate(bind(W.Fa2TrainBwdDq, D=D, NP=1, NS=1), parts[r]))]
+    want += [x for row in dk + dv for x in row]
+    for head in (stand_in, one):
+        assert _ints(evaluate(head, *map(_ints, (do, q, k, v, o, lse)))) == want, head.id
 
 
 def test_on_bits_each_is_its_words() -> None:
