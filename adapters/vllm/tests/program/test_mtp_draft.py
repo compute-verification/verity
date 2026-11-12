@@ -124,6 +124,14 @@ def test_on_bits_each_is_the_switchs_boolean_version_and_returns_its_words(name:
         assert got[i] == ([want] if isinstance(want, int) else list(want)), (name, i)
 
 
+def test_the_cut_on_bits_is_the_word_cut() -> None:
+    """At the served statics `boolean_mtp_draft.eh_cut` of `MtpEhNorm_v2` is `mtp_draft.eh_cut` of `MtpEhNorm_v1` unit by unit:
+    each unit's word view is the word cut's unit, as many of each."""
+    word = bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)
+    bits = boolean_version(word)
+    assert [(TR.word_of(u).id, n) for u, n in BM.eh_cut(bits)] == [(u.id, n) for u, n in MD.eh_cut(word)]
+
+
 def test_the_scale_on_bits_refuses_a_register_live_in_some_threads_only() -> None:
     """96 of a 128 block on two warps leaves threads 48-63's register masked and the rest live: refused by name."""
     with pytest.raises(ValueError, match="live in some threads and masked in others"):

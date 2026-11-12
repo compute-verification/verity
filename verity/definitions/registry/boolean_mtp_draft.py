@@ -13,7 +13,8 @@ BLOCK) is one row of the batch that takes it, `DsaRMSNormSquares` for the first 
 masked register's operand the bf16 word +0 (its f32 word +0, as the masked load leaves), then the warps' butterflies and their
 halving tree in `dsa_norm.rms_scale`'s order.  A register must be live in every thread or masked in every thread (N a multiple of
 32 WARPS times a thread's run of V = min(BLOCK / (32 WARPS), 8) elements): GLM-5.3's 6144 in a block of 8192 on 4 warps is, eight
-runs of 1024 of which the last two are masked.  Each word view is `mtp_draft`'s `_v1` at the same statics.
+runs of 1024 of which the last two are masked.  Each word view is `mtp_draft`'s `_v1` at the same statics.  `MtpEhNorm_v2` at
+6144 is past a Flock proof block as `_v1` is, and is staged as its cut too (`CUTS`, `eh_cut`).
 """
 from __future__ import annotations
 
@@ -116,3 +117,18 @@ def _eh(B, S, pos, e, p, ew, hw):
 
 
 MtpEhNormV2 = EW.on_bits("MtpEhNorm", 2, ["H", "BLOCK", "WARPS", "EPS"], _sig, _eh, MD.MtpEhNorm)
+
+
+def eh_cut(row) -> list[tuple[object, int]]:
+    """The units an `MtpEhNorm_v2` binding ``row`` is staged as, `mtp_draft.eh_cut`'s on bits: the select, each half's scale and
+    its H / 64 `DsaRMSNormApply_v3` units."""
+    if getattr(row, "defn", None) is not MtpEhNormV2:
+        raise ValueError(f"eh_cut cuts an MtpEhNorm_v2 binding, not {row!r}")
+    S = row.bindings
+    H = int(S["H"])
+    return [(bind(MtpEhZeroV2, H=H), 1),
+            (bind(TritonBlockRMSNormSumSqV2, N=H, BLOCK=S["BLOCK"], WARPS=S["WARPS"], EPS=S["EPS"]), 2),
+            (bind(BDN.DsaRMSNormApplyV3, G=MD.APPLY_G), 2 * H // MD.APPLY_G)]
+
+
+CUTS = {"MtpEhNorm_v2": eh_cut}

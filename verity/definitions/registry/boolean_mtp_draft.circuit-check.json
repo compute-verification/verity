@@ -19,13 +19,13 @@
  },
  "digests": {
   "MtpEhNorm_v2{H=6144,BLOCK=8192,WARPS=4,EPS=1e-05}": {
-   "sha512": ""
+   "sha512": "d43aa1acb4a2cdec0d5ac37383a59989d7efd8f7865a94cf9dbbedca8a611cb1bbd4bff50c2b64bb8a2be4ea3aefdfea572ed80a2feccd0c534aa368ecd38070"
   },
   "MtpEhZero_v2{H=6144}": {
-   "sha512": ""
+   "sha512": "4aab9e080363af1e20c7c98d4aeffd30b729564de96d3b85b6ae05feedfb6943b5f9da56ed740cb3cd3cfdccb6aab48c5e6197b330627f7ed320e219dc92c94f"
   },
   "TritonBlockRMSNormSumSq_v2{N=6144,BLOCK=8192,WARPS=4,EPS=1e-05}": {
-   "sha512": ""
+   "sha512": "f456b1fb382512c3601614762fceeda63057f8c70e37afab1539df8e1501492888f25147496d4520289384d59d33744087485c9ade568d5f89df96d9a42a7b53"
   }
  }
 }
