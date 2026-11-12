@@ -92349,3 +92349,20 @@ request (11,186 over 2,000), draft off, VLLM-392 and its date, 0.30 (6,997 bits 
   there; I read the pin only.
 - **New: acceptance on the load Friday serves** [derived]: 70.7% on the try's greedy agentic pass and 49.3% on stock
   chat prompts give 0.66 and 0.87 bits an output token at fixed width. Friday's own figure is neither.
+
+## FINDER, Thu 12 Nov 15:40Z: #9332 is ready to mark: head `a555863cf8d5`, records run and `test_lean_packages` passed, no conflict with `main`
+
+In plain words: the step network's half reads, `FlockSoundness.Audit.Periods.ex_prod_add_le`, is in a module of its own, proved, with nothing listed and nothing in `Definitions`. Its checks at the head are all in and all pass. The head did not move since I opened it.
+
+- **Head:** `a555863cf8d574b69613fc85c1f0b712951875c9` on `cursor/proofs-periods-charge-9e2a`, [#9332](https://github.com/compute-verification/verity/pull/9332), open, unmarked, mergeable [run: `gh pr view`, 15:39Z]. Issue PRF-599, the first of its two pull requests.
+- **The file on a node, beside its siblings:** `r20261112-150258-85c1`, exit 0: 3 theorems, no axiom beyond `propext`, `Classical.choice`, `Quot.sound`; no built module that doesn't import it declares a name it does [run].
+- **The records run** (`lean_changed.py --records security/Proofs --update`): `r20261112-151119-ca33`, done, rc 0, outcome pass at commit `a555863cf8d5`: `security`, `security/Proofs` and `security/Properties` each `AUDIT: PASS`; it regenerated no lock record (the change lists nothing), so there is no records commit to add [run]. It is the fast path (no kernel replay, no tests): the candidate's check is the Lean verdict.
+- **`tests/test_lean_packages.py` by name:** `r20261112-151119-aa90`, rc 0, 32 passed [run].
+- **Unread-declaration gate and Markdown limits** against `main`: both pass [run, on the VM: they read git only].
+- **`git merge-tree`:** against `main` `99f1b414a647`: clean. Against `origin/cursor/lean-remote-merge-landing-fc8d` `f3837f57d113`: 31 conflicted files, the same 31 `main` itself leaves against that branch, none of them one of this change's four files (`Soundness.lean`, `Soundness/Audit/PeriodsCharge.lean`, `Soundness/Audit/README.md`, the limits file) [run].
+- **Names, old (scratch) and new:** `NetTiming.ex_prod_add_le` is `FlockSoundness.Audit.Periods.ex_prod_add_le`, statement unchanged; `exFinCons` is `Ex_fin_cons` and `exLeOfForall` is `Ex_le_of_forall`, both in that namespace; `exMulLeft` is `Claims.Ex_mul_left` and `prLeEx` is `Claims.Pr_le_Ex`, both already on `main` [read].
+- **The limits file:** `Proofs/Flock` 272 + 1 = 273 modules, 2,283 + 3 = 2,286 declarations. #9149 moves the same line to 273 / 2,291; whichever lands second takes a merge of `main` and reads 274 / 2,294, and I send a new head for it [derived from the two diffs].
+- **What is not proved:** nothing about a guarantee. The file has the step (one period's product bound with a charge paid once) and its two helpers; no theorem reads it yet, and network's half is theirs.
+- **Note for you:** `research queue open` warned that PRF-599 has no label naming a live goal of the Goals page (its labels: `from:proofs`); the issue is yours to label.
+
+Next: the phase lemma. Its first two files elaborate on a node (29 theorems, axioms clean); the checkpoint line follows.
