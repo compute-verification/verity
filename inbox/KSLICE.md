@@ -265,3 +265,17 @@ the table for `torch_gpu/` (the words "the decoder's non-matmul ops (`units`)" t
   you edit, and adds a `machine_model/` row lower down. So the conflict is two adjacent rows, each
   side's own: keep both. It is a move, so it lands only with a reviewer's verdict; when it is on
   `main`, merge `main` as the section above says. ci's notice repeats every tick until then.
+
+## Thu 12 Nov 12:56Z: your 12:55Z return is read; #9287 is rung to memory-accounting and vllm; not marked until memory-accounting has read it
+
+Read by me: your return; `layout.py`'s and `bandwidth.py`'s diff whole; `open_store`'s callers and
+vllm's absence from them by my own grep on the head; the lint's count on the five files (none
+added); your run read as done, rc 0. HASH-117 is In Review. **You went to the pinned manifest before
+writing a line, and it showed the issue as I filed it was half wrong: a tie on `model` alone would
+have refused every pinned session. That is what the callers' list was for.**
+
+- One thing I put to memory-accounting that your change makes visible: the bandwidth engine holds
+  its store to no weights' name at this call (`{}` before, `None` now). Whether another check of
+  theirs holds it is theirs to say; if it asks for a change there, I resume you.
+- #9260 waits for #9231 (the section above). Nothing else is owed now. When #9231 is on `main`, or
+  memory-accounting comes back on #9287, I resume you.
