@@ -20,11 +20,11 @@ SKIP = {".lake", ".git", ".venv", "node_modules", "__pycache__"}
 FIXTURES = ROOT / "tools/verity/lean/tests/fixtures"
 
 
-def lake_packages() -> list[Path]:
+def lake_packages(fixtures: bool = False) -> list[Path]:
     out = []
     for d, dirs, files in os.walk(ROOT):
         dirs[:] = sorted(x for x in dirs if x not in SKIP)
-        if ("lakefile.toml" in files or "lakefile.lean" in files) and not Path(d).is_relative_to(FIXTURES):
+        if ("lakefile.toml" in files or "lakefile.lean" in files) and (fixtures or not Path(d).is_relative_to(FIXTURES)):
             out.append(Path(d))
     return out
 
@@ -52,6 +52,22 @@ def test_every_package_module_is_a_module():
     assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
         "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
         "\n  ".join(lakefiles)
+
+
+def test_no_lakefile_names_the_setting_lake_reads_before_the_environment():
+    """`check.py`'s builds (`lake_env`) and the suites' uncached runs (`suites.py`'s `UNCACHED_ENV`) turn Lake's artifact
+    cache off by `LAKE_ARTIFACT_CACHE` alone. That is enough while no lakefile names `enableArtifactCache`, a package's own
+    setting, which Lake reads before the environment. The Lean tools' fixtures are held to it too: their tests build them."""
+    pkgs = lake_packages(fixtures=True)
+    assert any(p.is_relative_to(FIXTURES) for p in pkgs), "the walk reached no fixture's lakefile"
+    named = [str(f.relative_to(ROOT)) for p in pkgs for f in (p / "lakefile.toml", p / "lakefile.lean")
+             if f.exists() and "enableArtifactCache" in f.read_text()]
+    assert not named, (
+        f"{', '.join(named)}: names `enableArtifactCache`, which Lake reads before `LAKE_ARTIFACT_CACHE`: where a package "
+        "turns it on, its build reads and writes a cache whatever the variable says. Two places turn Lake's cache off by "
+        "the variable alone: `lake_env` in tools/verity/lean/check.py and `UNCACHED_ENV` in tools/verity/check/suites.py. "
+        "Leave the setting out, or in the same change give both what `build` in tools/verity/lean/lean_changed.py gives a "
+        "build outside the sandbox: a `LAKE_CACHE_DIR` naming an empty directory of the command's own, removed after it.")
 
 
 def test_one_toolchain():
