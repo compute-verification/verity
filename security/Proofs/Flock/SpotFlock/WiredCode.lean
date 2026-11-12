@@ -102,9 +102,10 @@ code is stated about, `V h`, does not run that check. -/
 def WiresFirst : Prop := writersFirst h = true
 
 /-- **Every wired source bit has a gate to go to** (`wiresMove`), as a premise. Nothing the verifier runs decides
-it. No proof reads it: it is what makes the connected program mean what it reads. Under it every wired read is sent
-to its writer's output, so none stays an input of the connected program, which a bound on what the program's inputs
-determine takes as given. -/
+it. It enters no step of the proof of a statement about the connected code: such a statement takes it so that the
+connected program has no wired read left as a free input. Under it and `SourcesNamed`, a source bit at a port no
+link names is sent to its writer's output (`wireTarget_of_sourcesNamed`), so only the source bits at a port a link
+names stay inputs of the connected program. -/
 def WiresMove : Prop := wiresMove h = true
 
 /-- **Every source bit is at a port a link or a wire names** (`sourcesNamed`), as a premise. Nothing the verifier
