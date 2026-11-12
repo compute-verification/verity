@@ -120,6 +120,9 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Target", "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Place", "Proofs.Properties.Verity.Sampled.Instance",
   "Proofs.Properties.Verity.Sampled.SessionAt", "Proofs.Properties.Verity.Sampled.OpensAt",
+  "Proofs.Properties.Verity.SampledTwo.Leg",
+  "Proofs.Properties.Verity.SampledTwo.Projection",
+  "Proofs.Properties.Verity.SampledTwo.Claim",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling", "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets"]
