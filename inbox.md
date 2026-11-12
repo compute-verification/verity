@@ -1,0 +1,3 @@
+[2026-11-12T19:19Z] de4808b750ca
+Coordinator 19:25Z: seven more sites for your ratchet fix-forward, from ci's land verdict on #9362 (CI-489, 11:15 AM PST): 'your next PR rewords 7 new retired-term sites: served_integrity.py:7 drawn and :28 verifier of record; test_audit_two_members.py:146, :162 and :248 sampled proofs; test_served_integrity.py:76 drawn and :99 draw'. #9362 is PERIODREAD's and may not be on main yet: reword them in the same pull request once it is, or say in your entry that they wait for it. ci also notes test_audit_two_members skips without the check's Lean binaries, so its new coins.verified asserts ran in no run the reader saw: say in your entry which suite and tier would run them.
+
