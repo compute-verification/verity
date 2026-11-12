@@ -13,7 +13,7 @@
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
-//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--sources [--random N]] [--slots N]]   (the unit's level schedule cut at its
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--plan] [--sources [--random N]] [--slots N]]   (the unit's level schedule cut at its
 //!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
@@ -5004,7 +5004,9 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// and whether one seed off in one slot is refused. With `--native` too, a `NATIVE` line: the same walk and compare on seeds
 /// computed in 64-bit words (`sha512_native::unit_seeds_native`), each compression's from its chaining value and block,
 /// which are still read off the host's evaluation at the compression's first rounds; the seed bits that differ from the
-/// host evaluator's; and one of those seeds off. With `--sources`, a `SOURCES` line: each compression's inputs (read the
+/// host evaluator's; and one of those seeds off. With `--plan` too, a `PLAN` line: the same walk and compare on seeds from
+/// the unit's inputs alone, by a plan derived from the unit's rows (`sha512_native::UnitHashPlan`), with what the plan is
+/// and one of its seeds off; or why no plan was derived. With `--sources`, a `SOURCES` line: each compression's inputs (read the
 /// same way) by where they come from, by their values in the statement's slots (`sha512_native::unit_sources`), and with
 /// `--random N` a second one on N slots of random unit inputs. Exits 1 unless every compare a line makes is `same` and every seed off is
 /// refused.
@@ -5147,6 +5149,57 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             "inputs_from": "the host's evaluation, at each compression's first 20 found rounds' committed words", "rows_read": read_rows,
             "native_s": native_s}).as_object().unwrap().clone());
         println!("NATIVE\t{line}");
+    }
+    if flag("--plan") && slots > 0 {
+        // the seeds from the unit's inputs alone, by a plan derived from the unit's rows: nothing of the unit is evaluated
+        let t = Instant::now();
+        let plan = flock_live::sha512_native::UnitHashPlan::derive(net, comps.clone());
+        let derive_s = t.elapsed().as_secs_f64();
+        match plan {
+            Err(why) => {
+                println!("PLAN\t{}", json!({"net": ni, "derived": false, "why": why, "derive_s": derive_s}));
+                ok = false;
+            }
+            Ok(plan) => {
+                use flock_live::sha512_native::CvFrom;
+                let groups = slots.div_ceil(32);
+                let lanes = |g: usize| (slots - 32 * g).min(32);
+                let input = |g: usize, col: u32| -> u32 {
+                    let (w, i) = (col as usize / 128, col as usize % 128);
+                    ins[32 * g..32 * g + lanes(g)].iter().enumerate().fold(0u32, |x, (l, v)| x | ((((if i < 64 { v[w].lo } else { v[w].hi }) >> (i % 64)) as u32 & 1) << l))
+                };
+                let t = Instant::now();
+                let z: Vec<Vec<u32>> = (0..groups).into_par_iter().map(|g| plan.seeds(lanes(g), |col| input(g, col))).collect();
+                let seeds_s = t.elapsed().as_secs_f64();
+                let seed_bits_differing: usize = z.par_iter().enumerate().map(|(g, z)| {
+                    let used = u32::MAX >> (32 - lanes(g));
+                    z.iter().zip(seed_z(g)).map(|(x, y)| ((x ^ y) & used).count_ones() as usize).sum::<usize>()
+                }).sum::<usize>();
+                got.fill(!0);
+                let t = Instant::now();
+                let walk = unit_ab_seeded(net, &cut, &seeds, |g| z[g].clone(), uw, &ins, &mut got);
+                let walk_s = t.elapsed().as_secs_f64();
+                let differing = want.par_iter().zip(&got).filter(|(x, y)| x != y).count();
+                // one of the plan's seeds off in the last slot
+                let (gl, n) = (groups - 1, 32 * (groups - 1));
+                let off = unit_ab_seeded(net, &cut, &seeds, |_| {
+                    let mut z = z[gl].clone();
+                    z[2 * seeds.len() / 3] ^= 1 << (lanes(gl) - 1);
+                    z
+                }, uw, &ins[n..], &mut got[4 * uw * n..]);
+                let same = host && walk == Some(true) && differing == 0;
+                ok = ok && same && seed_bits_differing == 0 && off == Some(false);
+                let (rows, inputs, longest) = plan.size();
+                println!("PLAN\t{}", json!({"net": ni, "derived": true, "derive_s": derive_s, "derived_on": "256 slots of random unit inputs",
+                    "compressions": comps.len(), "chaining_values": {"a_constant": plan.cv.iter().filter(|x| matches!(x, CvFrom::Const(_))).count(),
+                        "an_earlier_output": plan.cv.iter().filter(|x| matches!(x, CvFrom::Out(_))).count()},
+                    "rows_between_the_compressions": rows, "input_columns_read": inputs, "of_input_columns": first, "most_columns_in_a_block_bit": longest,
+                    "seeds_from": "the unit's inputs alone: no row of the unit is evaluated but the rows between the compressions",
+                    "slots": slots, "seeds": seeds.len(), "seed_bits": seeds.len() * slots, "seed_bits_differing": seed_bits_differing,
+                    "words": want.len(), "walk_ok": walk, "words_differing": differing, "same": same, "off_seed_walk_ok": off,
+                    "seeds_s": seeds_s, "walk_s": walk_s, "host_s": host_s}));
+            }
+        }
     }
     if flag("--sources") {
         // each compression's inputs by where they come from, in the statement's slots and, with `--random N`, in N slots

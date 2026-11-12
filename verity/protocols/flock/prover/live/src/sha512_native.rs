@@ -379,9 +379,9 @@ impl UnitComp {
     }
 
     /// The seeds' z, in [`UnitComp::seeds`]' order, of the compression on `cv` and `msg`: the state after the last round
-    /// ([`working_state`]), bit by bit, then each feed-forward row's: bit i's carry row of `cv[j] + st[j]` is
+    /// ([`working_state`], which it returns), bit by bit, then each feed-forward row's: bit i's carry row of `cv[j] + st[j]` is
     /// `(x ^ c)_i & (y ^ c)_i` and a committed carry `c_{i+1}`, `c = (x + y) ^ x ^ y`.
-    pub fn seed_bits(&self, cv: &[u64; 8], msg: &[u64; 16], mut out: impl FnMut(bool)) {
+    pub fn seed_bits(&self, cv: &[u64; 8], msg: &[u64; 16], mut out: impl FnMut(bool)) -> [u64; 8] {
         let st = working_state(cv, msg);
         for w in st {
             (0..64).for_each(|i| out(w >> i & 1 == 1));
@@ -391,6 +391,7 @@ impl UnitComp {
             let j = j as usize;
             out(if commit { c[j] >> (i + 1) & 1 == 1 } else { ((cv[j] ^ c[j]) & (st[j] ^ c[j])) >> i & 1 == 1 });
         }
+        st
     }
 }
 
@@ -530,6 +531,355 @@ pub fn unit_sources(n_inputs: usize, slots: usize, input_bit: impl Fn(usize, usi
     res
 }
 
+/// One bit of a compression's block as the unit's rows give it: the XOR of `cols`' z, flipped if `flip`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BitForm {
+    pub cols: Vec<u32>,
+    pub flip: bool,
+}
+
+impl BitForm {
+    /// The XOR of two forms: a column in both cancels.
+    fn xor(&self, o: &BitForm) -> BitForm {
+        let mut all: Vec<u32> = self.cols.iter().chain(&o.cols).copied().collect();
+        all.sort_unstable();
+        let mut cols: Vec<u32> = Vec::with_capacity(all.len());
+        for c in all {
+            if cols.last() == Some(&c) {
+                cols.pop();
+            } else {
+                cols.push(c);
+            }
+        }
+        BitForm { cols, flip: self.flip ^ o.flip }
+    }
+}
+
+/// A step of a [`UnitHashPlan`], in the unit's row order.
+#[derive(Clone, Debug)]
+enum Step {
+    /// a row between the compressions that a block reads: its place among the plan's values, its A and its B columns' places
+    Row(u32, Vec<u32>, Vec<u32>),
+    /// compression k: its block from the values, its seeds into them
+    Comp(usize),
+}
+
+fn splitmix(x: u64) -> u64 {
+    let mut z = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// A cut unit's seeds from the unit's inputs alone, with no evaluation of the unit: every compression among its rows
+/// ([`unit_compressions`]) computed in 64-bit words, in row order, each one's chaining value a constant or an earlier
+/// compression's output and each bit of its block an XOR of unit input bits, earlier seeds and the few rows the unit
+/// computes between its compressions (a swap, a selection), which the plan evaluates itself.
+///
+/// It is derived from the circuit: on [`UnitHashPlan::BATCHES`] batches of 64 slots of random unit inputs the host
+/// evaluates the unit once; each compression's inputs are read off its first rounds ([`UnitComp::inputs`]); its own rows
+/// are the rows back from its first found round whose z is a row's of that compression ([`compression`]'s candidates); and
+/// a block bit's form is the part, in columns before the compression, of a row of the compression whose value that part
+/// is in every slot (a carry row of an addition of the block's word reads the bit beside columns of the compression
+/// alone). Bit 63 of a word has no carry row: it is read off the schedule word 16 later, whose bit 63 adds five more
+/// block bits to it. Nothing is modelled of what the unit hashes. A plan that is wrong in some slot gives a seed that is
+/// not its row's z there, which the walk that takes the seeds refuses ([`crate::circuit::unit_ab_seeded`]): completeness,
+/// never soundness.
+#[derive(Clone, Debug)]
+pub struct UnitHashPlan {
+    pub comps: Vec<UnitComp>,
+    /// each compression's chaining value: a constant or an earlier compression's output
+    pub cv: Vec<CvFrom>,
+    /// each compression's block, bit `64 t + i` word t's bit i, over places among the plan's values
+    msg: Vec<Vec<BitForm>>,
+    steps: Vec<Step>,
+    /// the unit input columns the plan reads, each with its place
+    inputs: Vec<(u32, u32)>,
+    /// each compression's seeds' places, in [`UnitComp::seeds`]' order
+    seed_at: Vec<Vec<u32>>,
+    /// the values: place 0 is the constant one, place 1 zero
+    places: usize,
+}
+
+impl UnitHashPlan {
+    pub const BATCHES: usize = 4;
+
+    /// The plan of `net`'s compressions `comps`, checked on the slots it was derived on. Err: what of the unit it does not
+    /// cover.
+    pub fn derive(net: &IrUnitNet, comps: Vec<UnitComp>) -> Result<UnitHashPlan, String> {
+        const B: usize = UnitHashPlan::BATCHES;
+        const N: usize = UnitComp::READ_ROUNDS;
+        type Sig = [u64; B];
+        let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
+        if !net.one_pass() {
+            return Err("the unit has no one-pass form".into());
+        }
+        let input = |b: usize, col: usize| splitmix(((b as u64) << 40) ^ col as u64);
+        let mut zs: Vec<Sig> = vec![[0; B]; u];
+        for b in 0..B {
+            let (z, _, _) = net.eval64_flat(|col| input(b, col));
+            zs.iter_mut().zip(z).for_each(|(s, z)| s[b] = z);
+        }
+        // 0: no compression's row; 1: a compression's own row; 2: a seed
+        let mut kind = vec![0u8; u];
+        let (mut cvs, mut msgs, mut starts) = (Vec::new(), Vec::new(), Vec::new());
+        let mut outs: Vec<Vec<[u64; 8]>> = Vec::new();
+        let mut issues = Vec::new();
+        let mut prev_end = first;
+        for (k, c) in comps.iter().enumerate() {
+            if c.words.len() < N || c.words.len() > 80 {
+                return Err(format!("compression {k}: {} rounds found", c.words.len()));
+            }
+            let t0 = 80 - c.words.len();
+            let ins: Vec<CompIn> = (0..64 * B).map(|l| {
+                let word = |r: u32| (0..64).fold(0u64, |x, i| x | ((zs[r as usize + i][l / 64] >> (l % 64) & 1) << i));
+                let (e, a): (Vec<u64>, Vec<u64>) = c.words[..N].iter().map(|&(e, a)| (word(e), word(a))).unzip();
+                c.inputs(&e, &a)
+            }).collect::<Option<Vec<CompIn>>>().ok_or_else(|| format!("compression {k}: its first rounds' words are no compression's"))?;
+            // the z of every row the compression could have, in the same slots
+            let mut cands = Vec::new();
+            let tapes: Vec<Vec<u64>> = ins.iter().enumerate().map(|(l, (cv, msg))| {
+                let mut t = Tape::new(l == 0);
+                compression(&mut t, 0, *cv, msg);
+                if l == 0 {
+                    cands = t.cands.take().unwrap();
+                }
+                t.sink
+            }).collect();
+            let n = tapes[0].len();
+            let mut zc: Vec<Sig> = vec![[0; B]; cands.len()];
+            for b in 0..B {
+                let mut bits = vec![0u64; 64 * n];
+                for w in 0..n {
+                    let mut m = [0u64; 64];
+                    for (l, x) in m.iter_mut().enumerate() {
+                        *x = tapes[64 * b + l][w];
+                    }
+                    transpose64(&mut m);
+                    bits[64 * w..64 * w + 64].copy_from_slice(&m);
+                }
+                zc.iter_mut().zip(&cands).for_each(|(x, &(sa, sb))| x[b] = sliced(&bits, sa) & sliced(&bits, sb));
+            }
+            let own: std::collections::HashSet<Sig> = zc.into_iter().collect();
+            let mut start = c.words[0].0 as usize;
+            while start > prev_end && own.contains(&zs[start - 1]) {
+                start -= 1;
+            }
+            let end = c.ff.1 as usize;
+            kind[start..end].fill(1);
+            c.seeds().for_each(|r| kind[r as usize] = 2);
+            prev_end = end;
+            // every row of the compression through round 15: the part of its A and of its B in columns before the compression
+            let hi = if t0 <= 15 { c.words[15 - t0].1 as usize + 64 } else { c.words[0].0 as usize };
+            let part = |r: usize, side: bool| -> Vec<u32> { (if side { &net.b } else { &net.a }).row(r).iter().copied().filter(|&col| (col as usize) < start).collect() };
+            let mut parts: std::collections::HashMap<Sig, (u32, bool)> = std::collections::HashMap::new();
+            for r in start..hi {
+                for side in [false, true] {
+                    let mut s = [0u64; B];
+                    let mut any = false;
+                    for col in part(r, side) {
+                        any = true;
+                        (0..B).for_each(|b| s[b] ^= zs[col as usize][b]);
+                    }
+                    if any {
+                        parts.entry(s).or_insert((r as u32, side));
+                    }
+                }
+            }
+            let lookup = |s: Sig| -> Option<BitForm> {
+                if s == [0; B] || s == [!0; B] {
+                    return Some(BitForm { cols: Vec::new(), flip: s[0] != 0 });
+                }
+                let (hit, flip) = match parts.get(&s) {
+                    Some(hit) => (hit, false),
+                    None => (parts.get(&s.map(|w| !w))?, true),
+                };
+                Some(BitForm { cols: part(hit.0 as usize, hit.1), flip }.xor(&BitForm::default()))
+            };
+            let sig = |t: usize, i: usize| -> Sig { std::array::from_fn(|b| (0..64).fold(0u64, |x, l| x | ((ins[64 * b + l].1[t] >> i & 1) << l))) };
+            let mut forms: Vec<Option<BitForm>> = vec![None; 1024];
+            for t in (0..16).rev() {
+                for i in 0..63 {
+                    let s = sig(t, i);
+                    let mut f = lookup(s);
+                    // where a constant operand left a carry a lower bit of the word itself, the part holds that bit too:
+                    // the bits since the last committed carry
+                    for j in (i - i % 5..i).rev() {
+                        if f.is_some() {
+                            break;
+                        }
+                        if let Some(fj) = forms[64 * t + j].clone() {
+                            let sj = sig(t, j);
+                            f = lookup(std::array::from_fn(|b| s[b] ^ sj[b])).map(|x| x.xor(&fj));
+                        }
+                    }
+                    forms[64 * t + i] = f;
+                }
+                let top = lookup(sig(t, 63)).or_else(|| {
+                    // W[t + 16] = W[t] + s0(W[t + 1]) + W[t + 9] + s1(W[t + 14]): bit 63 of s0(x) is x's bits 0 and 7, of s1(x) x's bits 18 and 60
+                    let (mut s, mut f) = (sig(t, 63), BitForm::default());
+                    for (tt, ii) in [(t + 1, 0), (t + 1, 7), (t + 9, 63), (t + 14, 18), (t + 14, 60)] {
+                        if tt < 16 {
+                            f = f.xor(forms[64 * tt + ii].as_ref()?);
+                            let o = sig(tt, ii);
+                            (0..B).for_each(|b| s[b] ^= o[b]);
+                        }
+                    }
+                    lookup(s).map(|x| x.xor(&f))
+                });
+                forms[64 * t + 63] = top;
+            }
+            let lost: Vec<usize> = (0..1024).filter(|&x| forms[x].is_none()).collect();
+            if let Some(&x) = lost.first() {
+                issues.push(format!("compression {k} (rows {start} to {end}, {} rounds found): {} of its block's bits are no row's part before it, the first word {} bit {}",
+                                    c.words.len(), lost.len(), x / 64, x % 64));
+            }
+            let cv = if ins.iter().all(|x| x.0 == ins[0].0) {
+                CvFrom::Const(ins[0].0)
+            } else {
+                (0..k).rev().find(|&j| outs[j].iter().zip(&ins).all(|(o, x)| *o == x.0)).map_or(CvFrom::Other, CvFrom::Out)
+            };
+            if cv == CvFrom::Other {
+                issues.push(format!("compression {k} (rows {start} to {end}): its chaining value is neither a constant nor an earlier compression's output"));
+            }
+            outs.push(ins.iter().map(|(cv, m)| {
+                let st = working_state(cv, m);
+                std::array::from_fn(|j| cv[j].wrapping_add(st[j]))
+            }).collect());
+            cvs.push(cv);
+            msgs.push(forms.into_iter().map(Option::unwrap_or_default).collect::<Vec<BitForm>>());
+            starts.push(start as u32);
+        }
+        if !issues.is_empty() {
+            let more = issues.len().saturating_sub(8);
+            issues.truncate(8);
+            return Err(format!("{} compressions of {} not covered: {}{}", issues.len() + more, comps.len(), issues.join("; "),
+                               if more > 0 { format!("; and {more} more") } else { String::new() }));
+        }
+        // every column a block reads: the constant, a unit input, a seed, or a row between the compressions, whose own
+        // columns follow
+        let mut place: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        place.insert(cp as u32, 0);
+        let mut places = 2u32;
+        let seed_at: Vec<Vec<u32>> = comps.iter().map(|c| c.seeds().map(|r| {
+            place.insert(r, places);
+            places += 1;
+            places - 1
+        }).collect()).collect();
+        let mut inputs = Vec::new();
+        let mut rows: BTreeMap<u32, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
+        let mut todo: Vec<u32> = msgs.iter().flatten().flat_map(|f| f.cols.iter().copied()).collect();
+        let mut inside = Vec::new();
+        while let Some(col) = todo.pop() {
+            if place.contains_key(&col) {
+                continue;
+            }
+            let i = col as usize;
+            if i < first {
+                // an input column the unit does not read as its own row is zero
+                if net.a.row(i) == [col].as_slice() {
+                    place.insert(col, places);
+                    inputs.push((col, places));
+                    places += 1;
+                } else {
+                    place.insert(col, 1);
+                }
+            } else if kind[i] != 0 {
+                inside.push(col);
+                place.insert(col, 1);
+            } else {
+                place.insert(col, places);
+                places += 1;
+                let side = |r: &crate::ir_block::Rows| -> Vec<u32> { r.row(i).iter().copied().filter(|&x| x != col).collect() };
+                let (a, b) = (side(&net.a), side(&net.b));
+                todo.extend(a.iter().chain(&b).copied());
+                rows.insert(col, (a, b));
+            }
+        }
+        if let Some(&r) = inside.iter().min() {
+            return Err(format!("{} columns the blocks read are rows of a compression that are no seeds, the first row {r}", inside.len()));
+        }
+        let at = |cols: &[u32]| -> Vec<u32> { cols.iter().map(|c| place[c]).collect() };
+        let msg: Vec<Vec<BitForm>> = msgs.iter().map(|m| m.iter().map(|f| BitForm { cols: at(&f.cols), flip: f.flip }).collect()).collect();
+        let mut steps = Vec::with_capacity(rows.len() + comps.len());
+        let mut k = 0;
+        for (r, (a, b)) in &rows {
+            while k < comps.len() && starts[k] <= *r {
+                steps.push(Step::Comp(k));
+                k += 1;
+            }
+            steps.push(Step::Row(place[r], at(a), at(b)));
+        }
+        steps.extend((k..comps.len()).map(Step::Comp));
+        let plan = UnitHashPlan { comps, cv: cvs, msg, steps, inputs, seed_at, places: places as usize };
+        // the plan on the first batch's first 32 slots against the host's z
+        let got = plan.seeds(32, |col| input(0, col as usize) as u32);
+        let off = plan.comps.iter().flat_map(|c| c.seeds()).zip(&got).filter(|&(r, &z)| zs[r as usize][0] as u32 != z).count();
+        if off > 0 {
+            return Err(format!("the plan's seeds differ from the host's z at {off} of {} seed rows in the slots it was derived on", got.len()));
+        }
+        Ok(plan)
+    }
+
+    /// The rows between the compressions the plan evaluates, the unit input columns it reads, and the most columns a
+    /// block's bit is an XOR of.
+    pub fn size(&self) -> (usize, usize, usize) {
+        (self.steps.iter().filter(|s| matches!(s, Step::Row(..))).count(), self.inputs.len(),
+         self.msg.iter().flatten().map(|f| f.cols.len()).max().unwrap_or(0))
+    }
+
+    /// The seeds' z in `lanes` slots (at most 32; bit l is slot l's), in the compressions' and [`UnitComp::seeds`]' order,
+    /// from the unit's inputs alone: `input(col)` is input column `col` in the slots.
+    pub fn seeds(&self, lanes: usize, input: impl Fn(u32) -> u32) -> Vec<u32> {
+        assert!(lanes <= 32, "UnitHashPlan::seeds: at most 32 slots");
+        let mut v = vec![0u32; self.places];
+        v[0] = !0;
+        for &(col, at) in &self.inputs {
+            v[at as usize] = input(col);
+        }
+        let fold = |v: &[u32], cols: &[u32]| cols.iter().fold(0u32, |x, &c| x ^ v[c as usize]);
+        let mut out = Vec::with_capacity(self.seed_at.iter().map(Vec::len).sum());
+        let mut outs: Vec<Vec<[u64; 8]>> = Vec::with_capacity(self.comps.len());
+        for step in &self.steps {
+            match step {
+                Step::Row(at, a, b) => {
+                    let z = fold(&v, a) & fold(&v, b);
+                    v[*at as usize] = z;
+                }
+                Step::Comp(k) => {
+                    let (c, seed_at) = (&self.comps[*k], &self.seed_at[*k]);
+                    let mut msg = vec![[0u64; 16]; lanes];
+                    for (bit, f) in self.msg[*k].iter().enumerate() {
+                        let x = fold(&v, &f.cols) ^ if f.flip { !0 } else { 0 };
+                        for (l, m) in msg.iter_mut().enumerate() {
+                            m[bit / 64] |= u64::from(x >> l & 1) << (bit % 64);
+                        }
+                    }
+                    let mut z = vec![0u32; seed_at.len()];
+                    let mut o = Vec::with_capacity(lanes);
+                    for (l, m) in msg.iter().enumerate() {
+                        let cv = match &self.cv[*k] {
+                            CvFrom::Const(cv) => *cv,
+                            CvFrom::Out(j) => outs[*j][l],
+                            CvFrom::Other => unreachable!("a plan has no such chaining value"),
+                        };
+                        let mut s = 0;
+                        let st = c.seed_bits(&cv, m, |bit| {
+                            z[s] |= u32::from(bit) << l;
+                            s += 1;
+                        });
+                        o.push(std::array::from_fn(|j| cv[j].wrapping_add(st[j])));
+                    }
+                    seed_at.iter().zip(&z).for_each(|(&at, &z)| v[at as usize] = z);
+                    out.extend(z);
+                    outs.push(o);
+                }
+            }
+        }
+        out
+    }
+}
+
 /// The compressions among `net`'s rows, in row order, by shape alone. A committed word is 64 rows in a row whose B is the
 /// constant column, with none before or after; a round ends in two of them, `e` then `a`, an addition's rows apart; a
 /// compression's rounds follow each other within a round's rows, and its last four rounds' words are the state its
@@ -552,7 +902,8 @@ pub fn unit_compressions(net: &IrUnitNet) -> Vec<UnitComp> {
     }
     let add = |s: usize| (0..ADD_ROWS).all(|k| commit(s + k) == (k < 72 && k % 6 == 5));
     let rounds: Vec<(usize, usize)> = words.windows(2).filter(|w| w[1] == w[0] + 64 + ADD_ROWS && add(w[0] + 64)).map(|w| (w[0], w[1])).collect();
-    let reads = |r: usize, c: usize| net.a.row(r).contains(&(c as u32)) || net.b.row(r).contains(&(c as u32));
+    // the highest bit of the word at `w` that row `r` reads
+    let top = |r: usize, w: usize| net.a.row(r).iter().chain(net.b.row(r)).map(|&c| c as usize).filter(|c| (w..w + 64).contains(c)).max().map(|c| c - w);
     let mut out = Vec::new();
     let mut k = 0;
     while k < rounds.len() {
@@ -563,13 +914,14 @@ pub fn unit_compressions(net: &IrUnitNet) -> Vec<UnitComp> {
         if k - s >= 3 {
             let state = [rounds[k].1, rounds[k - 1].1, rounds[k - 2].1, rounds[k - 3].1, rounds[k].0, rounds[k - 1].0, rounds[k - 2].0, rounds[k - 3].0];
             let start = rounds[k].1 + 64;
-            // each word's addition: bit i's carry row reads the state word's bit i (a bit folded with a constant chaining
-            // value has no row), and a committed carry reads rows of the last four rounds and the feed-forward only
+            // each word's addition: bit i's carry row reads the state word's bit i and none above it (below it, where a
+            // constant chaining value left the carry a bit of the word; a bit folded with one has no row), and a committed
+            // carry reads rows of the last four rounds and the feed-forward only
             let mut p = start;
             let mut ff_rows = Vec::new();
             for (j, w) in state.into_iter().enumerate() {
                 for i in 0..63 {
-                    if p < cp && !commit(p) && reads(p, w + i) {
+                    if p < cp && !commit(p) && top(p, w) == Some(i) {
                         ff_rows.push((j as u8, i as u8, false));
                         p += 1;
                     }
@@ -971,6 +1323,70 @@ mod tests {
             eprintln!("skipped: python3 could not build the slot circuits from {}", repo.display());
         }
         nets
+    }
+
+    /// A unit of three compressions as the gadgets write one: two in a chain over input bits and constants from the
+    /// initial value, a swap of their output and more input bits on an input bit, and a third over the swap. `None` without
+    /// Python and the verity packages.
+    fn chain_circuit() -> Option<IrUnitNet> {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).canonicalize().ok()?.join("../../../../..");
+        let dir = std::env::temp_dir().join(format!("sha512-native-chain-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).ok()?;
+        let py = format!(
+            "import sys\nsys.path[:0] = ['{r}/verity/protocols/flock/prover/python', '{r}', '{r}/catalog', '{r}/kernels', '{r}/experimental', '{r}/benchmarks/numerical/python']\n\
+             from verity_flock import ir_lower as IL, sha512_circuit as S\nfrom verity_flock.gf2 import Circuit, const_bits\n\
+             C = Circuit()\nm, d = C.input('m', 2048), C.input('d', 128)\nw = S._words(m, 32)\niv = [const_bits(v, 64) for v in S.IV]\n\
+             h = S.compress_gadget(C, iv, w[:16])\n\
+             h = S.compress_gadget(C, h, w[16:24] + [const_bits((0x0123456789abcdef * (i + 3)) % 2**64, 64) for i in range(8)])\n\
+             x = [b for v in h for b in v]\ny = [b for v in w[24:32] for b in v]\nt = [C.AND(d[0], x[i] ^ y[i]) for i in range(512)]\n\
+             g = S.compress_gadget(C, iv, S._words([x[i] ^ t[i] for i in range(512)] + [y[i] ^ t[i] for i in range(512)], 16))\n\
+             C.output('out', [b for v in g for b in v])\n\
+             open('{d}/chain.txt', 'w').write(IL.netlist(IL.layout(C, ['m', 'd'], ['out']), 'chain', None, None))\n",
+            r = repo.display(), d = dir.display());
+        let ok = std::process::Command::new("python3").arg("-c").arg(py).status().ok()?.success();
+        let net = ok.then(|| IrUnitNet::load(dir.join("chain.txt").to_str().unwrap()));
+        let _ = std::fs::remove_dir_all(&dir);
+        if net.is_none() {
+            eprintln!("skipped: python3 could not build the chain circuit from {}", repo.display());
+        }
+        net
+    }
+
+    /// The plan derived from a unit's rows gives every seed from the unit's inputs alone, in slots it was not derived on,
+    /// and the walk on the cut schedule takes them: the host builder's words. A plan with one block bit wrong gives a seed
+    /// the walk refuses.
+    #[test]
+    fn a_hash_plan_gives_the_seeds_from_the_inputs() {
+        use crate::circuit::{unit_ab_into, unit_ab_seeded};
+        use crate::ir_block::schedule_seeded;
+        let Some(net) = chain_circuit() else { return };
+        let comps = unit_compressions(&net);
+        let found: Vec<usize> = comps.iter().map(|c| c.rounds).collect();
+        assert_eq!(comps.len(), 3, "chain: three compressions, rounds found {found:?}");
+        let plan = UnitHashPlan::derive(&net, comps.clone()).unwrap_or_else(|e| panic!("chain: {e}"));
+        assert_eq!(plan.cv, [CvFrom::Const(SHA512_IV), CvFrom::Out(0), CvFrom::Const(SHA512_IV)]);
+        let (rows, inputs, longest) = plan.size();
+        eprintln!("chain: {} rows, rounds found {found:?}; the plan evaluates {rows} rows between the compressions and reads {inputs} input columns; \
+                   a block bit is an XOR of at most {longest} columns", net.useful);
+        assert_eq!((rows, inputs), (512, 16 * 64 + 8 * 64 + 8 * 64 + 1), "chain: the swap's rows, and the input bits the blocks and the swap read");
+        let seeds: Vec<u32> = comps.iter().flat_map(|c| c.seeds()).collect();
+        let cut = schedule_seeded(&net, &seeds);
+        let uw = 1usize << (net.unit_log - 7);
+        let slots = 45;
+        let bit = |l: usize, col: usize| splitmix(0xabcd ^ ((l as u64) << 32) ^ col as u64) & 1;
+        let ins: Vec<Vec<F128>> = (0..slots).map(|l| (0..net.in_words).map(|w| {
+            let half = |h: usize| (0..64).fold(0u64, |x, i| x | (bit(l, WORD * w + 64 * h + i) << i));
+            F128::new(half(0), half(1))
+        }).collect()).collect();
+        let seed_z = |g: usize| plan.seeds((slots - 32 * g).min(32), |col| (32 * g..(32 * g + 32).min(slots)).fold(0u32, |x, l| x | ((bit(l, col as usize) as u32) << (l - 32 * g))));
+        let (mut want, mut got) = (vec![0u64; 4 * uw * slots], vec![!0u64; 4 * uw * slots]);
+        assert!(unit_ab_into(&net, 0, uw, &ins, &mut want), "chain: z = a & b");
+        assert_eq!(unit_ab_seeded(&net, &cut, &seeds, seed_z, uw, &ins, &mut got), Some(true), "chain: the cut walk on the plan's seeds");
+        assert!(got == want, "chain: the cut walk's packed a, b words");
+        let mut bad = plan.clone();
+        bad.msg[2][64 * 9 + 17].flip ^= true;
+        let off = |g: usize| bad.seeds((slots - 32 * g).min(32), |col| (32 * g..(32 * g + 32).min(slots)).fold(0u32, |x, l| x | ((bit(l, col as usize) as u32) << (l - 32 * g))));
+        assert_eq!(unit_ab_seeded(&net, &cut, &seeds, off, uw, &ins, &mut got), Some(false), "chain: a plan with a block bit wrong");
     }
 
     fn plan_digest(p: &NativeSha) -> String {
