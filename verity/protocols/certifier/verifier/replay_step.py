@@ -824,7 +824,8 @@ ENGINE_DRAFT = ("num_speculative_tokens", "speculative", "num_lookahead_tokens",
 #: The keys the step models at these values alone. A ``scheduler`` also has to agree with ``async_scheduling``.
 ENGINE_HELD = {"policy": ("fcfs",), "scheduler": ("Scheduler", "AsyncScheduler")}
 #: The keys that leave the scheduler's steps as they are, each with why. They bind at any value.
-ENGINE_INERT = {"max_num_partial_prefills": "vLLM's v1 scheduler does not read it"}
+ENGINE_INERT = {"max_num_partial_prefills": "the scheduler the step models does not read it",
+                "kv_cache_dtype": "the binding reads the pool's size in blocks (num_gpu_blocks) directly"}
 
 
 def _refuse_unmodeled(e: dict) -> None:

@@ -26,7 +26,7 @@ REPLAY = {"max_num_seqs": 4, "max_num_batched_tokens": 256, "max_model_len": 512
           "long_prefill_token_threshold": 0, "enable_chunked_prefill": True, "enable_prefix_caching": False,
           "async_scheduling": False, "watermark": 0.0, "scheduler_reserve_full_isl": True, "policy": "fcfs"}
 MODELED = {"sync serve": SERVED, "async serve": SERVED_ASYNC, "replay": REPLAY, "demo": CS.DEMO_ENGINE,
-           "partial prefills": {**SERVED, "max_num_partial_prefills": 4},
+           "partial prefills": {**SERVED, "max_num_partial_prefills": 4}, "kv format": {**SERVED_ASYNC, "kv_cache_dtype": "fp8"},
            "watermark": {**REPLAY, "watermark": 0.25, "scheduler_reserve_full_isl": False, "long_prefill_token_threshold": 32}}
 
 #: a set value of each draft key
