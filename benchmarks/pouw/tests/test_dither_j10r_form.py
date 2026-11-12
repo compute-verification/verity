@@ -13,11 +13,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import serve as SV
 import torch
 
+from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.prover.circuit import h1tile as HT
 
 DITHER = Path(__file__).resolve().parents[2] / "hash" / "dither"
 SALT, RA, RB = (hashlib.sha512(x).digest() for x in (b"salt", b"A", b"B"))
@@ -37,21 +38,6 @@ def dither(name: str):
     finally:
         sys.path[:] = path
         sys.modules.pop(name, None)
-
-
-@functools.cache
-def served(name: str):
-    """`benchmarks/pouw/served_h1/<name>.py`, imported as dither imports it (served_h1 on sys.path); sys.path is restored
-    and the served_h1 modules it loaded are dropped from sys.modules."""
-    here, path, before = DITHER.parents[1] / "pouw" / "served_h1", list(sys.path), set(sys.modules)
-    sys.path.insert(0, str(here))
-    try:
-        return __import__(name)
-    finally:
-        sys.path[:] = path
-        for m in set(sys.modules) - before:
-            if Path(getattr(sys.modules[m], "__file__", None) or "/").parent == here:
-                sys.modules.pop(m)
 
 
 def _units(m: int, n: int) -> list[tuple[int, int]]:
@@ -77,10 +63,9 @@ def test_each_units_blocks_are_the_ones_credit_derives_at_the_slot(m):
 
 @pytest.mark.parametrize("t", [64, 2048])
 def test_each_calls_first_position_is_credits_u0(t):
-    """The arm's call w of step s starts at s U + off(w) (`serve.static_layout`, dither's `u_step` and `offs`): credit's
-    u0 for that call, the sum of `credit.call_work`'s sizes before it in the window's layout at M = T (two layers of
-    Llama-3.1-8B's linears, three steps)."""
-    SV = served("serve")
+    """The arm's call w of step s starts at s U + off(w) (served_h1's `serve.static_layout`, dither's `u_step` and
+    `offs`): credit's u0 for that call, the sum of `credit.call_work`'s sizes before it in the window's layout at M = T
+    (two layers of Llama-3.1-8B's linears, three steps)."""
     names = [f"{x}{layer}" for layer in range(2) for x in ("qkv", "o", "gate_up", "down")]
     nk = LLAMA * 2
     steps = 3
