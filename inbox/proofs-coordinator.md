@@ -83612,3 +83612,596 @@ Each run and what I read in it:
 **One thing about my VM:** its checkout and `/tmp` were reset between my turns. Both branches were pushed, so nothing was lost; I rebuilt the worktrees from `origin`.
 
 **What I need:** the mark on #9199 at `ce7dab0ab39c`, if this reads right to you.
+
+## SESSIONS, Thu 12 Nov 10:33Z: with each proof block's own proving seconds as a third axis, no one change gets under 300 GB at any share of the head's table taken as fixed; `main` as timed, the fold and the one pass are 933.8, 710.8 and 683.5 GB at every share, and (c) as timed is still 683.5 GB. The head's quarter statement must take at least 2.07 of the full table's 2.86 GPU-s for lower fixed seconds alone to have a cell under 300 GB; otherwise it takes the prover's seconds on a table about 3.2 times lower, fixed and per block together, which is neither built nor timed. Modeled throughout
+
+Everything below is modeled: arithmetic on the cost model of the kit of COUNT's run `r20261112-054659-8921` at tree
+`c8b46edd10e4`, each figure a design of the planner. Nothing ran on the served engine, no session of these shapes has
+run, and **no cell under 300 GB is a figure to quote as reachable**: each rests on changes that are neither built nor
+timed and on a division of the head's prover seconds that no timing is behind [relayed: COUNT 10:00Z]. Runs:
+`r20261112-100124-8460` (`art:fb56dae505af8a3dfcf69a70632b52215ac6463200c8835f5cad40f17aafc9c6`) and
+`r20261112-102141-c21f` (`art:45ffec380ef3b91609a3488e5d0e9d6e0500ab46cec08613dc54085881074183`), both exit 0. Mailbox reread at 10:32Z: its newest
+section is the coordinator's of 10:13Z, and this entry follows it (three more shares, the rows as timed on `main` at
+each, the quarter statement in seconds, larger tables at each share).
+
+### For Daniel
+
+1. All of this is arithmetic on the cost model, and at every share of the head's table taken as fixed (0.71 as the
+   cost model computes it, 0.66 and 0.61 as fitted on the two block types of the head's size, 0.30 as fitted on the
+   MoE blocks, 0.25 to 0.17 as read off the proof server's timers) it gives the same three bounds: 934 GB as timed on
+   `main`, 711 GB with the faster check and 684 GB with its one-pass form, both built on branches and timed tonight
+   and neither on `main`.
+2. The share decides only what is left to gain, and no timing is behind any of them, so the number to buy card time
+   for is the head's quarter statement: lowering fixed seconds alone can give a cell under 300 GB only if it takes at
+   least 2.07 of the full table's 2.86 GPU-seconds (a share of 0.63), which the 0.71 and 0.66 shares predict (2.24
+   and 2.13 s) and the 0.61, 0.30 and 0.25 to 0.17 shares do not (2.02, 1.36 and 1.25 to 1.08 s).
+3. Even over that line those cells are a verifier and a proof server with almost no fixed seconds, so at every share
+   the nearest cell under 300 GB with 100 bits or more keeps the one-pass check and asks two more things: at shares
+   0.71 to 0.61 the prover's fixed seconds a table at a quarter and each proof block proved about three times faster
+   (287 to 291 GB), at 0.30 and 0.25 the same with each block four times faster (261 GB), and at 0.17 the fixed
+   seconds at a half with each block four times faster (296 GB).
+4. Said without the share: with the one-pass check the prover's seconds on a table, fixed and per block together,
+   have to be about 3.2 times lower, and since neither a lower fixed cost in the prover nor faster proving of a
+   block is built or timed, none of those figures is reachable today.
+5. Larger tables alone get under 300 GB at no share: tables of 2, 4 and 8 times the proof blocks, with the faster
+   check, give 480, 378 and 329 GB at 0.71, 494, 395 and 342 GB at 0.66, 508, 404 and 355 GB at 0.61, 555, 480 and
+   444 GB at 0.30, 555, 494 and 456 GB at 0.25, and 573, 508 and 480 GB at 0.17.
+6. Tables four times as large with each block proved twice as fast would be 254 to 296 GB across the six shares, but
+   that needs proof-system parameters for larger tables (neither built nor timed), the wide first-level leaves to
+   keep 100 bits (an open pull request), and the assumption, which nothing supports, that a larger table costs the
+   same fixed seconds.
+
+### 0. What ran, and how to read a figure
+
+- **Runs** [run]. `r20261112-100124-8460` on vy-nebius-cpu-1: `wires_axis.py`, a script beside `wires_fold.py` (which
+  it loads unchanged; both are run inputs, not repository files). 887 designs; 4 of 4 rows as priced give back run 8921's designs and run `bd0d`'s bits; 72 of 72 rows that my last run `5cb2` also has are the same designs. `r20261112-102141-c21f` on
+  vy-nebius-cpu-11: the same script's second part, written after the 10:13Z section. 1043 designs; 4 of 4 rows as priced give back run 8921's designs and run `bd0d`'s bits; 10 of 10 rows that the first run `8460` also has are the same designs. Outputs:
+  `out/sessions_axis.json`, `out/sessions_axis2.json`, each with its log and `out/inputs.sha256`.
+- **The row** is row C (a kept verifier process with the circuit file kept: a block type's first session pays its
+  read and its check, each later one its check), the best designed configuration (258 block types, 130 of them the
+  head's units), one table a session, the head's read not counted (head at 160).
+- **Three axes**, each a multiplier on every one of the 258 block types:
+  - `v`, a later session's seconds in the Lean verifier. Named by pricing: (b) the fold as timed, 38.89 s on the head
+    [relayed: FOLD 08:22Z]; (c) the fold with the one pass as timed, 31.5 s on the head and the fold's seconds on MoE
+    and the GEMM [relayed: FIXEDCOST 09:40Z]; then 0.2, 0.1, 0.05 and 0.01 of `main`'s timed seconds (118.76 s on
+    the head) and none.
+  - `p`, the prover's seconds fixed a table.
+  - `b`, the prover's seconds a proof block: the new axis.
+- **The share** is how a full table of a head unit's prover seconds divides into seconds fixed a table and its
+  blocks' own. A full table of the head block's type is 2.8555 GPU-s, one timing at one prover [relayed: COUNT
+  10:00Z, `r20261111-015333-38d6`]. Six shares:
+  - `kit`: the kit's cells as they are, 0.7115 at the head block's type. A computed proportion, not a timing
+    [relayed: COUNT 10:00Z].
+  - 0.66 and 0.61: the two-point fits of the two block types of the head's size, 256 blocks a statement; 0.30: the
+    fit of the fused MoE blocks, 1,024 blocks a statement [relayed: COUNT 10:00Z].
+  - 0.25 and 0.17: 0.9 and 0.6 s of the 3.57 s session of the kept proof server's timers [relayed: FIXEDCOST 07:31Z].
+  - At a share other than `kit` all 130 head unit types are set to it; the other 128 types keep the kit's cells.
+  - A share s says the same as "a quarter statement of the head, 64 of its 256 blocks, takes 2.8555 × (1 + 3s)/4
+    GPU-s" [derived from the two-point rule COUNT wrote out, fixed = (4·T_quarter − 2.8555)/3].
+- **K is whole, so figures repeat.** At the planner's rate GB is 17,771/K (section 3), so 300 GB is K ≥ 60 (296.2 GB;
+  K 59 is 301.2 GB); (c) is K 26.
+- **Bits.** In parentheses: the one-wait trace (#9149, open). All changes adds the wide level-0 leaves (#9108, open).
+  1512 cells over the six shares, a design in each; all-changes bits minus one-wait bits is 4.00 to 4.00 in every cell; 106 cells are under 100 one-wait bits, every one of them at 125.1 GB or less (97.84 bits at the least, at 48.9 GB), and every cell at 126.0 GB or more has them; the least all-changes bits in the grid is 101.84 [run].
+- **Marks.** Bold: under 300 GB with 100 one-wait bits or more. †: under 300 GB with fewer than 100 one-wait bits.
+
+### 1. The third axis: each proof block's own proving seconds
+
+#### 1.1 The summary by share
+
+| share of a full head table fixed | a quarter statement would take, GPU-s | a full head table: fixed + its blocks' own, GPU-s | as timed on `main` | (b) the fold | (c) the one pass | every fixed second of both sides at zero | the nearest cell under 300 GB (rule in 1.2), with the verifier at (b) or (c) | its GB (one-wait bits) |
+|---|---|---|---|---|---|---|---|---|
+| the kit's split (0.7115 at the head block's type) | 2.238 | 2.031 + 0.824 | 933.8 | 710.8 | 683.5 | **273.4 (101.12)** | (c) the one pass, 31.5 s; prover's fixed ×0.25; blocks ×0.35 | 286.6 (101.19) |
+| 0.66 fixed | 2.127 | 1.884 + 0.971 | 933.8 | 710.8 | 683.5 | **291.3 (101.22)** | (c) the one pass, 31.5 s; prover's fixed ×0.25; blocks ×0.35 | 286.6 (101.19) |
+| 0.61 fixed | 2.020 | 1.742 + 1.114 | 933.8 | 710.8 | 683.5 | 306.4 (101.29) | (c) the one pass, 31.5 s; prover's fixed ×0.25; blocks ×0.35 | 291.3 (101.22) |
+| 0.30 fixed | 1.356 | 0.857 + 1.999 | 933.8 | 710.8 | 683.5 | 403.9 (101.69) | (c) the one pass, 31.5 s; prover's fixed ×0.25; blocks ×0.25 | 261.3 (101.06) |
+| 0.25 fixed | 1.249 | 0.714 + 2.141 | 933.8 | 710.8 | 683.5 | 423.1 (101.76) | (c) the one pass, 31.5 s; prover's fixed ×0.25; blocks ×0.25 | 261.3 (101.06) |
+| 0.17 fixed | 1.078 | 0.485 + 2.370 | 933.8 | 710.8 | 683.5 | 444.3 (101.83) | (c) the one pass, 31.5 s; prover's fixed ×0.5; blocks ×0.25 | 296.2 (101.24) |
+
+- **The three timed rows are the same at every share** [run: K for the three rows, by share: kit: K 38 / 25 / 26; 0.66: K 38 / 25 / 26; 0.61: K 38 / 25 / 26; 0.3: K 38 / 25 / 26; 0.25: K 38 / 25 / 26; 0.17: K 38 / 25 / 26]. A share divides a full table's
+  seconds, and every session's table is full (0.999 to 1.000 [run: `5cb2`]), so what a session costs does not move.
+  The share decides only what lowering one part would give.
+- With all 130 head unit types at one share of 0.7115 instead of the kit's own cells the rows are the same again,
+  933.8 / 710.8 / 683.5 GB, and so are the larger tables as timed on `main`, 592.4 / 433.4 / 355.4 GB [run].
+- The last two columns are cells of the model, not offers: `p` and `b` below 1 are neither built nor timed.
+
+#### 1.2 The cell under 300 GB that asks the least
+
+**The rule.** Among the cells under 300 GB with 100 one-wait bits or more, the largest product v·p·b, each factor
+counted from what is built and timed. `p` and `b` are the multipliers. `v` is the cell's seconds for one later
+session of every block type over (c)'s 5,874 core-s (`main`'s as timed is 19,490, the fold's 6,951 [run on my VM:
+the model's seconds, no design]): 1 at (b) and (c), 0.66 at 0.2 of `main`'s, 0.33 at 0.1, 0.17 at 0.05. I print the
+largest product, and the largest among the cells that ask nothing new of the verifier.
+
+| share | rule | verifier | prover's fixed × | blocks × | product | GB | K | sampled proof blocks | sessions | bits, one-wait | bits, all changes | budget: prover's fixed / verifier's / blocks / replay |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| kit | largest product | (c) the one pass, 31.5 s | 0.25 | 0.35 | 0.0875 | 286.6 | 62 | 3,877,574,116 | 3,199,485 | 101.19 | 105.19 | 26.3% / 32.6% / 29.3% / 11.1% |
+| kit | next at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 28.9% / 35.8% / 23.0% / 12.2% |
+| kit | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 26.7% / 39.9% / 21.3% / 11.3% |
+| 0.66 | largest product | (c) the one pass, 31.5 s | 0.25 | 0.35 | 0.0875 | 286.6 | 62 | 3,877,574,116 | 3,199,485 | 101.19 | 105.19 | 24.9% / 32.6% / 31.3% / 11.1% |
+| 0.66 | next at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 27.3% / 35.8% / 24.5% / 12.2% |
+| 0.66 | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 25.3% / 39.9% / 22.7% / 11.3% |
+| 0.61 | largest product | (c) the one pass, 31.5 s | 0.25 | 0.35 | 0.0875 | 291.3 | 61 | 3,815,032,598 | 3,147,881 | 101.22 | 105.22 | 23.2% / 32.1% / 32.7% / 10.9% |
+| 0.61 | next at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 25.8% / 35.8% / 26.0% / 12.2% |
+| 0.61 | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 23.9% / 39.9% / 24.1% / 11.3% |
+| 0.3 | largest product | 0.2 of `main`'s, 23.75 s | 0.5 | 0.25 | 0.0829 | 277.7 | 64 | 4,002,657,152 | 3,302,677 | 101.15 | 105.15 | 31.1% / 23.6% / 33.2% / 11.5% |
+| 0.3 | largest product at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 16.5% / 35.8% / 35.3% / 12.2% |
+| 0.3 | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 15.3% / 39.9% / 32.7% / 11.3% |
+| 0.3 | next at (b) or (c) | (c) the one pass, 31.5 s | 0.5 | 0.1 | 0.0500 | 250.3 | 71 | 4,440,447,778 | 3,663,920 | 101.00 | 105.00 | 34.5% / 37.4% / 14.7% / 12.7% |
+| 0.25 | largest product | 0.2 of `main`'s, 23.75 s | 0.5 | 0.25 | 0.0829 | 273.4 | 65 | 4,065,198,670 | 3,354,280 | 101.12 | 105.12 | 28.8% / 24.0% / 35.2% / 11.7% |
+| 0.25 | largest product at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 15.0% / 35.8% / 36.8% / 12.2% |
+| 0.25 | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 13.9% / 39.9% / 34.1% / 11.3% |
+| 0.25 | next at (b) or (c) | (c) the one pass, 31.5 s | 0.5 | 0.1 | 0.0500 | 243.4 | 73 | 4,565,530,814 | 3,767,121 | 100.96 | 104.96 | 32.3% / 38.4% / 15.8% / 13.1% |
+| 0.17 | largest product | (c) the one pass, 31.5 s | 0.5 | 0.25 | 0.1250 | 296.2 | 60 | 3,752,491,080 | 3,096,266 | 101.24 | 105.24 | 22.3% / 31.6% / 34.6% / 10.8% |
+| 0.17 | next at (b) or (c) | (c) the one pass, 31.5 s | 0.25 | 0.25 | 0.0625 | 261.3 | 68 | 4,252,823,224 | 3,509,099 | 101.06 | 105.06 | 12.6% / 35.8% / 39.2% / 12.2% |
+| 0.17 | next at (b) or (c) | (b) the fold, 38.89 s | 0.25 | 0.25 | 0.0625 | 282.1 | 63 | 3,940,115,634 | 3,251,086 | 101.17 | 105.17 | 11.7% / 39.9% / 36.3% / 11.3% |
+
+Each share's one-axis rows and the line that gives the frontier between cells [run for the cells; derived for the
+line, from (c)'s shares of the budget and a replay's fixed cost a sampled replay block]:
+
+- **The kit's split (0.7115 at the head block's type)**: 142 of 252 cells are under 300 GB, 119 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 634.7, ×0.5 573.3, ×0.35 538.5, ×0.25 507.7, ×0.1 480.3, ×0.05 467.7, ×0 455.7.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 538.5, ×0.25 467.7, ×0.1 423.1, ×0.05 403.9, ×0 386.3.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 612.8, ×0.5 555.3, ×0.35 522.7, ×0.25 493.6, ×0.1 455.7, ×0.05 444.3, ×0 433.4.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 522.7, ×0.25 444.3, ×0.1 403.9, ×0.05 386.3, ×0 370.2.
+  - From (c)'s shares at K 26: K 60 needs 44.1·p + 13.7·v + 35.2·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 no factor does; ×0.5 ×0.08; ×0.25 ×0.40; ×0.1 ×0.59; ×0 ×0.71; with every fixed second of both sides at zero ×1.10.
+- **0.66 fixed**: 136 of 252 cells are under 300 GB, 115 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 634.7, ×0.5 573.3, ×0.35 522.7, ×0.25 507.7, ×0.1 467.7, ×0.05 444.3, ×0 433.4.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 555.3, ×0.25 480.3, ×0.1 433.4, ×0.05 423.1, ×0 403.9.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 612.8, ×0.5 555.3, ×0.35 507.7, ×0.25 480.3, ×0.1 444.3, ×0.05 433.4, ×0 413.3.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 538.5, ×0.25 455.7, ×0.1 413.3, ×0.05 403.9, ×0 386.3.
+  - From (c)'s shares at K 26: K 60 needs 41.8·p + 13.7·v + 37.5·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 no factor does; ×0.5 ×0.11; ×0.25 ×0.39; ×0.1 ×0.55; ×0 ×0.67; with every fixed second of both sides at zero ×1.03.
+- **0.61 fixed**: 133 of 252 cells are under 300 GB, 115 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 634.7, ×0.5 555.3, ×0.35 522.7, ×0.25 493.6, ×0.1 444.3, ×0.05 433.4, ×0 423.1.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 555.3, ×0.25 493.6, ×0.1 444.3, ×0.05 433.4, ×0 423.1.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 612.8, ×0.5 538.5, ×0.35 493.6, ×0.25 467.7, ×0.1 423.1, ×0.05 413.3, ×0 403.9.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 538.5, ×0.25 467.7, ×0.1 433.4, ×0.05 413.3, ×0 403.9.
+  - From (c)'s shares at K 26: K 60 needs 39.5·p + 13.7·v + 39.8·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 no factor does; ×0.5 ×0.13; ×0.25 ×0.38; ×0.1 ×0.53; ×0 ×0.63; with every fixed second of both sides at zero ×0.97.
+- **0.30 fixed**: 120 of 252 cells are under 300 GB, 105 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 612.8, ×0.5 507.7, ×0.35 455.7, ×0.25 413.3, ×0.1 355.4, ×0.05 341.8, ×0 323.1.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 612.8, ×0.25 573.3, ×0.1 538.5, ×0.05 522.7, ×0 522.7.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 592.4, ×0.5 493.6, ×0.35 433.4, ×0.25 394.9, ×0.1 335.3, ×0.05 317.3, ×0 301.2.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 592.4, ×0.25 538.5, ×0.1 522.7, ×0.05 507.7, ×0 507.7.
+  - From (c)'s shares at K 26: K 60 needs 25.3·p + 13.7·v + 54.0·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 no factor does; ×0.5 ×0.23; ×0.25 ×0.35; ×0.1 ×0.42; ×0 ×0.46; with every fixed second of both sides at zero ×0.72.
+- **0.25 fixed**: 121 of 252 cells are under 300 GB, 107 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 592.4, ×0.5 507.7, ×0.35 444.3, ×0.25 403.9, ×0.1 341.8, ×0.05 323.1, ×0 306.4.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 612.8, ×0.25 573.3, ×0.1 555.3, ×0.05 538.5, ×0 538.5.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 573.3, ×0.5 480.3, ×0.35 423.1, ×0.25 386.3, ×0.1 323.1, ×0.05 306.4, ×0 286.6.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 592.4, ×0.25 555.3, ×0.1 538.5, ×0.05 522.7, ×0 522.7.
+  - From (c)'s shares at K 26: K 60 needs 23.0·p + 13.7·v + 56.3·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 ×0.04; ×0.5 ×0.24; ×0.25 ×0.34; ×0.1 ×0.40; ×0 ×0.44; with every fixed second of both sides at zero ×0.69.
+- **0.17 fixed**: 121 of 252 cells are under 300 GB, 106 of them with 100 one-wait bits or more; with one axis moved from (b) or (c): none.
+  - Blocks alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.75 592.4, ×0.5 493.6, ×0.35 423.1, ×0.25 386.3, ×0.1 323.1, ×0.05 301.2, ×0 277.7.
+  - The prover's fixed alone, at (b) the fold, 38.89 s: ×1 710.8, ×0.5 634.7, ×0.25 592.4, ×0.1 573.3, ×0.05 573.3, ×0 555.3.
+  - Blocks alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.75 573.3, ×0.5 467.7, ×0.35 403.9, ×0.25 362.7, ×0.1 301.2, ×0.05 282.1, ×0 261.3.
+  - The prover's fixed alone, at (c) the one pass, 31.5 s: ×1 683.5, ×0.5 612.8, ×0.25 573.3, ×0.1 555.3, ×0.05 555.3, ×0 538.5.
+  - From (c)'s shares at K 26: K 60 needs 19.3·p + 13.7·v + 59.9·b ≤ 38.7. With the verifier at (c) the blocks' factor must be at most: prover's fixed ×1 ×0.09; ×0.5 ×0.26; ×0.25 ×0.34; ×0.1 ×0.38; ×0 ×0.42; with every fixed second of both sides at zero ×0.65.
+
+**How much faster, read off these** [derived from the lines; the cells agree at every one I checked]:
+- **Without the split: the prover's seconds on a table as a whole, at ×0.315.** (c)'s prover's fixed and proof
+  blocks are 79.3% of the budget at every share, and K 60 leaves them 25.0%: fixed and blocks alike 3.2 times lower.
+  The cell at `p` 0.25 and `b` 0.25 is 261.3 GB, 101.06 bits, at all six shares [run].
+- **No single axis does it at any share** [run: no such cell in any of the six grids]. With the verifier at (c) and
+  the prover's fixed seconds as they are, no speed of the blocks reaches K 60 at the kit's share, 0.66, 0.61 and
+  0.30; at 0.25 it takes ×0.04 and at 0.17 ×0.09. The prover's fixed seconds alone at zero leave 370.2 to 538.5 GB.
+- **With the prover's fixed seconds at a quarter**, each block's proving has to be at ×0.40, 0.39, 0.38, 0.35, 0.34
+  and 0.34 from the kit's share down to 0.17: about three times faster, and the share hardly matters.
+- **With the prover's fixed seconds at a half**: ×0.08, 0.11, 0.13, 0.23, 0.24, 0.26. Here the share decides.
+- **With every fixed second of both sides at zero**: ×1.10, 1.03, 0.97, 0.72, 0.69, 0.65. At 0.61 and below even
+  that corner needs each block proved faster.
+
+#### 1.3 What the head's quarter statement must show for a cell under 300 GB to exist
+
+The two-axis grid of fixed seconds (the verifier's, the prover's) has a cell under 300 GB only if its corner has
+one: every fixed second of both sides at zero, each block proved as today. A sweep of the share for that corner and
+three cells near it [run: `c21f`, 36 shares from 0.30 to 1.00, a design in each]:
+
+| share | a quarter statement, GPU-s | every fixed second of both sides at zero | the head's check at 1.19 s, the prover's fixed ×0.05 | the head's check at 5.94 s, the prover's fixed ×0.05 | the verifier at (c), the prover's fixed at zero |
+|---|---|---|---|---|---|
+| 0.3 | 1.356 | 403.9 (K 44) | 413.3 (K 43) | 433.4 (K 41) | 507.7 (K 35) |
+| 0.4 | 1.571 | 370.2 (K 48) | 386.3 (K 46) | 403.9 (K 44) | 467.7 (K 38) |
+| 0.5 | 1.785 | 341.8 (K 52) | 355.4 (K 50) | 370.2 (K 48) | 433.4 (K 41) |
+| 0.56 | 1.913 | 323.1 (K 55) | 341.8 (K 52) | 355.4 (K 50) | 413.3 (K 43) |
+| 0.58 | 1.956 | 317.3 (K 56) | 335.3 (K 53) | 348.5 (K 51) | 413.3 (K 43) |
+| 0.6 | 1.999 | 311.8 (K 57) | 329.1 (K 54) | 341.8 (K 52) | 403.9 (K 44) |
+| 0.62 | 2.042 | 301.2 (K 59) | 323.1 (K 55) | 335.3 (K 53) | 394.9 (K 45) |
+| 0.64 | 2.085 | **296.2** (K 60) | 311.8 (K 57) | 329.1 (K 54) | 394.9 (K 45) |
+| 0.66 | 2.127 | **291.3** (K 61) | 306.4 (K 58) | 323.1 (K 55) | 386.3 (K 46) |
+| 0.68 | 2.170 | **282.1** (K 63) | 301.2 (K 59) | 317.3 (K 56) | 378.1 (K 47) |
+| 0.7 | 2.213 | **277.7** (K 64) | **296.2** (K 60) | 311.8 (K 57) | 370.2 (K 48) |
+| 0.72 | 2.256 | **273.4** (K 65) | **291.3** (K 61) | 301.2 (K 59) | 370.2 (K 48) |
+| 0.74 | 2.299 | **265.2** (K 67) | **282.1** (K 63) | **296.2** (K 60) | 362.7 (K 49) |
+| 0.76 | 2.342 | **257.6** (K 69) | **277.7** (K 64) | **291.3** (K 61) | 355.4 (K 50) |
+| 0.8 | 2.427 | **246.8** (K 72) | **265.2** (K 67) | **277.7** (K 64) | 341.8 (K 52) |
+| 0.9 | 2.641 | **214.1** (K 83) | **236.9** (K 75) | **250.3** (K 71) | 311.8 (K 57) |
+| 1 | 2.856 | **183.2** (K 97) | **206.6** (K 86) | **219.4** (K 81) | **277.7** (K 64) |
+
+- **Every fixed second of both sides at zero**: the sweep's first share under 300 GB is 0.64 (the last at or over it 0.62); a sampled replay block's cost is a line in the share to within 0.00% [derived: least squares on the sweep's 36 designs], and the line meets K 60 at a share of **0.634**, a quarter statement of **2.07 GPU-s**.
+- **The head's check at 1.19 s, the prover's fixed ×0.05**: the sweep's first share under 300 GB is 0.7 (the last at or over it 0.68); a sampled replay block's cost is a line in the share to within 0.00% [derived: least squares on the sweep's 36 designs], and the line meets K 60 at a share of **0.692**, a quarter statement of **2.20 GPU-s**.
+- **The head's check at 5.94 s, the prover's fixed ×0.05**: the sweep's first share under 300 GB is 0.74 (the last at or over it 0.72); a sampled replay block's cost is a line in the share to within 0.00% [derived: least squares on the sweep's 36 designs], and the line meets K 60 at a share of **0.736**, a quarter statement of **2.29 GPU-s**.
+- **The verifier at (c), the prover's fixed at zero**: the sweep's first share under 300 GB is 0.94 (the last at or over it 0.92); a sampled replay block's cost is a line in the share to within 0.00% [derived: least squares on the sweep's 36 designs], and the line meets K 60 at a share of **0.933**, a quarter statement of **2.71 GPU-s**.
+
+- **So the number to ask the card for:** the head's quarter statement, 64 blocks on the driver and prover count
+  that gave the full table's 2.8555 GPU-s. **At 2.07 GPU-s or more** (a share of 0.634) the grid of fixed seconds has
+  a cell under 300 GB; under 2.07 it has none, and every cell under 300 GB then needs each block proved faster as
+  well. For a cell that is not the bare corner, a head check of 1.19 s and a twentieth of the prover's fixed
+  seconds, it is **2.20 GPU-s** (0.692); with a 5.94 s check, 2.29 GPU-s, over what the kit's own share predicts.
+- What each share predicts for that timing: the kit's 2.238 s; 0.66 and 0.61, 2.127 and 2.020 s; 0.30, 1.356 s; 0.25
+  and 0.17, 1.249 and 1.078 s. So the kit's share and 0.66 are over the line, 0.66 by one step of K (291.3 GB at K
+  61), and 0.61, 0.30, 0.25 and 0.17 are under it.
+- With the third axis on that corner: a sampled replay block's proof blocks cost 0.843% of the budget outside the head's units and 1.762% × (1 − share) in them, and its replay 0.179% [derived from the sweep]; K 60 with every fixed second at zero then needs a share of at least: blocks ×1: 0.634 (2.07 s); blocks ×0.9: 0.541 (1.87 s); blocks ×0.8: 0.423 (1.62 s); blocks ×0.75: 0.353 (1.47 s); blocks ×0.7: 0.273 (1.30 s); blocks ×0.6: 0.071 (0.87 s); blocks ×0.5: any share.
+- The corner is a bound on the grid and not a design anyone has: it prices a verifier and a proof server with no
+  fixed seconds at all.
+
+#### 1.4 Every fixed second of both sides at zero, by the blocks' factor
+
+| share | blocks ×1 | blocks ×0.9 | blocks ×0.8 | blocks ×0.75 | blocks ×0.7 | blocks ×0.65 | blocks ×0.6 | blocks ×0.55 | blocks ×0.5 | blocks ×0.45 | blocks ×0.4 | blocks ×0.35 | blocks ×0.3 | blocks ×0.25 | blocks ×0.1 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| kit | **273.4 (101.12)** | **250.3 (101.00)** | **225.0 (100.84)** | **214.1 (100.77)** | **201.9 (100.69)** | **189.1 (100.59)** | **177.7 (100.50)** | **164.5 (100.39)** | **153.2 (100.29)** | **141.0 (100.17)** | **128.8 (100.04)** | 116.2 (99.89)† | 104.5 (99.74)† | 92.1 (99.55)† | 48.9 (97.84)† |
+| 0.66 | **291.3 (101.22)** | **265.2 (101.08)** | **236.9 (100.92)** | **225.0 (100.84)** | **211.6 (100.76)** | **199.7 (100.67)** | **187.1 (100.58)** | **174.2 (100.47)** | **160.1 (100.35)** | **148.1 (100.24)** | **134.6 (100.10)** | 121.7 (99.96)† | 109.0 (99.80)† | 96.1 (99.62)† | 51.5 (97.92)† |
+| 0.61 | 306.4 (101.29) | **277.7 (101.15)** | **250.3 (101.00)** | **236.9 (100.92)** | **225.0 (100.84)** | **209.1 (100.74)** | **195.3 (100.64)** | **183.2 (100.55)** | **169.2 (100.43)** | **154.5 (100.30)** | **141.0 (100.17)** | **127.8 (100.03)** | 113.9 (99.86)† | 100.4 (99.68)† | 54.4 (98.00)† |
+| 0.3 | 403.9 (101.69) | 370.2 (101.56) | 329.1 (101.39) | 311.8 (101.31) | **291.3 (101.22)** | **273.4 (101.12)** | **253.9 (101.02)** | **236.9 (100.92)** | **216.7 (100.79)** | **199.7 (100.67)** | **179.5 (100.52)** | **161.6 (100.37)** | **143.3 (100.19)** | 124.3 (99.99)† | 68.9 (99.14)† |
+| 0.25 | 423.1 (101.76) | 378.1 (101.59) | 341.8 (101.45) | 323.1 (101.37) | 301.2 (101.26) | **282.1 (101.17)** | **265.2 (101.08)** | **246.8 (100.98)** | **225.0 (100.84)** | **206.6 (100.72)** | **187.1 (100.58)** | **167.7 (100.42)** | **148.1 (100.24)** | **128.8 (100.04)** | 70.5 (99.17)† |
+| 0.17 | 444.3 (101.83) | 403.9 (101.69) | 362.7 (101.53) | 341.8 (101.45) | 323.1 (101.37) | 301.2 (101.26) | **282.1 (101.17)** | **257.6 (101.04)** | **236.9 (100.92)** | **216.7 (100.79)** | **197.5 (100.66)** | **176.0 (100.49)** | **155.9 (100.31)** | **134.6 (100.10)** | 73.1 (99.22)† |
+
+- kit, blocks ×1: K 65, 4,065,198,670 sampled proof blocks, the proof blocks 87.9% of the budget and replay 11.7%.
+- 0.66, blocks ×1: K 61, 3,815,032,598 sampled proof blocks, the proof blocks 88.0% of the budget and replay 10.9%.
+- 0.61, blocks ×1: K 58, 3,627,408,044 sampled proof blocks, the proof blocks 88.8% of the budget and replay 10.4%.
+- 0.3, blocks ×1: K 44, 2,751,826,792 sampled proof blocks, the proof blocks 91.4% of the budget and replay 7.9%.
+- 0.25, blocks ×1: K 42, 2,626,743,756 sampled proof blocks, the proof blocks 90.9% of the budget and replay 7.5%.
+- 0.17, blocks ×1: K 40, 2,501,660,720 sampled proof blocks, the proof blocks 92.2% of the budget and replay 7.2%.
+
+#### 1.5 The grids: GB (one-wait bits)
+
+**The kit's split (0.7115 at the head block's type)**: a full table of the head block's type is 2.031 GPU-s fixed and 0.824 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 42.4% / 15.9% / 33.8% / 4.5%; (c) 44.1% / 13.7% / 35.2% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 634.7 (102.34) | 573.3 (102.19) | 538.5 (102.10) | 507.7 (102.02) | 480.3 (101.94) |
+| (b) the fold, 38.89 s | 0.5 | 538.5 (102.10) | 480.3 (101.94) | 423.1 (101.76) | 386.3 (101.62) | 362.7 (101.53) | 323.1 (101.37) |
+| (b) the fold, 38.89 s | 0.25 | 467.7 (101.90) | 403.9 (101.69) | 341.8 (101.45) | 306.4 (101.29) | **282.1 (101.17)** | **246.8 (100.98)** |
+| (b) the fold, 38.89 s | 0.1 | 423.1 (101.76) | 355.4 (101.50) | **296.2 (101.24)** | **261.3 (101.06)** | **236.9 (100.92)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 403.9 (101.69) | 341.8 (101.45) | **282.1 (101.17)** | **246.8 (100.98)** | **222.1 (100.83)** | **185.1 (100.56)** |
+| (b) the fold, 38.89 s | 0 | 386.3 (101.62) | 329.1 (101.39) | **265.2 (101.08)** | **230.8 (100.88)** | **206.6 (100.72)** | **169.2 (100.43)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 612.8 (102.29) | 555.3 (102.15) | 522.7 (102.06) | 493.6 (101.98) | 455.7 (101.86) |
+| (c) the one pass, 31.5 s | 0.5 | 522.7 (102.06) | 467.7 (101.90) | 403.9 (101.69) | 362.7 (101.53) | 341.8 (101.45) | 301.2 (101.26) |
+| (c) the one pass, 31.5 s | 0.25 | 444.3 (101.83) | 386.3 (101.62) | 323.1 (101.37) | **286.6 (101.19)** | **261.3 (101.06)** | **225.0 (100.84)** |
+| (c) the one pass, 31.5 s | 0.1 | 403.9 (101.69) | 341.8 (101.45) | **277.7 (101.15)** | **240.2 (100.94)** | **216.7 (100.79)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 386.3 (101.62) | 323.1 (101.37) | **261.3 (101.06)** | **225.0 (100.84)** | **201.9 (100.69)** | **164.5 (100.39)** |
+| (c) the one pass, 31.5 s | 0 | 370.2 (101.56) | 306.4 (101.29) | **246.8 (100.98)** | **211.6 (100.76)** | **187.1 (100.58)** | **150.6 (100.26)** |
+| 0.2 of `main`'s, 23.75 s | 1 | 658.2 (102.39) | 592.4 (102.24) | 522.7 (102.06) | 493.6 (101.98) | 467.7 (101.90) | 423.1 (101.76) |
+| 0.2 of `main`'s, 23.75 s | 0.5 | 493.6 (101.98) | 433.4 (101.79) | 370.2 (101.56) | 335.3 (101.42) | 311.8 (101.31) | **273.4 (101.12)** |
+| 0.2 of `main`'s, 23.75 s | 0.25 | 413.3 (101.72) | 355.4 (101.50) | **296.2 (101.24)** | **257.6 (101.04)** | **233.8 (100.90)** | **197.5 (100.66)** |
+| 0.2 of `main`'s, 23.75 s | 0.1 | 370.2 (101.56) | 311.8 (101.31) | **250.3 (101.00)** | **214.1 (100.77)** | **189.1 (100.59)** | **151.9 (100.28)** |
+| 0.2 of `main`'s, 23.75 s | 0.05 | 355.4 (101.50) | **296.2 (101.24)** | **233.8 (100.90)** | **197.5 (100.66)** | **174.2 (100.47)** | **136.7 (100.12)** |
+| 0.2 of `main`'s, 23.75 s | 0 | 341.8 (101.45) | **277.7 (101.15)** | **219.4 (100.81)** | **183.2 (100.55)** | **158.7 (100.34)** | 121.7 (99.96)† |
+| 0.1 of `main`'s, 11.88 s | 1 | 612.8 (102.29) | 555.3 (102.15) | 493.6 (101.98) | 455.7 (101.86) | 433.4 (101.79) | 394.9 (101.66) |
+| 0.1 of `main`'s, 11.88 s | 0.5 | 467.7 (101.90) | 403.9 (101.69) | 341.8 (101.45) | 301.2 (101.26) | **277.7 (101.15)** | **240.2 (100.94)** |
+| 0.1 of `main`'s, 11.88 s | 0.25 | 386.3 (101.62) | 323.1 (101.37) | **261.3 (101.06)** | **225.0 (100.84)** | **201.9 (100.69)** | **164.5 (100.39)** |
+| 0.1 of `main`'s, 11.88 s | 0.1 | 335.3 (101.42) | **277.7 (101.15)** | **216.7 (100.79)** | **179.5 (100.52)** | **155.9 (100.31)** | 119.3 (99.93)† |
+| 0.1 of `main`'s, 11.88 s | 0.05 | 323.1 (101.37) | **261.3 (101.06)** | **201.9 (100.69)** | **164.5 (100.39)** | **139.9 (100.16)** | 103.9 (99.73)† |
+| 0.1 of `main`'s, 11.88 s | 0 | 306.4 (101.29) | **246.8 (100.98)** | **185.1 (100.56)** | **149.3 (100.25)** | 125.1 (100.00)† | 88.9 (99.50)† |
+| 0.05 of `main`'s, 5.94 s | 1 | 592.4 (102.24) | 538.5 (102.10) | 480.3 (101.94) | 444.3 (101.83) | 413.3 (101.72) | 378.1 (101.59) |
+| 0.05 of `main`'s, 5.94 s | 0.5 | 444.3 (101.83) | 386.3 (101.62) | 323.1 (101.37) | **286.6 (101.19)** | **261.3 (101.06)** | **225.0 (100.84)** |
+| 0.05 of `main`'s, 5.94 s | 0.25 | 370.2 (101.56) | 306.4 (101.29) | **246.8 (100.98)** | **209.1 (100.74)** | **185.1 (100.56)** | **148.1 (100.24)** |
+| 0.05 of `main`'s, 5.94 s | 0.1 | 323.1 (101.37) | **261.3 (101.06)** | **199.7 (100.67)** | **163.0 (100.38)** | **138.8 (100.15)** | 102.7 (99.71)† |
+| 0.05 of `main`'s, 5.94 s | 0.05 | 306.4 (101.29) | **246.8 (100.98)** | **185.1 (100.56)** | **148.1 (100.24)** | 124.3 (99.99)† | 87.5 (99.48)† |
+| 0.05 of `main`'s, 5.94 s | 0 | **291.3 (101.22)** | **230.8 (100.88)** | **169.2 (100.43)** | **132.6 (100.08)** | 108.4 (99.79)† | 72.5 (99.21)† |
+| 0.01 of `main`'s, 1.19 s | 1 | 592.4 (102.24) | 522.7 (102.06) | 467.7 (101.90) | 423.1 (101.76) | 403.9 (101.69) | 362.7 (101.53) |
+| 0.01 of `main`'s, 1.19 s | 0.5 | 433.4 (101.79) | 370.2 (101.56) | 306.4 (101.29) | **273.4 (101.12)** | **246.8 (100.98)** | **211.6 (100.76)** |
+| 0.01 of `main`'s, 1.19 s | 0.25 | 355.4 (101.50) | **291.3 (101.22)** | **230.8 (100.88)** | **195.3 (100.64)** | **170.9 (100.45)** | **134.6 (100.10)** |
+| 0.01 of `main`'s, 1.19 s | 0.1 | 306.4 (101.29) | **246.8 (100.98)** | **187.1 (100.58)** | **150.6 (100.26)** | **126.0 (100.01)** | 89.8 (99.52)† |
+| 0.01 of `main`'s, 1.19 s | 0.05 | **291.3 (101.22)** | **230.8 (100.88)** | **170.9 (100.45)** | **134.6 (100.10)** | 110.4 (99.82)† | 74.4 (99.25)† |
+| 0.01 of `main`'s, 1.19 s | 0 | **277.7 (101.15)** | **216.7 (100.79)** | **155.9 (100.31)** | 119.3 (99.93)† | 95.5 (99.61)† | 54.4 (98.00)† |
+| none | 1 | 592.4 (102.24) | 522.7 (102.06) | 455.7 (101.86) | 423.1 (101.76) | 394.9 (101.66) | 362.7 (101.53) |
+| none | 0.5 | 423.1 (101.76) | 370.2 (101.56) | 306.4 (101.29) | **269.3 (101.10)** | **243.4 (100.96)** | **209.1 (100.74)** |
+| none | 0.25 | 348.5 (101.47) | **291.3 (101.22)** | **227.8 (100.86)** | **193.2 (100.62)** | **167.7 (100.42)** | **131.6 (100.07)** |
+| none | 0.1 | 306.4 (101.29) | **243.4 (100.96)** | **183.2 (100.55)** | **146.9 (100.23)** | 122.6 (99.97)† | 86.3 (99.46)† |
+| none | 0.05 | **291.3 (101.22)** | **227.8 (100.86)** | **167.7 (100.42)** | **131.6 (100.07)** | 107.1 (99.77)† | 71.1 (99.18)† |
+| none | 0 | **273.4 (101.12)** | **214.1 (100.77)** | **153.2 (100.29)** | 116.2 (99.89)† | 92.1 (99.55)† | 48.9 (97.84)† |
+
+**0.25 fixed**: a full table of the head block's type is 0.714 GPU-s fixed and 2.141 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 22.1% / 15.9% / 54.1% / 4.5%; (c) 23.0% / 13.7% / 56.3% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 592.4 (102.24) | 507.7 (102.02) | 444.3 (101.83) | 403.9 (101.69) | 341.8 (101.45) |
+| (b) the fold, 38.89 s | 0.5 | 612.8 (102.29) | 522.7 (102.06) | 423.1 (101.76) | 362.7 (101.53) | 323.1 (101.37) | **265.2 (101.08)** |
+| (b) the fold, 38.89 s | 0.25 | 573.3 (102.19) | 480.3 (101.94) | 378.1 (101.59) | 323.1 (101.37) | **282.1 (101.17)** | **225.0 (100.84)** |
+| (b) the fold, 38.89 s | 0.1 | 555.3 (102.15) | 455.7 (101.86) | 355.4 (101.50) | **296.2 (101.24)** | **257.6 (101.04)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 538.5 (102.10) | 444.3 (101.83) | 348.5 (101.47) | **291.3 (101.22)** | **250.3 (101.00)** | **191.1 (100.61)** |
+| (b) the fold, 38.89 s | 0 | 538.5 (102.10) | 433.4 (101.79) | 341.8 (101.45) | **282.1 (101.17)** | **243.4 (100.96)** | **183.2 (100.55)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 573.3 (102.19) | 480.3 (101.94) | 423.1 (101.76) | 386.3 (101.62) | 323.1 (101.37) |
+| (c) the one pass, 31.5 s | 0.5 | 592.4 (102.24) | 493.6 (101.98) | 403.9 (101.69) | 341.8 (101.45) | 301.2 (101.26) | **243.4 (100.96)** |
+| (c) the one pass, 31.5 s | 0.25 | 555.3 (102.15) | 455.7 (101.86) | 362.7 (101.53) | 301.2 (101.26) | **261.3 (101.06)** | **204.3 (100.70)** |
+| (c) the one pass, 31.5 s | 0.1 | 538.5 (102.10) | 433.4 (101.79) | 335.3 (101.42) | **277.7 (101.15)** | **240.2 (100.94)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 522.7 (102.06) | 423.1 (101.76) | 329.1 (101.39) | **269.3 (101.10)** | **230.8 (100.88)** | **172.5 (100.46)** |
+| (c) the one pass, 31.5 s | 0 | 522.7 (102.06) | 423.1 (101.76) | 323.1 (101.37) | **261.3 (101.06)** | **222.1 (100.83)** | **164.5 (100.39)** |
+| 0.2 of `main`'s, 23.75 s | 1 | 658.2 (102.39) | 555.3 (102.15) | 455.7 (101.86) | 394.9 (101.66) | 355.4 (101.50) | **296.2 (101.24)** |
+| 0.2 of `main`'s, 23.75 s | 0.5 | 573.3 (102.19) | 467.7 (101.90) | 370.2 (101.56) | 311.8 (101.31) | **273.4 (101.12)** | **216.7 (100.79)** |
+| 0.2 of `main`'s, 23.75 s | 0.25 | 522.7 (102.06) | 433.4 (101.79) | 329.1 (101.39) | **273.4 (101.12)** | **233.8 (100.90)** | **176.0 (100.49)** |
+| 0.2 of `main`'s, 23.75 s | 0.1 | 507.7 (102.02) | 403.9 (101.69) | 306.4 (101.29) | **250.3 (101.00)** | **211.6 (100.76)** | **151.9 (100.28)** |
+| 0.2 of `main`'s, 23.75 s | 0.05 | 493.6 (101.98) | 394.9 (101.66) | 301.2 (101.26) | **240.2 (100.94)** | **201.9 (100.69)** | **144.5 (100.20)** |
+| 0.2 of `main`'s, 23.75 s | 0 | 493.6 (101.98) | 386.3 (101.62) | **291.3 (101.22)** | **233.8 (100.90)** | **195.3 (100.64)** | **136.7 (100.12)** |
+| 0.1 of `main`'s, 11.88 s | 1 | 612.8 (102.29) | 522.7 (102.06) | 423.1 (101.76) | 362.7 (101.53) | 323.1 (101.37) | **261.3 (101.06)** |
+| 0.1 of `main`'s, 11.88 s | 0.5 | 538.5 (102.10) | 433.4 (101.79) | 341.8 (101.45) | **282.1 (101.17)** | **240.2 (100.94)** | **183.2 (100.55)** |
+| 0.1 of `main`'s, 11.88 s | 0.25 | 493.6 (101.98) | 394.9 (101.66) | 301.2 (101.26) | **240.2 (100.94)** | **201.9 (100.69)** | **143.3 (100.19)** |
+| 0.1 of `main`'s, 11.88 s | 0.1 | 467.7 (101.90) | 370.2 (101.56) | **273.4 (101.12)** | **216.7 (100.79)** | **177.7 (100.50)** | 119.3 (99.93)† |
+| 0.1 of `main`'s, 11.88 s | 0.05 | 467.7 (101.90) | 362.7 (101.53) | **265.2 (101.08)** | **209.1 (100.74)** | **169.2 (100.43)** | 111.1 (99.83)† |
+| 0.1 of `main`'s, 11.88 s | 0 | 455.7 (101.86) | 355.4 (101.50) | **257.6 (101.04)** | **199.7 (100.67)** | **161.6 (100.37)** | 103.3 (99.72)† |
+| 0.05 of `main`'s, 5.94 s | 1 | 592.4 (102.24) | 507.7 (102.02) | 403.9 (101.69) | 341.8 (101.45) | 306.4 (101.29) | **246.8 (100.98)** |
+| 0.05 of `main`'s, 5.94 s | 0.5 | 522.7 (102.06) | 423.1 (101.76) | 323.1 (101.37) | **265.2 (101.08)** | **225.0 (100.84)** | **166.1 (100.41)** |
+| 0.05 of `main`'s, 5.94 s | 0.25 | 480.3 (101.94) | 378.1 (101.59) | **282.1 (101.17)** | **225.0 (100.84)** | **185.1 (100.56)** | **126.9 (100.02)** |
+| 0.05 of `main`'s, 5.94 s | 0.1 | 455.7 (101.86) | 355.4 (101.50) | **257.6 (101.04)** | **199.7 (100.67)** | **161.6 (100.37)** | 102.7 (99.71)† |
+| 0.05 of `main`'s, 5.94 s | 0.05 | 444.3 (101.83) | 348.5 (101.47) | **250.3 (101.00)** | **191.1 (100.61)** | **153.2 (100.29)** | 95.0 (99.60)† |
+| 0.05 of `main`'s, 5.94 s | 0 | 433.4 (101.79) | 341.8 (101.45) | **243.4 (100.96)** | **183.2 (100.55)** | **144.5 (100.20)** | 87.1 (99.47)† |
+| 0.01 of `main`'s, 1.19 s | 1 | 592.4 (102.24) | 493.6 (101.98) | 386.3 (101.62) | 329.1 (101.39) | **291.3 (101.22)** | **233.8 (100.90)** |
+| 0.01 of `main`'s, 1.19 s | 0.5 | 507.7 (102.02) | 403.9 (101.69) | 306.4 (101.29) | **250.3 (101.00)** | **211.6 (100.76)** | **153.2 (100.29)** |
+| 0.01 of `main`'s, 1.19 s | 0.25 | 467.7 (101.90) | 370.2 (101.56) | **269.3 (101.10)** | **211.6 (100.76)** | **170.9 (100.45)** | 113.2 (99.85)† |
+| 0.01 of `main`'s, 1.19 s | 0.1 | 444.3 (101.83) | 341.8 (101.45) | **243.4 (100.96)** | **187.1 (100.58)** | **148.1 (100.24)** | 89.8 (99.52)† |
+| 0.01 of `main`'s, 1.19 s | 0.05 | 433.4 (101.79) | 335.3 (101.42) | **236.9 (100.92)** | **177.7 (100.50)** | **139.9 (100.16)** | 81.5 (99.38)† |
+| 0.01 of `main`'s, 1.19 s | 0 | 423.1 (101.76) | 329.1 (101.39) | **227.8 (100.86)** | **170.9 (100.45)** | **131.6 (100.07)** | 73.7 (99.23)† |
+| none | 1 | 592.4 (102.24) | 480.3 (101.94) | 386.3 (101.62) | 329.1 (101.39) | **286.6 (101.19)** | **227.8 (100.86)** |
+| none | 0.5 | 507.7 (102.02) | 403.9 (101.69) | 306.4 (101.29) | **246.8 (100.98)** | **209.1 (100.74)** | **149.3 (100.25)** |
+| none | 0.25 | 467.7 (101.90) | 362.7 (101.53) | **265.2 (101.08)** | **206.6 (100.72)** | **167.7 (100.42)** | 109.7 (99.81)† |
+| none | 0.1 | 433.4 (101.79) | 341.8 (101.45) | **240.2 (100.94)** | **183.2 (100.55)** | **144.5 (100.20)** | 86.3 (99.46)† |
+| none | 0.05 | 433.4 (101.79) | 329.1 (101.39) | **233.8 (100.90)** | **176.0 (100.49)** | **136.7 (100.12)** | 78.3 (99.32)† |
+| none | 0 | 423.1 (101.76) | 323.1 (101.37) | **225.0 (100.84)** | **167.7 (100.42)** | **128.8 (100.04)** | 70.5 (99.17)† |
+
+**0.17 fixed**: a full table of the head block's type is 0.485 GPU-s fixed and 2.370 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 18.6% / 15.9% / 57.6% / 4.5%; (c) 19.3% / 13.7% / 59.9% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 592.4 (102.24) | 493.6 (101.98) | 423.1 (101.76) | 386.3 (101.62) | 323.1 (101.37) |
+| (b) the fold, 38.89 s | 0.5 | 634.7 (102.34) | 522.7 (102.06) | 423.1 (101.76) | 355.4 (101.50) | 317.3 (101.34) | **253.9 (101.02)** |
+| (b) the fold, 38.89 s | 0.25 | 592.4 (102.24) | 493.6 (101.98) | 386.3 (101.62) | 323.1 (101.37) | **282.1 (101.17)** | **219.4 (100.81)** |
+| (b) the fold, 38.89 s | 0.1 | 573.3 (102.19) | 467.7 (101.90) | 362.7 (101.53) | 301.2 (101.26) | **261.3 (101.06)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 573.3 (102.19) | 467.7 (101.90) | 362.7 (101.53) | **296.2 (101.24)** | **253.9 (101.02)** | **193.2 (100.62)** |
+| (b) the fold, 38.89 s | 0 | 555.3 (102.15) | 455.7 (101.86) | 355.4 (101.50) | **291.3 (101.22)** | **250.3 (101.00)** | **187.1 (100.58)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 573.3 (102.19) | 467.7 (101.90) | 403.9 (101.69) | 362.7 (101.53) | 301.2 (101.26) |
+| (c) the one pass, 31.5 s | 0.5 | 612.8 (102.29) | 507.7 (102.02) | 403.9 (101.69) | 335.3 (101.42) | **296.2 (101.24)** | **233.8 (100.90)** |
+| (c) the one pass, 31.5 s | 0.25 | 573.3 (102.19) | 467.7 (101.90) | 370.2 (101.56) | 306.4 (101.29) | **261.3 (101.06)** | **199.7 (100.67)** |
+| (c) the one pass, 31.5 s | 0.1 | 555.3 (102.15) | 455.7 (101.86) | 348.5 (101.47) | **282.1 (101.17)** | **243.4 (100.96)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 555.3 (102.15) | 444.3 (101.83) | 341.8 (101.45) | **277.7 (101.15)** | **236.9 (100.92)** | **174.2 (100.47)** |
+| (c) the one pass, 31.5 s | 0 | 538.5 (102.10) | 433.4 (101.79) | 335.3 (101.42) | **269.3 (101.10)** | **227.8 (100.86)** | **167.7 (100.42)** |
+| 0.2 of `main`'s, 23.75 s | 1 | 658.2 (102.39) | 538.5 (102.10) | 444.3 (101.83) | 378.1 (101.59) | 335.3 (101.42) | **273.4 (101.12)** |
+| 0.2 of `main`'s, 23.75 s | 0.5 | 573.3 (102.19) | 480.3 (101.94) | 370.2 (101.56) | 311.8 (101.31) | **269.3 (101.10)** | **206.6 (100.72)** |
+| 0.2 of `main`'s, 23.75 s | 0.25 | 555.3 (102.15) | 444.3 (101.83) | 341.8 (101.45) | **277.7 (101.15)** | **233.8 (100.90)** | **172.5 (100.46)** |
+| 0.2 of `main`'s, 23.75 s | 0.1 | 522.7 (102.06) | 423.1 (101.76) | 317.3 (101.34) | **257.6 (101.04)** | **214.1 (100.77)** | **151.9 (100.28)** |
+| 0.2 of `main`'s, 23.75 s | 0.05 | 522.7 (102.06) | 413.3 (101.72) | 311.8 (101.31) | **250.3 (101.00)** | **206.6 (100.72)** | **145.7 (100.22)** |
+| 0.2 of `main`'s, 23.75 s | 0 | 507.7 (102.02) | 413.3 (101.72) | 306.4 (101.29) | **243.4 (100.96)** | **201.9 (100.69)** | **138.8 (100.15)** |
+| 0.1 of `main`'s, 11.88 s | 1 | 612.8 (102.29) | 507.7 (102.02) | 403.9 (101.69) | 341.8 (101.45) | 301.2 (101.26) | **240.2 (100.94)** |
+| 0.1 of `main`'s, 11.88 s | 0.5 | 555.3 (102.15) | 444.3 (101.83) | 341.8 (101.45) | **277.7 (101.15)** | **233.8 (100.90)** | **172.5 (100.46)** |
+| 0.1 of `main`'s, 11.88 s | 0.25 | 507.7 (102.02) | 413.3 (101.72) | 306.4 (101.29) | **243.4 (100.96)** | **201.9 (100.69)** | **138.8 (100.15)** |
+| 0.1 of `main`'s, 11.88 s | 0.1 | 493.6 (101.98) | 386.3 (101.62) | **286.6 (101.19)** | **222.1 (100.83)** | **181.3 (100.53)** | 119.3 (99.93)† |
+| 0.1 of `main`'s, 11.88 s | 0.05 | 493.6 (101.98) | 386.3 (101.62) | **277.7 (101.15)** | **216.7 (100.79)** | **174.2 (100.47)** | 112.5 (99.84)† |
+| 0.1 of `main`'s, 11.88 s | 0 | 480.3 (101.94) | 378.1 (101.59) | **273.4 (101.12)** | **209.1 (100.74)** | **167.7 (100.42)** | 105.8 (99.76)† |
+| 0.05 of `main`'s, 5.94 s | 1 | 592.4 (102.24) | 493.6 (101.98) | 386.3 (101.62) | 329.1 (101.39) | **286.6 (101.19)** | **222.1 (100.83)** |
+| 0.05 of `main`'s, 5.94 s | 0.5 | 538.5 (102.10) | 423.1 (101.76) | 323.1 (101.37) | **261.3 (101.06)** | **219.4 (100.81)** | **155.9 (100.31)** |
+| 0.05 of `main`'s, 5.94 s | 0.25 | 493.6 (101.98) | 394.9 (101.66) | **286.6 (101.19)** | **225.0 (100.84)** | **185.1 (100.56)** | 122.6 (99.97)† |
+| 0.05 of `main`'s, 5.94 s | 0.1 | 480.3 (101.94) | 370.2 (101.56) | **269.3 (101.10)** | **206.6 (100.72)** | **164.5 (100.39)** | 102.7 (99.71)† |
+| 0.05 of `main`'s, 5.94 s | 0.05 | 467.7 (101.90) | 362.7 (101.53) | **261.3 (101.06)** | **199.7 (100.67)** | **158.7 (100.34)** | 96.1 (99.62)† |
+| 0.05 of `main`'s, 5.94 s | 0 | 467.7 (101.90) | 362.7 (101.53) | **253.9 (101.02)** | **193.2 (100.62)** | **151.9 (100.28)** | 89.3 (99.51)† |
+| 0.01 of `main`'s, 1.19 s | 1 | 592.4 (102.24) | 480.3 (101.94) | 378.1 (101.59) | 311.8 (101.31) | **273.4 (101.12)** | **209.1 (100.74)** |
+| 0.01 of `main`'s, 1.19 s | 0.5 | 522.7 (102.06) | 413.3 (101.72) | 306.4 (101.29) | **246.8 (100.98)** | **204.3 (100.70)** | **143.3 (100.19)** |
+| 0.01 of `main`'s, 1.19 s | 0.25 | 480.3 (101.94) | 378.1 (101.59) | **273.4 (101.12)** | **214.1 (100.77)** | **170.9 (100.45)** | 109.7 (99.81)† |
+| 0.01 of `main`'s, 1.19 s | 0.1 | 467.7 (101.90) | 362.7 (101.53) | **253.9 (101.02)** | **193.2 (100.62)** | **151.9 (100.28)** | 89.8 (99.52)† |
+| 0.01 of `main`'s, 1.19 s | 0.05 | 455.7 (101.86) | 355.4 (101.50) | **246.8 (100.98)** | **187.1 (100.58)** | **144.5 (100.20)** | 83.0 (99.41)† |
+| 0.01 of `main`'s, 1.19 s | 0 | 455.7 (101.86) | 348.5 (101.47) | **240.2 (100.94)** | **179.5 (100.52)** | **137.8 (100.14)** | 76.3 (99.28)† |
+| none | 1 | 592.4 (102.24) | 480.3 (101.94) | 370.2 (101.56) | 311.8 (101.31) | **269.3 (101.10)** | **206.6 (100.72)** |
+| none | 0.5 | 507.7 (102.02) | 413.3 (101.72) | 306.4 (101.29) | **243.4 (100.96)** | **201.9 (100.69)** | **139.9 (100.16)** |
+| none | 0.25 | 480.3 (101.94) | 378.1 (101.59) | **273.4 (101.12)** | **209.1 (100.74)** | **167.7 (100.42)** | 106.4 (99.76)† |
+| none | 0.1 | 455.7 (101.86) | 355.4 (101.50) | **250.3 (101.00)** | **189.1 (100.59)** | **148.1 (100.24)** | 86.3 (99.46)† |
+| none | 0.05 | 455.7 (101.86) | 348.5 (101.47) | **243.4 (100.96)** | **183.2 (100.55)** | **141.0 (100.17)** | 79.7 (99.35)† |
+| none | 0 | 444.3 (101.83) | 341.8 (101.45) | **236.9 (100.92)** | **176.0 (100.49)** | **134.6 (100.10)** | 73.1 (99.22)† |
+
+For 0.66, 0.61 and 0.30 I print the rows at (b), (c) and none; the other four verifier rows are in
+`sessions_axis2.json`.
+
+**0.66 fixed**: a full table of the head block's type is 1.884 GPU-s fixed and 0.971 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 40.2% / 15.9% / 36.1% / 4.5%; (c) 41.8% / 13.7% / 37.5% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 634.7 (102.34) | 573.3 (102.19) | 522.7 (102.06) | 507.7 (102.02) | 467.7 (101.90) |
+| (b) the fold, 38.89 s | 0.5 | 555.3 (102.15) | 480.3 (101.94) | 423.1 (101.76) | 378.1 (101.59) | 355.4 (101.50) | 317.3 (101.34) |
+| (b) the fold, 38.89 s | 0.25 | 480.3 (101.94) | 413.3 (101.72) | 348.5 (101.47) | 306.4 (101.29) | **282.1 (101.17)** | **243.4 (100.96)** |
+| (b) the fold, 38.89 s | 0.1 | 433.4 (101.79) | 370.2 (101.56) | 306.4 (101.29) | **265.2 (101.08)** | **240.2 (100.94)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 423.1 (101.76) | 355.4 (101.50) | **291.3 (101.22)** | **250.3 (101.00)** | **225.0 (100.84)** | **185.1 (100.56)** |
+| (b) the fold, 38.89 s | 0 | 403.9 (101.69) | 341.8 (101.45) | **273.4 (101.12)** | **236.9 (100.92)** | **209.1 (100.74)** | **170.9 (100.45)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 612.8 (102.29) | 555.3 (102.15) | 507.7 (102.02) | 480.3 (101.94) | 444.3 (101.83) |
+| (c) the one pass, 31.5 s | 0.5 | 538.5 (102.10) | 467.7 (101.90) | 403.9 (101.69) | 362.7 (101.53) | 335.3 (101.42) | **296.2 (101.24)** |
+| (c) the one pass, 31.5 s | 0.25 | 455.7 (101.86) | 394.9 (101.66) | 329.1 (101.39) | **286.6 (101.19)** | **261.3 (101.06)** | **225.0 (100.84)** |
+| (c) the one pass, 31.5 s | 0.1 | 413.3 (101.72) | 348.5 (101.47) | **286.6 (101.19)** | **246.8 (100.98)** | **219.4 (100.81)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 403.9 (101.69) | 335.3 (101.42) | **269.3 (101.10)** | **230.8 (100.88)** | **204.3 (100.70)** | **166.1 (100.41)** |
+| (c) the one pass, 31.5 s | 0 | 386.3 (101.62) | 323.1 (101.37) | **253.9 (101.02)** | **216.7 (100.79)** | **191.1 (100.61)** | **151.9 (100.28)** |
+| none | 1 | 592.4 (102.24) | 522.7 (102.06) | 455.7 (101.86) | 413.3 (101.72) | 386.3 (101.62) | 348.5 (101.47) |
+| none | 0.5 | 433.4 (101.79) | 370.2 (101.56) | 306.4 (101.29) | **265.2 (101.08)** | **240.2 (100.94)** | **201.9 (100.69)** |
+| none | 0.25 | 362.7 (101.53) | **296.2 (101.24)** | **233.8 (100.90)** | **193.2 (100.62)** | **167.7 (100.42)** | **129.7 (100.05)** |
+| none | 0.1 | 317.3 (101.34) | **253.9 (101.02)** | **189.1 (100.59)** | **150.6 (100.26)** | 125.1 (100.00)† | 86.3 (99.46)† |
+| none | 0.05 | 306.4 (101.29) | **240.2 (100.94)** | **176.0 (100.49)** | **136.7 (100.12)** | 110.4 (99.82)† | 71.9 (99.20)† |
+| none | 0 | **291.3 (101.22)** | **225.0 (100.84)** | **160.1 (100.35)** | 121.7 (99.96)† | 96.1 (99.62)† | 51.5 (97.92)† |
+
+**0.61 fixed**: a full table of the head block's type is 1.742 GPU-s fixed and 1.114 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 38.0% / 15.9% / 38.3% / 4.5%; (c) 39.5% / 13.7% / 39.8% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 634.7 (102.34) | 555.3 (102.15) | 522.7 (102.06) | 493.6 (101.98) | 444.3 (101.83) |
+| (b) the fold, 38.89 s | 0.5 | 555.3 (102.15) | 493.6 (101.98) | 423.1 (101.76) | 378.1 (101.59) | 348.5 (101.47) | 311.8 (101.31) |
+| (b) the fold, 38.89 s | 0.25 | 493.6 (101.98) | 423.1 (101.76) | 348.5 (101.47) | 311.8 (101.31) | **282.1 (101.17)** | **240.2 (100.94)** |
+| (b) the fold, 38.89 s | 0.1 | 444.3 (101.83) | 378.1 (101.59) | 311.8 (101.31) | **269.3 (101.10)** | **240.2 (100.94)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 433.4 (101.79) | 362.7 (101.53) | **296.2 (101.24)** | **253.9 (101.02)** | **227.8 (100.86)** | **187.1 (100.58)** |
+| (b) the fold, 38.89 s | 0 | 423.1 (101.76) | 355.4 (101.50) | **282.1 (101.17)** | **240.2 (100.94)** | **214.1 (100.77)** | **172.5 (100.46)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 612.8 (102.29) | 538.5 (102.10) | 493.6 (101.98) | 467.7 (101.90) | 423.1 (101.76) |
+| (c) the one pass, 31.5 s | 0.5 | 538.5 (102.10) | 467.7 (101.90) | 403.9 (101.69) | 362.7 (101.53) | 329.1 (101.39) | **291.3 (101.22)** |
+| (c) the one pass, 31.5 s | 0.25 | 467.7 (101.90) | 403.9 (101.69) | 329.1 (101.39) | **291.3 (101.22)** | **261.3 (101.06)** | **222.1 (100.83)** |
+| (c) the one pass, 31.5 s | 0.1 | 433.4 (101.79) | 362.7 (101.53) | **291.3 (101.22)** | **250.3 (101.00)** | **222.1 (100.83)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 413.3 (101.72) | 348.5 (101.47) | **277.7 (101.15)** | **236.9 (100.92)** | **209.1 (100.74)** | **167.7 (100.42)** |
+| (c) the one pass, 31.5 s | 0 | 403.9 (101.69) | 335.3 (101.42) | **265.2 (101.08)** | **222.1 (100.83)** | **195.3 (100.64)** | **153.2 (100.29)** |
+| none | 1 | 592.4 (102.24) | 507.7 (102.02) | 444.3 (101.83) | 403.9 (101.69) | 370.2 (101.56) | 329.1 (101.39) |
+| none | 0.5 | 444.3 (101.83) | 378.1 (101.59) | 306.4 (101.29) | **265.2 (101.08)** | **236.9 (100.92)** | **195.3 (100.64)** |
+| none | 0.25 | 378.1 (101.59) | 306.4 (101.29) | **236.9 (100.92)** | **195.3 (100.64)** | **167.7 (100.42)** | **126.9 (100.02)** |
+| none | 0.1 | 335.3 (101.42) | **265.2 (101.08)** | **195.3 (100.64)** | **154.5 (100.30)** | **126.9 (100.02)** | 86.3 (99.46)† |
+| none | 0.05 | 323.1 (101.37) | **250.3 (101.00)** | **183.2 (100.55)** | **141.0 (100.17)** | 113.9 (99.86)† | 72.8 (99.22)† |
+| none | 0 | 306.4 (101.29) | **236.9 (100.92)** | **169.2 (100.43)** | **127.8 (100.03)** | 100.4 (99.68)† | 54.4 (98.00)† |
+
+**0.30 fixed**: a full table of the head block's type is 0.857 GPU-s fixed and 1.999 its blocks' own. The budget with nothing moved (prover's fixed / verifier's fixed / proof blocks / replay): (b) 24.3% / 15.9% / 51.9% / 4.5%; (c) 25.3% / 13.7% / 54.0% / 4.7%.
+
+| the verifier's later session (the head's seconds) | prover's fixed × | blocks ×1 | ×0.75 | ×0.5 | ×0.35 | ×0.25 | ×0.1 |
+|---|---|---|---|---|---|---|---|
+| (b) the fold, 38.89 s | 1 | 710.8 (102.50) | 612.8 (102.29) | 507.7 (102.02) | 455.7 (101.86) | 413.3 (101.72) | 355.4 (101.50) |
+| (b) the fold, 38.89 s | 0.5 | 612.8 (102.29) | 522.7 (102.06) | 423.1 (101.76) | 362.7 (101.53) | 329.1 (101.39) | **269.3 (101.10)** |
+| (b) the fold, 38.89 s | 0.25 | 573.3 (102.19) | 467.7 (101.90) | 378.1 (101.59) | 317.3 (101.34) | **282.1 (101.17)** | **225.0 (100.84)** |
+| (b) the fold, 38.89 s | 0.1 | 538.5 (102.10) | 444.3 (101.83) | 348.5 (101.47) | **291.3 (101.22)** | **257.6 (101.04)** | **199.7 (100.67)** |
+| (b) the fold, 38.89 s | 0.05 | 522.7 (102.06) | 433.4 (101.79) | 341.8 (101.45) | **286.6 (101.19)** | **246.8 (100.98)** | **191.1 (100.61)** |
+| (b) the fold, 38.89 s | 0 | 522.7 (102.06) | 423.1 (101.76) | 329.1 (101.39) | **277.7 (101.15)** | **236.9 (100.92)** | **183.2 (100.55)** |
+| (c) the one pass, 31.5 s | 1 | 683.5 (102.45) | 592.4 (102.24) | 493.6 (101.98) | 433.4 (101.79) | 394.9 (101.66) | 335.3 (101.42) |
+| (c) the one pass, 31.5 s | 0.5 | 592.4 (102.24) | 493.6 (101.98) | 403.9 (101.69) | 341.8 (101.45) | 306.4 (101.29) | **250.3 (101.00)** |
+| (c) the one pass, 31.5 s | 0.25 | 538.5 (102.10) | 455.7 (101.86) | 355.4 (101.50) | 301.2 (101.26) | **261.3 (101.06)** | **206.6 (100.72)** |
+| (c) the one pass, 31.5 s | 0.1 | 522.7 (102.06) | 423.1 (101.76) | 329.1 (101.39) | **273.4 (101.12)** | **236.9 (100.92)** | **181.3 (100.53)** |
+| (c) the one pass, 31.5 s | 0.05 | 507.7 (102.02) | 413.3 (101.72) | 323.1 (101.37) | **265.2 (101.08)** | **227.8 (100.86)** | **172.5 (100.46)** |
+| (c) the one pass, 31.5 s | 0 | 507.7 (102.02) | 403.9 (101.69) | 311.8 (101.31) | **257.6 (101.04)** | **219.4 (100.81)** | **163.0 (100.38)** |
+| none | 1 | 592.4 (102.24) | 493.6 (101.98) | 394.9 (101.66) | 335.3 (101.42) | 301.2 (101.26) | **243.4 (100.96)** |
+| none | 0.5 | 493.6 (101.98) | 403.9 (101.69) | 306.4 (101.29) | **250.3 (101.00)** | **211.6 (100.76)** | **155.9 (100.31)** |
+| none | 0.25 | 444.3 (101.83) | 355.4 (101.50) | **261.3 (101.06)** | **206.6 (100.72)** | **167.7 (100.42)** | 112.5 (99.84)† |
+| none | 0.1 | 423.1 (101.76) | 329.1 (101.39) | **233.8 (100.90)** | **179.5 (100.52)** | **142.2 (100.18)** | 86.3 (99.46)† |
+| none | 0.05 | 413.3 (101.72) | 317.3 (101.34) | **227.8 (100.86)** | **170.9 (100.45)** | **133.6 (100.09)** | 77.6 (99.31)† |
+| none | 0 | 403.9 (101.69) | 311.8 (101.31) | **216.7 (100.79)** | **161.6 (100.37)** | 124.3 (99.99)† | 68.9 (99.14)† |
+
+### 2. (c) with the one pass as timed: row C is still 683.5 GB
+
+| head counted | row | (b) the fold | (c) as derived at 08:32Z | (c) as timed | (c) as timed, `least` / `most` / `alt` | K | sampled proof blocks | sessions | bits, one-wait | bits, all changes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 160 | C | 710.8 | 683.5 | **683.5** | 683.5 / 683.5 / 683.5 | 26 | 1,626,079,468 | 1,341,762 | 102.45 | 106.45 |
+| 160 | B | 740.5 | 710.8 | **710.8** | 740.5 / 710.8 / 710.8 | 25 | 1,563,537,950 | 1,290,145 | 102.50 | 106.50 |
+| 287.5 | C | 710.8 | 683.5 | **683.5** | 683.5 / 683.5 / 683.5 | 26 | 1,626,079,468 | 1,341,762 | 102.45 | 106.45 |
+| 287.5 | B | 987.3 | 987.3 | **987.3** | 987.3 / 985.7 / 985.7 | 18 | 1,125,747,324 | 928,932 | 102.98 | 106.98 |
+
+- **Inputs** [relayed: FIXEDCOST 09:40Z, section 4]: the head's later session ×0.81 of the fold alone in two rounds,
+  31.5 s on FOLD's 38.89 s; MoE 11.52 against 11.31 s and the GEMM 3.22 against 3.25 s, so both stay at the fold's
+  11.838 and 3.202 s. Untimed types follow the line through the three timed types as before: the 94 types at the
+  median go from 30.28 s on `main` to 13.85 s (13.03 s as derived at 08:32Z).
+- **Row C (c) is still 683.5 GB, K 26** [run]. Of the budget (prover's fixed / verifier's fixed / proof blocks /
+  replay): (b): 42.4% / 15.9% / 33.8% / 4.5%, spent 96.6%; (c) as derived: 44.1% / 13.6% / 35.2% / 4.7%, spent 97.6%; (c) as timed: 44.1% / 13.7% / 35.2% / 4.7%, spent 97.6%.
+- **It does not hang on the 31.5:** with the head's later session at 32.86, 34, 35.73 and 36.5 s the design is the
+  same K 26, and at FIXEDCOST's own seconds on all three types (32.86 or 35.73, 11.52, 3.224) too; at 38.89 s it is
+  the fold's K 25, 710.8 GB [run on my VM: 11 designs, under a minute].
+- Row B is 710.8 GB with the head's read not counted (740.5 GB in the `least` bracket) and 987.3 GB with it counted.
+
+### 3. What sets 17,770 GB over K
+
+**Two sentences.** GB × K is 17,771 because it is 1.151 times ln(1/δ) × n × B ÷ rate ÷ 8·10^9 = 15,442: δ = 0.01 is
+the chance of escape the bound allows, n = 90,237,980 the replay blocks a verification phase registers and the first stage
+samples K of, B = 74,320 bits what one wholly wrong replay block is charged under the cap of 28,000 served bits, the
+rate 0.25 the planner's setting for how many proof blocks the second stage proves in a sampled replay block
+(62,541,518 of its 59.95 billion), and 1.151 what the planner's bound adds to that first-order count. Since the proof
+blocks proved in a sampled replay block grow with the rate and the bound falls with rate × K, GB × (sampled proof
+blocks a verification phase) is one constant, 1.111·10^12, so the 10% budget enters only as how many proof blocks it
+pays to prove, and what else could move the bound is the constant's own terms (δ, the 28,000-bit cap, and the
+1.86·10^13 bits of capped outputs and locations a replay block's proof blocks carry, which is the partition), not
+fewer proof blocks from each sampled replay block.
+
+| rate | pricing | GB | K | proof blocks proved a sampled replay block | sampled proof blocks | GB × K | GB × sampled proof blocks | replay's share of the budget | bits, one-wait |
+|---|---|---|---|---|---|---|---|---|---|
+| 0.0625 | (b) | 786.1 | 90 | 15,635,469 | 1,407,192,210 | 70,753 | 1.106·10^12 | 16.1% | 102.66 |
+| 0.125 | (b) | 724.2 | 49 | 31,270,827 | 1,532,270,523 | 35,485 | 1.110·10^12 | 8.8% | 102.53 |
+| 0.25 (the planner picks it) | (b) | 710.8 | 25 | 62,541,518 | 1,563,537,950 | 17,771 | 1.111·10^12 | 4.5% | 102.50 |
+| 0.5 | (b) | 1,056.9 | 13 | 125,082,914 | 1,626,077,882 | 13,740 | 1.719·10^12 | 2.3% | 102.45 |
+| 1 | (b) | 1,152.1 | 6 | 250,165,719 | 1,500,994,314 | 6,913 | 1.729·10^12 | 1.1% | 102.56 |
+| 0.0625 | (c) | 760.8 | 93 | 15,635,469 | 1,454,098,617 | 70,753 | 1.106·10^12 | 16.7% | 102.61 |
+| 0.125 | (c) | 709.7 | 50 | 31,270,827 | 1,563,541,350 | 35,485 | 1.110·10^12 | 9.0% | 102.50 |
+| 0.25 (the planner picks it) | (c) | 683.5 | 26 | 62,541,518 | 1,626,079,468 | 17,771 | 1.111·10^12 | 4.7% | 102.45 |
+| 0.5 | (c) | 1,056.9 | 13 | 125,082,914 | 1,626,077,882 | 13,740 | 1.719·10^12 | 2.3% | 102.45 |
+| 1 | (c) | 1,152.1 | 6 | 250,165,719 | 1,500,994,314 | 6,913 | 1.729·10^12 | 1.1% | 102.56 |
+
+- [read: `verity/protocols/spot/optimize.py:1424-1445` and `:1504-1524` at the kit's tree] The rate sets each block
+  type's count in a sampled replay block: rate × its blocks × (its output bits, capped at 28,000, plus the bits of
+  its location) ÷ B. At rate 1 one wrong proof block, with its location, costs the adversary as much escape as a
+  wholly wrong replay block. The planner tries the powers of two from 2^-10 to 16 and takes the least bound the
+  budget pays for.
+- [run on my VM: the planner's bound at fixed K, 15 evaluations] GB × K is 17,771 at K 13, 26 and 52 at rate 0.25;
+  35,485 at 0.125; 70,753 at 0.0625; 13,740 at 0.5; 6,913 at 1. So GB × (sampled proof blocks) is 1.106 to
+  1.111·10^12 up to rate 0.25 and 1.72 to 1.73·10^12 at 0.5 and 1: past 0.25 a sampled proof block buys 0.65 of
+  what it did.
+- **Fewer proof blocks from each sampled replay block, and its cost in bits** [run: the table]: at half the rate the
+  budget pays for nearly the same sampled proof blocks over twice the replays, 709.7 GB against 683.5 at (c), and the
+  bits are the same to 0.05 (they follow the sampled proof blocks). At twice the rate it is 1,056.9 GB. The rate is
+  not a lever in either direction.
+- **The constant's terms** [derived; constants from the run]: 1.111·10^12 = 1.151 × 4.605 × 90,237,980 ×
+  1.859·10^13 ÷ 8·10^9. The 1.859·10^13 bits are a replay block's 59,949,977,567 proof blocks at their output bits
+  capped at 28,000 (1.330·10^13, a mean of 222 bits) plus their locations (5.29·10^12, a mean of 88.2 bits). So 28%
+  of the bound is the count of proof blocks and 72% their capped output bits: fewer proof blocks a replay block, or
+  narrower outputs, lower it in proportion. I ran no design search on either.
+- [guess] n and the budget should both grow with the length of a verification phase, so that length should not move
+  the bound; I have not read how the kit sets its budget against that length, and ran nothing on it.
+
+### 4. Larger tables at each share
+
+Row C, head at 160, a table of 2, 4, 8 times the proof blocks **at the same fixed seconds a table** (the premise; a
+guess, nothing shows a table of that size costs the same) [run; modeled]. For the bits a larger table has a level 0
+of 2, 4, 8 times the lines, a schedule that does not exist [guess]; all changes keeps 2^19. GB (one-wait bits):
+
+| share | a table of | as timed on `main`, blocks ×1 | (b) blocks ×1 | (b) ×0.5 | (b) ×0.25 | (c) ×1 | (c) ×0.5 | (c) ×0.25 | bits, all changes, (c): ×1 / ×0.5 / ×0.25 |
+|---|---|---|---|---|---|---|---|---|---|
+| kit | 2 times | 592.4 (101.24) | 480.3 (100.94) | 362.7 (100.53) | 301.2 (100.26) | 480.3 (100.94) | 355.4 (100.50) | **291.3 (100.22)** | 105.94 / 105.50 / 105.22 |
+| kit | 4 times | 433.4 (99.79) | 378.1 (99.59) | 257.6 (99.04)† | 197.5 (98.66)† | 378.1 (99.59) | 253.9 (99.02)† | 191.1 (98.61)† | 105.59 / 105.02 / 104.61 |
+| kit | 8 times | 355.4 (98.50) | 329.1 (98.39) | 204.3 (97.70)† | 144.5 (97.20)† | 323.1 (98.37) | 201.9 (97.69)† | 142.2 (97.18)† | 105.37 / 104.69 / 104.18 |
+| 0.66 | 2 times | 612.8 (101.29) | 493.6 (100.98) | 362.7 (100.53) | **296.2 (100.24)** | 480.3 (100.94) | 355.4 (100.50) | **286.6 (100.19)** | 105.94 / 105.50 / 105.19 |
+| 0.66 | 4 times | 444.3 (99.83) | 394.9 (99.66) | 261.3 (99.06)† | 197.5 (98.66)† | 386.3 (99.62) | 257.6 (99.04)† | 191.1 (98.61)† | 105.62 / 105.04 / 104.61 |
+| 0.66 | 8 times | 370.2 (98.56) | 341.8 (98.45) | 211.6 (97.76)† | 146.9 (97.23)† | 341.8 (98.45) | 209.1 (97.74)† | 144.5 (97.20)† | 105.45 / 104.74 / 104.20 |
+| 0.61 | 2 times | 612.8 (101.29) | 507.7 (101.02) | 362.7 (100.53) | **291.3 (100.22)** | 493.6 (100.98) | 355.4 (100.50) | **282.1 (100.17)** | 105.98 / 105.50 / 105.17 |
+| 0.61 | 4 times | 455.7 (99.86) | 403.9 (99.69) | 265.2 (99.08)† | 197.5 (98.66)† | 394.9 (99.66) | 261.3 (99.06)† | 191.1 (98.61)† | 105.66 / 105.06 / 104.61 |
+| 0.61 | 8 times | 386.3 (98.62) | 355.4 (98.50) | 216.7 (97.79)† | 148.1 (97.24)† | 355.4 (98.50) | 214.1 (97.77)† | 145.7 (97.22)† | 105.50 / 104.77 / 104.22 |
+| 0.3 | 2 times | 658.2 (101.39) | 555.3 (101.15) | 362.7 (100.53) | **269.3 (100.10)** | 538.5 (101.10) | 355.4 (100.50) | **257.6 (100.04)** | 106.10 / 105.50 / 105.04 |
+| 0.3 | 4 times | 538.5 (100.10) | 480.3 (99.94) | 291.3 (99.22)† | 197.5 (98.66)† | 467.7 (99.90) | 286.6 (99.19)† | 191.1 (98.61)† | 105.90 / 105.19 / 104.61 |
+| 0.3 | 8 times | 467.7 (98.90) | 444.3 (98.83) | 253.9 (98.02)† | 160.1 (97.35)† | 444.3 (98.83) | 250.3 (98.00)† | 158.7 (97.34)† | 105.83 / 105.00 / 104.34 |
+| 0.25 | 2 times | 683.5 (101.45) | 555.3 (101.15) | 362.7 (100.53) | **265.2 (100.08)** | 555.3 (101.15) | 355.4 (100.50) | **253.9 (100.02)** | 106.15 / 105.50 / 105.02 |
+| 0.25 | 4 times | 538.5 (100.10) | 493.6 (99.98) | 296.2 (99.24)† | 197.5 (98.66)† | 480.3 (99.94) | 291.3 (99.22)† | 191.1 (98.61)† | 105.94 / 105.22 / 104.61 |
+| 0.25 | 8 times | 480.3 (98.94) | 455.7 (98.86) | 261.3 (98.06)† | 163.0 (97.38)† | 455.7 (98.86) | 257.6 (98.04)† | 160.1 (97.35)† | 105.86 / 105.04 / 104.35 |
+| 0.17 | 2 times | 683.5 (101.45) | 573.3 (101.19) | 362.7 (100.53) | **257.6 (100.04)** | 555.3 (101.15) | 355.4 (100.50) | 250.3 (100.00)† | 106.15 / 105.50 / 105.00 |
+| 0.17 | 4 times | 573.3 (100.19) | 507.7 (100.02) | 301.2 (99.26) | 197.5 (98.66)† | 507.7 (100.02) | 296.2 (99.24)† | 191.1 (98.61)† | 106.02 / 105.24 / 104.61 |
+| 0.17 | 8 times | 507.7 (99.02) | 480.3 (98.94) | 269.3 (98.10)† | 166.1 (97.41)† | 480.3 (98.94) | 265.2 (98.08)† | 163.0 (97.38)† | 105.94 / 105.08 / 104.38 |
+
+- **Larger tables alone get under 300 GB at no share** [run]: with the blocks at ×1 the least in the table is 323.1
+  GB (8 times, the kit's share, (c)). At (b) the three sizes give 480.3 / 378.1 / 329.1 GB at the kit's share, 493.6 / 394.9 /
+  341.8 at 0.66, 507.7 / 403.9 / 355.4 at 0.61, 555.3 / 480.3 / 444.3 at 0.30, 555.3 / 493.6 / 455.7 at 0.25 and
+  573.3 / 507.7 / 480.3 at 0.17. The lower the fixed share, the less a larger table gives: it saves only fixed
+  seconds.
+- **With each block proved twice as fast (×0.5)** a table of 4 times is under 300 GB at all six shares at (c), 253.9
+  to 296.2 GB, and at five at (b); a table of 8 times at all six at both. **None of those cells has 100 one-wait
+  bits**: they hold 100 bits only with the wide level-0 leaves. The cells under 300 GB, by size: 2 times: one-wait 100.00 to 100.24, all changes 105.00 to 105.24; 4 times: one-wait 98.61 to 99.24, all changes 104.61 to 105.24; 8 times: one-wait 97.18 to 98.10, all changes 104.18 to 105.10 [run].
+- **With each block proved four times as fast (×0.25)** a table of 2 times is under 300 GB at every share at (c),
+  250.3 to 291.3 GB, with 100.00 to 100.24 one-wait bits (at 0.17 the cell is 0.002 of a bit short and the least
+  with 100 is 253.9 GB).
+- At a table of 2 times with the blocks at ×0.5 every share gives the same 362.7 GB at (b) and 355.4 GB at (c): the
+  same K by the whole-number step.
+- The least GB that keeps 100 one-wait bits depends only on the table's size, not on the share or the pricing
+  [run: `8460`'s searches]: 2 times: [253.9]; 4 times: [507.7]; 8 times: [1045.4] GB.
+- **Which changes this needs**: a schedule past m = 35 (m 36 for 2 times, 37 for 4, 38 for 8), which does not exist
+  in the Lean verifier, the prover or the proofs [read: `Flock/Schedule.lean:50-52`, `pure_block.rs:393-394`, my
+  09:28Z entry, section 4]; the wide level-0 leaves (#9108, open) for 100 bits at 4 times and over; faster proving
+  of each block; and a timing of a table of that size, which nobody has.
+
+### 5. Each change: built, timed, or neither
+
+| change | built | timed | on `main` |
+|---|---|---|---|
+| the fold in the Lean verifier (#9209) | yes, on its branch [read: `gh`, open] | yes: the head's later session 38.89 s against 118.76 s [relayed: FOLD 08:22Z] | no |
+| the one pass | yes, on `cursor/proofs-fixedcost-46fc`, proved equal [relayed: FIXEDCOST 09:40Z]; I found no pull request [read: `gh`] | yes, two rounds: ×0.81 on the head, nothing on MoE and the GEMM; a second form is pushed and not yet timed [relayed] | no |
+| the kept verifier process (#9190) and the circuit file kept, which row C assumes | on branches [read: `gh`, #9190 open; relayed: FIXEDCOST 09:40Z names both branches] | its parts are timed (a read, a session's check); I have read no timing of the kept process end to end | no |
+| the proof behind the one-wait bits (#9149) | open [read: `gh`] | not a timing | no |
+| the wide level-0 leaves (#9108) | open [read: `gh`] | none that I have read | no |
+| lower fixed seconds a table in the prover (`p`) | no | no; whether there are fixed seconds to lower is what the quarter statement would show | |
+| faster proving of each proof block (`b`) | no | no | |
+| a schedule past m = 35 (larger tables) | no | no | |
+| a release log that holds the sessions' lines of coins (233,466,532 at (c) and 538,750,370 at K 60 [run], against 8,388,608 on `main` [relayed: the coordinator, 08:11Z]), and a driver for this configuration | no | no | |
+
+### 6. Not done, and what not to rely on
+
+- No timing is mine. Every seconds figure is relayed, and the split of the head's table is the open question of
+  PRF-589.
+- `b` multiplies every block type's seconds a proof block alike, and `p` every type's fixed seconds alike. A change
+  that speeds only the head's units, or only the witness, is not priced here.
+- At a share other than `kit` only the head's 130 unit types are re-divided. MoE's own cell is a two-point fit; the
+  GEMM's and the others' are the kit's.
+- The lines in 1.2 and 1.3 are fits to the planner's designs, good to a step of K; the cells are the designs.
+- I ran no search over the partition or the cap for section 3, and no design at a verification phase of another
+  length.
+- Not checked: what a table of 2^36 bits or more needs of a device's memory; whether the planner would pick another
+  configuration than the best designed one once `p` or `b` moves.
