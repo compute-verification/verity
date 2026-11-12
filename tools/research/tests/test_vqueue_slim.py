@@ -1210,6 +1210,31 @@ def test_a_suite_failed_by_its_machine_is_infra_by_what_its_run_printed_not_by_w
     assert suite_kind({**row, "nondeterministic": row["failed_tests"]}, "") == "flaky"
 
 
+NUMBERED_DIR_LOG = """==================================== ERRORS ====================================
+_________________ ERROR at setup of test_random_chains[synth] __________________
+
+tmp_path_factory = TempPathFactory(_given_basetemp=PosixPath('/workspace/tmp/verity-suite-2306m276_5z3t/b'))
+
+    @pytest.fixture(autouse=True)
+    def _host_isolated(monkeypatch, tmp_path_factory):
+>       _without_host(str(tmp_path_factory.mktemp("host")), env)
+E       OSError: could not create numbered dir with prefix host in /workspace/tmp/verity-suite-2306m276_5z3t/b after 10 tries
+
+../../../../tools/verity/check/guard/verity_suite_guard.py:232: OSError
+=========================== short test summary info ============================
+ERROR tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]
+"""
+
+
+def test_a_suite_whose_tests_pytest_could_give_no_temporary_directory_is_failed_by_its_machine():
+    """A full disk reaches a suite's tests as pytest's own error, which drops the errno: `mktemp` could not create its numbered
+    directory under the basetemp after its tries.  That is the machine's (or its shared scratch's) fault, never the change's."""
+    row = _row("verity/protocols/certifier/verifier", "verity/protocols/certifier/verifier",
+               "tests/test_network_certifier_compile_slice_v6.py::test_random_chains[synth]", step="lean-suites")
+    assert suite_kind(row, NUMBERED_DIR_LOG) == "infra"
+    assert suite_kind(row, NUMBERED_DIR_LOG.replace("could not create numbered dir", "could not parse its config")) == "own"
+
+
 def test_a_lean_build_s_failure_is_read_as_its_failed_modules_alike_in_every_run_and_its_reads_their_imports():
     """lean-audit failed Security/Proofs's build on one module and Security/Properties for reading its facts: read as lake's
     failed module and the audit's lines, the same in every run whatever its scratch tree and timings, named by the module's
