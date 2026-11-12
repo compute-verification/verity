@@ -129,12 +129,13 @@ def test_a_config_asks_for_fresh_windows_or_for_nothing(tmp_path):
 @pytest.mark.parametrize("path", sorted(ATTACKS.glob("*.toml")), ids=lambda p: p.stem)
 def test_a_config_that_does_not_ask_is_the_job_it_was(path):
     """Each config under attacks/: what decides its run is the seven entries it was before a config could ask for
-    windows, and its digest their sha256, so the label its records are found under doesn't move. One that asks
-    states so besides them."""
+    windows, its dials those its digest holds (`Config.undigested` names the rest), and its digest their sha256, so
+    the label its records are found under doesn't move. One that asks states so besides them."""
     cfg = config.load(path, starts.registry())
     s = cfg.start
     was = {"start": s.name, "theta": s.theta_file_sha256, "data": s.data, "route": cfg.route,
-           "route_version": cfg.route_version, "dials": cfg.dials, "budget": cfg.budget}
+           "route_version": cfg.route_version,
+           "dials": {k: v for k, v in cfg.dials.items() if k not in cfg.undigested}, "budget": cfg.budget}
     asked = {"windows": cfg.windows} if "windows" in tomllib.loads(path.read_text()) else {}
     canonical = json.dumps(was | asked, sort_keys=True, separators=(",", ":")).encode()
     assert cfg.run() == was | asked and cfg.record()["run"] == cfg.run()
