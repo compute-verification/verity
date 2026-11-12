@@ -8,6 +8,8 @@ the lock it ships states only what the copied files hold:
   record, a rule over the modules under a prefix), and goes whole otherwise, with everything its record holds;
 * an entry that lists witnesses (`WITNESSES`: theorems beside the declaration it is named after, which nothing rests on)
   goes with a witness the copied files lack: it would say of the public tree what no file there shows;
+* a runner's entry goes with a file of the command that writes its data (`GENERATORS`) the copied files lack: the public
+  tree can't make that data, so the run isn't one it can repeat;
 * a kept entry's record may cite other names (`CITES`: the premises a guarantee takes, a deployed guarantee's gap). Those
   are never dropped: a public statement doesn't rest on what the export leaves out, so a cited name the copied files
   lack refuses the lock (`missing`);
@@ -43,6 +45,9 @@ PREFIX = "prefix"
 IMPORT = "import"
 #: a Lake package, by its path from the lock's own
 PACKAGE = "package"
+#: a command's argument: a path from the package's directory, or from the repository's as `{repo}/PATH`, held unless it
+#: names a tracked file or directory the export copies nothing of
+ARGUMENT = "argument"
 
 #: where a lock holds entries, and the kind of name each is under: a dict's keys, a list's items, or the one name a
 #: section is. `*` stands for every entry of the section before it. A section the Lean check matches a module's name
@@ -55,6 +60,7 @@ ENTRIES = (
     ("meaning", PREFIX), ("escapes", CONSTANT),
     ("claims.modules", PREFIX), ("claims.witnesses", DECLARATION), ("claims.not", DECLARATION),
     ("claims.generic", DECLARATION),
+    ("guarantee_lemmas.witnesses", DECLARATION), ("guarantee_lemmas.not", DECLARATION),
     ("witnesses", DECLARATION), ("unwitnessed", DECLARATION), ("witnesses_assumed", DECLARATION),
     ("compile_time", MODULE), ("layers", PREFIX), ("layers.*.imports", IMPORT), ("layers.*.except", MODULE),
     ("reads_exempt", PREFIX),
@@ -69,7 +75,12 @@ ENTRIES = (
 WITNESSES = (
     ("witnesses.*.honest", DECLARATION), ("witnesses.*.nontrivial", DECLARATION),
     ("claims.witnesses.*.fails", DECLARATION), ("claims.witnesses.*.meets", DECLARATION),
+    ("guarantee_lemmas.witnesses.*.fails", DECLARATION), ("guarantee_lemmas.witnesses.*.meets", DECLARATION),
+    ("guarantee_lemmas.witnesses.*.by", DECLARATION),
 )
+#: where a runner's entry gives the command that writes its data, `*` standing for the entry: it goes with a file of that
+#: command the copied files lack
+GENERATORS = (("runs.*.generate", ARGUMENT),)
 #: where a kept entry's record cites other names, which the copied files must have. What a statement reads
 #: (`premises.reads`) includes the constants Lean generates below a declaration (a structure's `mk`, a type's `rec`).
 CITES = (
@@ -98,7 +109,8 @@ NAME = re.compile(r"[A-Za-z_][\w']*(?:\.[A-Za-z_][\w']*)+")
 #: a path of two components or more, as a reason spells a file or a directory
 PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")
 #: every section a rule covers, a section of subsections by each subsection
-RULED = frozenset({path.partition(".*")[0] for path, _ in (*ENTRIES, *WITNESSES, *CITES)} | {*OPAQUE, *LANE_SECTIONS})
+RULED = frozenset({path.partition(".*")[0] for path, _ in (*ENTRIES, *WITNESSES, *GENERATORS, *CITES)}
+                  | {*OPAQUE, *LANE_SECTIONS})
 #: the sections of subsections
 NESTED = frozenset(s.partition(".")[0] for s in RULED if "." in s)
 
@@ -132,8 +144,8 @@ def _stated(lock: dict, rules) -> Iterator[tuple[str, str, str, str]]:
 
 def named(lock: dict) -> Iterator[tuple[str, str, str]]:
     """(where, kind, name) of every name ``lock`` states: its entries' (`ENTRIES`), and those they list as witnesses
-    (`WITNESSES`) and cite (`CITES`)."""
-    for _, where, kind, name in _stated(lock, (*ENTRIES, *WITNESSES, *CITES)):
+    (`WITNESSES`), run to write their data (`GENERATORS`) and cite (`CITES`)."""
+    for _, where, kind, name in _stated(lock, (*ENTRIES, *WITNESSES, *GENERATORS, *CITES)):
         yield where, kind, name
 
 
@@ -237,7 +249,8 @@ def missing(lock: dict, has: Callable[[str, str], bool]) -> list[str]:
 def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str, list[str]]]:
     """``lock`` as the export ships it, and {the path of the rule: the names of the entries it dropped}. Each entry named
     after what the copied files lack (``has(kind, name)`` false) is gone (`ENTRIES`), and so is each that lists a
-    witness they lack (`WITNESSES`); no entry carries `LANE_FIELDS`, and `LANE_SECTIONS` are gone. `ValueError` when a
+    witness they lack (`WITNESSES`) or a generator's file they lack (`GENERATORS`); no entry carries `LANE_FIELDS`, and
+    `LANE_SECTIONS` are gone. `ValueError` when a
     section has no rule (`unruled`), or when a kept entry still cites a name the copied files lack (`CITES`)."""
     if bad := unruled(lock):
         raise ValueError(f"public_lock: no rule says what {', '.join(bad)} names, so the export can't tell what of it is "
@@ -256,7 +269,7 @@ def public(lock: dict, has: Callable[[str, str], bool]) -> tuple[dict, dict[str,
                 holder[key] = [n for n in value if not (isinstance(n, str) and n in gone)]
             else:
                 del holder[key]
-    for path, kind in WITNESSES:
+    for path, kind in (*WITNESSES, *GENERATORS):
         section, _, listed = path.partition(".*.")
         for holder, key, _ in _places(out, section.split(".")):
             for entry, record in list(holder[key].items()) if isinstance(holder[key], dict) else ():

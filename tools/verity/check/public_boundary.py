@@ -303,8 +303,8 @@ class Tree:
 
     def _lakefile(self, f: str) -> list[Edge]:
         d = os.path.dirname(f)
-        out = [Edge(f, t, 1, "package", "its package's files") for t in (f"{d}/lake-manifest.json" if d else "lake-manifest.json",
-                                                                       f"{d}/lean-toolchain" if d else "lean-toolchain")
+        out = [Edge(f, t, 1, "package", "its package's files")
+               for t in (f"{d}/{name}" if d else name for name in ("lake-manifest.json", "lean-toolchain", "lean-audit.json"))
                if t in self.files]
         text = self.text(f)
         for r in self.toml(f).get("require", []):

@@ -312,8 +312,8 @@ paths = ["security/*/{Core,Claims,Hash}{,.lean}", "security/{Definitions,Models}
 from = "*"
 
 [[needed]]
-why = "what a public file needs to build and run: its Lake package's files, its suite's and distribution's pyproject, the packages above it"
-paths = ["**/{lakefile.toml,lake-manifest.json,lean-toolchain,pyproject.toml,__init__.py,conftest.py}", "uv.lock"]
+why = "what a public file needs to build, run and pass the Lean check: its Lake package's files and lock, its suite's and distribution's pyproject, the packages above it"
+paths = ["**/{lakefile.toml,lake-manifest.json,lean-toolchain,lean-audit.json,pyproject.toml,__init__.py,conftest.py}", "uv.lock"]
 from = "*"
 via = ["package"]
 
@@ -381,12 +381,6 @@ paths = [
     "benchmarks/one_stage",
 ]
 until = "the v3 ledger names a period's prover `prover`"
-
-[[residue]]
-what = "a Lean lock's reason names PoUW's clear audit by its directory, which the export leaves out"
-pattern = 'verity/protocols/pouw/clear\b'
-paths = ["verity/protocols/pouw/verifier/lean/commit/lean-audit.json"]
-until = "the lock's `runs` reason for `PouwCommit.DifftestMain` names the clear audit without its directory"
 
 [[residue]]
 what = "an open conjecture's test, which its lock entry must name, is a file the export leaves out"
