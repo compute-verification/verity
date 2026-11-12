@@ -24,6 +24,8 @@ verifier, the sessions, their rounds, the samples and the frame are `code h`'s.
 * `rows_of_two`: where the design evaluates, every member with a unit has a computed row.
 * `rewires_of_two`: where the design evaluates and each wire's writer's part is before its reader's, the code's
   wiring map rewires the members' programs (`Prog.Rewires`).
+* `named_port_of_stmtOk`: in an accepted run, each port a wire or a link names for a template is a port of that
+  template's session circuit, by that name. A run at a member whose circuit has rows under other names is refused.
 
 The verifier is `V h` itself. Its check of the session statements (`stmtOk`) holds each session's reads to the
 links and wires the verifier holds (`readsOk`), and does not run round 2's check of the design itself
@@ -160,5 +162,75 @@ theorem rewires_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     obtain ⟨t, hlt, rfl⟩ := List.getElem_of_mem hci
     exact (templateOk_facts h (templateOk_of_two h hd hlt) hlt).2
   exact rewires_wireMap h (fun ci hci => (hT ci hci).1) (fun ci hci => (hT ci hci).2) (rows_of_two hd) hF
+
+/-! ## What the verifier refuses of a design -/
+
+/-- **In an accepted run, a port a wire or a link names is a port of its template's session circuit.** Template
+`t`'s session statement sets up, and each port a wire or a link of the auditor's copies names for the template is the
+name of one of the session's registered reads and of a port of each of its statement circuits. So a run at a member
+whose circuit has no port of that name, its rows under other names, is refused: its session's registered reads
+either leave the port out, which round 2's statement check refuses (`SecondStage.wiredRead`, `linkedRead`, the code
+`second-read`), or name a port the circuit doesn't have, which the session's verifier refuses
+(`Flock.Registered.checkPort`). The refusal is the run's and not the registration's: the design still evaluates. -/
+theorem named_port_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
+    ∃ ins spec sts, FlockDeploy.setupOf true (stmtAt h m₂ t) = some (ins, spec, sts) ∧
+      ∀ port : String,
+        ((∃ wr ∈ h.wires.getD #[], wr.template = h.names.getD t "" ∧ wr.port = port) ∨
+          ∃ l ∈ h.links.getD #[], l.template = h.names.getD t "" ∧ l.port = port) →
+        ∃ own reg, ins.registered = some own ∧ reg ∈ own ∧ reg.name = port ∧
+          ∀ sc ∈ sts, ∃ p, (List.range sc.c.ports.size).find? (fun p => sc.c.ports[p]!.name == port) = some p := by
+  have hat := stmtOkAt_of h hok ht
+  obtain ⟨ins, spec, sts, hset⟩ :
+      ∃ ins spec sts, FlockDeploy.setupOf true (stmtAt h m₂ t) = some (ins, spec, sts) := by
+    have hs := sessionOk_of_stmtOkAt h hat
+    simp only [sessionOk, Bool.and_eq_true] at hs
+    obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
+    exact ⟨ins, spec, sts, hset⟩
+  refine ⟨ins, spec, sts, hset, fun port hport => ?_⟩
+  obtain ⟨s, hx⟩ := parse_of_stmtOkAt h hat
+  unfold stmtOkAt at hat
+  rw [hx] at hat
+  simp only [Bool.and_eq_true] at hat
+  obtain ⟨_, _, _, w, S, -, -, -, hw, hS, hc⟩ := readsOk_true h hat.2
+  have hwi := ins_of_setupOf hw hset
+  obtain ⟨-, -, hSr, hSn⟩ := stmtJsonOf_fields h hS
+  obtain ⟨-, -, -, -, -, -, -, hlinked, hwired, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  have hany : (Spot.entries (Spot.getD S.registered "ports")).any (·.1 == port) = true := by
+    rcases hport with ⟨wr, hwr, hwt, rfl⟩ | ⟨l, hl, hlt, rfl⟩
+    · unfold Spot.SecondStage.wiredRead at hwired
+      have h1 : (wr.template != h.names.getD t "" ||
+          (Spot.entries (Spot.getD S.registered "ports")).any (·.1 == wr.port)) = true :=
+        Array.all_eq_true_iff_forall_mem.1 hwired wr hwr
+      rcases Bool.or_eq_true_iff.1 h1 with hne | hany
+      · exact absurd hwt (bne_iff_ne.1 hne)
+      · exact hany
+    · unfold Spot.SecondStage.linkedRead at hlinked
+      have h1 : (l.template != h.names.getD t "" ||
+          (Spot.entries (Spot.getD S.registered "ports")).any (·.1 == l.port)) = true :=
+        Array.all_eq_true_iff_forall_mem.1 hlinked l hl
+      rcases Bool.or_eq_true_iff.1 h1 with hne | hany
+      · exact absurd hlt (bne_iff_ne.1 hne)
+      · exact hany
+  obtain ⟨⟨nm, e⟩, hme, hnm⟩ := Array.any_eq_true'.1 hany
+  obtain rfl : nm = port := by simpa using hnm
+  cases hreg : ins.registered with
+  | none =>
+    rw [hSn (registered_none hwi hreg), show Spot.entries (Spot.getD Lean.Json.null "ports") = #[] from rfl] at hme
+    exact absurd hme (Array.not_mem_empty _)
+  | some own =>
+    obtain ⟨bR, jR, hbR, hjR, hoj⟩ := registered_of_ins hwi hreg
+    have hSj : S.registered = jR := by
+      have h4 := hSr bR hbR
+      rw [hjR] at h4
+      exact (Option.some.inj h4).symm
+    obtain ⟨kvs, hports, -, hback⟩ := portsOf_entries (portsOf_of_ofJson hoj)
+    rw [hSj, getD_of_ok hports] at hme
+    obtain ⟨reg, hmem, hrn⟩ := hback _ hme
+    refine ⟨own, reg, rfl, hmem, hrn, fun sc hsc => ?_⟩
+    obtain ⟨_, _, -, -, hregs⟩ := opens_of_setup hset hreg sc hsc
+    obtain ⟨p, _, _, hp, -⟩ := hregs reg hmem
+    rw [hrn] at hp
+    exact ⟨p, hp⟩
 
 end SpotFlock
