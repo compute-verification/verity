@@ -753,7 +753,7 @@ def _stop_arg(text: str | None) -> dict | None:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     try:
         from verity_vllm.program.frontend.target_profile import parse_target_arg

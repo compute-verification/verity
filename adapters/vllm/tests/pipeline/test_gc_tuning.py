@@ -1,4 +1,4 @@
-"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
+"""verity_vllm.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
 checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
@@ -17,11 +17,11 @@ import sys
 import pytest
 
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
+from verity_vllm import gc_tuning
 from verity_vllm.observe.fold.fold import fold
-from verity_vllm.pipeline import gc_tuning
 
 PROBE = ("import gc, json, sys\n"
-         "from verity_vllm.pipeline.gc_tuning import tune\n"
+         "from verity_vllm.gc_tuning import tune\n"
          "before = gc.get_threshold(); r = tune(); after = gc.get_threshold()\n"
          "print(json.dumps({'before': before, 'ret': r, 'after': after}))\n")
 
@@ -61,7 +61,7 @@ def test_env_contract_in_a_fresh_interpreter(value, expect):
 
 
 EXIT_PROBE = ("import atexit, gc\n"
-              "from verity_vllm.pipeline.gc_tuning import tune\n"
+              "from verity_vllm.gc_tuning import tune\n"
               "n0 = gc.get_freeze_count()\n"
               "atexit.register(lambda: print('frozen' if gc.get_freeze_count() > n0 else 'unfrozen', flush=True))\n"
               "tune(); tune()\n")
@@ -180,3 +180,9 @@ def test_the_entry_points_call_tune():
     assert "gc_tuning import tune" in inspect.getsource(global_match.main)
     assert "gc_tuning import tune" in inspect.getsource(batch_decomp.main)
     assert "gc_tuning import tune" in inspect.getsource(manifest.main)
+
+
+def test_the_older_path_is_the_same_tune():
+    """`pipeline.gc_tuning.tune` is the module's own function, so the heap is frozen once whichever path a caller takes."""
+    from verity_vllm.pipeline import gc_tuning as older
+    assert older.tune is gc_tuning.tune and older.__all__ == ["tune"]

@@ -1073,7 +1073,7 @@ def fold_worker(a: Options) -> int:
     for req in ("log", "profile", "out"):
         if getattr(a, req) is None:
             raise SystemExit(f"--worker fold needs --{req}")
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.gc_tuning import tune as _gc_tune   # process-level; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     doc, result = fold_summary_result(a.log, a.profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
     out = Path(a.out)
