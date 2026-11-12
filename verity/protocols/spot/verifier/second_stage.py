@@ -79,11 +79,12 @@ table in place of its name, as the interior registration's check read it), the r
 record or a value the verifier holds, and the read's verdict port reads a value the verifier fills with 1
 (`_opened_row`): the row is then the table's at that key, short of a SHA-512
 collision. A key the block computes, a wire, is refused, with a reason of its own (`KEY_WHY`): no statement covers it.
-A read is a template of the read's Definition (`OPENING`), by its id; that the circuit a session proves under that id
-is the read's is the template check's (`Flock.ReadNet.check`), not round 2's. Which table a read opens is the one whose
-root and domain id the verifier fills, and which row its key. Not held here: that the table has as many leaves as the
-read's template has rows. A design whose key is the prover's after the sample, or whose root and domain are not one
-table's of round 1's record, is refused here. The code is reported beside the others, in every
+A read is a template the auditor's params record as one (`Own.reads`, `service.template_reads`): the template
+check (``flock-read-tmpl check V H``, `Flock.ReadNet.check`) accepted the circuit file they name for it as the read of
+a table of V rows, where the params were made; round 2 runs no template check. Which table a read opens is the one
+whose root and domain id the verifier fills, a table of V leaves in round 1's record, and which row its key. A design
+whose key is the prover's after the sample, whose root and domain are not one table's of round 1's record, or whose
+table has another leaf count than the read's rows, is refused here. The code is reported beside the others, in every
 branch of `check`, so a run that has it still reaches its other stops.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
@@ -127,13 +128,13 @@ RETURN_WHY = ("the interior registration registers a value of a name the replay 
               "registration's record: what a replay block returns is read only at a port that record commits")
 INPUTS_WHY = ("the interior registration registers a value that is neither one the verifier holds without the prover (one "
               "it pinned, one it holds to an earlier record, or one it fills from its own bytes) nor the opened row of a "
-              "read whose root and domain it fills from one table round 1's record registers, whose key is a port of "
-              "round 1's record or a value it holds, and whose verdict it holds to 1")
+              "read the auditor's params record, whose root and domain it fills from one table of the read's rows that "
+              "round 1's record registers, whose key is a port of round 1's record or a value it holds, and whose "
+              "verdict it holds to 1")
 KEY_WHY = ("the interior registration registers the opened row of a read at a key the block computes (the read's key is "
            "wired to another template's output): no statement covers it")
-#: A read's Definition, as a template's id begins, and its ports (`gates.embedding.EmbeddingRead`): its key, the
-#: table's root and domain id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING`).
-OPENING = "EmbeddingRead_v1{"
+#: A read's ports (`gates.embedding.EmbeddingRead`, `Flock.ReadNet.readTmpl`): its key, the table's root and domain
+#: id, the opened row with its salt and its path, and its verdict (`SecondStage.OPENING_KEY` and the names after it).
 OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
 OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
@@ -313,7 +314,8 @@ class Own:
     rows of the ports they and the links name (`replay_rows`), the names the replay block's return has in the boundary
     registration's record (`replay_returns`), and, of the values the interior registration registers, the verifier's
     own copies of those it holds without the prover: each one it fills itself, with its rows of sources
-    (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``)."""
+    (`supplied_of`), and the names of those it pinned or holds to an earlier record (``fixed``); and the templates the
+    auditor's params record as reads, each with its table's rows, ``(template, V)`` (`service.template_reads`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
@@ -330,6 +332,7 @@ class Own:
     returns: tuple[str, ...] = ()
     supplied: tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...] = ()
     fixed: tuple[str, ...] = ()
+    reads: tuple[tuple[str, int], ...] = ()
 
 
 def supplied_of(supplied: Any) -> tuple[tuple[str, tuple[tuple[tuple[str, str], ...], ...]], ...]:
@@ -1277,40 +1280,49 @@ def _bytes_of(row: Sequence[tuple[str, str]]) -> str | None:
     return row[0][1] if len(row) == 1 and row[0][0] == "bytes" else None
 
 
+def _read_size(own: Own, t: str) -> int | None:
+    """`SecondStage.readSize`: the rows V of the table template `t` reads, where the auditor's params record `t` as a
+    read (``own.reads``, a template's first); None for a template they record none for."""
+    return next((v for u, v in own.reads if u == t), None)
+
+
 def _one_table(own: Own, mine: Mapping[str, Any], t: str, root: str, domain: str) -> bool:
     """`SecondStage.oneTable`: values `root` and `domain`, which template `t`'s root and domain ports read, are one
-    table's of round 1's record at every unit. Each has at least one row and as many as the other; row ``i`` of each is
-    one ``bytes`` source (`_bytes_of`), and some port of round 1's record (`_by_port`) registers row ``i`` of `root` as
-    its root under row ``i`` of `domain` as its domain id; and the two ports' rows place each unit alike (``own.rows``:
-    one ``per`` and the same runs). So a unit reads the root and the domain id of one table that round 1's record
-    registers."""
+    table's of round 1's record at every unit, a table of as many leaves as the read has rows. `t` is a read of V rows
+    (`_read_size`). Each value has at least one row and as many as the other; row ``i`` of each is one ``bytes`` source
+    (`_bytes_of`), and some port of round 1's record (`_by_port`) registers row ``i`` of `root` as its root under row
+    ``i`` of `domain` as its domain id, at V leaves; and the two ports' rows place each unit alike (``own.rows``: one
+    ``per`` and the same runs). So a unit reads the root and the domain id of one table of V leaves that round 1's
+    record registers."""
     a, b = ([_bytes_of(r) for r in mine[v]] for v in (root, domain))
-    ports = list(_by_port(own.boundary).values())
+    ports, size = list(_by_port(own.boundary).values()), _read_size(own, t)
     at = [None if (r := _rows_of(own, t, p)) is None else (r.per, r.runs) for p in OPENING_TABLE]
-    return (bool(a) and len(a) == len(b)
+    return (size is not None and bool(a) and len(a) == len(b)
             and all(r is not None and d is not None
                     and any(type(_get(e, "root")) is str and type(_get(e, "domain")) is str
-                            and _get(e, "root") == r and _get(e, "domain") == d for e in ports)
+                            and _get(e, "root") == r and _get(e, "domain") == d
+                            and _nat(n := _get(e, "leaves")) and n == size for e in ports)
                     for r, d in zip(a, b))
             and at[0] is not None and at[0] == at[1])
 
 
 def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link) -> bool:
     """`SecondStage.openedRow`: link `x` names the opened row of a read against a root round 1 committed. Its template
-    is a read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
+    is a read (`_read_size`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
     (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
-    of round 1's record at every unit (`_one_table`); its key (`OPENING_KEY`) is no wire, and is linked at values the
-    interior registration doesn't register (`registered`: a port of round 1's record then, by ``second-links``) or
-    the verifier holds (``own.fixed``, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
-    statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each
-    row `VERDICT_ONE`. A key the block computes, a wire, is refused: no statement covers it (`_inputs_why`)."""
+    of round 1's record at every unit, of the read's rows (`_one_table`); its key (`OPENING_KEY`) is no wire, and is
+    linked at values the interior registration doesn't register (`registered`: a port of round 1's record then, by
+    ``second-links``) or the verifier holds (``own.fixed``, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its
+    template's reference statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at
+    least one row, each row `VERDICT_ONE`. A key the block computes, a wire, is refused: no statement covers it
+    (`_inputs_why`)."""
     t = x.template
     at = lambda p: [y.value for y in own.links or () if y.template == t and y.port == p]  # noqa: E731
     held = lambda v: v not in registered or v in own.fixed or v in mine  # noqa: E731
     ref = next((r for u, r in own.ref_reads if u == t), None)
     verdict = _get(_get(_get(ref, "ports"), OPENING_VERDICT), "value")
     roots, domains = at(OPENING_ROOT), at(OPENING_DOMAIN)
-    return (t.startswith(OPENING) and x.port in OPENING_ROW
+    return (_read_size(own, t) is not None and x.port in OPENING_ROW
             and all(at(p) and all(v in mine for v in at(p)) for p in OPENING_TABLE)
             and all(_one_table(own, mine, t, r, d) for r in roots for d in domains)
             and _wire_of(own, t, OPENING_KEY) is None and bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))
@@ -1352,7 +1364,7 @@ def inputs_failure(own: Own) -> str | None:
 def _inputs_why(own: Own, v: str) -> str:
     """`SecondStage.inputsWhy`: why value `v` is refused (`inputs_failure`): `KEY_WHY` where a link names it as the
     opened row of a read whose key is wired, a key the block computes, else `INPUTS_WHY`."""
-    wired = any(x.value == v and x.template.startswith(OPENING) and x.port in OPENING_ROW
+    wired = any(x.value == v and _read_size(own, x.template) is not None and x.port in OPENING_ROW
                 and _wire_of(own, x.template, OPENING_KEY) is not None for x in own.links or ())
     return KEY_WHY if wired else INPUTS_WHY
 

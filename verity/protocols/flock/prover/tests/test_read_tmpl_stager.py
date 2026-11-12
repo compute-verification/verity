@@ -95,6 +95,25 @@ def test_the_executable_is_the_one_named_else_the_trees_build_else_the_paths(tmp
         RT.executable()
 
 
+def test_the_check_of_a_circuit_file_is_the_executables_verdict(tmp_path, monkeypatch):
+    """`read_tmpl.check` runs the executable ``check V H CIRCUIT`` and reads its verdict: none where it accepts the file
+    (exit 0), its own words where it refuses it (exit 1), and an error for a usage error or a file it can't read
+    (exit 2)."""
+    circuit = tmp_path / "circuit.txt"
+    monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, "echo 'ok EmbeddingRead_v1(V=7,H=3)'")))
+    assert RT.check(7, 3, circuit) is None
+    assert (tmp_path / "args").read_text() == f"check 7 3 {circuit}\n"
+    why = f"flock-read-tmpl: {circuit}: the check refuses its template EmbeddingRead_v1(V=7,H=3) at V = 8, H = 3"
+    monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, f"echo '{why}' >&2; exit 1")))
+    assert RT.check(8, 3, circuit) == why
+    monkeypatch.setattr(RT, "EXE", str(_stand_in(tmp_path, "echo 'usage: flock-read-tmpl V H' >&2; exit 2")))
+    with pytest.raises(ValueError, match="usage: flock-read-tmpl V H"):
+        RT.check(8, 3, circuit)
+    monkeypatch.setattr(RT, "EXE", str(tmp_path / "missing"))
+    with pytest.raises(FileNotFoundError, match="lake build flock-read-tmpl"):
+        RT.check(8, 3, circuit)
+
+
 @pytest.mark.slow
 def test_a_structural_unit_the_verifier_has_a_template_for_is_staged_on_it(tmp_path, monkeypatch):
     """Where `read_tmpl.of` gives a template, the structural stager's unit is that template, never `struct_lower`'s: its
@@ -148,7 +167,8 @@ def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verif
     """A structural ``EmbeddingRead_v1{V = 5, H = 2}`` on the rows serving commits (`interface.unit_rows`): its unit is the
     template ``flock-read-tmpl 5 2`` writes, the tree's build found with nothing named, byte for byte its template section, and a
     round of honest reads, a read under another salt and one past V stages on it, each read's row and verdict the IR
-    reference's (`gates.embedding.reference`)."""
+    reference's (`gates.embedding.reference`). The verifier's check accepts the statement's circuit file as that read,
+    and refuses it as a read of another count of rows (`read_tmpl.check`)."""
     V, H = 5, 2
     monkeypatch.setattr(RT, "EXE", None)
     assert RT.executable() == str(verifiers)
@@ -163,3 +183,7 @@ def test_a_read_unit_is_the_verifiers_template_and_stages_a_round_of_reads(verif
     want = [E.reference(V, *c) for c in cases]
     assert [list(map(int, w)) for w in got["outs"]["o0"]] == [h for h, _ok in want]
     assert [int(w[0]) for w in got["outs"]["o1"]] == [ok for _h, ok in want] == [1] * V + [0, 1]
+    circuit = tmp_path / "round" / "circuit.txt"
+    assert RT.check(V, H, circuit) is None
+    assert RT.check(V + 1, H, circuit) == (f"flock-read-tmpl: {circuit}: the check refuses its template "
+                                           f"EmbeddingRead_v1(V={V},H={H}) at V = {V + 1}, H = {H}")

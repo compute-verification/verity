@@ -275,6 +275,36 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     assert HT.roots_of(leaf, hist) == {n: (hs[n].root, hs[n].domain.domain_id) for n in names}
 
 
+def test_the_params_record_a_read_only_where_the_verifiers_check_accepts_its_circuit_file(tmp_path, monkeypatch):
+    """`read_record`, what the params record of a template beside its circuit file's SHA-512: a table read's rows and
+    words a row where ``flock-read-tmpl check V H`` accepts the file, asked once; nothing where it refuses it, and
+    nothing for a Definition that is no read, which it is never asked about. The file is the one of the SHA-512 the
+    params name, else an error. `service.template_reads` reads the record back as the read's rows."""
+    from verity_flock import read_tmpl
+
+    circuit, asked = tmp_path / "circuit.txt", tmp_path / "args"
+    circuit.write_bytes(b"a circuit file")
+    sha = hashlib.sha512(b"a circuit file").hexdigest()
+
+    def stand_in(body: str) -> None:
+        exe = tmp_path / "flock-read-tmpl"
+        exe.write_text(f"#!/bin/sh\necho \"$@\" >> {asked}\n{body}\n")
+        exe.chmod(0o755)
+        monkeypatch.setattr(read_tmpl, "EXE", str(exe))
+
+    stand_in("echo 'ok EmbeddingRead_v1(V=8,H=2)'")
+    assert TS.read_record(E.read(8, 2), circuit, sha) == {"V": 8, "H": 2}
+    assert asked.read_text() == f"check 8 2 {circuit}\n"
+    assert TS.read_record(PAIR, circuit, sha) is None and asked.read_text() == f"check 8 2 {circuit}\n"
+    entry = {"template": E.read(8, 2).id, "circuit": sha, "header": {}, "registered": None}
+    assert S.template_reads({"templates": [{**entry, "read": TS.read_record(E.read(8, 2), circuit, sha)}]}) == (
+        (E.read(8, 2).id, 8),)
+    with pytest.raises(ValueError, match="is not the circuit file of SHA-512"):
+        TS.read_record(E.read(8, 2), circuit, "00" * 64)
+    stand_in("echo 'flock-read-tmpl: it does not parse as a templated statement' >&2; exit 1")
+    assert TS.read_record(E.read(8, 2), circuit, sha) is None
+
+
 @pytest.mark.slow
 def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name():
     """Round 2's read check (`second_stage._read_ok`) on a table read's ``root`` and ``domain`` ports, from a record the
