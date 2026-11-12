@@ -7,6 +7,7 @@ frozen target is ``REAL``; no ``rescale_state`` in its contracts).
 """
 from __future__ import annotations
 
+import copy
 import random
 
 import pytest
@@ -139,8 +140,6 @@ def test_e4m3_nan_words_are_rejected_and_448_is_finite() -> None:
 
 
 def test_rescale_mutations_are_rejected() -> None:
-    import copy
-
     p = Params.from_model(ADA_E4M3_M16N8K32)
     acc = 0x3F800001
     a = [0x38, 0x38] + [0] * 30

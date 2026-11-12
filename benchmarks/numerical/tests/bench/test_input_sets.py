@@ -7,6 +7,7 @@ set of each template has the captured layout and provenance fields and verifies 
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,6 +15,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.definitions.ops import gemm
+from verity.definitions.registry import prims as VP
+from verity.definitions.silicon import models
+from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as M
+from verity_numerical.bench import contract
 from verity_numerical.bench import generate as G
 from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
@@ -149,10 +157,6 @@ def test_evaluation_targets_equal_the_definitions():
     """Heads evaluate through a batch Definition that has a kernel; each equals the head's gate reference, and the captured
     vLLM GEMM step (core's AmpereBF16TcDot16_v2 since the re-baseline re-key; the retired _v1 evaluated the same function) equals the
     kernel."""
-    from verity.circuits.evaluation import evaluate_batch
-    from verity.circuits.defs import REGISTRY, bind
-    from verity.definitions.ops import gemm
-
     key = SY.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
         instances = [sub.draw(key, j) for j in range(n)]
@@ -165,7 +169,6 @@ def test_evaluation_targets_equal_the_definitions():
     sub = TM.subcircuit("gemm-coordinate", K=64)
     instances = [sub.draw(key, j) for j in range(64)]
     x, w = np.stack([d.inputs["x"] for d in instances]), np.stack([d.inputs["w"] for d in instances])
-    from verity.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
     assert np.array_equal(ref, evaluate_batch(sub.target(), x, w))
@@ -182,8 +185,6 @@ def test_model_only_gemm_semantics_bind_but_do_not_generate(tmp_path):
 
 
 def test_gemm_ids_fit_the_census_schema():
-    import re
-
     schema = json.loads((CENSUS / "schemas" / "input_sets.schema.json").read_text())
     pattern = re.compile(schema["items"]["properties"]["subcircuit"]["pattern"])
     for sem in [*TM.GEMM_SEMANTICS, *TM.GEMM_FP8]:
@@ -197,8 +198,6 @@ FP8 = sorted(TM.GEMM_FP8)
 def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
     """An FP8 set's y is the FP32 accumulator word of K/32 steps of the verity.definitions.silicon model the backends chain with (ADA_E4M3_M16N8K32,
     HOPPER_E4M3_K32), from the IR reference (verity.definitions.kernels.tc ADA_E4M3_DOT / HOPPER_E4M3_DOT); every operand byte is finite."""
-    from verity.definitions.silicon import models
-
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics=sem, tile=4)
     s = IS.InputSet.open(G.generate(sub, 12, 5, tmp_path)["path"])
     assert IS.verify(s.path)["ok"]
@@ -220,8 +219,6 @@ def test_fp8_sets_hold_the_backends_accumulators(tmp_path, sem):
 def test_nvfp4_sets_hold_the_models_accumulator(tmp_path):
     """NVFP4 (sm120): y is models.BLACKWELL_SM120_NVF4's chain over the E2M1 codes and UE4M3 block-16 scales, from the IR reference
     verity.definitions.kernels.tc.SM120_NVF4_DOT; codes span 0..15, scales the valid 0x00..0x7E."""
-    from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as M
-
     sid = "gemm-coordinate/k1536/sm120-mma-e2m1-nvf4"
     sub = TM.parse_subcircuit_id(sid)
     s = IS.InputSet.open(G.generate(sub, 8, 2, tmp_path)["path"])
@@ -256,8 +253,6 @@ def test_meta_and_ref(synthetic):
     m = s.meta()
     assert (m["subcircuit"], m["template"], m["source"], m["n"], m["seed"]) == (s.subcircuit.id, "gemm-coordinate", "synthetic", 6, 11)
     ref = s.ref(0, 4, art="art:" + "0" * 64)
-    from verity_numerical.bench import contract
-
     assert not contract._validate_instances(ref, 4, None)
     assert ref["range"] == [0, 4] and ref["content_digest"] == s.content_digest
     with pytest.raises(ValueError):
