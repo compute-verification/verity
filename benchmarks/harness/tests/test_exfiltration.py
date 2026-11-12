@@ -1125,7 +1125,11 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
     assert cs["value"] is None and cs["missing"][0] == {"field": "serving", "lacks": ["serving"], "why": E.SERVING_GAP}
     assert {p["share"] for p in cs["parts"].values()} == {None}
 
-    for bad, why in (({"replay": [{"seconds": 30.0, "gpus": 0}]}, "holds replay at 30.0 seconds on 0 GPUs"),
+    # a part on 0 GPUs started no process on a card: it is read, and adds no GPU-seconds
+    cs = E.served_share(SERVED | {"staging": [{"seconds": 20.0, "gpus": 0}]})
+    assert cs["missing"] == [] and cs["parts"]["staging"]["gpu_s"] == 0.0 and cs["value"] == pytest.approx(0.1175)
+    for bad, why in (({"replay": [{"seconds": 30.0, "gpus": -1}]}, "holds replay at 30.0 seconds on -1 GPUs"),
+                     ({"serving": {"seconds": 1000.0, "gpus": 0}}, "holds the window's serving at 0.0 GPU-seconds"),
                      ({"serving": {"seconds": 0.0, "gpus": 8}}, "holds the window's serving at 0.0 GPU-seconds"),
                      ({"stock": None, "serving_cost": -1}, "holds a serving cost of -1: a fraction over -1")):
         with pytest.raises(ValueError, match=f"{SERVED['run']}'s record {why}"):

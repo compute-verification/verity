@@ -673,7 +673,8 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
 
 def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]:
     """The GPU-seconds a record's field holds, a list of what held GPUs for it (one entry a session or a step, each
-    `{"seconds": s, "gpus": g}`) or one such entry, and the keys an entry lacks. None and the gap where it holds none."""
+    `{"seconds": s, "gpus": g}`) or one such entry, and the keys an entry lacks. None and the gap where it holds none.
+    An entry on 0 GPUs is a step that started no process on a card: it is read, and adds no GPU-seconds."""
 
     if not entries:
         return None, [field]
@@ -682,9 +683,9 @@ def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]
         seconds, gpus = e.get("seconds"), e.get("gpus")
         lacks += [f"{field}.{k}" for k, v in (("seconds", seconds), ("gpus", gpus)) if v is None]
         if None not in (seconds, gpus):
-            if not (seconds >= 0 and isinstance(gpus, int) and gpus >= 1):
+            if not (seconds >= 0 and isinstance(gpus, int) and gpus >= 0):
                 raise ValueError(f"{run}'s record holds {field} at {seconds!r} seconds on {gpus!r} GPUs: an entry is "
-                                 "seconds of 0 or more on a whole count of GPUs, 1 or more")
+                                 "seconds of 0 or more on a whole count of GPUs, 0 or more")
             total += seconds * gpus
     return (None if lacks else total), sorted(set(lacks))
 
