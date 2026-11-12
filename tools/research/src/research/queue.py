@@ -1081,6 +1081,23 @@ def move_scripts(repo: Path, at: str) -> dict[str, str]:
     return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
 
 
+#: `move_scripts`' paths as `vqueue.meets` reads a change's files: a change that meets one changes what judges a move
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py", MOVE_CHECK, MOVE_PINS)
+
+
+def path_rows(text: str) -> list[tuple[str, str]]:
+    """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
+    included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
+    goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  None of a map that doesn't parse."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return []
+    tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
+    rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
+    return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
+
+
 def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
     """``scripts`` (`move_scripts`) written under ``dest`` at their paths, so each finds its imports beside it as in a checkout:
     ``dest``."""
@@ -1518,7 +1535,7 @@ def _message(pr: PR) -> str:
 
 def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
     return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
-            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
+            f"by the queue for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
             f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
 
 
@@ -2300,38 +2317,49 @@ class Queue:
 
     # -- moves (the module's `Moves`)
 
+    @staticmethod
+    def _move_key(tip: str, pr: PR, main: str) -> str:
+        """The key of move PR ``pr``'s regeneration on ``tip``, landing tip ``main`` (the state's `moves_made`)."""
+        return f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+
     def _regenerate(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
         """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip, landing tip ``main``
-        and head (`_regenerated`; the state's `moves_made`)."""
-        key = f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+        and head (`_regenerated`; the state's `moves_made`, which keeps a certified move's `move_check.py --json` report as its
+        `certificate`)."""
+        key = self._move_key(tip, pr, main)
         self._used.add(key)
         got = self._made.get(key) or {}
         if not got.get("why") and not (got.get("commit") and self._has(got["commit"])):
-            commit, why = self._regenerated(tip, pr, main)
-            got = self._made[key] = {"commit": commit} if commit else {"why": why}
+            commit, why, report = self._regenerated(tip, pr, main)
+            got = self._made[key] = {"commit": commit, "certificate": report} if commit else {"why": why}
         return got.get("commit"), got.get("why", "")
 
-    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
+    def _scripts_below(self, tip: str, main: str) -> list[str]:
+        """The scripts of `tools/move/` that the members between ``main`` and ``tip`` change: a move regenerated on ``tip``
+        runs ``main``'s, and `restack.py` carries the members above it with its base's, so it waits until they land."""
+        scripts, ours = move_scripts(self.workdir, main), move_scripts(self.workdir, tip)
+        return sorted(p for p in ours.keys() | scripts.keys() if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p))
+
+    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str, dict | None]:
         """`rename.py --map MAP` (``pr``'s `Move:` line, ``tip``'s map) run at the root of a worktree of ``tip``, committed as one
-        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT`;
-        the PR's head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its
-        landing gates are, so a member below the move can't change what judges it; and a member below that changes
-        `tools/move/`'s scripts holds the move back, since `restack.py` carries the members above it with its base's.  A map
-        ``tip`` or a script ``main`` lacks, such a member, a script that fails, a map that renames nothing there, or a move
-        `move_check.py` refuses is the reason."""
+        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT
+        --json`, given each of the map's path rows as `--map OLD=NEW` (`path_rows`): (the commit, "", its report).  The PR's
+        head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates
+        are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
+        holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
+        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None)."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
             missing.insert(0, f"{pr.move} at {tip[:12]}")
         if missing:
             return None, (f"its move can't be regenerated: there's no {' or '.join(missing)}; land the map first, then mark the "
-                          "move again")
-        ours = move_scripts(self.workdir, tip)
-        if changed := sorted(p for p in ours.keys() | scripts.keys()
-                             if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p)):
+                          "move again"), None
+        if changed := self._scripts_below(tip, main):
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
-                          f"until those members land on `{into}`")
+                          f"until those members land on `{into}`"), None
+        rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
@@ -2340,24 +2368,33 @@ class Queue:
                 r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
                                    capture_output=True, text=True, env=_script_env())
                 if r.returncode:
-                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
+                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}", None
                 _git(wt, "add", "-A")
                 tree = _out(wt, "write-tree")
                 if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
-                                  "its map moves nothing there")
+                                  "its map moves nothing there"), None
                 commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
                               env=IDENTITY).stdout.strip()
                 # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
-                c = subprocess.run([sys.executable, str(check), tip, commit], cwd=wt, capture_output=True, text=True,
-                                   env=_script_env())
-                if c.returncode:
-                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified (`{MOVE_CHECK} "
-                                  f"{tip[:12]} {commit[:12]}` exit {c.returncode}): {_tail(c, 4)}")
+                c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
+                                   cwd=wt, capture_output=True, text=True, env=_script_env())
+                said = f"`{MOVE_CHECK} {tip[:12]} {commit[:12]}`" + (f" with {len(rows)} --map rows" if rows else "")
+                try:
+                    report = json.loads(c.stdout)
+                except ValueError:
+                    report = None
+                if not isinstance(report, dict):
+                    return None, f"{said} couldn't judge its move regenerated on {tip[:12]} (exit {c.returncode}): {_tail(c, 4)}", \
+                        None
+                if c.returncode or report.get("certified") is not True:
+                    refused = "; ".join(f"{f.get('path')}: {f.get('reason')}" for f in (report.get("refusals") or [])[:3])
+                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified ({said} exit "
+                                  f"{c.returncode}): {_tail(c, 1)}" + (f": {refused}" if refused else "")), None
                 self.log(f"research queue: #{pr.number}'s move ({pr.move}) regenerated on {tip[:12]} as {commit[:12]}: "
                          f"{_tail(c, 1)}")
-                return commit, ""
+                return commit, "", report
             finally:
                 _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
                 _git(self.workdir, "worktree", "prune", check=False)
