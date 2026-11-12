@@ -51,7 +51,8 @@ from verity.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
-           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
+           "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values",
+           "rid_of_ids", "rid_in", "inputs"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)

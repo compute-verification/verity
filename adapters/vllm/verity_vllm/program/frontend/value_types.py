@@ -148,3 +148,7 @@ def join_coll(T: Type, flats: Sequence[Coll]) -> Coll:
     if next(it, None) is not None:
         raise FrontendError("E_SHAPE", f"more tensor chunks than {T!r} has leaves", "join")
     return Coll(T, refs)
+
+
+__all__ = ["WIDTH_OF_DTYPE", "CARRIER", "Alloc", "width_of", "type_of_tensor", "type_of", "is_tensor_type", "shape_of",
+           "flat_types", "tensors_of", "unflatten", "split_coll", "join_coll"]
