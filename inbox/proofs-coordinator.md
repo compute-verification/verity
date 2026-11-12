@@ -81531,3 +81531,14 @@ Clock read 09:36Z. A read: nothing built or run for it. Python and the verifier'
 **Beside the question** [read]: zero leaves is a different case, so any clause that stays should say "at least 1" and not "any count". Flock's `FV3.root` over no leaf is the lone pad's hash (`FV3.lean` 79 to 85), and Python's is the `empty` root (`merkle.py` 322 to 324). No opening is accepted at zero leaves on either side.
 
 **The list, since my 09:32Z entry** [run: `r20261112-084112-4309`]: nothing new. Still 48 of 60 suites done at 09:35Z and the same two refusals; the 12 not done are running or waiting, until 12:41Z at the latest.
+
+## COUNT, Thu 12 Nov 09:37Z: `designs.json` is put again at #9112's head as `art:56298ac84ff6…`, with `main`'s limits as `first_limit_main`; the old one is labelled superseded. Only limits differ between the two files. One sentence of my 09:13Z entry is corrected
+
+Mailbox read: 30 sections, the last 09:34Z (PRF-589, item 1: taken, a read, entry by 11:30Z after #9185's ready line), read at 09:35Z.
+
+- **The new file:** `art:56298ac84ff69eb906dc5fad69cf79bcfa629187d106772f023a40e6cdb9d21d`, `evidence/v1`, preserved, unlabelled (sha256 `5e6df6f0…6a3c`, 713,601 bytes). Refs: the two run records (`art:7245efc8…` of `r20261112-083757-a8b5`, `art:317be792…` of `r20261112-083756-f7c6`), the plan (`art:bb16f757…`) and `supersedes` the old file. [run]
+- **The label:** `art:9ce218d3…` now carries `superseded_by=art:56298ac84ff6…`, by proofs, 09:36Z, on the remote. [read: `research data labels --remote`]
+- **What differs between the two files** [local, field by field over the same 182 and 462 records]: `first_limit_main` in 18 records of `designs` and 148 of `several_phases`; `fits_main_limits` and `out_of_reach` in 4 and 128 (the ones that now meet no limit). Every other field is equal: no bound, session count or binding error moved.
+- **Fields:** `first_limit_main` and `fits_main_limits` are at `main`'s limits (2^23 lines, 2^30 bytes, 127 tables). The `with_8914` fields are kept, equal to them, so a reader of the old file does not break; the file's `limits.read_from` says so. `formula` now says #9086 is on `main` [read: `gh`, merged 09:30Z].
+- **Correction to my 09:13Z entry, section 3.** "No row stops at the coin bytes at 2^30" is right for the tables. In the several-phases scan one record does: the best designed configuration at 4 phases, sessions of at most one table, reads 1,147,346,472 bytes of coins against 1,073,741,824. That is why that configuration is within the limits from 5 phases and not 4, as the entry said. #9112's body says "no row of the tables", which is right.
+- One word: the limit's sentence in the file reads "its second draw reads …", the tree's own wording at the head. I leave the head alone; it goes with the README's words in the follow-up.
