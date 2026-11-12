@@ -673,6 +673,59 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
                                  "above", "below")), seen
 
 
+def test_the_rows_forms_caps_are_the_schedules(server):
+    """The rows form's `cells` are the schedule's caps (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each
+    of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and
+    cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for caps that miss its connections; no caps, one
+    connection short or over, and a cap below `egress_cells` are refused as parameters by Lean and the mirror alike;
+    and a schedule of 4 lanes over a 32-bucket link-window, 5 egress cells a connection, charges 384 bits for each over
+    one link-window (Lean's `#guard`)."""
+    for n in range(4):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        p, out = PC.params(case["params"]), reference(case)
+        s = p.schedule
+        assert list(p.cells) == s.caps(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
+        term = s.lanes * p.windows * s.window * clog2(s.egress_cells + 1)
+        assert out["verdict"] == ACCEPT and term > 0, (n, out)
+        assert (out["public"]["schedules"], out["public"]["cells"]) == (term, term), (n, out["public"])
+        verdict, got = D.replay(PORT, case, server)
+        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
+        for bad in PC.bad_cells(case["params"]):
+            broken = case | {"params": bad}
+            assert reference(broken)["reason"].startswith("params: cells:"), (n, reference(broken))
+            verdict, got = D.replay(PORT, broken, server)
+            assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
+    four = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
+                        ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
+    assert len(four.caps(1)) == 128 and sum(clog2(c + 1) for c in four.caps(1)) == 384
+
+
+def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
+    """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
+    distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
+    every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
+    before its caps, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
+    mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
+    fragment = "rows format: a frame's ordinal and payload length are u32s"
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p = PC.params(case["params"])
+        per = p.schedule.lanes * p.schedule.window
+        over = -(-PC.U32 // per)
+        assert PC.rows_wf(p.schedule, p.windows) and PC.rows_wf(p.schedule, (PC.U32 - 1) // per), (n, per)
+        assert not PC.rows_wf(p.schedule, over), (n, per)
+        broken = case | {"params": case["params"] | {"windows": over}}
+        assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
+        empty = dataclasses.replace(p, audits=(), windows=0)
+        for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
+            q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
+
+
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
     `check_registration` reads back under the period's key, session and schedule."""
