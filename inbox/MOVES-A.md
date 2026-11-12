@@ -9,8 +9,8 @@ what they move. Your pull request is still due open and unmarked by Fri 13 Nov 1
 1. **Sunday is one chain.** lean's eight rename maps run first, then top's maps, in one branch and one landing. Each
    map must certify on the tree the map before it leaves. So after your pull request is open, your maps are rehearsed
    on lean's Friday head (lean posts it on LEAN-80 by Fri 13 Nov 6 PM PST; top resumes you with it). To make that
-   rehearsal short: read lean's rename maps (`tools/move/*.toml` on `origin/main`, and any on lean's open branches you
-   can find with `gh pr list --author-any --search "Move:" --state open` or by the name `lean` in the head) and list
+   rehearsal short: read lean's rename maps (`tools/move/*.toml` on `origin/main`, and those on lean's open pull requests, which
+   `gh pr list --state open --search "head:cursor/lean" --json number,title,headRefName` lists) and list
    in your body every path or word in your maps that one of them changes.
 2. **One records run.** The Lean locks are updated once for the whole run, so every map's moves must compose into one
    `--moved` file (`tools/verity/lean/check.py --update --moved MOVES.json`; read how the move tools write it). For
