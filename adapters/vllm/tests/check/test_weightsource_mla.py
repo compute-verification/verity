@@ -9,7 +9,7 @@ import pytest
 from verity.circuits.types import Array, RecordType
 from verity.definitions.registry.prims import BF16, F32
 
-from verity_vllm.check.checkpoint_words import mla_moe_sources
+from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
@@ -82,6 +82,13 @@ def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources(
     assert mla_moe_sources(Array(FD, BF16)) is None
     with pytest.raises(ValueError, match="an array w13 in each of its layers"):
         mla_moe_sources(RecordType(*((k, Array(2, BF16) if k == "layers" else t) for k, t in wt.fields)))
+
+
+def test_a_name_that_is_no_layer_field_is_refused_by_name():
+    sources = mla_moe_sources(_mla_weights_type())
+    assert sources is not None
+    with pytest.raises(ValueError, match="^norm: not a layer field of an MLA Program$"):
+        mla_field_words(sources, "norm", lambda tensor, field: np.zeros(0, dtype=np.uint16))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):

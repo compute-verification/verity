@@ -18,6 +18,7 @@ import pytest
 from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
 from tests.check.test_oracle_compare import make_bmap, make_match, reader
 from tests.check.test_oracle_compare_v2_producers import gemma_like_program
+from tests.check.test_verdict import CLASSES, _base
 from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import cublas_route_pin, fp8_moe_scales
@@ -109,6 +110,21 @@ def test_a_wrapper_result_without_a_program_block_states_no_correspondence_diges
     assert V.correspondence_of_build(None, result_jsons=None) == (None, "absent", {})
     stated = {**silent, "request": {"program": {"correspondence_digest": digest}}}
     assert V.correspondence_of_build(None, result_jsons=stated) == (digest, "result.json:request", {"request": digest})
+
+
+def instrumented(pair: int, commit_pass: Any) -> dict[str, Any]:
+    """An instrumented run's line of runs.jsonl whose Commit record states `commit_pass`, or leaves it out."""
+    commit = _base()
+    if commit_pass is not ABSENT:
+        commit["commit_pass"] = commit_pass
+    return {"arm": "instrumented", "pair": pair, "tokens_equal_ref": True, "commit": commit}
+
+
+@pytest.mark.parametrize("stated, outcome", [((True, True), V.PASS), ((True, False), V.FAIL), ((True, ABSENT), V.PASS), ((True, None), V.PASS)])
+def test_a_verdict_document_that_states_no_decision_takes_the_runs_own_where_every_run_states_one(stated, outcome):
+    v = V.build([instrumented(i, p) for i, p in enumerate(stated)], {"required_classes": list(CLASSES)})
+    mismatch = ["RECONSTRUCTION MISMATCH: recorded commit_pass=False but the rule-by-rule outcome is PASS; the recorded decision stands"]
+    assert (v.outcome, v.notes) == (outcome, mismatch if outcome == V.FAIL else [])
 
 
 @pytest.fixture
@@ -588,3 +604,20 @@ def test_the_codes_violators_and_undecided_classes_a_query_use_verdict_lists_are
     assert r.detail["partition"]["codes"] == ["P1", "P2"] and r.detail["readiness_32"]["n_violators"] == 2
     assert [r.detail["width"][k] for k in ("n_violators", "violators", "n_unsupported", "unsupported")] == [1, ["V_v1"], 1, ["W_v1"]]
     assert r.detail["undecided"] == ["1 member class(es) with undecidable w_out: ['W_v1']"]
+
+
+@pytest.mark.parametrize("path, value", [*unstated("use", empty={}), (("use",), [G.QUERY_USE_KIND])])
+def test_a_query_use_document_that_states_no_use_fails_on_its_kind(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts[QUERY_USE] = query_use_doc()
+    r = gate_over(tmp_path, "G8", QUERY_USE, path, value, arts)
+    assert (r.status, r.reason) == ("fail", f"use.kind None != {G.QUERY_USE_KIND!r}")
+    assert r.detail["use"] == {"kind": None, "w_max": None} and r.detail["width"]["w_max"] == query_use_doc()["verdict"]["width"]["w_max"]
+
+
+@pytest.mark.parametrize("path, value", [*unstated("verdict", "readiness_32", empty={}), (("verdict", "readiness_32"), [True])])
+def test_a_query_use_verdict_that_states_no_readiness_carries_none(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts[QUERY_USE] = query_use_doc()
+    r = gate_over(tmp_path, "G8", QUERY_USE, path, value, arts)
+    assert (r.status, r.reason, r.detail["readiness_32"]) == ("pass", None, None)
