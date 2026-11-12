@@ -74130,3 +74130,29 @@ It does not establish three things.
   - The second asks for the lock's reason to end at `frame` before the next mark. I checked the fact myself and it holds, as above. If it is yours, I make the one-string commit; say whether that head needs its own records run or stands on `43e5`.
 - **`r20261112-061346-8587` cancelled** before it took a slot: the queue placed the union's try on `vy-nebius-cpu-2`. `d69e` is the same try on `vy-nebius-cpu-11`.
 - **I marked nothing.**
+
+## WIRED, Thu 12 Nov 06:18Z: `SecondWiresMove` is proved in the tree on the scratch: `4302` ended exit 0 on all three files, `secondWiresMove` on `propext`, `Classical.choice` and `Quot.sound` alone; my 06:08Z rows marked written are now compiled; #8940 is not on `main`
+
+Tags as in my 06:08Z entry. Mailbox read 06:18Z: 128 lines, newest section 05:05Z [run]. Scratch `cursor/proofs-wired-5d1b` is still `8f941d294261`, the head both runs' later files ran at [run: `git ls-remote`]. Nothing restated in a listed guarantee, no lock regenerated, no pull request opened [run: `git status`, `git log`].
+
+**0. #8940** [run: `git merge-base --is-ancestor 58a598e615b1 origin/main`, 06:18Z]: not on `main`, which is `d6075b75d289`.
+
+**1. Each lemma, now** [run: `research fetch --all r20261112-055319-4302`, 06:16Z, its `stdout.log`; `0a72` as in my 06:08Z entry]
+
+| what | file | state | run, and its line |
+|---|---|---|---|
+| Lemma 1, `rowAt_lt_of_fits` | `RowsFit.lean` | compiled | `r20261112-052858-0a72`: `lean exit 0 in 77 s`, 6 theorems, no axiom beyond the three |
+| Lemma 2, `writtenBits_inj` | `WrittenAt.lean` | compiled | `r20261112-055319-4302`: `lean exit 0 in 328 s`, 18 theorems, no axiom beyond the three |
+| The statement with `(two h s).isSome` | `WiresTie.lean` | compiled | `4302`: `lean exit 0 in 88 s`, `no theorems in it` |
+| Lemma 3, `room_of_two`, and `theorem secondWiresMove : SecondWiresMove` | `WiresMove.lean` | compiled | `4302`: `lean exit 0 in 36 s`, 12 theorems, no axiom beyond the three; `'SpotFlock.secondWiresMove' depends on axioms: [propext, Classical.choice, Quot.sound]` |
+
+- [run] `4302` is done, exit 0, on vy-nebius-cpu-13: it took its slot at 06:07Z and ended by 06:16Z. Neither run's log has a warning or an error at a line of the four files [run: `rg` over both `stdout.log`].
+- Open in the proof: nothing. No `sorry`, no hypothesis beyond the ruled statement's five.
+- [run] These are one-file tries: each file elaborated on a tree with its imports built, with the package's options and the axiom probe. No records run and no `check` has read them, and the files are under no root of `security/Proofs/Flock.lean`.
+
+**2. What this leaves of PRF-571** [derived: my 03:18Z section 3 and the statement]
+
+- `SecondWiresMove` gives `wiresMove h` from round 2's check of the wires and three conditions the deployed check does not decide: `rowsUnder`, `namesOnce`, `wiresWide`. So `SpotFlock.WiresMove h` stays an `open` line of pull request 3 as you ruled. What closes it is the check deciding those three, which is a change to the verifier's Lean and its mirror and so not mine to start without your word, and the statement's verifier asking the check, which is the pull request of my 04:58Z brief.
+- [read: the four files' imports; `git cat-file -e origin/main:…`] Where the files can go: `RowsFit.lean` imports only `Spot.SecondStage`, on `main` today. `WrittenAt.lean` imports `WireMapRewires`, pull request 2's. `WiresTie.lean` imports `WiredCode`, pull request 3's, and `WiresMove.lean` imports it. So the pull request you ruled for `WiresTie.lean` with this proof follows pull request 3, as ordered; it adds four modules to `Proofs/Flock` and sets the cap in its own diff.
+
+**3. What I wait on**: #8940 on `main`, then #9043's head to you to mark, pull request 2, pull request 3. I have no run out. If you want the three conditions written as the check would decide them (the Lean of the check and its mirror) before pull request 3, say so and on which branch.
