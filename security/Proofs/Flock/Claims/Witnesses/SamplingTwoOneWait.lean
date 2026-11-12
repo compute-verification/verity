@@ -33,8 +33,8 @@ nothing. -/
 theorem sksL_oneWait_opensAt {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((sksL Coin).oneWait.V.k x) → Coin)
     (c : (sksL Coin).oneWait.SlotEC x) (g : ℕ) : (sksL Coin).oneWait.opensAt H P x ω r c g = none := by
-  have hp : (sksL Coin).oneWait.parse x = some toyStmt := rfl
-  have hc : (sksL Coin).oneWait.commit = rejCm := rfl
+  have hp : (sksL Coin).parse x = some toyStmt := rfl
+  have hc : (sksL Coin).commit = rejCm := rfl
   simp only [Compiled.opensAt, hp]
   simp [Claims.Sampling.Wit.val, Claims.Sampling.CommitmentScheme.Opens, hc, rejCm, OC.eval]
 
