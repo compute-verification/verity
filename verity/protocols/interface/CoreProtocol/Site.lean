@@ -34,7 +34,9 @@ namespace Site
 
 open Lean (Json)
 
-/-- What a location is. `outside`, the kind of the rest of the world, is no registered location's. -/
+/-- What a location is. `host` is a machine of the prover's; `auditorHost` is a machine of the auditor's, which its
+devices may run in and which holds none of the prover's hardware. `outside`, the kind of the rest of the world, is no
+registered location's. -/
 inductive Kind
   | site
   | host
@@ -42,6 +44,7 @@ inductive Kind
   | memory
   | certifier
   | challenger
+  | auditorHost
   | outside
   deriving DecidableEq, Repr
 
@@ -51,16 +54,17 @@ def Kind.parents : Kind → List (Option Kind)
   | .host => [some .site]
   | .device => [some .host]
   | .memory => [some .device, some .host]
-  | .certifier | .challenger => [some .site]
+  | .certifier | .challenger => [some .site, some .auditorHost]
+  | .auditorHost => [some .site]
   | .outside => []
 
-/-- The pairs of kinds a link may join, in either order. -/
+/-- The pairs of kinds a link may join, in either order. No link ends at an auditor's host. -/
 def Kind.links : List (Kind × Kind) :=
   [(.host, .host), (.host, .outside), (.certifier, .host), (.certifier, .outside), (.challenger, .host)]
 
-/-- The auditor's devices: the network certifiers and the memory challengers. -/
+/-- The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts. -/
 def Kind.auditor : Kind → Bool
-  | .certifier | .challenger => true
+  | .certifier | .challenger | .auditorHost => true
   | _ => false
 
 /-- A memory leaf's tier. -/
@@ -164,9 +168,9 @@ A disk leaf's `bw` bounds the bytes that come off the disk, not a read the host 
 over a host's disk leaves counts the host's DRAM tier's rate beside them, once.
 `chip` is a host's on-chip state in bits, as a sheet's is, and none on every other location. `shared` is, for a tier,
 the bits a second read from or written to a host's leaves of that tier together, where one ceiling holds them all;
-empty on every other location. `key` is the public key one of the auditor's devices is registered under, and `scheme`
-the id of the signature scheme that key is of (`SCHEMES`), which says how many levels of keys stand under it; both
-empty on every other location.
+empty on every other location. `key` is the public key one of the auditor's devices or hosts is registered under, and
+`scheme` the id of the signature scheme that key is of (`SCHEMES`), which says how many levels of keys stand under it;
+both empty on every other location.
 `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; none
 on every other location, and a device that states none times nothing. `timeUnit` is the Site's unit of time in seconds,
 on a location of kind `site` and none on every other (`Site.timeUnit`). -/
@@ -345,10 +349,11 @@ structure Digests where
   genesis : Composite → String
 
 /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
-SKU's; the tolerance registration allows around an estimate; the key of each of its own devices, by the device's id; its
-figures for each memory leaf directly under a host, by the leaf's id; its figures for each host, by the host's id; and
-how far each of its own devices' clocks may run from real time, by the device's id. That these figures are the hardware
-is a public input: no check holds it and no premise says it, and a result is over the registered hardware. -/
+SKU's; the tolerance registration allows around an estimate; the key of each of its own devices and hosts, by its id;
+its figures for each memory leaf directly under a host, by the leaf's id; its figures for each host of the prover's, by
+the host's id; and how far each of its own devices' clocks may run from real time, by the device's id. That these
+figures are the hardware is a public input: no check holds it and no premise says it, and a result is over the
+registered hardware. -/
 structure Auditor where
   sheet : String → Option Sheet
   tolerance : Figure
@@ -398,8 +403,9 @@ def Refs : Prop :=
   (∀ x ∈ e.locs, ∀ p ∈ x.parent, (S.add e).Known p) ∧
     ∀ k ∈ e.links, (S.add e).Known k.ends.1 ∧ (S.add e).Known k.ends.2
 
-/-- `kind`: parents and tiers by kind, links between kinds a link may join, each at a positive capacity or, where it
-says no certifier splits it, at none, and each certifier splitting exactly one uplink. -/
+/-- `kind`: parents and tiers by kind, so an auditor's host is at the site and holds only the auditor's devices; links
+between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and each
+certifier splitting exactly one uplink. -/
 def Kinds : Prop :=
   (∀ x ∈ e.locs, x.parent.bind (S.add e).kind? ∈ x.kind.parents ∧ (x.kind = .memory ↔ x.tier.isSome)) ∧
     (∀ k ∈ e.links, k.ends.1 ≠ k.ends.2 ∧ (∃ p ∈ Kind.links, (S.add e).Joins k p.1 p.2) ∧
@@ -445,9 +451,9 @@ def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
     ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
-/-- `owner`: each new certifier or challenger is one of the auditor's own devices, owned by it, with its key, its key's
-scheme, one the check knows (`SCHEMES`), and the auditor's figure for its clock, below 1 where there is one; and every
-other new location is the prover's and states no scheme and no clock. -/
+/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its
+key's scheme, one the check knows (`SCHEMES`), and the auditor's figure for its clock, below 1 where there is one; and
+every other new location is the prover's and states no scheme and no clock. -/
 def Owners : Prop :=
   ∀ x ∈ e.locs,
     (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ A.scheme x.id = some x.scheme ∧
@@ -593,9 +599,11 @@ def device (digest : Sheet → String) (A : Registration.Auditor) (d : String) {
       bw := (tick.1 * k.bw).ceil.toNat
       cap := cap }
 
-/-- The host a location is in: itself when it is a host. -/
+/-- The host of the prover's a location is in: itself when it is one. None for a location in none, as the auditor's
+devices and hosts are. -/
 def host (i : String) : Option String :=
-  (S.loc? i).bind fun x => if x.kind = .host then some x.id else S.host? x
+  (S.loc? i).bind fun x =>
+    if x.kind = .host then some x.id else (S.host? x).filter fun h => S.kind? h = some .host
 
 /-- `x` is `i` or lies under it, following at most `n` parents. -/
 def within (i : String) : Nat → Loc → Bool
@@ -672,7 +680,7 @@ def tagged (tag : String) (j : Json) : String :=
 
 def Kind.name : Kind → String
   | .site => "site" | .host => "host" | .device => "device" | .memory => "memory" | .certifier => "certifier"
-  | .challenger => "challenger" | .outside => "outside"
+  | .challenger => "challenger" | .auditorHost => "auditor-host" | .outside => "outside"
 
 def Tier.name : Tier → String
   | .hbm => "hbm" | .dram => "dram" | .disk => "disk"
@@ -791,8 +799,8 @@ def Loc.ofJson (j : Json) : V Loc := do
     "tier", "time_unit"] "a location"
   let get := fun k => Flock.J.get j k "a location"
   pure { id := ← Flock.J.str j "id" "a location",
-         kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .outside] Kind.name (← get "kind")
-           "a location's kind",
+         kind := ← byName [.site, .host, .device, .memory, .certifier, .challenger, .auditorHost, .outside] Kind.name
+           (← get "kind") "a location's kind",
          parent := ← optOf (Flock.J.asStr · "a location's parent") (← get "parent"),
          owner := ← byName [.prover, .auditor] Owner.name (← get "owner") "a location's owner",
          sheet := ← Flock.J.str j "sheet" "a location",
