@@ -89,10 +89,10 @@ def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     known = next((c for c in CARDS if c in name), None)
     if known is None:
         raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    want_cap, want_sms, min_driver, arch = CARDS[known]
+    want_capability, want_sms, min_driver, arch = CARDS[known]
     problems = []
-    if capability != want_cap:
-        problems.append(f"compute capability {capability}, not {want_cap}")
+    if capability != want_capability:
+        problems.append(f"compute capability {capability}, not {want_capability}")
     if sms != want_sms:
         problems.append(f"{sms} SMs, not {want_sms}")
     head = driver.split(".")[0]

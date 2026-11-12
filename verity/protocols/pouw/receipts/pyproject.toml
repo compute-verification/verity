@@ -3,6 +3,8 @@
 # a suite (`uv run tools/verity/check/suites.py verity/protocols/pouw/receipts`). Stdlib only, but for numpy in the r9 twin.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the tests import receipt_conform and receipt_folds by name from this directory
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

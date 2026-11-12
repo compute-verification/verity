@@ -78,12 +78,15 @@ def _register(kind: str, name: str, phase: str, seeded, calib, on, check, source
     return deco
 
 
-def linear_step(name: str, *, phase: str = "real", seeded=False, calib=False, check=None, source="") -> Callable[[Callable], Callable]:
+def linear_step(name: str, *, phase: str = "real", seeded: bool | Callable[[dict], bool] = False,
+                calib: bool | Callable[[dict], bool] = False, check: Callable | None = None,
+                source: str = "") -> Callable[[Callable], Callable]:
     return _register("linear", name, phase, seeded, calib, ("linear",), check, source)
 
 
-def attention_step(name: str, *, phase: str = "real", seeded=False, calib=False, on=ATTENTION_MATMULS, check=None,
-                   source="") -> Callable[[Callable], Callable]:
+def attention_step(name: str, *, phase: str = "real", seeded: bool | Callable[[dict], bool] = False,
+                   calib: bool | Callable[[dict], bool] = False, on: Iterable[str] = ATTENTION_MATMULS,
+                   check: Callable | None = None, source: str = "") -> Callable[[Callable], Callable]:
     return _register("attention", name, phase, seeded, calib, on, check, source)
 
 
