@@ -1430,6 +1430,8 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_ela
         said, before = [], len(calls["build"])
         rc = LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True)
         assert not stubs, "each stub's answer was read"
+        ats = [at for c, at in zip(calls["build"][before:], calls["at"][before:]) if c[4] is None]
+        assert ats == [LC.bound("Sec/Proofs", tree)] * len(ats), "each `lake build` of a try, the rebuild too, is bound"
         return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[4] is None]
 
     x, y, z = products()

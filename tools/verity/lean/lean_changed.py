@@ -1816,7 +1816,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                     def rebuild(refusal: str) -> tuple[int, str, float]:
                         began = time.monotonic()
                         clashed(tree, closure(pkg), refusal, but=plan.module)
-                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
+                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox,
+                                              at=bind)
                         return status, built, time.monotonic() - began
 
                     rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
