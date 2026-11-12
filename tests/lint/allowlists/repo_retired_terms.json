@@ -4739,7 +4739,7 @@
     {"file": "verity/protocols/pouw/verifier/tests/test_weights.py", "count": 1},
     {"file": "verity/protocols/pouw/verifier/tests/window_vectors.py", "count": 9},
     {"file": "verity/protocols/pouw/verifier/weights.py", "count": 1},
-    {"file": "verity/protocols/pouw/verifier/window.py", "count": 74},
+    {"file": "verity/protocols/pouw/verifier/window.py", "count": 70},
     {"file": "verity/protocols/spot/verifier/profile.py", "count": 90},
     {"file": "verity/hardware/record.py", "count": 2},
     {"file": "verity/hardware/registration.py", "count": 11},
