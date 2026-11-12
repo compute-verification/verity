@@ -603,8 +603,8 @@ class Capture:
         self._write(start)
         for r in roots:
             self._write(r)
-        for l in links:
-            self._write(l)
+        for link in links:
+            self._write(link)
         for ev in st.events:
             self._write(ev)
         for e in pending:
@@ -675,13 +675,13 @@ class Capture:
                 blocks = self._blocks_in_use()
                 lead = [()] if bdim == 0 else [(k,) for k in range(int(t.shape[0]))] if bdim == 1 else None
                 if lead is not None and blocks:
-                    for l in lead:
+                    for leading in lead:
                         for b in blocks:
                             v = t
-                            for k in l:
+                            for k in leading:
                                 v = v.select(0, k)
                             v = v.select(0, b)
-                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(l) + [b]}, cap=cap)
+                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(leading) + [b]}, cap=cap)
                     return
             why = f"spanned bytes {nbytes} > snapshot_max_bytes {cap}"
             if cap != full:
