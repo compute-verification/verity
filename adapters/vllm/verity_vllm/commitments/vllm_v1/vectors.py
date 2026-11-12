@@ -358,16 +358,20 @@ def load() -> dict[str, Any]:
     return json.loads(VECTORS.read_text(encoding="utf-8"))
 
 
+def write_or_check(text: str, path: Path, args: list[str]) -> bool:
+    """Write ``text`` to ``path``, or with ``--check`` among ``args`` write nothing; whether the file then holds ``text``
+    (a missing file holds none).  Both generators' ``main`` are this."""
+    if "--check" not in args:
+        path.write_text(text, encoding="utf-8")
+        return True
+    return path.exists() and path.read_text(encoding="utf-8") == text
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = sys.argv[1:] if argv is None else argv
-    text = render()
-    if "--check" in args:
-        if VECTORS.read_text(encoding="utf-8") != text:
-            print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
-            return 1
+    if write_or_check(render(), VECTORS, sys.argv[1:] if argv is None else argv):
         return 0
-    VECTORS.write_text(text, encoding="utf-8")
-    return 0
+    print(f"{VECTORS} is stale; rerun without --check", file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
