@@ -121,6 +121,44 @@ def test_the_registration_takes_the_engines_world_at_the_rank_and_the_engine_arg
         AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 8)
 
 
+def _launched(**engine_kwargs: Any) -> dict:
+    return {"model": "m", "revision": "r", "target": {}, "execution": "eager",
+            "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
+
+
+@pytest.mark.parametrize("cache", ["fp8", "fp8_e4m3", "fp8_ds_mla"])
+def test_a_launch_that_names_another_kv_cache_format_is_refused_by_its_setting(cache):
+    """φ carries no KV cache format, so such a launch would compile to the Programs of a launch at the default, which it did
+    not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
+    why = (f"engine kv_cache_dtype={cache!r}: a request Program states the KV cache of a launch at kv_cache_dtype auto or bfloat16, "
+           "so the compile of this launch would be Programs it did not run (VLLM-393).")
+    with pytest.raises(ValueError, match=re.escape(why)):
+        AC.engine_of(_launched(kv_cache_dtype=cache), 0)
+    with pytest.raises(ValueError, match=re.escape(why)):
+        AC.phi_of(_launched(kv_cache_dtype=cache), {}, 0)
+    for stated in ({}, {"kv_cache_dtype": None}, {"kv_cache_dtype": "auto"}, {"kv_cache_dtype": "bfloat16"}):
+        assert AC.engine_of(_launched(**stated), 0) == ({"world": 8, "rank": 0}, {"max_model_len": 2048})
+        assert AC.phi_of(_launched(**stated), {}, 0).engine == {"max_model_len": 2048}
+
+
+@pytest.mark.parametrize("setting", [{"speculative_config": {"method": "mtp", "num_speculative_tokens": 5}}, {"speculative_config": {}},
+                                     {"spec_method": "mtp"}, {"spec_model": "draft"}, {"spec_tokens": 5}])
+def test_a_launch_that_decodes_speculatively_is_refused_by_its_setting(setting):
+    """φ carries no speculative config, so such a launch would compile to Programs whose decode rows are one token, which it
+    did not run: the registration refuses it by the setting, in the config's form or vLLM's short ones. A launch that
+    leaves them out, or at None, compiles as before."""
+    (name, value), = setting.items()
+    why = (f"engine {name}={value!r}: a request Program states no draft tokens (speculative decoding), its decode row is one "
+           "token, so the compile of this launch would be Programs it did not run (VLLM-393).")
+    with pytest.raises(ValueError, match=re.escape(why)):
+        AC.engine_of(_launched(**setting), 0)
+    with pytest.raises(ValueError, match=re.escape(why)):
+        AC.phi_of(_launched(**setting), {}, 0)
+    off = dict.fromkeys(("speculative_config", "spec_method", "spec_model", "spec_tokens"))
+    assert AC.engine_of(_launched(**off), 0) == ({"world": 8, "rank": 0}, {"max_model_len": 2048})
+    assert AC.phi_of(_launched(**off), {}, 0).engine == {"max_model_len": 2048}
+
+
 def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
     """A run whose engine record has the environment its build set states the DSA top-k's, set or not, and nothing else of it:
     `predict.dsa` compiles a row past INDEX_TOPK only under the canonical row, and refuses it for an engine built without."""

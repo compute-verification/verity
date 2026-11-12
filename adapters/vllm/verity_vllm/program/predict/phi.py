@@ -106,6 +106,29 @@ def load_phi(path: str | Path) -> Phi:
 #: the prefix cache). A request Program's length rule reads ``max_model_len`` (`steps.compile_steps`), so two compiles of one
 #: served engine's requests that read them differently compile different Programs
 REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
+#: the ``kv_cache_dtype`` values a launch's request Programs are stated at: vLLM's default, and bf16 by name, the default's
+#: format for a model computed in bf16
+STATED_KV_CACHE = ("auto", "bfloat16")
+#: the engine args that turn speculative decoding on: the config, and vLLM's short forms of its method, model and token count
+SPECULATIVE = ("speculative_config", "spec_method", "spec_model", "spec_tokens")
+
+
+def _refuse_unstated(kw: Mapping[str, Any]) -> None:
+    """A ValueError for engine args that serve what no request Program states: a KV cache format the launch names
+    (a ``kv_cache_dtype`` outside `STATED_KV_CACHE`), whose cache other kernels than the default's may write and read, or
+    speculative decoding (an arg of `SPECULATIVE`), whose decode rows hold draft positions. φ carries neither
+    (`REGISTERED_ENGINE`), so the compiler's check of φ's engine (`domain.engine_facts`) never sees them, and the compile of such
+    a launch would be the Programs of a launch without them, which it did not run."""
+    cache = kw.get("kv_cache_dtype")
+    if cache is not None and cache not in STATED_KV_CACHE:
+        raise ValueError(f"engine kv_cache_dtype={cache!r}: a request Program states the KV cache of a launch at kv_cache_dtype "
+                         f"{' or '.join(STATED_KV_CACHE)}, so the compile of this launch would be Programs it did not run "
+                         "(VLLM-393). Serve with kv_cache_dtype at vLLM's default to compile it")
+    for k in SPECULATIVE:
+        if kw.get(k) is not None:
+            raise ValueError(f"engine {k}={kw[k]!r}: a request Program states no draft tokens (speculative decoding), its decode "
+                             "row is one token, so the compile of this launch would be Programs it did not run (VLLM-393). "
+                             "Serve with speculative decoding off to compile it")
 
 
 def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
@@ -113,11 +136,14 @@ def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
     (``meta``'s ``engine_record``: `LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1,
     the length the built engine reads back, ``effective``), and, from a record of the environment its build set
     (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK
-    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have."""
+    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have, and for a launch that names
+    another KV cache format or decodes speculatively (`_refuse_unstated`)."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 
     rec = meta.get("engine_record")
     kw = None if rec is None else rec.get("engine_kwargs")
+    if kw is not None:
+        _refuse_unstated(kw)
     world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
