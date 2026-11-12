@@ -29,7 +29,7 @@ def _table() -> str:
     return text[start:] if end < 0 else text[start:end]
 
 
-SPEC = '[env.py]\nspec = ["uv.lock", "pyproject.toml"]\n\n' + _table()
+SPEC = '[slot]\ncores = 32\nmem_gb = 110\n\n[env.py]\nspec = ["uv.lock", "pyproject.toml"]\n\n' + _table()
 LISTERS = {"test-file": family.tasks}
 #: what every toy checkout holds besides its suite: the files the core and the family make inputs of every task
 BASE = {f"{graph.RUNNERS}/test_file.py": "", **{p: "" for p in family.GUARD}}
