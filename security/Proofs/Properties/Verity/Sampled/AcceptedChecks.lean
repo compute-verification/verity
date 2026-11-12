@@ -66,7 +66,7 @@ theorem ksCheck_parsed {parsed : Flock.V Flock.Circuit} {tags : Flock.Tags} {pf 
         dsimp only at h
         rw [hl] at h
         cases h
-      | ok pub => exact ⟨c, rfl, pub, rfl⟩
+      | ok pub => exact ⟨c, rfl, pub, hl⟩
 
 -- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
@@ -146,7 +146,8 @@ theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray} {names : List S
       subst htt
       rw [hf] at ha
       cases ha
-    rw [if_neg hc] <;> rfl
+    rw [if_neg hc]
+    rfl
   | some a =>
     have hm : t.name ∈ names := by
       rw [hn, tablesOf_ofArray]
@@ -156,7 +157,7 @@ theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray} {names : List S
       unfold pinnedFile
       rw [dif_pos ⟨a, tableFile_hash hf⟩]
       exact ⟨_, rfl⟩
-    rw [if_pos hc, hb, ← ht t htm a b hf hb] <;> rfl
+    rw [if_pos hc, hb, ← ht t htm a b hf hb]
 
 /-- **v2's inputs to `verify --zk` on the blobs are `inputsAt`'s** where the tables the blobs hold are the ones the
 circuit file registers. -/
