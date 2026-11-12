@@ -12,7 +12,10 @@ ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's
 last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
-(`verity_vllm.pipeline.epoch`: `main` for `digests`).
+(`verity_vllm.pipeline.epoch`: `main` for `digests`).  The last tests are of a field its document may leave out, null or empty:
+a TP Build's rank blocks, a Commit's decision document, a job's inputs (`research_outputs`), a run's source identity
+(`verity_vllm.pipeline.research_result.build_result`) and the replay bundles a Commit's verdict names
+(`verity_vllm.pipeline.row_config`: `commit_verdict`, `replay`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -34,7 +37,9 @@ import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
 import verity_vllm.pipeline.research_outputs as RO
+import verity_vllm.pipeline.research_result as RES
 import verity_vllm.pipeline.row_build as RB
+import verity_vllm.pipeline.row_config as RCFG
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
 from tests.check.test_verdict import _base, _row_dir
@@ -42,6 +47,7 @@ from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.check.gates import GateResult
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -274,6 +280,10 @@ def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it
     assert LC.batch_dispatch_of(_put(tmp_path / "several.json", {**varies, "requests": several})) is True
     assert LC.batch_dispatch_of(_put(tmp_path / "one.json", {**varies, "requests": several[:1]})) is False
     assert LC.batch_dispatch_of(_put(tmp_path / "invariant.json", {"requests": several})) is False
+    engines: list[dict[str, Any] | None] = [None, {}, {"target": None}, {"target": {}}, {"target": {"batch_invariant": None}},
+                                            {"target": {"batch_invariant": True}}]
+    for engine in engines:
+        assert LC.batch_dispatch({"engine": engine, "requests": several}) is False, engine
 
 
 def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes():
@@ -426,3 +436,96 @@ def test_the_digests_command_writes_each_rows_digests_and_their_table(tmp_path, 
     (d / "manifest.json").unlink()
     assert EP.main(EP.DigestsOptions(row_dirs=[str(d)], out=str(out))) == 1
     assert json.loads(out.read_text())["rows"][0]["programs"] == whole["programs"] and not capsys.readouterr().err
+
+
+def test_a_tp_builds_digests_read_a_summary_whose_rank_blocks_are_not_all_there(tmp_path):
+    """A rank whose block, or whose `workload`, is absent, null or empty has no workload digest, and then the row has no digest of
+    record.  Rank 0's `build_step` may be left out the same way, and then there is no step digest."""
+    row = "llama32-1b__bf16__l40s__tp2__b8__i256__o32__mixed__greedy__bi-eager"
+    whole = {"build_step": {"program_digest": "s" * 64}, "workload": {"workload_digest": "w" * 64}}
+
+    def digests(ranks: dict[str, Any]) -> dict[str, Any]:
+        _put(tmp_path / "build_summary.json", {"tp": {"world": 2}, "ranks": ranks})
+        return RO.program_digest(tmp_path, row)
+    of_record = digests({"rank0": whole, "rank1": whole})
+    assert of_record["program_digest"] and (of_record["step_digest"], of_record["rank_workload_digests"]) == ("s" * 64, ["w" * 64] * 2)
+    left_out: list[dict[str, Any]] = [{}, {"rank1": None}, {"rank1": {}}, {"rank1": {"workload": None}}, {"rank1": {"workload": {}}}]
+    for rank1 in left_out:
+        got = digests({"rank0": whole, **rank1})
+        assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, "s" * 64, ["w" * 64, None]), rank1
+    left_out = [{}, {"build_step": None}, {"build_step": {}}]
+    for step in left_out:
+        got = digests({"rank0": {"workload": whole["workload"], **step}, "rank1": whole})
+        assert (got["program_digest"], got["step_digest"]) == (of_record["program_digest"], None), step
+    left_out = [{}, {"rank0": None}]
+    for rank0 in left_out:
+        got = digests({"rank1": whole, **rank0})
+        assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, None, [None, "w" * 64]), rank0
+
+
+def test_a_commits_verdict_entry_reads_a_decision_document_without_its_replay_or_its_runs(tmp_path):
+    """A config record's `replay` and a verdict's `runs` may be absent, null or empty: the entry then states no replay and no runs."""
+    row, run = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", tmp_path / "run"
+
+    def meta(d: Path, stages: str, rel: str, doc: dict[str, Any]) -> dict[str, Any]:
+        _put(d / "stages.txt", stages)
+        _put(d / rel, doc)
+        return RO.build_outputs(d, row, "commit", run, {})["outputs"][0]["meta"]
+    config, verdict = "config PASS 2026-09-23T00:00:00Z\ncommit PASS 2026-09-23T00:00:01Z rc=0\n", "commit PASS 2026-09-23T00:00:00Z rc=0\n"
+    left_out: list[dict[str, Any]] = [{}, {"replay": None}, {"replay": {}}]
+    for replay in left_out:
+        got = meta(tmp_path / "config", config, "config_record.json", {"outcome": "PASS", "why": "w", **replay})
+        assert (got["outcome"], got["why"], got["replay_equal"], got["replay_k"]) == ("PASS", "w", None, None), replay
+    got = meta(tmp_path / "config", config, "config_record.json", {"outcome": "PASS", "replay": {"equal": True, "k": 64}})
+    assert (got["decision_record"], got["replay_equal"], got["replay_k"]) == ("config_record.json", True, 64)
+    left_out = [{}, {"runs": None}, {"runs": {}}]
+    for runs in left_out:
+        got = meta(tmp_path / "tp1", verdict, "verdict.json", {"outcome": "PASS", **runs})
+        assert (got["outcome"], got["n_runs"], got["runs_failed"]) == ("PASS", None, None), runs
+    got = meta(tmp_path / "tp1", verdict, "verdict.json", {"outcome": "PASS", "runs": {"instrumented": 1, "control": 1, "failed": 0}})
+    assert (got["decision_record"], got["n_runs"], got["runs_failed"]) == ("verdict.json", 2, 0)
+
+
+def test_a_jobs_inputs_are_the_artifacts_its_store_names(tmp_path):
+    """A job.json that is absent or no document, or whose `store` or its `inputs` is absent, null or empty, names no input."""
+    assert RO.inputs_from_job(tmp_path) == {}
+    left_out: list[Any] = [{}, {"store": None}, {"store": {}}, {"store": {"inputs": None}}, {"store": {"inputs": {}}}, ["not a job"], "{"]
+    for job in left_out:
+        _put(tmp_path / "job.json", job)
+        assert RO.inputs_from_job(tmp_path) == {}, job
+    _put(tmp_path / "job.json", {"store": {"inputs": {"build": "art:" + "1" * 64, "weights": "/a/path", "n": 3}}})
+    assert RO.inputs_from_job(tmp_path) == {"build": "art:" + "1" * 64}
+
+
+def test_a_results_tree_is_the_first_one_its_source_identity_states(tmp_path):
+    """The tree of a run's result is the first `git_sha` its `source_identity.json` states.  One whose `identities` is absent, null or
+    empty states no tree, and one that does not parse is said to be unreadable."""
+    def fingerprint(doc: Any) -> dict[str, Any]:
+        _put(tmp_path / "source_identity.json", doc)
+        return RES.build_result(tmp_path, "row", "role", ["build"], "r1", None)["workload_fingerprint"]
+    stated = fingerprint({"ok": True, "requested_sha": "ab", "identities": {"a": "not a dict", "b": {"git_sha": ""}, "c": {"git_sha": "cd"}}})
+    assert (stated["tree_sha"], stated["source_identity"]) == ("cd", {"ok": True, "requested_sha": "ab"})
+    left_out: list[dict[str, Any]] = [{}, {"identities": None}, {"identities": {}}, {"identities": {"a": {"path": "/p"}}}]
+    for identities in left_out:
+        got = fingerprint({"ok": True, **identities})
+        assert (got["tree_sha"], got["source_identity"]) == (None, {"ok": True}), identities
+    assert fingerprint("{")["source_identity"] == "unreadable"
+
+
+@pytest.mark.parametrize("verdict", [None, {}, {"replay_deferred": None}, {"replay_deferred": {}}, {"replay_deferred": {"bundles": None}},
+                                     {"replay_deferred": {"bundles": []}}])
+def test_a_commit_verdict_that_names_no_replay_bundle_is_not_pending_and_leaves_nothing_to_replay(tmp_path, verdict):
+    """`commit/verdict.json`, its `replay_deferred` or the `bundles` under it may be absent, null or empty, and each reads as no bundle:
+    a Commit that decided nothing is then a FAIL, not PENDING, and the replay stage refuses by the count."""
+    said: list[tuple[Any, ...]] = []
+    row = SimpleNamespace(d=str(tmp_path), config_run=True, ck="", verdict=lambda *a: said.append(a), tl=lambda *a: None, log=lambda *a: None)
+    _put(tmp_path / "commit" / "summary.json", {"commit_pass": None})
+    if verdict is not None:
+        _put(tmp_path / "commit" / "verdict.json", verdict)
+    with pytest.raises(Stop) as stop:
+        RCFG.commit_verdict(row, 0, 60)
+    assert stop.value.rc == 12 and said[-1][:2] == ("commit", "FAIL")
+    with pytest.raises(Stop):
+        RCFG.replay(row)
+    assert said[-1][:2] == ("replay", "FAIL") and "0 replay bundles named in commit/verdict.json" in said[-1][2]
+
