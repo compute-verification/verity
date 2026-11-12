@@ -18,7 +18,10 @@ b the bits its words hold at the point (`held`), at most those of the narrowest 
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
 by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), so a row holding an inf is
 a row: two words of one value hold the same inf there. A row holding an f32 NaN is refused: no comparison shows it
-distinct, and whoever submits the circuit can make a NaN at the point.
+distinct, and whoever submits the circuit can make a NaN at the point. `CENTRE` is where the point makes no inf or NaN
+from finite operands in training_slowdown's step, nor a binade either side; a -inf the Program states as a value (a
+causal mask's) is not the point's doing, and stays at every centre through the mask's add and the softmax's subtraction
+to the exponential that makes it 0.
 
 The evaluation runs top-down along the reader's summaries (`Reader.summary`), a call's output at its caller's words,
 so an identity written through a call is seen, and a view's words are its source's, so an argument passed twice or
@@ -59,8 +62,9 @@ from . import work as WK
 
 #: the sampled bits a row must hold
 ROW_BITS = 64
-#: the binade `θ`'s and a registered input's floats are sampled about: an operand made of two weights (a SiLU's or an
-#: exponential's) goes as its square, and must stay inside f32's range for an honest step's values to be finite
+#: the binade `θ`'s and a registered input's floats are sampled about, for completeness only (it decides which honest
+#: circuits pass, never what passes a claim): SiLU's exp operand, made of two weights, goes as the centre squared and
+#: must stay below 88.7, where f32's exp overflows
 CENTRE = -3
 #: the bits a word of each rounding's format holds at the point: its sign, its mantissa and two of its exponent
 ROUNDED = {"F32ToBf16Rn": 10, "F32ToF16Rn": 13, "F32ToE4m3Sat": 6, "F32ToE2m1Sat": 4}

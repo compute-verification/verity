@@ -838,6 +838,22 @@ def test_a_row_with_a_nan_is_refused(monkeypatch):
     assert WK.read(p, KB).N == (T - 1) * K * N
 
 
+def test_a_nan_made_from_an_inf_is_refused():
+    """W ⊙ W times 2^127 twice is +inf in every word at the point, and it plus -1 times it is inf - inf, a NaN in
+    every word: the NaN reaches the charged operand's rows, and the Program is refused there, naming the claim."""
+    big = const(32, 0x7F000000)
+
+    def step(B, c, z):
+        w, u = c
+        inf = _mul(B, _mul(B, _mul(B, w, w), B.call(big)), B.call(big))
+        nan = _add(B, inf, _mul(B, inf, B.call(const(32, 0xBF800000))))
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, u, nan)
+
+    with pytest.raises(WK.RepeatedRows) as e:
+        WK.read(_loop("InfNanRows", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows, e.value.nan) == ("InfNanRowsStep_v1", "w", None, (N, N))
+
+
 def test_a_claim_past_a_scan_the_point_does_not_run_whole_is_refused():
     """An inner scan whose contexts repeat before its last iteration leaves its outputs unevaluated at the point, so a
     charged weight carried out of it is refused, with the scan named and the fix."""
