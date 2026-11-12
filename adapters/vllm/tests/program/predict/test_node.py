@@ -16,7 +16,6 @@ from verity.circuits.program import RUN, input_id, is_input, is_registered
 
 from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 from verity_vllm.pipeline import registration_log as RL
-from verity_vllm.program.predict import cli as CLI
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
@@ -125,6 +124,8 @@ def test_a_world_of_one_has_no_node_program():
 def test_the_node_command_writes_the_descriptor_and_logs_the_summary(tmp_path, monkeypatch, caplog):
     """`predict node` (`verity_vllm.program.predict.cli`) writes the node Program's descriptor and, in `node.json`, its summary, θ
     and spans; the summary is its one logged line."""
+    pytest.importorskip("torch")  # `predict.cli` loads `predict.compiled`, which imports torch; this file is collected without it
+    from verity_vllm.program.predict import cli as CLI
     phi = _phi(TINY, tp={"world": 2, "rank": 0})
     monkeypatch.setattr(CLI.A, "phi_at", lambda row, rank, config: phi)
     assert CLI.node_main(CLI.NodeOptions(row="row", config="config.json", wrapper="step", out=str(out := tmp_path / "node"))) == 0
