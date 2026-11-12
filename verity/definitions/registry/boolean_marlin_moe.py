@@ -36,6 +36,10 @@ the same circuit, so they are one `...Activation_v1` Call per pair and x word: a
 
 Each cut bit is an element of its own (`Array<1, Value<1>>`): an `Array<n, Value<1>>` is one n-bit word in the word view, and the
 word Definitions' cuts are n 1-bit words.
+So `verity.definitions.boolean.boolean_version` refuses the five words whose signature has a cut, `MarlinMoeSchedule_v1`,
+`MarlinMxfp4Coordinate(W)_v1` and `MarlinMoeExpertCoordinate(W)_v1`: it asks for `bit_type` of the word's signature, where the n
+1-bit words are one `Array<n, Value<1>>`, not the `_v2`'s n `CUT`s.  They are reached through the pair GEMMs' `_v2`, not the
+switch: each binds the schedule's `_v2` and its columns, the coordinates' bodies cut at x, itself.
 """
 from __future__ import annotations
 
