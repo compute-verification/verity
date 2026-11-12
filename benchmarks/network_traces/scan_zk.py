@@ -1167,8 +1167,10 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), \
             s.records[-1]["audit"]
 
+    family = stream.family(draw)
+
     def reason(evidence: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(evidence, window, after, read, AC.lms_verify)
+        return CC.coins_reason(evidence, window, family, after, read, AC.lms_verify)
 
     why = (published.get("error") or "the draw committed no segment") if ev is None else reason(ev)
     try:
@@ -1183,7 +1185,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
     bad = {**AC.negatives(ev, coins.draws.pre()), "coins-for-another-window": ev} if ev is not None else {}
     for name, evidence in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s = stream_on(AC.Replay(read))
+        s = stream_on(AC.Replay(read, family))
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
             if d.draw != draw.draw:

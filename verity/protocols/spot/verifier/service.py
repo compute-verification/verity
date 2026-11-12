@@ -993,6 +993,8 @@ class _Entry:
     seed_salt: str | None = None
     history: Mapping[str, Any] | None = None
     read: bytes | None = None
+    #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
+    family: str | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
     drawn_at: float | None = None
@@ -1008,6 +1010,7 @@ class _Entry:
     interior_history: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
+    second_family: str | None = None
 
 
 def _reading(x: Any) -> float | None:
@@ -1512,7 +1515,9 @@ class Stream:
     the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
     the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
-    coins' evidence (`outcome`'s `coins`), refusing a sample without it. A stream that reads no coins (`All`, or one a
+    coins' evidence (`outcome`'s `coins`), refusing a sample without it, and holds it to the family the stream read the
+    sample from (`family`: the coins' `label` at the sample; a family's coins follow one registration, so each
+    registration's sample, and a second stage's, reads a family of its own). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
     their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
@@ -2193,7 +2198,24 @@ class Stream:
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         e = self._entries[registration.order]
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
+        e.family = self._family(e.read)
         return e.draw
+
+    def _family(self, read: bytes | None) -> str | None:
+        """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
+        sample (`coins.ChallengerCoins.label`), which the verifier's run holds the coins' evidence to, so the evidence
+        names no family of its own; None for a sample that read none."""
+        return self._coins.label if read and isinstance(self._coins, ChallengerCoins) else None
+
+    def family(self, draw: Draw) -> str | None:
+        """The challenger's family the stream read `draw`'s coins from (the second stage's own for a second-stage
+        sample), as it names it to the verifier's run with the coins' evidence (`outcome`); None for a sample that read
+        none, and for one the stream doesn't hold."""
+        o = draw.registration.order
+        e = self._entries[o] if _nat(o) and o < len(self._entries) else None
+        if e is None:
+            return None
+        return e.second_family if draw.replay_sample is not None else e.family
 
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
@@ -2226,6 +2248,7 @@ class Stream:
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         e.second, e.second_read = got["draw"], got["read"]
+        e.second_family = self._family(e.second_read)
         return e.second
 
     def session(self, draws: Sequence[Draw]) -> Session:
@@ -2289,11 +2312,11 @@ class Stream:
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
         (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
-        coins the session the ledger opens for the
+        coins of the family the stream read them from (`family`) that the session the ledger opens for the
         registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
         after the registration's digest, each checked against its
-        commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
-        `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
+        commitment and every one read, the family's log showing no other root; missing evidence, or a registration
+        without its window root, is a reject failing `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a sample that read no
         coins.
 
@@ -2401,7 +2424,7 @@ class Stream:
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
-                      history=e.history)
+                      history=e.history, family=e.family)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2468,14 +2491,15 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
-                      tied=self.spec.check.tied or None,
+                      tied=self.spec.check.tied or None, family=e.family,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
-                                "coins": interior_coins, "proved_units": proved_units, "instances": instances,
+                                "coins": interior_coins, "family": e.second_family, "proved_units": proved_units,
+                                "instances": instances,
                                 "served": served, "session_roots": session_roots, "statements": statements,
                                 "proofs": proofs})
             if not v.ok:

@@ -3,8 +3,9 @@
 # engine): flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
-# Exit 0 when the second stage is what today's record gives (two_stage_small.py expect): round 1 commits no port for the
-# block's return, so everything holds but the return's read. Records under $OUT (never a circuit, a prover file, a
+# Exit 0 when the second stage held (two_stage_small.py expect): round 1 commits the ids the block returns as a port, the
+# return's sessions read it at round 1's rows, round 2 accepts the statements, and the stream's outcome is accepted or
+# refused by the two-stage form alone. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
@@ -12,6 +13,11 @@
 #   two_stage_small.py serve more; SMALL_FIRST and SMALL_SECOND="--firewall PATH" pass `first` and `second` more;
 #   SMALL_INLINE=1 runs the class as a served vocabulary's is, its block the check's body inlined, with `second
 #   --unlinked`: exit 0 when everything holds but round 2's wires (second-wires)
+#   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
+#   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
+#   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances;
+#   adding --stop serves it under a stop rule, a stop class, which `first` and `second` take as --stop
+#   adding --tables commits each request's history table beside it instead, as a serve with no stop rule does
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -52,15 +58,17 @@ INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLIN
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
 CLASS=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["class"])' "$O/serve.json")
+RULE=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stop", ""))' "$O/serve.json")
+STOP=(); [ -z "$RULE" ] || STOP=(--stop "$RULE")
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
-  --challenger local --main "$O/main.txt" --out "$W/first" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
+  --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" "${UNLINKED[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json

@@ -62,9 +62,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``boundary-rows``: ``record`` with the two-stage audit's boundary commitment at serve, each window's finished
   requests committed by size class (`verity_vllm.pipeline.boundary_rows`), vLLM's prefix cache left on, its object the
   two-stage serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead
-  (``check``, ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``verdicts``, ``tables`` for each span's latent
-  history tables (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``; the
-  server is held after its loads until its windows' commits account for every finished request (`await_commits`).
+  (``check``, ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``verdicts``, ``ids``, ``tables`` for each span's
+  latent history tables (`servetax_plugin`) or ``stop``, the serve's stop rule, which has no tables), at ``--window-s``;
+  the server is held after its loads until its windows' commits account for every finished request (`await_commits`).
 - ``canonical-topk``: ``compiled`` with the canonical DSA top-k (`benchmarks/dsa_topk`'s vLLM plugin, `TOPK`), which
   rewrites only the indexer's rows of more than 2,048 keys, so it acts on long contexts alone;
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
@@ -237,6 +237,9 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
+#: the two-stage serve's boundary object: `ROWS`, the ids served committed as what its replay block returns
+#: (`boundary_rows.Layout.ids`), which round 2 holds the check's output to, and `TABLES`
+TWO_STAGE_ROWS = {**ROWS, "ids": True, "tables": TABLES}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
@@ -277,7 +280,7 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment, prefix caching off",
                      ("--no-enable-prefix-caching",),
-                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
@@ -414,7 +417,7 @@ MODELS = {
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
                             "the prefix cache on")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
+                   metric="vllm/serving-cost-glm53", check="GreedySelect_v1{V=154880,N=7744}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
@@ -3352,7 +3355,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
                    help="a boundary commitment's object in place of the arm's own: check, per_prompt, per_output, "
-                        "drained, inline, verdicts, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
+                        "drained, inline, verdicts, ids, tables, stop (the serve's stop rule: ids, max_model_len, outputs)")
     r.add_argument("--private", metavar="DIR",
                    help="where the arm keeps what never leaves the node (a boundary commitment's classes, history tables' "
                         "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "

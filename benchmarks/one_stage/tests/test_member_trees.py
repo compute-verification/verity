@@ -36,8 +36,8 @@ ROOT_F, ROOT_B = bytes([20]) * 64, {"circuit": bytes([21]) * 64}
 
 
 class Host:
-    """The challenger's host: one withheld session of two coins of the samples' family, served to the one client that connects to
-    `address`; `log` is its release log once `ended`."""
+    """The challenger's host: one withheld session of one coin of the window's family and one of rank 0's, served to
+    the one client that connects to `address`; `log` is its release log once `ended`."""
 
     def __init__(self, tmp: Path) -> None:
         self.directory = tmp / "challenger"
@@ -45,7 +45,7 @@ class Host:
         state = tmp / "key.lms"
         lms.LeafState.create(state, lms.public_key(KEY), KEY.params.H)
         self._state = lms.LeafState(state, lms.public_key(KEY), KEY.params.H)
-        ch = C.LiveChallenger(AC.SCHEME, 0, [(AC.FAMILY, 2)], random.Random("host").randbytes)
+        ch = C.LiveChallenger(AC.SCHEME, 0, [(AC.WINDOW_FAMILY, 1), (AC.family(0), 1)], random.Random("host").randbytes)
         key = C.ChallengerKey(KEY.params.W, KEY.params.H, lms.public_key(KEY))
         session = R.open_session(ch, key, "auditor-1", lambda m: lms.sign(KEY, self._state, m).encode(), self.directory,
                                  "s-1", withhold=True)
@@ -88,7 +88,7 @@ def held(tmp_path):
     proxy.hold(0)
     proxy.commit(0, REGISTRATION.hex())
     assert len(proxy.read(0, C.COIN_BYTES)) == C.COIN_BYTES
-    assert proxy.drawn(0)["label"] == AC.FAMILY
+    assert proxy.drawn(0)["label"] == AC.family(0)
     yield host, proxy
     proxy.skip(0)
     host.ended()
@@ -136,8 +136,8 @@ def test_two_sessions_on_the_windows_session_each_closed_after_its_evidence_pass
     host, proxy = held
     relay = MT.Relay(proxy, MT.listener())
     first, second = verifier(relay), verifier(relay)
-    assert first.layout() == second.layout() == proxy.layout() == {"epoch": 0, "families": [[AC.FAMILY, 2]],
-                                                                    "scheme": AC.SCHEME}
+    assert first.layout() == second.layout() == proxy.layout() == {
+        "epoch": 0, "families": [[AC.WINDOW_FAMILY, 1], [AC.family(0), 1]], "scheme": AC.SCHEME}
     a = session(first, tmp_path / "a", bytes(range(32)))
     after_a = MT.closing_round(proxy, a)
     assert after_a == K.closing_after(a).hex() == hashlib.sha512(K.session_evidence(
@@ -158,7 +158,7 @@ def test_two_sessions_on_the_windows_session_each_closed_after_its_evidence_pass
     closing = [json.loads(line) for line in log if json.loads(line).get("round") == C.CLOSING_ROUND]
     assert [(x["stream"], x["n"], x["after"], x["coins"]) for x in closing] == [
         (CT.SESSION, 0, after, hashlib.sha512(b"").hexdigest()) for after in (after_a, K.closing_after(b).hex())]
-    assert C.sample_link_first(AC.FAMILY, REGISTRATION, log[1:])
+    assert C.sample_link_first(AC.family(0), REGISTRATION, log[1:])
     assert MT.trees_reason(log, [("a", a), ("b", b)]) is None
     assert MT.trees_reason(log, [("b", b), ("a", a)]) == C.MEMBERS_ORDER
     assert "the sessions use 1" in MT.trees_reason(log, [("a", a)])
@@ -178,7 +178,7 @@ def test_the_relay_passes_on_tree_frames_alone_and_a_refusal_ends_its_own_connec
         R.RemoteChallenger.connect(relay.address)
     stray = verifier(relay)
     with pytest.raises(C.CoinError, match="the challenger refused: a relay's frames are hello, then tree"):
-        stray.open(AC.FAMILY, 1, bytes(64))
+        stray.open(AC.family(0), 1, bytes(64))
     left_open = verifier(relay)
     a = session(left_open, tmp_path / "a", bytes(range(32)))
     MT.closing_round(proxy, a)
