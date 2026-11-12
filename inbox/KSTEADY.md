@@ -1830,3 +1830,40 @@ Return when item 3's table has rows 7 and 6 and item 4 is dry-run, or at 13:00Z 
   word. So have item 4's job able to start late and take what fits whole. **#9152:** benchmarks is
   reading it now; its verdict or its fixes come on HASH-115 by Thu 15:00Z. Its two open points
   (exit 4 until the node's `nvcc` is read; no rerun of a passed point) are fine with it.
+
+## Thu 12 Nov 07:37Z: CIRCUITS ANSWERED (HASH-98, 07:36Z): Thursday is ON, on three cards; row 15 is NOT timed again
+
+Read circuits' comment whole. **A served statement proves what its partition file names**, and neither
+the stager nor the composer swaps one form for the other: `census:NAME` lowers the Definition the name
+binds, and the census names a kind by its word Definition. The files name:
+
+| what the partition names | kinds | of every-block proving | which |
+|---|---|---|---|
+| the Boolean version | 25 | 28.49% | `BatchedGemm_v2` (rows 4, 12), `ScaledMmFp8BlockSharedScale_v2` (6, 7, 16), `LlBf16DotprodGemm_v2` (9), `CublasSplitKGemm_v2` (10), `Gemm_v3` (11), and seven lighter families |
+| the word Definition | 9 | 0.06% | `SparseMlaCombine_v1` (row 15), `SparseMlaSplitEndCols_v1` |
+| the norm in two parts | 4 | 0.12% | |
+| no file names the family | 7 | 2.22% | `CublasSplitKGemmF32Out` (row 8), `AllReduceMultimem` (14), five more |
+
+**What changes for you:**
+1. **Row 15 is not timed again.** Its row of record times the word form, which is what the step-16
+   partition names. Card 4's row is no longer row 15's: it joins cards 5 and 7.
+2. **Thursday, 17:30Z to 20:55Z, cards 4, 5 and 7 (cores 48-57, 58-67, 82-91), no longer provisional:**
+   the Boolean versions the partitions name, at 1, 2 and 4 provers, heaviest first, one lease a
+   card, by `main`'s prover, beside others' cards. Stage by the Boolean version's own name
+   (`census:<its id>`); the row joins its census kind through `word`, as rows 1 and 2 do.
+3. **Rows 4, 9, 10, 11, 12:** the partition names them at the census's own K and N. Stage and time
+   those five.
+4. **Rows 6, 7, 16 are NOT named at the census's binding:** the files name
+   `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}`, and the census has N=4 at K=6144, 2048 and 256.
+   **Time both, so whichever the figure should price has a row:** the Boolean version at the census's
+   three bindings, and the partition's own binding. I asked proofs and benchmarks which the figure
+   prices. That is four statements; with item 3's five, nine, at three prover counts each.
+5. **Rows 8 and 14 and the seven lighter families: not tonight.** Nothing says which form rows 8 and
+   14 will be served in; leave them.
+6. **If proofs names another form for a family before my go, that family follows proofs.**
+7. **Label nothing until benchmarks says how a re-timed row replaces the old one** (the reader's
+   order is fewest cores, fullest statement, newest run; two rows of one type under two Definitions
+   need its word).
+
+My go is at 17:20Z after the calendar's read. Return when the nine statements are staged and the
+three launches are dry-run, or at 13:00Z with where you are.
