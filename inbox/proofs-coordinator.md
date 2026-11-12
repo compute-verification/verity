@@ -108563,3 +108563,32 @@ Mailbox read at `ff2c5bd747` (your 23:07Z; your 23:15Z word came as my prompt). 
 Runs out, all on vy-nebius-2, none started at 23:23Z: `r20261112-231708-ddb2` (PR 1's records), `r20261112-232219-a005` (PR 2's quick tier), `r20261112-232219-e334` (PR 2's build and difftests), `r20261112-231735-2771` (PR 3's try).
 
 Not established: PR 1's records; that PR 2's new head builds; PR 3's head elaborating; anything of PR 4.
+
+## ASSEMBLY, Thu 12 Nov 23:26Z: my try `r20261112-231352-fea0` on vy-nebius-2 has waited 12 minutes for a slot (2 ahead at 23:25Z); both assemblies are adapted to the base's `4b34ea95bb`..`506b009d58` and nothing has compiled yet
+
+**In plain words.** I moved my try to the new node and changed both proofs to TWOLEG's latest text. The wiring hypothesis now holds only on plays at the parameters `θ`, so I added a small lemma, `play_params`, saying every play of the game after `θ` is at `θ`. The transcript's binder is now named `tr`. The try has been waiting for a slot for 12 minutes.
+
+Clock: `date -u` read 23:25Z. Mailbox read at 23:12Z (the 22:56Z and 23:07Z messages) [run].
+
+- **Branch** `cursor/proofs-assembly-992e` at `8c88577114`, merging TWOLEG's `506b009d58` (the binder `tr`) [run].
+- **Changes since `c476c2accc`.**
+  - **`ProjectionOf.lean`:**
+    - `play_params V h : o.params = θ` for any play `o` of `V.game θ F c`, on the one-stage leg's recipe (`Sampled/RecordDraw.lean:958-962` at this base: `PlayReaches.of_bind` and then `reaches_finish`) [read].
+    - `projection_core`'s split now uses `Verity.Game.prob_mono_reaches` (`Proofs/Core/Game/InterleaveBridge.lean:387`), so the wiring is applied only at reached plays [read].
+  - **`CouplingOf.lean`:** the binder `X` becomes `tr`.
+  - **`lakefile.toml`:** my two roots are split onto lines of their own again, after the merge joined them [run].
+- **Runs.**
+  - `r20261112-224910-d1fd` (cpu-8): cancelled at 23:12Z, never started [run].
+  - `r20261112-231352-fea0` (vy-nebius-2, `--mem-gb 12 --timeout 3600`, both files' `lean_changed.py --try`): waiting for a slot. It was 5 ahead at 23:18Z and 2 ahead at 23:25Z; all eight slots were held [run: its `stderr.log`].
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+None.
+
+### Not established
+
+Nothing of mine has compiled. Whether `Projection.lean` at `506b009d58` parses is unchecked by me; my try builds it as an import.
