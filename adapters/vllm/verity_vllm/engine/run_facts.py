@@ -18,6 +18,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from verity_vllm.engine import engine_profile as prof
 from verity_vllm.engine import handle
 from verity_vllm.engine.build import (
     Engine,
@@ -40,8 +41,6 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
                      sampling: dict) -> tuple[dict, str, dict]:
     """(manifest, profile_id, notes) via `profile.build_manifest` exactly like the production recorder; falls back
     to a sha256 of the engine kwargs + versions when build_manifest cannot run (and says so in the notes)."""
-    from verity_vllm.engine import engine_profile as prof
-
     case = engine.case
     acc = ACCEPTED.get(case, {})
     notes: dict[str, Any] = {"case": case, "accepted_profile_id": acc.get("profile_id"), "accepted_record": acc.get("record")}
@@ -83,6 +82,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         manifest["backends"]["vllm_has_flashinfer"] = vllm_has_flashinfer()     # host fact vLLM keys kernel choices on (nvcc on PATH)
         # the block-scaled FP8 linear kernel the FP8 layers carry (None for a model without FP8 linears): the record attests
         # the kernel whose arithmetic the FP8 Definitions are (CutlassFp8BlockScaledMMKernel), beside the declared `target.fp8_block_gemm`
+        # (the translator's readers are imported here and below, not at the top: they load the core `verity`, which this module does not)
         from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
         fp8k = fp8_block_gemm_kernel_of(engine.model)
         if fp8k is not None:

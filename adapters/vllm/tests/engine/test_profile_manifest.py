@@ -1,11 +1,13 @@
 """`verity_vllm.engine.run_facts.profile_manifest` and `verity_vllm.engine.engine_profile.build_manifest` on stand-ins of a
 built engine: the manifest a run's profile id is taken from, key for key and in its order, the id, the notes, and the
 fallback document where the profile cannot be built.  No engine and no device: the readers of the device, the software
-and the engine's config are stand-ins here.  Every expectation is what the two functions gave before a line of them was
+and the engine's config are stand-ins here; `software_info` is read on a stand-in vLLM.  Every expectation is what the two functions gave before a line of them was
 changed, so an id pinned here moves only if the manifest's bytes do."""
 from __future__ import annotations
 
+import importlib.metadata
 import json
+import platform
 import sys
 from types import SimpleNamespace as NS
 from typing import Any
@@ -261,3 +263,21 @@ def test_build_manifest_writes_each_declared_flag_and_names_an_order_and_overrid
     plain = _build(readers, request_order="workload", engine_overrides={})
     assert "engine_overrides" not in plain and "workload_order" not in plain
     assert engine_profile.profile_id_of(plain) == "c1ce9d7bf26e"
+
+
+def test_software_info_names_vllm_as_given_the_python_side_by_installed_version_and_three_dists(monkeypatch):
+    versions = {"triton": "3.4.0", "transformers": "4.57.0"}
+
+    def version(name: str) -> str:
+        if name not in versions:
+            raise importlib.metadata.PackageNotFoundError(name)
+        return versions[name]
+
+    monkeypatch.setitem(sys.modules, "vllm", NS(__version__="0.28.1rc1-test"))
+    monkeypatch.setattr(importlib.metadata, "version", version)
+    monkeypatch.setattr(engine_profile, "dist_identity", lambda name: {"installed": name == "torch"})
+    assert json.dumps(engine_profile.software_info("wheel", None)) == json.dumps({
+        "vllm": {"version": "0.28.1rc1-test", "wheel_sha256": "wheel", "commit": None},
+        "python": {"version": platform.python_version(), "torch": torch.__version__, "cuda": torch.version.cuda, "triton": "3.4.0",
+                   "flashinfer": None, "xformers": None, "transformers": "4.57.0"},
+        "dists": {"vllm": {"installed": False}, "torch": {"installed": True}, "triton": {"installed": False}}})
