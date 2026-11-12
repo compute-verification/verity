@@ -81126,3 +81126,55 @@ all-changes column keeps 2^19, as the wide-leaf schedule does.
 
 Artifacts: `/opt/cursor/artifacts/sessions-fold/` (`send/` the run's inputs, `5cb2/out/sessions_fold.json` and
 `wires_fold.txt`, `0926/out/`, `145a/out/`). Note: `lanes/proofs/20261112T0904Z-report-wires-fold-priced.md`.
+
+## CLOSEROUND, Thu 12 Nov 09:28Z: #9199's quick tier failed two lints of my own code; both are fixed at `af94d6411979` with no Lean file changed, the fixture passes on it, and the twin is open as #9230; the ready line waits on one run, `e724`
+
+No ready line yet. Mailbox read to the 09:16Z section.
+
+**What came back.**
+
+- `r20261112-074902-fb34`: the Lean check's fast path on `verity/protocols/spot/verifier/lean`, no `--update`: pass, 5657 declarations in 51 modules, the three axioms, 0 guarantees, and it asks for no record [run]. It is not the kernel replay. It ran on `66ad39c9af`; `git diff --stat 66ad39c9af af94d6411979 -- '*.lean' '*lean-audit.json' '*lakefile*'` is empty [run: that command], so its verdict is the head's.
+- `r20261112-075418-8df4`, the quick tier on `ce63595747`: exit 1. **`repository` failed, 2 of 310**; the other 54 suites passed [run]. Both failures are lints of code #9199 adds:
+  - `test_no_new_reads`: `a5_coins.py` read `A5_LOCAL_KEY` from the environment.
+  - `test_no_new_silent_excepts`: four handlers in `member_trees.Relay`, one in `challenger._open_of`.
+- `r20261112-082132-87dd`: the fixture on `ce63595747`, 1 passed in 268 s; `out/refusal.json` is `MULTI_REFUSED`, decided [run].
+
+**The fixes, five commits after `ce63595747` (head `af94d6411979`, pushed).** Three are choices in driver code; say if any is wrong.
+
+1. **The environment read became a flag**: `records_audit.py audit --challenger local --deployed-key` (`a5_coins.start(deployed=True)`), off by default, refused with any other challenger [read: `benchmarks/prove_path/records_audit.py` main]. Without it a local session is byte for byte as before, so no other lane's audit changes. It touches `records_audit.py`, which lean's branch changes too; my lines sit away from theirs and `merge-tree` stops on nothing new (below).
+2. **The relay reports instead of swallowing**: a listener or a connection that ends for any reason but its client's `close` is recorded, and `Relay.close` returns the list; on teardown it tolerates `ENOTCONN` alone and re-raises anything else [read: `benchmarks/one_stage/member_trees.py` `Relay`]. The audit's verdict does not read the list (as before: the published log decides).
+3. **`challenger._open_of` reads a line through `open_line`**, then `_event`: None on exactly the lines it was None on before (no parse, no dict, another event, a tree that is no string) [read: `spot/device/challenger.py` 1118-1127, 1056-1062]. It is the log's check, not a device rule, and no meaning changes.
+4. Two rewording commits: the closing round's prose and tests in the Glossary's terms, and no cost figure in the flag's help.
+
+**On the head.**
+
+- Both lints: 2 passed [run: `pytest tests/lint/test_repo_env_reads.py::test_no_new_reads tests/lint/test_repo_silent_excepts.py::test_no_new_silent_excepts`, this VM]. The relay's and the trees' unit files: 3 passed, 26 passed [run: this VM].
+- `r20261112-091150-e637`: the fixture on `af94d6411979` under `--deployed-key`: 1 passed in 269 s; `out/refusal.json`: `proofs: MULTI_REFUSED`, decided true, the challenger's key at W=1, H=20, 431 log lines [run].
+- **Out: `r20261112-092520-e724`**, `suites.py --changed 19fb19a21e40 --quick` on the head with `main` (`19fb19a21e40`, still its tip at 09:28Z [run: `git fetch`]) merged in, scratch merge `14841fce533d`. It is waiting for a slot on cpu-9; `8df4` took 83 min once started, so about 11:00Z [guess].
+- `ratchet-gate` (off the gate) against `main`: 7 retired-term sites added, down from 60 [run: `adapters/vllm/tools/ratchet_gate.py`, this VM]. The 7 are names I do not own: `a5_coins.Draws` and `drawn` in a test, `audit`'s parameter `drawn`, and Lean's `MULTI_REFUSED` text mirrored byte for byte.
+
+**The stops against open branches** [run: `git merge-tree --write-tree --name-only`, the scratch merge and `main` alone against each tip].
+
+- lean's `cursor/lean-remote-merge-landing-fc8d`, now at `f3837f57d113`: `main` alone stops on **12** paths, not 14, and #9199 merged in stops on the same 12. `a5.py` is the one of the 12 that #9199 changes, and its conflict hunks are the same with and without. **#9199 adds none.** (At `d65efe304c` it added one, `records_audit.py`, where my flag's check sat beside lean's new `--day-ledger` check; I moved mine, which is commit 5.)
+- vllm's `cursor/vllm-proofserver-exited-24aa` (`04df0f0296f9`): none, as you found. `main` has not moved, so nothing to merge yet.
+- vllm's kept driver (`0691799bab32`): `a5.py`, as before. **For VLLM-335: I expect #9199 first** if `e724` is green, and then vllm writes `proof_server` with both arguments; if vllm's lands first I merge `main` and write it.
+- REDRAW (`2011220faf70`): `a5_coins.py`, `Draws.read` and `_close`, which gain a lock in mine. `case_coins` takes the family label as an argument.
+
+**The twin: #9230**, unmarked, `cursor/proofs-closeround-twin-780f` at `cda0bef3f06c`, stacked on #9199 (its own diff is seven files).
+
+- `members.members_run` in `one_stage/members.py`, a file of its own; `proofs.py` and `test_a5_case_v2.py` untouched; choice (a), no length passed, no new piece in `Spot/Pieces.lean`; the docstring says which Lean steps it does not mirror.
+- `r20261112-084836-8fef` at `2167a0eae1` and `r20261112-091225-3106` at the head, the same three suites: the difftest with the refusal's tests 5 passed, the verifier's `-k "members_run or member_trees"` 41 passed, the fixture with the twin's rows 1 passed (207 s at the head) [run].
+- The difftest holds the twin to Lean's `refusal` on 14 changed cases, each refused by both with one reason, and on the stand-in audit, which both end at `verdict flock-verify/s0 did not accept`. On the fixture's real sessions the twin accepts both, credits the evidence's proved units and maps to `ALL_PASSED`, the line Lean prints [run: `3106`].
+- **Not run: the `LINK_ROOT_LEN` row.** It is named in the difftest's docstring only. The `vus_per_block` row is run.
+- **Out: `r20261112-092434-9e4c`**, `suites.py --changed 14841fce533d --quick` on the twin with `main` merged in (scratch merge `11e0c774f605`), running on cpu-8; about 10:45Z [guess].
+- `ratchet-gate` against #9199's head: 15 retired-term sites, names I do not own (`coins.DRAW_FORM`, the recorded keys `unit_draw`, `draw`, `law`, the verdict names `flock-verify/<session>`) [run: this VM].
+
+**Not run at all:** the full check, the Lean check's kernel replay, circuit-check (no circuit changed).
+
+**Runs that say nothing about the code, and one thing for infra.**
+
+- `r20261112-084919-704b` (the quick tier on the old head): cancelled by me when the head moved.
+- **cpu-7 refuses new launches**: three launches through `--on auto` between 09:21Z and 09:23Z were sent to cpu-7 and refused with "could not make ... a checkout (the machine has no git)" [run]. `r20261112-091123-19b0`, #9199's quick tier launched there at 09:11Z, never left `submitted`, and `research cancel` twice answered "left its hold ... run `research cancel` again" [run]. It is not cancelled; `e724` replaces it.
+- **I departed from `--on auto` for two launches**: `e724` and `9e4c` went to named nodes of the same pool (`--on vy-nebius-cpu-9|8 --pool research --as proofs --project verity`), since `auto` kept choosing cpu-7. Say if that is not mine to do.
+
+**What I need:** nothing to decide unless a fix above is wrong. Resume me when `e724` is back (about 11:00Z); the ready line for #9199 follows if it is green.
