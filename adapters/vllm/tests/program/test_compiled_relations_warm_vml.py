@@ -1,4 +1,4 @@
-"""compiled_relations.warm_vml: each process's first MKL VML call is made on one thread, once, before the compiled relations run.
+"""compiled_relations.warm_vml: each process's first MKL VML call is made on one thread, once, before a replay on torch's CPU math.
 
 torch's statically linked MKL races on its first VML call when several intra-op threads make it at once (one chunk at 1771 ulp);
 the helper's single-threaded `exp` initialises every VML function.  CPU: without torch it does nothing; with torch it makes one

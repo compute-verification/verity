@@ -610,7 +610,6 @@
     {"file": "verity_vllm/pipeline/weight_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/window_advice.py", "kind": "SIM300", "symbol": "_replay", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/pipeline/workload_file.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "SIM300", "symbol": "_build.embed_norm", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "I001", "symbol": "_finish_report", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "E741", "symbol": "SiluMul", "detail": "Ambiguous variable name: `I`"},

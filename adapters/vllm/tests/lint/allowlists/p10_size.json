@@ -22,7 +22,6 @@
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 215},
     {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 865},
-    {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 206},
     {"file": "verity/definitions/numerics/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1015},
     {"file": "verity/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
     {"file": "verity/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
