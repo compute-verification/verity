@@ -46,8 +46,9 @@ It prints the number as text, then one line of JSON whose first keys are `value`
 line or a run that can't be read exits 2.
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
-share of a card's memory a PoUS session certified held (its record's certified bits over the card's memory), and the
-share a wipe left foreign at most (the bound its run's label states). A reference that can't be read prints its
+state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the
+device's memory, its on-chip state and a round of side-channel traffic together, not the device memory credited), and
+the share a wipe left foreign at most (the bound its run's label states). A reference that can't be read prints its
 reason in place of a number, and the session's number still prints.
 
 - `run.py`: the command.

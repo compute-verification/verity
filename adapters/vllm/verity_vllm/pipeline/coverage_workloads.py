@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -37,6 +36,11 @@ from pathlib import Path
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
 from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
+from verity_vllm.log import init_logger
+
+__all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
@@ -409,5 +413,5 @@ def main(a: Options) -> int:
             suffix = (f"_r{a.replicate}" if a.replicate else "") + variant_suffix(samp_variant, feats)
             p = out_dir / f"workload_cov_{a.case.lower()}_{prof.lower()}_{ctx.lower()}{suffix}.json"
             p.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n")
-            print(f"{p.name}: {doc['note'][:200]}", file=sys.stderr)
+            logger.info("%s: %s", p.name, doc["note"][:200])
     return 0
