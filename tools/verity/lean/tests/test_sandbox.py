@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -184,6 +185,52 @@ def test_inside_the_sandbox_a_tree_bound_at_the_fixed_path_is_read_there_and_wri
     assert (real / "pkg" / ".lake" / "out").read_text() == "built\n"
     assert not (real / "pkg" / "src" / "no").exists()
     assert Path(FIXED).exists() == was
+
+
+#: each write a build must not make in its tree, as (its name, Python that makes it under the tree's path `b`)
+WRITES = {
+    "append to a source": 'open(f"{b}/pkg/src/M.lean", "a").write("x")',
+    "unlink a source": 'os.unlink(f"{b}/pkg/src/M.lean")',
+    "rename a source": 'os.rename(f"{b}/pkg/src/M.lean", f"{b}/pkg/src/N.lean")',
+    "chmod a source": 'os.chmod(f"{b}/pkg/src/M.lean", 0o600)',
+    "write the lock": 'open(f"{b}/pkg/lean-audit.json", "w").write("{}")',
+    "write another package's .lake": 'open(f"{b}/other/.lake/x", "w").write("x")',
+    "write under a submount": 'open(f"{b}/sub/x", "w").write("x")',
+}
+
+
+@needs_unshare
+@needs_var_tmp
+def test_through_the_fixed_path_and_the_trees_own_every_write_outside_the_rw_dirs_fails_as_a_read_only_file_system(
+        tmp_path):
+    """The bound copy keeps each mount's read-only flag (`--rbind` after every mount is made read-only), so through FIXED,
+    as through the tree's own path, a source file can't be appended to, unlinked, renamed or have its mode changed, and
+    the lock, another package's `.lake` and a mount inside the tree can't be written: each fails with EROFS, while the
+    RW_DIR takes its write. The submount is made in a mount namespace of the test's own, by a bind inside the tree."""
+    real, _ = linked_tree(tmp_path)
+    (real / "pkg" / "lean-audit.json").write_text("{}\n")
+    (real / "other" / ".lake").mkdir(parents=True)
+    (real / "sub").mkdir()
+    (subsrc := tmp_path / "subsrc").mkdir()
+    script = "\n".join([
+        "import errno, os, sys",
+        "for b in sys.argv[1:]:",
+        *(f"    try:\n        {code}\n        print(b, {name!r}, 'written')\n"
+          f"    except OSError as e:\n        print(b, {name!r}, errno.errorcode[e.errno])" for name, code in WRITES.items()),
+        "    open(f'{b}/pkg/.lake/ok', 'a').write('ok')",
+        "    print(b, 'rw', 'written')"])
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
+                        'mount --bind "$0" "$1" && exec "${@:2}"', str(subsrc), str(real / "sub"),
+                        *UNSHARE, "--", "bash", str(SANDBOX), "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--",
+                        sys.executable, "-c", script, FIXED, str(real)], cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == [f"{b} {w} {'written' if w == 'rw' else 'EROFS'}"
+                                     for b in (FIXED, str(real)) for w in [*WRITES, "rw"]]
+    assert (real / "pkg" / "src" / "M.lean").read_text() == f"source of {tmp_path.name}\n"
+    assert not (real / "pkg" / "src" / "N.lean").exists() and (real / "pkg" / "src" / "M.lean").stat().st_mode & 0o777 != 0o600
+    assert (real / "pkg" / "lean-audit.json").read_text() == "{}\n" and list((real / "other" / ".lake").iterdir()) == []
+    assert list(subsrc.iterdir()) == [] and list((real / "sub").iterdir()) == []
+    assert (real / "pkg" / ".lake" / "ok").read_text() == "okok"
 
 
 @needs_unshare
