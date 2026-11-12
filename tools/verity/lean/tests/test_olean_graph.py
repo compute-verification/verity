@@ -139,7 +139,8 @@ def module_data(d: Path, path: str = "/a/P/M.lean", text: str = "unused variable
 def test_a_module_built_at_another_path_has_one_canonical_digest_and_nothing_else_keeps_it(tmp_path):
     """`canonical` leaves out the source's path where only the entries reach it (a message's file), so the build at a
     longer path, whose private part's pointer into the server part moved, shares the digest. Every other difference
-    changes it, a path a declaration holds among them, and a part whose root isn't a `ModuleData` has none."""
+    changes it, a path a declaration holds among them; a part whose root isn't a `ModuleData` has none, and a part that
+    isn't an `.olean` file, or a pointer into a part that isn't there, is malformed."""
     x = module_data(tmp_path / "x")
     y = module_data(tmp_path / "y", path="/a/much/longer/checkout/elsewhere/P/M.lean")
     assert x["olean.private"].read_bytes() != y["olean.private"].read_bytes(), "the pointer into the server part moved"
@@ -153,7 +154,6 @@ def test_a_module_built_at_another_path_has_one_canonical_digest_and_nothing_els
         "a declaration's string": module_data(tmp_path / "literal", literal="lis"),
         "a declaration's scalar": module_data(tmp_path / "scalar", scalar=b"\x02" + bytes(7)),
         "the header": module_data(tmp_path / "header", header=HEADER[:-1] + b"1"),
-        "a parts list": {p: f for p, f in x.items() if p != "olean.server"},
     }
     for what, z in changed.items():
         assert G.canonical(z, SOURCE) != G.canonical(x, SOURCE), what
@@ -162,7 +162,11 @@ def test_a_module_built_at_another_path_has_one_canonical_digest_and_nothing_els
     assert G.canonical(held[0], SOURCE) != G.canonical(held[1], SOURCE), "a declaration reads the path, so it counts"
     assert G.canonical(x, "Q/M.lean") != G.canonical(x, SOURCE), "only the module's own source is left out"
     assert G.canonical(module(tmp_path / "old"), SOURCE) is None
-    assert G.canonical(module(tmp_path / "stray", stray=0x4000_0000), SOURCE) is None
+    (tmp_path / "short.olean").write_bytes(b"olean")
+    with pytest.raises(G.Malformed, match="not an olean file"):
+        G.canonical({**x, "olean": tmp_path / "short.olean"}, SOURCE)
+    with pytest.raises(G.Malformed, match="is in no part"):
+        G.canonical({p: f for p, f in x.items() if p != "olean.server"}, SOURCE)
 
 
 def test_a_module_s_replay_key_is_the_same_at_another_path_and_moves_with_its_declarations(tmp_path):

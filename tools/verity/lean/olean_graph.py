@@ -170,79 +170,78 @@ def canonical(files: dict[str, Path], source: str) -> str | None:
     number, a boxed scalar or null) and its scalar bytes. The walk takes what the roots' imports and declarations
     (`MODULE_DATA` before `entries`) reach before anything only the entries reach, and a string of the second kind that is
     an absolute path ending in ``/`` + ``source``, of the length its text has, counts as such a path, whatever it is.
-    None when a part isn't a compacted region whose root is a `ModuleData`."""
+    None when a part's root isn't a `ModuleData`; `Malformed` when a part isn't a compacted region."""
     suffix = "/" + source.lstrip("/")
-    try:
-        names = [p for p in PARTS if p in files]
-        r = _Region({p: files[p].read_bytes() for p in names})
-        spans = [(base + DATA, base + len(data), data) for base, data in r.parts.values()]
+    names = [p for p in PARTS if p in files]
+    r = _Region({p: files[p].read_bytes() for p in names})
+    spans = [(base + DATA, base + len(data), data) for base, data in r.parts.values()]
 
-        def at(a: int) -> tuple[bytes, int]:
-            for lo, hi, data in spans:
-                if lo <= a < hi:
-                    return data, a - lo + DATA
-            raise Malformed(f"address {a:#x} is in no part")
+    def at(a: int) -> tuple[bytes, int]:
+        for lo, hi, data in spans:
+            if lo <= a < hi:
+                return data, a - lo + DATA
+        raise Malformed(f"address {a:#x} is in no part")
 
-        roots = {r.root(p) for p in names}
-        number: dict[int, int] = {}
-        exact: set[int] = set()
-        now: list[int] = []
-        later: list[int] = []
+    roots = {r.root(p) for p in names}
+    for a in roots:
+        _, _, n, tag = _HEAD.unpack_from(*at(a))
+        if tag != 0 or n != len(MODULE_DATA):
+            return None
+    number: dict[int, int] = {}
+    exact: set[int] = set()
+    now: list[int] = []
+    later: list[int] = []
 
-        def ref(a: int, entries: bool) -> bytes:
-            if a & 1 or not a:
-                return b"s" + _U64.pack(a)
-            if (i := number.get(a)) is None:
-                i = number[a] = len(number)
-                if entries:
-                    later.append(a)
-            if not entries and a not in exact:
-                exact.add(a)
-                now.append(a)
-            return b"o" + _U64.pack(i)
+    def ref(a: int, entries: bool) -> bytes:
+        if a & 1 or not a:
+            return b"s" + _U64.pack(a)
+        if (i := number.get(a)) is None:
+            i = number[a] = len(number)
+            if entries:
+                later.append(a)
+        if not entries and a not in exact:
+            exact.add(a)
+            now.append(a)
+        return b"o" + _U64.pack(i)
 
-        def record(a: int, entries: bool) -> bytes:
-            d, o = at(a)
-            _, size, n, tag = _HEAD.unpack_from(d, o)
-            if tag < MAX_CTOR:
-                if size < 8 + 8 * n:
-                    raise Malformed(f"a constructor of {size} bytes with {n} object fields")
-                if a in roots and (tag != 0 or n != len(MODULE_DATA)):
-                    raise Malformed(f"a root of tag {tag} with {n} object fields, not a `ModuleData`")
-                fs = struct.unpack_from(f"<{n}Q", d, o + 8)
-                last = len(MODULE_DATA) - 1 if a in roots else n
-                rec = (struct.pack("<BBH", tag, n, size) + b"".join(ref(f, entries or i >= last) for i, f in enumerate(fs))
-                       + _bytes(d, o + 8 + 8 * n, size - 8 - 8 * n))
-            elif tag == ARRAY:
-                k = _u64(d, o + 8)
-                rec = struct.pack("<BQ", tag, k) + b"".join(ref(f, entries) for f in struct.unpack_from(f"<{k}Q", d, o + 24))
-            elif tag == SCALAR_ARRAY:
-                k = _u64(d, o + 8)
-                rec = struct.pack("<BBQ", tag, n, k) + _bytes(d, o + 24, n * k)
-            elif tag == STRING:
-                length, s = _string(d, o)
-                rec = bytes([tag]) + (b"path" if entries and _path_of_source(length, s, suffix)
-                                      else struct.pack("<QQ", length, len(s)) + s)
-            elif tag == MPZ:
-                k = struct.unpack_from("<ii", d, o + 8)[1]
-                rec = struct.pack("<Bi", tag, k) + _bytes(*at(_u64(d, o + 16)), 8 * abs(k))
-            elif tag in (THUNK, TASK, REF):
-                rec = bytes([tag]) + ref(_u64(d, o + 8), entries)
-            else:
-                raise Malformed(f"an object of kind {tag}, which a compacted region doesn't hold")
-            return _U64.pack(number[a]) + rec
+    def record(a: int, entries: bool) -> bytes:
+        d, o = at(a)
+        _, size, n, tag = _HEAD.unpack_from(d, o)
+        if tag < MAX_CTOR:
+            if size < 8 + 8 * n:
+                raise Malformed(f"a constructor of {size} bytes with {n} object fields")
+            fs = struct.unpack_from(f"<{n}Q", d, o + 8)
+            last = len(MODULE_DATA) - 1 if a in roots else n
+            rec = (struct.pack("<BBH", tag, n, size) + b"".join(ref(f, entries or i >= last) for i, f in enumerate(fs))
+                   + _bytes(d, o + 8 + 8 * n, size - 8 - 8 * n))
+        elif tag == ARRAY:
+            k = _u64(d, o + 8)
+            rec = struct.pack("<BQ", tag, k) + b"".join(ref(f, entries) for f in struct.unpack_from(f"<{k}Q", d, o + 24))
+        elif tag == SCALAR_ARRAY:
+            k = _u64(d, o + 8)
+            rec = struct.pack("<BBQ", tag, n, k) + _bytes(d, o + 24, n * k)
+        elif tag == STRING:
+            length, s = _string(d, o)
+            rec = bytes([tag]) + (b"path" if entries and _path_of_source(length, s, suffix)
+                                  else struct.pack("<QQ", length, len(s)) + s)
+        elif tag == MPZ:
+            k = struct.unpack_from("<ii", d, o + 8)[1]
+            rec = struct.pack("<Bi", tag, k) + _bytes(*at(_u64(d, o + 16)), 8 * abs(k))
+        elif tag in (THUNK, TASK, REF):
+            rec = bytes([tag]) + ref(_u64(d, o + 8), entries)
+        else:
+            raise Malformed(f"an object of kind {tag}, which a compacted region doesn't hold")
+        return _U64.pack(number[a]) + rec
 
-        h = hashlib.sha256()
-        for p in names:
-            h.update(p.encode() + b"\0" + r.parts[p][1][:BASE])
-        h.update(b"".join(ref(r.root(p), False) for p in names))
-        for a in now:
-            rec = record(a, False)
+    h = hashlib.sha256()
+    for p in names:
+        h.update(p.encode() + b"\0" + r.parts[p][1][:BASE])
+    h.update(b"".join(ref(r.root(p), False) for p in names))
+    for a in now:
+        rec = record(a, False)
+        h.update(_U64.pack(len(rec)) + rec)
+    for a in later:
+        if a not in exact:
+            rec = record(a, True)
             h.update(_U64.pack(len(rec)) + rec)
-        for a in later:
-            if a not in exact:
-                rec = record(a, True)
-                h.update(_U64.pack(len(rec)) + rec)
-    except (Malformed, struct.error, OSError):
-        return None
     return h.hexdigest()
