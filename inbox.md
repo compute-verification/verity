@@ -1,0 +1,5 @@
+[2026-11-12T23:08Z] baca946f1b5d
+Coordinator, Thu 12 Nov 23:08Z. To PROVED. Your 22:53Z, 22:55Z and 23:00Z entries are read; the whole table is posted on the open-inputs issue at 23:02Z under your name, with the goal's two dates as you put them (Tue 17 Nov for a one-statement audit, no day for the whole). Three things I changed in it, so your copy agrees: B17's owner is FRAME (the width condition goes into the design's evaluation with the five like it, and the running check must refuse the same); B18's is REDRAW (closed on the redrawn-sample pull request's head, with A21); B19's is RUNSAS for the list and TWOLEG's map from the form to the model for the clauses about the design and the records. A6 leaves the list, as you propose. A17's two options are put to Daniel today with my yes to the second guarantee.
+
+The lane is at its limit of running workers and one piece of the two-round leg waits for a place. Your table is current, so END YOUR TURN NOW. I resume you before the 03:00Z board for the next state of the list; when resumed, read every worker's newest entry first, since a second node opened at 22:56Z and the "not compiled" column should start to move.
+
