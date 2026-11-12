@@ -104439,3 +104439,76 @@ Mailbox read at `bf6f5af8a8` (21:51Z). **I can pause now:** three runs are out a
 **Not established:** that the statement elaborates; that the Lean check agrees with the reference (`ef46`); that PR 1's last 8 suites pass (`6715`); anything proved.
 
 **Need from you:** the word on `Numbered` (choice 1, or another); the two PR 2 words above.
+
+## WINDOWAT, Thu 12 Nov 22:05Z: A33 taken: its statement is written (172 lines, checked on a model, not in the tree) and waits on #9475 and on two fields of the window's instance; A28 whole I hold for Sat 14 Nov 20:00Z, not Sat 02:00Z, and I say below what I hold at 02:00Z
+
+Clock: `date -u` read 22:05Z before posting. Mailbox read at `cursor/proofs-inbox` `bf6f5af8a838` (fetched 21:52Z): your 21:51Z message (A33 is mine after A28; the date is Sat 02:00Z; the hour for A28), which also came by the shell hook [run]. Heads unchanged since my 21:51Z entry. Nothing of `security` built on the VM.
+
+### 1. A33: each member's openings at a window
+
+- [read] **What the theorem asks.** `ClaimReads.reads` (`Sampled/Window/Instance.lean:444-447`) asks `JointAuditV5.ReadsAt` at every window the instance sets up and every strategy, with no play; it unfolds, member by member (`ReadsWith`, `Sampled/Window/Unbound.lean:177-189`), to `MemberV5.ReadAt`, whose `opens` clause is `m.OpensUnder r op` (`:138-141,151`): wherever the member's deployed commitment opens a gate its files don't fix, `op` opens the gate to every value with that first bit. `op` is the vocabulary's `Opens θ F c` at the member's gates of the circuits side by side.
+- [read] **The one statement's twin** is `Instance.OpensAt` from `SessionsReady` (`Sampled/OpensAt.lean:232-272`), through `Live.opens_rowLeaf` (an opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the session's place) and `Instance.place` (the base places each gate at `placeOfFiles` of its read). On #9475 (`cursor/soundness-prf579-8fb2` at `0e12a1ba4366`) `OpensReady` is one clause, the ports and roots check's pass, and `opens_rowLeaf` reads it with `Live.hdup` (`OpensAt.lean:151-154,179-183,202-284` there).
+- **The statement, in a new `Sampled/MemberForm/Opens.lean`** (ours; 172 lines, 6 theorems, 4 definitions, in my working tree, uncommitted):
+
+```lean
+def OpensPlace (pl : Option Place) (w : ℕ) (v : BitVec w) : Prop :=
+  ∃ p, pl = some p ∧ ∃ o : Hash.RowLeaf.Opening,
+    Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧
+      ∀ i : Fin w, o.row[p.offset + i.val]? = some (v.getLsbD i.val)
+
+/-- The member's deployed commitment opens only at its own files' places. -/
+def OpensOwn {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) : Prop :=
+  m.OpensUnder m.fileRead fun g v => OpensPlace (placeOfRead m.fileRead g) (m.fileRead.circuit.w g) v
+
+/-- `ReadsWith`'s recursion, keeping of each member its `opens` clause. -/
+def OpensWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
+    ((g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop) →
+    List (MemberV5 Reg nJ) → Prop
+
+theorem opensWith_read {Reg : Type} {nJ : ℕ} (V : Vocab d α) (θ c : ByteArray) (F : Array ByteArray)
+    (hplace : ∀ g, V.place θ F c g = placeOfFiles (V.read θ F) g) (ms : List (MemberV5 Reg nJ))
+    (hread : ms.map (·.fileRead) = (V.read θ F).first :: (V.read θ F).rest) (hown : ∀ m ∈ ms, OpensOwn m) :
+    OpensWith (V.read θ F).first (V.read θ F).rest (V.Opens θ F c) ms
+```
+  and the one statement not written yet, a member's twin of `Live.opens_rowLeaf` with `placeOfRead_eq`:
+
+```lean
+theorem opensOwn_of_checked {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ) (hc : m.Checked)
+    (hp : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (zkTags m.I) m.I.circuitFile m.I.tables)
+      (zkTags m.I) m.I.publicFile = .ok ()) : OpensOwn m
+```
+- [run: on this VM, no run id] `opensWith_read` and the five lemmas under it elaborate in a core-only model (the file's text over stub copies of `circuitWith`, `constsWith`, `placeOfWith`, `Vocab.Opens`, `OpensUnder`), axioms `propext`, `Quot.sound`. Not in the tree yet: it is in run `r20261112-220347-1827`.
+- **What it waits on**, in order:
+  1. [read] **#9475 in my base** (on `main`, then in soundness's window branch): `opensOwn_of_checked` is `opens_rowLeaf`'s script at a member's `Cd`, `rows`, `Lm`, `roots` (`Window/Unbound.lean:57-80`, the same formulas as `Live`'s), and on the merged tree `OpensReady` still has five clauses (`OpensAt.lean:124-131`). [guess] 200 lines for the twin. It is no lines if soundness restates `opens_rowLeaf`, `OpensReady.domain`, `.roots`, `.words` and `placeOf_words` over the commitment's data (`D`, `hU`, `pub`, `n`, `pi`) rather than over `Live`; then `Live`'s and the member's are instances. That is their file: under "To post".
+  2. [read] **`place` at the window's instance.** `WindowInstance` has no such field (`Window/Instance.lean:127-135`); the one statement's is `Instance.place`. One field, `place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g`: row A34, soundness's.
+  3. [derived] **Each member's files check in the window's `SetsUp`.** `reads` has no play, so `m.Checked`'s `noPublic`, `parsed`, `distinct` and the ports check's pass must be clauses of what "the verifier sets this window up on `F`" says (`fixes` is `W.RootsFix`, already a hypothesis of `reads`). They are `MembersSetUp.loads`, `.distinct` of my map (21:16Z, file C) and one clause more, `ports`; `WindowAt` (A28) proves them of an accept from #9441's `membersRun_files`, which holds `ksFiles`, the ports check, of every member, drawn or not (`Member.FilesHeld`, `OneStageZk.lean:1215-1218`). So A33 is after A28's file C, as you put it, and it needs (N3)'s `read` clause as `hread`.
+- [run] `cursor/soundness-prf579-rest-8fb2` is not on `origin` (`git ls-remote --heads origin 'cursor/soundness-prf579*'` at 22:00Z lists only `cursor/soundness-prf579-8fb2`), so I have not read the registered files' field.
+
+### 2. The hour for A28
+
+**Sat 14 Nov 20:00Z for the whole, [guess]; not Sat 02:00Z.** What decides it:
+
+| file | lines | state | waits on |
+|---|---|---|---|
+| F `Consts.lean`, A `Accept.lean`, B `Run.lean` | 534 written | in run `r20261112-220347-1827`, none elaborated in the tree | a Lean slot |
+| `Opens.lean` (A33's window half) | 172 written | same run | a Lean slot |
+| C `SetsUp.lean`: `MemberOn`, `WindowOn`, `MembersSetUp`, the files' checks, `WindowAt` | [guess] 450 | not started | (N1), (N3) for its last theorem; the rest nothing |
+| E `Reads.lean`: the sample by member, the evidence, `WindowReads`'s assembly | [guess] 600 | not started | (N2), (N4); the undrawn member's ruling |
+| D `Sessions.lean`: the nine fields of `SessionOpens` and `close` at the `j`-th tree | [guess] 900 | not started | nothing of anyone's |
+
+- [read] **D is the hour.** Nothing on soundness's branch concludes `SessionOpens` or `SessionRead`: every use takes one as a hypothesis (`Window/Record.lean:384-651`, `Window/Counts.lean:333,362`, `Window/Steps.lean:218,329`), and `SessionRead.of_dropped` (`Window/Closing.lean:265`) goes from the first to the second. The read-level lemmas it needs are stated for any number of trees (`Sampled/RoundsRead.lean`: `readLog_opening` `:596`, `readLog_openedOf` `:716`, `readLog_round` `:755`, `readLog_specs` `:861`, `KeyAt.of_named` `:1157`, `openedOf_eq_recordRounds` `:1207`); the one-tree step is `KeyAt.eq_zero` and the lemmas after it (`Sampled/MovesReach.lean:281-660`), which I restate at the tree `members_read` hands over (`MemberForm/Order.lean:750`). [guess] 500 to 800 lines of it are new proof, and I have read its lemmas' statements, not their proofs.
+- [run] **The loop is the other half.** A launch waited 30 minutes for a slot on `vy-nebius-cpu-8` tonight and never took one (I cancelled two of mine at 22:03Z to hold one reservation of 64 GB instead of two; `vy-nebius-cpu-12` and `-cpu-10` had 11 checks in line at 21:33Z). No file of mine has been through the tree's Lean yet, so I do not know the first build's time.
+- **What I hold at Sat 02:00Z:** F, A, B and `Opens.lean` committed (three axioms each); C compiled with `WindowAt` proved from `MembersSetUp` and, if soundness's files are unchanged by then, from (N1) and (N3) as two named hypotheses stated in C; E's two statements that need no ruling (`statesMember`, `statementFiles_evidence`); D's statement and its first half (the read exists at a per-member accept; `tree`, `key`, `full`, `coins`, `parse`).
+- **What the whole needs from others:** soundness's (N1) to (N4) on their branch by Fri 13 Nov 16:00Z; the undrawn member's ruling (my 21:51Z entry, section 3) by then; a slot within 30 minutes of a launch. Each day one of these is late moves the hour by as much. Friday 18:00Z's entry replaces the [guess] with the count of D's lemmas against the tree, as the brief asks.
+
+### To post
+
+- To soundness, for A33: restate `Live.opens_rowLeaf` and the four lemmas under it (`Sampled/OpensAt.lean` on #9475) over the commitment's data, so a window's member reads the same lemma; and `place` as a field of `WindowInstance` (A34).
+- For PRF-371, if you post an hour for A28 today: Sat 14 Nov 20:00Z, a guess until Fri 18:00Z, with F, A, B, C and A33's window half by Sat 02:00Z.
+
+### Not established
+
+- That any of the four written files elaborates in the tree: run `r20261112-220347-1827`, waiting for a slot at 22:04Z.
+- `opensOwn_of_checked`: not written; [guess] that `m.pub.n = m.n`, which `placeOfRead_eq`'s twin needs, follows from `Checked.parsed` and `noPublic` by `loadPublic_inOut` (`Flock/Bridge/V5/Accepted.lean:205`, [relayed: PROVED 21:18Z]), not checked.
+- Whether the merged tree builds: records run `r20261112-203452-ae67`, still running on `vy-nebius-cpu-12` at 22:04Z (slot `p2` since 20:42Z), no verdict.
+- D's size, and so the hour.
