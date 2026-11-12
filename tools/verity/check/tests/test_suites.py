@@ -1784,7 +1784,8 @@ def test_a_program_no_tracer_sees_into_fails_its_suite_until_the_suite_names_its
 def test_an_untraced_program_is_named_by_its_file_or_every_file_the_run_ran_as_the_graph_runner_names_it(monkeypatch, tmp_path):
     """`undeclared_untraced` decides as the graph's test-file runner does: a file whose path from its suite's directory matches a
     pattern of `untraced` may start any program, and a conftest's (`*`) only when each file the run ran may, since each file's own
-    run repeats it; compilers alone pass, the runner's `COMPILERS`. The fix names the files to add, in the list or as a new key."""
+    run repeats it; compilers alone pass, the runner's `COMPILERS`; a suite the graph runs whole (`AFTER_LEAN`) is not held to
+    it. The fix names the files to add, in the list or as a new key."""
     import ast
 
     S = _suites(monkeypatch, tmp_path)
@@ -1797,6 +1798,8 @@ def test_an_untraced_program_is_named_by_its_file_or_every_file_the_run_ran_as_t
     assert S.undeclared_untraced(suite, {"*": ["git"]}, ["tests/test_git.py", "tests/test_sh.py"]) == {"*": ["git"]}
     assert S.undeclared_untraced(suite, {"*": ["git"]}, []) == {"*": ["git"]}
     assert S.undeclared_untraced(S.Suite("r", ".", (), (), untraced=("*",)), {"*": ["git"], "tests/test_x.py": ["git"]}, []) == {}
+    lean = S.AFTER_LEAN[0]                                       # the graph runs it whole: no file of it gets a task
+    assert S.undeclared_untraced(S.Suite(lean, f"x/{lean}", (), ()), {f"x/{lean}/tests/test_x.py": ["lake"]}, []) == {}
     assert S.untraced_fix(suite, {"a/pkg/tests/test_sh.py": ["sh"], "*": ["git"]}) == (
         'a/pkg/pyproject.toml: add to [tool.verity.tests] untraced = [...]\n    "*",\n    "tests/test_sh.py",')
     assert S.untraced_fix(S.Suite("r", ".", (), ()), {"tests/test_x.py": ["git"]}) == (

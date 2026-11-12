@@ -68,7 +68,8 @@ doesn't start; the failure names the test and the file. Nothing sees into other 
 their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. A test file that starts one
 fails its suite unless the suite names it under `[tool.verity.tests] untraced` (fnmatch patterns from its directory; a conftest's
 program, every file the run ran), as the graph's test-file runner decides (`undeclared_untraced`), and the failure names the line
-to add; a compiler alone passes, as the runner lets a file whose code builds native code start one. The one exception is the
+to add; a compiler alone passes, as the runner lets a file whose code builds native code start one, and a suite of
+`AFTER_LEAN`, which the graph runs whole, is not held to it. The one exception is the
 suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
@@ -1891,7 +1892,10 @@ def undeclared_untraced(suite: Suite, untraced: dict[str, list[str]], ran: list[
     decides (`runners/test_file.allowed`, its family's `_named_tests`): a module is named when its path from the suite's
     directory matches one of the fnmatch patterns, and "*" (a conftest or hook, which every test file's own run repeats) when
     every module of ``ran`` (the run's tests' files, from the suite's directory) is. Compilers alone pass: the runner lets a
-    file whose closure builds native code start them, a closure this run doesn't see."""
+    file whose closure builds native code start them, a closure this run doesn't see. A suite of `AFTER_LEAN` has none: the
+    graph runs it whole, as check does (its lean-suites tasks), and gives none of its files a task of its own."""
+    if suite.name in AFTER_LEAN or suite.path in AFTER_LEAN:
+        return {}
     base = "" if suite.path == "." else suite.path + "/"
 
     def named(rel: str) -> bool:

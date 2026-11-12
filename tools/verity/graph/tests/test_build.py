@@ -468,22 +468,19 @@ if how == "kill a suite":
     rows[1].update(status="failed")
 if how == "timeout":
     rows[1].update(status="failed", timed_out=600.0)
-if how == "untraced":
-    rows[1].update(status="failed", beyond_tests=True, undeclared_untraced={"lean/b/c/tests/test_v.py": ["git"]})
 Path(a[a.index("--json") + 1]).write_text(json.dumps(rows))
 if how == "wrote":
     print("\\nthe tests changed 1 files in the repository (tests write under tmp_path):\\n  x.txt")
-sys.exit(1 if how in ("tests", "kill a suite", "timeout", "untraced", "wrote") else 0)
+sys.exit(1 if how in ("tests", "kill a suite", "timeout", "wrote") else 0)
 """
 
 
 @pytest.mark.parametrize(("how", "status"), [("pass", "pass"), ("cached", "pass"), ("tests", "fail"), ("timeout", "fail"),
-                                             ("untraced", "fail"), ("wrote", "fail"), ("kill a suite", "error"), ("missing", "error"),
+                                             ("wrote", "fail"), ("kill a suite", "error"), ("missing", "error"),
                                              ("usage", "error"), ("kill", "error"), ("pass old", "pass"), ("part", "pass")])
 def test_lean_suites(tmp_path, monkeypatch, how, status):
     """suites.py --lean-built on the task's suites, with lake on the PATH, after the executables it reads are put at their paths
-    in the tree (over another build's there); a suite that failed is named with its failed tests, or the test files that started
-    programs no tracer sees into that its suite doesn't name, and a suite the report lacks,
+    in the tree (over another build's there); a suite that failed is named with its failed tests, and a suite the report lacks,
     one that failed on nothing its row names (a kill) and a usage error are no result.  A part's task runs `--files K/M` on a
     timing record that holds none of its suites' files, and its report's rows, of the suite's part, are the suite's."""
     root = _tree(tmp_path, monkeypatch, {lean_suites.SUITES: SUITES_STANDIN, "bin/lake": "#!/bin/sh\n",
@@ -505,9 +502,6 @@ def test_lean_suites(tmp_path, monkeypatch, how, status):
     if how == "tests":
         assert res["detail"]["failed"] == [{"name": "b/c", "suite": "lean/b/c", "failed_tests": ["tests/test_v.py::test_v"]}]
         assert res["detail"]["suites"] == {"a": "passed", "b/c": "failed"}
-    if how == "untraced":
-        assert res["detail"]["failed"] == [{"name": "b/c", "suite": "lean/b/c", "failed_tests": [], "beyond_tests": True,
-                                            "undeclared_untraced": {"lean/b/c/tests/test_v.py": ["git"]}}]
     if how == "missing":
         assert res["detail"]["error"] == "not run: b/c", res
 
