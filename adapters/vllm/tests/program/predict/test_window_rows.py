@@ -38,11 +38,16 @@ from tests.program.predict.test_window_circuit import (
 )
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
 from tests.program.predict.test_window_circuit_fa3 import H200
+from verity_vllm.check.replay.checks import check_rows
+from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
+from verity_vllm.program.predict.naming import write_build
+from verity_vllm.program.predict.steps import compile_steps
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}
@@ -477,6 +482,34 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
         WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], *_read(store))
+
+
+@pytest.mark.usefixtures("code_versions_stood_in")
+def test_a_requests_checks_are_no_served_op_and_any_other_row_without_a_member_is_refused(tmp_path):
+    """A request's Program ends on its length rule (`StopCheck_v1`), a check its instances header names: it computes the
+    Program's verdict from the request's sampled ids, the engine never runs it and the record binds no member of it. So
+    `Served.of_record` takes the request's ops from its Program's other rows, however the request finished, and a row with
+    no committed member that the header names no check is refused by name. Each prompt is one id, a prefill of one row an
+    op, and no record is given: `of_record` reads none before a value is asked."""
+    reg = S._registered()
+    advice, ingress = S._session([(1, 3, S.GREEDY), (1, 3, {**S.GREEDY, "max_tokens": 3})],
+                                 [[(0, 0, 1), (1, 0, 1)], [(0, 1, 1), (1, 1, 1)], [(0, 2, 1), (1, 2, 1)]])
+    c = compile_steps(reg, advice, ingress, named=True)
+    assert sorted(u.stop["finish"] for u in c.requests) == [1, 2]
+    for u in c.requests:
+        d = tmp_path / str(u.stop["finish"])
+        write_build(str(d), c.programs[u.digest], c.named[u.digest])
+        pi = ProgramIndex(read_instances(str(d / "instances.json.gz"), expand=False), program_dir=str(d))
+        (_what, i, _lo, _hi), = check_rows(pi)
+        rule = pi.rows[i]
+        assert i == len(pi.rows) - 1 and rule["spec"].startswith("StopCheck_v1{")
+        assert not (pi.describe(rule) or {}).get("members")
+        served = WR.Served.of_record(pi, None, "q", 0)
+        assert (served.LP, len(served.decode)) == (1, pi.n_steps - 1)
+        assert [x["spec"] for x in served.rows] == [r["spec"] for r in pi.rows[:-1]]
+        del pi.inst["checks"]
+        with pytest.raises(ValueError, match=rf"q: row {i} \(StopCheck_v1\{{.*\}}\) has no committed member"):
+            WR.Served.of_record(pi, None, "q", 0)
 
 
 def test_a_node_served_under_other_statics_is_held_to_its_class_nodes_value(window):
