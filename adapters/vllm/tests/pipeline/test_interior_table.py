@@ -26,9 +26,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -37,8 +34,17 @@ from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows.interface import digest_words
-from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
-                                  serving_rows as SRW)
+from verity.protocols.spot.verifier import second_stage as SS
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as RG
+from verity.protocols.spot.verifier.one_stage import registration as R
+
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 RD = E.read(8, 2)
 SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
@@ -376,7 +382,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
     it = honest
     assert [len(v) for v in it.published.values()] == [C, C]
-    zero = np.zeros(2, np.uint16)
+    zero: np.ndarray = np.zeros(2, np.uint16)
     for t in drawn:
         for k in (C - 1, C, CAP - 1):
             r = IR.table_reads(t, [k])
