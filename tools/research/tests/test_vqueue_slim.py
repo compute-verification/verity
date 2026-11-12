@@ -7,6 +7,7 @@ the content the step reads at the candidate and at its base, so `vqueue.decide` 
 base, each failure by the tests it names."""
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import shutil
@@ -28,6 +29,7 @@ from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, LEAN_IN
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
+from test_vqueue_loop import NEW, _check, _row, env  # noqa: F401  (env: the loop's fixture)
 
 #: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
 OFF = ("circuit-check", "ratchet-gate")
@@ -777,6 +779,45 @@ def test_a_run_has_left_its_passes_once_the_store_holds_its_attempt():
     assert [left(d, r) for r in ("r-done", "r-running", "r-away")] == [True, False, False]
     assert not left(SimpleNamespace(q=SimpleNamespace()), "r-done")
 
+
+@pytest.mark.parametrize("how", ["left", "late"])
+def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_then_launches_naming_them(env, monkeypatch,
+                                                                                                        how):
+    """The loop under the check that gates, on `test_vqueue_loop`'s fakes (`Runs`: a run's record is in once it ended): the lower candidate fails, so the upper one is
+    dropped with it while its shards run, and its member, built again on `main`, launches nothing while their records are
+    out: its line's record waits naming them.  A later tick launches it once they ended (``left``), or the first past
+    `CARRY_WAIT_S` after the cancel without them (``late``), each shard naming every one."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    named, d = [], loop.world.slim_driver()
+    launch = d.launch_postland
+    d.launch_postland = lambda repo, commit, *a, **kw: named.append((commit, os.environ.get(CARRY_ENV))) or launch(
+        repo, commit, *a, **kw)
+    lower = loop.tick()[1]["sha"]
+    upper = loop.tick()[0]["sha"]
+    replaced_ids = sorted(f"c-{n}" for n, (c, *_) in enumerate(runs.launches, 1) if c == upper)
+    runs.end(main)
+    runs.end(lower, 3, "pytest", rows=(_row(NEW),))
+    frozen, reads = loop.now, itertools.count()
+    loop.now = lambda: frozen() + next(reads)              # the drop's line is older than the rebuild's start
+    logged = loop.tick()
+    loop.now = frozen
+    assert sorted(next(r for r in logged if r["action"] == "drop" and r["sha"] == upper)["beside_cancelled"]) == replaced_ids
+    rebuilt = next(r for r in logged if r["action"] == "build")["sha"]
+    waits = next(r for r in logged if r["action"] == "slim" and r["sha"] == rebuilt)["record"]
+    assert (waits["carry"], sorted(waits["wait"]["runs"]), waits["ids"]) == (replaced_ids, replaced_ids, [])
+    assert not [c for c, _ in named if c == rebuilt]
+    if how == "left":
+        runs.end(upper)
+    else:
+        env.clock += CARRY_WAIT_S + 60
+    loop.tick()
+    assert [x for c, x in named if c == rebuilt] == [",".join(replaced_ids)] * 3
+    rec = [r for r in env.lines() if r["action"] == "slim" and r["sha"] == rebuilt][-1]["record"]
+    assert "wait" not in rec and len(rec["ids"]) == 3
+    assert rec.get("carry_without") == (replaced_ids if how == "late" else None)
 
 @pytest.mark.parametrize("red, state", [("circuit-check", PASS), ("ratchet-gate", PASS), ("lean-changed", PASS),
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
