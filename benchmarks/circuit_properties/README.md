@@ -47,15 +47,16 @@ multiply, which give F. The rules are the training benchmark's reading of a trac
 The products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
 and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
 reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
-distinct contexts do). A product is charged where both operands depend on θ′ in every word, neither carries a gather's
-rows, the two are no one array and not two activations; `Work.left_out` holds the rest by why. Nothing is stated
+distinct contexts do). A product is charged where both operands depend on θ′ in every word, each is specific or a weight
+(`work.may_repeat`: an operand that reads the current inputs and is not specific may repeat its rows, however the
+Program writes them), the two are no one array and not two activations; `Work.left_out` holds the rest by why. Nothing is stated
 beside the circuit. A gather's rows by the batch stay a gather's rows until one rule makes them specific: a softmax over
 a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
 The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position, no two positions of the batch hold
 equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
-by a shared weight would then read one pair of values twice (`shared_rows`; a scan over a value input's rows too).
+by a shared weight would then read one pair of values twice.
 `work.bound(work, c)` is the most blocks over its
 sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a

@@ -1,6 +1,7 @@
 """The work the min-cut bound reads off a Program (`circuit_properties.work`), on word circuits of the reference
-registry's products whose work is known by hand: a training loop's scan, whose carried weight is charged from its
-second iteration and whose batch is free; a lookup whose table is the registered one or the loop's own; a Program with
+registry's products whose work is known by hand: a training loop's scan, whose carried weights are charged from
+their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
+them; a lookup whose table is the registered one or the loop's own; a Program with
 no scan; one array times itself; two activations; the largest set of arrays a work multiplies pairwise; a weight
 decoded from a ternary code; a one-hot row; a rank-4 bottleneck between two carried weights; each operand's β at
 min(16, β(k)); and |C| in Boolean gates."""
@@ -90,21 +91,45 @@ def loop() -> Program:
                  lambda B, c, x: ((_add(B, c[0], x), _add(B, c[1], x)), B.call(LIN, _mul(B, x, c[1]), c[0])))
 
 
+def carried_loop() -> Program:
+    """y = (u ⊙ g) W^T, u, g and W carried and each added the iteration's z: no operand reads an input, so the product
+    of two weights is charged from the second iteration."""
+    return _loop("Carried", (("w", W_T), ("g", X_T), ("u", X_T)), (("z", X_T),), Y_T,
+                 lambda B, c, z: (tuple(_add(B, a, z) for a in c), B.call(LIN, _mul(B, c[2], c[1]), c[0])))
+
+
+def _gathered(w: WK.Work) -> WK.Group:
+    (g,) = [g for g in w.products if g.reason == "gathered"]
+    return g
+
+
 def _boolean(fid_counts: Counter, by_id: dict) -> int:
     return sum(n * sum(compile_bits(boolean_version(by_id[f])).counts.values()) for f, n in fid_counts.items())
 
 
-def test_a_scan_charges_its_carried_weight_from_its_second_iteration():
-    p = loop()
+def test_a_scan_charges_its_carried_weights_from_their_second_iteration():
+    p = carried_loop()
     w = WK.read(p, KB)
     prims = [f for f in flatten(p.root).prims if not is_input(f)]
     assert w.gates == _boolean(Counter(f.id for f in prims), {f.id: f for f in prims})
     (g,) = w.groups
-    assert (g.weight, g.widths, g.out_width, g.k_dim, g.rates) == ((False, True), (32, 32), 32, K, (32.0, 32.0))
-    assert g.beta == (MC.beta(KB), MC.beta(KB)) and w.r_step is None and w.keep == 1.0
+    assert (g.weight, g.widths, g.out_width, g.k_dim, g.rates) == ((True, True), (32, 32), 32, K, (32.0, 32.0))
     assert (w.N, w.O) == ((T - 1) * K * N, (T - 1) * N * 32)
     assert w.left_out == {"theta": K * N, "gathered": 0, "self": 0, "activations": 0}
     assert len(g.edges) == 1
+
+
+def test_a_value_inputs_row_by_a_carried_weight_is_priced_and_left_out():
+    """x ⊙ g by the carried W, x an iteration's input: two of its rows may be equal, so from the second iteration the
+    product is left out as gathered, priced as an activation by a weight."""
+    p = loop()
+    w = WK.read(p, KB)
+    prims = [f for f in flatten(p.root).prims if not is_input(f)]
+    assert w.gates == _boolean(Counter(f.id for f in prims), {f.id: f for f in prims})
+    g = _gathered(w)
+    assert (g.weight, g.widths, g.out_width, g.k_dim, g.rates) == ((False, True), (32, 32), 32, K, (32.0, 32.0))
+    assert g.beta == (MC.beta(KB), MC.beta(KB)) and w.r_step is None and w.keep == 1.0
+    assert w.groups == [] and w.left_out == {"theta": K * N, "gathered": (T - 1) * K * N, "self": 0, "activations": 0}
 
 
 def test_the_batch_alone_is_free_like_theta():
@@ -181,9 +206,9 @@ def test_the_arrays_multiplied_pairwise_set_F():
     assert b.omega == 3 and b.bound.F == MC.share(3) and b.bound.statement == MC.HE_SHARED
 
 
-def test_two_activations_are_left_out_and_set_the_prefix_a_sequence_shares():
-    """h (x ⊙ g) times x's own matrix (Z ⊙ G) is two activations, left out; its dims allow a sequence of K, so a
-    token-indexed product keeps 1 − 1/K of its MACs."""
+def test_two_activations_set_the_prefix_a_sequence_shares():
+    """h (x ⊙ g) times x's own matrix (Z ⊙ G) is two activations, neither specific, so it is left out as gathered, as
+    h W is; its dims allow a sequence of K, so a token-indexed product keeps 1 − 1/K of its MACs."""
     def step(B, c, x, z):
         g, G, W = c
         h = _mul(B, x, g)
@@ -192,11 +217,9 @@ def test_two_activations_are_left_out_and_set_the_prefix_a_sequence_shares():
 
     w = WK.read(_loop("Acts", (("g", X_T), ("G", W_T), ("W", W_T)), (("x", X_T), ("z", W_T)), Array(2 * N, F32),
                       step), KB)
-    (g,) = w.groups
-    assert g.weight == (False, True) and w.left_out["activations"] == (T - 1) * K * N
+    assert w.groups == [] and {g.weight for g in w.products if g.reason == "gathered"} == {(False, True), (False, False)}
+    assert w.left_out["gathered"] == 2 * (T - 1) * K * N and w.left_out["activations"] == 0
     assert w.keep == 1 - WK.SHARED_PREFIX / K
-    b = WK.bound(w, C)
-    assert b.N == pytest.approx(w.keep * (T - 1) * K * N)
 
 
 def _ternary_loop() -> Program:
@@ -233,8 +256,8 @@ def test_a_weight_decoded_from_a_ternary_code_is_priced_at_its_rate():
     """A decoded value reads a bit of each plane and its row's scale, a word each a value's worth: its rate is 1 bit and
     it holds b = 2 + 32/KT source bits, so its β is b·1/(b + 1) at its passed width b."""
     w = WK.read(_ternary_loop(), KB)
-    (g,) = w.groups
-    assert g.weight == (False, True) and g.widths == (32, 32) and w.N == (T - 1) * N * KT
+    g = _gathered(w)
+    assert g.weight == (False, True) and g.widths == (32, 32) and w.left_out["gathered"] == (T - 1) * N * KT
     b = 2 + 32 / KT
     assert g.rates == (32.0, pytest.approx(1.0)) and g.bits == (32.0, pytest.approx(b))
     assert g.beta == (MC.beta(KB), pytest.approx(b / (b + 1)))
@@ -269,7 +292,8 @@ def test_a_rank_bottleneck_between_carried_weights_bounds_the_downstream_operand
     p = _loop("Adapter", (("g", row), ("A", Array(R, row)), ("B", Array(D, Array(R, F32))), ("C", Array(N, row))),
               (("x", row),), Y_T, step)
     w = WK.read(p, KB)
-    by = {(g.k_dim, g.dims[3]): g for g in w.groups}
+    assert w.groups == []
+    by = {(g.k_dim, g.dims[3]): g for g in w.products if g.reason == "gathered"}
     assert set(by) == {(D, R), (R, D), (D, N)}
     assert by[(D, R)].beta == (MC.beta(KB), MC.beta(KB)) and by[(R, D)].rates[0] == 32.0
     downstream = by[(D, N)]
@@ -279,7 +303,7 @@ def test_a_rank_bottleneck_between_carried_weights_bounds_the_downstream_operand
 
 
 def test_the_bound_is_the_calculators_at_the_groups_beta():
-    w = WK.read(loop(), KB)
+    w = WK.read(carried_loop(), KB)
     best = WK.bound(w, C)
     bk = MC.beta(KB)
     whole = MC.bound(C, KB, N=w.N, O=w.O, size=w.gates, beta_w=bk, beta_x=bk, b=MC.BF16, F=MC.share(2))
@@ -289,10 +313,10 @@ def test_the_bound_is_the_calculators_at_the_groups_beta():
 
 def test_every_operand_is_at_most_bf16_and_beta_k():
     for k in (KB, 8e6):
-        (g,) = WK.read(loop(), k).groups
-        assert g.beta == (min(MC.BF16, MC.beta(k)),) * 2
-    assert WK.bound(WK.read(loop(), WK.HEAD_K), C) is None
-    assert WK.bound(WK.read(loop(), 1e10), C) is None
+        (g,) = WK.read(carried_loop(), k).groups
+        assert g.beta == _gathered(WK.read(loop(), k)).beta == (min(MC.BF16, MC.beta(k)),) * 2
+    assert WK.bound(WK.read(carried_loop(), WK.HEAD_K), C) is None
+    assert WK.bound(WK.read(carried_loop(), 1e10), C) is None
 
 
 #: a row's positions
@@ -330,22 +354,36 @@ def test_rows_stay_a_gathers_from_the_circuit_alone():
         assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N
 
 
-def test_a_scan_over_a_value_inputs_rows_reads_rows_that_may_repeat():
-    """Each iteration scans its PN rows of x, each times the carried W: the rows are an input's values, two of which
-    may be equal, so the inner scan's products are left out as gathered, as a batch's over the rows would be."""
-    def step(B, c, rows, z):
+def _rows_loop(form: str) -> Program:
+    """Each iteration multiplies its PN rows of values, each times the carried g, by the carried W: as one batch node,
+    a call a row, a scan inside the iteration over the rows, or two inputs of a row each."""
+    def step(B, c, *xs):
         w, g = c
+        if form == "inputs":
+            ys = concat([B.call(LIN, _mul(B, r, g), w).refs for r in xs[:PN]])
+        elif form == "batch":
+            ys = B.batch(LIN, _mul(B, xs[0], g), w, axes=(0, None)).refs
+        elif form == "calls":
+            h = _mul(B, xs[0], g)
+            ys = concat([B.call(LIN, h[p], w).refs for p in range(PN)])
+        else:
+            def row(B, S, acc, x, g_, w_):
+                return tuple_of(acc, B.call(LIN, _mul(B, x, g_), w_))
 
-        def row(B, S, acc, x, g_, w_):
-            return tuple_of(acc, B.call(LIN, _mul(B, x, g_), w_))
+            inner = _def("Row", ((("acc", Y_T), ("x", X_T), ("g", X_T), ("w", W_T)), Tuple(Y_T, Y_T)), row)
+            init = Coll(Y_T, concat([B.call(const(32, 0)).refs] * N))
+            ys = B.scan(bind(inner), init, xs=[xs[0]], shared=[g, w])[1].refs
+        return (_add(B, w, xs[-1]), _add(B, g, xs[-1])), Coll(Array(PN, Y_T), ys)
 
-        inner = _def("Rows", ((("acc", Y_T), ("x", X_T), ("g", X_T), ("w", W_T)), Tuple(Y_T, Y_T)), row)
-        init = Coll(Y_T, concat([B.call(const(32, 0)).refs] * N))
-        out = B.scan(bind(inner), init, xs=[rows], shared=[g, w])
-        return (_add(B, w, z), _add(B, g, z)), out[1]
+    rows = tuple((f"r{p}", X_T) for p in range(PN)) if form == "inputs" else (("rows", ROWS_T),)
+    return _loop("Rows" + form, (("w", W_T), ("g", X_T)), (*rows, ("z", X_T)), Array(PN, Y_T), step)
 
-    p = _loop("RowScan", (("w", W_T), ("g", X_T)), (("rows", ROWS_T), ("z", X_T)), Array(PN, Y_T), step)
-    w = WK.read(p, KB)
+
+@pytest.mark.parametrize("form", ("batch", "calls", "scan", "inputs"))
+def test_a_value_inputs_rows_are_left_out_however_the_program_writes_them(form):
+    """Two rows of an input's values may be equal, whichever way the Program writes them, so each form leaves out the
+    same MACs as gathered."""
+    w = WK.read(_rows_loop(form), KB)
     assert w.groups == []
     assert w.left_out == {"theta": PN * K * N, "gathered": (T - 1) * PN * K * N, "self": 0, "activations": 0}
 

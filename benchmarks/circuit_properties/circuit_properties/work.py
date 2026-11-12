@@ -24,8 +24,9 @@ For `min_cut.bound`'s inputs it reads:
   batch count. An operand is a weight where it reads nothing of the current iteration's inputs, else an activation
   and the product's token side.
 * Which are charged (`Work.groups`; the others are `Work.left_out` by why): a product both of whose operands depend on
-  θ′ in every word ("theta" else), neither of which carries a gather's rows ("gathered"), whose operands are no one
-  array ("self") and not two activations ("activations"). A gather's rows stay a gather's rows through every op until
+  θ′ in every word ("theta" else), neither of which may repeat its rows (`may_repeat`: it carries a gather's rows, or
+  reads the current inputs and is not specific; "gathered"), whose operands are no one array ("self") and not two
+  activations ("activations"). A gather's rows stay a gather's rows through every op until
   the rule below makes them specific, but not through a carry: a carried word reads no current input, so it is no
   row's. A weight gradient and attention's products are both products of two activations, which a Program tells apart
   only by where their outputs go, which its author chooses.
@@ -51,8 +52,10 @@ reading of the same step, and a bound true but weak: a product the tables don't 
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
-the two, for generic weights; a product is charged only on specific operands, so no two MACs it charges read one pair
-of values. From the circuit alone, with nothing stated, one rule makes values specific, and every op it can't decide
+the two, for generic weights; a product is charged only on specific or weight operands, so no two MACs it charges
+read one pair of values. An operand that reads the current inputs and is not specific may repeat its rows, as two
+rows of values may be equal as two tokens may, however the Program writes them: a batch, a call a row, a scan or two
+inputs. From the circuit alone, with nothing stated, one rule makes values specific, and every op it can't decide
 gives a gathered value:
 
 * A softmax's rows (`masked_rows`): each a row of a product's outputs, through one-to-one ops on constants
@@ -64,16 +67,12 @@ gives a gathered value:
   constant's columns there differ and each has a finite word, since two keys of one token give columns whose ratio is
   the exponential of the constant's difference.
 * A product's output (`product_status`) is specific where its x's slices are such rows or columns, or x is specific
-  and read one to one, and w's rows differ: w specific and read one to one, a value of θ′ no gather's rows reach, or a
+  and read one to one, and w's rows differ: w specific and read one to one, a value of θ′ that reads no current input, or a
   product's output whose columns w's rows read, each another.
 * A primitive's output stays specific only where it is one to one in a specific argument read one to one, at the
   constants it reads (`INJECTIVE`'s ops, a multiply's constant nonzero); an op outside it gives a gathered value, so an
   op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
   values the Program doesn't state (a rope table, which may hold a 0).
-* A batch's members that read rows of the current inputs against an argument they share (`shared_rows`), a value
-  batch's rows by a weight, read rows that may repeat, which carry a gather's rows: two rows of a batch of values may
-  be equal as two tokens may. So do the iterations of a scan inside the loop over rows of the current inputs, where
-  those rows are not specific.
 
 The rule rests on one premise, the one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
 each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
@@ -180,6 +179,12 @@ THETA = Status(False, False, False, False, frozenset())
 def unknown(st: Status) -> bool:
     """Whether an array's values are the current inputs', which the Program neither states nor computes from θ."""
     return st.reach and not (st.dep or st.gathered or st.specific or st.stated)
+
+
+def may_repeat(st: Status) -> bool:
+    """Whether two rows of an array may hold one word: it carries a gather's rows, or reads the current inputs and is
+    not specific, however the Program writes its rows (a batch, a call a row, a scan, two inputs)."""
+    return st.gathered or (bool(st.data) and not st.specific)
 
 
 def unspecific(st: Status, sts) -> Status:
@@ -822,13 +827,13 @@ class Reader:
 
         def distinct_rows(nd, i: int, K: int) -> bool:
             """Whether argument ``i`` of product ``nd``'s slices of ``K`` words differ pairwise wherever its words
-            could: it is specific and read one to one, or no gather's rows reach it and it depends on θ, or it is a
+            could: it is specific and read one to one, or its rows can't repeat (`may_repeat`) and it depends on θ, or it is a
             view, one row of words a column, of a product of a gather's rows by a weight."""
             a = nd.args[i]
             st = arg_status(a)
             if st.specific:
                 return one_to_one(a)
-            if not st.gathered:
+            if not may_repeat(st):
                 return not st.stated and not unknown(st)
             w = words(a)
             if not w or len(w) % K or {s_ for s_, _j, _l in w} != {"n"} or len({j_ for _s, j_, _l in w}) != 1:
@@ -855,18 +860,6 @@ class Reader:
             if rows and cols:
                 return base._replace(specific=True, gathered=False)
             return unspecific(base, [arg_status(a) for a in nd.args])
-
-        def shared_rows(nd, sts: list, args) -> list:
-            """The statuses ``sts`` of batch ``nd``'s arguments ``args``, where its members read rows of the current inputs
-            against an argument they share: those rows carry a gather's rows, since two of them may be equal, as a value
-            batch's may, and the members would then read one pair of values."""
-            if nd.form != "batch" or nd.n < 2:
-                return sts
-            mapped = [nd.axes[i] is not None for i in args]
-            if all(mapped) or not any(mapped):
-                return sts
-            return [s._replace(gathered=True) if m and s.data and not (s.specific or s.stated) else s
-                    for s, m in zip(sts, mapped)]
 
         def primitive_status(f, nd, sts: list, base: Status) -> Status:
             """A primitive's output is specific where it reads a specific word one to one, by an op that no generic value
@@ -918,7 +911,7 @@ class Reader:
                 dims = (1, members, K, cols) if xm and not wm else (1, 1, K, cols * members) if wm and not xm else \
                     (members, 1, K, cols)
                 (ra, bx), (rb, bw) = operand(nd.args[ix]), operand(nd.args[iw])
-                sx, sw = shared_rows(nd, [arg_status(nd.args[ix]), arg_status(nd.args[iw])], (ix, iw))
+                sx, sw = arg_status(nd.args[ix]), arg_status(nd.args[iw])
                 site = Site(p, k, members, max(_unit(tx), _unit(tw)), ret.leaves, _width(ret), K,
                             (_width(tx), _width(tw)), sx, sw,
                             (tuple(x[2:] for x in self.parts(nd.args[ix].refs)),
@@ -935,9 +928,8 @@ class Reader:
                 prof.append(capped(C.ret, rate, bits))
             elif nd.form == "batch":
                 params, _ = f.signature()
-                mapped = shared_rows(nd, [arg_status(a) for a in nd.args], range(len(nd.args)))
-                cctx = tuple(arg_profile(a) if ax is None else ((t.leaves, st),)
-                             for a, ax, (_n, t), st in zip(nd.args, nd.axes, params, mapped))
+                cctx = tuple(arg_profile(a) if ax is None else ((t.leaves, arg_status(a)),)
+                             for a, ax, (_n, t) in zip(nd.args, nd.axes, params))
                 C = self.summary(f, cctx, depth)
                 S.children.append((C, nd.n, [b for i, (a, ax) in enumerate(zip(nd.args, nd.axes))
                                              for b in bindings(i, a, ax is not None)]))
@@ -963,9 +955,7 @@ class Reader:
     def scan(self, S: Summary, k: int, nd, depth: int, arg_profile, arg_status, bindings) -> Profile:
         """A scan's iterations by context: the first's carry `first`'s, each next one's the carry the one before
         returned, until a context repeats. A carried value reads none of the current iteration's inputs, and outside
-        every scan, the init and the shared arguments are the loop's, not an iteration's. Inside the loop, a scan over
-        rows of the current inputs reads rows that may repeat, as a batch's members do (`shared_rows`), unless they are
-        specific or stated."""
+        every scan, the init and the shared arguments are the loop's, not an iteration's."""
         step, n, nx = nd.fn, nd.n, nd.n_xs
         params, ret = step.signature()
         inner = depth + 1
@@ -975,8 +965,6 @@ class Reader:
         for j in range(nx):
             a, per = nd.args[1 + j], params[1 + j][1].leaves
             s = arg_status(a)
-            if depth and s.data and not (s.specific or s.stated):
-                s = s._replace(gathered=True)
             xs.append(((per, s._replace(data=s.data | {inner})),))
         xs = tuple(xs)
         shared = tuple(drop(arg_profile(a), outer) for a in nd.args[1 + nx:])
@@ -1250,7 +1238,7 @@ def _read(program, k: float, products, lookups):
         n = count[s.sid] * site.n
         if not (site.x.aff and site.w.aff):
             reason = "theta"
-        elif site.x.gathered or site.w.gathered:
+        elif may_repeat(site.x) or may_repeat(site.w):
             reason = "gathered"
         elif x is None or w is None or cls.find(x) == cls.find(w):
             reason = "self"
