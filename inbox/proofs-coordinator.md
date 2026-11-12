@@ -78614,3 +78614,136 @@ another layout [derived].
   only if you say so, since FIXEDCOST offered to build lever 4 in the same pattern and one of us should.
 - Kit, so anyone can rerun: `lanes/proofs/20261112T0650Z-fold/` in the notes (`launch_fold.sh`, `launch_check.sh`,
   `FoldCands.lean`, `fold_ref.c`).
+
+## OUTBITS (SERVEDFORM), Thu 12 Nov 08:26Z: it differs by row: a served statement names the Definition its partition file names; of the 45 kinds a file on `main` names the Boolean version at the census's own statics for 12 (5.3% of the proving time; rows 4, 9, 10, 11, 12), the census's own Definition for 9 (0.06%; row 15), and for 24 (25.6%; rows 6, 7, 8, 14, 16) no file names the kind or its Boolean version at the census's statics
+
+The full entry: the table by row, the figure's label (the brief's task 4) and the line for HASH-98. Items 1 to 4 of the
+07:40Z section are in my 08:14Z entry and stand; one thing here is new and narrows circuits' count (next section).
+Read at `origin/main` `bcaf58a45d53`; `origin/main` at 08:22Z is `1a3eadc9c5b4`, and no file cited here differs between
+the two [run: `git diff --name-only` over them]. No code changed, nothing launched on a node. A share below is kernels'
+share of Flock's proving time at one prover over every block of the census, from its steady-state rows [relayed:
+`h98/boolean-versions.md`]; I measured none.
+
+### What is new since 08:14Z: by exact statics, 12 kinds are on the Boolean version, not 25
+
+- Circuits counted by family: 25 kinds (28.5%) whose family a file names in its Boolean version [relayed: HASH-98,
+  07:36Z]. I matched each of the 45 census names, and the id of its `boolean_version`, exactly against every template
+  name of the nine `benchmarks/one_stage/glm53_*tp8*.json` files [run: `check6.py`, 1.1 s, 70 MiB; no Boolean template
+  bound]. A file's name is its Definition's id (`serving_templates.py:248-249`), so an exact match is the test [read].
+
+| what a file on `main` names for the kind | kinds | share | which |
+|---|---|---|---|
+| its Boolean version, at the census's own statics | 12 | 5.265% | rows 4, 12, 9, 10, 11 (5.045%); `Fp8GroupQuantUe8m0` at `K=6144`, `2048`, `256`; `EmbeddingShard{...START=0}`; `RoPEHeadGptJ`; `DsaIndexerKRow`; `SiluMul{I=256}` (two older one-family files name its word form too) |
+| the census's own Definition (the word form) | 9 | 0.057% | row 15 `SparseMlaCombine_v1`; the eight `SparseMlaSplitEndCols_v1` |
+| the same row split at another width, in its Boolean version | 3 | 1.367% | row 16 (the file's unit is a quarter of the census's block); `MoeSum_v1{TOPK=8,H=96}` and `ResidualAdd_v1{N=384}` (the files name the row whole: one unit is 32 and 16 census blocks) |
+| the family, but not at this kind's statics | 10 | 21.859% | rows 6 and 7 (21.211%); `ScaledMmFp8BlockSharedScale_v1{K=1536,N=8,G=128}`; seven `EmbeddingShard` kinds (the file names `START=0` only) |
+| nothing of the family | 11 | 2.340% | the seven of item 4 (rows 8 and 14 among them, 2.222%); four norm kinds, whose rows the files name in two parts under other names (`...SumSq..._v2`, `...Apply..._v2`) |
+
+- The 45 and their shares add to 30.888% [run: `check6.py`'s tally].
+- `MoeSum` and `ResidualAdd`: `unit_templates` of the row lists the census's kind 32 and 16 times a row beside the
+  whole row once [run: `check7.py`].
+
+### The table by row
+
+"Entry n" is the file's n-th template, counted from 0; each file is one line of JSON. What decides every row is the
+same rule: the file's name, bound to exactly that Definition (`serving_templates.py:223-281`, the refusal at
+`:248-249`), which the verifier's Program (`serving_rows.py:208, 253, 440`), the composer
+(`compose_circuit.py:226-235`) and the stager (`stage.py:386-405`) all take [read; run on rows 4, 12, 6, 15].
+
+| row | share | the census's kind | what a served statement names | Boolean | the file that decides it |
+|---|---|---|---|---|---|
+| 4 | 1.856% | `BatchedGemm_v1{B=1,K=512,N=1,DOT=...v1}` | `BatchedGemm_v2{B=1,K=512,N=1,DOT=...v2}` | yes | `glm53_all_families_tp8_step16.json`, entry 14 |
+| 12 | 1.881% | `BatchedGemm_v1{B=1,K=192,N=1,DOT=...v1}` | `BatchedGemm_v2{B=1,K=192,N=1,DOT=...v2}` | yes | the same file, entry 13 |
+| 9 | 0.642% | `LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}` | `LlBf16DotprodGemm_v2{...}` | yes | the same file, entry 0 |
+| 10 | 0.417% | `CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT=...v1}` | `CublasSplitKGemm_v2{...,DOT=...v2}` | yes | the same file, entry 5 |
+| 11 | 0.249% | `Gemm_v2{K=6144,N=1,DOT=...v1}` | `Gemm_v3{K=6144,N=1,DOT=...v2}` | yes | the same file, entry 15; `glm53_prefill_tp8_step0.json`, entry 0 |
+| 6 | 9.172% | `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | nothing: no file names a GEMM coordinate at `K=6144`, at any width or form | none | all nine files; only the row's quantisation is named (`glm53_prefill_tp8_step0.json`, entry 12) |
+| 7 | 12.039% | `...{K=2048,N=4,G=128}` | nothing, the same | none | the same; quantisation at entry 8 |
+| 16 | 1.303% | `...{K=256,N=4,G=128}` | at prefill, `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}`: the same GEMM, 4 units a census block. At decode, no GEMM coordinate; a FlashInfer row is `FlashInferFp8Linear_v2{K=256,N=1}` | yes, at another width | `glm53_prefill_tp8_step0.json`, entry 1; `glm53_all_families_tp8_step16.json`, entry 12 |
+| 8 | 2.003% | `CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,DOT=...v1}` | nothing | none | no file names the family |
+| 14 | 0.102% | `AllReduceMultimem_v1{WORLD=8,SIZE=96,...}` | nothing | none | no file names the family |
+| 15 | 0.025% | `SparseMlaCombine_v1{NSPLIT=5,DV=64,INV=...v1}` | itself | no | `glm53_sparse_mla_tp8_step16.json`, entry 10 (the eight column ends: entries 2 to 9) |
+
+### The brief's task 4: the figure joins a row by `stage.word`, so a Boolean row at the census's statics is read with no code change
+
+- **What a row's label names.** A steady-state row's `type` is the stager's argument (`census:NAME`), and its
+  `stage` is the stager's record copied whole (`benchmarks/one_stage/server_rate.py:323-325`): `definition` is the id
+  of the Definition staged and `word` the template's word (`benchmarks/served_units/stage.py:424`) [read]. For the
+  rows of record of these kinds both are the census's name [run: `stage.json` of fourteen of kernels' run records
+  printed].
+- **What the reader joins on.** `steady_row` reads the row as `definition_id(stage["word"])` where the stage has a
+  word, and as `stage.definition` only where it has none (`benchmarks/harness/verity_bench/prove_records.py:272-280`).
+  `Flock.table` puts the row on the census type of that id, and lists it as unread where the census has none
+  (`benchmarks/harness/verity_bench/prove.py:442-451`) [read]. `benchmarks/prove_path/` is the prove path's driver and
+  joins no row [run: `rg` over it].
+- **So a row timed on the Boolean version is read in the word row's place with no code change.** It has another
+  `type`, another `pin` and another `stage.definition`, and the same `stage.word` [run: `check5.py`, the reader's own
+  functions on `main`'s census file, 0.1 s: a row with `stage.definition` `SparseMlaCombine_v2{...}` and `stage.word`
+  the census's name is the steady-state row of row 15's type; the same for rows 4, 6 and 16 at the census's statics].
+  The tree pins it: `test_a_row_names_the_census_type_it_was_staged_for_not_the_form_staged` passes [run: that test
+  and `test_a_steady_row_of_no_block_type_of_the_census_is_unread_not_dropped`, 2 passed].
+- **Which of two labelled rows prices the type.** At one prover count: the fewest cores, then the fullest statement,
+  then the newest run (`prove.py:357-361`) [read]. A newer Boolean row of as many blocks as the word row prices the
+  type; one of fewer blocks does not until the word row's run is superseded [run: `check5.py`, 4,096 blocks against
+  4,096, 2,048 and 8,192]. A superseded run gives none of its rows (`prove_records.py:365-366`) [read], as benchmarks
+  said; each of the 41 runs holds one type's rows [relayed: kernels, HASH-98 08:03Z].
+- **Rows 6, 7 and 16 at the files' binding price nothing.** A row at `..._v2{K,N=1,G=128}` has the word
+  `..._v1{K,N=1,G=128}`, which is no type of a census at `N=4`: it is unread, and an unread row is not its family's
+  row either (`prove.py:449-451, 466-467`) [read; run: `check5.py`]. The command's output on `main` already lists the
+  labelled `N=1` rows at `K=256`, `2048`, `6144` and `1536` under Unread [relayed: kernels'
+  `h98/figure-main-flock.md:249-277`]. A row at `..._v2{K,N=4,G=128}` has the census's name as its word [run:
+  `check2.py`].
+- **A sampling plan needs no change either:** a plan's cell is a row's by the census's name of the block type, else
+  by any staged type a row of it carried, a superseded run's included (`prove.py:595-599`,
+  `prove_records.py:402-403`) [read].
+
+### The line for HASH-98
+
+**A served statement proves the Definition its partition file names, so it differs by row: for 12 of the 45 kinds (5.3% of the proving time; rows 4, 9, 10, 11 and 12) a file on `main` names the Boolean version at the census's own statics; for 9 (0.06%; row 15 and the eight column ends) it names the census's own Definition; for 24 (25.6%; rows 6, 7, 8, 14 and 16) no file names the kind or its Boolean version at the census's statics.** [each of the 45 names and the id of its `boolean_version` matched exactly against the nine `benchmarks/one_stage/glm53_*tp8*.json` files at `bcaf58a45d53`, run by us; the shares are kernels', of Flock's proving time at one prover]
+
+- **This narrows circuits' 25 kinds (28.5%), which counted by family.** The difference is rows 6, 7 and 16 (22.5%) and ten small kinds (0.7%), below.
+- **Nothing swaps one form for the other.** `serving_templates.py:248-249` refuses a name that binds to another Definition, and the verifier's Program, the composer and the stager take that Definition (`serving_rows.py:208, 253, 440`; `compose_circuit.py:226-235`; `stage.py:386-405`). [read; one call run on rows 4, 12, 6 and 15]
+- **Rows 4, 12, 9, 10 and 11:** the Boolean version at the census's K and N (`glm53_all_families_tp8_step16.json`, entries 14, 13, 0, 5, 15 from 0). Kernels' plan for Thursday stands.
+- **Rows 6, 7 and 16: the census stands, and the partition's unit is the same computation split four times finer.** Both are coordinates of the GEMM part of a block-scaled FP8 linear row: the census's block returns 4 of the row's outputs, the file's unit 1 (`serving_templates.py:16-28, 71-74, 320-344`). One census block is 4 units of the file's binding at the same K, at each of `K=6144`, `2048` and `256`. No unit joins them. Beside them is the row's quantisation unit, once a row, which the census already counts as its own kind. [read; `unit_templates` run on the rows; an older census in the tree at `N=1` counts exactly 4 times the blocks at each K]
+  - Only `K=256` is in a file, at prefill (`glm53_prefill_tp8_step0.json`, entry 1). No file names a GEMM coordinate at `K=6144` or `K=2048` at any width or in either form, so rows 6 and 7 (21.2%) are proved by no partition on `main`. [run]
+  - 4 is the count, not the price. Four 1-wide units open the activation row four times, in four blocks of 2^24, 2^23 and 2^22 bits where the census's block is one of 2^25, 2^24 and 2^22 [the tree's estimates; nothing staged by us]. And the figure reads a row at `N=1` onto no row of the census (`prove.py:449-451`); its output on `main` already lists kernels' `N=1` rows as unread.
+  - **So what prices these three rows is the census's binding in its Boolean version, `ScaledMmFp8BlockSharedScale_v2{K,N=4,G=128}` at `K=6144`, `2048` and `256`.** Each binds as a serving template whose word is the census's name [run]; kernels has staged the first two. The statement at `{K=256,N=1,G=128}` prices nothing in Friday's figure.
+  - The file's entry is the older one (24 Oct; coordinates wider than one output, and the census's choice of width, came 8 Nov). Moving it to `N=4` and naming `K=6144`, `2048` and `1536` is a later change of ours.
+- **Row 15 and the eight column ends: `verify --zk` takes the word forms the step-16 file names; the row stays as timed.** `zk_refusal` returns nothing for them [run]. Neither ground of `ks_form_why` applies: the outputs come from the unit, which reads one input group. The form check accepted both at the file's statics in kernels' runs of record [their records, read by us], and the Lean verifier accepted both under `--zk` at smaller statics in the sparse attention rehearsal (`r20261111-150349-7a37`, which proved the stand-in's window, not this file) [its record, read by us]. The file is not `zk: true`. Not shown: the Lean verifier on the file's own statics.
+- **The seven kinds in no file (2.2%; rows 8 and 14):** the form check takes each word form [kernels' records], and each has a registered Boolean version that binds with the census's name as its word [run]. The form does not decide, so they stay untimed until a partition names them.
+- **Ten small kinds (0.7%) are the same case as rows 6, 7 and 16:** `ScaledMmFp8BlockSharedScale_v1{K=1536,N=8,G=128}` and seven `EmbeddingShard` kinds are in no file at their statics (the file names `START=0` only); for `MoeSum_v1{TOPK=8,H=96}` and `ResidualAdd_v1{N=384}` the files name the row whole, one unit being 32 and 16 census blocks. Four norm kinds (0.1%) are named in two parts.
+- **The figure needs no change for a Boolean row at the census's statics.** It joins a row by `stage.word` (`prove_records.py:279-280`), which the stager writes as the census's name (`stage.py:424`). With both rows labelled, the fuller statement prices the type, then the newer run (`prove.py:357-361`): superseding the word-form run is needed only where the Boolean statement holds fewer blocks. [read; run on the reader's functions]
+- **Thursday, for kernels:** rows 4, 12, 9, 10, 11 as planned; rows 6, 7 and 16 at `..._v2{K,N=4,G=128}`; row 15 not again; rows 8 and 14 and the five other kinds in no file not timed.
+
+### Checks I ran, and what each printed
+
+Checks 1 to 4 are in the 08:14Z entry with their output. Since then:
+
+| check | what it does | what it printed |
+|---|---|---|
+| `check5.py` (0.1 s, 25 MiB) | the reader's `definition_id`, `Steady` and `Flock.table` on `main`'s census file, on rows built as `steady_row` builds them | a Boolean row with `stage.word` the census's name: the steady-state row of the census's type (rows 15, 4, 6, 16); with no `stage.word`: unread; at `N=1`: unread, 0 priced as family; of two rows of one type the fuller, then the newer, prices it |
+| two named tests of `benchmarks/harness/tests/test_prove.py` (under 2 s) | the tree's own pins of that join | 2 passed |
+| `check6.py` (1.1 s, 70 MiB) | the 45 kinds against the nine files by exact name | the tally above; per kind, the file and entry |
+| `check7.py` (0.6 s, 55 MiB) | `unit_templates` of a `MoeSum` and a `ResidualAdd` row | `MoeSum_v1{TOPK=8,H=96}` 32 a row, `ResidualAdd_v1{N=384}` 16 a row, each beside the whole row once |
+
+Outputs: `/opt/cursor/artifacts/servedform-check{1..7}-*.log` and `servedform-run-7a37-standin-records.log`.
+
+### What I could not establish
+
+- The Lean verifier (`verify --zk`, or its own `ks-form`) on the word combine and the column ends at the step-16
+  file's statics: the evidence is the Python mirror of the form check at those statics, and the Lean verifier at the
+  stand-in's.
+- The form check for the column ends C=1 to 7: only C=0 has a record.
+- Whether the census of record in the store is `main`'s `glm53_blocks.json`: I read the tree's file and kernels' table
+  of the 45 names, which all match one name of it [run: `check6.py`], not the labelled art.
+- Any timing, and so the price of four 1-wide units against one census block: block sizes only, and those estimates.
+- Why a `row`-layout word template named without `chunk_cap` (`DsaIndexerQ`, `DsaTopKShortRow`) would pass or fail
+  under `--zk`: that statement is the verifier's input set, which I did not read.
+- For the ten small kinds and the four norms, whether the census or the file is the one to change: not asked, and not
+  mine.
+
+### My own task
+
+#9117 is marked ready since 03:37Z at `3e94266a6db3` and waits on a reader's land verdict; #9066 waits on its verdict;
+the finding note waits on its second reader. I go back to them now, and I keep reading the mailbox for what you want
+changed in the line above.
