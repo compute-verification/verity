@@ -39,11 +39,11 @@ def digests_of_record(args: Any, required_manifest: dict[str, Any] | None) -> se
     """The Program digests of record for the Commit `args` describes: its `--program-digest`, the manifest's `component_digests`
     and each of its `components`' `program_digest`.  A manifest may hold neither block, and names no digest then."""
     of_record = {str(args.program_digest)} if getattr(args, "program_digest", None) else set()
-    listed = None if required_manifest is None else required_manifest.get("component_digests")
-    components = None if required_manifest is None else required_manifest.get("components")
-    if listed is not None:
+    listed = required_manifest.get("component_digests") if required_manifest else None
+    components = required_manifest.get("components") if required_manifest else None
+    if listed:
         of_record.update(str(x) for x in listed)
-    if components is not None:
+    if components:
         of_record.update(str(c["program_digest"]) for c in components.values() if isinstance(c, dict) and c.get("program_digest"))
     return of_record
 
@@ -51,7 +51,7 @@ def digests_of_record(args: Any, required_manifest: dict[str, Any] | None) -> se
 def program_digest(program: dict[str, Any]) -> str:
     """A loaded Program's digest: its Build result's `program_digest`, else its instances' `digest`; "" where it records neither."""
     result, instances = program.get("result"), program.get("instances")
-    return str((None if result is None else result.get("program_digest")) or (None if instances is None else instances.get("digest")) or "")
+    return str((result.get("program_digest") if result else None) or (instances.get("digest") if instances else None) or "")
 
 
 def oracle_producers_of_record(args: Any, required_manifest: dict[str, Any] | None, reqs: list[dict[str, Any]],

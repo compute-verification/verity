@@ -261,10 +261,10 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     for i, run in enumerate(runs):
         given = run.get("session")
         named, opened_for = (given.get("session"), given.get("root")) if given else (None, None)  # no session block names neither
-        if not given or named != audited.session or opened_for != window["root"]:
+        if named != audited.session or opened_for != window["root"]:
             return (f"run {i}'s coins are session {named}'s, opened for root {str(opened_for)[:16]}, "
                     f"not {audited.session}, the one the auditor's ledger opened for the Commit's root {window['root'][:16]}")
-        if given.get("commitment") != trusted.root.hex() or run.get("index") != i:
+        if (given.get("commitment") if given else None) != trusted.root.hex() or run.get("index") != i:
             return f"run {i}'s coins are not coin {i} of the commitment the auditor's challenger signed"
     if trusted.scheme != SCHEME_TAG or [list(f) for f in trusted.families] != families(len(roots)):
         return f"the challenger's coins are {trusted.scheme} {list(trusted.families)}, not the Commit's {families(len(roots))}"

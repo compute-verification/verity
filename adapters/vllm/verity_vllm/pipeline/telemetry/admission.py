@@ -431,7 +431,7 @@ def model_key_for_row(row_id: str) -> str:
 def request_prompt_len(request: dict[str, Any]) -> int:
     """A workload request's prompt length: its `prompt_len`, else how many `prompt_token_ids` it lists; 0 where it gives neither."""
     ids = request.get("prompt_token_ids")
-    return int(request.get("prompt_len") or (0 if ids is None else len(ids)))
+    return int(request.get("prompt_len") or (len(ids) if ids else 0))
 
 
 def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
@@ -441,8 +441,8 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     sweep's, else one request of 1,024 input and 128 output tokens, and its longest context the longest input and output."""
     w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
     sweep, requests, engine = w.get("sweep"), w.get("requests"), w.get("engine")
-    sw: dict[str, Any] = {} if sweep is None else sweep
-    reqs: list[dict[str, Any]] = [] if requests is None else requests
+    sw: dict[str, Any] = sweep if sweep else {}
+    reqs: list[dict[str, Any]] = requests if requests else []
     row = row_id or sw.get("row_id") or ("" if isinstance(workload_path, dict) else Path(workload_path).stem)
     prompt = sum(request_prompt_len(r) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_input", 1024))
     decode = sum(int(r.get("max_tokens") or 0) for r in reqs) or int(sw.get("batch", 1)) * int(sw.get("max_output", 128))
@@ -451,12 +451,11 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     steps = int(w.get("expected_engine_steps") or o_max)
     lp_max = max((int(r.get("prompt_len") or 0) for r in reqs), default=i_max)
     t_max = max((int(r.get("max_tokens") or 0) for r in reqs), default=o_max)
-    engine_args = None if engine is None else engine.get("args")
-    max_model_len = None if engine_args is None else engine_args.get("max_model_len")
+    engine_args = engine.get("args") if engine else None
     key = model_key_for_row(row)
     notes = []
     if key not in MODELS:
         notes.append(uncalibrated_model_note(key))
-    return RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(max_model_len or (i_max + o_max)),
+    return RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int((engine_args.get("max_model_len") if engine_args else None) or (i_max + o_max)),
                     pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
                     largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)
