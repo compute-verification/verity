@@ -89,7 +89,10 @@ def test_the_gemm_route_follows_the_step(art: Path) -> None:
     assert down(6)["base"] == "Gemm_v2"
 
 
-@pytest.mark.parametrize("routes", [{}, *({"routes": held} for held in (None, {}, [], "", 0, False))], ids=repr)
+NO_ROUTES: list[dict] = [{}, {"routes": None}, {"routes": {}}, {"routes": []}, {"routes": ""}, {"routes": 0}, {"routes": False}]
+
+
+@pytest.mark.parametrize("routes", NO_ROUTES, ids=repr)
 def test_a_missing_route_leaves_the_build_incomplete(art: Path, routes: dict) -> None:
     m = _build(art, routes=routes)
     assert not m["complete"] and len(m["routes_missing"]) == 28
