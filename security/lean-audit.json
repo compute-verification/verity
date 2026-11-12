@@ -6140,7 +6140,7 @@
    "Proofs.Properties.Verity.Recursive": "the recursive audit (RecursiveAuditC3) states sampled proofs at the recursive configuration over the recursion's deployed record (`Dep`, `RecDeploy`), its session in the game (`SessionIn`) and verdict (`RecVerdict`), which read C-Flock's recursive model in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its round order (`SamplingDeploy.codeTwoAt`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
+   "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its stage order (`SamplingDeploy.codeTwoStage`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a built session frame and its addresses (`Built`, `Addresses`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/ (PRF-467), which removes this entry",
    "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Accounting.ReadUnit.Guarantees": "the expert-row read's binding states its ports at C-Flock's unit (`Flock.Bridge.circuitOf`, `copyGate`), still in Proofs; C-Flock is excepted until its spec is extracted",
@@ -16353,37 +16353,40 @@
    "signature": [
     "Flock.SecurityProofs.SampledKSTwo_honest :",
     "  And (SamplingDeploy.CallsUniform (fun x => 0) SamplingDeploy.toyBytes)",
-    "    (And (SamplingDeploy.CallsUniform (fun x => 0) SamplingDeploy.toyBytes)",
+    "    (And (SamplingDeploy.StageUniform (fun x => 1) (fun x => 0) SamplingDeploy.toyStageBytes)",
     "      (And",
-    "        (SamplingDeploy.RegMatchesTwo (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) (fun x => Option.none)",
-    "          fun x => Option.none)",
+    "        (SamplingDeploy.RegMatchesTwo (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage))",
+    "          (fun x => Option.none) fun x => Option.none)",
     "        (And",
-    "          (SamplingDeploy.Code.RefusesTwo FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
-    "            fun x => Option.none)",
+    "          (SamplingDeploy.Code.RefusesTwo FlockDeploy.sha512",
+    "            (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) fun x => Option.none)",
     "          (And",
-    "            (SamplingDeploy.Code.ReplayCap FlockDeploy.sha512 (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder)",
-    "              (fun x => Option.none)",
-    "              (SamplingDeploy.replayTwo (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) (fun x => Option.none)",
+    "            (SamplingDeploy.Code.ReplayCap FlockDeploy.sha512",
+    "              (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) (fun x => Option.none)",
+    "              (SamplingDeploy.replayTwo",
+    "                (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) (fun x => Option.none)",
     "                (fun x => 0)",
-    "                (SamplingDeploy.bytesFirst SamplingDeploy.toyCode (fun x => 0) SamplingDeploy.toyOrder",
-    "                  SamplingDeploy.toyBytes))",
+    "                (SamplingDeploy.bytesFirst SamplingDeploy.toyCode (fun x => 0)",
+    "                  (SamplingDeploy.orderOf SamplingDeploy.toyStage) SamplingDeploy.toyBytes))",
     "              fun x => 0)",
     "            (And",
     "              (SamplingDeploy.Code.InteriorFixed FlockDeploy.sha512",
-    "                (SamplingDeploy.toyCode.atOrder SamplingDeploy.toyOrder) fun x x_1 x_2 => List.nil)",
+    "                (SamplingDeploy.toyCode.atOrder (SamplingDeploy.orderOf SamplingDeploy.toyStage)) fun x x_1 x_2 =>",
+    "                List.nil)",
     "              (And",
     "                (Claims.Sampling.SessionRuns FlockDeploy.sha512",
     "                  (SamplingDeploy.deploy Flock.Readable.relation",
-    "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes)))",
+    "                    (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                      SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage SamplingDeploy.toyStageBytes)))",
     "                (And",
     "                  (SamplingDeploy.SessionsIn",
-    "                    (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                      SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
+    "                    (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
+    "                      SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage SamplingDeploy.toyStageBytes))",
     "                  (Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512",
     "                    (SamplingDeploy.deploy Flock.Readable.relation",
-    "                      (SamplingDeploy.codeTwoAt SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0) (fun x => 0)",
-    "                        SamplingDeploy.toyOrder SamplingDeploy.toyBytes SamplingDeploy.toyBytes))",
+    "                      (SamplingDeploy.codeTwoStage SamplingDeploy.toyCode (fun x => Option.none) (fun x => 0)",
+    "                        (fun x => 0) SamplingDeploy.toyBytes (fun x => 1) SamplingDeploy.toyStage",
+    "                        SamplingDeploy.toyStageBytes))",
     "                    (fun x => Option.none) fun x x_1 x_2 => List.nil))))))))"
    ],
    "assumptions": [],
@@ -16393,7 +16396,7 @@
     "open": [],
     "reads": ["FlockSoundness.Assumptions.UniformRandomBytes"]
    },
-   "type_hash": "fe645d949a84b923ead012613f96d40384a0a06a3d10c7e666970ba14130a4aa"
+   "type_hash": "d4ebf4c0bc865e16721edc6ddde768037bc76d2d998f272b9881b1cdee7baa55"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
@@ -28177,7 +28180,7 @@
    "Nci.Cut.SecurityProofs.HE": "frozen (no-function): Like Bound, it is about an arbitrary registered circuit, its charged work, the values its words carry (ValuesInjective, NoSharedPair) and any partition into blocks that each read at most k gates outside θ, under the named (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Nci.Cut.SecurityProofs.HEShared": "frozen (no-function): Like HE, with the matmuls reading shared arrays, each an edge of a graph with no clique of ω + 1 (Arrays) at a cost of at least q (CostsAtLeast), under the named (H) and (E) (security/Definitions/Assumptions.lean), not about the NCI check's code; nothing joins it to a verdict yet.",
    "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (SampledLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
-   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed stage order (SamplingDeploy.codeTwoStage, a second stage of R rounds), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform, StageUniform) and seven facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.ReplayCap, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -49948,12 +49951,13 @@
    }
   },
   "Proofs.Flock.Claims.Sampling.Reg": {
-   "digest": "6516229f634a499c0dced900e9c5688567c81c81cb19c6cca7607f9925053a4a",
+   "digest": "9e2de95582c62dd8363f3a8291cc6730f68168adcaff058192c95e84d5d31339",
    "definitions": {
     "SamplingDeploy.Code.atOrder": "c9c6c79ebe69a96a8c2812bd44128bdb89b9c4d800890215d3ed13ebc0ccce4c",
     "SamplingDeploy.Order": "e792cfd93feb1130e3e08748fdee92779db92ee177866cbfe3128777efc8f4f5",
     "SamplingDeploy.Order.first": "d2cc2ae07afdf25872bca01cf6ce048ad81e0653fb1e1acb54205f89c431be64",
     "SamplingDeploy.Order.second": "f5e0bb21160cc6b2859b5086057f018a8cc21728044493990c0faacae00aaa84",
+    "SamplingDeploy.Order.stage": "dda477856de0f561054ffbafe05fd59297d74b35330af04be5a9978ee7d345f2",
     "SamplingDeploy.Reg": "1b3e12ffcdf4cbd70b94a9df2b9d25dd47a90d992601800807f7478748b592f6",
     "SamplingDeploy.Reg.checked": "228693f4cc8f39249ac59312a7dede25b2162ce7ad922605a48e49c6dd0a3322",
     "SamplingDeploy.Reg.closure": "8c719e90a70b4e9db69f4fcc993be691c120dbf425cabd7f5cb6b888a492e29e",
@@ -49973,10 +49977,16 @@
     "SamplingDeploy.RegTwo.ns": "a4666cba86127ce9281665318084a608d65efee2499306e02e50c8911b4e937b",
     "SamplingDeploy.RegTwo.sample": "1c8be293dfabdbebd9ff2131f0cfbb515fb3ef6085e75264f10592d628305026",
     "SamplingDeploy.RegTwo.templateAt": "70bffada2ca628b49f5ef1c4a69f7fd231769f51804bc07a8f794c2d2622c547",
+    "SamplingDeploy.StageOrder": "548ebb09b9ee5194da86bb2fd2852d1ba3f6d8aae5de7869bb7ff63fece5d2f0",
+    "SamplingDeploy.StageOrder.round": "e16947edd25caaca77b0ff64b864d4b9e6d5c174cf458ce351d098f3910d1199",
+    "SamplingDeploy.StageOrder.toOrder": "6085582265ebc09e15038dda9948b4512c9c80e1a544e39d05ed72efa87a96fd",
     "SamplingDeploy.bytesFirst": "b22325e952197d5678dbdbbf62643a152fbded6e789826f85ed7c67a9754f41f",
     "SamplingDeploy.bytesSecond": "1b0c62bbc8f6089a2e7a2a684d4714931ccaa9cb0e4407919b47c9861fd62c50",
+    "SamplingDeploy.bytesStage": "089f7882b32d97600b7d7a029f3e9c7d6f521caa178b11e6fbeb62b002aec0d1",
     "SamplingDeploy.codeTwo": "f9f8bd974e1b4ca5ee71976b5a9dac1d93f64a0cdc7be5b090ec87fb1c7904fb",
     "SamplingDeploy.codeTwoAt": "671fc8cf8cef54b6e7c78239c41874db7bab6edfa7fbbfc44d09bfd118be03e0",
+    "SamplingDeploy.codeTwoStage": "e74914ad9da0d2c72cec82e1f03387b0ca4ce24ce4a57d105a3470daef6dac97",
+    "SamplingDeploy.orderOf": "bb1a528827fedb3a951b1c85ef77877fdd76bc172c65503d68fa784c5016a466",
     "SamplingDeploy.replayTwo": "e97056cbf61eca5b206aa8415c4c8fccef2a4b49c3d99c9cef58028feedf4750"
    }
   },
@@ -52416,9 +52426,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "a9358e6df85c44df1e79036fdc78789a25d2ec872b3b3b4513228b63ed6c9657",
+   "digest": "bc57fee09ca3e8a7fe0c95ad0a344e19f87054c8599d3b5b5e936698e0d47986",
    "definitions": {
-    "Flock.Guarantees.SampledKSTwo": "5a77023c5d1421fffd958bb5178c1f4a2a1102ceb43d35a260f35df541840d0a",
+    "Flock.Guarantees.SampledKSTwo": "30ffe2b28d47195d8240120c7674301bc14a571edbdd70c910b32bf3c9faa884",
     "Flock.Guarantees.SpotExfilTwo": "097271a4310d5e7764bb4753dab66ef363db9d20a19b0e44e6f3edb2edd916d8",
     "Flock.Guarantees.SpotKSTwo": "dad9e5b89978f6e5ccad6a2ef9ceed7e4885f11196f4a068960fac5e693b6955"
    }
@@ -52430,13 +52440,16 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
-   "digest": "d7d3fc1292784ba7e1c2b8ace73a48d5a5d278861c1d7448df875fbdf2177494",
+   "digest": "e0582d2a89b19d5e931d2636d82f33e680caed83f30a222b80ae80f324f2f7dd",
    "definitions": {
     "SamplingDeploy.CallsUniform": "843c1524d45050b8823823ed2154b5a9b3a1eda8b0662d004096ab45c5796cf0",
+    "SamplingDeploy.StageUniform": "76ebe582282af0e76797d1308b6241d385034311aeed2454cd9e41c600711b69",
     "SamplingDeploy.rejV2": "b71044f828348b7a6b1927c95185b50016f758f394d3fef7be25cff41fc2a002",
     "SamplingDeploy.toyBytes": "f99781febbdb5bea67640621c729c901b1467344841a6847441f0d820f8c93af",
     "SamplingDeploy.toyCode": "9a270ff00c5d14c939f5fef658316c820b89e15057ab386d8057863bb1fdb4af",
-    "SamplingDeploy.toyOrder": "1df79ebb8308638dd62bcb1c4c578d308e282939e77366429f979f8bdfe9331d"
+    "SamplingDeploy.toyOrder": "1df79ebb8308638dd62bcb1c4c578d308e282939e77366429f979f8bdfe9331d",
+    "SamplingDeploy.toyStage": "dd133caaa224530149c33f2f98a7ff998d53f3a889a8d77ce9e001d38a338232",
+    "SamplingDeploy.toyStageBytes": "e3e092ed64e9cc71616e6f436b8368110e6284c377be50bbd8dc02e1a825f99e"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoCode": {
@@ -57085,7 +57098,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "b499b788c1da24af4d4433260c3ef9b30bcfac282e1aa8bfdbc075face026476",
+   "digest": "a93703c44e8c96db318ef021352bda1c22ad913052120dfd779b8788f4d5e033",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -57256,7 +57269,7 @@
     "Verity.lmsVerify": "993e1cb2cd6c8becdd06809eb5c83651a409279af683056f82191a4e853c2a24",
     "Verity.maxLeaves": "0b9cd529a77b9fcb35e08f7da30e057169a63f282569dccfa0e8841a502936a6",
     "Verity.maxTreeCoins": "0763ec542244a4ad68b316c0b30cb7dbc49a72468309c705af0b83109bc5575c",
-    "Verity.maxTreeLines": "b66542cc1eb2c4cd21c3d9c002c9d5013f03a6eab0fba3835dfc25164df5dab0",
+    "Verity.maxTreeLines": "5c4fd76e8c4db10ce0bc02e13b97431dd417b198d63de8c8ac1c635b7ebe77be",
     "Verity.namedFile": "a89ad04269d6befbf1edde130d8f1af3ccfa53c2b990f0ca8a29826485f9cb9e",
     "Verity.namedFinder": "c48665428afa8d18fc1355a552b477afe189e04a69ee337df48f1c296deb9dba",
     "Verity.parsedConsts": "f9d2e428528841c9c7316d7f47d7a5d6ff8f2d2ebbe3c3f3cd8e3b75e6acead4",
@@ -57945,7 +57958,7 @@
    }
   },
   "Spot.Challenger": {
-   "digest": "d2198fe0bcfe47d73a787226db24fbe2fd70c3cf338a09d1a695b60c200dd422",
+   "digest": "0223551535247c55be16736fbc60fe26159107393450f24274778e51277f7116",
    "definitions": {
     "Spot.Challenger.BINDING": "5a7d19bc2d16340585ab7d52246ad08d0c2bf63c0303d25d06ec6ae07536451a",
     "Spot.Challenger.COIN_BYTES": "c1da35a1d13c81a2186942130e56d2ca6f5faa9da550628aea3e01bfc1732362",
@@ -57970,7 +57983,7 @@
     "Spot.Challenger.LiveOpening.ofJson": "53e3502ab211884d3bfe9959c81841e7f882e7167eac4e91cb5a4b8830e35d85",
     "Spot.Challenger.LiveOpening.path": "20f4848c989c951568a7c8b4e8b863db73c6485705db41201b14fa822b0db8f3",
     "Spot.Challenger.LiveOpening.salt": "f71b76e5e681ae5c343b168cf06426196ce07a7e1b11265f440277b79137c79f",
-    "Spot.Challenger.MAX_COINS": "05ffe187998240b5d3cd8aba10d795d0726ba5ef30f81b8d6b9999b85f52512c",
+    "Spot.Challenger.MAX_COINS": "c59f44f1b76e14954f5ee2b6127bfa6a7a938a7728391a6291c02748bac4a689",
     "Spot.Challenger.NOT_EPOCH": "082429df93f6866f3fe3ba5e54821ddffffc37d64dc75062a96623f5d2e32aa9",
     "Spot.Challenger.NOT_LAYOUT": "577f29ce124c76340edf10da837685998ecf8cdbe086a837f5de7b57f1d0fc00",
     "Spot.Challenger.NOT_SCHEME": "80e4e63ca11f5e2c2fdd205395c79dd8b637bac897307d65c542e6de1aef2d17",
@@ -57989,7 +58002,7 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "17ed429fbebed155f35343ff306933782c9a8f94d50d0d156d68a3d0f98da69f",
+   "digest": "0c2870734e866b7e4e0af76454b5165a695d79e0a4d4f5af2b9f39f90a559f55",
    "definitions": {
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
     "Spot.Challenger.Limits": "a0216a077b6946bf95377c777c0353192d673edebe19b2d0854123fcfef6433e",
@@ -58002,7 +58015,7 @@
     "Spot.Challenger.Limits.pins": "e6ec651f82770ed006861b690de95987ae8850978754eb905070052d571b62cb",
     "Spot.Challenger.MAX_HELLOS": "216aeb0750c71d09e0b64bc871855ef79f01d3916d5dfd1270e370570070b98d",
     "Spot.Challenger.MAX_LEDGER_LINES": "ed8f0c6c83917204d348b04684f1a811fa4abd55cbfb39d6c141be6c31d75ca0",
-    "Spot.Challenger.MAX_PATH": "39986376c30b7afc9968a3f878c5d6da5c4cd9d67d566252460634b9a777ec57",
+    "Spot.Challenger.MAX_PATH": "ce3787d2afd1b80658846444463f53a92d4d4b9c8e4972b63884226a033ef69c",
     "Spot.Challenger.MAX_PINS": "a2b7912cbcfe78c9c5763c299b3b3adc460ba791e8ba4ca44b0d52cce2c2a1fa",
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
@@ -58065,7 +58078,7 @@
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "50b636e6ac3a729258eefadd7d2c7e6fbd10df6796283336d64970129b7d8d7f",
+   "digest": "6a8c3941a4a349f3d1356d02d58a036ae018f3415022fbc12a8b54e1d64d2935",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -58116,7 +58129,7 @@
     "Spot.Challenger.MAX_LOG_LINES": "c54db0c2bc9ef2e3821ba144853fab4feddb5b352ed550dbd7c4898899265c2d",
     "Spot.Challenger.MAX_MINUTES": "5e149430ce56cbded7ed79cb7ff5fd85d1c73c3ab7448edf099834dce4828ffb",
     "Spot.Challenger.MAX_SESSION_ID": "270c602d143d4abe89df9f8b88e7c41ebb9432464391bc0414210ff6cedc8c89",
-    "Spot.Challenger.MAX_TREE_LINES": "d6764a3445dbc845a9e6c1e22fe48fcae12a668bf0d2decc89a7a8ef83f450d6",
+    "Spot.Challenger.MAX_TREE_LINES": "185b46461690cd2f43d966d9f02eca5b2979c0a94ae9ff2a293dbecabfc8e22c",
     "Spot.Challenger.MonitoringPeriod": "f798e136eb0fc56245acdcc5fd0674a0ca2cb49d256de03d1e6882f03d65d1eb",
     "Spot.Challenger.MonitoringPeriod.cap": "cbc30aa90e9841952a38b28268ae8acdda6c152e296db4c3e6c740f0c1764110",
     "Spot.Challenger.MonitoringPeriod.circuit": "3d6c159175d59b5135f01740b9cc3ec614e087bc21d150dfb2d5ed6b4ff06c68",
