@@ -20,7 +20,8 @@ too, under the arm's environment (`served_under`), and ``--private`` is where th
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position), the replay's wall time beside the served window's
-(first arrival to last step) and the value settings in force in its engine's environment (``settings``, as the served
+(first arrival to last step), the cards its engine held (``gpus``, the tensor-parallel width ``--tp``) and the value
+settings in force in its engine's environment (``settings``, as the served
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
@@ -362,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
            "settings": settings,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
-           "engine_ready_s": got["ready_s"], **compare(w, got)}
+           "engine_ready_s": got["ready_s"], "gpus": a.tp, **compare(w, got)}
     if a.against:
         d = token_diff(read_tokens(a.against), got["tokens"])
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
