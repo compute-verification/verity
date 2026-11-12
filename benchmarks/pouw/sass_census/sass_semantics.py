@@ -23,6 +23,8 @@ any disagreement, so a drift between this table and the model is caught.
 """
 from __future__ import annotations
 
+__all__ = ["classify"]
+
 # The tensor-core MMA families. Each heads products on the tensor route (A3). `omega` forms, operand formats and peaks
 # are the sheet's; a form whose operand type has no sheet peak is priced at 0 (DMMA FP64, b1, s4 on sm_120) -- a gap A3
 # can't price. mul=True, word=True, route="tensor".
@@ -135,7 +137,7 @@ CONTROL = {"BRA", "BRX", "BRXU", "JMP", "JMX", "JMXU", "CALL", "RET", "EXIT", "B
            "PREEXIT", "RPCMOV", "BMOV", "LEPC", "ULEPC", "PMTRIG", "SETCTAID", "GETLMEMBASE", "SETLMEMBASE", "QSPC",
            "MATCH", "SYNCS", "SYNCSU", "USYNCS", "CCTL", "CCTLL", "CCTLT", "CCTLU", "UTMACCTL", "UTMACMDFLUSH",
            "UTCBAR", "UBLKL2CCTL", "UTMAL2CCTL", "UBLKPF", "UTMAPF", "PLOP3", "UPLOP3", "PSETP", "UPSETP", "P2R", "R2P",
-           "UP2UR", "UR2UP", "CS2UR", "VISET", "UVIRTCOUNT", "Option", "SETLMEMBASE", "TXQ", "DEPBAR",
+           "UP2UR", "UR2UP", "CS2UR", "VISET", "UVIRTCOUNT", "Option", "TXQ",
            # cp.async.mbarrier.arrive: arrives on a shared-memory mbarrier as prior LDGSTS land (writes barrier state, no
            # register). Absent from NVIDIA's Instruction Set Reference, yet emitted on sm_90/sm_100/sm_120.
            "ARRIVES"}
@@ -146,10 +148,10 @@ PREDICATE = {"ISETP", "FSETP", "DSETP", "HSETP2", "PSETP", "UISETP", "UFSETP", "
 
 
 def classify(base: str) -> dict:
-    if base in PREDICATE:
-        return {"mul": False, "word": False, "route": "control", "note": "compare / set-predicate (writes a predicate)"}
     """The semantic record for a SASS base opcode: `mul` (can form a product), `word` (writes a >=32-bit result that
     could be a committed word), `route` (the menu route that prices it, or None), and a human `note`."""
+    if base in PREDICATE:
+        return {"mul": False, "word": False, "route": "control", "note": "compare / set-predicate (writes a predicate)"}
     if base in MMA:
         fam = "wgmma" if base in MMA_WGMMA else "tcgen05" if base in MMA_TCGEN05 else "mma.sync"
         return {"mul": True, "word": True, "route": "tensor", "note": f"{fam} matrix multiply-accumulate"}

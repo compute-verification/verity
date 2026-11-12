@@ -224,8 +224,8 @@ def diff(family: str, census: dict, with_unused: bool) -> dict:
 
 
 def report(d: dict) -> str:
-    out = [f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
-           f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})",
+    out = [(f"== {d['family']} (ISA table: {d['isa_table']}; DS_tensor types: {', '.join(d['ds_tensor_types'])}; "
+            f"census tensor rows: {', '.join(d['priced_tensor_tokens'])})"),
            "buckets: " + ", ".join(f"{b} {n}" for b, n in d["counts"].items())]
     if d["disagreements"]:
         out.append("class_of disagreements (the lane classifier's UNIFORM regex mis-maps these): "

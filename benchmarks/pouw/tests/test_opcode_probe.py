@@ -215,8 +215,9 @@ sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "censu
 
 def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
     """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
-    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
-                                                                    "BRA": 1}}]}
+    def loop(pat: str, n: int) -> dict:
+        return {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+
     assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
     assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
     assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
@@ -338,6 +339,26 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
     assert re.search(r"^lgc-max +0 +2422 +2430 +2430 p_light +2429\.9 +2430\.1 +2429\.6 +2422 +150 +0x0 +GPU clocks", got, re.M)
     assert re.search(r"^gpc-offset\+105 +0 .* p_light +2101\.0", got, re.M)
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
+
+
+clocks = _load("opcode_probe_clocks", POUW / "opcode_probe" / "clocks.py")
+
+
+def test_lock_passes_megahertz_or_nvmls_id_for_tdp_and_unlimited():
+    """`clocks.py lock`: MIN and MAX reach nvmlDeviceSetGpuLockedClocks as MHz, or as NVML's limit id for `tdp` and
+    `unlimited`; the row says what was asked and the call's rc."""
+    nvml, calls = object.__new__(clocks.Nvml), []
+
+    def call(name: str, *args) -> tuple[int, str]:
+        calls.append((name, [a.value for a in args]))
+        return 3, "Not Supported"
+
+    nvml.call = call
+    assert nvml.lock("1830", "tdp") == {"op": "nvmlDeviceSetGpuLockedClocks", "min": "1830", "max": "tdp", "rc": 3,
+                                        "error": "Not Supported"}
+    nvml.lock("unlimited", "2430")
+    assert calls == [("nvmlDeviceSetGpuLockedClocks", [1830, 0xFFFFFF01]),
+                     ("nvmlDeviceSetGpuLockedClocks", [0xFFFFFF02, 2430])]
 
 
 def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
@@ -497,6 +518,22 @@ def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, cap
 
 
 # ---- the probes themselves -------------------------------------------------------------------------------------------
+
+
+def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
+    """The build's nvcc: the executable NVCC names, else CUDA_HOME's bin/nvcc; a name that is no executable is passed over."""
+    named, home = tmp_path / "named", tmp_path / "home" / "bin" / "nvcc"
+    home.parent.mkdir(parents=True)
+    for exe in (named, home):
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("NVCC", str(named))
+    monkeypatch.setenv("CUDA_HOME", str(home.parents[1]))
+    assert probe.nvcc() == str(named)
+    monkeypatch.setenv("NVCC", str(tmp_path / "absent"))
+    assert probe.nvcc() == str(home)
+    monkeypatch.delenv("NVCC")
+    assert probe.nvcc() == str(home)
 
 
 def _cuda_tools() -> bool:
