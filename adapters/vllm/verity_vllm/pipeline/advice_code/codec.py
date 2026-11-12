@@ -34,7 +34,7 @@ replayed rows, which recomputes every start and n by vLLM's rules and checks the
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
+**Sent**, as `window_charge.Advice`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 The hits, the resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so
@@ -460,7 +460,7 @@ def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: i
 
 def _residual(record: Record, reg: Registered, order: Sequence[int], rp: Any, decisions: Sequence[Decision],
               looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`window_charge.Window`): no hit, resume or lag bit, only decisions and order entries. A
+    """The windows v1 sends (`window_charge.Advice`): no hit, resume or lag bit, only decisions and order entries. A
     decision goes to the earlier of its arrival's ingress window and the earliest window that shows its step's rows; an
     order entry to the earlier of its arrival's ingress window and the earliest window that shows the rows of the first
     step that reads that arrival (a lookup, a decision or its admission). Each is nondecreasing in the replay's order,
@@ -657,7 +657,7 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`window_charge.Window`s: the decisions and the order's deviations): what a codebook
+    """The windows `encode` codes (`window_charge.Advice`s: the decisions and the order's deviations): what a codebook
     is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
