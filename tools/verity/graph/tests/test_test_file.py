@@ -29,7 +29,7 @@ def _table() -> str:
     return text[start:] if end < 0 else text[start:end]
 
 
-SPEC = '[env.py]\nspec = ["uv.lock", "pyproject.toml"]\n\n' + _table()
+SPEC = '[slot]\ncores = 32\nmem_gb = 110\n\n[env.py]\nspec = ["uv.lock", "pyproject.toml"]\n\n' + _table()
 LISTERS = {"test-file": family.tasks}
 #: what every toy checkout holds besides its suite: the files the core and the family make inputs of every task
 BASE = {f"{graph.RUNNERS}/test_file.py": "", **{p: "" for p in family.GUARD}}
@@ -85,9 +85,9 @@ SUITE = {
                                          '    module = f"{__name__}.{ADAPTERS[name]}"\n    return importlib.import_module(module)\n'),
     "lib/toy_lib/adapters/xa.py": "X = 1\n",
 }
-#: in every toy task: the suite's declared data but its Python and its directory's Markdown, its own directory's data, the
+#: in every toy task: the suite's declared inputs, Python included, but its directory's Markdown, its own directory's data, the
 #: pyprojects above, the guard
-COMMON = [*family.GUARD, "pyproject.toml", "s/data/x.json", "s/notes.txt", "s/pyproject.toml", "s/table.csv"]
+COMMON = [*family.GUARD, "pyproject.toml", "s/data/gen.py", "s/data/x.json", "s/notes.txt", "s/pyproject.toml", "s/table.csv"]
 LIB = ["lib/toy_lib/__init__.py", "lib/toy_lib/core.py", "lib/toy_lib/helper.py"]
 
 
@@ -101,6 +101,7 @@ def test_its_tasks_are_the_test_files_suites_py_runs():
     ours = family.Tree(ROOT, [p for p in graph.git(ROOT, "ls-tree", "-r", "-z", "--name-only", "HEAD").decode().split("\0") if p])
     found = family.discover(ours)
     assert {s.path: family.suite_tests(ours, s, found) for s in found} == want
+    assert family.STORE_READS == suites.STORE_READS, "what its guard lets every suite read, which a whole-tree task declares"
 
 
 def test_the_listing_is_the_same_bytes_from_any_checkout(tmp_path):
@@ -205,6 +206,21 @@ def test_what_a_test_file_reads_that_its_source_does_not_name(tmp_path):
         "what its suite's [[tool.verity.tests.reads]] declare it reads, for the test files it names alone"
 
 
+def test_a_task_declares_the_registry_its_closure_names_and_an_untraced_one_what_its_suite_s_guard_allows(tmp_path):
+    """`suites.py`'s guard lets every suite read each pyproject.toml and `STORE_READS`, and keys a pass on them only when its
+    tests read them, which no key of the graph can: a task declares the registry where a module of its closure names it (the
+    store's replica map), and a task keyed on its suite's tree all of them."""
+    store = {family.REGISTRY: "{}\n", family.STORE_READS[1]: "",
+             "lib/toy_lib/store.py": 'from pathlib import Path\n\nREPLICAS = Path("fixtures") / "artifacts.json"\n',
+             "s/tests/test_store.py": "from toy_lib import store\n\n\ndef test_store():\n    assert store.REPLICAS\n"}
+    root = toy_tree(tmp_path / "tree", SPEC, {**WALKS, **store})
+    by = {t["id"]: set(t["inputs"]) for t in family.tasks(root, graph.tracked(root))}
+    assert family.REGISTRY in by["test-file:s/tests/test_store.py"] and family.REGISTRY not in by["test-file:s/tests/test_a.py"]
+    tree = family.Tree(root, graph.tracked(root))
+    assert {*family.STORE_READS, *tree.pyprojects} <= by["test-file:t/tests/test_m.py"]
+    assert not {*family.STORE_READS, "s/pyproject.toml"} & by["test-file:t/tests/deep/test_e.py"]
+
+
 def test_built_paths_are_the_expression_s_matches():
     texts = ['a/"b"', 'x = a.b /\n  "c" / "d"', 'Path(__file__)/"x"', ' / "x"', 'a\u2003/"x"', 'f(a)\t/ \'b\' / "c"',
              'a / b / "c"', '"q"/"x"', 'a[0].parent/"x"/"y" HERE/"z"', '\u00e9a/"x"', 'a.b.c/"x"a/"y"', "x/'", 'a/"b"/"c"/',
@@ -235,10 +251,30 @@ def test_the_core_completes_them_from_the_table(tmp_path):
     assert set(graph.runner_sources("test-file")) <= set(t["inputs"]) and not t["reads"] and not t["outputs"]
 
 
+#: a module a test loads by a path it computes, which puts its own directory's `lib/` on `sys.path` and imports from it
+LOADED = ('import sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))\n\n'
+          'import dep  # noqa: E402\n\nV = dep.V\n')
+
+
+def _loads(where: str) -> str:
+    """A test file that runs ``where``/p.py by a path no string of it names."""
+    head, tail = where[:2], where[2:]
+    return ('import runpy\nfrom pathlib import Path\n\n\ndef test_loads():\n'
+            f'    where, name = "{head}" + "{tail}", "p" + ".py"\n'
+            '    assert runpy.run_path(str(Path(__file__).parents[2] / where / name))["V"] == 1\n')
+
+
 RUNS = {
     **BASE,
     "s/pyproject.toml": ('[project]\nname = "toy-suite"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n'
-                         '[tool.verity.tests]\nuntraced = ["tests/test_git_keyed.py"]\n'),
+                         '[tool.verity.tests]\nuntraced = ["tests/test_git_keyed.py"]\ninputs = ["plugins/p.py"]\n\n'
+                         '[[tool.verity.tests.reads]]\ntests = ["tests/test_walked.py"]\npaths = ["walked/p.py"]\n'),
+    "plugins/p.py": LOADED,
+    "plugins/lib/dep.py": "V = 1\n",
+    "walked/p.py": LOADED,
+    "walked/lib/dep.py": "V = 1\n",
+    "s/tests/test_declared.py": _loads("plugins"),
+    "s/tests/test_walked.py": _loads("walked"),
     "s/notes.txt": "n\n",
     "s/tests/test_git.py": "import subprocess\n\n\ndef test_git():\n    subprocess.run(['git', '--version'], check=True)\n",
     "s/tests/test_cc.py": ("import shutil\nimport subprocess\n\nimport pytest\n\n\n"
@@ -303,6 +339,15 @@ def test_a_read_outside_its_inputs_is_an_error(results):
     r = results["test_lock.py"]
     assert r["status"] == "pass" and not r["undeclared_reads"] and r["detail"]["ignored"] == [".lake/build.lock"], \
         "a file git ignores (a build's lock) is none the graph lists, so no input a key could hold"
+
+
+def test_python_a_task_declares_is_an_input_with_what_it_imports(results):
+    """Its suite's declared Python and a reads entry's: its suite's guard lets the file read them, and a test that loads one by a
+    path or a name it computes (circuit-check's sidecars, a registry's tool) reads it and runs its imports, which the test
+    file's own closure never reaches. Declaring less made the executor's runs of such files errors that `suites.py` passes."""
+    for f in ("test_declared.py", "test_walked.py"):
+        r = results[f]
+        assert r["status"] == "pass" and not r["undeclared_reads"] and r["detail"]["passed"] == 1, (f, r)
 
 
 def test_a_program_the_guard_cannot_trace_is_an_error_unless_the_task_is_keyed_on_its_suite(results):

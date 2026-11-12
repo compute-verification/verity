@@ -14,7 +14,7 @@ SHAPE = EPS.Shape(16, 128, 16)       # KS = 4
 
 
 def test_the_reference_is_not_registered():
-    """Decision 102 is one design across schemes, so `eps1-sm120-h1fx1` has one registration, `h1tile`'s compile-pass
+    """The design is one across schemes, so `eps1-sm120-h1fx1` has one registration, `h1tile`'s compile-pass
     scheme; this reference is not in `circuit.SCHEMES` and `circuit.traced_as` does not reach it."""
     assert EPS.SCHEME not in circuit.SCHEMES
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"}
