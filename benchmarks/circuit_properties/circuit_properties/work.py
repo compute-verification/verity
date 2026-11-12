@@ -72,7 +72,8 @@ gives a gathered value:
   values the Program doesn't state (a rope table, which may hold a 0).
 * A batch's members that read rows of the current inputs against an argument they share (`shared_rows`), a value
   batch's rows by a weight, read rows that may repeat, which carry a gather's rows: two rows of a batch of values may
-  be equal as two tokens may.
+  be equal as two tokens may. So do the iterations of a scan inside the loop over rows of the current inputs, where
+  those rows are not specific.
 
 The rule rests on one premise, the one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
 each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
@@ -962,7 +963,9 @@ class Reader:
     def scan(self, S: Summary, k: int, nd, depth: int, arg_profile, arg_status, bindings) -> Profile:
         """A scan's iterations by context: the first's carry `first`'s, each next one's the carry the one before
         returned, until a context repeats. A carried value reads none of the current iteration's inputs, and outside
-        every scan, the init and the shared arguments are the loop's, not an iteration's."""
+        every scan, the init and the shared arguments are the loop's, not an iteration's. Inside the loop, a scan over
+        rows of the current inputs reads rows that may repeat, as a batch's members do (`shared_rows`), unless they are
+        specific or stated."""
         step, n, nx = nd.fn, nd.n, nd.n_xs
         params, ret = step.signature()
         inner = depth + 1
@@ -972,6 +975,8 @@ class Reader:
         for j in range(nx):
             a, per = nd.args[1 + j], params[1 + j][1].leaves
             s = arg_status(a)
+            if depth and s.data and not (s.specific or s.stated):
+                s = s._replace(gathered=True)
             xs.append(((per, s._replace(data=s.data | {inner})),))
         xs = tuple(xs)
         shared = tuple(drop(arg_profile(a), outer) for a in nd.args[1 + nx:])

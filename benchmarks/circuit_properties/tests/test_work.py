@@ -330,6 +330,26 @@ def test_rows_stay_a_gathers_from_the_circuit_alone():
         assert w.groups == [] and w.left_out["gathered"] == (T - 1) * PN * K * N
 
 
+def test_a_scan_over_a_value_inputs_rows_reads_rows_that_may_repeat():
+    """Each iteration scans its PN rows of x, each times the carried W: the rows are an input's values, two of which
+    may be equal, so the inner scan's products are left out as gathered, as a batch's over the rows would be."""
+    def step(B, c, rows, z):
+        w, g = c
+
+        def row(B, S, acc, x, g_, w_):
+            return tuple_of(acc, B.call(LIN, _mul(B, x, g_), w_))
+
+        inner = _def("Rows", ((("acc", Y_T), ("x", X_T), ("g", X_T), ("w", W_T)), Tuple(Y_T, Y_T)), row)
+        init = Coll(Y_T, concat([B.call(const(32, 0)).refs] * N))
+        out = B.scan(bind(inner), init, xs=[rows], shared=[g, w])
+        return (_add(B, w, z), _add(B, g, z)), out[1]
+
+    p = _loop("RowScan", (("w", W_T), ("g", X_T)), (("rows", ROWS_T), ("z", X_T)), Array(PN, Y_T), step)
+    w = WK.read(p, KB)
+    assert w.groups == []
+    assert w.left_out == {"theta": PN * K * N, "gathered": (T - 1) * PN * K * N, "self": 0, "activations": 0}
+
+
 def test_clique():
     tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
     assert WK.clique(tri) == 3
