@@ -191,7 +191,6 @@
     {"file": "verity_vllm/properties/record.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/vocab-range-exactness/v1"},
     {"file": "verity_vllm/properties/router_tap_exactness.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},
     {"file": "verity_vllm/properties/vocab_range_exactness.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
-    {"file": "verity_vllm/protocols/__init__.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/protocol-composition/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession._session", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "schema-literal", "symbol": "CommitSession.end", "detail": "verity-vllm/remote-session/v0"},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
