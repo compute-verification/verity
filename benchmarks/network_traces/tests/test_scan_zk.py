@@ -271,6 +271,43 @@ def test_every_rounds_own_o0_rows_meet_one_set_of_frame_domains_its_templates_an
         m.ports["x"]["domain"] for m in other.rounds["block"]}
 
 
+def test_a_public_o0_is_under_the_public_salts_so_an_ok_members_root_is_the_schedules_constant(tmp_path):
+    """A proof block's public word is its ok bit, and the staging commits a member's o0 rows under the verifier's
+    public salts (`scan_zk.ok_salts`, `scan_ok.salt`), in every round. So the verifier's table of one execution
+    phase's members (`scan_ok.members`) is the staging's (`members_of` at one execution phase a registration, from two
+    ticks, the least the staging runs), its o0
+    binding the staging's frame binding, and the honest round's members, every output 1, are each at the constant the
+    period check computes from the schedule's T (`scan_ok.constants`): its registration's ``<member>/o0`` roots are
+    held (`scan_ok.held`), and not at another T. The unread round's one proof block's output is 0, so its root, at the
+    domain of one ingress proof block, is not the constant, and a registration naming it for ``last`` is refused: an
+    ok bit is the verifier's row or the registration doesn't pass."""
+    K, T = sz.scan_ok, sz.TEST.params.window
+    for t in (2, 3, 4, T, 32):
+        assert K.members(t) == tuple((m.name, m.template, len(m.buckets)) for m in sz.members_of(sz.TEMPLATES, 1, t))
+    assert sz.set_of is K.set_of
+    for tp, n in (("first", 1), ("ingress", T - 2), ("ingress", 1), ("egress", T)):
+        assert K.binding(tp, n) == sz.frame_binding(sz.set_of(tp), n, "o0")
+    h = sz.host(tmp_path, setup=sz.TEST)
+    for name in ("honest", "chain", "tampered", "unread"):
+        for m in h.rounds[name]:
+            assert m.salts["o0"] == sz.ok_salts(m.n) == [K.salt(i) for i in range(m.n)], (name, m.name)
+            assert not {s for p, ss in m.salts.items() if p != "o0" for s in ss} & set(m.salts["o0"]), (name, m.name)
+    honest, consts = h.rounds["honest"], K.constants(T)
+    assert [f"{m.name}/o0" for m in honest] == [c.port for c in consts]
+    for m, c in zip(honest, consts):
+        assert m.outputs == [1] * m.n and m.refused is None, m.name
+        assert (m.ports["o0"]["root"], m.ports["o0"]["domain"], m.ports["o0"]["leaves"]) == (c.root, c.domain, c.leaves)
+    roots = [{"port": f"{sz.port_prefix(None, m)}/o0", "root": m.ports["o0"]["root"], "leaves": m.n,
+              "domain": m.ports["o0"]["domain"]} for m in honest]
+    assert K.held(consts, {"roots": roots}) and not K.held(K.constants(T + 1), {"roots": roots})
+    (u,) = h.rounds["unread"]
+    last = next(c for c in consts if c.port == "last/o0")
+    assert u.outputs == [0] and (u.ports["o0"]["domain"], u.ports["o0"]["leaves"]) == (last.domain, last.leaves)
+    assert u.ports["o0"]["root"] != last.root
+    assert not K.held(consts, {"roots": [{**r, "root": u.ports["o0"]["root"]} if r["port"] == last.port else r
+                                         for r in roots]})
+
+
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
 
@@ -575,7 +612,9 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
     (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), and refuses the
-    forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
+    forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
+    root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
+    (`period_case.UNOK`), the tampered case (another Program's
     registration) at the registration, the chain case (the round's registration of the Program) at its refusal, a block
     whose entries are at other roots by name, and at the wiring (`period_case.UNWIRED`) one whose lanes' chunks are
     swapped, one lane's chunk at another root or missing, or whose roots are at its o1, no `SlotEntry_v1` template's
@@ -603,8 +642,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
              for tr in trs]
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
+    oks = [{"port": f"{m.name}/o0", "root": m.ports["o0"]["root"], "leaves": m.n, "domain": m.ports["o0"]["domain"]}
+           for m in h.rounds["honest"]]
+    assert PC.scan_ok.held(PC.scan_ok.constants(T), {"roots": oks})
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
-        *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
+        *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
@@ -678,6 +720,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         got = PC.reference(SP.rows_case(run, scan, v3c=v3c))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+    unok = sz.frame(sz.set_of("egress"), "o0", [[1]] * (T - 1) + [[0]], 16, salts=sz.ok_salts(T))
+    for named in ([*roots[:-1], {**roots[-1], "root": unok.root.hex()}], roots[:-1], roots[:-len(oks)]):
+        stated = R.record(program, query, law, sz.S.SCHEME, named, {"kind": "stand-in"}, leaf_layer="ee" * 64)
+        said = sz.window_answer(stated, {**record, "registration": stated}, sz.Fraction(1, 100), "unused")
+        (scan / "answers.json").write_text(json.dumps({**doc, "registration": stated, "windows": [
+            {"window": 0, "answer": said, "registrations": registrations}]}))
+        got = PC.reference(SP.rows_case(run, scan))
+        assert (got["verdict"], got["reason"]) == ("reject", f"execution phase 0: {PC.UNOK}"), got
+    (scan / "answers.json").write_text(json.dumps(doc))
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "
