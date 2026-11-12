@@ -102,7 +102,7 @@ def test_an_own_partial_the_lm_heads_class_does_not_admit_fails_links():
     """A link's module path names the class, and the class decides the producer: the LM head's all-gather takes a Gemm's rows.  An
     embedding shard is a partial producer in general, so only the links check refuses it there."""
     colls, _ = _world()
-    links = {r: _links(r, 2, ("RowParallelLinear", "ParallelLMHead")) for r in colls}
+    links: dict[int, list[dict] | dict[str, list[dict]]] = {r: _links(r, 2, ("RowParallelLinear", "ParallelLMHead")) for r in colls}
     res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["Gemm_v1{K=8}"]} for r in colls})
     assert res["verdict"] == "PASS" and res["failed"] == [], res
     res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["EmbeddingShard_v1{V=8}"]} for r in colls})
