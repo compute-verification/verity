@@ -218,6 +218,29 @@ def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch
     assert (cmd[-2:] == ["--lane", "bench-spine"]) is takes and ("--lane" in cmd) is takes
 
 
+def test_an_ir_cells_verifier_binary_is_the_first_result_that_names_its_backend(tmp_path):
+    drv = drivers.driver("C-interactive")
+
+    def result(where: str, doc) -> None:
+        (tmp_path / where).mkdir(parents=True, exist_ok=True)
+        (tmp_path / where / "result.json").write_text(doc if isinstance(doc, str) else json.dumps(doc))
+
+    def named(name) -> dict:
+        return {"workload_fingerprint": {"software": {"backend": {"name": name}}}}
+
+    assert drv.ir_binary(tmp_path) == drv.ir_binary(tmp_path / "absent") == "flock-ir-frame"
+    result("points/a", named("flock-ir-sampling"))
+    assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
+    for says_nothing in ({}, [], named(None), named(""), {"workload_fingerprint": {"software": None}}):
+        result(".", says_nothing)
+        assert drv.ir_binary(tmp_path) == "flock-ir-sampling"
+    result(".", named("flock-ir-frame"))
+    assert drv.ir_binary(tmp_path) == "flock-ir-frame"
+    result(".", "{")
+    with pytest.raises(ValueError):
+        drv.ir_binary(tmp_path)
+
+
 def test_takes_lane_reads_the_installed_script():
     from verity_flock import register as FR
 
