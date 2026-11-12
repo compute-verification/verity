@@ -33,6 +33,19 @@ def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
     assert OC.OpenedReader(store, run)(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == b"\x07" * 10
 
 
+def test_a_dumped_store_keeps_no_weight_registration_and_its_roots_take_the_records(tmp_path):
+    """`verity_vllm.commit.run_roots.RunRoots.weight_registration` is the record's: the store's file holds none, and the roots a
+    reader loads take the one it sets."""
+    com, rc = commit_steps(STEPS)
+    rc.weight_registration = {"root": "ab" * 64}
+    SD.dump(com, rc, tmp_path)
+    assert b"weight_registration" not in (tmp_path / "store.json").read_bytes()
+    run = SD.load(tmp_path)[1]
+    assert run.weight_registration is None and run == rc.roots()
+    run.weight_registration = dict(rc.weight_registration)
+    assert run.weight_registration == rc.weight_registration and run != rc.roots()
+
+
 def test_the_dump_hashes_every_step_file_as_it_writes_it(tmp_path, monkeypatch):
     import hashlib
     monkeypatch.setattr(SD, "FLUSH", 100)                            # a flush between the chunks of every step
