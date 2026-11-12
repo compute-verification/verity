@@ -79847,3 +79847,221 @@ Both refs moved after your message: `origin/main` is `19fb19a21e40` (it was `bca
 - One new file on my branch, the statements the second reader asked for (a compiled verifier read at sessions and at tables as one verifier, and `Compiled.es` over Flock at one table): its try `r20261112-083937-9970` ended rc 0, "lean exit 0 in 379 s", siblings clean, "none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", with one unused-instance warning; the fix's try is `r20261112-085559-a891`, running, and I push when it ends [run].
 - Item 5's try has ended, exit 0, first try: `r20261112-081953-a4a6`; the entry is due at 11:00Z and I will post it sooner [run].
 - Item 2 and the three answers by 10:00Z.
+
+## ONSITE, Thu 12 Nov 09:02Z: the 14:00Z entry: your posted line stands; the carve is one move pull request of two commits; four ordinary changes go before it (the mover's fix among them), one on either side and three after
+
+Read on `main` at `19fb19a21e40` [read: `git rev-parse origin/main`, 09:02Z]; nothing under the two directories changed since `d6075b75d289` [read: `git diff --name-only`]. This is the entry due 14:00Z, with the additions of your 06:16Z, 06:27Z and 07:21Z sections. My entries of 07:15Z, 07:33Z, 07:46Z (the correction), 07:55Z and 08:33Z hold the ready lines, the certificates and the CI-489 line; I repeat only their results. Every count of the move below is from the staging with #9202's mover and certificate, not from the certificates of 07:15Z and 07:33Z, which I withdrew.
+
+**Whether your line stands.** Yes: `remote/verifier/composition/` leaves first for `verity/protocols/compose/`, then the two configurations move whole to `verity/configurations/remote/` and `verity/configurations/onsite/`, inner layout unchanged. No file has to be cut and no Lean module, declaration or lock record changes [run `r20261112-083051-6186`: both commits certified pure moves on lean's `a88eee998fa2`, and every Lake path resolves after each]. One condition is new since 07:15Z: the move is staged only from a base that holds #9202. `main`'s mover leaves remote's requirement of `core_composition` naming an emptied directory, and `main`'s certificate passes that (my 07:46Z entry).
+
+### 1. The 37 files, and where each goes
+
+All paths are under `verity/protocols/`. "Whole" means the file moves with its directory and no line of it is cut.
+
+| Files | What it is | Goes to | Read by |
+|---|---|---|---|
+| `remote/verifier/composition/CoreComposition.lean` and `CoreComposition/{Product,Same,Blobs,Tie,Stubs,Cases,Guards}.lean` (8) | The Lake package `core_composition`, namespace `Core.Composition`: `product`, `same`, `productB`, `sameB`, `tiedSame`, `tiedSameB`, the stub and the guards | `compose/`, whole | `CoreRemote.lean:24-26`, `CoreOnsite.lean:29-31` (`Blobs`, `Cases`, `Tie`); `security/Properties/Composition.lean:3` (`Tie`) |
+| `remote/verifier/composition/{lakefile.toml,lake-manifest.json,lean-audit.json,lean-toolchain,.gitignore}` (5) | The package's files. It requires `core_base` and `core_protocol` only (`lakefile.toml:13-19`). The lock holds no guarantee | `compose/`, whole | `security/Properties/lakefile.toml`, onsite's and remote's lakefiles (by path) |
+| `remote/verifier/composition/README.md` (1) | The composition rule and its formats | `compose/`, whole | seven READMEs and docstrings name it |
+| `remote/verifier/composition/pyproject.toml`, `tests/{periods,reference}.py`, `tests/test_{composition,registration}_difftest.py`, `tests/test_inference_only_not_composed.py` (6) | The suite `verity-core-composition`: the difftest of `core_composition`, `core_onsite` and `core_remote`, which builds both configurations' executables | `compose/` with the package in the move; then `verity/configurations/pyproject.toml` and `tests/` in an ordinary change (item 6, C5) | `check.py:1665`, `ci.toml` (by the suite's name), `tests/test_gate_paths.py:194-195`, `demos/lifecycle/lifecycle.py` (loads `reference.py` by path) |
+| `remote/verifier/{CoreRemote.lean,RemoteMain.lean}` (2) | The package `core_remote`: `Core.Remote.protocol` (`verity/remote/v0`), its list (`:48-49`) and ties; the executable `remote` | `verity/configurations/remote/verifier/`, whole | `CoreOnsite.lean:32`, `CoreComposites.lean:15`, `security/Properties/Remote.lean:3` |
+| `remote/verifier/{lakefile.toml,lake-manifest.json,lean-audit.json,lean-toolchain,.gitignore,README.md}` (6) | The package's files and remote's README (577 lines) | the same, whole | `tests/test_documented_commands.py:56-58`, `demos/vllm/demo.toml`, `security/README.md` |
+| `onsite/verifier/{CoreOnsite.lean,OnsiteMain.lean}` (2) | The package `core_onsite`: `Core.Onsite.protocol` (`verity/onsite/v0`), its list (`:63-65`) and ties; the executable `onsite` | `verity/configurations/onsite/verifier/`, whole | `CoreComposites.lean:13`, `security/Properties/lakefile.toml` |
+| `onsite/verifier/CoreComposites.lean` (1) | `Core.Composites`: the two configurations with their lists (`composites`, `:28-30`), `ofIds` (the configuration a list of ids makes, or the refusal, `:36-49`) and `main` | with onsite, whole (your ruling). It imports both configurations (`:13-18`), so it is neither a protocol's nor `compose`'s | `ProductMain.lean:3`, `security/Properties/Verity/Game.lean:3` |
+| `onsite/verifier/ProductMain.lean` (1) | The executable `product IDS id\|check\|serve`: one line calling `Core.Composites.main` | with onsite, whole | the run's `tools.json` names the built executable (`tools/verity/cli/tests/step0.py:183`) |
+| `onsite/verifier/{lakefile.toml,lake-manifest.json,lean-audit.json,lean-toolchain,.gitignore}` (5) | The package's files. It requires twelve packages, `core_remote` among them (`lakefile.toml:70-72`) | the same, whole | `security/Properties/lakefile.toml` |
+
+- That is 20 files to `compose/`, 8 to `configurations/remote/` and 9 to `configurations/onsite/` [read: `git ls-files`]. On lean's landing head remote has one more, `RemoteV1Main.lean`, carried by the directory row [run `r20261112-083051-6186`: 18 files moved by the second map, 13 of them byte for byte].
+- No file belongs to one of the eight other protocols.
+
+### 2. The move's own change list
+
+From the two commits #9202's mover makes with the maps on `main`'s tip [run locally on the scratch `a117a7df07da`, which is `19fb19a21e40` with the maps and #9202: 70 files, 37 renames and 33 edited in place, +169 −158; #9202's `move_check.py` certifies both]. The per-file counts equal those of the node's staging on `bcaf58a45d53` [run `r20261112-081322-6ffb`], though `main` changed four of the 70 files between the two. A node's staging on the tip (`r20261112-083632-f2b7`) was still waiting for a slot when I wrote this. Paths are the new ones. The number is the lines changed in each commit, first and second.
+
+| Kind | File | Lines | What changes |
+|---|---|---|---|
+| Lakefile | `security/Properties/lakefile.toml` | 1, 1 | the `path` of `core_composition`, then of `core_onsite` |
+| Lakefile | `verity/protocols/compose/lakefile.toml` | 2, 0 | the `path` of `core_base` and of `core_protocol` |
+| Lakefile | `verity/configurations/onsite/verifier/lakefile.toml` | 1, 11 | the `path` of `core_composition`, then of every requirement but `core_remote`, which moves with it |
+| Lakefile | `verity/configurations/remote/verifier/lakefile.toml` | 1, 7 | `path = "composition"` to `"../../compose"` (the line `main`'s mover leaves), then the `path` of all seven requirements |
+| Manifest | `security/Properties/lake-manifest.json`, `security/Proofs/lake-manifest.json` | 1, 2 each | the `dir` of the three packages |
+| Manifest | `verity/protocols/compose/lake-manifest.json` | 2, 0 | the `dir` of its two requirements |
+| Manifest | `verity/configurations/onsite/verifier/lake-manifest.json` | 1, 14 | the `dir` of each path package |
+| Manifest | `verity/configurations/remote/verifier/lake-manifest.json` | 1, 9 | `"dir": "composition"` likewise, then the `dir` of each path package |
+| Lock | the three `lean-audit.json` | 0, 0 | moved byte for byte; no lock under `security/` changes |
+| Record | `tools/research/src/research/store/moves.json` | +5, +6 | the two moves, appended by the mover |
+| Test | `tests/test_gate_paths.py` | 2, 0 | `NON_LEAN_READS`: the suite's `periods.py` and `reference.py` |
+| Test | `tests/test_documented_commands.py` | 0, 3 | the three allowed commands of remote's README |
+| Test | `tests/lint/allowlists/lean_bar.json` | 8, 5 | entries by file |
+| Test | `tests/lint/allowlists/repo_retired_terms.json` | 11, 5 | entries by file |
+| Test | `tests/lint/allowlists/repo_silent_excepts.json` | 1, 0 | one entry by file |
+| Test | `tools/research/tests/test_vqueue_slim.py` | 1, 0 | a test id of the suite |
+| Test | `verity/protocols/compose/tests/` (5 files) | 5, 3 | `parents[6]` to `parents[4]` in each; the two packages' directories and two `.lean` paths |
+| Test | `verity/protocols/certifier/verifier/network/tests/test_{inference_only,network_period}_protocol.py` | 1 each, 0 | a docstring's path |
+| Python | `demos/lifecycle/lifecycle.py` | 2, 0 | the path it loads `reference.py` from, and its docstring |
+| Python | `verity/hardware/registration.py` | 1, 0 | a docstring's relative path |
+| Check | `tools/verity/check/check.py` | 1, 0 | the suite's directory, the key of its slow tests (`:1665`) |
+| Check | `tools/verity/check/drive.toml` | 0, 1 | `lowrisk_excludes`: the two configurations' `verifier/` |
+| Check | `pyproject.toml`, `uv.lock` | 1 each, 0 | the suite as a workspace member |
+| Check | `verity/protocols/compose/pyproject.toml` | 0, 1 | the suite's `inputs`: the two configurations' packages |
+| Check | `.agents/skills/using-slack/registry.json` | 0, 2 | soundness's `owns` |
+| Shell | `benchmarks/one_stage/kept_composite.sh` | 0, 3 | the two package directories it builds in |
+| Comment | `demos/lifecycle/pyproject.toml`, `demos/vllm/demo.toml` | 1, 0 and 0, 1 | a path in a comment |
+| Doc | `ARCHITECTURE.md`, `benchmarks/one_stage/README.md`, `verity/protocols/interface/README.md` | 1 each, 0 | a path |
+| Doc | `security/README.md` | 0, 1 | a path |
+| Doc | `demos/README.md`; `demos/lifecycle/README.md`; `demos/vllm/README.md` | 1, 2; 1, 1; 0, 3 | paths |
+| Doc | `verity/protocols/certifier/verifier/README.md`; `verity/protocols/spot/verifier/README.md` | 1, 1; 0, 2 | paths |
+| Doc | `verity/protocols/{inference_only/verifier/nci,pouw/verifier}/README.md` | 2, 2 each | relative paths |
+| Doc | `verity/protocols/compose/README.md`; `verity/configurations/remote/verifier/README.md` | 14, 3; 3, 3 | their own paths and relative links |
+| Moved only | the other 20: every `.lean` file, the three `lean-toolchain` and the three `.gitignore` | 0 | byte for byte |
+
+What names either path and the move does not change, each with why:
+- `tools/verity/check/ci.toml` names the suite by its name, which stays; `queue.toml` and `policy.toml` name neither path [read: `rg`].
+- `tests/test_lean_packages.py` and `tests/test_doc_paths.py` name neither path; they find packages and docs by glob [read: `rg`]. `tests/test_boundaries.py:289` lists `core_onsite` and `core_remote` by package name, which stays.
+- `tests/test_boundaries.py:196`, `CORE_TREES`' `"protocols/remote"`: written from `verity/`, which the mover does not see (item 5, and C3 of item 6).
+- `benchmarks/one_stage/served_composite.sh:90` and `tests/test_served_verdicts.py:1870, 2010`: a path built from a variable, and two written from `verity/` (C2 of item 6). No other file builds a path under `verity/protocols/` from a variable [read: `rg` over the tree].
+- `tools/move/*` (earlier maps and their tests) and `moves.json`'s earlier entries: the history of past moves, excluded by the maps.
+- Two Lean comments already name a path that is gone, `verity/core/protocols/onsite` (`RemoteAudit/Protocol.lean:14`, `PousCheck/RunProtocol.lean:16`). The move leaves them; they are stale today.
+- No Python imports either directory as a module: neither holds an `__init__.py`, and no import line changes in either commit [read: the diff]. The mover counts five modules renamed by the first map, the suite's five Python files by their path, and none by the second [run `r20261112-081322-6ffb`]; nothing imports them by name.
+- The maps exclude `**/*.lean` from the rewrite, so no Lean file's text changes: a path in a Lean comment stays as written.
+
+### 3. `security/` and the areas
+
+- One package requires them: `security_properties` requires `core_composition` and `core_onsite` by path (`security/Properties/lakefile.toml`), and reaches `core_remote` through onsite. `security_proofs` reaches them through it; only its manifest changes [read: the move's diff].
+- Three files import them: `security/Properties/Composition.lean:3` (`CoreComposition.Tie`), `security/Properties/Remote.lean:3` (`CoreRemote`), `security/Properties/Verity/Game.lean:3` (`CoreComposites`). 23 Lean files of `security/` name `Core.Onsite`, `Core.Remote`, `Core.Composites` or `Composition.`; 12 of them are under `security/Proofs/Properties/` [read: `rg -l`].
+- **No area is renamed.** A Lean module is named from its package's root and a package by its `name`, and the move changes neither, so every import, declaration and lock record reads as before. The areas `Composition`, `Remote` and `Verity` keep their names. Renaming `Composition` to match the directory `compose` would change statements' text, so it could not ride a pure move; I see no need for it.
+
+### 4. The order, and which moves are pure
+
+- **Both commits are pure moves and neither needs a second commit, once #9202 is on `main`.** The mover then rewrites every lakefile's `path` and every manifest's `dir` itself, and no Lean import changes. With it `move_check.py` certifies both commits on `main`'s side [run `r20261112-081322-6ffb` on `bcaf58a45d53`, and locally on the tip: 12 renames and 38 path-only edits; 12 and 28] and on lean's `a88eee998fa2` with the one_stage change [run `r20261112-083051-6186`: 12 and 39; 13 and 32]. Each rerun changes nothing, and every Lake path requirement resolves on the base and after each commit (0 unresolved of 361, and of 396) [run: `/tmp/maps/lake_paths.py`].
+- **Without #9202 the first commit is not a sound move, though `main` certifies it.** Remote's `path = "composition"` and its manifest's `"dir": "composition"` stay, naming a directory the commit empties (2 unresolved of 361) [run, my 07:46Z entry]. With the mover fixed and `main`'s certificate, staging stops at that line as "edit beyond moved paths and module names" [runs `r20261112-080422-72d4`, `r20261112-080422-c967`]. So #9202 changes both files, and nothing by hand goes into the move.
+- **A certificate is not a build.** It says only paths changed. I add the resolving check to every staging I report; the Lean build is the move's own check, in a Lean batch.
+- **`compose` first, then the configurations.** The second map runs on the commit the first makes. The other order would carry `composition/` to `verity/configurations/remote/verifier/composition/` and move it a second time.
+- **PRF-573's rename (#9144):** on `main` (`510b6d74da`) [read: `git log origin/main`]. Eight files, none of the move's 70.
+- **LEAN-249.** Lean's side of the merge changes 18 files under the two directories [read: `git diff --numstat origin/main...origin/cursor/lean-remote-merge-landing-fc8d` at `a88eee998fa2`]:
+  - onsite: `CoreComposites.lean` (+18 −9), `lake-manifest.json`, `lean-audit.json`.
+  - remote: `CoreRemote.lean` (+152 −5), `README.md`, `RemoteMain.lean`, `RemoteV1Main.lean` (new), `lakefile.toml`, `lake-manifest.json`, `lean-audit.json`.
+  - composition: `README.md`, `lake-manifest.json`, `lean-audit.json`, `pyproject.toml`, and four files of `tests/` (`test_composition_difftest.py` +204 −20, `reference.py` +92 −3, `periods.py`, `test_inference_only_not_composed.py`).
+  - It also changes 22 of the 33 files the move edits in place. None of that needs a change to the maps: they are directory rows with no `[split]` table.
+- **What must land first**, in order: #9174 (the maps; marked 07:20Z) and #9202 (the mover and the certificate; open, ci's to read), then lean's merge, then the one_stage change. #9196 (`CORE_TREES`; marked 08:03Z) goes before the move too. #9178 and top's #9175 can land on either side of the move.
+
+### 5. What makes `verity/configurations/` the wrong place, or a file that cannot move whole
+
+No file fails to move whole. Six things a reader should know:
+- **One Lake requirement is written as a bare name** (`verity/protocols/remote/verifier/lakefile.toml:21-22`, its manifest `:37`), the only requirement so written among the tree's 361 Lake paths [run locally: a parse of every lakefile and manifest]. It is why #9202 exists, and it is the one place where "moves whole" needed more than the maps.
+- **`CORE_TREES` (my 07:33Z entry).** After the move `test_core_never_names_a_prover_only_module` would stop reading the suite's five Python files, and pass. #9196 adds `"protocols/compose"` before the move and closes it [run locally: 58 passed before and after the move; `_side` of the five files is `None` without the line and `core` with it].
+- **The configurations' lists are also written inside a protocol's Python.** `verity/protocols/spot/verifier/parties.py:146` (`SUBPROTOCOLS`) holds each configuration's protocol ids, beside `verity/configuration/deploy/config.py:57` (`COMPOSITES`). Under "no protocol imports a configuration" that table belongs with the configurations. It is no part of this move; I name it so that the boundary rule's text does not claim more than Lean's lakefiles.
+- **`verity/configuration/` and `verity/configurations/` differ by one letter.** You called the pair temporary on MEM-279 (06:17Z), and top's #9175 writes "(not `verity/configurations/`)" beside the first. The mover and the tests do not confuse them [run: the eleven root test files].
+- **The suite reads both configurations from a protocol's directory** until C5 lands (my 07:15Z entry, item 3).
+- **`verity/composite/device/live_challenger/`** (ours, 21 files) keeps the retired word in its path. It is not under either directory and no map names it.
+
+### 6. The list of moves, as you can post it
+
+**Moves (one pull request, two commits, one mark):**
+- **M1.** From `verity/protocols/remote/verifier/composition/` to `verity/protocols/compose/` (20 files, `tools/move/compose_map.toml`). In the same pull request: nothing by hand; the mover's path edits in 8 of the 20 and in 30 other files. Waits on: C0, C1, lean's merge (LEAN-249) and C2 on `main`.
+- **M2.** From `verity/protocols/remote/` to `verity/configurations/remote/` and from `verity/protocols/onsite/` to `verity/configurations/onsite/` (17 files today, 18 after lean's merge; `tools/move/configurations_map.toml`). In the same pull request, as its second commit: the mover's path edits in 5 of the 17 and in 23 other files. Waits on: M1, whose commit it is made on.
+
+**Ordinary changes around them (no map):**
+- **C0, before.** #9202: the mover follows a Lake path to another package however it is written and stops a move that breaks one; the certificate reads the same paths. Open, unmarked; ci's files, so ci's word. Without it the move must not be staged.
+- **C1, before.** #9174: the two maps, and `verity demo` reads a demo's protocol from `verity/configurations/` too. Marked 07:20Z.
+- **C2, before.** `benchmarks/one_stage/served_composite.sh` writes each product's package directory out (commit `3f29ae86e4a4`, to be put on `main`'s tip). Waits on: lean's merge on `main`. Without it the script builds in a directory the move removes.
+- **C3, before.** #9196: `"protocols/compose"` added to `CORE_TREES` in `tests/test_boundaries.py`. Marked 08:03Z. top's file.
+- **C4, either side.** #9178: the low-risk list names the composition package's directory. Marked; needs ci's word and a land verdict.
+- **C5, after.** The suite `verity-core-composition` parted from the package: `pyproject.toml` and `tests/` to `verity/configurations/`, its name unchanged; with it the two `NON_LEAN_READS` rows dropped, `CORE_TREES` naming `configurations`, `check.py:1665`, the workspace member and `uv.lock`. Waits on: M2.
+- **C6, after.** The rule "no protocol requires a configuration" in `tests/test_boundaries.py`, the stale `"protocols/remote"` out of `CORE_TREES`, and soundness's `owns` entry for `verity/protocols/compose/`. Text below. Waits on: M2.
+- **C7, after.** The word move "subprotocol" to "protocol" on the code side (item 7). Waits on: M2 and C5, and for its Lean names on soundness's word move in `security/`.
+
+### 7. The word move's sites on the code side
+
+Under `verity/protocols/` and `verity/configuration/` on `main`: 48 files, 351 lines, 388 occurrences [run: `rg -c -i subprotocol`].
+- By directory (lines, files): `protocols/remote` 240, 16 (the composition package and remote's README hold most); `spot` 28, 4; `onsite` 28, 4; `configuration/deploy` 19, 2; `inference_only` 12, 8; `pouw` 7, 3; `interface` 7, 2; `certifier` 4, 3; `pous` 3, 3; `poub` 3, 3.
+- By kind (lines, files): Python 126, 15; Lean 119, 15; Markdown 99, 13; TOML 6, 4; one lock's prose (`onsite/verifier/lean-audit.json:30`).
+- Sites that are not prose, which the map must treat one by one:
+  - **`SUBPROTOCOLS`** (13 uses on the code side): defined at `spot/verifier/parties.py:146`, exported at `:679`, read by spot's two test files and the suite's `test_composition_difftest.py`; outside the code side by `tools/verity/cli/tests/test_run.py:123-128, 244` and `demos/lifecycle/lifecycle.py:893`. The same module defines `PROTOCOLS` at `:674`, so the plain rename collides; the constant needs its own new name.
+  - **Four Lean strings**, the refusal's text: `CoreComposites.lean:39, 48` and their guards at `:88, 90`. No Python compares that text [read: `rg`], so only the guards follow.
+  - **Five test names**: two in the suite (`test_composition_difftest.py:743, 748`, named again at `composition/README.md:183-184`), two in `spot/verifier/tests/test_parties.py:121, 131`, one in `inference_only/rho/tests/test_envelopes.py:414`. The suite's first is a test id in `tools/verity/check/check.py:1668`, outside the code side; the id must change in the same commit.
+  - **`Verity.remote_soundness_of_subprotocols`**, a theorem of `security/`, named at `remote/verifier/README.md:9, 392`: it follows soundness's rename, never ahead of it.
+  - **`Properties.RemoteAudit.Subprotocol.AcceptIsVerified`**, named at `poub/verifier/lean/RemoteAudit/Protocol.lean:29`: the same.
+- **The site top handed over:** `remote/verifier/composition/README.md:3`, "Verity's two composite protocols". #9175 exempts it by path in `tests/test_retired_terms.py`; the word move rewrites the line and drops the exemption.
+- Outside the code side, for whoever takes them: `security/` 446 lines in 33 files (soundness's), `benchmarks/` 83 in 17, `demos/` 55 in 11, `tools/` 43 in 10, `adapters/` 13 in 9, `tests/` 10 in 4, and elsewhere under `verity/` 4 in 2 (`verity/README.md`, `verity/hardware/registration.py`) [run: `rg -c`]. Eight more test names carry the word there (five in `tools/verity/cli/tests/test_run.py`, three in `benchmarks/one_stage/tests/`).
+
+### 8. What would contradict the Glossary the hour the move lands
+
+After top's #9175 the Glossary reads: a configuration is what an auditor runs, remote and onsite are the two, and prose says "protocol" for "subprotocol" [read: `origin/cursor/top-carve-terms-795e:ARCHITECTURE.md:131, 181`]. Against that, the places in files of ours:
+- `composition/README.md:3` ("composite protocols", the one retired phrase left), and "composite" for a configuration at `:21, 22, 25, 26, 181-183`.
+- `remote/verifier/README.md`: "composite" for a configuration at `:45, 89, 248, 250, 264, 265, 545, 549, 569`.
+- `onsite/verifier/CoreComposites.lean:2-5` ("The composite a configuration's subprotocols make", where "configuration" means the run's file) and `onsite/verifier/lean-audit.json:30` ("the composite a deployment's listed subprotocols make").
+- `onsite/verifier/lakefile.toml:68, 81-82` and `composition/pyproject.toml:40, 55`: comments.
+- Not ours: #9175's own `AGENTS.md` text says "Target, not yet: … `remote/` and `onsite/` under `verity/configurations/`", which is stale the hour the move lands. top's file; one line for top.
+- All but the first are the word alone, which #9175 does not retire, so no test fails on them. I would fold them into C7's pull request as its prose commit, not open a pull request for them now: each of these files is in a Lake package's directory, so a docs change to them waits behind every Lean batch (top's reason for leaving `README.md:3`).
+
+### 9. The text of C6 (not opened)
+
+Applied to the staged tree (`36a5f6dafdf2`, #9202's mover on `bcaf58a45d53`), `tests/test_boundaries.py` passes with 60 tests (58 and the two new) and the registry parses [run locally]. ruff's one finding in the file is at a line the change does not touch and is on `main` today [run locally].
+
+```diff
+--- a/.agents/skills/using-slack/registry.json
++++ b/.agents/skills/using-slack/registry.json
+@@ soundness's "owns"
+         "verity/configurations/onsite/verifier/",
+-        "verity/configurations/remote/verifier/"
++        "verity/configurations/remote/verifier/",
++        "verity/protocols/compose/"
+--- a/tests/test_boundaries.py
++++ b/tests/test_boundaries.py
+@@ CORE_TREES
+-              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+-              "protocols/recursion", "protocols/remote", "protocols/tests")
++              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma",
++              "protocols/inference_only/verifier", "protocols/recursion", "protocols/tests")
+@@ beside BASE_LEAN
++#: Where the configurations are, what an auditor runs (remote, onsite): each lists protocols, and no protocol requires one.
++CONFIGURATIONS = "verity/configurations/"
++PROTOCOLS = "verity/protocols/"
+@@ after test_a_requirement_across_the_base_line_is_found
++def _lake_packages() -> dict[str, str]:
++    """Each tracked lakefile's package with its directory, as ``_lake_requires`` reads them."""
++    return {tomllib.loads((ROOT / lake).read_text())["name"]: str(Path(lake).parent) + "/"
++            for lake in _tracked("*lakefile.toml") if "fixtures" not in Path(lake).parts}
++
++
++def _configuration_requirers(at: dict[str, str], requires: dict[str, list[str]]) -> list[str]:
++    """The protocols' Lake packages (``at``: {package: its directory}) that require a configuration's, each with which."""
++    configurations = {pkg for pkg, where in at.items() if where.startswith(CONFIGURATIONS)}
++    return [f"{at[pkg]}lakefile.toml: {pkg} requires {need}, a configuration ({at[need]}): a protocol is stated without "
++            f"the configurations that list it, so what both read goes in a protocol or in {PROTOCOLS}interface/"
++            for pkg in sorted(at) if at[pkg].startswith(PROTOCOLS) for need in requires.get(pkg, ()) if need in configurations]
++
++
++def test_no_protocol_requires_a_configuration() -> None:
++    """Over every lakefile under ``verity/protocols/``: none requires a Lake package under ``verity/configurations/``, so
++    compose stays on top of the protocols and a configuration on top of compose."""
++    at = _lake_packages()
++    assert any(where.startswith(CONFIGURATIONS) for where in at.values()), f"no Lake package is under {CONFIGURATIONS}"
++    offenders = _configuration_requirers(at, _lake_requires())
++    assert not offenders, "\n".join(offenders)
++
++
++def test_a_protocol_that_requires_a_configuration_is_found() -> None:
++    """The check above isn't vacuous: a protocol's package that requires a configuration's is found, and a configuration
++    that requires another, or the analysis that requires one, is not."""
++    at = {"core_remote": f"{CONFIGURATIONS}remote/verifier/", "core_onsite": f"{CONFIGURATIONS}onsite/verifier/",
++          "core_composition": f"{PROTOCOLS}compose/", "security_properties": "security/Properties/"}
++    held = {"core_onsite": ["core_composition", "core_remote"], "core_remote": ["core_composition"],
++            "core_composition": [], "security_properties": ["core_onsite"]}
++    assert _configuration_requirers(at, held) == []
++    found = _configuration_requirers(at, {**held, "core_composition": ["core_remote"]})
++    assert [line.split(": ", 1)[0] for line in found] == [f"{PROTOCOLS}compose/lakefile.toml"], found
+```
+
+- On the moved tree the rule holds of 19 protocol packages; the two that require a configuration are `core_onsite` (requires `core_remote`) and `security_properties` (requires `core_onsite`), neither a protocol [run locally].
+- With #9196 on `main`, the `CORE_TREES` hunk here only drops `"protocols/remote"`. When C5 lands, the suite's files are under `verity/configurations/`, and the entry that keeps them on the verifiers' side is `"configurations"`.
+- The registry's line keeps soundness the owner of the composition package, as it is today under `verity/protocols/remote/verifier/`. Without it the directory falls to our `verity/` entry. Whose it should be is yours and soundness's to say; the line is top's file.
+
+### 10. Not done, and what I hold
+
+- Not run: any Lean build, the suite `verity-core-composition`, the whole root suite, the check. The certificates say the commits are pure moves and the resolving check says every Lake path names a package; neither says the moved packages build. The move's own check does, in a Lean batch: five manifests change (`security/Properties`, `security/Proofs`, `core_onsite`, `core_remote`, `core_composition`), so none of the five has a published build to restore [read: `tools/verity/lean/cache.py:318-330`].
+- I hold the one_stage branch (`cursor/proofs-one-stage-package-paths-b7e4`, `3f29ae86e4a4`) for the hour lean's merge is on `main`, as you ruled.
+- Scratch branches of mine, never to be marked: `cursor/proofs-scratch-maps-on-remote-merge-9d2b` (lean's landing head with the maps, the one_stage change and #9202's commits) and `cursor/proofs-scratch-maps-mover-on-main-6b1f` (#9202's commits and the maps on `main`). Say if I should delete them once the move is staged.
+- When lean's landing head moves again I rerun the staging and write one line only if a certificate or the resolving check changes.
+- The `Goal top/architecture-signed` line in #9196's and #9202's bodies is my reading of the goals page (08:33Z entry); correct it if it is not the goal.
