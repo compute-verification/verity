@@ -40,7 +40,8 @@ block and the store's last), a pass's root against `receipts.tree` over the refe
 the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
 a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; with
 `--leaf-ctas`, the leaf pass over the same store (`GpuBackend.gate_leaf_pass`): that pass's root and kept levels, no
-receipt written, its receipts when asked for against the reference's, and its sessions; then in
+receipt written, its receipts when asked for against the reference's, the same with no reading CTA, so that every
+tile is a consumer's own, and its sessions; then in
 calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
 against the reference's.
 """
@@ -577,11 +578,13 @@ class DeviceStore:
         """How the passes launched from now on run each GPU's shard: with `leaf_ctas` 0 by `rs_pass`, the receipts
         stored and the leaves hashed from them by the consumers; with more, by `rs_leaf_pass` on that many reading
         CTAs, whose warps hash their leaves as the receipts come and store no receipt, unless `receipts` asks for them
-        (the same bytes in the same array, for a check). The roots, the kept levels and the openings are the same
-        either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes it wants and puts it
-        back."""
-        if leaf_ctas < 0 or (receipts and not leaf_ctas):
-            raise ValueError("a leaf pass has at least one reading CTA, and only a leaf pass is asked for its receipts")
+        (the same bytes in the same array, for a check); with -1, by `rs_leaf_pass` with no reading CTA, every tile
+        a consumer warp's own, which is a gate's and no way to run a store. The roots, the kept levels and the
+        openings are the same either way, and a host segment is always `rs_pass`'s. A caller sets it for the passes
+        it wants and puts it back."""
+        if leaf_ctas < -1 or (receipts and not leaf_ctas):
+            raise ValueError("a leaf pass has reading CTAs or, with -1, none, and only a leaf pass is asked for its "
+                             "receipts")
         if leaf_ctas and self.h0 > 8:
             raise ValueError(f"a leaf pass keeps its levels from h0 <= 8, not {self.h0}")
         self.sync()
@@ -1142,6 +1145,8 @@ class GpuBackend:
                  trace_allocator: bool = False, host_blocks: int = 0, host_ctas: int = 16,
                  host_consumers: int = 8, hbm=None, leaf_ctas: int = 0) -> None:
         self.torch, self.log, self.blocks, self.warm_openings = torch, log, blocks + host_blocks, warm_openings
+        if leaf_ctas < 0:
+            raise ValueError(f"leaf_ctas counts a store's reading CTAs (0: `rs_pass`), not {leaf_ctas}")
         self.leaf_ctas = leaf_ctas
         self.host = {"host_ctas": host_ctas, "host_consumers": host_consumers}
         self.trace_allocator, self.calibration_trace = trace_allocator, None
@@ -1403,8 +1408,10 @@ class GpuBackend:
         that pass's, made from leaves and written into levels that were 0xA5 before it (the same seed's levels are
         otherwise still in the ring from that pass, and its leaves in the leaves' buffer from the gate's own first leaf
         pass); it writes nothing into the shards' receipt arrays, filled with 0xA5 before it, which the check of the
-        receipts refuses; asked for its receipts, the root is the same and they are the reference's byte for byte; and
-        its sessions are accepted when honest and rejected at a receipt with 1/16 of the blocks dropped."""
+        receipts refuses; asked for its receipts, the root is the same and they are the reference's byte for byte; with
+        no reading CTA (`consumer_tiles`), where every tile is a consumer warp's own, both hold again and no reading
+        CTA started; and its sessions are accepted when honest and rejected at a receipt with 1/16 of the blocks
+        dropped."""
         torch = self.torch
         shards = [s for s in range(len(small.n)) if not small.on_host[s]]
         want = [ys[small.base[s]:small.base[s] + small.n[s]] for s in shards]
@@ -1438,12 +1445,26 @@ class GpuBackend:
             poison()
             got, handle = small.run_pass(seed)
             out["receipts"] = got == root and same(DeviceStore.ready(handle)) and receipts()
+            # A consumer warp computes a tile itself (`help_leaf_tile`) only where it is on an SM before any reading
+            # CTA, which no pass can be counted on to do. With no reading CTA every tile is a consumer's.
+            tiles = {}
+            for asked in (False, True):
+                small.pass_mode(-1, receipts=asked)
+                poison()
+                got, handle = small.run_pass(seed)
+                small.sync()
+                tiles["receipts" if asked else "root"] = (got == root and same(DeviceStore.ready(handle))
+                                                          and receipts() == asked)
+                tiles["reading_ctas_started"] = tiles.get("reading_ctas_started", 0) + sum(
+                    int(small.seg_ring[s]["ctr"][-1]) for s in shards)
+            out["consumer_tiles"] = tiles
             small.pass_mode(self.leaf_ctas)
             out["session_honest"] = self.gate_session(small, reg, set())
             out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
         finally:
             small.pass_mode(0)
         out["ok"] = (out["root"] and out["no_receipt_written"] and out["control_refused"] and out["receipts"]
+                     and out["consumer_tiles"] == {"root": True, "receipts": True, "reading_ctas_started": 0}
                      and out["session_honest"]["accepted"] and out["session_skip_sixteenth"]["failure"] == "receipt")
         return out
 
