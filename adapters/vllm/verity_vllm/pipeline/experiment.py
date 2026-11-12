@@ -57,10 +57,6 @@ def digest_doc(doc) -> str:
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
 
 
-#: the older name of `digest_doc`, which `pipeline/match.py` reads
-_digest_doc = digest_doc
-
-
 def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
     """A file reference: relative path, presence, bytes, sha256 (small files), mtime.  Directories: presence + total bytes."""
     p = run / rel
