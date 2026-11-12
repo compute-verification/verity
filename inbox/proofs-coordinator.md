@@ -86146,3 +86146,78 @@ Clock read: 11:33Z. Branch `cursor/proofs-members-files-61d4` at `0429a81f9848`,
 
 - `r20261112-112538-beae`, about 12:45Z [guess], and `r20261112-113402-dade`, no estimate. Resume me on their ends if you want the two verdicts before the landings.
 - The two landings. When both are on `main` I merge `origin/main` into `cursor/proofs-headsplit-c85e` with these closes, push, run the quick tier and the cost model, edit the body and write the ready line.
+
+## CLOSEROUND, Thu 12 Nov 11:35Z: #9199 has `main` merged in at `7a528d6b1c01` with `proof_server.py` closed on both arguments (#9077's `wide_leaf`, mine `tree_from`); `9e4c`'s one failure was #9199's own test, already mended; three runs are out, no ready line yet
+
+**My VM was reset again before this turn** (the checkout back on `main` at `33866d93e66e`, `/tmp/cr` gone) [run: `git status`, `ls`]. Nothing was lost: both branches were pushed, and I rebuilt the worktrees from `origin`.
+
+**1. The merge (#9199)**
+
+- The head is `7a528d6b1c01`, pushed with no force [run: `git ls-remote`]: `ce7dab0ab39c`, then the merge `b19b3ad9d1` of `main` at `33866d93e66e`, then one commit of one new test. `main`'s tip is still `33866d93e66e` and is in the head [run: `git merge-base --is-ancestor`, 11:32Z].
+- **The landing that conflicts is not vllm's `_exited` change.** It is #9077, commit `4f2921855f`, "server_rate.py --wide-leaf: a row on the wide level-0 leaf's statement version" [run: `git log ce7dab0ab39c..origin/main -- .../proof_server.py`, one commit]. vllm's `04df0f0296f9` is not on `main` [run: `git merge-base --is-ancestor`].
+- **What #9077 does** [read: its diff]: `ProofServer` gains `wide_leaf`; with it every prover's and every verifier's command line carries `--wide-leaf` beside `--zk`, through one list `self._version`, so a session's two sides always agree on the statement version. `benchmarks/one_stage/server_rate.py --wide-leaf` uses it for a row. Its test is `test_the_wide_leaf_is_carried_by_both_sides_or_by_neither`.
+- **The conflict: one file, two hunks** [run: `git merge-tree --write-tree ce7dab0ab39c 33866d93e66e`, then the file in the written tree].
+
+Hunk 1, the class docstring. Mine:
+
+```
+    the plain one. ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
+    ``challenger``.
+```
+
+`main`'s:
+
+```
+    the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
+    both carry, so every prover and verifier of the server does; off, fast100's.
+    ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+```
+
+My close, every sentence of both:
+
+```
+    the plain one. ``wide_leaf``: the wide level-0 leaf's statement version (`--wide-leaf`), which a session's two sides
+    both carry, so every prover and verifier of the server does; off, fast100's.
+    ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+    ``tree_from``: every verifier's flags for the one challenger session the caller holds (module docstring), never with
+    ``challenger``.
+```
+
+Hunk 2, the last line of `__init__`'s signature. Mine: `tree_from: Sequence[str] | None = None):`. `main`'s: `wide_leaf: bool = False):`. My close:
+
+```
+                 env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False,
+                 wide_leaf: bool = False, tree_from: Sequence[str] | None = None):
+```
+
+- Both are keyword-only (after the `*`), so their order changes no caller [read: `proof_server.py:297`].
+- **The bodies merged without a conflict and both hold** [read: `proof_server.py:303-312`, `:478-482`, `:495`]: my refusal of `challenger` with `tree_from` and `self.tree_from`; #9077's `self._version`; the verifier's line is `serve, *self._version, ..., *(flags if ch else self.tree_from)` and the prover's `prove, *self._version, ...`. The two never meet: `wide_leaf` adds a flag at the front of both sides' lines, `tree_from` ends the verifier's line alone.
+- **Mine does not undo #9077's** [run, on this VM, the worktree on `PYTHONPATH`]: `verity/protocols/flock/prover/tests/test_proof_server.py` on the merged tree, 14 passed, #9077's `test_the_wide_leaf_is_carried_by_both_sides_or_by_neither` among them.
+- **One test added** (`7a528d6b1c01`), since `tree_from` had no test in that file: `test_the_callers_challenger_flags_end_every_verifiers_line_and_no_provers`. With `wide_leaf` on and off, the caller's flags end the verifier's line and reach no prover's, both lines carry `--wide-leaf` exactly when asked, the server starts no challenger, and `challenger=True` with `tree_from` is refused. It is among the 14 [run].
+- Since the last tested merge (`33faab2be81c`, run `a5fd`), `main` changed two of this change's files: `proof_server.py` and `test_proof_server.py` [run: `git diff --name-only 33faab2be81c 33866d93e66e`, held against the change's 23 files].
+- **Lean and locks** [run: `git diff --name-only origin/main 7a528d6b1c01`]: on top of `main` the change still holds the same four (`Spot.lean`, `Spot/MembersRefusal.lean`, `Spot/ZkMain.lean`, the package's `lean-audit.json`) and no record file. The merge brought `main`'s own Lean of that package under it (`Spot/Returned.lean`, `Run.lean`, `SecondStage.lean`), so I launched the fast path on the merged tree (`2b22` below): until it ends, "no record moves" is [derived] from the diff, not [run].
+
+**Merge-trees at 11:32Z**, the seven drivers registered [run: `git config --get merge.<name>.driver`, one key at a time]:
+
+- Against `main` (`33866d93e66e`): `7a528d6b1c01` and the twin's `42b213aebe00` each merge with no conflicted path [run].
+- Against `cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`, the tip I read at 10:33Z too) [run: `stops.py`]: `main` alone stops on 23 paths; with #9199 merged in, the same 23, none beyond, none fewer; the same for the twin. In every one of the 23 the conflict hunks are the same with and without this change. `a5.py` and `verity/protocols/spot/verifier/README.md` are the two of them this change touches. `proof_server.py` is not among them, and lean's branch does not touch it or its test [run].
+
+**2. `r20261112-092434-9e4c` (the twin's quick tier at `cda0bef3f06c`): the failure is this change's, and is already mended**
+
+- It ended 10:35:34Z, rc 1, on its own exit code: no timeout, no signal [read: `status.json`]. 62 suites, **61 passed, 1 failed** [read: `stdout.log:171`].
+- The one: `benchmarks/prove_path`, 148 passed, 1 failed: `tests/test_records_audit.py::test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session`, `Left contains 1 more item: {'deployed': False}` at line 999 [read: `stdout.log:26-52`].
+- **Whose: #9199's**, the same test `e724` failed. `--deployed-key`'s commit added `deployed` to what `records_audit` hands `a5_coins.start`, and the twin at `cda0bef3f06c` carried that commit without its mend (`ce7dab0ab39c`). Not another lane's, not `main`'s, not the machine's.
+- **Mended before this turn:** the twin has carried `ce7dab0ab39c` since `f16dfba0bbae`, and `436c` passed that suite on it (150 passed) [run, 10:33Z entry].
+- **The five suites still out when I last read it all passed** [read]: `verity-numerical` 639 (6 skipped), `research` 4444 (3 skipped), `verity/circuits` 1120, `verity/commitments/windows` 94 (1 skipped), `verity-core-evaluate` 36. No other suite failed.
+- The twin's own suites in it [read]: `verity/protocols/spot/verifier` 904, `verity-core-sampled-proofs` 260 with 2 skipped (`test_members_twin.py` run whole), `benchmarks/one_stage` 566 (the fixture's file run whole), `repository` 340.
+
+**The twin (#9230)** is at `42b213aebe00`, pushed with no force [run]: `f16dfba0bbae` with #9199's `7a528d6b1c01` merged in, no conflict. Its own diff over #9199's head is the same seven files [run: `git diff --stat 7a528d6b1c01 42b213aebe00`]. No mend was needed.
+
+**Runs out** (each launched detached; the hours are [guess] from `e724`'s 34 minutes and `9e4c`'s 71):
+
+- `r20261112-112819-801e`, #9199 at `7a528d6b1c01`: `suites.py --changed 33866d93e66e --quick`, on `vy-nebius-cpu-2`, running at 11:34Z [read]. It holds the proof server's tests (`verity-flock`), `benchmarks/prove_path`, and `benchmarks/one_stage` with the fixture's file run whole under `--deployed-key`. I expect it by 12:15Z.
+- `r20261112-112848-2b22`, the same head: `lean_changed.py --records verity/protocols/spot/verifier/lean`, no `--update`, on `vy-nebius-cpu-1`, running at 11:34Z [read]. I expect it by 12:15Z. It is the fast path, not the kernel replay.
+- `r20261112-113134-dadb`, the twin at `42b213aebe00`: `suites.py --changed 7a528d6b1c01 --quick`, on `vy-nebius-cpu-2`, waiting for a slot at 11:34Z [read]. I expect it by 13:15Z.
+
+**Not run on the new heads yet:** anything remote; the three runs above are all of it. No ready line until `801e` and `2b22` are read. Mailbox read at 11:32Z: nothing after your 10:37Z section [run]. I marked nothing and posted nothing.
