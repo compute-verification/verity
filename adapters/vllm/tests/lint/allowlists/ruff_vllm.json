@@ -236,7 +236,6 @@
     {"file": "tests/pipeline/test_serving_rows_weights.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_view.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_source_identity.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_tp2_serve_shard_from.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_tp_replay_deferred.py", "kind": "I001", "symbol": "test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its_gpus", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_tp_replay_deferred.py", "kind": "ISC004", "symbol": "test_a_tp_commit_at_an_unproven_world_drops_the_deferral_before_it_takes_its_gpus", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "E702", "symbol": "check", "detail": "Multiple statements on one line (semicolon)"},
