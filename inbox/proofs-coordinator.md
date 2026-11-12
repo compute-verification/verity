@@ -106293,3 +106293,59 @@ None yet.
 ### Not established
 
 Everything: nothing is written or compiled. The reading in line 4 is an argument, not a proof.
+
+## PROVED, Thu 12 Nov 22:40Z: A14, the four answers: the theorem's session covers a `subset` design, which is what a `rate:` becomes; the check takes strata and by-work designs at two functions; of the first accept's two probe cases the refusal keeps `subset:1` and refuses `stratified:1`; Friday's `rate:2/8` is a subset of 2 of 8, which the two-round guarantee's design covers once the rate is resolved
+
+**In plain words, for Daniel.** A sampling design says how an audit picks the blocks it checks. The theorem for the one-statement audit covers one design: a uniform random subset of a fixed size. A stated rate becomes exactly that once the population is known, so a rate is covered. The check today also accepts two other designs, by strata and by work, which the theorem does not cover, and the ruling is that the check must refuse them. This entry answers the four questions needed to write that refusal without refusing Friday's own runs. Friday's runs sample by a rate, so they stay covered. One kind of run would be refused: a one-statement audit tied to the weights' window, whose setting today is a design by strata.
+
+Clock: `date -u` read 22:40Z before the push. Mailbox read at `96931e7599`, nothing after the 22:25Z message. No file of the tree changed; no run of mine is out; I ran no Lean. Paths under `verity/protocols/spot/verifier/lean/Spot/` are written `Spot/…`.
+
+### 1. Exactly what `Live.hsub` covers [read]
+
+- The field: `hsub : designAt desc qr lj tb n = .subset (lawK (designAt desc qr lj tb n))` (`security/Proofs/Properties/Verity/Sampled.lean:161-163`). In words: the design Flock's bridge reads from the statement's descriptor, the query, the law object and the work table, over the `n` proof blocks, is a `subset` design of some size `k`.
+- What ties it to the parameters: `SetsUp.params` asks `lawAt p.base.verifier A.n = .ok A.design` (`:680`), and `lawAt` is the derived design if there is one, else the expanded rule's (`:663-666`).
+- So a session exists at parameters whose law is the object `{"law": "subset", "k": K}`, or a text `rate:NUM/DEN[:T]`, with `1 ≤ K ≤ n`. A rate text becomes `subset:K` at `K = T·⌈NUM·n/(DEN·T)⌉` (`Select.textOver`, `Spot/Select.lean:194-198`; `Rate.count`, `Spot/Rate.lean:27`).
+- Not covered: the objects `stratified` and `work`, and the texts `stratified-rate:` and `work-rate:`, which become them (`Spot/Select.lean:199-204`).
+
+### 2. Where the compiled check takes a strata or by-work design [read]
+
+Two functions of v1's parameters, which v2 reads unchanged through `paramsOfJson` (`Spot/OneStageZk.lean:245-259`):
+
+- `OneStage.rule` (`Spot/OneStage.lean:137-147`): a law object of kind `subset`, `stratified` or `work` with a natural `k` passes. `bernoulli` parses here and is refused later (`coveredDesign`, `:485-487`).
+- `OneStage.design` (`:153-160`): a law given as text passes if it is a rate, a stratified rate or a work rate, and is turned into `subset:K`, `stratified:K` or `work:K`.
+
+Nothing after them looks at the kind again. The refusal of my 22:15Z entry is one test of `p.base.verifier.law`'s kind at the end of `paramsOfJson`, after both, so it sees the kind whichever way it was written.
+
+### 3. Which design the first accept of record uses
+
+- [relayed: FIRSTACCEPT 22:15Z and 22:34Z, runs `d2b2` and `871c`, read by me] Its probe ran two one-member audits: `subset:1` over 2 units, and `stratified:1` over 1 unit. A scratch build with the one change to `publicHeld` accepts both.
+- [derived] Under the refusal the first is kept (`k = 1 ≤ n = 2`, section 1) and the second is refused. So the first accept of record has to be the `subset:1` case, or a `rate:`.
+- [read] The hazard I named at 22:15Z stands: the served script's tie to the weights' window defaults to `stratified:1` and refuses any design that is not `stratified:K` (`benchmarks/one_stage/served_verdicts.sh:286`, `:781-782`: under the tie every table needs a sampled reader, which only strata give). A tied one-statement audit and this refusal cannot both hold until the tie takes a subset design or the theorem covers strata.
+
+### 4. Friday's two-round first stage, and whether the two-round guarantee's design covers it
+
+**What the run samples** [read].
+
+- A stream's rule is always a rate: a fixed count is refused when the rule is read (`Rule.ofJson`, `FIXED`, `Spot/Select.lean:160-167`).
+- The run resolves it over the population before anything else reads it: `i.rule.over n (strataSizes …)`, refusal `rate` where that gives none (`Spot/Run.lean:262`), then `lawOver` (`:263`). The Python is `service.selection_law` (`verity/protocols/spot/verifier/service.py:760-781`).
+- [derived] So `rate:2/8` over 8 replay blocks is `subset:2`: `⌈2·8/8⌉ = 2`. [relayed: GATHER 21:54Z for the shape.]
+
+**What the guarantee's design is** [read].
+
+- The two-round guarantee's design is `SpotFlock.two h` (`security/Proofs/Flock/SpotFlock/Code.lean:400-408`). Its first stage is `replayDesign h`, which is `slotDesign` of the boundary registration's rule (`:383-384`; `security/Properties/Spot/Draw.lean:84-93`).
+- `slotDesign` reads the rule with `lawOver`, which parses `subset:K`, `stratified:K`, `work:K` or `bernoulli:` and throws on a rate text (`parseDesign`, `Spot/Select.lean:51-61`).
+- A `subset K` first stage is in the guarantee's scope where `1 ≤ K ≤` the population (`oneStageOk`, `Code.lean:263`), and it is the one first stage at which the replay cap is tight: `K` replay blocks' proof blocks and the ones always checked (`firstK`, `cap`, `SpotFlock/Cap.lean:36-53`, `:167-170`). At any other first stage the cap is every proof block.
+
+**So** [derived]: yes, the design covers a rate as the driver samples it, as `subset:K`. One condition: the registration the model holds must carry the rule after the rate is resolved. With the stream's own rule, `rate:2/8`, `slotDesign` errors, `replayDesign` is none and `two` is none, so there is no design to speak of. Every stream's rule is a rate, so every link from a run to the model passes through `Rule.over`. The two lemmas that tie the run to the model (rows B9, B10) have to hand the model `i.rule.over n sizes`, not `i.rule`.
+
+### Not established
+
+- That the statements on the B9 and B10 branches and the honest registration (B8) hand the model the resolved rule. I did not read them.
+- Which design Friday's one-statement run uses: a rate, or the tie's `stratified:1`.
+- That nothing but the tie sets a strata or by-work design on a path Friday runs.
+
+### To post
+
+- For soundness, who asked which draw Friday's run uses: "Two-round: the first stage is `rate:2/8`, resolved to `subset:2` over 8 replay blocks (`Run.lean:262`); the second stage is `work`, k = 1 per cell (`Select.secondLaw`). One-statement: the driver samples by a rate, so `subset:K`; the exception is a run under the tie to the weights' window, which sets `stratified:1`."
+- For the workers of B8, B9 and B10: "`SpotFlock.two` reads the first stage's rule with `lawOver`, which throws on a rate text. Hand the model the rule after `Rule.over`, or `two` is none at every stream."
+- For the holder of `OneStageZk.lean`: "the refusal goes at the end of `paramsOfJson`; of the first accept's two cases it keeps `subset:1` and refuses `stratified:1`".
