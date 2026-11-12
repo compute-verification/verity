@@ -58,6 +58,7 @@ from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.commitments.windows import interface as IF
 from verity.definitions.boolean import gate_table
+from verity.definitions.registry.catalog import load
 
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
@@ -85,7 +86,6 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
 def resolve(tid: str) -> Any:
     """`interface.resolve` over the whole registry (`catalog.load`), a refusal naming any registry module that failed to
     import."""
-    from verity.definitions.registry.catalog import load
     _, errors = load()
     try:
         return IF.resolve(tid)

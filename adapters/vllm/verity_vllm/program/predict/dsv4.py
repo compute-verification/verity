@@ -28,6 +28,23 @@ from types import SimpleNamespace
 from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Refs, concat, strided_view
 from verity.circuits.types import Type
+from verity.definitions.numerics.flashmla_twin import (
+    num_sm_parts,
+    request_splits,
+    sched_meta,
+)
+from verity.definitions.numerics.marlin_moe_rows import moe_block
+from verity.definitions.numerics.mhc_twin import tf32_num_split
+from verity.definitions.registry import dsv4_indexer
+from verity.definitions.registry import dsv4_qnorm_insert as Q
+from verity.definitions.registry import marlin_moe as MM
+from verity.definitions.registry.dsa_norm import check_block
+from verity.definitions.registry.dsv4_compressor import DSV4_COMPRESSOR
+from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
+from verity.definitions.registry.tp_allreduce import settings_of
+
+from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.program import model as analytic
 
 from . import dsa
 from .common import Unexpressible, _arr, _Peers, served_class
@@ -44,15 +61,7 @@ class Net:
     DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
-        from verity.definitions.registry import dsv4_indexer
-        from verity.definitions.registry import dsv4_qnorm_insert as Q
-        from verity.definitions.registry.dsa_norm import check_block
-        from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
-        from verity.definitions.registry.tp_allreduce import settings_of
-
-        from verity_vllm.engine.profiles import family_facts as FF
         from verity_vllm.observe.fold.profiles.generic import rank_hf_config
-        from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsv4 import (
             COMPRESSORS,
@@ -147,7 +156,6 @@ class Net:
         the attention (an indexer at ratio 4, a compressor of the D-wide rows at every ratio, overlapping two windows at ratio 4), the
         router (its table below HASH_LAYERS, else its correction bias), the shared and the MXFP4 routed experts; layer 0 holds the one
         rope cache."""
-        from verity.definitions.registry import marlin_moe as MM
         C, r = self.C, self.ratios[L]
         H, HC, D, DR, QL, NH, NHP, E, INTER, SI, IH, ID, OL, TOPK = (int(C[k]) for k in (
             "H", "HC_MULT", "HEAD_DIM", "QK_ROPE", "Q_LORA", "NH", "PADDED_HEADS", "NUM_EXPERTS", "I", "SHARED_I", "INDEX_HEADS",
@@ -229,7 +237,6 @@ class _Model(dsa._Model):
 
     def pre(self, rows: list[Refs]) -> tuple[list[Refs], list[Refs], list[tuple[Refs, Refs]]]:
         """Layer 0's pre over the embedding rows (`MhcPreBroadcastRule`) -> (streams, layer input, (post, comb)) per row."""
-        from verity.definitions.numerics.mhc_twin import tf32_num_split
         w = lambda f: self.w[(0, f)].refs  # noqa: E731
         fn = self.k("mhc_pre_broadcast", **self.net.mhc, NS=tf32_num_split(len(rows), self.H, int(self.net.tp.num_sms)))
         outs = [self.call(fn, r, w("hc_attn_fn_broadcast"), w("hc_attn_scale"), w("hc_attn_base"), w("attn_norm.weight")) for r in rows]
@@ -239,8 +246,6 @@ class _Model(dsa._Model):
     def post_pre(self, parts: list[Refs], streams: list[Refs], mix: list, L: int, side: str) -> tuple[list[Refs], list[Refs], list]:
         """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer: the FMA path at
         most `SMALL_FMA_TOKENS` rows, the TF32 pre above (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
-        from verity.definitions.numerics.mhc_twin import tf32_num_split
-
         from verity_vllm.program.frontend.rules.vllm_mhc import (
             MHC_GEOMETRY,
             SMALL_FMA_TOKENS,
@@ -309,7 +314,6 @@ class _Model(dsa._Model):
         """The compressed row of the window ending at p over the state rows from position P (`Dsv4SparseAttnRule._compress`): the
         window's 2 * ratio rows at ratio 4 (row k reading the half k // 4 of its state), its ratio rows at 128 -> (NoPE, scale bytes
         without the pad, RoPE)."""
-        from verity.definitions.registry.dsv4_compressor import DSV4_COMPRESSOR
         r, D, DR, QB = self.net.ratios[L], int(self.C["HEAD_DIM"]), int(self.C["QK_ROPE"]), self.net.G["QT"]
         taken = [(k, s - P) for k, s in enumerate(range(p - (2 * r if r == 4 else r) + 1, p + 1)) if s >= P]
         if r == 4:
@@ -325,11 +329,6 @@ class _Model(dsa._Model):
         """FlashMLA over the rows each position reads, its window from max(p - window + 1, P) then the compressed rows the history
         holds by then (`Dsv4SparseAttnRule`): one row a decode over each padded to BN rows, at the splits of the planner for the one
         request; more a prefill, each row gathered once and each position's rows, compressed first, padded to its NP pairs of blocks."""
-        from verity.definitions.numerics.flashmla_twin import (
-            num_sm_parts,
-            request_splits,
-            sched_meta,
-        )
         C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
         D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
         G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
@@ -375,9 +374,6 @@ class _Model(dsa._Model):
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_marlin_moe`, op-major): the router logits, the shared expert, each
         row's six experts and weights, the align over the pairs p = t * TOPK + k in pair-index order, per pair the w13 GEMM, the
         clamped SwiGLU and the weighted w2 GEMM; each row's sum of its TOPK rows, plus the shared expert's."""
-        from verity.definitions.numerics.marlin_moe_rows import moe_block
-        from verity.definitions.registry import marlin_moe as MM
-
         from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         C, M, H = self.C, len(x), self.H
         E, TOPK, INTER, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])

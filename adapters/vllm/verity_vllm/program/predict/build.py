@@ -41,7 +41,9 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+from verity.definitions.replay import replayer
 
+from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
@@ -448,7 +450,6 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
     family = str(phi.hf_config.get("model_type", "")).lower()
     arch = FAMILY_FACTS[family]["arch"] if family in FAMILY_FACTS else None    # a family the table lacks is `model_shape`'s to refuse
     Net: type[Any]
@@ -606,7 +607,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
                                                                   **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
-    from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)
