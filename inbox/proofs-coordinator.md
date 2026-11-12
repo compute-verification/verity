@@ -98142,3 +98142,57 @@ Ready rows main has outdated: 50 (new text), 18 (2^192 for 2^128), 54 (a paragra
 Text S: "Section 3.2". Row 56: Section 4, agreed.
 Every text in full: note:proofs/20261112T1940Z-finding-spot-nine-rows. Nothing posts until Daniel says so.
 ```
+
+## CROSSCLOSE, Thu 12 Nov 19:42Z: one row changed: `a5.py` is no longer `c364515fd276`'s to take by path, #9362 on `main` wrote into it and lean's head has git's merge, which reads right; lean's head `64ee10f17900` holds the no-gap files unmoved and our three closes still fit it
+
+**The row that changed.** `benchmarks/one_stage/a5.py`.
+
+- [run] #9362 landed on `main` between `0582899c4392` and `4a90174415b7` and adds 20 lines to it (`main`'s blob went
+  `617792582d13` → `6f1efeeedebd`). Lean's merge `e122d8e38121` took git's own merge of the file, no stop:
+  `22d7bcd2141c`, 1,795 lines; it is my close's `a704f32474f1` plus those 20 lines. Lean's head `64ee10f17900` holds the same blob.
+- [derived] **So `c364515fd276`'s `a5.py` must not be taken by path any more**: it would drop #9362's lines. Nothing
+  is to take: the file does not stop.
+- [read] The meet reads right. #9362's lines sit in `coins_outcome` (merged lines 484 to 490), in `audit` and in a new
+  `case_written`. They call `AC.Ch.ChallengerKey.from_json`, `AC.Ch.pinned_session` and `AC.lms_verify`, and read the
+  locals `ev`, `why` and `root`. `verity/protocols/spot/device/challenger.py` is one blob, `be4a803f1814`, on `main`, on
+  lean's last head and on this one; `lms_verify` is `a5_coins.py:710` in the merged tree; the three locals are bound
+  above in the merged function (`root` 438, `ev` 440, `why` 456).
+- [run] ruff finds no undefined, unused or redefined name in the merged file.
+- **Not run by me:** the tests that reach those lines (`benchmarks/one_stage/tests/test_a5_case_v2.py`,
+  `test_served_integrity.py`, `test_audit_two_members.py`) at lean's head. They are the suite `benchmarks/one_stage`,
+  which lean's own check of its head runs. Say if you want a run of that suite from me; a slot took 45 to 75 minutes
+  to come today.
+- [run] The other files of ours are unmoved at `64ee10f17900` from `e209a56847d4`: `FlockVerify.lean` `ee4aab1a9baf`,
+  the pin `a08ebe4756ba`, `test_difftest.py` `fc4019234796`, spot's verifier README `71ad3eb23f5c`, `whole_run.py`
+  `353f5a6ddc36`, `test_a5_wiring.py` `77434e56efae`, `optimize.py` `25282e9bd890`, `test_optimize.py` `601b763eddc4`.
+
+**Lean's head `64ee10f179004414f2c09c235a14c019a7692bda`** [run: `git fetch`, 19:39Z], four commits over
+`e122d8e38121`, eight files, none ours and none under `verity/protocols/flock/verifier` [run: `git diff --stat`]:
+three locks, remote's verifier (`CoreRemote.lean`, two READMEs, one test) and `benchmarks/one_stage/composite.py`.
+
+- [derived] The no-gap answer holds at `64ee10f17900`, line numbers included.
+- [run] `main` is `0e8d16c3b8be` (#9370, #9397, #9404 over `4a90174415b7`), not yet in lean's head; the two merge with
+  no stop.
+- [run] Rows at `64ee10f17900` with `main` `0e8d16c3b8be`: as at 19:26Z. #9237 → `82a48d3a8dda` (`test_difftest.py`
+  only), #9253 → `fed2063c5d79`, #9091 → `ceffc70c0052`, each checked again against this head (outside its one stop
+  the merged file is the close's; the pin's 64 lines match the merged tree's blobs); #9176, #9229, #9212, #9080, #9075
+  stop nowhere.
+
+**By name, over what lean merged at `e122d8e38121`** (`main`'s fifteen landings from `0582899c4392`).
+
+- [run] Names those landings took out of a file and did not put back: 5; none is in a line lean's side adds.
+- [run] The other way, names lean's side took out that a line of those landings holds: 33 words, all common ones
+  (`path`, `root`, `digest`, `Program`, …). For each I looked whether a file `main` added it to names the module lean's
+  side took it from: one did, `served_integrity.py` with `digest`, and [read] it is `registration.digest`, which both
+  sides have. Nothing real.
+- [run] A check I had not made before: every `from M import N` and every `ALIAS.name` on a module of the tree, in all
+  5,960 Python files of `e122d8e38121`, against what the module binds. Nothing is unresolved there that is not
+  unresolved the same way on `main` `4a90174415b7` or on lean's last head. The same check on `25f40229fc` finds the
+  `Registry` import, the meet lean mended at 18:38Z, so it sees that kind. It does not see a changed signature, a
+  method, or Lean.
+
+**Runs** [run: `research status`, 19:39Z]: all four running now. `r20261112-182234-9fdd` (my trial of lean's line
+whole at `main` `30d6fcc92ff7`: seven Lean tries with `FlockVerify.lean` among them, the pin's test, then every quick
+suite), `r20261112-182303-e169` (#9253 in), `r20261112-182335-606d` (#9091 in), `r20261112-171809-f6bf`. Ends [guess]:
+the tries of `e169` and `606d` by 20:10Z and their suites by 20:40Z; `9fdd`'s tries by 20:20Z and its suites by
+21:10Z; `f6bf` was at 116 of 125 at 18:50Z and has not ended, which is longer than I expected; I read why next.
