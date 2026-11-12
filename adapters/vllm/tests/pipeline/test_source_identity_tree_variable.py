@@ -1,4 +1,4 @@
-"""`source_identity`'s two reads of ``VERITY_TREE``, in this process: the requested tree is checked against the variable, and the
+"""`verity_vllm.pipeline.source_identity`'s two reads of ``VERITY_TREE``, in this process: the requested tree is checked against the variable, and the
 manifest's record carries the variable as the environment holds it.  The command's own tests (`test_source_identity`) run it in a
 child process, with the packages it resolves and the commits git names; here both are stood in, so no test starts a program."""
 from __future__ import annotations
