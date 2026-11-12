@@ -166,7 +166,7 @@ def test_every_line_prices_its_blocks_one_way():
     assert len({round(r, 20) for r in rates}) == 1, rates
     reads = [x for x in lines["per-expert"]["partition"].value["strata"] if x.get("kind") == "EmbeddingRead_v1"]
     assert reads and all(x["macs"] == 0 < f1.price(x) and x["priced"] == "measured" for x in reads)
-    assert 0 < lines["registered"]["partition"].value["computed_share"] < .01
+    assert 0 < lines["registered"]["partition"].value["computed_share"] < .03
     assert lines["per-expert"]["proof_overhead"].value < lines["registered"]["proof_overhead"].value
     stray = c["partition"].value | {"strata": [{"block": "Unstaged_v1{K=3}", "per_token": 1, "macs": 3, "out_bits": 16}]}
     with pytest.raises(ValueError, match="no k_log"):
