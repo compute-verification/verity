@@ -152,7 +152,7 @@ def test_gpu_tf32_mm_is_cublas_tf32_gemm(monkeypatch) -> None:
     monkeypatch.setattr(CB, "TRAIN_TF32", CB.TRAIN_TF32 + ((3, 16, 4),))
     a, b = _data(3, 16, seed=8), _data(16, 4, seed=9)
     A, B = (np.asarray(_bits(t), np.uint32).reshape(t.shape) for t in (a, b))
-    acc = np.zeros(12, np.uint32)
+    acc: np.ndarray = np.zeros(12, np.uint32)
     for k in range(0, 16, 8):
         acc = MT.tf32_dot8(acc, np.repeat(A[:, k:k + 8], 4, axis=0), np.tile(B[k:k + 8].T, (3, 1)))
     for bm in (b, b.t().contiguous().t()):

@@ -14,6 +14,7 @@ import bisect
 import collections
 import functools
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -241,7 +242,7 @@ EXACT = {
 }
 
 
-def _f32(v: float) -> int:
+def _f32(v: float | np.floating) -> int:
     return int(np.float32(v).view(np.uint32))
 
 
@@ -526,7 +527,7 @@ def _recip(s: float) -> torch.Tensor:
 #: words are the GPU's (its NaN words are the `_v2` Definitions'): a number is its f32 word, which a bf16 add doesn't round first,
 #: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU; addcdiv is
 #: fma(value, t1 / t2, self), as torch CPU's addcmul by a value of 1 computes it
-GPU = {
+GPU: dict[str, tuple[Callable[..., object], tuple[torch.Tensor, ...], Callable[..., torch.Tensor]]] = {
     "add_number_bf16": (lambda a: (a + 0.1,), (XB,), lambda a: (a.float() + _f32_of(0.1)).bfloat16()),
     "sub_tie_bf16": (lambda a: (a - TIE,), (X67B,), lambda a: (a.float() - _f32_of(TIE)).bfloat16()),
     "mul_number_bf16": (lambda a: (a * 3.4445,), (XB,), lambda a: (a.float() * _f32_of(3.4445)).bfloat16()),
@@ -883,7 +884,7 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     assert not isinstance(prog, Unsupported), prog
     got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
         "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
-    want = collections.Counter()
+    want: collections.Counter[str] = collections.Counter()
     for (K, N), linears in {(64, 64): 9, (64, 192): 4, (192, 64): 2}.items():
         for role in ("fwd", "dX", "dW"):
             want[word_of(CB.train_linear(role, 32, K, N)).id] += linears

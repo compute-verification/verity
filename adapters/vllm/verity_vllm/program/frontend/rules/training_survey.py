@@ -93,7 +93,7 @@ def _guarded(rule: Rule, hole: Hole) -> Rule:
                 del ctx.env[key]
             hole.emit(node, ctx, e)
 
-    g = object.__new__(type(f"Guarded{cls.__name__}", (cls,), {"applies": applies, "emit": emit}))
+    g: Rule = object.__new__(type(f"Guarded{cls.__name__}", (cls,), {"applies": applies, "emit": emit}))
     g.__dict__.update(rule.__dict__)
     return g
 

@@ -81,7 +81,7 @@ class SoftmaxBackward(_TrainRule):
     def targets(self):
         return {aten._softmax_backward_data.default}
 
-    def applies(self, node, ctx):
+    def applies(self: _TrainRule, node, ctx):
         for a in node.args[:2]:
             why = _operand_ok(ctx, a)
             if why or not isinstance(ctx.val(a), Coll):

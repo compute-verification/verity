@@ -361,10 +361,10 @@ class Addcdiv(_TrainRule):
         v = (_const(ctx, node, _bits(_value(node))), None)
         mul, div, add, fma = (_F32[k][gpu] for k in ("mul", "div", "add", "fma"))
         if gpu:
-            fns = (div, fma)
+            fns = [div, fma]
             y = _ew(ctx, node, fma, [v, _flat(_ew(ctx, node, div, [t1, t2], S), S), s], S)
         else:
-            fns = (mul, div, add)
+            fns = [mul, div, add]
             vt1 = _flat(_ew(ctx, node, mul, [v, t1], S), S)
             y = _ew(ctx, node, add, [s, _flat(_ew(ctx, node, div, [vt1, t2], S), S)], S)
         ctx.define(node, y)

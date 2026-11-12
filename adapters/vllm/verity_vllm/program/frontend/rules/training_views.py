@@ -183,7 +183,8 @@ def _refs(shape, boxes: list[_Box], where: str, budget: list[int] | None = None)
         return _strided_refs(b.space, b.idx, b.leaf0, [high - low for low, high in zip(b.lo, b.hi)], b.st, where)
     order = sorted(boxes, key=lambda b: b.lo[0])
     cuts = sorted({b.lo[0] for b in boxes} | {b.hi[0] for b in boxes})
-    parts, active, i = [], [], 0
+    parts, i = [], 0
+    active: list[_Box] = []
     for c0, c1 in zip(cuts, cuts[1:]):
         active = [b for b in active if b.hi[0] > c0]
         while i < len(order) and order[i].lo[0] <= c0:

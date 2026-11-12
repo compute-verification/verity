@@ -45,7 +45,7 @@ _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 _NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
 
 
-def _bits(x: float) -> int:
+def _bits(x: float | np.floating) -> int:
     return int(np.float32(x).view(np.uint32))
 
 
@@ -245,7 +245,7 @@ def _word_ew(ctx, node, fn, args, S: tuple[int, ...], dtype) -> Coll:
     if dims is None:
         return _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, dtype) for a in args], S, w)
     T = tuple(S[d] for d in dims)
-    ops = []
+    ops: list[tuple[Coll, int | None]] = []
     for a in args:
         v = ctx.val(a) if isinstance(a, torch.fx.Node) else None
         if isinstance(v, (StaticIndex, StaticFloat)) and v.tensor.numel() > 1:

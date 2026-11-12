@@ -263,7 +263,7 @@ class ElementwiseRefRule(OpRule):
         fn = ctx.kind(role, node, **statics)
         out = ctx.call(fn, *flat, node=node, rule=self)
         ctx.define(node, out.reshape(_tensor_type(shp, w)))
-        rec = {"op": role, **statics}
+        rec: dict[str, object] = {"op": role, **statics}
         if scalar_rec is not None:
             rec["scalar_operand"] = scalar_rec
         ctx.record(self, node, rec, emitted=fn.id)
@@ -802,7 +802,7 @@ class ArgmaxRefRule(OpRule):
             return "keepdim=True"
         if dim is None and len(sx or ()) != 1:
             return "argmax over a flattened >1-D tensor (not a bound rule)"
-        if dim is not None and dim not in (-1, len(sx) - 1):
+        if dim is not None and dim not in (-1, len(sx or ()) - 1):
             return f"argmax over dim {dim} of {sx} is not the last axis"
         return True
 
