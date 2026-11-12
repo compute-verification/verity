@@ -28,6 +28,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -196,7 +197,6 @@ def _split(loop: dict[str, int]) -> tuple[int, int]:
 
 
 def _count(loop: dict[str, int], pat: str) -> int:
-    from fnmatch import fnmatchcase
     return sum(c for o, c in loop.items() if fnmatchcase(o, pat))
 
 

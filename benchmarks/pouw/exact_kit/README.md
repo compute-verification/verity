@@ -19,33 +19,19 @@ the other's argument. Fold semantics belong to the receipt-fold module. MMA sema
     `exact-kit/verdict/v1`) to `--verdict PATH`, else to `$OUT/<script>.verdict.json`, and under `research run` the run's
     `result.json`.
   - The verdict holds no times or paths, so two runs of one script give the same bytes.
-- `exact_kit.f2`: works on int-bitmask rows, where bit j is column j.
-  - `rank`, `rref` (canonical: sorted by pivot, the lowest set bit), `reduce` and `in_span`.
-  - `nullspace(rows, n)`, `span`, `kernel(rows, n)` and `dot`.
-  - `from_matrix`, `to_matrix` and `transpose`.
-  - `alternating(n, pairs)`, `wedge(n, a, b)` and `xor_rows` for bilinear forms.
-- `exact_kit.fp`: the same over F_p on int lists: `rref`, `rank`, `nullspace`, `span`, `kernel`, `normal` (projective)
-  and `lines`.
-- `exact_kit.cube`: functions on {0,1}^n, indexed by sum x_i 2^i.
-  - `mobius(values, n, bits=None)` gives the coefficients exactly over Z, or in Z/2^bits. `evaluate` is its inverse.
-  - `quadratic_rows(coeff, n, plane)` gives the degree-2 part as an F_2 matrix.
-  - Also `points`, `bit`, `degree` and `popcount`.
-- `exact_kit.wrap`: `u` and `s` (k-bit unsigned and two's complement), `u32` and `s32`, `rotl`, `rotr` and `v2`, on ints
-  and numpy arrays.
+- `exact_kit.f2`: works on int-bitmask rows, where bit j is column j: `rank`, and `from_matrix` for a 0/1 matrix's rows.
+- `exact_kit.wrap`: `rotl` and `rotr` of k-bit words, on ints and numpy arrays.
 - `exact_kit.search`: exact kernel searches over a packed domain. Probes only prune; every result is checked on the whole
   domain.
-  - `kernel(f, xs, deltas, act=xor)`: every delta with f(act(x, delta)) = f(x) on all of xs.
   - `meet(left, right)`: sort-merge matching of signatures.
   - `meet_kernel(g, h, xs, A, B)`: every (a, b) with g(x, a) = h(x, b) on all of xs, found by meeting in the middle.
-  - `lift(ok, bits)`: 2-adic lifting, one bit at a time.
-- `exact_kit.sat.Cnf`: a CNF over named variables, solved by pysat (CaDiCaL).
-  - Gates: `and_`, `or_`, `xor`, `xor_all`, `parity` and `maj`.
-  - Words: `word`, `const`, `add_words`, `xor_words`, `mul_const`, `equal`, `differ` and `value`.
-  - Cardinality: `at_most`, `at_least` and `exactly`.
-  - Solving: `solve`, `models(over, limit)` and `count`.
+- `exact_kit.sat.Cnf`: a CNF over named variables, solved by pysat (CaDiCaL; `SOLVER` names it).
+  - Variables and clauses: `var`, `word`, `add` and `true`.
+  - Gates: `and_`, `or_`, `xor`, `xor_all` and `parity`.
+  - Solving: `solve`, `models(over, limit)` and `value`.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
-GF(p). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
+GF(2). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
 stops at `benchmarks/pouw`'s project, takes the kit for a workspace of its own, and builds it a separate `.venv` and
 `uv.lock`.
 

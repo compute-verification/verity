@@ -161,13 +161,16 @@ def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callabl
     quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
     holds its session's secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
+
+    def refused(why: object = None) -> Ch.CoinError:
+        return Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+
     try:
         got = json.loads(p.stdout)
     except ValueError:
-        got = None
+        raise refused() from None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
-        why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+        raise refused(got.get("refused") if isinstance(got, dict) else None)
     return got
 
 
