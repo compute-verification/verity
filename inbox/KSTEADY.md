@@ -1777,3 +1777,17 @@ that the pins agree.** What it adds, in order:
     287.2 s, 40.9 GiB. Its program check was dropped (`16555afd…` hashes the staged Boolean
     Definition's id, which `program-word.json` does not hold). Nothing for you to do; the kit keeps
     making a kept proof the way that one was made.
+
+## Thu 12 Nov 06:16Z: one more thing for HASH-98, wanted by Thu 16:00Z: the figure as `main` prints it
+
+**#8852, #9088 and #9089 are on `main`** (`d6075b75d289`), so the reader is there. The goal
+(`proofs/spot-proof-server-steady-state`) still shows Tuesday's $0.0367$ and says the figure from `main`
+is read Thursday morning. **Run benchmarks' command at `main`'s head against the labels as they are and
+return, for the goal:** the line it prints for SPOT (prover GPUs a serving GPU, the share priced from
+steady rows, the kinds counted), the head blocks' shares and their ms a block, the "every block with
+Flock" figure, what each rests on, and the run id. Say what changed against Tuesday's reading and
+why (the rows timed again at ten cores, the census, the plan). If the command exits 2 or refuses a
+row on `main`, say which and why; do not relabel anything to make it print.
+
+**Also read on the queue by me:** your #9152 is open and not marked. Tell me in your return what it
+waits for and which suites ran at its head; I read it before any mark.
