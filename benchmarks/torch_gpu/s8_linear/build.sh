@@ -4,7 +4,7 @@
 #                    sass_gate.py passes it: no ptxas warning, serialized wgmma, spill or local memory; every GEMM's MMAs its
 #                    IGMMA.64xBNx32 s8 atom alone; the epilogue's s32-to-f32 conversion, FMUL and F2FP.BF16, no FFMA, no .FTZ
 #   sass.json        the gate's record: registers, the atoms' SASS forms and instruction counts per kernel
-#   row_table/       the commitment kernels for sm_90 (`row_tables_device.device_lib("90")`, commit.py's), in the layout of
+#   row_table/       the commitment kernels for sm_90 (`row_tables_device.device_lib("90")`), in the layout of
 #                    ~/.cache/verity/row_table, which run.sh seeds from it; skipped with no Python at $PY
 #   toolchain.txt (nvcc --version and the command line), source.txt (the commit), MANIFEST.sha256
 # Usage, from the tree's root on a CPU node with CUDA 13's nvcc:

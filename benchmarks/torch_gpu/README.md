@@ -19,7 +19,7 @@ uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`attn_bf16`, `s8_linear`, `units` and `p2_stage`) source `ship.sh`, the one statement of a
+those builds (`attn_bf16`, `s8_linear` and `p2_stage`) source `ship.sh`, the one statement of a
 ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
 heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
@@ -46,8 +46,6 @@ doesn't follow its place either, and nothing holds a rebuild to the same bytes f
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
   The served path and `archive/examples/h200` load through it.
-- `units/`: the H200 demo's non-matmul proof blocks, each word for word its CPU twin. `session.sh` sweeps their
-  helpers over every operand word and holds each kernel's words to its twin's, on an H200 or an RTX PRO 6000.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
   runs every case under poison in each tiling of both paths, on an H200.
 - `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.

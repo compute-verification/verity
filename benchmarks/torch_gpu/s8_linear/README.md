@@ -26,8 +26,7 @@ Set aside: vLLM's CUTLASS int8 GEMM (its epilogue applies s_w first; on the tran
 order but needs M a multiple of 16 and writes y^T), a baseline in `bench.py`.
 
 The shapes are `fixture.MODELS`: `mqa16k52` (the H200's: width 16384, 52 layers, MQA, MLP 65536,
-context 32, ~20,480 sequences), `mqa16k` and `mha8k` (the RTX's), plus `d<width>` for any fused-QKV 4x layer. `realw.py`
-gates the kernel on the demo's seeded weights at the H200 shape (`benchmarks.torch_gpu.p2_stage.served_weights`).
+context 32, ~20,480 sequences), `mqa16k` and `mha8k` (the RTX's), plus `d<width>` for any fused-QKV 4x layer.
 
 | file | what |
 |---|---|
@@ -37,12 +36,9 @@ gates the kernel on the demo's seeded weights at the H200 shape (`benchmarks.tor
 | `wgmma.py` | the cubin from Python: tensor maps, configs, launches, the cubin's identity held to its gate and MANIFEST |
 | `fixture.py` | the models, the tables a layer commits, the gate's inputs and edges, and the CPU twin of the Definition's epilogue (numpy) |
 | `run.py` | the gate: every cell of every case against the twin, s32 sums against exact float64 ones, poison, second call, graph replay, the kernel's checks, the s32 edge at K = 131040 |
-| `realw.py` | the same gate on one layer's seeded weights and the head, every row |
 | `configs.py` | the configs per kernel, arch and (N, K), `tune.py`'s gated winners |
 | `tune.py` | the config sweep (kbench's interleaved timing, each config gated before it is timed) |
 | `bench.py`, `lt.py`, `roofline.py` | time against M for the exact kernels, cuBLASLt int8 autotuned and vLLM's CUTLASS, against the s8 peak (measured and data-sheet readings) and the measured DRAM bandwidth |
-| `reduce.py` | the price of an s8 tensor-core reduction of a linear's s32 output O (its four bytes, its byte planes, its low byte, against a public r-column matrix), alone and beside the linear on a second stream, against one read of O and the linear itself; the SHA-512 compressions per T MAC of hashing only the reduction |
-| `commit.py` | a layer's op outputs as hm96-sha512 row tables, timed against the layer's linears |
 | `fuse.py` | the reduction of a linear's s32 sums O by a public int8 R in the GEMM's epilogue (`wgmma.reduce_mm`, the `s8mr` kernels: z = O's bytes times R^T), gated against the separate pass word for word and timed against the GEMM alone, with each arm's clock64 SM clock |
 | `run.sh` | steps of these scripts on one leased GPU of an H200, a lease each, from build.sh's ship |
 
