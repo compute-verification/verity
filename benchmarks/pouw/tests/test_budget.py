@@ -3,18 +3,11 @@ and its allocation is the least ε within each budget."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import math
-import sys
-from pathlib import Path
 
+import budget as B
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_budget", Path(__file__).parents[1] / "budget.py")
-B = importlib.util.module_from_spec(spec)
-sys.modules["pouw_budget"] = B
-spec.loader.exec_module(B)
 
 FAM = {f.name: f for f in B.FAMILIES}
 #: 1 + γ at y = 0, the machine model's ratio on each family's measured kernel (budget_fill.json's first point)
