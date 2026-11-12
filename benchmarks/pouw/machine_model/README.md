@@ -26,7 +26,8 @@ MMA forms, the table route, the headline's designs, the attack families, the dev
 
 ## Interface
 
-What code outside this directory uses, and may. The rest is the model's own and changes with it.
+What code outside this directory uses, and may; each module below lists it in its `__all__`. The rest is the model's
+own and changes with it.
 
 - **The command** `machine-model` ("Commands").
 - **`verity_machine_model.model`**, the data as objects: `DATA` (this `data/`), `device(name)` and `devices()`,
@@ -44,6 +45,11 @@ What code outside this directory uses, and may. The rest is the model's own and 
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
   `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+
+What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
+file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
+table), so every other command runs without `verity`; and nothing else of the workspace. A design's perplexity arm and
+a sheet's Lean module are named in the data by path and never read by a computation.
 
 ## Commands
 
@@ -76,6 +82,10 @@ uv run machine-model cover [--holes|--check]   # the opcode table
 
 `--device sm_NN` reads `data/devices/sm_NN/` ("Devices"); `--data DIR` reads any data directory. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
+
+Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
+one exception: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
+`rows.csv` ("Adopt a probe's census").
 
 ## Layout
 
