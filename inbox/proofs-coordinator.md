@@ -77001,3 +77001,45 @@ Tags: [run] a command I ran now; [read] a file, log or record I read now; [deriv
   - **I have not pulled it into `cursor/proofs-stops-1340` yet.** It conflicts with `main`'s tip in seven files [run], all #8707's own with #9028 [relayed]. Pulling it now would stop my scratch branch from taking `main` until #8707's remerge lands. I pull it when #8707 is on `main`, or now if you say so.
 
 **Checkpoint** note written this turn. **I wait on** `r20261112-073033-0e1f`, about 08:40Z. When it ends I put its verdict in #9116's body.
+
+## A4ROWS, Thu 12 Nov 07:48Z: #9179 is now four files at `8f3b84d957ed`, not ready to mark: the quick tier failed on `PlanDraw.lean`, whose digest a fixture pins, so I took that file out and both runs are relaunched on the new head; the twelve headers are below as one line an owner; the merge with lean's landing branch is clean
+
+Read at `origin/main` = `d6075b75d289` [read 07:42Z]. Mailbox `inbox/a4rows.md`: your 07:17Z section, read and followed [read 07:46Z].
+
+### 1. One file is left out, and why
+
+- **`security/Proofs/Flock/Soundness/PlanDraw.lean` is out of #9179**, restored to `main`'s bytes in a third commit. Its header still names the dead path [read].
+- **The quick tier at `442620403c3e` failed**: run `r20261112-070321-44f4`, rc 1, ended 07:45Z, 5 suites, 3 passed, 2 failed [read]. Both failures are one stale pin:
+  - repository: `tests/test_pins.py::test_no_pin_is_stale`;
+  - verity-flock: `tests/test_randomness_spec.py::test_the_lean_vectors_were_generated_from_this_tree`, "changed since the vectors were generated … `['security/Proofs/Flock/Soundness/PlanDraw.lean']`" [read].
+- **Cause.** `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json` records the sha256 of `PlanDraw.lean` among the Lean vectors' inputs (`generate.sh`, `tools/verity/check/pins.py:130`), so any byte of the file, a comment included, makes it stale. `pins.py`'s `stale` gives 0 rows on `main`, 1 at `442620403c3e`, 0 at the new head [read: run here on the three trees].
+- **What the path fix takes**: `bash verity/protocols/flock/prover/tests/lean/generate.sh`, which builds `Proofs.Flock.Soundness.PlanDraw` and rewrites the fixture. That is a regenerated fixture, no longer "comments only", so it is not in this pull request [derived]. I can do it as a third pull request (the comment, plus the fixture regenerated through `research run --cwd clone`) on your word; otherwise it goes with the next change that regenerates those vectors.
+- My error: I did not look for pins on the five files before opening. I have now: no pin records any of the four that remain [read: `stale` at the new head, and the pins' recorded paths].
+
+### 2. The pull request as it is
+
+- **#9179**, head `8f3b84d957ed6a3d14a224e8f290736f1347eed5`: three commits on `d6075b75d289`, four files, +14 −13 [read: `gh pr view`]. Body replaced with `research queue edit`: first paragraph "Comments only; no statement, no lock record", a section "Left out: `Soundness/PlanDraw.lean`", both heads' runs [read]. Unmarked.
+- Every changed line is inside a module header, checked again at this head [read]. Ratchet gate passed at this head [read].
+- **Lean try of the four files**: run `r20261112-074345-35b1`, launched 07:43Z on vy-nebius-cpu-10's research pool; waiting for a slot at 07:45Z [read].
+- **Quick tier**: run `r20261112-074309-a2db`, launched 07:43Z on vy-nebius-cpu-11's research pool, `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick`, four suites now (verity-flock is no longer touched); waiting for a slot at 07:45Z [read]. The last one waited 27 minutes for its slot.
+- **The earlier try, `r20261112-070248-2916`** at `442620403c3e`, still running: `PlanDraw.lean`, `ExecDraw.lean`, `SessionLoop/SampledAuditTwo.lean` and `ZkAny/SampledChosenTwo.lean` each exit 0, the axiom probe naming no theorem beyond the three; `SessionLoop/SampledChosenTwo.lean` is building its imports (10408 of 10578 at 07:46Z) [read]. The four files are byte for byte the same at both heads [read: `git diff 442620403c3e 8f3b84d957ed --stat` is `PlanDraw.lean` alone].
+- Ready line in my next entry, when `35b1` and `a2db` have verdicts.
+
+### 3. `git merge-tree` with lean's landing branch
+
+- `origin/cursor/lean-remote-merge-landing-fc8d` at `1ab0a942376e` with my head `8f3b84d957ed`: exit 0, no conflicted path; merge base `d6075b75d289`. That branch holds each of the four files at `main`'s blob and the merged tree holds each at my head's [read 07:45Z]. The branch moved twice while I worked (`de28a691126b` at 07:22Z, also clean with `442620403c3e`).
+- The crossed branch `ae73c594d338`: the four files merge clean there too [read].
+
+### 4. The twelve headers that are not ours, one line an owner, to paste on MEM-279
+
+Checked at `origin/main` `d6075b75d289`; owners from `research msg owners --dry-run` [read]. I change none.
+
+```
+@compute-accounting: nine Lean headers cite the dead prefix `verity/ml/protocols/pouw/circuit/` (it is `verity/protocols/pouw/prover/circuit/` now): `security/Proofs/Pouw/LiveCredit.lean:47`, `security/Definitions/Accounting/TS/SharedNoise.lean:72`, `security/Definitions/Accounting/TS/J10R.lean:10`, `security/Proofs/Accounting/TS/J10RChecks.lean:10`, `security/Definitions/Pouw/H1Zy.lean:14`, `security/Definitions/Pouw/H1Zy/Lane.lean:12`, `security/Definitions/Pouw/H1Zy/Combine.lean:17`, `security/Definitions/Pouw/H1Zy/Dequant.lean:10`, `security/Definitions/Pouw/H1Zy/Tile.lean:9`.
+@memory-accounting: two Lean headers cite the dead prefix `verity/ml/protocols/pouw/circuit/` (it is `verity/protocols/pouw/prover/circuit/` now): `security/Definitions/Accounting/Gates/Model.lean:287`, `security/Definitions/Accounting/Gates/Registry.lean:15`.
+@lean: one Lean header cites the dead prefix `verity/ml/protocols/pouw/circuit/` (it is `verity/protocols/pouw/prover/circuit/` now): `security/Definitions/Accounting/Assumptions/Compose.lean:219`.
+```
+
+A caution for whoever pastes it, from section 1: a comment in a Lean file can still fail a suite where a fixture pins the file's digest. The six pins of `tools/verity/check/pins.py` record 89 paths: none of the twelve is among them, and of my five only `PlanDraw.lean` is [read: each pin's `recorded`, run here on `main`]. So I expect none of the twelve to trip a pin [derived]; a test's own fixture can still read a file in a way no pin lists, which only its suite tells.
+
+Checkpoint: waiting on `35b1` and `a2db`; next entry at their verdicts, or by 08:45Z with their state.
