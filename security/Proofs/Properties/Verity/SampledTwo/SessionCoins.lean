@@ -197,6 +197,178 @@ def CoinsReadSessions : Prop :=
     DevLocal A (locOf A tab) dev → InteriorLogged C Good →
       CoinsReadSome A (formReading A C (withCoins A C tab dev Ms) dev) (FormAccepts C) Good .sessions
 
+/-! ## The session-round locator reads only what the frames say of the coin trees -/
+
+theorem firstsOf_append : ∀ (acc xs ys : List ℕ), firstsOf acc (xs ++ ys) = firstsOf (firstsOf acc xs) ys
+  | _, [], _ => rfl
+  | acc, x :: xs, ys => by
+    simp only [List.cons_append, firstsOf]
+    exact firstsOf_append _ xs ys
+
+theorem treesOpened_append (a b : List Release) :
+    treesOpened (a ++ b) = firstsOf (treesOpened a) (b.filterMap fun r => openTree r.frame) := by
+  unfold treesOpened
+  rw [List.filterMap_append, firstsOf_append]
+
+/-- **What the session-round locator reads of the releases before a frame**: the trees they open in the order first
+opened, the specs of the trees they sample, and each stream's openings. -/
+def Same (pre pre' : List Release) : Prop :=
+  treesOpened pre = treesOpened pre' ∧ helloSpecs pre = helloSpecs pre' ∧
+    ∀ i s, openedOf pre i s = openedOf pre' i s
+
+theorem sessLoc_congr {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {pre pre' : List Release} (h : Same pre pre')
+    (fr : Frame) : sessLoc off K M tab pre fr = sessLoc off K M tab pre' fr := by
+  obtain ⟨h1, h2, h3⟩ := h
+  cases fr with
+  | fresh _ => rfl
+  | hello _ => rfl
+  | opening i s n => simp only [sessLoc, h1, h2, h3]
+
+theorem Same.snoc {pre pre' : List Release} (h : Same pre pre') {r r' : Release} (hf : r.frame = r'.frame) :
+    Same (pre ++ [r]) (pre' ++ [r']) := by
+  obtain ⟨h1, h2, h3⟩ := h
+  refine ⟨?_, ?_, fun i s => ?_⟩
+  · rw [treesOpened_append, treesOpened_append, h1]
+    simp only [List.filterMap_cons, List.filterMap_nil, hf]
+  · unfold Verity.Sampled.helloSpecs at h2 ⊢
+    rw [List.filterMap_append, List.filterMap_append, h2]
+    simp only [List.filterMap_cons, List.filterMap_nil, hf]
+  · unfold openedOf at h3 ⊢
+    rw [List.countP_append, List.countP_append, h3 i s]
+    simp only [List.countP_cons, List.countP_nil, hf]
+
+/-- Releases that neither sample nor open a coin tree change nothing the session-round locator reads. -/
+theorem same_append {pre q : List Release} (hq : ∀ r ∈ q, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp) :
+    Same pre (pre ++ q) := by
+  refine ⟨?_, ?_, fun i s => ?_⟩
+  · have hnil : (q.filterMap fun r => openTree r.frame) = [] :=
+      List.filterMap_eq_nil_iff.2 fun r hr => (hq r hr).1
+    rw [treesOpened_append, hnil]
+    rfl
+  · have hnil : helloSpecs q = [] := by
+      unfold Verity.Sampled.helloSpecs
+      apply List.filterMap_eq_nil_iff.2
+      intro r hr
+      obtain ⟨h1, h2⟩ := hq r hr
+      cases hf : r.frame with
+      | fresh _ => rfl
+      | hello sp => exact absurd hf (h2 sp)
+      | opening _ _ _ => rw [hf] at h1; cases h1
+    unfold Verity.Sampled.helloSpecs at hnil ⊢
+    rw [List.filterMap_append, hnil, List.append_nil]
+  · have hz : openedOf q i s = 0 := by
+      unfold openedOf
+      apply List.countP_eq_zero.2
+      intro r hr
+      obtain ⟨h1, -⟩ := hq r hr
+      cases hf : r.frame with
+      | fresh _ => simp [Frame.opensAt]
+      | hello _ => simp [Frame.opensAt]
+      | opening _ _ _ => rw [hf] at h1; cases h1
+    unfold openedOf at hz ⊢
+    rw [List.countP_append, hz, Nat.add_zero]
+
+theorem located_append (loc : List Release → Frame → Option ℕ) (n : ℕ) :
+    ∀ (pre a b : List Release), located loc n pre (a ++ b) = located loc n pre a ++ located loc n (pre ++ a) b
+  | pre, [], b => by simp [located]
+  | pre, r :: a, b => by
+    simp only [List.cons_append, located, List.append_assoc]
+    rw [located_append loc n (pre ++ [r]) a b]
+    simp [List.append_assoc]
+
+/-- The session-round locator puts no release that opens no coin tree on any round. -/
+theorem located_none {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n : ℕ} (q : List Release)
+    (hq : ∀ r ∈ q, openTree r.frame = none) : ∀ pre, located (sessLoc off K M tab) n pre q = [] := by
+  induction q with
+  | nil => intro _; rfl
+  | cons r q ih =>
+    intro pre
+    have h1 : ¬ sessLoc off K M tab pre r.frame = some n := by
+      have hr := hq r (List.mem_cons.2 (Or.inl rfl))
+      cases hf : r.frame with
+      | fresh _ => simp [sessLoc]
+      | hello _ => simp [sessLoc]
+      | opening _ _ _ => rw [hf] at hr; cases hr
+    show (if sessLoc off K M tab pre r.frame = some n then [(r.frame, r.coins)] else []) ++
+      located (sessLoc off K M tab) n (pre ++ [r]) q = []
+    rw [if_neg h1, List.nil_append]
+    exact ih (fun x hx => hq x (List.mem_cons_of_mem _ hx)) _
+
+/-- **The releases put on a round are the same in two logs of the same frames**, where each release put there shows
+its coins in the first and those are the second's. -/
+theorem located_same {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {n : ℕ} {l l' : List Release}
+    (hl : List.Forall₂ (fun r r' => r.frame = r'.frame ∧ (r.coins ≠ [] → r.coins = r'.coins)) l l') :
+    ∀ {pre pre' : List Release}, Same pre pre' →
+      (located (sessLoc off K M tab) n pre l).all (fun x => !x.2.isEmpty) = true →
+      located (sessLoc off K M tab) n pre' l' = located (sessLoc off K M tab) n pre l := by
+  induction hl with
+  | nil => intro _ _ _ _; rfl
+  | @cons r r' l l' hr _ ih =>
+    intro pre pre' hS hall
+    obtain ⟨hf, hc⟩ := hr
+    simp only [located, List.all_append, Bool.and_eq_true] at hall ⊢
+    rw [ih (hS.snoc hf) hall.2, ← sessLoc_congr hS r'.frame, ← hf]
+    by_cases hloc : sessLoc off K M tab pre r.frame = some n
+    · have hne : r.coins ≠ [] := by
+        intro he
+        simp [hloc, he] at hall
+      rw [if_pos hloc, if_pos hloc, hc hne]
+    · rw [if_neg hloc, if_neg hloc]
+
+/-- A release the check read whose coins it shows has the device's coins. -/
+theorem of_ofV2 {r r' : Release} (h : (Read.ofV2 r).Of r') :
+    r.frame = r'.frame ∧ (r.coins ≠ [] → r.coins = r'.coins) := by
+  obtain ⟨hf, -, hc⟩ := h
+  refine ⟨hf, fun hne => hc r.coins ?_⟩
+  cases hcs : r.coins with
+  | nil => exact absurd hcs hne
+  | cons a as => simp [Read.ofV2, hcs]
+
+/-- The session the run's round `n` is in holds it. -/
+theorem slotOf_some {h : SpotFlock.Held} {n t : ℕ} (hs : SpotFlock.slotOf h n = some t) :
+    SpotFlock.off h t < n ∧ n ≤ SpotFlock.off h t + SpotFlock.k₀ h t := by
+  unfold SpotFlock.slotOf at hs
+  simpa using List.find?_some hs
+
+theorem coinsRead_sessions : CoinsReadSessions := by
+  intro A C Ms tab dev Good hdev hlog o hacc hgood i _ hg c hc
+  have h0 : i ≠ 0 := by
+    intro e
+    (simp only [groupOf, if_pos e] at hg) <;> cases hg
+  have h1 : ¬ i ≤ A.h.stage := by
+    intro e
+    (simp only [groupOf, if_neg h0, if_pos e] at hg) <;> cases hg
+  have h2 : i ≠ A.h.stage + 1 := by
+    intro e
+    (simp only [groupOf, if_neg h0, if_neg h1, if_pos e] at hg) <;> cases hg
+  have hc' : (formReading A C (withCoins A C tab dev Ms) dev).coin o i = some c := hc
+  simp only [formReading, if_neg h0, dif_neg (show ¬ (i - 1 < A.h.stage) by omega), if_neg h2] at hc'
+  cases hs : SpotFlock.slotOf A.h (i + 1) with
+  | none => simp [hs] at hc'
+  | some t =>
+    simp only [hs] at hc'
+    obtain ⟨hlt, -⟩ := slotOf_some hs
+    have hn : SpotFlock.off A.h t + (i - SpotFlock.off A.h t) = i := by omega
+    simp only [withCoins, hn] at hc'
+    cases hl : interiorRead C o with
+    | none => simp [hl] at hc'
+    | some l =>
+      simp only [hl, Option.bind] at hc'
+      by_cases hall : (located (locOf A tab) i [] l).all (fun x => !x.2.isEmpty) = true
+      · rw [if_pos hall] at hc'
+        obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hacc hgood l hl
+        have hR' : List.Forall₂ (fun r r' => r.frame = r'.frame ∧ (r.coins ≠ [] → r.coins = r'.coins)) l l' :=
+          (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => of_ofV2 h
+        show dev o.log i = some c
+        rw [hdev i hg o.log l ?_, hc']
+        unfold locOf at hall ⊢
+        rw [hlog', located_append, located_none q (fun r hr => (hq r hr).1) []]
+        simp only [List.nil_append]
+        have hS : Same [] q := by simpa using same_append (pre := []) hq
+        exact located_same hR' hS hall
+      · rw [if_neg hall] at hc'
+        cases hc'
+
 /-- **The second stage's sessions' records the check read**, on the case of the play `o`: every statement's sessions'
 records in order, on the case's blobs (`Verity.Sampled.recordOn`), as `Spot.OneStageZk.membersTreesHeld` reads them. -/
 def sessionRecords (C : CaseOf) (o : Exchange) : Option (List Json) := do
