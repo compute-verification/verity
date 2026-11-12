@@ -50,6 +50,7 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
 bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, art:df775b659979)" }
+read = { value = 4.26e12, unit = "B/s", mark = "measurement", source = "streaming 16-B loads of 24.08 GB of device memory in 5.65 ms on one card, 4261.2 GB/s rounded down, 86.6% of memory.bandwidth: a stand-in calibrated to a decode step's time, not a peak probe (art:df775b659979)" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]

@@ -88,8 +88,7 @@ import cards as spot_cards
 from verity.protocols.reporting import PERIODS
 from verity.protocols.spot import plancheck
 from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
-                                                           two_stage_design)
-from verity.circuits.partition_v2 import unit_class
+                                                           two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
@@ -121,6 +120,16 @@ OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
 #: form's N: its program is a population program, each instance reading only its own share of each Input node
 #: (`partition.fanout`)
 FANOUT = 1
+
+
+def returned_bits(served: float) -> int:
+    """The bits a replay block returns, which a served window's two-stage registration publishes
+    (`WindowCommitmentRecord.returned`) and under which no served cap prices it (`plancheck.two`'s `returned`).
+    Modelled, and read from no registration: the model's replay block is one request whose only outputs are its tokens'
+    select words, which is what the `served_bits` input `served` counts, so it returns that input."""
+    return ceil(served)
+
+
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
@@ -424,7 +433,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
     cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
                        fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
-                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
+                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8), table=x.get("table_blocks", inf))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
     return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),
@@ -443,10 +452,10 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
-#: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
-REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
-                     "sampled of a registration's n, and the first stage draws at least ⌈q·n⌉, never fewer than one. "
-                     "No bound here is what serving costs at a smaller registration.")
+#: the verification phase a two-stage bound holds at, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A two-stage bound holds at its verification phase's size: the first stage samples a whole "
+                     "number of the phase's requests, never fewer than one, and the plan is priced and bounded at "
+                     "that count. No bound here is what serving costs at a smaller verification phase.")
 
 
 def outdir(out: Path, serving: str) -> Path:
@@ -457,7 +466,7 @@ def outdir(out: Path, serving: str) -> Path:
 
 def reading_note(serving: dict) -> str:
     """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
-    (and that its bounds then are), what it stands in place of, and the registration its bounds hold at
+    (and that its bounds then are), what it stands in place of, and the verification phase its bounds hold at
     (`REGISTRATION_NOTE`)."""
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]
@@ -600,15 +609,9 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def _size_class(bits: float) -> int:
-    if (w := unit_class(ceil(bits))) is None:
-        raise ValueError(f"a proof block of {bits} bits fits no public size class")
-    return w
-
-
-def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
-    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+def split_cells(cells: Sequence[Cell], merged: int | str | None) -> list[Cell]:
+    """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
+    return two_stage_strata(cells, merged)
 
 
 def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: float, served: float | None = None,
@@ -620,7 +623,7 @@ def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: floa
     certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
     them; a point Lean refuses is an error."""
     d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
-                      row["theta"], fanout=FANOUT)
+                      row["theta"], fanout=FANOUT, returned=None if served is None else returned_bits(served))
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
@@ -675,10 +678,17 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
-    class's bits and the merged one by the widest class it holds (`all` when it is the only one)."""
+    class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
+    a stratum (`merged` None), by `w` and the width's place among the widths; a by-template design's (`merged`
+    "template"), by each cell's position."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
+        if row.get("merged") == "template":
+            out["k"] = {str(t): v for t, v in k.items()}
+        elif "merged" in row and row["merged"] is None:
+            out["k"] = {f"w{t}": v for t, v in k.items()}
+        else:
+            out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
     return out
 
 

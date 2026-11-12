@@ -1,13 +1,12 @@
 """One training step of ordinary PyTorch code as an ATen graph with shapes and dtypes and no values.
 
     capture_step(model, optimizer, loss_fn, example_batch, *, updated=None, token_dims=None) -> StepGraph
-    capture_fn(step_fn, model, example_batch, *, optimizers=None, updated=None, token_dims=None) -> StepGraph
     capture_steps(step_fns, model, example_batch, *, measured, optimizers=None, token_dims=None) -> StepGraph
 
 `capture_step` runs the standard step: ``zero_grad``, ``loss_fn(model, batch).backward()``, then each optimizer's
-``step()``. `capture_fn` runs any step written as ``step_fn(model, batch, optimizers)`` (a forward-only MeZO step,
-gradient accumulation, two optimizers), which may mark its phases with `phase`. `capture_steps` runs several such
-steps in order, consecutive steps of one run, and measures one of them. All trace with `make_fx` under a
+``step()``. `capture_steps` runs several steps in order, consecutive steps of one run, each any step written as
+``step_fn(model, batch, optimizers)`` (a forward-only MeZO step, gradient accumulation, two optimizers), and measures
+one of them. Both trace with `make_fx` under a
 `FakeTensorMode`, so every tensor is a fake carrying only shape, dtype and device, and the graph is post-dispatch ATen:
 autograd's backward and the optimizer's foreach kernels are nodes like the forward's.
 
@@ -25,8 +24,8 @@ step (``meta["te_step"]``, from a ``te_capture::step::I`` marker around step I),
 batch is a token input, named ``tokens_…``.
 
 Phases come from `record_function` markers in the graph: torch's own ``Optimizer.step#…`` and ``Optimizer.zero_grad#…``,
-``te_capture::backward`` around every `torch.autograd.backward` and `torch.autograd.grad` the step calls, and
-``te_capture::phase::NAME`` from `phase`. A node outside every marker is in the forward.
+and ``te_capture::backward`` around every `torch.autograd.backward` and `torch.autograd.grad` the step calls. A node
+outside every marker is in the forward.
 
 Token axes are found by capture, not by propagating shapes through views: the step is captured again with each token
 axis of the example batch doubled (halved if doubling fails), and a node's dimension is indexed by that axis when its
@@ -48,6 +47,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import inspect
 import linecache
 import os
 import re
@@ -61,11 +61,9 @@ from torch._subclasses.fake_tensor import (DataDependentOutputException, Dynamic
                                            FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
-__all__ = ["BACKWARD", "Capture", "CaptureRefused", "PHASE", "STEP", "capture_fn", "capture_step", "capture_steps",
-           "phase"]
+__all__ = ["BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
 
 BACKWARD = "te_capture::backward"
-PHASE = "te_capture::phase::"
 STEP = "te_capture::step::"
 _TORCH_DIR = os.path.dirname(torch.__file__)
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,11 +82,6 @@ class CaptureRefused(Exception):
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
         super().__init__(f"{reason}: {message}" + (f" [at {where}]" if where else ""))
-
-
-def phase(name: str):
-    """Mark a region of a custom step as phase ``name`` (``"update"``, ``"optimizer"``, ...) in the captured graph."""
-    return torch.autograd.profiler.record_function(PHASE + name)
 
 
 @dataclass
@@ -155,26 +148,51 @@ def _resized(leaves: list, dims: list[tuple[int, ...]], axis: int, size: int) ->
 
 def _fake_copy(model: torch.nn.Module, optimizers: Sequence[torch.optim.Optimizer], mode: FakeTensorMode, device):
     """The model with every parameter and buffer a fake of its shape, dtype and requires_grad (tied ones stay tied), and a
-    fresh optimizer of each one's class over the copied parameters with the same param-group settings."""
+    fresh optimizer of each one's class over the copied parameters with the same param-group settings and the defaults
+    its constructor takes (a loaded optimizer's `defaults` also hold torch's ``differentiable``). A tensor an
+    optimizer holds that the model doesn't own (a latent kept beside the model) is copied as a fake too, before the
+    model is, so an attribute of the model that names it names the same fake as the optimizer does; it is returned by
+    the name of its place, ``optimizers.I.params.J``. Also returned: the model's and the optimizers' own tensors by
+    id, which no traced step may read (`_refuse_originals`)."""
     memo: dict[int, Any] = {}
+    originals: dict[int, str] = {}
+    held: dict[int, str] = {}
     with mode:
-        for p in model.parameters():
+        for n, p in model.named_parameters():
+            originals[id(p)] = n
             if id(p) not in memo:
                 memo[id(p)] = torch.nn.Parameter(torch.empty(p.shape, dtype=p.dtype, device=device or _dev(p)),
                                                  requires_grad=p.requires_grad)
-        for b in model.buffers():
+        for n, b in model.named_buffers():
+            originals[id(b)] = n
             if id(b) not in memo:
                 memo[id(b)] = torch.empty(b.shape, dtype=b.dtype, device=device or _dev(b))
+        for i, opt in enumerate(optimizers):
+            for j, p in enumerate(p for g in opt.param_groups for p in g["params"]):
+                if id(p) not in memo:
+                    originals[id(p)] = f"optimizers.{i}.params.{j}"
+                    fake = torch.empty(p.shape, dtype=p.dtype, device=device or _dev(p))
+                    memo[id(p)] = (torch.nn.Parameter(fake, requires_grad=p.requires_grad)
+                                   if isinstance(p, torch.nn.Parameter) else fake.requires_grad_(p.requires_grad))
+                    held[id(memo[id(p)])] = originals[id(p)]
     fake_model = copy.deepcopy(model, memo)
     fake_opts = []
     for opt in optimizers:
         groups = [{**{k: v for k, v in g.items() if k != "params"}, "params": [memo[id(p)] for p in g["params"]]}
                   for g in opt.param_groups]
         try:
-            fake_opts.append(type(opt)(groups, **dict(opt.defaults)))
+            fake_opts.append(type(opt)(groups, **_taken(type(opt), opt.defaults)))
         except TypeError:
             fake_opts.append(type(opt)(groups))
-    return fake_model, fake_opts
+    return fake_model, fake_opts, held, originals
+
+
+def _taken(cls: type, defaults: dict) -> dict:
+    params = inspect.signature(cls).parameters.values()
+    if any(p.kind is p.VAR_KEYWORD for p in params):
+        return dict(defaults)
+    names = {p.name for p in params}
+    return {k: v for k, v in defaults.items() if k in names}
 
 
 def _dev(t: torch.Tensor):
@@ -256,6 +274,19 @@ def _refuse_graph(gm: torch.fx.GraphModule) -> None:
                                                           f"this package can count")
 
 
+def _refuse_originals(gm: torch.fx.GraphModule, originals: dict[int, str]) -> None:
+    """A step is traced on a copy of the model and of the optimizers it is handed. One that reads the run's own
+    tensor instead reached it around them (a module's global, a closure): what it wrote there the copy never saw,
+    so the graph is not the step's."""
+    for n in gm.graph.nodes:
+        if n.op == "get_attr" and (name := originals.get(id(getattr(gm, n.target, None)))) is not None:
+            raise CaptureRefused("trace", None,
+                                 f"the step reads the run's own {name} and not the copy it is traced on: it reached "
+                                 f"the tensor around its arguments (a global, a closure). Reach it from the model or "
+                                 f"the optimizers `step` is handed: hold it on the model as a parameter (as routes/"
+                                 f"lora.py holds its adapters), or read it from its optimizer's param_groups")
+
+
 @contextlib.contextmanager
 def _marked_backward():
     """Every `torch.autograd.backward` / `torch.autograd.grad` the step calls runs inside a ``te_capture::backward``
@@ -307,7 +338,7 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
     program recorded from its start that measures that step (module docstring): its nodes carry their step, and each
     step's integer batch tensors are its token inputs."""
     mode = FakeTensorMode(allow_non_fake_inputs=True)
-    fake_model, fake_opts = _fake_copy(model, optimizers, mode, device)
+    fake_model, fake_opts, held, originals = _fake_copy(model, optimizers, mode, device)
     with mode:
         fakes = [[torch.empty(x.shape, dtype=x.dtype, device=device or _dev(x)) if isinstance(x, torch.Tensor) else x
                   for x in leaves] for _ in steps]
@@ -327,6 +358,7 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
     except Exception as e:
         raise _refusal(e) from e
     _refuse_graph(gm)
+    _refuse_originals(gm, originals)
     if measured is not None:
         _mark_steps(gm, len(tensor_at))
     names: dict[int, tuple[str, str, list[str]]] = {}
@@ -334,6 +366,8 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
         names.setdefault(id(p), ("parameter", n, []))[2].append(n)
     for n, b in fake_model.named_buffers(remove_duplicate=False):
         names.setdefault(id(b), ("buffer", n, []))[2].append(n)
+    for i, n in held.items():
+        names[i] = ("parameter", n, [n])
     attrs = {}
     for node in gm.graph.nodes:
         if node.op == "get_attr" and node.target not in attrs:
@@ -426,20 +460,12 @@ def capture_step(model: torch.nn.Module, optimizer, loss_fn: Callable[[torch.nn.
                     token_axes=token_axes, device=device, name=name)
 
 
-def capture_fn(step_fn: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Module, example_batch, *,
-               optimizers=None, updated: Iterable[str] | None = None, token_dims=None,
-               token_axes: Sequence[str] = ("batch", "seq"), device=None, name: str | None = None):
-    """Capture ``step_fn(model, batch, optimizers)``, one whole training step written by the caller, as a `StepGraph`;
-    ``optimizers`` are fresh copies of `optimizers` over the captured model's parameters. `updated` as in `capture_step`."""
-    return _capture([step_fn], model, _optimizers(optimizers), example_batch, updated=updated, token_dims=token_dims,
-                    token_axes=token_axes, device=device, name=name)
-
-
 def capture_steps(step_fns: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module, example_batch,
                   *, measured: int, optimizers=None, token_dims=None, token_axes: Sequence[str] = ("batch", "seq"),
                   device=None, name: str | None = None, mid_run: bool = False):
-    """Capture `step_fns` in order, consecutive steps of one run each written as `capture_fn`'s ``step_fn``, on one
-    model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
+    """Capture `step_fns` in order, consecutive steps of one run each written as ``step_fn(model, batch, optimizers)``
+    (one whole training step; ``optimizers`` are fresh copies of `optimizers` over the captured model's parameters), on
+    one model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
     of step `measured` of them, with its step circuit (module docstring). What the measured step reads of the run is
     what the steps before it wrote, so it takes one before it to read an updated weight; its cut's sinks are the values
     the step after it reads, so the last of `step_fns` has no cut (0). `mid_run` says the first of `step_fns` isn't the

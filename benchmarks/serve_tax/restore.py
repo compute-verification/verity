@@ -5,8 +5,9 @@ replay block's steps to its far edge, and say how close the replay came.
 
 The served arm took the boundary state at each edge (`servetax_plugin.edges_of`, module `boundary`): the KV pool's bytes
 (``--kv-dir``/edge-K.kv) and root, and the scheduler's, block pool's and model runner's state (edges/edge-K.state.pkl).
-This builds the served engine again in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the step trace's header,
-with the served server's stats setting, loads the KV bytes into the same block ids, puts the state back
+This builds the served engine again in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the step trace's header
+(the scheduler's settings, and the KV cache's format and the speculative decoding where it holds them:
+`replay.HEADER_ARGS`), with the served server's stats setting, loads the KV bytes into the same block ids, puts the state back
 (`boundary.restore`), and checks the restore: the KV root again, and every leaf `boundary.dump_core` renders against the
 served engine core's at the edge. It then replays: each request that arrived after the edge is added under its served
 engine id, prompt and sampling right before the scheduled step it arrived before, and the engine core drains and takes the
@@ -35,6 +36,7 @@ sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
 from verity_config.settings import SHARED  # noqa: E402 (from the tree's verity/configuration/config, put on sys.path above)
 import boundary as B  # noqa: E402 (beside this file)
+import replay  # noqa: E402
 import serve_tax as S  # noqa: E402
 
 #: the step trace's step fields compared (not ``t``, the served clock)
@@ -90,7 +92,8 @@ def engine(checkpoint: Path, header: dict, eager: bool, log_stats: bool) -> Any:
                       max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
                       enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
                       block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"],
-                      disable_log_stats=not log_stats)
+                      disable_log_stats=not log_stats,
+                      **{arg: cfg[key] for key, arg in replay.HEADER_ARGS.items() if key in cfg})
     return LLMEngine.from_engine_args(args)
 
 
