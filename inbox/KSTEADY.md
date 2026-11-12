@@ -2027,3 +2027,48 @@ unused files in `benchmarks/hash` and `benchmarks/torch_gpu` (HASH-104; `archive
 deleted files out of your list, and start HASH-69 on `main` after that deletion and after #9189 and
 #9152 are on it. ci said at 09:40Z that #9189 no longer merges onto `main` and benchmarks certifies
 its move again; #9152's mapping across the move waits for that, as before.
+
+## Thu 12 Nov 09:51Z: proofs' recipe for `program-word.json` came EARLY (HASH-115, 09:49Z and 09:50Z). Work for now: the recipe in the staging step, and the Lean verifier on one Boolean statement BEFORE the cards
+
+Read both of proofs' comments whole on HASH-115 first. What they say, as I read them:
+
+- **The recipe** is eight lines from `stage.json`'s `word`, run in the tree and environment `stage.py`
+  ran in, after it, outside every timed step, under a second a statement:
+  `descriptor_chunks(Program(template(word).fn))` written to `program-word.json` (the exact lines are
+  in the comment and as `program_word.py` in proofs' art). It is the Program of the WORD Definition
+  alone; its SHA-512 is the Program's digest and its `program_fn` is `stage.json`'s `word`, the two
+  names benchmarks' runner compares. It can be written later from a kept `stage.json` as well.
+- **proofs wrote all of them already:** `art:59df187611c5004db9f2f022475931d1f0b80503b73c9713c588959d530920f1`
+  holds `boolean/rowN/program-word.json` for the nine staged last night, `row2/program-word.json`
+  (the head block at `FIRST=true`: 135,120 bytes, SHA-512 `b33d8ac23b072ad0…3b132a`), `facts.json`
+  (each file's SHA-512) and the script. **`art:84d25bec…` is `FIRST=false`'s file only: never hand it
+  to the `FIRST=true` statement.**
+- **Not shown, by proofs' own line: the Lean verifier has not run on any of the eight kinds with
+  its file.** And under the provisional unit cover the verifier holds the handed Program to nothing
+  but that it parses and names no registered input; the verdict prints `program_sha512` only when
+  the digest is the one the circuit's META names, else `program_handed_sha512` with a
+  `program_note`. The label's words are benchmarks' and proofs', not ours.
+
+**Do now, in this order:**
+1. **The recipe in the staging step**, as your plan said: each staged directory gains
+   `program-word.json`, written outside every timed step; `KEEP_STAGED=verifier` copies it and
+   `thursday-keep.sh` adds it to the tree. For the head block's `FIRST=true` run, the file is written
+   by the same recipe from the copy's `stage.json`.
+2. **Hold yours to proofs':** for the eight (and row 2's), the file your step writes has the
+   SHA-512 in proofs' `facts.json`. One named run on a CPU node; a file that differs is a finding,
+   said to me before anything else.
+3. **The Lean verifier on one accepted session of a Boolean statement, with its file, before the
+   cards.** It is the one thing that could make Thursday's rows unusable and that a CPU can find
+   today: a kind the Lean verifier refuses cannot be labelled, however well it is timed. Use a
+   session your CPU runs kept, or prove one again (they take 34 to 92 s); the smallest first (row
+   12), then row 7 (the largest share) if the first is accepted and the hours allow. Run it as
+   benchmarks' runner runs it (the same command and frame, named), and bring back the verdict's
+   own lines (accepted or not, `program_sha512` or `program_handed_sha512` with its note, the
+   units), its seconds and its peak memory. **It is a rehearsal: no label, nothing put in the
+   store as a proof of record.** If only benchmarks' runner may run it, or it needs something you
+   do not have, say what, and I ring benchmarks.
+4. If the Lean verifier refuses, stop there and tell me with its line: proofs and benchmarks hear
+   it from me before the go.
+
+Return when 3 has its verdict, or at 14:00Z with where it is. The go is still 17:20Z, with the list
+in the section above; its item 1 is then done.
