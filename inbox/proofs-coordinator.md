@@ -104640,3 +104640,51 @@ That is not a few lines while the kept window has no session.
 - The gate's session key parameters.
 
 **NEEDS**: the STOP RULE change above, from the v2 verifier's owner, or a ruling. **To post**: none.
+
+## ADDRROW, Thu 12 Nov 22:16Z: I will prove FRAME's `RowFact` as stated on the base, under a shape condition on the address map and the roots half of `OneTreeFact`; three of its pieces check in a scratch file, none is compiled, and the try is `r20261112-220257-93db` (my 21:52Z entry named a run I have since cancelled)
+
+**In plain words.** FRAME's five facts are on the base now, and the row fact there asks more than mine did. It also covers a port that reads its rows off the session itself, rather than off a registered value, and it states the roots as the wired program's. I will prove FRAME's statement as written. It needs two inputs from outside my file. One is the other half of the five, `OneTreeFact`, which says the roots are the ones round 2 reads. The other is a condition on the address map, saying that each slot sits where round 2's rows put it. Three pieces of the proof check against copies of FRAME's code in a scratch file on my machine: round 2's row is the read's, and the read's kind is the auditor's. That is not a compile: the compile is queued. One new question: where the session's public file has shared-row tables, a port that reads its own rows reads them where the prover's table says. I have not found a check that pins that to the unit.
+
+**Correction to my 21:52Z entry** [run].
+- I cancelled `r20261112-214933-a527` before it ran: it called `verity lean try` without `--on`, which elaborates against a tree's built imports, and the run's tree has none.
+- The try is now `r20261112-220257-93db` on `vy-nebius-cpu-12`, waiting for a slot since 22:03Z. It runs `lean_changed.py --try`, as `verity lean try --on` does, on `Row.lean` and then `RowRead.lean`. It was launched at `42fad6156c`.
+
+**Reconciled with FRAME's `AddressFacts.lean`** [read] (base `4f52809539`, merged into my branch at `dab372e1be`).
+- FRAME's `SpotFlock.RowFact h ω keep addr` (`AddressFacts.lean:136`) asks `RowHolds` (`:69-84`) at every needed gate. That is `Counted`, plus two branches:
+  - Where `regNamed` is some `reg`: the slot's leaf count is `reg.leaves`, and its leaf under `rootsWired ω keep g` is the header's position.
+  - Where it is none: one table, and under `iroots` the slot's leaf count and leaf are the published tree's, at `rowAt … (unitOf draw n)`.
+- Mine covered only the first branch, without the leaf count, and under `readRoots`. I drop my `RowFact` and prove FRAME's.
+- The target is `rowFact_of : (∀ v, h.reg.always v = false) → RefRows h R → (second half of OneTreeFact h ω keep addr) → ShapeFact addr → RowFact h ω keep addr`.
+  - `ShapeFact addr` says each needed gate's slot has the shape `rowShape` gives: by the read's kind in the registered branch, and the unit's own rows in the other.
+  - `RootsHold`'s registered half is what turns `rootsWired` into `readRoots`, so `addressesWired_of_facts` can pass `ht` to it.
+- [guess] Whoever defines the address map has to meet `ShapeFact`. I don't know who that is.
+
+**What is written and checked so far.** The files, at `feadf9542c` and merged up to `dab372e1be`, are all under `security/Proofs/Flock/SpotFlock/AddressFacts/`, 702 lines. Each is a root of `security/Proofs/lakefile.toml` on a line of its own.
+- `Row.lean`: 306 lines, the statements.
+- `RowRead.lean`: 212 lines. `placedOk_read`, `rowsOk_read`, `readFact` (round 2's row is the read's) and `positionFact` (the header's position is `reg.readAt (σ n)`, from `rows_open` and `Port.readAt_eq`).
+- `RowKind.lean`: 184 lines. `mem_namesAt`, `mem_byPort`, `byPort_isSome_iff`, `registeredEntry_isSome_iff`, `draw_of_stmtOk` and `kindFact` (under `recordsOk`, the read's kind is `kindHeld`, read off the auditor's names).
+- [local, not a run] With the v4.34.0 toolchain on my VM I elaborated scratch files that copy FRAME's definitions verbatim (`placedOk`, `rowsOk`, `readOk` and its helpers, `Record.byPort`, `namesAt`, `registeredEntry`), importing only Lean core. Every theorem above except `positionFact`, `draw_of_stmtOk` and `kindFact` passes there, and each depends only on `propext`, `Classical.choice` and `Quot.sound`. That is a check of tactics against copies, not a compile of the files. Mathlib's simp set may behave differently in the real build.
+
+**Theorems left**, with my size guesses:
+- `InstanceFact`, about 250 lines: population labels through `loadPublic`'s normalization and `drawn`, then `rankAt` and `checked`.
+- `ParsedFact`, about 200 lines: the same `jsonOf "registered reads"` bytes Flock reads (`DeployInputs.lean:231`), then `portsOf`'s fields against round 2's.
+- `LeafFact` for both branches, about 250 lines: `leafAt` under `irootsOf` with place `idxOf ρ`, and `qOf` as the sample size.
+- `FallbackFact`, about 100 lines.
+- `rowFact_of`, the assembly, about 100 lines.
+
+[guess] All compiled by Fri 20:00Z, if each compile waits about an hour for a slot.
+
+**Question** [read, then guess].
+- A port that reads its rows off the session (`regNamed = none`) is at `rowAt c pop q (unitOf draw n)` (`Rooted.lean:47`). That is unit `u` at leaf `u` when the public file has no tables (`LeafMap.ident`). With tables it is `t.refs[u·np + q]` (`LeafMap.ofTables`, `LeafMap.lean:89-92`), the prover's own.
+- I have not found a check that holds a non-registered port's refs to the unit. If there is none, a slot fixed before the run reads that branch only at a file without tables.
+- My next entry says which case today's sessions are in.
+
+**NEEDS.**
+- FRAME: the `cellRowsOk` check from my 21:52Z entry (unchanged).
+- The assembly (whoever owns `addressesWired_of_facts`'s caller): my `rowFact_of` takes `OneTreeFact`'s second conjunct as a hypothesis.
+
+**To post.** Nothing.
+
+Clock: `date -u` read 22:14Z before I wrote this. Mailbox read at 22:12Z; no file for me.
+
+**Not established.** That any file compiles. That `ShapeFact` is satisfiable by one map at every gate a unit needs; a gate needed by units in two cells is the case to look at. The tables question above. The sizes and the hour.
