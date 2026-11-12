@@ -8,13 +8,24 @@ agent's transcript. Refused, anywhere in the command (pipelines,
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
 `tmux show-environment` (`showenv`) with no name or a secret's (tmux's global environment through `cut -d= -f1` prints a
 multi-line key's lines too).
-`compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
-(`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
-token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
-lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a
-`preToolUse` event's for the Shell tool (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key
-names go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
+`compgen -e` lists names only and passes.
+
+Also refused, run on this machine: every listing that prints a process's full command line, whatever it is piped into, since a
+daemon's or a git child's token sits in its argv and a filter for the daemon's name keeps exactly the lines that hold it
+(`argv_listing`): `ps` with a format naming `args`, `cmd`, `command` or `%a` (`-o`, `-O`, `o`, `--format`, each one read, as in
+`ps -o pid= -o args=`), with `-f` or `-F` in any bundle (`-efww`), or in BSD form without `c` or a format (`ps aux`, `ps ax`, `ps
+x`, a bare pid), and `ps e`, which adds each process's environment; `PS_FORMAT` naming one of those or `PS_PERSONALITY` set at
+all; `pgrep -a` or `--list-full`; `top -c`, `htop` and `btop`; `pstree -a`; and reading a `/proc/PID/cmdline` (`cat`, `tr '\\0'
+' ' < FILE`, `xargs -0 < FILE`, a `$P/cmdline`, a `cd /proc/PID` then `cmdline`, psutil's `cmdline()`). What says whether a
+process runs and since when, with no arguments, passes: `ps -eo pid,etimes,comm`, `pgrep -l PATTERN`, and `procs.py` beside this
+hook, which prints each command line with every token-like run cut out. A listing that another machine runs (`ssh HOST CMD`,
+`research pods ssh POD -- CMD`) prints that machine's argv and is judged as it always was (`every_argv`): refused when it prints
+the full command lines of every process or of a selection beyond one pid, unless piped straight into a `grep`/`rg` that keeps
+only matching lines (an inverted one, `grep -v`, prints the rest); `/proc/*/cmdline` is refused there too.
+
+Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a `preToolUse` event's for the Shell tool
+(`tool_input.command`), and prints its verdict as JSON on stdout; each event's key names go to $AGENT_GUARD_EVENT_LOG
+(`settings.record_event`).
 
 A secret file is refused the same way: a command that writes what it reads to its output (READERS: `cat`, `head`, `tail`,
 `sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, `zcat` and its kin, and a `grep`/`rg` that prints lines, one
@@ -98,13 +109,31 @@ TMUX_ARG_OPTIONS = set("cfLST")
 ENVIRON = re.compile(r"/proc/[^\s'\"]*environ|/proc/\*/cmdline")
 FILTERS = {"grep", "egrep", "fgrep", "rg"}
 FALLBACK = re.compile(r"(^|[\s|;&(`])(env|printenv|set|export|declare|typeset)(\s+-\S+)*\s*($|[|;&)>`])|show-?env", re.M)
+LISTING_FALLBACK = re.compile(r"(^|[\s|;&(`'\"])(ps\s+[^|;&\n]*(\b(args|cmd|command)\b|-\w*[fF]|(^|\s)[a-zA-Z]+(\s|$))|"
+                              r"pgrep\s+[^|;&\n]*(-\w*a|--list-f)|htop|btop)|cmdline", re.M)
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?=\n|$)", re.S)
 
-REASON = ("this command would print environment variables' values (a multi-line secret's later lines print even through "
-          "`cut -d= -f1`) or every process's full command line (tokens sit in some daemons' argv). List variable names with "
-          "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
-          "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
-          "`ps -eo pid,args | grep \"[p]attern\"` (not `grep -v`, which prints every other line) or `pgrep -af PATTERN`.")
+#: what a refused command would print: `refused_text`'s verdicts, each with its refusal
+ENVIRONMENT, ARGV = "environment", "argv"
+PROCS = "tools/agent-guard/procs.py"
+REASONS = {
+    ENVIRONMENT: ("this command would print environment variables' values (a multi-line secret's later lines print even through "
+                  "`cut -d= -f1`). List variable names with `compgen -e` (filter with `compgen -e | rg NAME`); check one "
+                  "variable with `[ -n \"${NAME:-}\" ] && echo set`."),
+    ARGV: ("this command would print processes' full command lines, and a daemon's token sits in its argv: a filter for the "
+           "daemon's name keeps exactly the lines that hold it. Whether a process runs, and since when: `ps -eo pid,etimes,comm` "
+           f"or `pgrep -l PATTERN`. Its arguments with every token-like run cut out: `python3 {PROCS} [PATTERN]` (on another "
+           f"machine: `ssh HOST python3 - [PATTERN] < {PROCS}`)."),
+}
+#: `ps` formats that print the command line, and options of `ps`, `pgrep`, `top` and `pstree` that take a value (the rest
+#: of the word, else the next word)
+SHOWS_ARGV = re.compile(r"\b(args|cmd|command)\b|%a")
+PS_VALUED = {"unix": set("CGgOopqstUu"), "bsd": set("OoptUk"),
+             "long": {"--format", "--sort", "--pid", "--ppid", "--quick-pid", "--user", "--User", "--group", "--Group", "--sid",
+                      "--tty", "--cols", "--columns", "--width", "--rows", "--lines"}}
+LISTER_VALUED = {"pgrep": set("dgGPstuUFr"), "top": set("deEnopuU"), "pstree": set("HNC")}
+#: reading a process's command line from /proc, in a word (a path, a variable's, Python code) or by psutil
+PROC_ARGV = re.compile(r"/proc/\S*cmdline|\$\{?\w+\}?/cmdline\b|\.cmdline\(|psutil\S*(cmdline|environ|as_dict)")
 
 
 def secret(name: str) -> bool:
@@ -214,6 +243,83 @@ def every_argv(args: list[str]) -> bool:
     return bool(set(short) & set("fF")) if fmt is None else shown
 
 
+def ps_prints(args: list[str], ps_format: str = "") -> str:
+    """What `ps ARGS` prints beyond each process's name: ENVIRONMENT (BSD `e`), ARGV (its command line) or "". It prints the
+    command line under a format naming it (every `-o`, `-O`, `o`, `O` and `--format` is read, and `ps_format`, the PS_FORMAT it
+    runs under), with `-f` or `-F`, and in BSD form (any option without a dash, or a bare pid) unless `c` or a format is given."""
+    formats, unix, bsd, i = [ps_format] if ps_format else [], set(), set(), 0
+    while i < len(args):
+        a, i = args[i], i + 1
+        if a.startswith("--"):
+            name, eq, value = a.partition("=")
+            if name == "--format":
+                formats.append(value if eq else args[i] if i < len(args) else "")
+            i += name in PS_VALUED["long"] and not eq
+        elif a.startswith("-") and len(a) > 1 or not re.fullmatch(r"[\d,]+", a):
+            dash = a.startswith("-")
+            letters, valued = (a[1:], PS_VALUED["unix"]) if dash else (a, PS_VALUED["bsd"])
+            for at, letter in enumerate(letters):
+                (unix if dash else bsd).add(letter)
+                if letter in valued:
+                    value = letters[at + 1:] or (args[i] if i < len(args) else "")
+                    i += not letters[at + 1:]
+                    if letter in "oO":
+                        formats.append(value)
+                    break
+        else:
+            bsd.add("p")
+    if "e" in bsd:
+        return ENVIRONMENT
+    if formats:
+        return ARGV if any(SHOWS_ARGV.search(f) for f in formats) or unix & {"f", "F"} else ""
+    return ARGV if unix & {"f", "F"} or (bsd and "c" not in bsd) else ""
+
+
+def letters_before_value(args: list[str], valued: set[str]) -> set[str]:
+    """The single-letter options `ARGS` gives a program whose options in `valued` take a value."""
+    out, skip = set(), False
+    for a in args:
+        if skip:
+            skip = False
+        elif re.fullmatch(r"-[^-].*", a):
+            for at, letter in enumerate(a[1:], 2):
+                out.add(letter)
+                if letter in valued:
+                    skip = at == len(a)
+                    break
+    return out
+
+
+def argv_listing(words: list[str]) -> str:
+    """What the simple command `words` (unwrapped) prints of processes beyond their names, run on this machine: ENVIRONMENT,
+    ARGV or "" (module doc)."""
+    if not words:
+        return ""
+    name, args = os.path.basename(words[0]), words[1:]
+    if name == "ps":
+        return ps_prints(args)
+    if name == "pgrep":
+        full = any(a.startswith("--list-f") and "--list-full".startswith(a) for a in args)
+        return ARGV if full or "a" in letters_before_value(args, LISTER_VALUED["pgrep"]) else ""
+    if name == "top":
+        return ARGV if "c" in letters_before_value(args, LISTER_VALUED["top"]) else ""
+    if name == "pstree":
+        return ARGV if "--arguments" in args or "a" in letters_before_value(args, LISTER_VALUED["pstree"]) else ""
+    return ARGV if name in ("htop", "btop") else ""
+
+
+def ps_variables(words: list[str]) -> str:
+    """ARGV when `words` set PS_FORMAT to a format that prints the command line, or PS_PERSONALITY at all (as an assignment
+    ahead of the command or by `export`), which change what a later `ps` prints; else ""."""
+    run = unwrap(words)
+    sets = words[:len(words) - len(run)] + (run[1:] if run[:1] == ["export"] else [])
+    for w in sets:
+        name, _, value = w.partition("=")
+        if name == "PS_PERSONALITY" or name == "PS_FORMAT" and SHOWS_ARGV.search(value):
+            return ARGV
+    return ""
+
+
 def ssh_words(args: list[str]) -> list[str]:
     """The words of what `ssh ARGS` runs on the far side (none for a login shell)."""
     i = 0
@@ -222,38 +328,57 @@ def ssh_words(args: list[str]) -> list[str]:
     return args[i + 1:]
 
 
-def refused(words: list[str], filtered: bool = False) -> bool:
-    if any(refused_text(w.split("$(", 1)[1]) for w in words if "$(" in w):
-        return True
-    words = unwrap(strip_redirections(words))
+def prose(words: list[str]) -> bool:
+    """Whether the simple command `words` (unwrapped) only carries text: `git`'s arguments (a commit message) and those of a
+    `research` command that runs nothing (no `--`)."""
+    prog = os.path.basename(words[0]) if words else ""
+    return (prog == "git" and "--no-index" not in words) or (prog == "research" and "--" not in words)
+
+
+def refused(words: list[str], filtered: bool = False, remote: bool = False, text: str = "") -> str:
+    """What the simple command `words` would print that it may not (ENVIRONMENT, ARGV) or "". `filtered`: its output goes
+    straight into a filter that keeps only matching lines; `remote`: another machine runs it; `text`: the whole command."""
+    for w in words:
+        if "$(" in w and (kind := refused_text(w.split("$(", 1)[1], remote)):
+            return kind
+    run = unwrap(strip_redirections(words))
+    if not remote and not prose(run) and os.path.basename(run[0] if run else "") not in ("ssh", "research"):
+        if any(PROC_ARGV.search(w) or w.endswith("/cmdline") or (w == "cmdline" and "/proc" in text) for w in words):
+            return ARGV
+        if kind := ps_variables(strip_redirections(words)) or argv_listing(run):
+            return kind
+    words = run
     if not words:
-        return False
+        return ""
     name, args = os.path.basename(words[0]), words[1:]
     opts = [a for a in args if a.startswith(("-", "+"))]
     names = [a for a in args if not a.startswith(("-", "+"))]
     if name == "env":
         run = env_command(args)
         if not run:
-            return True
-        return refused_text(run[0]) if len(run) == 1 and " " in run[0] else refused(run)
+            return ENVIRONMENT
+        if len(run) == 1 and " " in run[0]:
+            return refused_text(run[0], remote)
+        assignments = [a for a in args[:len(args) - len(run)] if "=" in a and not a.startswith("-")]
+        return refused(assignments + run, remote=remote, text=text)
     if name == "printenv":
-        return not names or any(secret(n) for n in names)
+        return ENVIRONMENT if not names or any(secret(n) for n in names) else ""
     if name == "set":
-        return not args
+        return "" if args else ENVIRONMENT
     if name == "export":
-        return all(a == "-p" for a in args)
+        return ENVIRONMENT if all(a == "-p" for a in args) else ""
     if name in ("declare", "typeset", "local", "readonly"):
         if not names:
-            return not opts or any(set(o.lstrip("-+")) - set("fF") for o in opts)
-        return any("p" in o for o in opts) and any(secret(n) for n in names)
+            return ENVIRONMENT if not opts or any(set(o.lstrip("-+")) - set("fF") for o in opts) else ""
+        return ENVIRONMENT if any("p" in o for o in opts) and any(secret(n) for n in names) else ""
     if name in SHELLS and "-c" in args[:-1]:
-        return refused_text(args[args.index("-c") + 1])
+        return refused_text(args[args.index("-c") + 1], remote)
     if name == "ssh":
-        return refused_text(" ".join(ssh_words(args)))
+        return refused_text(" ".join(ssh_words(args)), True)
     if name == "research" and "ssh" in args and "--" in args:
-        return refused_text(" ".join(args[args.index("--") + 1:]))
+        return refused_text(" ".join(args[args.index("--") + 1:]), True)
     if name == "ps":
-        return not filtered and every_argv(args)
+        return ARGV if remote and not filtered and every_argv(args) else ""
     if name == "tmux":
         i = 0
         while i < len(args) and args[i].startswith("-"):
@@ -266,12 +391,12 @@ def refused(words: list[str], filtered: bool = False) -> bool:
                     rest = rest[1:]
                 elif not a.startswith("-"):
                     shown.append(a)
-            return not shown or any(secret(n) for n in shown)
-        return False
+            return ENVIRONMENT if not shown or any(secret(n) for n in shown) else ""
+        return ""
     if name == "xargs":
         rest = [a for a in args if not a.startswith("-")]
-        return bool(rest) and refused(rest)
-    return False
+        return refused(rest, remote=remote, text=text) if rest else ""
+    return ""
 
 
 def filter_cmd(words: list[str]) -> bool:
@@ -296,14 +421,15 @@ def filtered(commands: list[tuple[list[str], str]], i: int) -> bool:
     return False
 
 
-def refused_text(text: str) -> bool:
-    if ENVIRON.search(text):
-        return True
+def refused_text(text: str, remote: bool = False) -> str:
+    """What `text` would print that it may not (ENVIRONMENT, ARGV) or "": `remote` when another machine runs it."""
+    if m := ENVIRON.search(text):
+        return ENVIRONMENT if m[0].endswith("environ") else ARGV
     try:
         commands = words_of(text)
-        return any(refused(w, filtered(commands, i)) for i, (w, _) in enumerate(commands))
     except ValueError:                                   # unbalanced quotes: judge the raw text
-        return bool(FALLBACK.search(text))
+        return ENVIRONMENT if FALLBACK.search(text) else ARGV if LISTING_FALLBACK.search(text) else ""
+    return next((kind for i, (w, _) in enumerate(commands) if (kind := refused(w, filtered(commands, i), remote, text))), "")
 
 
 #: commands that write what they read to their output
@@ -965,7 +1091,8 @@ def main() -> int:
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
-        deny = bool(FALLBACK.search(command) or ENVIRON.search(command))
+        deny = (ENVIRONMENT if FALLBACK.search(command) or re.search(r"/proc/\S*environ", command)
+                else ARGV if LISTING_FALLBACK.search(command) else "")
     try:
         low = None if deny else block_reason(command)
     except Exception:                                   # a bug in the block gate must not stop every command
@@ -981,7 +1108,7 @@ def main() -> int:
         pass
     low = secret_file_reason(command, stated_cwd(raw)) or low   # ahead of the gates' reasons: the one about a secret is the one to act on
     if deny or low:
-        reason = REASON if deny else low
+        reason = REASONS[deny] if deny else low
         print(json.dumps({"permission": "deny",
                           "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))

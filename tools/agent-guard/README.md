@@ -11,7 +11,8 @@ side by side; it is not a package.
 |---|---|---|
 | `boot.sh` | Puts the guard on a VM whatever branch is checked out: it writes `.cursor/hooks.json` where the branch tracks none, copies origin/main's guard out of the checkout, runs `install.sh` and starts `oom_watch.py`. | The Cloud Agent environment's start, on every boot; the team skill; `infra/cursor` |
 | `hook.sh` | `hook.sh NAME` runs origin/main's copy of the hook NAME on Cursor's event, so a branch cut before a guard landed still runs it. | `.cursor/hooks.json`, for every hook |
-| `shell_hook.py` | The shell hook. It refuses a command that would print secrets, a local build or unselected test run, a call that would block more than 20 minutes, and a branch switch or push that belongs to another agent. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
+| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, and a branch switch or push that belongs to another agent. A listing that another machine runs over `ssh` or `research pods ssh` is judged as before: refused unfiltered, passed when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
+| `procs.py` | This machine's processes, with each command line's token-like runs cut out: what the shell hook's refusal of a listing points to, beside `ps -eo pid,etimes,comm` and `pgrep -l`. | The shell hook's refusal |
 | `inbox.py` | Messages to a running agent, on this VM or another. | The team skill; `research digest` |
 | `research.sh` | The `research` on an agent VM's PATH: it runs origin/main's `tools/research/src/research/at_main.py`, which runs the checkout's `research` or, when the checkout is only behind, origin/main's. | `install.sh`; `at_main.py` |
 
@@ -28,6 +29,7 @@ git -C /workspace show origin/main:tools/agent-guard/boot.sh | bash -s -- /works
 python3 tools/agent-guard/inbox.py send AGENT_ID --text 'TEXT'     tell a running agent something
 python3 tools/agent-guard/inbox.py list                            each agent's pending and delivered messages
 python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM: whether its hook polls for it
+python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
 python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer

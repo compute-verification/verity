@@ -200,17 +200,12 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps axc",
     "ps ax -o pid,comm",
     "ps",
-    "ps -p 1234 -o pid,args",
     "ps -o pid,etime,comm --ppid 4242",
     "ps -u research",
-    "ps -eo pid,args | grep \"[p]ytest\"",
-    "ps aux | rg -i lake",
-    "ps -ef | grep -v grep | grep \"[p]ython\"",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
-    "pgrep -af quick_tier",
+    "pgrep -l quick_tier",
     "tmux show-environment -g DISPLAY",
     "tmux -f /exec-daemon/tmux.portal.conf send-keys -t build:0.0 'make' C-m",
-    "cat /proc/1234/cmdline | tr '\\0' ' '",
     "",
 ])
 def test_everything_else_passes(command):
