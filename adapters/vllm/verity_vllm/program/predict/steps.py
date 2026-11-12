@@ -35,9 +35,8 @@ its account in the output accounting (the advice through `reads.gate`):
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
   TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
-  8,192 tokens and 256 sequences, prefill chunks of at most 256 rows, the prefix cache stated on or off, and the positions its
-  `max_model_len` states, at most the checkpoint's own), whose token-count-dependent kernel choices read the whole launch,
-  padded to its capture size where it runs in a captured
+  8,192 tokens and 256 sequences, positions at most 131,072, prefill chunks of at most 256 rows, the prefix cache stated on or
+  off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
   graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
   prefill chunks and then its decodes, every row that step's forward ran as (n, start), in the advice's batch order, a refused
@@ -411,9 +410,8 @@ def place(i: int, LP: int, T: int, C: int, rows: Rows, output_len: int, carry: W
 def launch_class(phi: Phi) -> None:
     """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
     world and device, an execution the class doesn't serve (`CLASS_G_EXECUTIONS`) or a target compilation other than the one it
-    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, its `max_model_len` stated and at
-    most the checkpoint's `max_position_embeddings`, and the prefix cache stated on or off (vLLM's default is on).  Async
-    scheduling isn't one: the rows it runs past a request's stop are the advice's, `discarded`
+    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
+    off (vLLM's default is on).  Async scheduling isn't one: the rows it runs past a request's stop are the advice's, `discarded`
     and in the launches they ran in."""
     eng = dict(phi.engine or {})
     facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
@@ -424,9 +422,8 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    limits = {**CLASS_G_LIMITS, "max_model_len": int(phi.hf_config.get("max_position_embeddings") or 0)}
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {most}" for k, most in limits.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= most]
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:

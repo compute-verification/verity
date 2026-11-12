@@ -77,7 +77,7 @@ def test_the_runs_target_states_what_the_engine_ran():
     assert "compilation" not in AR.target_of(device, eager, "NVIDIA H200")
 
 
-def _class_g_phi(execution: str | None = None, effective: dict | None = None, max_model_len: int = 401408):
+def _class_g_phi(execution: str | None = None, effective: dict | None = None, max_model_len: int = 131072):
     """The φ a class-G run at ``execution`` and a launch of ``max_model_len`` registers, as `tools/advice_compile.py` reads what
     it records (its engine's keyword arguments, its target, its execution), the built engine reading back ``effective``."""
     import json
@@ -114,7 +114,7 @@ def test_a_class_g_runs_registration_is_in_class_g():
     from verity_vllm.program.predict.steps import launch_class
 
     launch_class(_class_g_phi())
-    assert _class_g_phi().engine["max_model_len"] == 401408
+    assert _class_g_phi().engine["max_model_len"] == 131072
     assert graph_capture_sizes(_class_g_phi()) == ()
     phi = _class_g_phi("compiled")
     assert phi.target_profile().compilation == "breakable" and phi.target_profile().execution_label == "compiled"
@@ -127,12 +127,17 @@ def test_a_class_g_runs_registration_is_in_class_g():
 
 def test_a_launch_that_leaves_the_limit_to_vllm_registers_the_length_the_engine_fitted():
     """Under ``max_model_len=-1`` the registration states the length the built engine reads back, never the launch's -1, which
-    class G refuses; a record that reads none back is refused by name."""
+    class G refuses; a record that reads none back is refused by name, and so is a length past the 131,072 positions a class-G
+    registration may state, fitted or stated."""
     from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.steps import launch_class
 
     phi = _class_g_phi(effective={"max_model_len": 4032}, max_model_len=-1)
     assert phi.engine["max_model_len"] == 4032
     launch_class(phi)
-    with pytest.raises(Unexpressible, match="engine arg max_model_len None, not a stated value of at most 1048576"):
+    with pytest.raises(Unexpressible, match="engine arg max_model_len None, not a stated value of at most 131072"):
         launch_class(_class_g_phi(max_model_len=-1))
+    with pytest.raises(Unexpressible, match="engine arg max_model_len 383872, not a stated value of at most 131072"):
+        launch_class(_class_g_phi(effective={"max_model_len": 383872}, max_model_len=-1))
+    with pytest.raises(Unexpressible, match="engine arg max_model_len 262144, not a stated value of at most 131072"):
+        launch_class(_class_g_phi(max_model_len=262144))

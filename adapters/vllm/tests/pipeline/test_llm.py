@@ -253,9 +253,9 @@ def test_an_engine_class_fills_its_settings():
 @pytest.mark.parametrize("limit", [4032, 131072, CTX, 1048576, -1])
 def test_an_engine_class_serves_at_the_context_limit_its_launch_states(limit):
     """The class fixes no context limit: the launch's reaches the engine args as stated, a length or -1 (vLLM's
-    ``--max-model-len auto``), and neither `CLASS_G_LIMITS` nor `CLASS_G_SERVED` holds one."""
+    ``--max-model-len auto``), and neither `CLASS_G_SERVED` nor the class's options hold one."""
     assert L.class_options({"engine_class": "G", "max_model_len": limit})["max_model_len"] == limit
-    assert "max_model_len" not in {**EC.CLASS_G_LIMITS, **EC.CLASS_G_SERVED, **EC.options("G")}
+    assert "max_model_len" not in {**EC.CLASS_G_SERVED, **EC.options("G")}
 
 
 @pytest.mark.parametrize("options,stated", [({}, None), ({"max_model_len": 0}, 0), ({"max_model_len": -2}, -2)])
