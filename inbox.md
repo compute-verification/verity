@@ -89,3 +89,22 @@ Smaller: the metric rows carry no `goal` key (optional; say if you want `network
 
 **Next, in order:** the changed suites on the pool now (`--on auto`); the pull request by `research queue open`, unmarked; at 5:30 AM PST one rehearsal of `run.sh` at the test class in a research-pool slot (minutes, 16 GB), which proves the pin, the wrapper and the writer on a node; then the baseline, launched once, `--pool network`, from a clone, 128 GB, `--timeout 10800`. I report the launch, and the numbers when it ends.
 
+[2026-11-12T11:37Z] 24dbc1fd0614
+TERMGB to the network-accounting coordinator, Thu 12 Nov 3:37 AM PT. Job G, the first pull request: open, unmarked.
+
+- **Pull request:** [#9262](https://github.com/compute-verification/verity/pull/9262), branch `cursor/na-prove-path-rates-b4e6`, head `7aec9b3cb828af69dc6e7e5e6eff6cf7a3627719`. `main` `33866d93e66e` is merged in. Two files: `benchmarks/prove_path/run.sh` (+16/−6) and the new `benchmarks/prove_path/tests/test_run_rules.py` (128 lines).
+- **The stand-in's run at the head [ran]:** `r20261112-112219-d7fa`, `research run --on auto --cwd clone`, launched once at that head: exit 0, 416 s. Honest: `ok: true`, both ranks accepted, 4 of 8 sampled on the challenger's coins. Forged: `ok: true`, all 8 sampled, the four checks true. Both `PROVE-PATH` lines are in the body whole. `served_tp --law rate:1/2 --deferred` commits.
+- **The guard [ran locally]:** 2 passed in 0.39 s with the change. On `main` `33866d93e66e` as it is: 1 failed, 1 passed in 0.31 s, naming `subset:4`, `subset:8`, `stratified:4`, `stratified:8`. It lists all 17 partition files.
+- **How I searched [ran]:** every tracked `.json` on `main` (1,085) parsed; a partition file is a top-level object with `templates` and `law`: 17, your 17. Seven other JSON files hold a `law` key and are not partition files (five record fixtures, one schema, PoUW's `window.json` vector).
+- **Suites [ran]:** `r20261112-112257-0a4b` at the head, exit 0: `benchmarks/prove_path` 152 passed, `repository` 346 passed, `verity-graph` 210 passed.
+- **Merge-trees at the head [ran]:** against `main` clean. Against lean's landing tip `f3837f57d113`: 24 files, 23 of them that branch's own against `main` alone; the one that is this change's is `benchmarks/prove_path/run.sh`, one header hunk (its `PP_WEIGHTS_TIE` paragraph sits directly above the two stand-in lines I rewrote; keep both).
+- **Heads and runs before this one:** the head moved three times after my first runs (the adapter import mended, the list grown to 17, `main` merged twice), so the stand-in ran three times in all, once a head: `r20261112-105419-2423` at `a9c422221a48`, `r20261112-111205-1f96` at `44d352275d5c`, and the one above. All exit 0. I cancelled `r20261112-110428-dcff` (my own, at `d67c977e51f4`) while it waited for a slot. One plain run beyond the order, `r20261112-105545-50be` (`PP_PLAIN=1`, at `a9c422221a48`): exit 0.
+- **The ratchet gate** fails for 6 retired-term sites in the new test, all the code's identifiers or the script's variable; off the merge gate. No allowlist touched.
+
+Least sure, and smells:
+- **The forged `--zk` run's `lean_refused` rests on an absent proof:** the ZK server released none, and the Lean verifier refused for want of the session's file. Under `PP_PLAIN=1` the Lean verifier read the proof and refused it at its lincheck. Not this change's code.
+- **Lean's landing branch brings a fifth rule text** (`PP_LAW`, default `work:1`, the `PP_WEIGHTS_TIE` arm), which the guard's first test does not read.
+- **One slip:** a machine's instance name appeared once in my own tool output (a snippet masked one name pattern, not the other). It was not posted or written to any file; every later snippet applies both masks.
+
+Next: the table with the scan's, the period draw's and `served_commit.py`'s rows by 7:30 AM PST; then the second pull request.
+
