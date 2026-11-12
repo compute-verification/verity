@@ -105,7 +105,7 @@ theorem pr_acc_of_event {H : Msg → Msg} {D : Compiled Coin A} (hS : D.Sessions
   have hmiss : Pr (fun r : Fin (D.V.k x) → Coin => ∀ u ∈ D.checked x r, u ∉ F) ≤ (1 - q) ^ F.card := by
     have h := Compiled.pr_miss_le hS hs hPt hin F hF (δ := max 0 (s.design.Pa (D.part s) F)) (le_max_left _ _)
     refine (Claims.Pr_mono fun r hr => ⟨fun hM => ?_, hr⟩).trans (h.trans (max_le hpow0 hPa))
-    simp only [Design.M, Set.mem_setOf_eq] at hM
+    simp only [Design.M, Set.mem_ofPred_eq] at hM
     exact absurd hM (not_lt.2 (le_max_right _ _))
   have hsnd : Pr (fun p : Ω × (Fin (D.V.k x) → Coin) => ∀ u ∈ D.checked x p.2, u ∉ F) ≤ (1 - q) ^ F.card :=
     (Claims.SamplingGeneric.Pr_snd (α := Ω)
@@ -183,6 +183,7 @@ theorem wreg_prefix [Fintype Tp] (H : Msg → Msg) (D : Msg → Compiled Coin A)
   unfold WregR
   rw [had.1 z i ω ω' h, had.2.1 z i ω ω' h, had.2.2 z i ω ω' h]
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- A phase's verdict reads only the earlier phases' coins where its statement and its prover's strategy do. -/
 theorem phaseAcc_prefix (H : Msg → Msg) (D : Msg → Compiled Coin A)
     (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
@@ -201,6 +202,7 @@ theorem phaseAcc_prefix (H : Msg → Msg) (D : Msg → Compiled Coin A)
     rfl
   exact key _ _ _ _ _ _ (hx z i ω ω' h) (hP z i ω ω' h)
 
+omit [Inhabited Coin] in
 /-- The verifier's coins at the statement's own number of rounds, as the first of `kV` coins: the coins past them
 are uniform and read by nothing. -/
 theorem pr_castLE [Fintype Tp] {n : ℕ} (h : n ≤ kV) (f : Tp → (Fin n → Coin) → Prop) :

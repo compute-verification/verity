@@ -167,9 +167,9 @@ theorem ksRegR_of_masses {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Session
       · refine Or.inr (Or.inr (Or.inr ⟨g, ?_, b, hb1, fun hbe => hne ?_⟩))
         · obtain ⟨o, ho, hp⟩ := List.any_eq_true.1 hany
           exact ⟨o, ho, by simpa using hp⟩
-        · rw [regValR, if_pos hany, hbe]
+        · rw [regValR, ite_eq_left hany, hbe]
       · refine Or.inr (Or.inr (Or.inl ⟨g, hg, b, hb1, ?_⟩))
-        rw [regValR, if_neg hany] at hne
+        rw [regValR, ite_eq_right hany] at hne
         exact hne
   have hT := L.pr_unfound_le H P β hβ0 hβ (fun _ => L.leadSel x (L.selOf x (FregR H L P x ops)))
     fun ω r => hκ ω r (L.leadSel x (L.selOf x (FregR H L P x ops)))

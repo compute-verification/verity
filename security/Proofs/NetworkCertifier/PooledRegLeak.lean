@@ -51,9 +51,9 @@ theorem leakAt_of_trace {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates L
   refine ⟨hfit, hlen, hj, fun g => if g ∈ freeInputs s.prog (lay s) (k s) then traceVal s.prog tr g else false,
     ⟨fun g hg hgf => ?_, fun g hg => ?_⟩,
     heldAdv s.prog Pt F tr, fun g b h => NetTiming.SampledAuditProof.faultyGate_of_heldAdv h, ?_⟩
-  · simp only [hgf, if_true]
+  · simp only [hgf, ite_true]
     exact hρ g hg hgf
-  · simp only [hg, if_false]
+  · simp only [hg, ite_false]
   intro t ht
   obtain ⟨h, hr, hst⟩ := hacc t ht
   refine ⟨h, ?_, hst⟩
@@ -101,7 +101,7 @@ theorem leakAt_regR {H : Msg → Msg} {D : Compiled Coin A} {Lk K S : ℕ} (lay 
     have hany : (ops s).any (fun o => o.pos == g) = true := by
       obtain ⟨q, hq, hp⟩ := hg
       exact List.any_eq_true.2 ⟨q, hq, by simp [hp]⟩
-    rw [regValR, if_pos hany] at hb
+    rw [regValR, ite_eq_left hany] at hb
     exact (Option.some.inj hb).symm
   have hno : ∀ v, ∃ ι : ℕ → Bool, ∀ u, Pt.blocks[v]? = some u → v ∉ FregR H D P x ops →
       s.prog.Correct (s.prog.refIn u (regValR H D P x (ops s)) ι) u := by

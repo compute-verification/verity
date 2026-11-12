@@ -45,8 +45,8 @@ local notation "P₂" => (fun _ _ _ => silentP : Unit → Ω₂ → Fin 1 → Pr
 local notation "ops₂" => (fun _ _ _ _ => certOps : Unit → Ω₂ → Fin 1 → AuditStatement → List (Opening Bool))
 local notation "obs₂" => (fun _ _ _ => [twoObs] : Unit → Ω₂ → Fin 1 → List (Obs 0 1 1))
 local notation "e₂" =>
-  (fun _ => (twoL Bool).εregX shaD [] silentP +
-    (BopsX shaD (twoL Bool) (fun _ => certOps) Unit silentP []).Pr shaD : Fin 1 → ℝ)
+  (fun _ => Compiled.εregX shaD (twoL Bool) [] silentP +
+    Finder.Pr shaD (BopsX shaD (twoL Bool) (fun _ => certOps) Unit silentP []) : Fin 1 → ℝ)
 
 /-- `twoLay` fits the program of two inputs over one step: it has no egress gate, and its ingress is an input. -/
 theorem twoLay_fits : twoLay.Fits twoStmt.prog 1 := by
