@@ -22,7 +22,7 @@ its own:
 
 What of ours meets the engine is recorded with the serve (``ours``): whether the trace's header holds the cache format, what
 the history tables' guard (`verity_vllm.pipeline.boundary_tables.mla_layers`) says of the model, and, where the guard passes,
-the tables' own step hook beside `Rows`: every row it read must be `Rows`' bytes.
+the tables' own step hook beside `Rows`: every block of rows it reads must be `Rows`' bytes.
 
 Without ``--phase`` it runs the serve and the replay of each of ``--runs`` (`RUNS`: weights and arm), compares each replay
 with its serve (steps, prefix-cache hits, tokens, rows), writes OUT/fp8_cache_replay.json and exits 0 only if every serve took
@@ -235,34 +235,40 @@ class Rows:
 
 
 def ours(runner: Any, header: dict[str, Any]) -> tuple[dict[str, Any], Any]:
-    """What of ours says of this engine before it serves, and the history tables' step hook where their guard passes."""
+    """What of ours says of this engine before it serves, and the history tables' step hook where their guard passes. The
+    hook's rows go to `Seen`, which keeps every block as read: the tables' own store refuses a request that starts past what
+    it holds, as one with a prefix-cache hit does."""
     from verity_vllm.pipeline import boundary_tables as BT
+
+    class Seen(BT.Latents):
+        def add(self, request: str, start: int, rows: Any) -> None:
+            self.seen.append((request, start, {x: r.copy() for x, r in rows.items()}))
 
     out: dict[str, Any] = {"header_kv_cache_dtype": header.get("kv_cache_dtype")}
     hook = None
     try:
-        hook = BT.StepHook(runner.model)
+        seen = Seen(BT.mla_layers(runner.model))
+        seen.seen = []
+        hook = BT.StepHook(runner.model, latents=seen)
         out["tables_guard"] = {"verdict": "ok", "layers": list(hook.layers)}
     except ValueError as e:
         out["tables_guard"] = {"verdict": "refuses", "message": str(e)}
     return out, hook
 
 
-def tables_rows(hook: Any, raw: dict[str, Any]) -> dict[str, Any]:
-    """The tables' hook against `Rows`: over the rows the hook read before it failed, if it did (it refuses a request that
-    starts past what it holds, as one with a prefix-cache hit does), whether each is `Rows`' bytes."""
-    lat = hook.latents
-    out: dict[str, Any] = {"failed": lat.failed, "requests": 0, "rows": 0, "differing": []}
-    for rid in lat.requests():
-        k, mine = lat.length(rid), lat.take(rid)
+def tables_rows(hook: Any, rows: Rows) -> dict[str, Any]:
+    """The tables' hook against `Rows`: each block of rows the hook read at a step, in order, against the block `Rows` read
+    for that request at that layer at that step."""
+    out: dict[str, Any] = {"failed": hook.latents.failed, "blocks": 0, "rows": 0, "differing": []}
+    at: dict[str, int] = {}
+    for rid, start, by in hook.latents.seen:
+        i = at[rid] = at.get(rid, -1) + 1
         for x, (name, _cache) in hook.layers.items():
-            buf = raw.get(f"{rid}|{name}")
-            if buf is None or not k:
-                continue
-            out["rows"] += k
-            if mine[x][:k].tobytes() != buf[:k].tobytes():
-                out["differing"].append({"request": rid, "layer": name})
-        out["requests"] += 1
+            s, mine = rows.got[rid][name][i]
+            out["blocks"] += 1
+            out["rows"] += len(mine)
+            if s != start or by[x].tobytes() != mine.tobytes():
+                out["differing"].append({"request": rid, "layer": name, "start": start})
     return out
 
 
@@ -363,7 +369,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     steps = [r for r in trace.records if r["kind"] == "step"]
     doc = {"phase": a.phase, "arm": a.arm, "weights": a.weights, "compiled": a.compiled, "cache": a.cache,
            "config": trace.records[0]["config"], "engine_given": {k: cfg.get(k) for k in ("kv_cache_dtype", "block_size")},
-           "chosen": chosen(eng, runner), "ours": {**said, **({"tables_rows": tables_rows(hook, raw)} if hook is not None else {})},
+           "chosen": chosen(eng, runner), "ours": {**said, **({"tables_rows": tables_rows(hook, rows)} if hook is not None else {})},
            "device": {"name": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0))},
            "vllm": __import__("vllm").__version__, "redrawn": redrawn, "steps": steps, "tokens": tokens, "rows": digests,
            "rows_skipped": rows.skipped, "sampling": {rid: r["sampling"] for rid, r in reqs.items()},
