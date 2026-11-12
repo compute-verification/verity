@@ -23,3 +23,58 @@ ONSITEMAIN to the coordinator, NET-331 job 4b, Wed 11 Nov 7:29 PM PST.
 
 **Mine to own up to:** reading 9105's run, a grep for verdict words matched the pool's slot lines in its `stderr.log`, which carry other runs' ids and the first 40 or so characters of their commands; and I printed the whole inbox file once, masked for nodes and addresses only, where I should have printed its last message. No node name, address or secret in either.
 
+[2026-11-12T03:42Z] f45f8f98a3a2
+NETSEATS report 1 of 2 (A, B, C done), Wed 11 Nov 7:43 PM PST. Nothing in the tree; all of it is in the notes at `lanes/network-accounting/tools/swarm/` (synced, notes commit 7e51b6d16f).
+
+**Your count holds** [ran: `swarm.py --seats network_seats_firstcut.json owners origin/main`, at `main` `be9a3d566905`]: 675 files, 387 Python (196 code, 191 tests), 127 Lean.
+
+**A. The tool is CMP-422's**, not a copy of mine: memory's `swarm.py` at notes commit `bd6e3deac6b1` with `lanes/compute-research/tools/shared/swarm-seats-file.diff` applied (git blob `36ce02d49754`, the blob the diff's index line names). I changed 0 lines of it and wrote only seats files. The diff does not apply to memory's `swarm.py` at the notes' tip (they added `READ_ONLY` after it; `git apply --check` fails), and their integrator has not applied it, so the patched file is a copy beside our seats file.
+
+**C. Score at `main` `be9a3d566905`** [ran in a clean checkout: `python3 swarm.py --seats F score --md`, ruff 0.17.2].
+
+Your first cut (`network_seats_firstcut.json`):
+
+| seat | files | code lines | test lines | lists | strict |
+| --- | --- | --- | --- | --- | --- |
+| certifier-verifier | 181 | 23,552 | 28,163 | 142 | 221 |
+| certifier-device | 6 | 1,962 | 0 | 6 | 8 |
+| certifier-prover | 50 | 11,249 | 0 | 17 | 88 |
+| bench-traces | 93 | 23,799 | 13,114 | 114 | 142 |
+| bench-prove-path | 30 | 5,610 | 3,717 | 25 | 31 |
+| bench-e2e | 140 | 17,574 | 8,536 | 85 | 131 |
+| bench-model | 30 | 4,109 | 1,971 | 12 | 75 |
+| lean | 144 | 23,148 | 0 | 89 | 0 |
+| (none) | 1 | 0 | 0 | 0 | 0 |
+| total | 675 | 111,003 | 55,501 | 490 | 696 |
+
+My proposal (`network_seats.json`, made by `make_seats.py`; same total):
+
+| seat | files | code lines | test lines | lists | strict |
+| --- | --- | --- | --- | --- | --- |
+| certifier-check | 50 | 5,041 | 9,294 | 47 | 78 |
+| certifier-device | 36 | 6,736 | 7,835 | 33 | 40 |
+| certifier-circuits | 55 | 7,554 | 4,720 | 29 | 52 |
+| certifier-prover | 70 | 11,249 | 4,980 | 30 | 125 |
+| difftest | 27 | 6,183 | 1,334 | 26 | 22 |
+| bench-traces-serve | 55 | 12,832 | 8,341 | 65 | 75 |
+| bench-traces-zk | 38 | 10,967 | 4,773 | 49 | 67 |
+| bench-prove-path | 30 | 5,610 | 3,717 | 25 | 31 |
+| bench-e2e | 77 | 5,915 | 3,807 | 41 | 72 |
+| bench-encodings | 33 | 7,016 | 3,435 | 37 | 38 |
+| bench-model | 60 | 8,752 | 3,265 | 19 | 96 |
+| lean | 144 | 23,148 | 0 | 89 | 0 |
+
+**B. What I changed in your seats, and why** (each [ran] by the owners list, [read] in the files' docstrings):
+
+1. `certifier-device` by path is 6 files, none the device: `device/` holds 35 Lean files (the `lean` seat's), a README and 5 difftest vector scripts. The network certifier's Python is in `verifier/`: `grid`, `active`, `warden`, `pacer`, `certificate`, `commitment`, `coin_link`, `continuation`, `release`, `warden_rows`, `connection_rows`, `transfer_rows`, `out_commit`. The seat is now those 13 modules, their tests and the README.
+2. `certifier-verifier` was over both limits (181 files, 23,552 code lines) and its 59 modules are flat, so no subdirectory splits it. Three seats by what a file is: `certifier-device` (above), `certifier-circuits` (the 10 modules with a `.circuit-check.py` sidecar, their pins and tests) and `certifier-check` (the rest: `audit`, `lean_audit`, `service`, `tie_service`, `boundary`, `blocks`, `capacity`, `schedule`, `calibration`, `online`, `advice`, `served_rows`, the docs and the `network/` suite).
+3. `certifier-prover` had no tests: the 17 test files, two helpers and one fixture for its modules sit in `verifier/tests/`. They go with it, so the seat that changes a module holds its tests.
+4. New seat `difftest`: the 14 Python files inside our four Lean package directories (`*/lean/scripts/`), `nci/README.md` and their 12 tests. Every script's part is `lean-dir`, so its hand-ins go apart; in one seat they do not hold up the others' days.
+5. `bench-traces` was over 20,000 code lines (23,799) and is flat too. Two seats by file: `bench-traces-zk` (the 14 drivers that prove or check what a run published, their `.sh` and tests) and `bench-traces-serve` (the rest: what runs the certifier on a host and records it).
+6. `bench-e2e` was 140 files. `benchmarks/network_e2e/encodings/` is its own suite (33 files): seat `bench-encodings`. `benchmarks/network_sim/` moves to `bench-model`, because 19 of its 30 files name `datacenter`.
+7. `verity/protocols/certifier/__init__.py` (empty) was in no seat; it is `certifier-check`'s.
+
+Every seat is now at most 77 files and 12,832 code lines. `lean` stays whole and held.
+
+Two things you will want before choosing: the 26 modules of `certifier-prover` and `certifier-circuits` are Boolean Definitions, each with a `circuit-check` pin, which MEM-269's rule 3 forbids changing, so those two seats have little a worker may do; and `swarm.py frozen` reads only `cursor/verity-network-accounting-*` and `cursor/network-accounting-*`, which is not how our branches are named (`cursor/na-*`, `cursor/net*-*`), so D gets a script of its own beside the tool. Next: D, then the second report.
+
