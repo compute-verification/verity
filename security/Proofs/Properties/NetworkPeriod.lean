@@ -608,4 +608,223 @@ theorem rowsCapPublished_nontrivial :
 theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
   fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
 
+/-! ## The rows form's scan's ok bits are at the constants of its schedule -/
+
+section Ok
+
+theorem okChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    (okChecks p c)[i]? = some (okCheck (NetworkCheck.ScanOk.consts s.window) (p.first + i) reg) := by
+  simp [okChecks, okChecksAt, hform, Array.getElem?_zipIdx, hreg]
+
+/-- On acceptance in the rows form, the schedule's constants computed and each execution phase's scan's registration
+is held to them (`ScanOk.held`): `okCheck` is no finding. -/
+theorem check_okHeld {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
+    {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) {i : ℕ}
+    {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    ∃ ks, NetworkCheck.ScanOk.consts s.window = .ok ks ∧ NetworkCheck.ScanOk.held ks reg = true := by
+  have hmem := Array.mem_of_getElem? (okChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    unfold okCheck at h0
+    split at h0
+    · rename_i ks hks
+      split at h0
+      · exact ⟨ks, hks, ‹_›⟩
+      · cases h0
+    · cases h0
+
+theorem ok_bind {α β : Type} {x : Except String α} {f : α → Except String β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+/-- A list mapped without an error: each result is an element's and each element has its result. -/
+theorem ok_list_mapM {α β : Type} {f : α → Except String β} :
+    ∀ {l : List α} {ys : List β}, l.mapM f = .ok ys →
+      (∀ y ∈ ys, ∃ x ∈ l, f x = .ok y) ∧ ∀ x ∈ l, ∃ y ∈ ys, f x = .ok y
+  | [], ys, h => by
+    rw [List.mapM_nil] at h
+    cases h
+    simp
+  | a :: l, ys, h => by
+    rw [List.mapM_cons] at h
+    obtain ⟨b, hb, h⟩ := ok_bind h
+    obtain ⟨bs, hbs, h⟩ := ok_bind h
+    cases h
+    obtain ⟨h1, h2⟩ := ok_list_mapM hbs
+    refine ⟨fun y hy => ?_, fun x hx => ?_⟩
+    · rcases List.mem_cons.1 hy with rfl | hy
+      · exact ⟨a, List.mem_cons_self, hb⟩
+      · obtain ⟨x, hx, hfx⟩ := h1 y hy
+        exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
+    · rcases List.mem_cons.1 hx with rfl | hx
+      · exact ⟨b, List.mem_cons_self, hb⟩
+      · obtain ⟨y, hy, hfx⟩ := h2 x hx
+        exact ⟨y, List.mem_cons_of_mem _ hy, hfx⟩
+
+theorem ok_array_mapM {α β : Type} {f : α → Except String β} {xs : Array α} {ys : Array β}
+    (h : xs.mapM f = .ok ys) : (∀ y ∈ ys, ∃ x ∈ xs, f x = .ok y) ∧ ∀ x ∈ xs, ∃ y ∈ ys, f x = .ok y := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  rcases hm : xs.toList.mapM f with e | zs
+  · rw [hm] at h
+    cases h
+  · rw [hm] at h
+    cases h
+    simpa using ok_list_mapM hm
+
+/-- A member's constant is its port, its proof blocks' count and its domain and root in hex. -/
+theorem constOf_ok {m : String × String × ℕ} {k : NetworkCheck.ScanOk.Const}
+    (h : NetworkCheck.ScanOk.constOf m = .ok k) :
+    ∃ dom : ByteArray, NetworkCheck.ScanOk.domain m.2.1 m.2.2 = .ok dom ∧
+      k = { port := m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT), leaves := m.2.2, domain := Flock.hexOf dom,
+            root := Flock.hexOf (NetworkCheck.ScanOk.root dom m.2.2) } := by
+  unfold NetworkCheck.ScanOk.constOf at h
+  obtain ⟨dom, hd, h⟩ := ok_bind h
+  cases h
+  exact ⟨dom, hd, rfl⟩
+
+/-- The constants that compute are a schedule's of at least two ticks, one a member: each is a member's and each
+member has its own. -/
+theorem consts_ok {T : ℕ} {ks : Array NetworkCheck.ScanOk.Const} (h : NetworkCheck.ScanOk.consts T = .ok ks) :
+    2 ≤ T ∧ (∀ k ∈ ks, ∃ m ∈ NetworkCheck.ScanOk.members T, NetworkCheck.ScanOk.constOf m = .ok k) ∧
+      ∀ m ∈ NetworkCheck.ScanOk.members T, ∃ k ∈ ks, NetworkCheck.ScanOk.constOf m = .ok k := by
+  unfold NetworkCheck.ScanOk.consts at h
+  split at h
+  · cases h
+  · exact ⟨by omega, ok_array_mapM h⟩
+
+theorem named_iff {k n : String} {e : Lean.Json} :
+    NetworkCheck.ScanOk.named k n e = true ↔ e.getObjValD k = .str n := by
+  cases h : e.getObjValD k <;> simp [NetworkCheck.ScanOk.named, h]
+
+theorem counted_iff {n : ℕ} {e : Lean.Json} :
+    NetworkCheck.ScanOk.counted n e = true ↔ (e.getObjValD "leaves").getNat? = .ok n := by
+  cases h : (e.getObjValD "leaves").getNat? <;> simp [NetworkCheck.ScanOk.counted, h]
+
+/-- A `roots` entry held to the constants whose port ends `/o0` is at a constant of that port, in leaves, domain and
+root. -/
+theorem entryHeld_ok {cs : Array NetworkCheck.ScanOk.Const} {e : Lean.Json}
+    (h : NetworkCheck.ScanOk.entryHeld cs e = true) {q : String} (hq : e.getObjValD "port" = .str q)
+    (hok : NetworkCheck.ScanOk.okPort q = true) :
+    ∃ c ∈ cs, c.port = q ∧ (e.getObjValD "leaves").getNat? = .ok c.leaves ∧
+      e.getObjValD "domain" = .str c.domain ∧ e.getObjValD "root" = .str c.root := by
+  simp only [NetworkCheck.ScanOk.entryHeld, hq, hok, Bool.not_true, Bool.false_or] at h
+  obtain ⟨c, hc, hp⟩ := Array.any_eq_true'.mp h
+  simp only [Bool.and_eq_true, beq_iff_eq] at hp
+  exact ⟨c, hc, hp.1.1.1, counted_iff.mp hp.1.1.2, named_iff.mp hp.1.2, named_iff.mp hp.2⟩
+
+/-- `ScanOk.held` unfolded: every constant's port is some `roots` entry's, and every `roots` entry is held. -/
+theorem held_ok {cs : Array NetworkCheck.ScanOk.Const} {reg : Lean.Json}
+    (h : NetworkCheck.ScanOk.held cs reg = true) :
+    (∀ c ∈ cs, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, e.getObjValD "port" = .str c.port) ∧
+      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, NetworkCheck.ScanOk.entryHeld cs e = true := by
+  simp only [NetworkCheck.ScanOk.held, Bool.and_eq_true] at h
+  refine ⟨fun c hc => ?_, fun e he => ?_⟩
+  · obtain ⟨e, he, hn⟩ := Array.any_eq_true'.mp (Array.all_eq_true'.mp h.1 c hc)
+    exact ⟨e, he, named_iff.mp hn⟩
+  · exact Array.all_eq_true'.mp h.2 e he
+
+/-- A member's port ends `/o0`. -/
+theorem okPort_port (name : String) :
+    NetworkCheck.ScanOk.okPort (name ++ ("/" ++ NetworkCheck.ScanOk.PORT)) = true := by
+  simp [NetworkCheck.ScanOk.okPort, String.toList_append]
+
+/-- Two names with one port are one name. -/
+theorem port_inj {a b : String}
+    (h : a ++ ("/" ++ NetworkCheck.ScanOk.PORT) = b ++ ("/" ++ NetworkCheck.ScanOk.PORT)) : a = b := by
+  have := congrArg String.toList h
+  simp only [String.toList_append, List.append_cancel_right_eq] at this
+  exact String.toList_inj.mp this
+
+/-- A scan's members have distinct names. -/
+theorem members_name_inj {T : ℕ} {m m' : String × String × ℕ} (hm : m ∈ NetworkCheck.ScanOk.members T)
+    (hm' : m' ∈ NetworkCheck.ScanOk.members T) (h : m.1 = m'.1) : m = m' := by
+  unfold NetworkCheck.ScanOk.members at hm hm'
+  split_ifs at hm hm' <;> simp at hm hm' <;> rcases hm with rfl | rfl | rfl | rfl <;>
+    rcases hm' with rfl | rfl | rfl | rfl <;> first | rfl | simp at h
+
+/-- **What `ScanOk.held` holds, in the constants' terms.** A registration held to the constants of `T` has `T ≥ 2`, a
+`roots` entry that is each member's constant (`OkEntry`), and no entry whose port ends `/o0` that is not a member's
+constant. A member's entry is found by its port: the constants hold a port ending `/o0` to the one member of that
+name (`members_name_inj`, `port_inj`). -/
+theorem held_members {T : ℕ} {ks : Array NetworkCheck.ScanOk.Const} {reg : Lean.Json}
+    (hk : NetworkCheck.ScanOk.consts T = .ok ks) (h : NetworkCheck.ScanOk.held ks reg = true) :
+    2 ≤ T ∧ (∀ m ∈ NetworkCheck.ScanOk.members T, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
+      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members T, OkEntry m e := by
+  obtain ⟨hT, hback, hforth⟩ := consts_ok hk
+  obtain ⟨hnamed, hall⟩ := held_ok h
+  have entry : ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+      NetworkCheck.ScanOk.okPort q = true →
+        ∃ m ∈ NetworkCheck.ScanOk.members T, m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q ∧ OkEntry m e := by
+    intro e he q hq hok
+    obtain ⟨k, hkm, hp, hl, hd, hr⟩ := entryHeld_ok (hall e he) hq hok
+    obtain ⟨m, hm, hc⟩ := hback k hkm
+    obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
+    have hp' : m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q := hp
+    exact ⟨m, hm, hp', dom, hdom, by rw [hp']; exact hq, hl, hd, hr⟩
+  refine ⟨hT, fun m hm => ?_, fun e he q hq hok => ?_⟩
+  · obtain ⟨k, hkm, hc⟩ := hforth m hm
+    obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
+    obtain ⟨e, he, hq⟩ := hnamed _ hkm
+    obtain ⟨m', hm', hp, hat⟩ := entry e he _ hq (okPort_port m.1)
+    exact ⟨e, he, members_name_inj hm' hm (port_inj hp) ▸ hat⟩
+  · obtain ⟨m, hm, -, hat⟩ := entry e he q hq hok
+    exact ⟨m, hm, hat⟩
+
+theorem rowsOkHeld : RowsOkHeld := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  obtain ⟨ks, hk, hheld⟩ := check_okHeld hform h hreg
+  exact held_members hk hheld
+
+/-- **`RowsOkHeld`'s honest lemma**: the period check accepts a period in the rows form under a schedule of two
+ticks, `pairPeriod 0` with nothing registered. A period with an execution phase needs the network certifier's LMS
+signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
+scans' registrations at the constants. -/
+theorem rowsOkHeld_honest :
+    ∃ (pub : Public) (prof : Profile), check (pairPeriod 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check (pairPeriod 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
+
+/-- A registration that names no root has no `roots` entry. -/
+theorem rootsOf_unnamed : NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj []) = #[] := by
+  have h : (NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj [])).size = 0 := by decide +kernel
+  exact Array.eq_empty_of_size_eq_zero h
+
+/-- **`RowsOkHeld`'s nontrivial lemma**: a rows-form period of one execution phase under a schedule of two ticks whose
+scan's registration names no root (`unnamedCommitment`) is not held: the scan's member `first` has no `first/o0` among
+its `roots`, so its proof block's ok bit is at no constant. -/
+theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairPeriod 1) unnamedCommitment := by
+  intro h
+  obtain ⟨-, hm, -⟩ := h pairSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 (Lean.Json.mkObj []) rfl
+  obtain ⟨e, he, -⟩ := hm ("first", "first", 1) (by simp [NetworkCheck.ScanOk.members])
+  rw [rootsOf_unnamed] at he
+  simp at he
+
+/-- **No period check that accepts every period has `RowsOkHeld`'s property.** -/
+theorem rowsOkHeld_acceptAll : ¬ RowsOkHeldOf acceptAllRows :=
+  fun h => rowsOkHeld_nontrivial (h (pairPeriod 1) unnamedCommitment ⟨#[], #[]⟩ _ _ rfl)
+
+end Ok
+
 end Properties.NetworkPeriod

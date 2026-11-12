@@ -48,6 +48,15 @@ many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTi
 being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 `RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
 its property of any period check, false at `acceptAllRows` too.
+
+`RowsOkHeld` says the rows form accepts no execution phase whose scan's registration names its proof blocks' ok bits
+anywhere but at the constants of the schedule's `T` (`NetworkCheck.ScanOk`): the schedule has at least two ticks, each
+member of the scan (`ScanOk.members`) has a `roots` entry at its constant (`OkEntry`: the port `<member>/o0`, the
+member's proof blocks' count, and the frame domain and the root of that many ok rows under the public salts), and
+every `roots` entry whose port ends `/o0` is some member's constant. So the root a member's `o0` is registered at is
+one the check computed from `T`, never one the registration states. It is stated in the constants' own terms
+(`ScanOk.domain`, `ScanOk.root`), not as `ScanOk.held` being true; `RowsOkHeldOf` is its property of any period
+check, false at `acceptAllRows` too, and `pairPeriod 1` with `unnamedCommitment` is a period it is false of.
 -/
 
 @[expose] public section
@@ -183,9 +192,9 @@ def RowsTiedCharged : Prop :=
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window, no audit's facts and
-no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf` and `RowsCapPublishedOf` must fail at for
-`RowsProgWired`, `RowsStateTied`, `RowsTiedCharged` and `RowsCapPublished` (each its `…Of` at `check`) to say
-something. -/
+no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`, `RowsCapPublishedOf` and `RowsOkHeldOf`
+must fail at for `RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsCapPublished` and `RowsOkHeld` (each its
+`…Of` at `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
@@ -214,5 +223,58 @@ def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, some 4⟩
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
   ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+
+/-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
+count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
+root are, in hex, the member's `o0` frame domain `dom` (`ScanOk.domain`, the template's and the count's) and the root
+of that many ok rows under the public salts at `dom` (`ScanOk.root`). -/
+def OkEntry (m : String × String × ℕ) (e : Lean.Json) : Prop :=
+  ∃ dom : ByteArray, NetworkCheck.ScanOk.domain m.2.1 m.2.2 = .ok dom ∧
+    e.getObjValD "port" = .str (m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT)) ∧
+    (e.getObjValD "leaves").getNat? = .ok m.2.2 ∧
+    e.getObjValD "domain" = .str (Flock.hexOf dom) ∧
+    e.getObjValD "root" = .str (Flock.hexOf (NetworkCheck.ScanOk.root dom m.2.2))
+
+/-- What `RowsOkHeld` says of a period its check accepted: in the rows form under a schedule of `T` ticks, of each
+execution phase's scan's registration `reg`: `T` is at least 2; each member of the scan at `T` (`ScanOk.members`) has
+a `roots` entry (`ScanOk.rootsOf`) that is its constant (`OkEntry`); and every `roots` entry whose port ends `/o0`
+(`ScanOk.okPort`) is the constant of a member of the scan at `T`. -/
+def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
+      2 ≤ s.window ∧
+      (∀ m ∈ NetworkCheck.ScanOk.members s.window, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
+      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
+
+/-- `RowsOkHeld` of the period check `chk`: `RowsOkHeldAt` of every period `chk` accepts. -/
+def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsOkHeldAt p c
+
+/-- **The rows form accepts no execution phase whose scan's ok bits are registered anywhere but at the constants of
+its schedule.** If the check accepts a period in the rows form under a schedule of `T` ticks, then `T ≥ 2` wherever it
+has an execution phase, and each execution phase's scan's registration names, for each member of the scan at `T`
+(`ScanOk.members`: `first`, `ingress-0` at `T ≥ 3`, `last` and `egress-0`), the port `<member>/o0` at the member's
+proof blocks' count, at its `o0` frame domain and at the root of that many ok rows under the public salts
+(`OkEntry`), and names no other port ending `/o0`: every such entry is a member's constant. The domain and the root
+are functions of `T` alone, which the check computes (`ScanOk.consts`), so a registration that names a member's `o0`
+at a root of the prover's choosing, at another count or domain, or under a name no member has, is refused. A member's
+proof blocks' ok words are rows of the tree its statement reads at `o0`; that the statement reads the tree at the root
+the registration names is the registration's check's, which the period check does not read. -/
+def RowsOkHeld : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsOkHeldAt p c
+
+/-- A rows-form schedule of one slot, one lane and two ticks (`T = 2`), with no response cap. -/
+def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
+
+/-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
+the periods `RowsOkHeld`'s witnesses are stated at. -/
+def pairPeriod (n : ℕ) : Params :=
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n⟩
+
+/-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
+def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
 
 end Properties.NetworkPeriod
