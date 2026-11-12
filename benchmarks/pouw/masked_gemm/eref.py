@@ -9,6 +9,8 @@ A' = A + E_A and B' = B + E_B within the format's exact range, each batch's A B^
 edited ones: separate pass, fused, fused and overlapped), and the receipts (duo at 32 and 64, TB4C at 32) over the running sums of all of K.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -24,12 +26,14 @@ S = np.array([5, 7, -5, -7], dtype=np.int64)
 RCS = [("cduo32", "duo", 32), ("cduo64", "duo", 64), ("ct4c32", 8, 32)]
 
 
-def keys(seed, inst=0):
+def keys(seed: int, inst: int = 0) -> tuple[int, int]:
+    """The noise keys of A and of B for instance ``inst``."""
     return (int(mix32(np.uint32(seed) ^ mix32(np.uint32(2 * inst + 0x0A0A0A0A)))),
             int(mix32(np.uint32(seed) ^ mix32(np.uint32(2 * inst + 1 + 0x0A0A0A0A)))))
 
 
-def noise(rows, k, key):
+def noise(rows: int, k: int, key: int) -> np.ndarray:
+    """The noise E of a rows x k operand: each element from S by two bits of its 16-byte chunk's hash."""
     chunk = (np.arange(rows, dtype=np.uint64)[:, None] * (k // 16) + np.arange(k // 16, dtype=np.uint64)[None, :])
     h = mix32(np.uint32(key) ^ mix32((chunk & 0xFFFFFFFF).astype(np.uint32)))
     j = np.arange(16, dtype=np.uint32)

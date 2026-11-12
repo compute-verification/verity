@@ -1,18 +1,15 @@
 """The duo receipts of one 128 x 128 tile, the CPU reference the edited GEMMs' references share.
 
 `tile_receipts` folds a tile's u32 words after each step (masked_gemm's mref.py's duo receipts, one tile at a time) under
-floored_gemm's ref.py's keys; `TM`, `BN`, `WM` and `NCT` are the tile's shape and `U_TAG` the SHA-512 tag of lpgemm.cu's U.
+ref.py's keys; `TM`, `BN`, `WM` and `NCT` are the tile's shape and `U_TAG` the SHA-512 tag of lpgemm.cu's U. A reader puts
+this directory on its path, or binds `ref`, before it imports this module.
 """
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
+from ref import key_mul, key_xor, mix32, rot_of, rotl
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "floored_gemm"))
-from ref import key_mul, key_xor, mix32, rot_of, rotl  # noqa: E402
+__all__ = ["BN", "NCT", "TM", "U_TAG", "WM", "mix32", "tile_receipts"]
 
 U_TAG = 6
 TM = BN = 128

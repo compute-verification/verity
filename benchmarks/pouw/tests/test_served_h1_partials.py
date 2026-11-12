@@ -1,7 +1,6 @@
 """Kernels' prover side of option A (`served_h1/partials.py`, /) held to the order the service states
 (`pouw.leaf_lanes`): row l of a sampled leaf's partials is lane l at the stated rows, columns and key block, its words in
-`leaf_lanes.word_order`, each `h1zy.lane_partial` (the row PouwH1LaneZy_v1 checks), and a dead leaf's rows are zero. Skips
-until served_h1/partials.py is on the tree."""
+`leaf_lanes.word_order`, each `h1zy.lane_partial` (the row PouwH1LaneZy_v1 checks), and a dead leaf's rows are zero."""
 from __future__ import annotations
 
 import importlib.util
@@ -19,8 +18,6 @@ RC, K = (32, 32), 64
 
 
 def _partials():
-    if not (SERVED / "partials.py").exists():
-        pytest.skip("served_h1/partials.py (#3101) is not on the tree")
     torch = pytest.importorskip("torch")
     sys.path.insert(0, str(SERVED))
     spec = importlib.util.spec_from_file_location("served_h1_partials", SERVED / "partials.py")
