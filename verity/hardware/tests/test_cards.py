@@ -65,11 +65,21 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
         "measures it")
 
 
+#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM that no document gives
+#: for another's, so a card without the measurement has no entry rather than an invented one.
+MEASURED_ONLY = {"host": {"disk.read"}}
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
-    """A reader can take any number from any card of a kind by the same key."""
-    keys = {sku: sorted(entries(load(sku))) for sku in skus(kind)}
+    """A reader can take any number from any card of a kind by the same key, the entries of `MEASURED_ONLY` apart: a
+    card that has one marks it a measurement, and some card has each."""
+    apart = MEASURED_ONLY.get(kind, set())
+    keys = {sku: sorted(set(entries(load(sku))) - apart) for sku in skus(kind)}
     assert len({tuple(k) for k in keys.values()}) == 1, keys
+    for key in apart:
+        marks = {card[key]["mark"] for card in map(entries, map(load, skus(kind))) if key in card}
+        assert marks == {"measurement"}, (key, marks)
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
@@ -135,7 +145,8 @@ def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
 def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
     that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
-    card states, and its GPU's measured read, which the RTX PRO 6000's card states."""
+    card states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO
+    6000's card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
@@ -149,6 +160,7 @@ def test_the_quoted_numbers() -> None:
     assert round(float(value(sapphire, "rate.ops")), -11) == 7.471e14
     timing = ("memory.read", "memory.bandwidth", "memory.write", "store.chip")
     assert [float(value(granite, k)) for k in timing] == [606.8e9, 819.2e9, 819.2e9, 1_000_341_504]
+    assert float(value(granite, "disk.read")) == 4.311e9
 
 
 def test_the_rates_readers_quote() -> None:

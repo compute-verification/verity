@@ -17,7 +17,7 @@ so the same GPU in another host needs no second card). Each number is an entry `
 | Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 
-Every card of a kind has the same sections. A GPU card's are `sm` (`count`, the SMs, and `warps`, the most warps
+Every card of a kind has the same sections, a host card's `disk` apart. A GPU card's are `sm` (`count`, the SMs, and `warps`, the most warps
 resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory` device memory's),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds),
@@ -29,7 +29,9 @@ add in a loop of 64 adds and 3 loop instructions, at or above the add's price at
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling) and `store` (its caches and allowances,
-and `chip`, the host's on-chip bytes in S_chip).
+and `chip`, the host's on-chip bytes in S_chip); and, only where a run read its node's disks, `disk` (`read`, the bytes
+a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX node's host card
+has it and the H200 nodes' has no entry rather than an invented one).
 
 ~~~python
 from verity.hardware.cards import load, skus
