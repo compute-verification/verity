@@ -31,10 +31,11 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
 __all__ = ["COMMANDS", "Timeline", "main"]
 
-SCHEMA = "verity-sweep/timeline/v1"
+SCHEMA = TIMELINE_SCHEMA
 
 # stage categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)
 CATEGORIES: list[tuple[str, tuple[str, ...]]] = [

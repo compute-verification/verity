@@ -1,7 +1,8 @@
 """The MoE source on DeepSeek-V4-Pro's path (`verity_vllm/acquire/sources/moe_source.py`), on CPU against the capture map
 `deepseek-v4-eager-hopper-tp8-v0`: each MoE layer runs `FusedTopKBiasRouter._compute_routing` (the module-global `fused_topk_bias`,
 by keyword, with a hash table on the first HASH layers) and `MarlinExperts.apply` (the w13 and w2 `ops.moe_wna16_marlin_gemm`
-launches, then `moe_sum`) as the pinned vLLM does, on the shape-and-dtype stand-ins of `test_glm53_sources`.
+launches, then `moe_sum`) as the pinned vLLM does, on the shape-and-dtype tensors of `test_glm53_sources` and vLLM's one stand-in
+(`tests.fake_vllm`).
 
 Its manifest of record names no `moe_block_stream` plane, so the source binds at the block's Calls (`at_calls`): each value under the
 MoE module, `model.layers.<i>.ffn.experts/<label>`, a hash layer's router as router_w.hash, ids and in.
@@ -14,14 +15,14 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
-import sys
 import types
 
 import pytest
 import torch
 
+from tests import fake_vllm
 from tests.acquire.dsv4_model import CMAP, ENV
-from tests.acquire.test_glm53_sources import Committer, T, fake_vllm
+from tests.acquire.test_glm53_sources import Committer, T
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import (
@@ -37,6 +38,11 @@ DECODE = ("hc-fused", "indexer-short", "decode-tokens")
 PLANES = ("router_w", "router_ids", "up", "act", "down", "sum")
 #: a manifest that names no `moe_block_stream` plane, as DeepSeek-V4-Pro's of record
 AT_CALLS = {"identities": [{"family": "call_boundaries"}]}
+#: what the MoE source wraps that vLLM's surface, a list of import statements, doesn't hold: attributes it reads off a module, and
+#: the router module it reaches by name.  The Triton launcher, which it wraps on every model, stays unset: Marlin's path never calls it.
+SITES = ("vllm._custom_ops:topk_softmax", "vllm._custom_ops:moe_sum", "vllm._custom_ops:moe_wna16_marlin_gemm",
+         "vllm.model_executor.layers.fused_moe.fused_moe:invoke_fused_moe_triton_kernel",
+         f"{MS.TOPK_BIAS_MODULE}:fused_topk_bias", f"{MS.TOPK_BIAS_MODULE}:can_use_dsv4_topk")
 
 
 def name(i: int, label: str) -> str:
@@ -49,9 +55,18 @@ def labels(i: int) -> tuple[str, ...]:
 
 
 def fake_dsv4(monkeypatch) -> types.SimpleNamespace:
-    """GLM's stand-ins plus the two sites DeepSeek-V4-Pro reaches: `ops.moe_wna16_marlin_gemm` and the router module's
-    `fused_topk_bias` and `can_use_dsv4_topk`, with the pinned signatures and dispatch."""
-    v = fake_vllm(monkeypatch)
+    """vLLM's stand-in with the sites DeepSeek-V4-Pro reaches set: the custom ops' `topk_softmax`, `moe_sum` and
+    `moe_wna16_marlin_gemm`, and the router module's `fused_topk_bias` and `can_use_dsv4_topk`, with the pinned signatures and
+    dispatch."""
+    fake = fake_vllm.install(monkeypatch, extra=SITES)
+    ops, rt = fake["vllm._custom_ops"], fake[MS.TOPK_BIAS_MODULE]
+    v = types.SimpleNamespace(ops=ops, rt=rt, calls=[])
+
+    def topk_softmax(topk_weights, topk_ids, token_expert_indices, gating_output, renormalize=False):
+        v.calls.append("topk_softmax")
+
+    def moe_sum(inp, out):
+        v.calls.append("moe_sum")
 
     def moe_wna16_marlin_gemm(input, output, b_qweight, b_bias, b_scales, a_scales, global_scale, b_qzeros, g_idx, perm, workspace,
                               sorted_token_ids, expert_ids, num_tokens_past_padded, topk_weights, moe_block_size, top_k, mul_topk_weights,
@@ -72,34 +87,33 @@ def fake_dsv4(monkeypatch) -> types.SimpleNamespace:
                 gating_output, e_score_correction_bias, topk, renormalize, idx):
             v.calls.append("dsv4_topk")
         elif scoring_func == "softmax":
-            sys.modules["vllm._custom_ops"].topk_softmax(w, ids, T(m, topk, dtype=torch.int32), gating_output, renormalize)
+            ops.topk_softmax(w, ids, T(m, topk, dtype=torch.int32), gating_output, renormalize)
         else:
             v.calls.append("topk_hash_softplus_sqrt" if scoring_func == "sqrtsoftplus" else f"topk_{scoring_func}")
         return w, ids
 
-    monkeypatch.setattr(v.ops, "moe_wna16_marlin_gemm", moe_wna16_marlin_gemm, raising=False)
-    rt = types.ModuleType(MS.TOPK_BIAS_MODULE)
-    rt.__dict__.update(fused_topk_bias=fused_topk_bias, can_use_dsv4_topk=can_use_dsv4_topk)
-    monkeypatch.setitem(sys.modules, MS.TOPK_BIAS_MODULE, rt)
-    v.rt = rt
+    ops.topk_softmax, ops.moe_sum, ops.moe_wna16_marlin_gemm = topk_softmax, moe_sum, moe_wna16_marlin_gemm
+    rt.fused_topk_bias, rt.can_use_dsv4_topk = fused_topk_bias, can_use_dsv4_topk
     return v
 
 
 class MoERunner(torch.nn.Module):
     """One MoE layer as the pinned vLLM runs DeepSeek-V4-Pro at TP8 on Hopper: `fused_topk_bias` by its module global, then
     `_fused_marlin_moe` (the w13 launch into intermediate_cache1, the activation into intermediate_cache2, the w2 launch from it into
-    intermediate_cache3) and `MarlinExperts.moe_sum`.  `seen` keeps what each kernel produced.  `positional` passes every launch
-    argument by position; `weight_on_input` swaps the launches' flags as `apply_router_weight_on_input` does."""
+    intermediate_cache3) and `MarlinExperts.moe_sum`.  `v` is `fake_dsv4`'s stand-in, whose modules' names the layer looks up at each
+    call.  `seen` keeps what each kernel produced.  `positional` passes every launch argument by position; `weight_on_input` swaps
+    the launches' flags as `apply_router_weight_on_input` does."""
 
-    def __init__(self, layer: int, *, scoring: str = "sqrtsoftplus", positional: bool = False, weight_on_input: bool = False) -> None:
+    def __init__(self, layer: int, v: types.SimpleNamespace, *, scoring: str = "sqrtsoftplus", positional: bool = False,
+                 weight_on_input: bool = False) -> None:
         super().__init__()
-        self.scoring, self.positional, self.weight_on_input = scoring, positional, weight_on_input
+        self.v, self.scoring, self.positional, self.weight_on_input = v, scoring, positional, weight_on_input
         self.bias = T(E, dtype=torch.float32)
         self.table = T(ENV["V"], K, dtype=torch.int32) if layer < HASH else None
         self.seen: dict[str, object] = {}
 
     def _launch(self, a: T, out: T, top_k: int, mul: bool, size_m: int, size_n: int, size_k: int, topk_weights: T) -> T:
-        ops = sys.modules["vllm._custom_ops"]
+        ops = self.v.ops
         meta = T(1, dtype=torch.int32)
         head = (a, out, T(1, dtype=torch.uint8), None, T(1, dtype=torch.uint8), None, None, None, None, None, meta, meta, meta, meta,
                 topk_weights)
@@ -109,7 +123,7 @@ class MoERunner(torch.nn.Module):
 
     def forward(self, hidden_states: T, router_logits: T, input_ids: T) -> T:
         m = hidden_states.shape[0]
-        w, ids = sys.modules[MS.TOPK_BIAS_MODULE].fused_topk_bias(
+        w, ids = self.v.rt.fused_topk_bias(
             hidden_states=hidden_states, gating_output=router_logits, scoring_func=self.scoring, e_score_correction_bias=self.bias,
             topk=K, renormalize=True, indices_type=None, input_tokens=input_ids, hash_indices_table=self.table, routed_scaling_factor=2.5,
             bias_vl=None, image_sentinel_lo=0)
@@ -117,20 +131,20 @@ class MoERunner(torch.nn.Module):
         cache2 = T(m * K, MIL)
         cache3 = self._launch(cache2, T(m * K, H), 1, not self.weight_on_input, m * K, H, MIL, w)
         out = T(m, H)
-        sys.modules["vllm._custom_ops"].moe_sum(cache3.view(-1, K, H), out)
+        self.v.ops.moe_sum(cache3.view(-1, K, H), out)
         self.seen = {"router_w": w, "router_ids": ids, "router_w.hash": w, "ids": ids, "up": cache1, "act": cache2, "down": cache3,
                      "sum": out}
         return out
 
 
-def dsv4_moe(layers: range | list[int], **kw) -> torch.nn.Module:
+def dsv4_moe(layers: range | list[int], v: types.SimpleNamespace, **kw) -> torch.nn.Module:
     root = torch.nn.Module()
     root.model = torch.nn.Module()
     root.model.layers = torch.nn.ModuleList()
     for i in range(max(layers) + 1):
         layer = torch.nn.Module()
         layer.ffn = torch.nn.Module()
-        layer.ffn.experts = MoERunner(i, **kw)
+        layer.ffn.experts = MoERunner(i, v, **kw)
         root.model.layers.append(layer)
     return root
 
@@ -144,7 +158,7 @@ def attached(monkeypatch, layers, **kw) -> tuple[types.SimpleNamespace, Committe
     v = fake_dsv4(monkeypatch)
     v.unwrapped = (v.rt.fused_topk_bias, v.ops.moe_wna16_marlin_gemm)
     c = Committer()
-    model = dsv4_moe(layers, **kw)
+    model = dsv4_moe(layers, v, **kw)
     src = MS.MoeBlockSource(c, model, manifest=AT_CALLS)
     src.install()
     assert (v.rt.fused_topk_bias, v.ops.moe_wna16_marlin_gemm) != v.unwrapped
@@ -233,7 +247,7 @@ def test_a_manifest_that_names_moe_planes_has_them_bound_and_any_other_the_calls
     `layer_of` is the layer of the source's own names only: not the module's `out` (the TP partial source's) nor another module's."""
     assert MS.binds_planes(None) and MS.binds_planes({"identities": [{"family": "moe_block_stream"}]})
     assert not MS.binds_planes(AT_CALLS) and not MS.binds_planes({"identities": []})
-    model = dsv4_moe([0, 3])
+    model = dsv4_moe([0, 3], types.SimpleNamespace())           # never run: the names need no vLLM
     planes, calls = MS.MoeBlockSource(Committer(), model), MS.MoeBlockSource(Committer(), model, manifest=AT_CALLS)
     assert planes.ports() == {} and calls.ports() == MS.PORTS
     assert [planes.layer_of(n) for n in ("moe/L3/up", "moe/L0/router_w", "moe/L3", name(3, "up"))] == [3, 0, None, None]
@@ -275,6 +289,7 @@ def test_every_label_binds_its_row_of_the_manifest_of_record(monkeypatch):
     bind none (the GEMMs' Calls hold them)."""
     _v, c, model, src = attached(monkeypatch, range(L))
     run_step(model, range(L), 4)
+    src.uninstall()
     names = acquired(c)
     rows = manifest_rows(0, 4)
     got = Binder(rows, rank=0, ports=src.ports()).bind(0, names)
@@ -295,6 +310,7 @@ def test_identity_check_holds_each_layer_to_its_values_and_a_hash_layer_to_one_m
     are none of the committer's modules (here the router gate's), so the hash layers' `<experts>/in` is no unexpected module."""
     _v, c, model, src = attached(monkeypatch, range(L))
     run_step(model, range(L), 4)
+    src.uninstall()
     gate = "model.layers.3.ffn.gate"
     names = [gate, *acquired(c)]
     com = NativeHostCommitter(None, run_id="dsv4-moe", gpu_tree=True)

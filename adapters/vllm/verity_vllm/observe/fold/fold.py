@@ -1025,7 +1025,7 @@ class _Fold:
             if n is not None and n < t.rows:
                 raise FoldError(f"move: {type(op).__name__} covers {n} rows, the move has {t.rows}")
         if whole_view(t.src).bits != whole_view(t.dst).bits:
-            raise FoldError(f"move between widths {t.src.view.dtype} -> {t.dst.view.dtype} ({t.hint})")
+            raise FoldError(f"move between widths {whole_view(t.src).dtype} -> {whole_view(t.dst).dtype} ({t.hint})")
         return t.dst, [self._read_operand(t.src, i) for i in range(t.rows)]
 
     def _move_writes(self, t: Transparent, read: tuple[Operand, list[Refs]]) -> None:
