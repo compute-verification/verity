@@ -151,14 +151,32 @@ PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, C
 HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
           "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
           "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+#: the smaller sets of onsite's subprotocols, each the file `demos/NAME.toml`: the network certifier with sampled proofs
+#: and the wipe, and those three with PoUW and the inference-only policy. Neither set is a composite's
+#: (`K.COMPOSITES`), so `verity run` refuses each file by name (``composite``)
+SETS: dict[str, tuple[str, ...]] = {
+    "onsite_network": ("sampled-proofs", "certifier", "wipe"),
+    "onsite_compute": ("sampled-proofs", "pouw", "inference-only", "certifier", "wipe"),
+}
 
 
-def configuration(commit: str) -> dict[str, Any]:
-    """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
-    cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
+def header(name: str) -> tuple[str, ...]:
+    """The comment `demos/NAME.toml` opens with, for ``name`` of `SETS`."""
+    return (f"The served window under {len(SETS[name])} of onsite's seven subprotocols, each party on its machine:",
+            f"{', '.join(SETS[name])}. The deploy bindings hold every host and address, this file none",
+            "(demos/onsite_served/README.md). The set is no composite's, so `verity run THIS` refuses it by name",
+            "(`composite`): protocol soundness covers onsite's seven and remote's three alone.")
+
+
+def configuration(commit: str, protocols: Sequence[str] = PROTOCOLS) -> dict[str, Any]:
+    """The configuration of ``protocols`` on the served window at program ``commit``: `config new`'s, each party at its
+    `PLACEMENT`, the workload's parameters stated, and PoUS's where it is listed. `demos/onsite_served/config.toml`
+    holds `PROTOCOLS`'s and `demos/NAME.toml` each of `SETS`'s; a set that is no composite's is refused, as `config new`
+    refuses it."""
+    cfg = K.new(SERVED_WINDOW, list(protocols), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
-    cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
+    if "pous" in protocols:
+        cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})

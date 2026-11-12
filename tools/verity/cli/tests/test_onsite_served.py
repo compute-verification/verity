@@ -3,7 +3,12 @@ the file is the table's configuration byte for byte and names no host; `verity r
 channel and piece with no GPU, and refuses by name a piece that is missing, a channel to an undeclared party and a
 binding the configuration has no place for; the served window runs once with every piece's hooks, and the onsite check
 reads the record's composed verdict, undecided while the record has no row for a listed subprotocol. The runner and the
-record are stand-ins written by each test."""
+record are stand-ins written by each test.
+
+The smaller sets' files (`demos/onsite_network.toml`, `demos/onsite_compute.toml`; `served_table.SETS`): each lists its
+set, names no host and holds exactly the parties and channels its subprotocols declare, and `verity run` refuses it by
+name (``composite``), since no composite is the set. With the set a composite's in the test's own process, which no
+tree's is, the file is the table's configuration byte for byte and a dry run resolves it."""
 from __future__ import annotations
 
 import dataclasses
@@ -176,6 +181,101 @@ def test_a_component_declaring_a_channel_to_an_undeclared_party_is_refused():
     with pytest.raises(Refused) as e:
         K.check(K.parse(CONFIG.read_text()), {**REG.components, "pous": bad}, REG.workloads)
     assert e.value.name == "declaration" and "oracle" in e.value.detail
+
+
+# --- the smaller sets' files -------------------------------------------------------------------------------------------
+
+COVERED = ("verity/onsite/v0 (bandwidth, certifier, inference-only, pous, pouw, sampled-proofs, wipe) and "
+           "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)")
+#: each of `served_table.SETS`: its set as the refusal names it, and what a dry run resolves were the set a composite's
+SETS = {
+    "onsite_network": {"taken": "certifier, sampled-proofs, wipe", "channels": 9, "entries": 10},
+    "onsite_compute": {"taken": "certifier, inference-only, pouw, sampled-proofs, wipe", "channels": 10, "entries": 14},
+}
+NAMES = sorted(SETS)
+
+
+def demo(name: str) -> Path:
+    return ROOT / "demos" / f"{name}.toml"
+
+
+def bound(name: str) -> dict:
+    """`BINDINGS` for the pieces ``name``'s set lists: a binding of an unlisted subprotocol is refused."""
+    return {p: mine for p, cs in BINDINGS.items() if (mine := {c: ks for c, ks in cs.items() if c in T.SETS[name]})}
+
+
+@pytest.fixture
+def composite(monkeypatch):
+    """Makes a set a composite's in this test's process alone, under an id no tree names."""
+    return lambda name: monkeypatch.setitem(K.COMPOSITES, f"test/{name}", tuple(sorted(T.SETS[name])))
+
+
+def test_the_smaller_sets_are_the_two_files():
+    assert sorted(T.SETS) == NAMES and all(set(s) < set(T.PROTOCOLS) for s in T.SETS.values())
+    assert set(T.SETS["onsite_network"]) < set(T.SETS["onsite_compute"])
+    assert not [s for s in T.SETS.values() if sorted(s) in map(sorted, K.COMPOSITES.values())]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_a_smaller_sets_file_lists_its_set_and_what_its_subprotocols_declare(name):
+    cfg = K.parse(demo(name).read_text())
+    assert cfg["protocols"] == list(T.SETS[name]) and "params" not in cfg
+    assert cfg["workload"] == {"name": T.SERVED_WINDOW, "params": dict(T.SERVED.default_params)}
+    parties, channels = K.declared([T.MANIFESTS[c] for c in T.SETS[name]], T.SERVED)
+    assert {p["name"]: p["principal"] for p in cfg["party"]} == {n: r.principal for n, r in parties.items()}
+    assert {(c["from"], c["to"]): (c["messages"], c.get("after", [])) for c in cfg["channel"]} == {
+        k: (list(c.messages), list(c.after)) for k, c in channels.items()}
+    assert not [(p["name"], f) for p in cfg["party"] for f in p if f in K.TRANSPORT]
+    assert not [(c["from"], c["to"], f) for c in cfg["channel"] for f in c if f in K.TRANSPORT]
+    assert {p["name"]: p["machine"] for p in cfg["party"]} == {n: T.PLACEMENT[n] for n in parties}
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_verity_run_refuses_a_smaller_set_as_no_composites(name, tmp_path, capsys, monkeypatch):
+    """No composite is the set, so the file is refused by name before a party, a channel or a binding is read, in a dry
+    run and in a run alike, and the table writes no configuration of it."""
+    line = (f"verity run: refused composite: {SETS[name]['taken']} is no composite's subprotocols: protocol soundness "
+            f"covers only {COVERED}\n")
+    assert R.run_main([str(demo(name)), "--dry-run"], REG) == 2
+    assert capsys.readouterr() == ("", line)
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
+    state = tmp_path / "state"
+    assert R.run_main([str(demo(name)), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path, bound(name)),
+                       "--state", str(state)], REG) == 2
+    assert capsys.readouterr() == ("", line) and not state.exists()
+    with pytest.raises(Refused) as e:
+        T.configuration(K.parse(demo(name).read_text())["program"]["commit"], T.SETS[name])
+    assert e.value.name == "composite"
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_were_its_set_a_composites_the_file_is_the_tables_byte_for_byte(name, composite):
+    composite(name)
+    text = demo(name).read_text()
+    cfg = T.configuration(K.parse(text)["program"]["commit"], T.SETS[name])
+    assert K.render(cfg, T.header(name)) == text and K.parse(text) == cfg
+    assert cfg["program"] == K.parse(CONFIG.read_text())["program"]
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_were_its_set_a_composites_a_dry_run_resolves_the_file(name, composite, tmp_path, capsys):
+    """The composite check alone is between the file and a run: with the set a composite's, the table resolves every
+    party, channel and listed piece, and no piece of a subprotocol the file doesn't list."""
+    composite(name)
+    cfg = R.load(demo(name), REG)
+    rc, got, err = dry(capsys, "--bindings", bindings(tmp_path, bound(name)), config=demo(name))
+    assert rc == 0, err
+    assert sorted(x["party"] for x in got["plan"]) == sorted(p["name"] for p in cfg["party"])
+    assert got["dry"] == [{"configuration": K.digest(cfg), "parties": 7, "channels": SETS[name]["channels"],
+                           "entries": SETS[name]["entries"], "unbound": []}]
+    assert {e["component"] for x in got["plan"] for e in x["entries"]} == {*T.SETS[name], T.SERVED_WINDOW}
+    hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
+    assert {"WIPE_CMD", "WIPE_KEY_SHA512", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)
+    assert not {"POUS_CMD", "POUS_ARGS", "SERVE_ARGS"} & set(hooks)
+    assert ("H1_GATE" in hooks) == ("pouw" in T.SETS[name])
+    rc, got, _ = dry(capsys, config=demo(name))
+    assert rc == 0 and got["dry"][0]["unbound"] == sorted(
+        f"{p}.{c}.{k}" for p, cs in bound(name).items() for c, ks in cs.items() for k in ks)
 
 
 # --- the run -----------------------------------------------------------------------------------------------------------
