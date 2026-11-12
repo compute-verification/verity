@@ -1,9 +1,12 @@
 """stage.py's census types: `parse` of census:NAME (the census name verbatim) and of a CENSUS key's statics, and `main`
 staging one through `stage_census` on a stub of `class_statement.UnitStager` (nothing is lowered or proved): the serving
 rows' template the name resolves, its rows' words, the size ``full`` and ``full/D`` resolve to at the block's k_log (never
-under one block's units), and stage.json's record."""
+under one block's units), and stage.json's record. With ``--bind``: the Program and partition object the statement binds
+(the verifier's copies beside it), the stager's ``bind`` and unit indices, and a ``full`` statement's circuit rebound to
+the Program of the count its k_log gives."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from types import SimpleNamespace
@@ -12,6 +15,8 @@ import numpy as np
 import pytest
 
 from conftest import load
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
 from verity.circuits.types import Array, Value
 
 SILU = "SiluMul_v2{I=256}"
@@ -87,10 +92,77 @@ def test_main(stage, monkeypatch, tmp_path, capsys, spec, n, want):
     assert (rec["k_log"], rec["vus_per_block"], rec["circuit_bytes"], rec["inst_bytes"]) == (32, 4, 2, 2)
     assert Stager.seen["circuit"] == tmp_path / "circuit.txt" and Stager.seen["stmt"] == rec["statement"]
     assert Stager.seen["rows"] == {r: (want, b // 16) for r, _s, b, _ps in rec["in_rows"]}
+    assert "bind" not in rec and not (tmp_path / "partition.json").exists() and not (tmp_path / "program.json").exists()
+
+
+def circuit_text(bind: dict) -> bytes:
+    """A circuit file's head as `circuit.compose` writes a binding: META, the second line, its two values."""
+    meta = {"k_log": 32, "partition": {"digest": bind["partition"], "rule": "verity/partition/v1"},
+            "program_sha512": bind["program"]}
+    return b"verity/flock-circuit\nMETA " + json.dumps(meta, sort_keys=True, separators=(",", ":")).encode() + b"\ngates\n"
+
+
+class BoundStager(Stager):
+    """`UnitStager` given ``bind``: circuit.txt written once, as it is composed, bound to it; a round takes its units'
+    indices and writes the public file's head (the circuit's pin as the stager holds it, the indices)."""
+
+    def __init__(self, d, name, in_rows, out_rows, circuit, bind, **stmt):
+        super().__init__(d, name, in_rows, out_rows, circuit, **stmt)
+        Stager.seen["bind"] = dict(bind)
+        circuit.parent.mkdir(parents=True, exist_ok=True)
+        circuit.write_bytes(circuit_text(bind))
+        self.pin = hashlib.sha512(circuit.read_bytes()).hexdigest()
+
+    def stage(self, rows, out, salt_key, indices):
+        Stager.seen.update(rows={r: v.shape for r, v in rows.items()}, indices=list(indices))
+        (out / "inst.bin").write_bytes(b"xy")
+        (out / "pub.bin").write_bytes(json.dumps({"circuit_sha512": self.pin, "units": {"indices": list(indices)}}).encode() + b"\n")
+        return {"meta": {"k_log": 32, "vus_per_block": 4}, "ands": 5, "unit_nnz": 9}
+
+
+@pytest.mark.parametrize(("n", "want", "composed"), [("3", 3, "own"), ("full/4", 8, "unbound"), ("8", 8, "own")])
+def test_main_bind(stage, monkeypatch, tmp_path, capsys, n, want, composed):
+    """--bind: the statement binds the population Program of its ``want`` instances and that Program's partition under
+    `Q_template_instances` v0, both written beside it. A count binds as the circuit is composed; ``full/4`` is composed
+    bound to `UNBOUND` and rebound, to the file a count of 8 composes."""
+    monkeypatch.setattr(stage.CS, "UnitStager", BoundStager)
+    monkeypatch.setattr(sys, "argv", ["stage.py", f"census:{SILU}", n, str(tmp_path), "--bind"])
+    stage.main()
+    rec = json.loads(capsys.readouterr().out)
+    part, desc = json.loads((tmp_path / "partition.json").read_text()), json.loads((tmp_path / "program.json").read_text())
+    digests = {"partition": PO.digest(part), "program": part["program"]}
+    assert PO.validate(part).ok and part["query"] == PO.template_instances_query([SILU])
+    assert desc["program_fn"] == f'TemplatePopulations_v1{{templates=["{SILU}"],counts=[{want}]}}'
+    assert program_digest(desc) == part["program"]
+    assert rec["bind"] == {**digests, "query": part["query"], "population": want, "indices": [0, want],
+                           "program_bytes": (tmp_path / "program.json").stat().st_size}
+    assert Stager.seen["bind"] == (digests if composed == "own" else stage.UNBOUND)
+    assert (rec["n"], Stager.seen["indices"]) == (want, list(range(want)))
+    assert (tmp_path / "circuit.txt").read_bytes() == circuit_text(digests)
+    assert rec["circuit_sha512"] == (tmp_path / "pin.txt").read_text() == hashlib.sha512(circuit_text(digests)).hexdigest()
+
+
+def test_rebind_refuses(stage, tmp_path):
+    """`rebind` rewrites only a file whose META holds the old binding's two values once each, and nowhere after META."""
+    f, new = tmp_path / "circuit.txt", {"partition": "1" * 128, "program": "2" * 128}
+    text = circuit_text(stage.UNBOUND)
+    f.write_bytes(text)
+    assert stage.rebind(f, stage.UNBOUND, new) == hashlib.sha512(circuit_text(new)).hexdigest() and f.read_bytes() == circuit_text(new)
+    with pytest.raises(SystemExit, match="META does not hold the binding"):
+        stage.rebind(f, stage.UNBOUND, new)
+    part = stage.UNBOUND["partition"].encode()
+    for bad, why in ((text.replace(b'"program_sha512"', b'"x":"' + part + b'","program_sha512"'), "META does not hold the binding"),
+                     (text.replace(b"\nMETA ", b"\nHEAD "), "META does not hold the binding"),
+                     (text + part + b"\n", "outside META's two values")):
+        f.write_bytes(bad)
+        with pytest.raises(SystemExit, match=why):
+            stage.rebind(f, stage.UNBOUND, new)
+        assert f.read_bytes() == bad
 
 
 @pytest.mark.parametrize(("argv", "why"), [([f"census:{SILU}", "full/0"], "invalid literal"),
                                            (["s8-linear", "full"], "is for a CENSUS type"),
+                                           (["s8-linear", "2", "--bind"], "which its statement binds already"),
                                            (["census:SiluMul_v2", "2"], "lacks the static")])
 def test_main_refuses(stage, monkeypatch, tmp_path, argv, why):
     monkeypatch.setattr(stage.CS, "UnitStager", Stager)
