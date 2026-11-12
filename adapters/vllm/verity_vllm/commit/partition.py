@@ -12,10 +12,7 @@ import json
 import os
 from typing import Any
 
-from verity.circuits import partition_object as PO
-
 from verity_vllm.log import init_logger
-from verity_vllm.query.required import Q_WORD_ID
 
 logger = init_logger(__name__)
 
@@ -58,6 +55,11 @@ def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -
     `by_component` / `by_rank` of them).  Each object must be a valid `verity/partition/v1` object of Q_word v1 {X: 16, W: 32} with that
     digest and, when the Commit holds the Builds' records (`programs`: their SHA-512s), name one of those Programs.  Refused by name
     (SystemExit) before any engine; returns what it checked, which the binding map records."""
+    # Read here, not at import: `pipeline.row_records` imports this module, and the row driver's modules load neither numpy nor the core.
+    from verity.circuits import partition_object as PO
+
+    from verity_vllm.query.required import Q_WORD_ID
+
     q = man.get("query") or {}
     if q.get("query_id") != Q_WORD_ID:
         return {"query": q.get("query_id"), "checked": False, "why": "not the query of record: no partition to bind"}
