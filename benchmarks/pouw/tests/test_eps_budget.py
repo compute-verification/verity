@@ -86,7 +86,7 @@ def test_the_designs_reproduce_skips_figures():
 
 
 def test_the_registry_skip_is_eps_budgets_number():
-    """One ε_skip a design on each device: its `[skip]` in benchmarks/pouw/machine_model/data/designs/ (sm_120) or
+    """One ε_skip a design on each device: its `[skip]` in benchmarks/machine_model/data/designs/ (sm_120) or
     data/devices/sm_NN/designs/ is design_skip's, to the three figures the registry writes."""
     for dev in devices():
         data = device(dev)

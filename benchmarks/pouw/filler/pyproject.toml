@@ -16,8 +16,8 @@ untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_p
 # their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/configuration/config/verity_config",
-          "verity/protocols/pouw/receipts", "benchmarks/pouw/machine_model/verity_machine_model",
-          "benchmarks/pouw/machine_model/data", "tools/research/src/research/__init__.py",
+          "verity/protocols/pouw/receipts", "benchmarks/machine_model/verity_machine_model",
+          "benchmarks/machine_model/data", "tools/research/src/research/__init__.py",
           "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", 
           "verity/protocols/pouw/verifier/__init__.py",
           "verity/protocols/pouw/verifier/serving.py",

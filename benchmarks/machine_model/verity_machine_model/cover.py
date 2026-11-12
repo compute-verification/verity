@@ -26,7 +26,7 @@ from verity_machine_model.model import DATA, card, device, kind_lists
 
 COVER = DATA / "cover"
 #: corpus.json and the two family tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
-FETCH = "uv run research data fetch-fixtures benchmarks/pouw/machine_model/data/cover"
+FETCH = "uv run research data fetch-fixtures benchmarks/machine_model/data/cover"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
 MARKS = ("covered", "coarse", "hole", "absent")
