@@ -250,6 +250,10 @@ UNREAD = ("ingress",)
 BLOCK = ("block",)
 #: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
 ROWS_O0 = frozenset(BLOCK)
+#: a public o0's one row the verifier accepts, the ok bit set, and the tag of the public salts its rows are committed
+#: under (`ok_salt`): a scan member's o0 tree is then the tree of n such rows, which anyone computes
+OK_ROW = (1,)
+OK_SALT_TAG = b"verity-network-certifier/scan-ok-row-salt/v1\0"
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
 #: compression before its last block at any length, as Flock's statement needs of one row (`verity_flock.circuit.
 #: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
@@ -674,6 +678,40 @@ def header_refusal(ports: dict, entries: dict) -> str | None:
                                        "verifier's registered reads do not")
 
 
+def ok_salt(position: int) -> bytes:
+    """The hm96 salt of row ``position`` of a member's public o0, which anyone derives: `WR.SALT_BYTES` bytes of
+    SHA-512 in counter mode (``SHA-512(m ‖ u32be c)``, each output whole) over m = `OK_SALT_TAG` ‖ u64be(position).
+    It reads the row's index in its member's tree and nothing of the link, the execution phase or the registration,
+    so the tree of n rows `OK_ROW` is one root at a given frame domain."""
+    head = OK_SALT_TAG + int(position).to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(WR.SALT_BYTES // 64))
+
+
+def ok_known(n: int, row: Sequence[int] = OK_ROW) -> dict:
+    """The known content of a member's n public o0 rows as flock-verify's ``--registered`` file names it under a
+    port's ``known`` key (`Flock.Registered.checkKnown`): each row ``row`` under its public `ok_salt`, so the verifier
+    computes the port's root itself and refuses a file whose root is another."""
+    return {"rows": [list(row)] * int(n), "salts": [ok_salt(i).hex() for i in range(int(n))]}
+
+
+def ok_root(M, m: dict, row: Sequence[int] = OK_ROW) -> str:
+    """The frame root of member ``m``'s o0 were each of its n rows ``row`` under its public `ok_salt`, at the frame
+    domain its staged header names for o0."""
+    from verity.commitments.indexed import RangeIndexedDomain
+    from verity.commitments.merkle import CommitmentDomain, tree_levels
+
+    fv, n = m["header"]["frame_v3"], m["n"]
+    o0 = next(p for p in m["ports"] if p.name == "o0")
+    dom = CommitmentDomain(bytes.fromhex(fv["bindings"]["o0"]), -1, RangeIndexedDomain(0, n), hash="sha512")
+    if dom.domain_id.hex() != fv["domain_ids"]["o0"]:
+        raise SystemExit(f"{m['name']}: its o0's frame domain is not its binding's over {n} rows")
+    bcs = M.a7.FC._commit_strings([o0], {"o0": M.np.asarray([list(row)] * n, dtype=M.np.uint16)},
+                                  {"o0": [ok_salt(i) for i in range(n)]})["o0"]
+    leaves = [row_leaf(dom, i, ADV.INST.tree_leaf(ADV.INST.default_key, bc), fv["schemas"]["o0"])
+              for i, bc in enumerate(bcs)]
+    return tree_levels(dom, leaves)[-1][0].hex()
+
+
 def registered_file(mr: SimpleNamespace, own: dict | None = None) -> dict:
     """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
     verdict's `registered` reports its roots): each network certifier port at the head `warden_rows.check_registration`
@@ -992,9 +1030,10 @@ def port_prefix(defn, mr: SimpleNamespace) -> str:
 def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     """Member mr's statement: each unit's input rows in a shared-row file (each instance its own table row, a slot
     entry's one a boundary, ``mr.refs``), every row but a public o0, input or output, under the salts and paths of its
-    registered entry, a public ``o0`` under a fresh salt; every port none of those registers (a public o0, the block's
-    ``x``, the last unit's o1) read at its own frame root (`own_rows`); and the verifier's own `--registered` file,
-    which names every port. Its outputs are
+    registered entry, a public ``o0`` under its public salt (`ok_salt`); every port none of those registers (a public
+    o0, the block's ``x``, the last unit's o1) read at its own frame root (`own_rows`); and the verifier's own
+    `--registered` file, which names every port, a public o0 at its known content (`ok_known`: n rows `OK_ROW`), so
+    Lean refuses the file of a member one of whose o0 rows is another. Its outputs are
     the references' (o0 every unit's where it is public, each output row where the reference gives one), and each
     row's b‖c the one the host read. The block's o0 frame root and domain must be the `prog` tree's: the scan reads
     the slot entries only where they are one tree. Its ports in the registration are ``at``'s (`port_prefix`)."""
@@ -1009,7 +1048,8 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     refs = {r: mr.refs.get(r, list(range(n))) for r in words}
     tables = {r: x[[refs[r].index(i) for i in range(max(refs[r]) + 1)]] for r, x in words.items()}
     set_name = mr.set_name or f"{st.iset.name}-{mr.round}-{mr.window}"
-    salts = {"o0": [os.urandom(WR.SALT_BYTES) for _ in range(n)], **mr.salts}
+    public = mr.template not in ROWS_O0
+    salts = {"o0": [ok_salt(i) if public else os.urandom(WR.SALT_BYTES) for i in range(n)], **mr.salts}
     got = st.stage(words, out, os.urandom(32), salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
                    tables=tables, refs=refs, registered=mr.entries)
     o0 = None if mr.outputs is None else [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
@@ -1025,6 +1065,8 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     own = own_rows(mr, out, st.ports, port_prefix(sg.defn, mr))
+    if public:
+        own["o0"] = {**own["o0"], "known": ok_known(n)}
     (out / "registered.json").write_text(json.dumps(registered_file(mr, own), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
          "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
@@ -1036,6 +1078,8 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
+    m["o0"] = {"root": fv["roots"]["o0"], "domain": fv["domain_ids"]["o0"], "leaves": n,
+               "ok_root": ok_root(M, m) if public else None}
     if mr.template == "block" and (fv["roots"]["o0"], fv["domain_ids"]["o0"]) != (mr.ports["o0"]["root"],
                                                                                  mr.ports["o0"]["domain"]):
         raise SystemExit(f"{mr.round}/{mr.name}: its o0's frame root and domain are not the prog tree's: the tree's "
@@ -1511,21 +1555,47 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
 
 
 def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
-    """An accepted round: accepted, every output 1; the unread round: its proof held and its audit accepted, and its
-    unit's output opened to 0, so the link-window is refused; a refused one (`rounds_of`): refused by Lean's
-    registered reads ("does not open") at each of its target members (`targets`), every other member's proof held."""
+    """An accepted round: accepted, every output 1; the unread round: Lean refuses its member's registered file, whose
+    o0 root is not the root of its known rows (`ok_known`), so its audit is refused and nothing opens; a refused one
+    (`rounds_of`): refused by Lean's registered reads ("does not open") at each of its target members (`targets`),
+    every other member's proof held."""
     lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
     outcome = rounds_of(at)[name][1]
     if outcome == "accepted":
         return res["window_accepted"] and all(lean.values())
     if outcome == "ok 0":
-        return (res["accepted"] and not res["window_accepted"] and bool(lean) and all(lean.values())
-                and res["opened"] == {targets(at, name)[0]: [0]})
+        t = targets(at, name)[0]
+        why = res["why"].get(f"lean-verify/{t}") or ""
+        return (not res["accepted"] and not res["window_accepted"] and lean == {t: False}
+                and "registered reads" in why and "known rows" in why and res["opened"] == {t: [None]})
     ts = targets(at, name)
     whys = [res["why"].get(f"lean-verify/{t}") or "" for t in ts]
     return (not res["accepted"] and all(lean.get(t) is False for t in ts)
             and all("registered reads" in why and outcome in why for why in whys)
             and all(v for x, v in lean.items() if x not in ts))
+
+
+def probe_known(M, a, m: dict, out: Path) -> dict:
+    """The unread round's recorded session, whose unit's o0 is 0, held again by Lean under other registered files
+    for its o0 than the verifier's own (which names n rows `OK_ROW` at the staged root, and which Lean refuses), each
+    written beside the staged statement as ``registered-<tag>.json``: ``no-known``, the port without its known
+    content; ``known-0``, its known content the rows the unit made; ``const-root``, its root the root of n rows
+    `OK_ROW` (`ok_root`), with that known content. Each verdict as `a0.lean_verify` gives it, and whether the staged
+    o0 root is the root of the rows the unit made under the public salts (`ok_root` on them)."""
+    sdir = out / f"session-{m['name']}"
+    doc = json.loads(m["registered_file"].read_text())
+    port, n = doc["ports"]["o0"], m["n"]
+    made = {"rows": [[w] for w in m["outputs"]], "salts": [ok_salt(i).hex() for i in range(n)]}
+    files = {"no-known": {k: v for k, v in port.items() if k != "known"}, "known-0": {**port, "known": made},
+             "const-root": {**port, "root": ok_root(M, m)}}
+    got: dict = {"staged_root": port["root"], "ok_root": ok_root(M, m), "domain": port["domain"], "verdicts": {}}
+    for tag, e in files.items():
+        f = m["dir"] / f"registered-{tag}.json"
+        f.write_text(json.dumps({**doc, "ports": {**doc["ports"], "o0": e}}, sort_keys=True))
+        v = M.a0.lean_verify(a.lean, {**m, "registered_file": f}, n, sdir, zk=True, log=f"probe-{tag}")
+        got["verdicts"][tag] = {x: v.get(x) for x in ("accepted", "why", "verify_s", "registered", "digest")}
+        log(f"probe {tag}: Lean {v.get('accepted')} {v.get('why') or ''} ({v.get('verify_s')} s)")
+    return got
 
 
 def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
@@ -1655,7 +1725,11 @@ def prove(a) -> int:
             summary["coins"] = {"challenger": coins.challenger, "window_root": coins.root, "rounds": ["honest"]}
             log(f"the honest round draws on the challenger's coins ({coins.challenger}), its session on the group's "
                 f"root {coins.root[:16]}…; the other rounds on a development challenger's")
+        only = os.environ.get("SC_ROUNDS", "").split()
         for j, (name, mrs) in enumerate(h.rounds.items()):
+            if only and name not in only:
+                log(f"round {name}: left out (SC_ROUNDS)")
+                continue
             pg = pgs[rounds[name][0]]
             members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
             if name == "honest":
@@ -1664,7 +1738,7 @@ def prove(a) -> int:
                     raise SystemExit(f"the honest round's chains don't hold on its public files: {summary['wires']}")
             summary.setdefault("rounds", {})[name] = {
                 m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
-                            "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
+                            "stage_s": m["stage_s"], "outputs": m["outputs"], "o0": m["o0"]} for m in members}
             log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}, "
                                                f"outputs {m['outputs']}" for m in members))
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -1676,6 +1750,8 @@ def prove(a) -> int:
             res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j, ks[name],
                         coins if name == "honest" else None)
             results[name] = res
+            if name == "unread":
+                res["probe"] = probe_known(M, av, members[0], out / name)
             if name == "honest":
                 summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
                 log(f"answers: link-windows {at.windows}, each {summary['answers']}")

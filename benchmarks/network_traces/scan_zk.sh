@@ -91,6 +91,8 @@ log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_D
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
+# SC_AFTER: a script sourced once the rounds are proved, while the staged files are still under $W/sczk
+if [ -n "${SC_AFTER:-}" ]; then source "$SC_AFTER"; fi
 mkdir -p "$OUT/sczk"
 (cd "$W/sczk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
   ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
