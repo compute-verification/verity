@@ -52,6 +52,13 @@ import numpy as np
 from verity_machine_model.eps import PRODUCTS, Design, design, designs, machine, setup
 from verity_machine_model.model import DATA, device, devices
 
+#: what `grind_price.py`, `proved_ticks.py` and the tests read
+__all__ = [
+    "CONTEXTS", "FLOOR_WORDS", "MODELS", "PHASES", "PV_SCALE_OPS", "RATES", "Shape", "TS_CHEAT", "decode_dram",
+    "design_skip", "floor_eps", "floor_skip", "main", "parts", "prices", "products", "pv_block_point", "pv_ts",
+    "summary",
+]
+
 L = 32                      # transcript stride and the low-rank noise's rank
 CONTEXTS = (2048, 8192, 32768)
 PHASES = ("prefill", "decode")

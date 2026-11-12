@@ -7,17 +7,8 @@ issue at 1/16; vfold's loop runs s / 1024 rounds; and each architecture is read 
 """
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
+import eps_counts as E
 import pytest
-
-SC = Path(__file__).resolve().parents[1] / "sass_census"
-spec = importlib.util.spec_from_file_location("eps_counts", SC / "eps_counts.py")
-E = importlib.util.module_from_spec(spec)
-sys.modules["eps_counts"] = E
-spec.loader.exec_module(E)
 
 SRC = """\
 DEV void issue() {

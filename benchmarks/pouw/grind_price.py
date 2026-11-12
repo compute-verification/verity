@@ -65,6 +65,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU
 import eps_budget as EB
 
+#: what the tests read
+__all__ = [
+    "BU", "EB", "FLAG", "H1_NOISE", "KAPPAS", "KAPPA_LIVE", "PREFILL", "PREFILL_COVER_CTX", "PROVED", "P_ALIVE",
+    "Q_BIT", "Q_KEYED", "SEG", "SeedGroup", "TILE", "decode_cover", "h1_attention", "h1_h_form", "levers",
+    "ln_t_over_delta", "prefill_cover", "premium", "regimes", "sites", "table", "visible_premium", "y_star",
+]
+
 T_BITS = (80, 128)                   # the cheater's hash queries a salt's epoch
 TILE = (32, 32)                      # h1tile's r × c (compile.Scheme.tile)
 SEG = 32                             # a receipt word's products (h1tile's 32-wide segments)
