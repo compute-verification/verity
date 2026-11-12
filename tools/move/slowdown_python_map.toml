@@ -125,7 +125,6 @@ files = ["benchmarks/training_slowdown/training_slowdown/grade.py",
 "rho's products term is this bound" = "the products term of the record's slowdown is this bound"
 "rho is it" = "the record's slowdown is it"
 "beside rho and never in it" = "beside the record's slowdown and never in it"
-"'rho is unmeasured'" = "'the slowdown of the record is unmeasured'"
 "rho is unmeasured" = "the record's slowdown is unmeasured"
 "add(\"rho\"," = "add(\"record's slowdown\","
 "rho: {" = "the record's slowdown: {"
