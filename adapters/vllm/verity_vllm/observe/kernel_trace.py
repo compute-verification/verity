@@ -30,7 +30,7 @@ def summarize_kernels(ks: list[dict]) -> OrderedDict[str, dict]:
         d = out.get(n)
         if d is None:
             args = e.get("args")
-            a = args if isinstance(args, dict) else {}
+            a = args if args else {}
             d = out[n] = {"count": 0, "us": 0.0, "grid": a.get("grid"), "block": a.get("block"), "first_index": i,
                           "cat": e.get("cat")}
         d["count"] += 1

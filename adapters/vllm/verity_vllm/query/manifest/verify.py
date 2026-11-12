@@ -22,9 +22,9 @@ ENGINE = "v2-query"
 
 
 def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str | None = None) -> dict[str, Any]:
-    # the used manifest is evidence, not a record this reader trusts: one with no list of rows digests as an empty one, and fails
+    # the used manifest is evidence, not a record this reader trusts: one with no rows digests as an empty one, and fails
     rows, query = used.get("identities"), used.get("query")
-    used_rows = list(rows) if isinstance(rows, (list, tuple)) else []
+    used_rows = rows if rows else []
     rows_digest = manifest_digest(used_rows)
     rec = {"schema": SCHEMA, "manifest": manifest_path, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
            "rebuilt_digest": rebuilt["manifest_digest"], "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt["program_digest"],
