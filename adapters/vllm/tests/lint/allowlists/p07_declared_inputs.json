@@ -1,8 +1,6 @@
 {
   "rule": "P7 (results depend only on declared inputs)",
   "entries": [
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "CompiledGraphSource.prepare", "detail": "except Exception"},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "_register_op", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "broad-except", "symbol": "compile_settings", "detail": "except Exception"},
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
@@ -38,7 +36,6 @@
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
     {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_is_fake", "detail": "except Exception"},
@@ -69,19 +66,15 @@
     {"file": "verity_vllm/program/frontend/gemm_targets.py", "kind": "broad-except", "symbol": "vllm_tuned_gemm_arch_family", "detail": "except Exception"},
     {"file": "verity/definitions/registry/lifted.py", "kind": "broad-except", "symbol": "_is_decoded", "detail": "except Exception"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "_real_rows", "detail": "VERITY_REAL_LOGITS"},
-    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "broad-except", "symbol": "main", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "broad-except", "symbol": "build_program_digest", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_RETAIN"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_MB"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_SLOTS"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "os.environ.items"},
-    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "environ", "symbol": "_engine_main", "detail": "os.environ.items"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
     {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "environ", "symbol": "inductor_cache_dir", "detail": "TORCHINDUCTOR_CACHE_DIR"},
     {"file": "verity_vllm/engine/kernel_identity.py", "kind": "environ", "symbol": "triton_cache_dir", "detail": "TRITON_CACHE_DIR"}
   ]

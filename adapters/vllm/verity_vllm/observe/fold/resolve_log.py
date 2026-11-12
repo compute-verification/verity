@@ -55,6 +55,7 @@ from verity_vllm.observe.fold.resolver import (
 )
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.log import read_log, split_steps
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 __all__ = ["Options", "load_profile", "main", "resolve_log"]
 
@@ -308,7 +309,6 @@ def _target_facts(header: RunHeader | None, results: list[StepResult]) -> dict:
     """[X-01] The target the resolver pinned the persistent GEMM against: the header's GPU document (the capture host's device query,
     `TargetProfile.from_gpu_document`) and the per-run total of GEMM launches checked against that target's `NUM_SMS` (0 launches /
     `target_profile` None when the header carried no device: the profile default was the pin)."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     gpu = ((header.profile if header else None) or {}).get("gpu") or {}
     tp = TargetProfile.from_gpu_document(gpu) if gpu else None
     acc = [sr.target for sr in results if sr.target]

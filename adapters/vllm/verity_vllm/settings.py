@@ -33,6 +33,11 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+#: The names the library's other modules read here.  A setting itself is read as an attribute, by its name in `SETTINGS`
+#: (`__getattr__`).
+__all__ = ["UnknownSetting", "environ", "get", "is_secret", "is_set", "put", "raw", "redact", "setdefault", "unset",
+           "validate_environ"]
+
 VALUE, WHERE, DEBUG = "value", "where", "debug"
 ROLES = (VALUE, WHERE, DEBUG)
 RECORD_SCHEMA = "verity-vllm/settings/v1"

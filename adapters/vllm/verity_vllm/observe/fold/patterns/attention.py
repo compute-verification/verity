@@ -99,9 +99,8 @@ class AttentionScope:
             # the softcap variant, :1329 `v_descale = !Is_FP8 || ptr == nullptr ? 1.0f : ...`); for the bf16 launch (checked below:
             # q/k/v/out bf16) they are dead arguments, whatever their values -- so they are not a reason to refuse a bf16 record.
             for key in ("k_new", "v_new", "q_v", "s_aux", "cp_tot_seqused_k", "leftpad_k", "kv_batch_idx", "rotary_cos", "rotary_sin"):
-                if a_ := bound_args(fa).get(key):
-                    if a_ is not None and a_ != 0:
-                        return unsupported(node, f"FA3 op argument {key!r} is bound: not the registered chain", **{key: repr(a_)})
+                if (a_ := bound_args(fa).get(key)) and a_ is not None and a_ != 0:
+                    return unsupported(node, f"FA3 op argument {key!r} is bound: not the registered chain", **{key: repr(a_)})
             for key in ("q_descale", "k_descale", "v_descale"):
                 a_ = bound_args(fa).get(key)
                 if a_ is not None and a_ != 0 and getattr(a_, "dtype", "float32") != "float32":
@@ -125,7 +124,7 @@ class AttentionScope:
         q, k, v, out = a.get("q"), a.get("k"), a.get("v"), a.get("out")
         if not (isinstance(q, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc) and isinstance(out, ViewDesc)):
             return unsupported(node, "FA2 op arguments q/k/v/out not bound by name (schema unrecognised)",
-                               schema=fa.enter.schema, names=list(a)[:24], views=[repr(x) for x in fa.input_views()][:8])
+                               schema=fa.dispatch.schema, names=list(a)[:24], views=[repr(x) for x in fa.input_views()][:8])
         causal = first(a.get("is_causal"), a.get("causal"))
         if causal is not True:
             return unsupported(node, "FA2 op is not causal", causal=causal)

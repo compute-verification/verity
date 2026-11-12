@@ -150,9 +150,10 @@ class _Pieces:
     def launch(self, kind: str, name: str, template: str, binds: dict[str, dict[str, Any]], outs: dict[str, str]) -> list[dict[str, Any]]:
         """Kernel `name` of the pin's `kind` pieces as template `template` at the model's literals and its pinned launch config, its
         parameters bound to `binds` and each write hooked as `outs`; the written values in `outs`' order."""
-        sha = (self.pin["kernels"].get(kind) or {}).get(name)
+        of_kind = self.pin["kernels"].get(kind)   # the pin's kernels by name for this kind of piece; a pin that states none has no kernel
+        sha = of_kind.get(name) if of_kind else None
         if sha is None:
-            raise Unmodelled(f"the pin has no kernel {name} in its {kind} pieces: {self.pin['kernels'].get(kind)}")
+            raise Unmodelled(f"the pin has no kernel {name} in its {kind} pieces: {of_kind}")
         t = T.TEMPLATE[template]
         rec = T.instantiate(name, t, _literals(t, self.m), self.pin["artifact"]["kernels"].get(sha))
         self.kernels[sha] = {"source_sha256": sha, "template": t.name, "literals": rec["literals"], "config": rec["config"]}
@@ -254,7 +255,9 @@ class _Pieces:
         if not self.layers:
             return None
         pieces = {str(c["piece"]): f"{self.backbone}.layers.{c['piece'] - 1}.mlp.experts" for c in self.calls if c["op"] == "moe_forward"}
-        return {"layers": self.layers, "pieces": pieces, "configs": (self.pin.get("moe") or {}).get("configs") or {}, "cc": list(cc)}
+        recorded = self.pin.get("moe")   # the fused-MoE launches the pin recorded, by row count; a pin without the block records none
+        configs = recorded.get("configs") if recorded else None
+        return {"layers": self.layers, "pieces": pieces, "configs": configs if configs else {}, "cc": list(cc)}
 
 
 def pin_file(role: str, device: str) -> str:
@@ -294,8 +297,9 @@ def differences(predicted: dict[str, Any], traced: dict[str, Any]) -> list[str]:
     """Where a predicted Build differs from a traced one: its digests, then the first differing call, attention op or step plan."""
     out = [f"{k}: predicted {predicted[k][:16]}, traced {str(traced.get(k))[:16]}" for k in ("program_digest", "manifest_digest")
            if predicted[k] != traced.get(k)]
-    if predicted["artifact"]["digest"] != (traced.get("artifact") or {}).get("digest"):
-        out += [f"artifact: {d}" for d in SA.differences(traced.get("artifact") or {}, predicted["artifact"])] or ["artifact digest"]
+    art = traced.get("artifact")   # a traced Build that states no artifact differs in every kernel and winner of the predicted one
+    if predicted["artifact"]["digest"] != (art.get("digest") if art else None):
+        out += [f"artifact: {d}" for d in SA.differences(art if art else {}, predicted["artifact"])] or ["artifact digest"]
     for key, a, b in (("call", predicted["program"]["calls"], traced["program"]["calls"]),
                       ("attention", predicted["program"]["attention"], traced["program"]["attention"]),
                       ("step plan", predicted["steps_plan"], traced["steps_plan"])):

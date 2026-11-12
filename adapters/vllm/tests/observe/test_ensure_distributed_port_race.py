@@ -2,23 +2,18 @@
 from __future__ import annotations
 
 import contextlib
-import sys
-import types
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.program.frontend import vllm_meta
 
 
 def _stub_vllm(monkeypatch, init):
-    cfg = types.ModuleType("vllm.config")
-    monkeypatch.setattr(cfg, "set_current_vllm_config", lambda _c: contextlib.nullcontext(), raising=False)
-    dist = types.ModuleType("vllm.distributed")
-    monkeypatch.setattr(dist, "init_distributed_environment", init, raising=False)
-    monkeypatch.setattr(dist, "ensure_model_parallel_initialized", lambda *_a: None, raising=False)
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", cfg)
-    monkeypatch.setitem(sys.modules, "vllm.distributed", dist)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.config:set_current_vllm_config", lambda _c: contextlib.nullcontext())
+    fake.set("vllm.distributed:init_distributed_environment", init)
+    fake.set("vllm.distributed:ensure_model_parallel_initialized", lambda *_a: None)
     monkeypatch.setattr(vllm_meta, "_DIST_READY", False)
 
 
@@ -39,12 +34,16 @@ def test_eaddrinuse_retried_with_a_fresh_port(monkeypatch):
 
 
 def test_other_errors_and_exhaustion_raise(monkeypatch):
+    others = []
+
     def other(**_kw):
+        others.append(1)
         raise RuntimeError("gloo: no such device")
 
     _stub_vllm(monkeypatch, other)
     with pytest.raises(RuntimeError, match="no such device"):
         vllm_meta.ensure_distributed(None)
+    assert len(others) == 1
     assert not vllm_meta._DIST_READY
 
     calls = []

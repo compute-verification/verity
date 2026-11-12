@@ -13,14 +13,13 @@ import random
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-
-from verity.definitions.silicon.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.definitions.silicon.cast import f32_is_nan as is_nan_f32_word
+from verity.definitions.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
 
 REPO = Path(__file__).resolve().parents[2]
 MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.json"))
