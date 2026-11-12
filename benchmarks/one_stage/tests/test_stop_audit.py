@@ -232,14 +232,16 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
     hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
     against `two_stage.stop_order`, reason for reason, ``audit``, its ``accepted`` and its ``complete``, against
-    `boundary_audit` on the outcome record, and ``case`` against the four. Thirteen written cases: no input is drawn,
+    `boundary_audit` on the outcome record, and ``case`` against the four. Fourteen written cases: no input is drawn,
     and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
     hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
     hand, the two registrations' coins each in a family of its own. Case 2: a stop record on a
     boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
     registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
-    coin opened and not read, no evidence, and no family named. Case 3: the boundary stream's audit record missing,
-    refused, and another registration's. Case 4: that audit record accepted with an entry that did not run."""
+    coin opened and not read, no evidence, no family named, and the boundary stream's family named for the stop
+    sample's coins, which are held to the family named and not to the one their evidence names. Case 3: the boundary
+    stream's audit record missing, refused, and another registration's. Case 4: that audit record accepted with an
+    entry that did not run."""
     stage1 = _stage1(tmp_path, monkeypatch, "across")
     r, s = _resume(stage1), stage1["stop"]
     earlier, later = stage1["registration"], s["registration"]
@@ -262,12 +264,14 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         "not read whole": (2, handed("short", (earlier, 1), (later, 2), read=64), None, accepted, "a coin opened and not read"),
         "no evidence": (2, {"evidence": None}, None, accepted, "published no signed log"),
         "no family": (2, {"family": None}, None, accepted, "read no coins of a challenger's family"),
+        "another family": (2, {"family": stage1["family"]}, None, accepted,
+                           f"the draw's coins are not the challenger's {stage1['family']} family's"),
         "no audit record": (3, {}, None, None, None),
         "a refused audit record": (3, {}, None, refused, None),
         "another registration's audit record": (3, {}, None, others, None),
         "an audit record that accepted and is not complete": (4, {}, None, SMALL.incomplete(stage1), None),
     }
-    assert len(cases) == 13 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 7 + [3] * 3 + [4]
+    assert len(cases) == 14 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 8 + [3] * 3 + [4]
     for name, (case, stop, log, outcome, why) in cases.items():
         mine = {**stage1, "stop": {**s, **stop}}
         log = list(r.first.stream.log) if log is None else log
