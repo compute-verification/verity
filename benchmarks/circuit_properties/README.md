@@ -53,7 +53,8 @@ may repeat its rows, however the Program writes them), the two are no one array 
 `Work.left_out` holds the rest by why. Nothing is stated
 beside the circuit. A gather's rows by the batch stay a gather's rows until one rule makes them specific: a softmax over
 a constant whose rows (or columns) differ, as a causal mask's do, through one-to-one ops and products by distinct rows.
-The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position, no two positions of the batch hold
+The rule rests on one premise, `SHARED_PREFIX`'s (`training_slowdown.work.P_BATCH`): past each row's first
+position, no two positions of the batch hold
 equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
