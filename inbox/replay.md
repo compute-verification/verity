@@ -107,12 +107,20 @@ The table, six columns for each route, AgentX's shape first. Reading left: the l
 the span and the pages' sizes, the carry spec, CACHE's final (05:15Z), `origin/cursor/proofs-inbox:inbox/replay.md`
 at each hour.
 
-## Entry 2, Thu 12 Nov 02:54Z (due 06:00Z): the table, the recommended route, what is undecided, the context limit
+## Entry 2, Thu 12 Nov 02:54Z, revised 03:00Z (due 06:00Z): the table, the recommended route, what is undecided, the context limit
 
 Read since entry 1: your 02:28Z section (the context column is 1,048,576 beside 131,072; your point checked below
 with file and line), CACHE's entry 2 (`cursor/proofs-cache-7c3e` at `8dfb1e1dbe`), vllm's
-`20261112T0229Z-report-cachedserve-load`, and vLLM's rejection sampler, request and step defaults at the pin
-`d9105ea80`. The note `20261112T0217Z-report-cheapest-replay` holds the same text. Nothing was run and no code changed.
+`20261112T0229Z-report-cachedserve-load`, the goals' texts, and vLLM's rejection sampler, draft layer, request and
+step defaults at the pin `d9105ea80`. The note `20261112T0217Z-report-cheapest-replay` holds the same text. Nothing
+was run and no code changed.
+
+Revised since `c348d79df3`: (1) the Lean on `main` does cover a replay block that reads another's committed values,
+in the sets' form, at about 1,900 times the figure's bound; it is the patterns' form that does not, and I had written
+"refuses"; (2) a recomputed hit re-runs the conversation so far, the earlier requests' decode steps included, since
+vLLM caches the pages a request fills while decoding; (3) the ratios of replay to own compute are a request's (18 and
+291 times), not weighted against unweighted; (4) row 16 against CACHE's route; the grain of the page commitment; who
+is charged across execution phases; the draft layer; whose each 131,072 is; the message for Daniel at 297 words.
 
 ### The answer
 
@@ -125,7 +133,7 @@ with file and line), CACHE's entry 2 (`cursor/proofs-cache-7c3e` at `8dfb1e1dbe`
    share of repeated prompt tokens (12% to 98%) or with the context (131,072 to the model's 1,048,576): what it
    recomputes is what the request itself computed. Recomputing the hit, which is what `main` does, multiplies the
    tokens replayed, committed and proved by 1.13 at our plan's 11.62% repeated and by 7 to 59 at 85.67% to 98.31%
-   [mine: 1/(1 − share)]. In this engine class the replay must also re-run every step that first computed a page of
+   [mine: 1/(1 − share) of prompt tokens; CACHE's 6.9 and 46 to 59 count FLOPs and outputs]. In this engine class the replay must also re-run every step that first computed a page of
    the prefix, the earlier requests' decode steps included: for an agentic conversation, the conversation so far.
 3. **What it costs at serving** over stock vLLM: a hash of each KV page as it fills and a host copy kept until the
    coins, modeled at 0.036% to 0.045% of one card's time, **never run beside serving**; the step record and the
@@ -138,11 +146,17 @@ with file and line), CACHE's entry 2 (`cursor/proofs-cache-7c3e` at `8dfb1e1dbe`
    measured for the terminator and the output length, 0 once the verifier holds the stop rule each request's circuit
    already ends with. Speculative decoding adds the accept lengths, at most 2 bits a step at three draft tokens, until
    its accept rule is in the circuit.
-5. **What is missing.** (a) The guarantee: the form of `main`'s Lean that our figure uses needs each request to read
-   in one replay block, so it refuses a replay block that reads another's committed values, a cache hit and a long
-   request's earlier span alike. (b) The request's circuit on the two-stage path: today's replay block is a stand-in
-   of token selects. (c) The draft layer and its accept rule: not built. (d) Measurements at size: no hit past 384
-   tokens has been replayed, nothing has run at an agentic load, and no page commitment has run beside serving.
+5. **What is missing.** (a) The guarantee: the form of the bound our figure uses needs each request to read in one
+   replay block, so it does not cover a replay block that reads another's committed values, a cache hit and a long
+   request's earlier span alike; the form on `main` that does cover it prices about 1,900 times higher [m, CACHE].
+   (b) The request's circuit on the two-stage path: today's replay block is a stand-in of token selects. (c) The
+   draft layer and its accept rule: not built. (d) Measurements at size: no hit past 384 tokens has been replayed,
+   nothing has run at an agentic load, and no page commitment has run beside serving.
+6. **Against CACHE's route** (a conversation as one replay block, row 14): that route is on `main` and cheaper in the
+   bound (1.4 times at 86 requests against 1.5), but its replay block for AX's median conversation holds 142,016
+   positions or more, the size the 128k goal already found too large for one replay block. At agentic lengths it
+   needs spans too, and a span reads committed values, which is the statement row 16 needs. So the long context
+   forces that statement, and with it the cache hit costs nothing more.
 
 ### How to read the table
 
@@ -171,9 +185,10 @@ times in busy GPU-seconds (317 against 381, ±12%) over 226 steps at P40 [M `r20
 wall seconds (1,306 against 1,495) over 11,350 steps at P128 [M `r20261108-203339-cf6c` against `b00b`]; both read in
 `vllm/20261111T0837Z-report-replay-how-and-cost`. That ratio does not separate the routes. What separates them is
 **which steps a sampled request makes the prover re-run**, against the request's own share of serving. On P128 a
-request's own compute is 17.6 GPU-seconds on average, its lifetime's steps 458 (26 times), and every 600 s execution
-phase its lifetime touches 5,258 (299 times) [m, same note: lifetimes of `c343`, eight cards times the time, at a
-replay factor of 1.0, compute-weighted]. Column 3 gives that second reading.
+request's own compute is 17.6 GPU-seconds on average, its lifetime's steps 320 (18 times), and every 600 s execution
+phase its lifetime touches 5,120 (291 times) [m, same note and `proofs/20261107T2045Z-report-lifetime`: lifetimes
+of `c343`, eight cards times the time, at a replay factor of 1.0, a request; weighted by compute the two are 458 and
+5,258, and the cells below quote those]. Column 3 gives that second reading.
 
 **What a request's bits depend on.** GLM-5.3 at TP8 is not batch invariant. A position's values depend on its step's
 shapes: the step's token count padded to its capture size, its count of sequences, every row's key count, and which
@@ -209,7 +224,7 @@ tree or the notes; 16 is built from their parts; 17 is the floor and is not buil
 
 | # | Route | 1. What serving records or commits beyond stock, and its cost against 1% | 2. Advice beyond the common list | 3. Replay cost for one sampled request; how it moves with the repeated share and the context |
 |---|---|---|---|---|
-| 1 | The whole execution phase from an empty engine, every request real (`benchmarks/serve_tax/replay.py`) | The step record: −0.3% [−3.3, +2.6] of output rate at saturation, 3 repeats, P40 [M `r20261107-155724-3f53`, arm `record`]. Token ids, 4 bytes a token: 528,448 B for a 131,072-token request; its host thread 81.3 to 89.8 s a phase of one such request, no GPU time seen [M `r20261109-220303-3352`, `r20261109-223637-4078`]. | none | Every step of the phase: 5,258 GPU-s on P128 at 600 s phases [m]. Every hit on a page older than the phase is recomputed: 4.37% of computed FLOPs at 600 s on P128 [m `sweep.py:63`]; at AX each conversation's whole prefix once a phase, 586 GPU-s for a 142,016-token one [mine: 4.2 GPU-ms a prompt token, from 546 GPU-s for 129,024 + 1,024 tokens alone, `r20261111-141333-8d9d`]. Grows with both. |
+| 1 | The whole execution phase from an empty engine, every request real (`benchmarks/serve_tax/replay.py`) | The step record: −0.3% [−3.3, +2.6] of output rate at saturation, 3 repeats, P40 [M `r20261107-155724-3f53`, arm `record`]. Token ids, 4 bytes a token: 528,448 B for a 131,072-token request; its host thread 81.3 to 89.8 s a phase of one such request, no GPU time seen [M `r20261109-220303-3352`, `r20261109-223637-4078`]. | none | Every step of the phase: 5,258 GPU-s on P128 at 600 s phases [m]. Every hit on a page older than the phase is recomputed: 4.37% of computed FLOPs at 600 s on P128 [m `sweep.py:63`]; at AX each conversation's whole prefix once a phase, 586 GPU-s for a 142,016-token one [mine: 4.2 GPU-ms a token, from 546 GPU-s for one request of 129,024 prompt and 1,024 output tokens alone, `r20261111-141333-8d9d`]. Grows with both. |
 | 2 | The phase from a snapshot at its edge (`restore.py`, `tp_restore.sh`) | Row 1's, plus at each edge a pause to hash every rank's page pool and copy one: 0.984 s median, 1.06 s at most over 21 edges, 298.1 GB hashed and 37.26 GB copied, P40 [M `3f53`, arm `boundary`]; 1.5 s at P128 [read `proofs/20261107T2045Z-report-lifetime`]. That is 0.16% to 0.25% of a 600 s phase [mine]. One edge a 30 s: −0.1% [−2.1, +2.0] [M `3f53`]. The drain before the pause, 2.7 s at the median on P128, is not priced. | none | Every step of the phase, at 0.83 times serving's busy GPU-s [M `f460`]; engine start 131.5 to 140.3 s and snapshot load 52.9 s a replay [M, `replay-how-and-cost`]. 5,258 GPU-s a sampled request on P128 [m]. Flat in the repeated share: the snapshot holds the cached pages. The snapshot is the pool, 37 GB a rank, at any context. |
 | 3 | From an edge, each request added again with its pages from host copies (`rebuild.py:10-31`) | Row 2's, less the runner's state. | none | Row 2's. Its time I did not read. |
 | 4 | The request's lifetime only, started inside the phase from pages copied as they were written, every request real (`rebuild.py:33-42`; pricer `sweep.py:361`) | No edge. Each KV page copied to host memory when it fills and hashed: 0.14 to 0.18 GB/s a rank written; the hash 0.036% to 0.045% of one card; host memory 22.5 GB on average and 61 GB at most with the coin 1 s after the request, 60 to 68 GB and 127 to 147 GB with coins at 600 s phase ends [m, `report-lifetime` on `c343` and the P40 trace]. **The serving side is not built; its effect on output rate is not measured.** | none | The lifetime's steps: 458 GPU-s on P128 at vLLM's defaults, 1,160 at the registered limits [m]. The other requests' pages must be loaded: 8.5 GB a rank on average, 24 GB at most [m]. Flat in the repeated share. Grows with context through the load only. |
@@ -224,7 +239,7 @@ tree or the notes; 16 is built from their parts; 17 is the floor and is not buil
 | 13 | Hits sent as advice | nothing | 1.54 to 1.57 bits a request; 5,181 bits a 600 s phase (`sweep.py:51`) | None of its own. Superseded: the scheduler replay derives hits. |
 | 14 | A conversation as one replay block | Row 1's, and the cache keyed by conversation: vLLM's `cache_salt` enters the first page's key [read vLLM `d9105ea80`, `vllm/v1/core/kv_cache_utils.py:605-613`]. | none | The conversation's computed tokens once, no hit recomputed. But its interior is every request's: every Definition's ports are 58.3 MiB a position a rank [M, `128k-path`], 7,462 GiB a rank for 131,072 positions [scaled by that note], against 721 GB of disk on the largest CPU node. Not feasible as one interior. |
 | 15 | Prefix caching off (today's two-stage arm) | Serving recomputes every repeated token: 13.86% more FLOPs on P128 [m `sweep.py:48`], 7.0 and 59 times at 85.67% and 98.31% [mine]. Ruled out by Daniel. | none | The request's lifetime, which is longer. |
-| **16** | **Recommended: row 5's replay, cut to a span as in row 9, started as in row 4. The sampled request's own computed positions, in their served step shapes with zero stand-ins, started at its first step on an engine kept up, reading the cached prefix and its own earlier positions from KV pages committed as written** | Row 1's, plus a hash and a host copy of each page as it fills. The hash: 0.036% to 0.045% of one card [m, row 4]; by the 117 GB/s a card the edge hash ran at [M `3f53`: 37.26 GB in 318 ms], 0.019% of serving's GPU time, or 0.15% of a long prefill's wall time if the step waits on it [mine: 92.6 KB a token]. At AX 263 MB a request a rank: 2,844 computed tokens [mine]. The latent rows are the same on every rank (`boundary_tables.py:8`), so one rank commits them. Does not grow with the repeated share. With today's table builder instead: row 9's 2.3% to 4.3%. **Not built; not measured beside serving.** | none | The steps of the span: for a whole request, row 5's 19 to 32 s at P40. That is its own compute times about the rows in its steps: 26 times on P128 [m]. At AX at least 444 decode steps: 65 to 69 s, 519 to 550 GPU-s, at Chat's 146 to 155 ms a step [mine; AX's step time is not measured], plus loading 13.2 GB a rank of prefix, 19 s at the snapshot load's rate [mine]. Flat in the repeated share. With context: tokens recomputed flat, pages loaded grow. |
+| **16** | **Recommended: row 5's replay, cut to a span as in row 9, started as in row 4. The sampled request's own computed positions, in their served step shapes with zero stand-ins, started at its first step on an engine kept up, reading the cached prefix and its own earlier positions from KV pages committed as written** | Row 1's, plus a hash and a host copy of each page as it fills. The hash: 0.036% to 0.045% of one card [m, row 4]; by the 117 GB/s a card the edge hash ran at [M `3f53`: 37.26 GB in 318 ms], 0.019% of serving's GPU time, or 0.15% of a long prefill's wall time if the step waits on it [mine: 92.6 KB a token]. At AX 263 MB a request a rank: 2,844 computed tokens [mine]. The latent rows are the same on every rank (`boundary_tables.py:8`), so one rank commits them. Does not grow with the repeated share. The host copy holds a page until the coins of the last phase a request read it in: at most the pool, 37 GB a rank, plus a phase's writes, 84 to 108 GB at 600 s [mine, from row 4's rates; argued]. With today's table builder instead: row 9's 2.3% to 4.3%. **Not built; not measured beside serving.** | none | The steps of the span: for a whole request, row 5's 19 to 32 s at P40. That is its own compute times about the rows in its steps: 18 times on P128 [m: 320 against 17.6 GPU-s a request]. At AX at least 444 decode steps: 65 to 69 s, 519 to 550 GPU-s, at Chat's 146 to 155 ms a step [mine; AX's step time is not measured], plus loading 13.2 GB a rank of prefix, 19 s at the snapshot load's rate [mine]. Flat in the repeated share. With context: tokens recomputed flat, pages loaded grow. |
 | 17 | The floor: the request's rows alone on a GPU, each kernel forced to the settings its served step chose | Row 16's. | none | The request's own compute, about 1 time. Not built: it needs a GPU form of the row kernels the CPU replay evaluates (`check/replay/evaluate.py`), each taking the step's shape as a setting. [argued] |
 
 #### Columns 4 to 6: bit for bit, the circuit, the guarantee
@@ -269,7 +284,7 @@ Nothing has been served past 131,072; every cell is [mine] or [argued] from the 
 |---|---|---|---|---|
 | Recompute what came before (1, 6, 15) | Token ids only, 4 B a token: 0.53 MB to 4.2 MB a request. | Everything before the span: 8 times the tokens, and each position's index reads every earlier key, so more than 8 times the work (not measured). | The length terms, 3 bits wider at most, until the stop rule is held. | Closed, F = 1; the interior and the proving grow with the tokens recomputed. |
 | A snapshot at the edge (2, 3) | The pool hashed at each edge: set by the cards' memory, not by the context. | The phase's steps; lifetimes lengthen. | the same | As the first row. |
-| Read what came before from committed pages (5, 9, **16**) | 92.6 KB a computed token a rank at any context. A table padded to its size class (`boundary_tables.py:20-23`): the tree of a 2^20-row table is 9.6 GiB against 1.2 GiB at 2^17. The engine's own decode row scores keys up to `max_model_len` (capture map `:1533`): stock's cost, not ours. | The span's own tokens: no growth. Pages loaded: 12.1 GB to 97.1 GB a rank, which is past this node's 37 GB pool, so such a request cannot be served here at all. | the same | At most the served bits of the requests that read the block: for a span, its own request's, which does not grow with the prompt. No statement on `main` gives that in the patterns' form. |
+| Read what came before from committed pages (5, 9, **16**) | 92.6 KB a computed token a rank at any context. A table padded to its size class (`boundary_tables.py:20-23`): the tree of a 2^20-row table is 9.6 GiB against 1.2 GiB at 2^17. The engine's own decode row scores keys up to `max_model_len` (capture map `:1533`): stock's cost, not ours. | The span's own tokens: no growth. Pages loaded: 12.1 GB to 97.1 GB a rank, which is past this node's 37 GB pool, so such a request cannot be served here at all. If the replay builds the history's row tables: 24 to 189 GPU-s at today's builder's rate. A sampled row's index proof reads every earlier key: 837,038 ANDs a key [relayed]. | the same | At most the served bits of the requests that read the block: for a span, its own request's, which does not grow with the prompt. No statement on `main` gives that in the patterns' form. |
 
 ### The recommended route
 
@@ -285,9 +300,15 @@ The changes, by lane, each with what I read that makes it possible:
     (`engine_classes.py:12-13`) though the registration may state it on (`:5-6`), and the boundary commitment refuses
     a caching scheduler (`pipeline/boundary_rows.py:600-603`); #8897 (open, not marked) deletes that refusal.
   - Commit each KV page when it fills, one hiding leaf a page, and keep a host copy until the phase's coins and its
-    replays: a plugin on vLLM's KV connector interface, sized at 450 to 750 lines in `report-lifetime` (section 1),
-    which reads that vLLM's own offloading connector stores each page as it is computed. The copy is keyed by the
-    write, not by content: two writes of the same tokens can hold different bits.
+    replays: a plugin on vLLM's KV connector interface, sized at 300 to 500 lines for the copy and 150 to 250 for
+    the commitment in `report-lifetime` (section 1), which reads that vLLM's own offloading connector stores each
+    page as it is computed. The copy is keyed by the write, not by content: two writes of the same tokens can hold
+    different bits. One rank's copy is enough: the latent rows and the indexer's keys are the same on every rank.
+  - The grain is the open choice [argued]. A leaf a page is what serving can afford (the hash rate above); a leaf a
+    row, the history table, is what a proof block opens cheaply and what today's builder makes at 2.3% to 4.3%.
+    The two fit together if serving commits pages and the replay builds the row tables of the sampled request's
+    history, with proof blocks that hold a table's rows to their page's leaf: at today's builder's rate that is
+    26 GPU-s for a 142,016-token history [mine: 0.18 GPU-ms a token], paid only for sampled requests. Not designed.
   - Make the boundary commitment keep up: its thread builds a layout for every phase and class
     (`boundary_rows.py:574-579`; PRF-456 [relayed]).
   - Give a request without a seed one by rule from its certified bytes.
@@ -320,7 +341,11 @@ Each with the run or statement that decides it.
 2. **Whether a long hit read from committed pages replays bit for bit.** Shown at 256 tokens. Decided by
    `rebuild.py --served --shape-only RID` on one of P128's two follow-ups that hit 131k and 83k tokens.
 3. **Whether the patterns' form holds with `N` readers,** and its price at AX. Decided by the Lean statement;
-   CACHE's final has the model.
+   CACHE's final has the model. The statement must also say who is charged across execution phases [argued]: at AX
+   most hits are on pages an earlier phase wrote, which this phase's Program reads as committed inputs (the compiler
+   has that form for a request carried over an edge, `steps.py:46-51`), and the readers of an incorrect page are then
+   requests of later phases, which the earlier phase's statement does not count: an audit statement holds one
+   Program (`security/Definitions/Claims/Sampling.lean:338-343`).
 4. **How large `N` is under stock keys.** vLLM keys the cache by content, so any two requests with one first page
    share it. Decided by Daniel or vllm: `cache_salt` a conversation (one request field; hits across conversations
    are lost; AX's 98.31% is inside the conversation) or a public cap in the statement.
@@ -336,7 +361,11 @@ Each with the run or statement that decides it.
    equals the target's argmax, so the tokens are the target's; under sampling the test and the resample change which
    tokens come out, from a draw keyed by seed and position. The accept lengths set every row's positions, so the
    schedule needs them: at most log₂(k + 1) bits a step (2 at k = 3) as advice, until the accept rule is a check
-   whose outputs a lemma shows unique. vLLM can also vary k with the batch size
+   whose outputs a lemma shows unique. Three more things follow. A stand-in's accept length depends on values it
+   does not have, so a replay with stand-ins must force each one's from the step record: no code does. The draft
+   layer is a 79th layer with its own attention and its own index, run up to k times a step
+   (`vllm/v1/worker/gpu/spec_decode/mtp/speculator.py:12-58`; where its cache rows live I did not read), so the
+   request's circuit and the committed pages grow by it. And vLLM can vary k with the batch size
    (`vllm/config/speculative.py:479-482`). Decided by vllm's production settings (k is 3 in one source and 5 in
    another, both relayed) and one served run with drafts.
 8. **A recompute after preemption** has no Program in this engine class (`steps.py:56-57`), and the engine can
@@ -349,15 +378,15 @@ Each with the run or statement that decides it.
 (`engine/profiles/hf_configs/GLM53.config.json`, `max_position_embeddings`, no RoPE scaling); the published recipe
 serves 262,144 [relayed, vllm-benchsweep on VLLM-339]. Where 131,072 is held, and what raising it costs:
 
-| Where | What holds it | To raise it |
-|---|---|---|
-| The engine class | `CLASS_G_LIMITS` and `CLASS_G_SERVED`, `max_model_len` 131,072 (`engine_classes.py:33`, `:36`); the compiler refuses a position past it (`steps.py:95-96`) | Two constants, after the rows below. |
-| The long row's Definitions | pinned ranges end at 131,072 keys (`boolean_dsa.circuit-check.py:13`; `boolean_dsa_topk_mask.circuit-check.py:14-37`; `dsa_topk_reads.circuit-check.py:41`; `stop_check.circuit-check.py:24`); the block that merges the selected positions fills the largest proof block, 2^27 bits, at 131,072 keys [relayed, the coordinator's 02:28Z] | New pins and circuit-check runs; the merge needs a cut. circuits' (CIR-244). |
-| The history table | `CAPACITY = 2^17` rows in the Lean verifier (`Spot/HistoryTable.lean:56`; `check` is `checkAt` at it, `:189-191`) and its Python (`history.py:41`); a witness at that capacity (`security/Proofs/Hash/HistoryWitness.lean:70`) | One constant in each, the vectors and the witness; `checkAt` already takes the capacity. Trees grow with it: 1.2 GiB a request at 2^17 [M, `128k-path`], 9.6 GiB at 2^20 [mine]. |
-| A decode row's index | the engine scores a decode row's keys up to `max_model_len` (capture map `:136`, `:1533`), and the circuit's index logits are 837,038 ANDs a key a row [relayed, CIR-186] | The one cost that grows with a request's length on every decode row, in serving and in proving. |
-| The compile | one 131,072-token request on one rank: 28,360 s and 788 GiB [relayed] | Does not scale as one Program; spans do (row 9). |
-| The page pool | 401,408 tokens on this node with the cache in bf16: 3.06 prompts of 131,072, 1.53 of 262,144, 0.38 of 1,048,576 [mine, from the pool's size; the count relayed from the stock arm's `server.log:249`] | **The one physical limit.** A 1,048,576-token request does not fit this node at any setting I read. An FP8 cache, which the recipe uses, is not captured: the capture map records `kv_cache_dtype` auto (`:35`). |
-| `serve_tax.py` | nothing: its base is 4,096 and a run passes its own (`:315`, `:423-428`) | none |
+| Where | What holds it | To raise it | Whose |
+|---|---|---|---|
+| The engine class | `CLASS_G_LIMITS` and `CLASS_G_SERVED`, `max_model_len` 131,072 (`engine_classes.py:33`, `:36`); the compiler refuses a position past it (`steps.py:95-96`) | Two constants, after the rows below. | vllm |
+| The long row's Definitions | pinned ranges end at 131,072 keys (`boolean_dsa.circuit-check.py:13`; `boolean_dsa_topk_mask.circuit-check.py:14-37`; `dsa_topk_reads.circuit-check.py:41`; `stop_check.circuit-check.py:24`); the block that merges the selected positions fills the largest proof block, 2^27 bits, at 131,072 keys [relayed, the coordinator's 02:28Z] | New pins and circuit-check runs; the merge needs a cut. | circuits (CIR-244) |
+| The history table | `CAPACITY = 2^17` rows in the Lean verifier (`Spot/HistoryTable.lean:56`; `check` is `checkAt` at it, `:189-191`) and its Python (`history.py:41`); a witness at that capacity (`security/Proofs/Hash/HistoryWitness.lean:70`) | One constant in each, the vectors and the witness; `checkAt` already takes the capacity. Trees grow with it: 1.2 GiB a request at 2^17 [M, `128k-path`], 9.6 GiB at 2^20 [mine]. | proofs |
+| A decode row's index | the engine scores a decode row's keys up to `max_model_len` (capture map `:136`, `:1533`), and the circuit's index logits are 837,038 ANDs a key a row [relayed, CIR-186] | The one cost that grows with a request's length on every decode row, in serving and in proving. | the model's; circuits for the proof's side |
+| The compile | one 131,072-token request on one rank: 28,360 s and 788 GiB [relayed] | Does not scale as one Program; spans do (row 9). | circuits and vllm |
+| The page pool | 401,408 tokens on this node with the cache in bf16: 3.06 prompts of 131,072, 1.53 of 262,144, 0.38 of 1,048,576 [mine, from the pool's size; the count relayed from the stock arm's `server.log:249`] | **The one physical limit.** A 1,048,576-token request does not fit this node at any setting I read. An FP8 cache, which the recipe uses, is not captured: the capture map records `kv_cache_dtype` auto (`:35`). | vllm (the FP8 cache's capture) |
+| `serve_tax.py` | nothing: its base is 4,096 and a run passes its own (`:315`, `:423-428`) | none | n/a |
 
 **What I would set it to: 262,144.** It is the published recipe's limit, it holds AgentX's 256,000-capped copy whole
 (largest prompt 255,808), and it is one doubling of each constant. "No restriction" is true of the design in row 16:
@@ -394,27 +423,30 @@ find in the tree and carry as relayed.
 - `benchmarks/spot_figures/cards/serve_tax.glm-5.3.json`: the certified tick's 1.626% is simulated on Llama-3.2-1B
   traces; the one GLM-5.3 pair gives 1.0% (442.2 against 446.7). The card is the older.
 
-### Message for Daniel (draft; final at 16:00Z)
+### Message for Daniel
 
-**The cheapest replay** re-runs only the sampled request's own computed tokens, in the steps it was served in, with
-every other request replaced by zeros of the same shape. What it did not compute, the cached prefix and for a long
-request its own earlier positions, it reads from KV pages that serving committed as it wrote them. Nothing is
-recomputed, so the cost does not grow with the share of repeated tokens or with the context length.
+**Cheapest replay.** Re-run only the sampled request's own computed tokens, in the steps it was served in, with every
+other request replaced by zeros of the same shape. The cached prefix, and a long request's own earlier positions, are
+read from KV pages that serving committed as it wrote them. So the cost does not grow with the share of repeated
+tokens or with context length.
 
-**At serving:** a hash of each KV page as it is written and a host copy kept until the coins. Modeled under 0.2% of
-serving time; not yet measured beside serving. Removing the scheduling advice also needs the certified tick: 1.0% of
-output rate in the one pair of runs we have, so the total is near 1% until measured at an agentic load.
+**At serving.** A hash of each KV page as it is written and a host copy kept until the coins: modeled under 0.2% of
+serving time, not yet measured. Zero scheduling advice also needs the certified tick, 1.0% of output rate in our one
+pair of runs, so the total is near 1%.
 
-**At audit:** a sampled request's replay is its own steps on the eight cards, 19 to 32 seconds measured on short
-requests. Recomputing the cached prefix, as `main` does, multiplies what is committed and proved by 7 to 59 at
-Copilot's and AgentX's reuse, and has to replay the conversation so far.
+**At audit.** A sampled request's replay is its own steps: 19 to 32 seconds, measured on short requests. Recomputing
+the cached prefix, as `main` does, multiplies what is committed and proved by 7 to 59 at Copilot's and AgentX's
+reuse, and replays the conversation so far.
 
-**Advice:** 0 bits for cache hits and scheduling; 5.6 bits a request today for the output length and how it ended, 0
-once the verifier holds the stop rule. Speculative decoding adds at most 2 bits a step until its accept rule is in
-the circuit.
+**Advice.** 0 bits for cache hits and scheduling; 5.6 bits a request for the output's length and ending, 0 once the
+verifier checks that itself. Speculative decoding adds at most 2 bits a step until its accept rule is in the
+circuit.
 
-**Missing:** (1) The guarantee: the Lean on `main` refuses a replay block that reads values another committed. One
-new statement covers cache hits and long contexts; the bound then grows with how many requests share a prefix,
-about 1.5 times at 86 (modeled). (2) The request's circuit on this path, the draft layer and its accept rule. (3)
-Measurements: no cache hit past 384 tokens replayed, nothing at an agentic load, context 131,072 only. The design
-does not limit context; this node's memory stops near 400,000 tokens.
+**Missing.**
+
+1. The guarantee: the bound we quote needs each request to read in one replay block. One new statement covers cache
+   hits and long contexts, at about 1.5 times today's bound for 86 requests sharing a prefix (modeled); without it,
+   about 1,900 times.
+2. The request's circuit on this path, with the draft layer and its accept rule.
+3. Measurements: no cache hit past 384 tokens replayed, nothing at an agentic load, nothing past 131,072 context.
+   The design does not limit context; this node's memory stops near 400,000 tokens.
