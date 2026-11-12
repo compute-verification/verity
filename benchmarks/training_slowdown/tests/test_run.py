@@ -365,7 +365,7 @@ def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_tra
         if r["phase"] == "forward" and r["token_dims"] == ["m"]:
             d = r["dims"]
             add(traced, "updated" if r["affected"][1] else "theta", (r["op"], d["m"], d["k"], d["n"]), r["count"],
-                r["count"] * products.priced(r)["macs"])
+                r["count"] * products.priced(r, tr["capture"])["macs"])
     assert counted == traced and counted["updated"] and counted["theta"]
     assert step["by"]["fwd/updated"] == sum(macs for _, macs in counted["updated"].values())
     assert {row[1] for row in log if row[2] != "mm"} <= {"theta", "act"}
