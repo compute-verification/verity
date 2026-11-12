@@ -644,7 +644,8 @@ REST_PLAN = [["lean-audit:*", "lean-build"], ["pytest"]]
 
 
 @pytest.mark.parametrize("shards, plan, heavy", [
-    (3, HEAVY_PLAN, ["m1", "big", "m3"]), (2, REST_PLAN, ["big", "m2"]), (3, None, ["big"] * 3), (1, HEAVY_PLAN, ["big"]),
+    (3, HEAVY_PLAN, ["m1,m2,m3", "big", "m3,m1,m2"]), (2, REST_PLAN, ["big", "m2,m3,m1"]), (3, None, ["big"] * 3),
+    (1, HEAVY_PLAN, ["big"]),
 ], ids=["names-it", "rest", "unread", "whole"])
 def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_the_heavy_machines(
         world, monkeypatch, shards, plan, heavy):
@@ -678,7 +679,7 @@ def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
                                                                                                          steps, **kw)
     assert "heavy_on" not in start(h.d, sha, base, heavy_on="big")
     assert "heavy_on" not in start(h.d, sha, base, shards=3, audit_from=base, heavy_on="big")
-    assert machines == ["m1,m2,m3", "m1", "m2", "m3"]
+    assert machines == ["m1,m2,m3", "m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
 
 
 def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_on_the_heavy_machines(
@@ -694,7 +695,7 @@ def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_
     assert rec["heavy_on"] == "big" and machines == []
     shards = [{"parts": HEAVY_PLAN[k]} for k in (0, 2, 1)]
     plans.answers[rec["plan"]["out"]] = ({**_plan_doc(3), "shards": shards}, None)
-    assert judge(h.d, rec) == Verdict(PENDING) and machines == ["m1", "m2", "big"]
+    assert judge(h.d, rec) == Verdict(PENDING) and machines == ["m1,m2,m3", "m2,m3,m1", "big"]
 
 
 @pytest.mark.parametrize("how", ["failed", "lost", "late", "another n"])

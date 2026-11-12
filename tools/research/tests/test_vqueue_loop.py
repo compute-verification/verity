@@ -4654,8 +4654,8 @@ def test_under_gate_check_a_heavy_candidate_s_shard_auditing_security_proofs_and
     (env.tmp / "heavy").write_text(heavy)
     loop.world.heavy_file, loop.world.heavy_on = env.tmp / "heavy", on
     _, built, started = loop.tick()
-    sha, usual = built["sha"], ["m1", "m2", "m3"]
-    want = ["m1", "big", "m3"] if on else usual
+    sha, usual = built["sha"], ["m1,m2,m3", "m2,m3,m1", "m3,m1,m2"]
+    want = [usual[0], "big", usual[2]] if on else usual
     below = want if heavy == "*\n" else usual
     assert [(c, m) for c, m, _, _ in runs.launches] == [(main, m) for m in below] + [(sha, m) for m in want]
     assert started["record"].get("heavy_on") == (on or None)
