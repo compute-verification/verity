@@ -207,6 +207,7 @@ def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
     `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
     from verity_flock import class_statement as CS
+
     from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     if os.environ.get("HZ_STAGE", "fast") == "fast":
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
