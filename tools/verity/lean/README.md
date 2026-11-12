@@ -282,10 +282,12 @@ Lean's job in `check` and the tools around the audit:
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
-  as it is (by the hash Lake's trace states). It leaves out uncounted, FILE's own module aside, what no root loads
-  beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
-  name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
-  the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
+  as it is: by the hash Lake's trace states for a module it built, and for one it took from its cache or an archive
+  by Lake's own word, a `lake build --no-build` of the modules that could be siblings, which compiles nothing. It
+  leaves out uncounted, FILE's own module aside, what no root loads beside the rest: the other executables' roots,
+  and every module under an `exempt` prefix of the package's lock (the name or below it, as the audit matches it), so
+  two scripts that each declare `main` don't clash. It never fails on the lock: with none, or one that can't be read
+  (which it says on stderr), it leaves out the executables' roots alone.
   A sibling is checked as it is built. One built against an older build of an import is rebuilt when a refusal names
   it, and not otherwise: the stub's first refusal has Lake rebuild the siblings it names, once, with a line that says
   so, and what the stub says once more is the verdict. That is the step's limit, and the full check, which builds
