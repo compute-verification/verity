@@ -412,6 +412,26 @@ def test_under_form_2_the_check_reads_a_tables_salts_by_the_rows_its_registratio
                                   "execution phase 0's connection rows aren't registered"]
 
 
+def test_under_form_2_the_keep_refuses_a_hand_that_files_more_than_the_bound_in_a_class_and_writes_nothing(tmp_path):
+    """R = `phase_releases` bounds an execution phase's releases. Under form 2 the publisher's keep of a hand that
+    files one more than R in a class raises, naming the release, the class and R, before it commits, signs or
+    writes anything: that execution phase has no line and no salts. The same hand without its last release is
+    laid, R rows in each of the class's tables."""
+    R, K, strides = ENDS.phase_releases, ENDS.stride_releases, CR.strides_of(ENDS)
+    one = Released(0, 20, 2, False, bytes([1]) * 20, bytes(8))
+    many = [one._replace(order=n) for n in range(R + 1)]
+    assert CT.file(ENDS, one) == 0 and R + 1 <= strides * K
+
+    def hand(releases: list) -> tuple:
+        return tuple(tuple(releases[j * K:(j + 1) * K]) for j in range(strides))
+
+    keeper = crr.Keeper(tmp_path, None, ENDS, ws.LINK)
+    with pytest.raises(ValueError, match=f"release {R} is filed in class 0 past the class's {R} rows: R = {R} "):
+        keeper.keep(0, hand(many))
+    assert list(tmp_path.iterdir()) == []
+    assert [len(rows) for rows in CR.tables(ENDS, hand(many[:R])).values()][2:5] == [R] * 3
+
+
 @pytest.mark.parametrize("form", [1, 2])
 def test_the_check_reads_the_release_order_past_an_execution_phase_that_isnt_complete(tmp_path, form):
     """A tick past its slack faults the second of five execution phases after its third bucket, and a connection
