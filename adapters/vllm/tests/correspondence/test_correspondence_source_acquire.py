@@ -6,11 +6,14 @@ from __future__ import annotations
 import gzip
 import json
 
+import pytest
+
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
 from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
+    ReturnSlot,
     infer_wrapper_prefix,
     read_program_correspondence,
 )
@@ -124,6 +127,14 @@ def test_owning_module_by_call_id_reads_the_record():
     assert corr.owning_module({"i": 6, "name": "argmax[0]"}) == "" and corr.owning_module({"name": "model.body.embed/e[0]"}) == "body.embed"
     assert corr.confirmed("body.embed") is True and corr.confirmed("runner.sampler") is False
     assert AcquireCorrespondence(tree()).confirmed("body.embed") is None
+
+
+def test_a_named_port_off_the_runner_is_the_whole_return_and_a_call_that_names_no_module_is_refused():
+    corr = AcquireCorrespondence(tree(), wrapper_prefix="model.")
+    assert corr.return_slot({"op_path": "body.embed", "output_member": "hidden"}) == ReturnSlot()
+    for call in ({}, {"i": 6}, {"call": 2}):                                         # a call id reads a record, and this reader has none
+        with pytest.raises(KeyError, match="neither op_path, call nor name"):
+            corr.owning_module(call)
 
 
 def test_from_programs_presence_test_digest_check_and_uniform_fallback(tmp_path):

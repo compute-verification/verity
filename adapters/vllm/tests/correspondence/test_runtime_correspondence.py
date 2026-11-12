@@ -12,6 +12,7 @@ a runtime / source occurrence, as data beside the Program (`annotations["corresp
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from pathlib import Path
@@ -290,3 +291,54 @@ def test_load_without_the_namespace_raises():
         load_correspondence(bare)
     with pytest.raises(KeyError):
         load_correspondence({"annotations": {}})
+    with pytest.raises(KeyError):
+        load_correspondence("descriptor.json.gz")                        # a path is neither a descriptor nor a program
+    assert correspondence_digest("descriptor.json.gz") is None
+
+
+def test_a_document_of_another_schema_and_a_batchs_record_are_refused():
+    doc = _tp_rank_program().program.annotations[NAMESPACE]
+    with pytest.raises(ValueError, match=r"not a runtime-correspondence/v1 document \(schema='runtime-correspondence/v0'\)"):
+        RuntimeCorrespondence.from_json(dict(doc, schema="runtime-correspondence/v0"))
+    batched = dict(doc, calls=[doc["calls"][0], {"members": [doc["calls"][1]]}, *doc["calls"][2:]])
+    with pytest.raises(ValueError, match=r"calls\[1\] is a batch's, its members' records"):
+        RuntimeCorrespondence.from_json(batched)
+    assert next(RuntimeCorrespondence.records(batched)).call == 0        # each record is built when it is reached: Call 0's is, before the refusal
+
+
+def test_validate_document_names_each_problem():
+    doc = _tp_rank_program().program.annotations[NAMESPACE]
+    assert validate_document(doc) == []
+    n_occ = len(doc["occurrences"])
+    with_inputs = next(o for o, occ in enumerate(doc["occurrences"]) if occ.get("inputs"))
+    collective = next(o for o, occ in enumerate(doc["occurrences"]) if occ.get("collective"))
+
+    def problems(change) -> list[str]:
+        d = copy.deepcopy(doc)
+        change(d)
+        return validate_document(d)
+
+    def no_keys(d):
+        del d["body"], d["calls"]
+        d["schema"] = "runtime-correspondence/v0"                        # not reported: the keys are, alone
+
+    def no_node_or_op(d):
+        del d["occurrences"][0]["node"], d["occurrences"][0]["op"]
+
+    assert problems(no_keys) == ["missing top-level key 'body'", "missing top-level key 'calls'"]
+    assert problems(lambda d: d.update(schema="runtime-correspondence/v0", body="root")) == [
+        f"schema 'runtime-correspondence/v0' != {SCHEMA!r}", "body 'root' != 'program_fn'"]
+    for rank in ({"world": 2, "rank": 2}, {"world": 2, "rank": -1}, {"world": "2", "rank": 0}, {"world": 2}):
+        assert problems(lambda d, rank=rank: d.update(rank=rank)) == [f"rank coordinate {rank!r} is not integers 0 <= rank < world"]
+    assert problems(lambda d: d.update(rank=None)) == []
+    assert problems(no_node_or_op) == ["occurrences[0] lacks 'node'", "occurrences[0] lacks 'op'"]
+    assert problems(lambda d: d["occurrences"][with_inputs]["inputs"][0].update(source="elsewhere")) == [
+        f"occurrences[{with_inputs}].inputs[0].source 'elsewhere' not in the enum"]
+    for key, value in (("occurrence", "0"), ("operand_ranks", [0, "1"])):
+        changed = dict(doc["occurrences"][collective]["collective"], **{key: value})
+        got = problems(lambda d, changed=changed: d["occurrences"][collective].update(collective=changed))
+        assert got == [f"occurrences[{collective}].collective has a non-integer rank coordinate: {changed!r}"]
+    assert problems(lambda d: d["calls"][0].pop("occ")) == ["calls[0] lacks 'occ'"]
+    assert problems(lambda d: d["calls"][0].update(occ=None)) == []
+    for occ in (n_occ, -1):
+        assert problems(lambda d, occ=occ: d["calls"][2].update(occ=occ)) == [f"calls[2].occ {occ} out of range"]
