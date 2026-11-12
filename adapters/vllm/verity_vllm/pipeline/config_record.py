@@ -277,9 +277,7 @@ def tp_build_part(d: Path, world: int) -> dict[str, Any]:
 
 def _sum(parts: list[dict[str, Any]], key: str) -> int | None:
     vals = [p.get(key) for p in parts]
-    if any(v is None for v in vals):
-        return None
-    return sum(int(v) for v in vals if v is not None)
+    return None if any(v is None for v in vals) else sum(int(v) for v in vals if v is not None)
 
 
 def tp_commit_part(d: Path, world: int) -> tuple[dict[str, Any], dict[str, Any]]:

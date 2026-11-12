@@ -64,7 +64,7 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     snap = "0,1"
     if float(sp.get("temperature", 0) or 0) > 0 and w.get("requests"):
         r0 = w["requests"][0]
-        lp, t = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])), int(r0["max_tokens"]) - 1
+        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])); t = int(r0["max_tokens"]) - 1
         snap = "all"
     ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
@@ -483,7 +483,7 @@ def served_shape(d: str) -> str:
         lp, t, cap = int(s["LP"]), int(s["T"]), int(s["cap_T"])
     except (OSError, ValueError, KeyError, TypeError):
         return ""
-    return f"LP={lp} T_r={t} cap_T={cap}" if t > 0 and t != cap else ""
+    return "LP=%d T_r=%d cap_T=%d" % (lp, t, cap) if t > 0 and t != cap else ""
 
 
 #: the query the row builds its manifest of record under: `query.required.QUERY_OF_RECORD`, spelt here because the row driver

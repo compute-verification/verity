@@ -27,6 +27,7 @@ import verity_vllm.pipeline.report as CARD
 import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
+from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -83,18 +84,29 @@ def test_the_match_line_reads_the_summary(tmp_path):
     assert R.match_line(str(tmp_path)) == "verdict PASS global None   concurrency None tokens_equal True fold None"
 
 
-@pytest.mark.parametrize(("shape", "said"), [
-    ({"LP": 8, "T": 3, "cap_T": 7}, "LP=8 T_r=3 cap_T=7"),
-    ({"LP": "8", "T": "3", "cap_T": "7"}, "LP=8 T_r=3 cap_T=7"),
-    ({"LP": 8, "T": 7, "cap_T": 7}, ""),
-    ({"LP": 8, "T": 0, "cap_T": 7}, ""),
-    ({"LP": 8, "T": 3}, ""),
-    ("{", ""),
-])
-def test_the_served_shape_is_said_when_a_request_stopped_before_its_cap(tmp_path, shape, said):
+def test_a_stochastic_rows_match_summary_holds_its_sampler_value_check(tmp_path):
+    d = _summary_row(tmp_path, old=False, stage_record=True)
+
+    def summary(rcs: int) -> dict[str, Any]:
+        R.match_summary(str(d), 0, 0, 0, STAGE_START, rcs, False)
+        return json.loads((d / "match_summary.json").read_text())
+
+    assert summary(-1)["stoch_value_check"] is None, "a greedy row has none"
+    absent = summary(0)
+    assert absent["stoch_value_check"]["verdict"] == "NOT-RUN" and absent["pass"] is False
+    assert absent["compare_verdict"] == "FAIL stoch value check NOT-RUN: "
+    _put(d / "match_stoch.json", {"summary": {"verdict": "PASS", "rows": 3}, "reasons": [], "variant": "temperature"})
+    passed = summary(0)
+    assert passed["stoch_value_check"] == {"rc": 0, "verdict": "PASS", "rows": 3, "device_facts_all_match": None,
+                                           "masked_rows_all_equal": None, "reasons": [], "variant": "temperature"}
+    assert passed["compare_verdict"] == "PASS" and passed["pass"] is True
+
+
+@pytest.mark.parametrize("shape", [{"LP": 8, "T": 3}, {"LP": 8}, [8, 3], "{"])
+def test_no_served_shape_is_said_without_a_whole_record_of_it(tmp_path, shape):
     assert R.served_shape(str(tmp_path)) == ""
     _put(tmp_path / "match_shape.json", shape)
-    assert R.served_shape(str(tmp_path)) == said
+    assert R.served_shape(str(tmp_path)) == ""
 
 
 def test_a_batch_rows_digest_of_record_is_the_workload_programs(tmp_path):
@@ -179,7 +191,7 @@ def test_a_manifest_build_that_fails_keeps_no_manifest_and_says_why(tmp_path, ch
 
 
 def test_the_launch_context_command_prints_each_shapes_context(tmp_path, capsys):
-    wl = _put(tmp_path / "w.json", {"sweep": {"input_lengths": [8, 5], "output_caps": [3, 2]}})
+    wl = _put(tmp_path / "w.json", {"requests": [{"prompt_len": 8, "max_tokens": 3}, {"prompt_len": 5, "max_tokens": 2}]})
     assert LC.main(LC.Options(workload=wl)) == 0
     assert capsys.readouterr().out == "LP5_T1 [8,1]\nLP8_T2 [8,1,1]\n"
     assert LC.main(LC.Options(workload=wl, LP=8, T=2)) == 0
@@ -198,12 +210,12 @@ def test_the_card_names_each_stage_that_is_not_ok():
 
 
 def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
-    sweep = {"input_lengths": [8, 5], "output_caps": [3, 2]}
+    several = [{"prompt_len": 8, "max_tokens": 3}, {"prompt_len": 5, "max_tokens": 2}]
     varies = {"engine": {"target": {"batch_invariant": False}}}
     assert LC.batch_dispatch_of(None) is False and LC.batch_dispatch_of("") is False
-    assert LC.batch_dispatch_of(_put(tmp_path / "several.json", {**varies, "sweep": sweep})) is True
-    assert LC.batch_dispatch_of(_put(tmp_path / "one.json", {**varies, "sweep": {"input_lengths": [8], "output_caps": [3]}})) is False
-    assert LC.batch_dispatch_of(_put(tmp_path / "invariant.json", {"sweep": sweep})) is False
+    assert LC.batch_dispatch_of(_put(tmp_path / "several.json", {**varies, "requests": several})) is True
+    assert LC.batch_dispatch_of(_put(tmp_path / "one.json", {**varies, "requests": several[:1]})) is False
+    assert LC.batch_dispatch_of(_put(tmp_path / "invariant.json", {"requests": several})) is False
 
 
 def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes():
