@@ -106561,3 +106561,114 @@ Clock: `date -u` read 22:46Z before the push. Mailbox read at `cb17934ed3`: your
 
 - The notice above, if you agree with option 2.
 - For the worker that takes A17's steps 1 and 2: "state the second guarantee on `V.place` at the deployed vocabulary; the root it compares with is one function of the parameters and the record over the four sources (`OneStage.lean:13-25`)".
+
+## TWOLEG, Thu 12 Nov 22:49Z: `Reading.lean` is pushed (head `27b59966ad`); the projection's coins now agree with the run's on what the verifier reads, rather than being equal, as COINMAP found they must be; SPOT's two-stage guarantee covers the second stage's work law at unit work
+
+**In plain words.** The file that says what the two-stage form's check reads of a play, round by round, is on my branch, so D, E, F and G can start from `27b59966ad`. Putting it next to COINMAP's first entry and RUNCOINS's 22:33Z showed one wrong text in `Projection.lean`. It said the coin the device releases equals the run's coin. A release carries only a prefix of a coin: 512 bits, or an opening's first `n` elements, read as a coin padded with zeros. So the two can only agree on what the verifier reads, and a log can hold no release at all. I fixed the two statements that said it. ASSEMBLY, COINMAP, CUT and MAJORITY should merge my branch at `27b59966ad`; CUT's and MAJORITY's texts did not change. Lean's two conditions on the form hold; one thing PROVED is about to change would break the form's parse, and I say what. On the coordinator's 22:44Z question: yes, SPOT's two-stage guarantee is proved over the very second-stage draw the run makes (the work law at `k = 1`, unit work), and over a first stage at a rate, through lemmas that are proved. The guarantee's own two open premises stay open.
+
+Clock: `date -u` read 22:49Z. Branch `cursor/proofs-twoleg-c5e5` at `27b59966ad`. Mailbox and the hook's 22:41Z and 22:44Z messages read; the four launched workers' first entries read (COINMAP's at 22:40Z is the one that bears on my texts).
+
+### 1. `Reading.lean` (`security/Proofs/Properties/Verity/SampledTwo/Reading.lean`, at `27b59966ad`, a lakefile root on its own line)
+
+Definitions only [read]:
+- `Case`: the parameters', commitment's and evidence's bytes, and the blobs.
+- `Decoded k p c e`: the form's own parsers decode the case.
+- `CaseOf := Exchange → Option Case`: the instance's composite decodes it; soundness's.
+- `AcceptsOn k`: `checkBlobsAtWith true … = .accept`, the switch on, so nothing proved of an accepted play rests on the switch being off.
+- `FormAccepts C o`: the play's case `AcceptsOn`. This is the `Acc` for every piece.
+- `inputOfCase`: the `Spot.Run.Input` the check hands `Spot.Run.run`. I split it out of the form as `inputAt` (`SampledTwo.lean:240`) so the pieces can name it.
+- `SessionReading`: four fields that pieces E and F define.
+  - `stmts`: round `stage + 1`'s message;
+  - `msg`, `coin` and `agree`: a session's, at session `t` and its round `i`.
+- `readsAt h n := n ≠ stage + 1 ∧ n < off h ms.length`: every round before the verdict's but the statements'. This is the same as RUNCOINS's list of rounds `V h` does not read.
+- `formReading A C S : Reading A`, round by round as RUNCOINS's `proverSeq` and `seqCoins` lay the play out:
+  - stmt: the boundary record's canonical bytes (`recordMsg`, which `jsonMsg` reads back);
+  - round 0: the message `[]`, and the coin whose bytes are the first stage's bytes and then zeros (`coinOf`);
+  - rounds 1 to `stage`: round 1's message is the interior record, the later rounds' are `[]`; the coins are the second stage's bytes, coin by coin (`stageCoinsOf`);
+  - round `stage + 1`: `S.stmts`, no coin;
+  - a session's round: `S.msg` and `S.coin`; the verdict's round has the message `[]`;
+  - `agree`: `prefixAgree` on the bytes the run's bytes carry; for coin `j` of the second stage that is `stageWidth`: bytes from `j · L`, at most `L`.
+- It reads no key. Per the 22:41Z point 6, the key stays the parameters' `challenger`.
+
+### 2. THE CHANGE TO `Projection.lean`, which the seven pieces prove to (at `27b59966ad`)
+
+[derived, from COINMAP's 22:40Z counterexample and its second doubt, both right]
+
+- `Reading` gains a field: `agree : Exchange → ℕ → Coin → Coin → Prop`. It holds when the coin `c` read at round `i` agrees with a run's coin `c'` on everything the run's verifier reads of it.
+- `CoinMapLaw`'s second clause:
+  - Before: `∀ ω r i, Rd.reads i → Rd.dev (Fr.out ω r).log i = some (r i)`.
+  - After: `∀ ω r i, Rd.reads i → ∀ c, Rd.dev (Fr.out ω r).log i = some c → Rd.agree (Fr.out ω r) i c (r i)`.
+  - A log with no release meets it, which answers COINMAP's empty-log counterexample. A release equal to `r i`'s prefix, not the whole coin, meets it, which answers its second doubt.
+- `AcceptsRun`'s coin premise:
+  - Before: `∀ i, Rd.reads i → Rd.coin o i = some (r i)`.
+  - After: `∀ i, Rd.reads i → ∀ c, Rd.coin o i = some c → Rd.agree o i c (r i)`.
+- The assembly still closes. On an accepted play with `Good`, `CoinsRead` gives `Rd.coin o i = Rd.dev o.log i` (unchanged). Where that is `some c`, the law gives `agree … c (r i)`, which is `AcceptsRun`'s premise.
+- `CoinsRead`, `StmtReadsNone`, `MessagesFixed`, `CallsLe`, `CutBound`, `StmtAt`, `ProjectionBound`, `ProjectionOf`'s list, `MajorityBound` and `CouplingOf` are unchanged.
+- What it moves to piece G (ACCEPTS) and RUNCOINS:
+  - `V h`'s outcome must depend on each read coin only through `agree`, that is on the prefix the run's bytes carry. So RUNCOINS's `accepts_of_reads` is stated at `agree`, not at equal coins.
+  - Where `select` reads past the bytes the device released, the run of record refuses, since the source is too short. That is the fact the prefix version needs [guess, not checked].
+
+### 3. RUNCOINS: the name and the contract (its 22:33Z section 3)
+
+[read]
+
+- The form's check is `VStar.Recursive.SampledTwo.checkBlobsAtWith`, and the leg reads it at `true` (`AcceptsOn`). `checkBlobsAt` is that function at `FORM`.
+- The run's input is `inputAt` (`SampledTwo.lean:240`).
+- RUNCOINS's four items, one by one:
+  1. `Run.run` accepted at `inputAt`'s input, on the verdicts the form computed and stamped. Yes: `prepare` runs `Spot.Run.run` on it, and `finishWith` refuses unless its `symbol` is `accept`.
+  2. `Rd.msg o 1` is the interior record's bytes. Yes, `recordMsg it.record`. `Rd.msg o (stage + 1)` is `S.stmts`, which F defines to match RUNCOINS's `StmtsAre`.
+  3. The coins are the stage bytes padded with zeros. Yes, as `coinOf` and `stageCoinsOf`, but read through `agree`, not equality (section 2).
+  4. Each template's session accepted. The form throws unless every session's verifier accepts (`OneStageZk.membersRun`, `r.all`). That Flock's masked verifier accepts at `stmtAt h m₂ t` on the messages and coins the form read is E and F's lemma at `S`.
+- I agree to `SpotFlock.RunsAs.accepts_of_reads` as RUNCOINS's bridge, at `agree`. Its unread rounds, `stage + 1` and the verdict's, are my `readsAt`.
+- RUNCOINS's coin-family finding (the evidence names the family) is in `Run.coinsHold`, below my form. Its fix, passing each stage's family, is REDRAW's or the Spot owner's.
+
+### 4. Lean's two conditions on step (i) (the 22:44Z point 1)
+
+[read, at `27b59966ad`]
+
+- (a) Holds. The form's `Params` and `Evidence` are its own module's types. `paramsOfJson (j : Json) : V Params` (line 135), `evidenceOf (b : ByteArray) : V Evidence` (164) and `checkBlobs (p) (c : OneStage.Commitment) (e) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity` (288) have `OneStageZk`'s signatures (`OneStageZk.lean:245, 285, 1306`).
+- (b) Holds. `checkBlobs_refuses (hF : FORM = false) p c e bs pub prof : checkBlobs p c e bs ≠ .accept pub prof` (line 312), at every input. Not yet compiled: section 6.
+- What does not hold, and depends on PROVED's split:
+  - The form's interior audit parses with `OneStageZk.membersParamsOfJson`, which calls `OneStageZk.paramsOfJson` (`OneStageZk.lean:829`).
+  - If PROVED makes `paramsOfJson` the wrapper that refuses a law other than `subset`, the interior, whose law is the work law at `k = 1`, is refused at parse.
+  - Fix: `membersParamsOfJson` calls `paramsParsed` (PROVED's; NEEDS 2). If it does not, I inline those five lines in my form at `paramsParsed` on PROVED's head.
+
+### 5. Does SPOT's two-stage guarantee cover the second stage as the driver draws it? (the 22:44Z point 2)
+
+Yes [read].
+- `Flock.SecurityProofs.SpotKSTwo` (`security/Proofs/Flock/SamplingGeneric/Guarantees.lean:101`) is proved at SPOT[Flock]'s code (`SpotFlock.code`). That code's second stage is `Spot.Select.selectSecond` (`security/Proofs/Flock/SpotFlock/Code.lean:440`), the very function `Spot.Run.run` draws with (`Spot/Run.lean:215-217`, with `Select.secondLaw`: the work law at `k = 1`, unit work, one stratum per cell, floor `k_t`).
+- `secondDraws`, the contract clause that the second stage is one uniform `k_t`-subset per cell, independently (`security/Definitions/Claims/SamplingTwo.lean:280-284`, against the design's `escCell`), is proved at that draw by `secondDraws_code` (`security/Proofs/Flock/SamplingGeneric/TwoCode.lean:449`). Its docstring, lines 30-31, says so.
+- A first stage at a rate over the replay blocks is covered by `replayDraws_code` (`TwoCode.lean:434`). It reads the first stage through `slotDesign`, which resolves the rule with `rule.lawOver n` (`security/Properties/Spot/Draw.lean:86`), so a rate is the `subset` design at its count. `RegMatchesTwo` ties that to the design's first stage (`SpotFlock/Facts.lean:381`).
+- So no lemma that `work` at unit work is the subset design is missing, and no refusal is needed.
+- What the coverage rests on [read, `security/lean-audit.json`, `Flock.SecurityProofs.SpotKSTwo`]: its open premises `CompiledTwo.Scope` and `SpotFlock.Addresses`, and its domain premise `SpotFlock.Built`, as before.
+
+### 6. Runs
+
+- `r20261112-224832-b424` (vy-nebius-cpu-12, proofs slot, 24 GB): `lean_changed.py --build` of the form, Leg, Projection, Claim and Reading at `27b59966ad`. Waiting for a slot at 22:48Z; ETA 00:30Z [guess: up to an hour for a slot, then the closure].
+- Cancelled as superseded, each before it held a slot: `r20261112-223819-f804` (it called `verity` inside the run: point 5's exit 127 would have hit it) and `r20261112-224323-da2d` (the old projection). `9f30` was cancelled before it started; it had the same `verity lean try` line.
+
+### STOP RULE
+
+Nothing. New files and my own, nothing imports them, no lock, and the form refuses last.
+
+### NEEDS
+
+1. The Spot owner, `verity/protocols/spot/verifier/lean/Spot/Run.lean`:
+   - `run` and `interiorAudit` take the switch as a parameter defaulting to `SecondStage.FORM`. `interiorAudit` reads `SecondStage.FORM` itself, so `Run.run` refuses every two-stage input today.
+   - Until then, `FormAccepts`, at the form's own switch on, is still false at every play, and a piece that proved anything from it would prove it vacuously.
+   - The rule for the pieces: no piece uses `form_off`, `checkBlobs_refuses` or that `Run.run` refuses.
+2. PROVED, `Spot/OneStageZk.lean`: `membersParamsOfJson` calls `paramsParsed`, not the wrapper (section 4).
+3. RUNCOINS: `accepts_of_reads` at `Rd.agree` (section 2).
+
+### To post
+
+To the Spot verifier's owner: "`Spot.Run.run` reads `SecondStage.FORM` inside `interiorAudit`, so every two-stage input is refused below the caller. Could `run` (and `interiorAudit`) take `(form : Bool := SecondStage.FORM)`? That changes no behaviour at the default, and the two-stage form's proofs can then state acceptance at the switch on without being vacuous."
+
+### Not established
+
+- Nothing new is compiled: `b424` has no slot yet.
+- `Reading.lean`'s and the form's texts are unchecked by Lean: `Classical.epsilon` over `SpotFlock.Stage h`, `ByteArray` append, `Spot.Run.Input`'s fields, and the `match` in `formReading`.
+- That `V h` reads only the prefix the run's bytes carry (section 2) [guess].
+- That `stageWidth` is how `selectSecond`'s bytes split by coin. I read it from `stageByte`'s `finProdFinEquiv` layout, coin `j` at bytes `[j·L, (j+1)·L)`, not from a lemma.
+- The Python twin and difftest: not started.
+- `Refused.lean` and `HeldOf.lean`: not started.
