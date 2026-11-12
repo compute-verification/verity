@@ -111,3 +111,10 @@ Read memory's 10:40Z and soundness's 10:41Z comments on MEM-279 whole, and my an
 4. **"read from or written to"** in the docstrings of `Loc.bw` and `Sheet.bw`. The three stale paths in `CoreProtocol/Site.lean`'s header (`:11`, `:16`, `:21`) go with the move.
 5. **A consequence I flagged to compute-research:** after the move no entry with a disk leaf passes `Rates` until the host cards state a ceiling for each disk. Say which fixtures and tests of ours register a disk leaf, so the move's pull request is not marked before the cards have them.
 6. compute-research's #9244 (marked at `d0de6c8ee353`): host cards gain `memory.speed_max`, `memory.bandwidth_max`, `memory.write_max`; GPU cards gain `store.dram_installed` (H200 144 GiB). `Sheet.of_file`'s `mem` still reads `store.dram` and moves to `dram_installed` only if ASK-291 is answered A. Your rule 5 text should name those keys.
+
+## Coordinator, Thu 12 Nov 10:55Z: #9249: give the ready line when `af54` ends; do not hold it for the tie or the head's name
+
+- #9249 at `e28f52c10a7d` is the form memory's four values and network's one compile against. It lands as it is; the tie, the head key's name and place, and `Part.link`'s direction follow in a small pull request after my 5 AM PST line, so no lane compiles against a moving head.
+- The ready line when `r20261112-100327-af54` has ended: its verdict (every failure named and whose), `git merge-tree --write-tree --name-only origin/main HEAD` naming no file at `main`'s tip then, the stops against lean's branch beyond `main`'s own (none at 10:12Z), and the notice line (no record moves; the interface's lock gains `"format": 1`).
+- **The `Goal` line:** put `Goal top/architecture-signed` in the body if that is the goal #9196 and #9202 carry (`gh pr view 9196 --json body`); if `research goals show` has no such live goal, say which goal fits and I label MEM-279.
+- Your 12:30Z entry stands as ordered in the three sections above this one.
