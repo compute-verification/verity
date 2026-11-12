@@ -5350,7 +5350,7 @@
     {"file": "verity/protocols/spot/verifier/lean/pyproject.toml", "count": 3},
     {"file": "verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py", "count": 69},
     {"file": "verity/protocols/spot/verifier/lean/tests/test_challenger_inner_trees.py", "count": 8},
-    {"file": "verity/protocols/spot/verifier/lean/tests/test_difftest.py", "count": 1217},
+    {"file": "verity/protocols/spot/verifier/lean/tests/test_difftest.py", "count": 1040},
     {"file": "verity/protocols/spot/verifier/lean/tests/test_harm_bound.py", "count": 19},
     {"file": "verity/protocols/spot/verifier/lean/tests/test_site_difftest.py", "count": 57},
     {"file": "verity/protocols/spot/verifier/lean/tests/test_wires_difftest.py", "count": 103},
