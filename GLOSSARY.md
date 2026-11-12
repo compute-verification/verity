@@ -208,7 +208,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
 | "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`security/Definitions/Pouw/Assumptions/Dither.lean`), until renamed | Dither |
 | "the accelerator model", "the machine model" for 𝓜 (`benchmarks/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
-| `ShaSpeed` and `ServiceSound`, the Lean's names until renamed | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
+| `ShaSpeed` and Dither's `Pouw.Assumptions.ServiceSound`, the Lean's names until renamed; not H1's premise `Properties.Pouw.Period.ServiceSound` (a window's one-stage Flock sessions), another premise, which keeps its name | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 | "overhead", "rho" and ρ for the training-cost ratio, overhead(𝒢, 𝒜, η), "the overhead lower bound"; "the circuit-size slowdown" for \|C\|/T_0, "training efficiency" η, "hardware multiple"; `verity/protocols/inference_only/rho` (`Overhead`, `Overhead.rho`, `theorem.overhead`), until renamed | slowdown(𝒢, 𝒜, η); the slowdown lower bound (honest overhead γ, and ρ as 𝓜's resource rate, stay) |
 | "dampener", "compute dampener" D; the Lean's `Nci.Dampener` and `Dampener*` names, until renamed | the slowdown |
 | T_0 and the reference circuit C_0 as overhead's normalizer; T_target ≥ L·T_0/Φ_total | the training cost T_𝒢(η; 𝓕); the time to the task, at least T_𝒢(η; 𝒜) GPU-hours |

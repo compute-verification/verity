@@ -70,9 +70,12 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 
 The Lean predates these names. Its round is an execution phase, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
-a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
-premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
-`ProofSystemSound` (the Lean's `ServiceSound`).
+a replica, and θ is 𝓜. A rename is to follow. Two premises already have their new names in the Lean (GLOSSARY.md's
+older names give the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
+system is sound", is `ProofSystemSound` (`Pouw.Assumptions.ProofSystemSound`): the verdict accepts a period only where
+each block's instance is registrable and the selected blocks' checks pass, in Flock's proofs. It is not H1's
+`Properties.Pouw.Period.ServiceSound`, a different premise, about the one-stage Flock sessions over a window's sampled
+units, which keeps its name.
 
 ## What is committed
 
