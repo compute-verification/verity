@@ -7011,7 +7011,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "delegate", "shadow-report", "vqueue", "map-moves",
-                                            "cross"])
+                                            "cross", "stranded"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
     ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads")
