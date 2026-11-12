@@ -4,7 +4,7 @@
 # origin/main, on the passes of the newest recorded checks, which the run fetches) in a priority slot and past a failed step, and refuses
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
-# COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
+# COMMIT (a train-prep branch or sha) is checked out in a worktree its launches share, so the checkout it runs from stays put, and
 # `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ or a Lean package its verifier requires by path
@@ -169,14 +169,27 @@ fi
 trees="${TRAIN_TREES:-${TMPDIR:-/tmp}}"
 mkdir -p "$trees" || die "can't make $trees"
 tag=${shard/\//of}
-tree="$trees/train-${sha:0:12}${shard:+-${tag/:/-}}${records:+-records}"
-git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
-# a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
-rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
-git -C "$root" worktree prune
-git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
+own="$trees/train-${sha:0:12}${shard:+-${tag/:/-}}${records:+-records}"
+log="$own.log"
+# every launch of a commit runs in one tree, and so on one venv: another launch's tree of it made in the last 20 min (under every
+# sweep's age, so none removes it under this launch) is taken as it is. One older may still hold a run's launcher, so beside it
+# this launch makes its own tree, as each launch did before
+tree="$trees/train-${sha:0:12}"
+if [ -f "$tree/.git" ] && [ -n "$(find "$tree" -maxdepth 0 -mmin -20 2>/dev/null)" ] \
+    && [ "$(git -C "$tree" rev-parse -q --verify HEAD 2>/dev/null)" = "$sha" ] \
+    && [ "$(git -C "$tree" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$common" ]; then
+  echo "train: ${sha:0:12}: in the tree another launch of it made, $tree"
+else
+  [ ! -e "$tree" ] || tree=$own
+  git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
+  # a tree git no longer lists as a worktree (half removed on the control pod's NFS TMPDIR) would refuse `worktree add`
+  rm -rf "$tree" 2>/dev/null || rm -rf "$tree" || true
+  git -C "$root" worktree prune
+  # a half-made tree (HEAD written, files not) is never another launch's to take
+  git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" \
+    || { git -C "$root" worktree remove --force "$tree" 2>/dev/null || rm -rf "$tree" || true; die "git worktree add $tree failed"; }
+fi
 exec 9>&-
-log="$tree.log"
 cd "$tree"
 if [ -n "$bookkeep" ]; then
   if grep -q -- "--bookkeeping-warn" tools/verity/check/check.py; then pass+=(--bookkeeping-warn)

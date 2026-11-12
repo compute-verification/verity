@@ -154,6 +154,22 @@ def test_prune_trees_folds_the_code_clones_packs_into_one_once_they_pass_50(tmp_
     assert packs() == 1 and git("rev-list", "--count", "HEAD", cwd=repo) == "51"
 
 
+def test_prune_trees_removes_a_shards_log_beside_its_commits_one_tree(tmp_path):
+    """Every shard of a commit runs in its one tree `train-SHA` (train.sh), each with its own log `train-SHA-KofN.log`, which no
+    tree of that name carries off: one unchanged for an hour goes, a newer one stays."""
+    repo, trains = tmp_path / "verity", tmp_path / "trains"
+    repo.mkdir()
+    trains.mkdir()
+    git("init", "-q", "-b", "main", cwd=repo)
+    old, new = trains / "train-0123456789ab-1of3.log", trains / "train-0123456789ab-2of3.log"
+    old.write_text("launched\n")
+    new.write_text("launched\n")
+    os.utime(old, (0, 0))
+    env = {**os.environ, "REPO": str(repo), "FAST": str(tmp_path / "fast"), "TRAIN_TREES": str(trains)}
+    subprocess.run(["sh", "-c", f'{function("prune_trees")}prune_trees'], env=env, check=True)
+    assert not old.exists() and new.exists()
+
+
 def test_merge_resets_a_local_main_that_drifted(repo):
     clone, tip = repo
     git("checkout", "-q", "-B", "main", cwd=clone)
