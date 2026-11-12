@@ -27,15 +27,16 @@ registered and its record complete is in the event, not among the premises: a pe
 not registered as the period's, or has an incomplete record, is outside the bound.
 
 The charge. `e_i` is a number fixed before the period, and the `e_i` add over the phases. Phase `i`'s charge
-`cl z ω i` is a quantity of the phase's own coins that is not negative and reads only the phases before `i`
-(`ChargeAdaptive`): the part of a phase's error that the prover spends as the period's coins fall. The period pays
-the charges at their total along its coins, `Σ_i cl z ω i (ω i)`, averaged over those coins, once. So a quantity the
-prover spends across the phases as the earlier coins fall is charged at its total over the period, not at its
-largest value in each phase. At the charge zero the bound is `(1 - q)^Fmax + Σ_i e_i`.
+`cl z ω i` is a function of the phase's own coins that is not negative and that the earlier phases' coins fix
+(`ChargeAdaptive`); the phase's error is at most `e_i` plus the charge's average over the phase's own coins. The
+period pays the charges once: at the average, over the period's coins, of their sum along those coins,
+`Σ_i cl z ω i (ω i)`. So where the charge is what a prover spends from one budget across the phases, choosing each
+phase's share after the earlier phases' coins, the period pays at most the budget, where a bound on each phase alone
+pays each phase's largest share, added over the phases. At the charge zero the bound is `(1 - q)^Fmax + Σ_i e_i`.
 
 What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
 at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
-`y`, so the statement reads at one verifier a statement as at one verifier of every statement, the constant function;
+`y`, and one verifier that judges every statement is the constant function;
 the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds`), and a phase's verifier reads the
 first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
 this statement derives it from what the verifier accepts. That each phase reads only the phases before it
@@ -47,10 +48,11 @@ charge's average (`PhaseErrors`), with the `e_i` and the charge not negative and
 before its own (`ChargeAdaptive`).
 
 What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
-fixes no sample's form and states no error's size. It fixes no charge: the charge is a parameter, and this statement
-shows of no charge that it bounds a phase's error. The error it bounds is the committed form's, a number that the
-phase's statement, its prover's strategy and its registered openings fix before the phase's coins; it does not bound
-a phase's error by what the prover spends at the phase's own coins.
+fixes no sample's form and states no error's size. It names no charge: the charge is a parameter and `PhaseErrors`
+a premise, and nothing here shows of a charge that is not zero that it bounds a phase's error. A phase's error is
+still the committed form's with the binding term, one number at each phase, which the phase's statement, its
+prover's strategy and its registered openings fix before the phase's coins: the statement turns no part of it into
+what the prover spends.
 -/
 
 @[expose] public section
