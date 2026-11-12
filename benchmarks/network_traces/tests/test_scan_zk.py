@@ -409,6 +409,29 @@ def _reported(files: dict[str, dict]) -> dict[str, dict]:
         p: {"value": e["value"], "root": e["root"]} for p, e in f["ports"].items()}} for name, f in files.items()}
 
 
+def _record_check():
+    """A stand-in registration of four units, and the record check on it. -> (``record(registered)``, the registration
+    listing those registered values; ``check(files, rec)``, the record check's ``registered`` finding on the reads the
+    members' ``--registered`` files report, None where it finds nothing)."""
+    program = sz.PA.mixed_population_program([(FIRST, 4)])
+    query = sz.PA.template_instances_query([FIRST])
+    law = sz.DR.parse_design("stratified:4")
+
+    def record(registered: list[dict]) -> dict:
+        return R.record(program, query, law, sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                        registered=registered)
+
+    def check(files: dict[str, dict], rec: dict) -> dict | None:
+        verdicts = _reported(files)
+        draw = {**sz.DR.derive(program, query, law), "population": 4, "units": [0, 1, 2, 3]}
+        got = sz.AU.audit_record(rec, R.receipt(rec, "a test"), draw, rec["law"], [0, 1, 2, 3], 4, {}, verdicts,
+                                 2.0 ** -20, session_registered=sz.AU.session_registered(verdicts, rec))
+        assert not got["accepted"] or "registered" not in got["checks"]
+        return got["checks"].get("registered")
+
+    return record, check
+
+
 def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_the_record_check(tmp_path):
     """The record check on a scan's registration (`audit.audit_record`'s ``registered``, on the reads the verdicts
     report for the registration's values, `audit.session_registered`). Lean opens a member's registered reads against
@@ -433,22 +456,7 @@ def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_th
     (ingress, egress) = (next(d["value"] for m in honest for d in m.warden.values() if d["direction"] == x)
                          for x in ("ingress", "egress"))
     assert sorted(certified) == sorted((ingress, egress))
-    program = sz.PA.mixed_population_program([(FIRST, 4)])
-    query = sz.PA.template_instances_query([FIRST])
-    law = sz.DR.parse_design("stratified:4")
-
-    def record(registered: list[dict]) -> dict:
-        return R.record(program, query, law, sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64,
-                        registered=registered)
-
-    def check(files: dict[str, dict], rec: dict) -> dict | None:
-        verdicts = _reported(files)
-        draw = {**sz.DR.derive(program, query, law), "population": 4, "units": [0, 1, 2, 3]}
-        got = sz.AU.audit_record(rec, R.receipt(rec, "a test"), draw, rec["law"], [0, 1, 2, 3], 4, {}, verdicts,
-                                 2.0 ** -20, session_registered=sz.AU.session_registered(verdicts, rec))
-        assert not got["accepted"] or "registered" not in got["checks"]
-        return got["checks"].get("registered")
-
+    record, check = _record_check()
     rec = record(sz.registered_of(certified))
     files = {m.name: sz.registered_file(m) for m in honest}
     assert sz.AU.session_registered(_reported(files), rec) == {v: e["root"] for v, e in certified.items()}
@@ -480,6 +488,60 @@ def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_th
     assert check(swapped, rec) is None
     bare = record([])
     assert bare["format"] == R.FORMAT and all(check(f, bare) is None for f in (files, tampered(eg, "o1")))
+
+
+def test_a_registered_file_whose_certified_ports_rows_are_reversed_is_accepted_at_the_same_value_and_root(tmp_path):
+    """The other half of the open premise that the ``--registered`` file agrees with the record: which leaves each
+    proof block reads. The egress member's file with its certified port's ``reads`` reversed names the registration's
+    value, root, leaf count, words and domain, and holds proof block k to certified row T - 1 - k. The registered
+    reads accept a statement built at those positions and refuse the honest one by its first position
+    (`warden_rows.refusal`, the Python mirror of `Flock.Registered.checkPort`; that the Lean verifier's verdict on
+    the file is the mirror's is argued from its text, and not run here). A verdict reports a port's value and root and
+    not its ``reads``, so the session's reported reads are the honest session's and the record check finds nothing.
+
+    So nothing holds a proof block's row of the network certifier's table to its own bucket. Against a table of the
+    same rows in mirrored buckets (what the network certifier signs when bucket k's row leaves in bucket T - 1 - k),
+    the member's computed rows, each proof block's of its own bucket, are accepted under the reversed file and refused
+    under the honest reads ("does not open"). The check that holds a file's ``reads`` to the registration and the
+    Program turns this test into a refusal."""
+    run = published(tmp_path / "run", sz.TEST, windows=1)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST)
+    honest = h.rounds["honest"]
+    certified = sz.certified_rows([{"warden": m.warden} for m in honest])
+    eg = next(m for m in honest if m.template == "egress")
+    cells, dom = h.at.sides["egress"][eg.window].cells, h.at.sides["egress"][eg.window].dom
+    port = eg.ports["o1"]
+    rows, back = list(port["reads"]), list(port["reads"])[::-1]
+    assert back != rows and len({cells.rows[r] for r in rows}) > 1
+    reversed_ = {**port, "reads": back}
+    assert {k: v for k, v in reversed_.items() if k != "reads"} == {k: v for k, v in port.items() if k != "reads"}
+    its_value = eg.warden["o1"]["value"]
+    assert (reversed_["value"], reversed_["root"]) == (its_value, certified[its_value]["root"])
+
+    _words, _salts, entry = cells.statement(back)
+    assert sz.WR.refusal(reversed_, dom, entry, [sz.WR.bc(cells.rows[r], cells.salts[r]) for r in back]) is None
+    assert sz.WR.refusal(port, dom, eg.entries["o1"], eg.bcs["o1"]) is None
+    assert sz.WR.refusal(reversed_, dom, eg.entries["o1"], eg.bcs["o1"]) == (
+        f"registered reads: unit {eg.base} reads position {rows[0]}, and the verifier's program reads {back[0]}")
+
+    record, check = _record_check()
+    rec = record(sz.registered_of(certified))
+    files = {m.name: sz.registered_file(m) for m in honest}
+    mine = {**files, eg.name: {**files[eg.name], "ports": {**files[eg.name]["ports"], "o1": reversed_}}}
+    assert mine != files and _reported(mine) == _reported(files)
+    assert check(mine, rec) is None
+
+    late = sz.WR.Cells.commit(cells.link, cells.direction, cells.window, cells.rows[::-1], cells.wiring, cells.params,
+                              cells.session)
+    assert late.head.root != cells.head.root
+    its = sz.WR.bucket_port(late.head, h.at.params, eg.base)
+
+    def computed(reads: list[int]) -> str | None:
+        bcs = [sz.WR.bc(eg.made["o1"][k], late.salts[r]) for k, r in enumerate(reads)]
+        return sz.WR.refusal({**its, "reads": reads}, dom, late.statement(reads)[2], bcs)
+
+    assert its["reads"] == rows and computed(back) is None
+    assert computed(rows) == "registered reads: table row 0 does not open the registered root at position 0"
 
 
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
