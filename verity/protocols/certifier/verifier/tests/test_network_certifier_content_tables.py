@@ -292,14 +292,14 @@ def test_the_tables_are_the_schedules_size_whatever_the_load_and_hold_each_relea
         assert bare == {name: made[phase][name] for name in ("lengths", "fails")}
 
 
-def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_builder_lays_the_class_it_is_given(
+def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_tables_lay_the_class_they_are_given(
         ran, monkeypatch):
     """The network certifier's rule reads a release's own sizes and nothing else: the first class the schedule lists
     whose request row holds its request and whose response row holds its ids. So of two classes of one size the rule
-    files in the first only. The class is an argument of the builder, which lays a release in whichever class it is
-    told that holds it: with another rule in the one function, the tables are that rule's. A release that no class
-    holds, or whose class's rows are all held, has no content row, and its lengths and fails slots are the ones it
-    had."""
+    files in the first only. The class is an argument of `content_rows.tables`, which lays a release in whichever
+    class it is told that holds it: with another rule in the one function, the tables are that rule's. A release
+    that no class holds, or whose class's rows are all held, has no content row, and its lengths and fails slots are
+    the ones it had."""
     _, _, _, handed = ran
     got = released(handed)
     assert [CT.file(CON, r) for r in got] == [i for i, _ in FILED]
@@ -328,7 +328,7 @@ def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_builder_lay
     assert not any(any(row) for name in (*CT.names(0), *CT.names(1)) for row in none[name])
     for params, tables in ((one, made), (small, none)):
         assert {name: tables[name] for name in ("lengths", "fails")} == CR.tables(LEN, handed[0])
-    # what the builder refuses
+    # what `content_rows.tables` refuses
     a, b, c, d = first
     for releases, filing, why in (
             (first, [0, 2, 2], "a class, or None, a release"), (first, [0, 4, 2, 0], "the schedule lists 4"),

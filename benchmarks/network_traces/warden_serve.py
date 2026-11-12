@@ -682,7 +682,7 @@ class PublisherProcess:
         return done["refused"]
 
     def lengths(self, window: int, strides) -> None:
-        """The warden's `lengths`: an execution phase's hand, queued a slot stride an item
+        """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
         (`connection_rows_run.hand`); the process lays its tables, commits them and signs their head
         (`connection_rows_run.Keeper`)."""
         for item in crr.hand(window, strides):
