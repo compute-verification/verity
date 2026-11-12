@@ -16532,13 +16532,7 @@
    "premises": {
     "assumptions": [],
     "domain": ["SpotFlock.Built"],
-    "open": [
-     "Claims.SamplingGeneric.CompiledTwo.BconfXLe",
-     "Claims.SamplingGeneric.CompiledTwo.OffIregLe",
-     "Claims.SamplingGeneric.CompiledTwo.OffRegXLe",
-     "Claims.SamplingGeneric.CompiledTwo.Scope",
-     "SpotFlock.Addresses"
-    ],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
     "reads": []
    },
    "type_hash": "542bec717239108d25c9aad4002dae67c607c347ce3ddae3b51c50ae7498324f"
@@ -35295,6 +35289,17 @@
     "Verity.Expand.AndPair.d": "9f54454d09b3179a29cb266aba9baf38cc3aaef95c4c6cf98245745636c533d1"
    }
   },
+  "Definitions.Core.FirstHit": {
+   "digest": "d14b7555b48c9aa09755e4830267fa0c4593d11b976cd20d70e42bf9707618c7",
+   "definitions": {
+    "Verity.FirstHit.classFinderAt": "1149e6634be571e3d8d44bfb6b2e650b3bcfb09787d7b992afbf75fcbc9f6509",
+    "Verity.FirstHit.clsOf": "e39003c3518f494f20a99e2e140f0ce770f549d62c045ed2afec925b8e7d4021",
+    "Verity.FirstHit.firstIdx": "a89db9e9a7b0472e8461ac411da0e08adfefbda659451d619a11ce1f659e706a",
+    "Verity.FirstHit.loopCostAt": "8d34714c937c040d3929f3066d6c368bdc0fa9a46fbc7e6185afdf0a34459939",
+    "Verity.FirstHit.outOfAt": "a14671265dba96094fada0207a57d21ad168607ff7dfe11a5e9acf5243a5b051",
+    "Verity.FirstHit.sampleFinderAt": "a62db64dd0111de912f16b0f40557c2839893e1d5ccc561d492785dc9f572941"
+   }
+  },
   "Definitions.Core.Formalism": {
    "digest": "87911a6fcc6f2281e17208fcbd3c3daf4aa113c05e674e7cc698879087e3658b",
    "definitions": {
@@ -52169,16 +52174,18 @@
     "Claims.SamplingGeneric.SessionOpensTwo": "9b1b9bc7b9d5915277d92a99a9543464d7132f21a88708a6c121802fe0a6bda3"
    }
   },
-  "Proofs.Flock.SamplingGeneric.RegX": {
-   "digest": "947c038091ab6b24fe69830f580d1564ade2f96feba6b9e16ae6085e3f77e575",
+  "Proofs.Flock.SamplingGeneric.RunExtAt": {
+   "digest": "0d7527c4ba5c9dfd6c70ff117bc78bb31ec6a5b9ccba189be0e9c59d0381a4ed",
    "definitions": {
-    "Claims.SamplingGeneric.Compiled.OffRegX": "92116fc0b2f4fbae0bf4e75c8e07e3cef617ac277c26dde2f1185cbbf6257dba"
+    "Claims.SamplingGeneric.Compiled.callsBy": "50be7171eae32b29960b84c88e31aee7547d55fcfe70f1ec19e125b0ba21c47e",
+    "Claims.SamplingGeneric.Compiled.collBy": "42d8a02d29f4dd8338e184e6811dc0d9f37186da8f626b3c696ef279c90be0d5",
+    "Claims.SamplingGeneric.Compiled.runExtAt": "f86244af3fd53f5af996261f7d61f22d2648ea25343210c12a0f8b5aee68c31d"
    }
   },
   "Proofs.Flock.SamplingGeneric.SpotFirstHit": {
-   "digest": "5f2e39404317f8efeb5996777d4bcc05a8844a74f7b71937a298b71cd1f867a6",
+   "digest": "6398718f854be2df0e596c87ea9a9ca344e274ea7b57fb00e7fba5bbe67e3bc8",
    "definitions": {
-    "Flock.Guarantees.SpotFirstHitTwo": "4dd8f6969be7b3530a4aa5787bf9c14dc800787d080c0e906781f46f56a0cc96"
+    "Flock.Guarantees.SpotFirstHitTwo": "5b8387fc5be3a8aeac2996466fa1290b4add1f35b997cfe6282b5c0677a61a52"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
@@ -52212,20 +52219,47 @@
     "SamplingDeploy.compiledTwo": "f769ceaeb1605ddc3667206c2eff548c9b80b07c9267ab95ad9de253a2487e4c"
    }
   },
-  "Proofs.Flock.SamplingGeneric.TwoFirstHitKS": {
-   "digest": "2a9973f0176d34e7720f6c98528b54d12cc505e7ea551ebb11b5e4c7ff41e87f",
+  "Proofs.Flock.SamplingGeneric.TwoFirstHitAt": {
+   "digest": "088e062f5daae84d073d17b380eeffd0d9050cc54433126e2cc5c2fcda7f5008",
    "definitions": {
-    "Claims.SamplingGeneric.CompiledTwo.BconfXLe": "3a1ec65ea9b187aa78ceb674a1673da7f723d1f89771a0b1df1f32fb5e5c3d1d",
+    "Claims.SamplingGeneric.Compiled.firstHitCost": "907c25574455a240127333d8f6afe41ddd8d288a1d341ab81fed5871b166d042",
+    "Claims.SamplingGeneric.Compiled.firstSlots": "efdbcf0768fe9dae34b80b01ba0bd1876711234ac3fb9675aca52d52991e8d25",
+    "Claims.SamplingGeneric.Compiled.runCost": "46736f47f08a3a68c3265480e1d149a063935c0c7ca2b19ab7bc57f8902c4243",
+    "Claims.SamplingGeneric.Compiled.sampleNeeds": "0bd5cecf31aec26eb0209f8e278d5d7f4ffa7270e55d5cd05ccb5e9c00540fde",
+    "Claims.SamplingGeneric.Compiled.sessCountIn": "4af0b335666eff9640a7781225e488ae18b4c0160f6054e28c65f513150ed0e3"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoFirstHitKS": {
+   "digest": "b80df3b3905bae101d7aa8f4e4ce9c98e4fa6c15649d6a70497241fb697839e3",
+   "definitions": {
     "Claims.SamplingGeneric.CompiledTwo.FirstHitTwoXAt": "646125ae8f2b49e62cb43ed163e5cf48f6b1e4275ce10f30957955ab9c42b444",
-    "Claims.SamplingGeneric.CompiledTwo.OffIregLe": "06830b37c9650a435b076d574cabf663a298f4434d05a4f6314ab7f86a4fe76d",
-    "Claims.SamplingGeneric.CompiledTwo.OffRegXLe": "e3a2368cc87b7abffa68aa9dfd204d92324a010c40eeb26f429addd44e90f12b",
     "Claims.SamplingGeneric.CompiledTwo.εfirstTwoX": "496e9ebacea85bda892ca90f12e0214ecba59403bccc1e54073c82a3adabd5f7"
    }
   },
-  "Proofs.Flock.SamplingGeneric.TwoReg": {
-   "digest": "3a49d11a4f278b44851269e31b54887c15d3b6f0573fdadda650c699b2b81aaa",
+  "Proofs.Flock.SamplingGeneric.TwoOffClassAt": {
+   "digest": "459744ddd4daa1419bac132b2e39b3cdac17fba17c6932b2263642e9ce700cd7",
    "definitions": {
-    "Claims.SamplingGeneric.CompiledTwo.OffIreg": "4f3e0597509e66bba8eba0807ecd76463893e1bdb1dabaa7ace07c6059ffa62a"
+    "Claims.SamplingGeneric.Compiled.runCalls": "bc66b6c7f196ab9080fc0cd99f62cd480457bf06a13e102ed8ec89be9bf6cc51"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoReg": {
+   "digest": "99c04bc6afe28b94ee29bce1b466c6ed5d2531f2468a8b1ad31aaabda7de9014",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.iop": "81b288afcba5c6c859faff364024a4da37ac8a9952aabf43640980fc155abb82",
+    "Claims.SamplingGeneric.CompiledTwo.iopTable": "b899ca4debb7eaf2dcb25d9dab56ba9b2853c40e30204e793cd2c1e142b4ce73"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoRegFirstHit": {
+   "digest": "0a2155ff814744b4d0aa2f31383a1e8865714c0e7ce08b704dfbe0c3625ec9e5",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.callsAt": "54f388abe88ccd03077630d8e19135b1b12729992474d537a0d9522a8e989955"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass": {
+   "digest": "137fd4f5dfcce67d7b766c1a5f010f9c1f64f8d3ba24f0e663cbe3b73019b9dc",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.finderXCls": "0fb93c441b2aae01b940b2fa7ee4cbd30bd713f6428939e72824e23255b90a12",
+    "Claims.SamplingGeneric.CompiledTwo.finderICls": "7bc86bf9cd605d4b26feee5e5e39615400fdad7f8e062f139a40264149ae0241"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
@@ -55846,6 +55880,12 @@
    "definitions": {
     "SpotFlock.seenAt": "631716f938c2a13bffb074d7ff2d0592961341a19ed4f712b7210acc3e929b09",
     "SpotFlock.unitStmt": "7a42f82f5bbb0b9dddd5105c74e740a3cfedae6a54789fb2e500e98b085fe3b5"
+   }
+  },
+  "Proofs.Flock.SpotFlock.OpensWhole": {
+   "digest": "0fcaea2e64eba7e45ef124ef56bd680df04e6e77b3b04c18d6c18a878b1bf455",
+   "definitions": {
+    "SpotFlock.gateKey": "1208d994ab45752f2fcb3e9205e5fed36b0d54229f99888657a3d2f8ce78a7b4"
    }
   },
   "Proofs.Flock.SpotFlock.Placement": {
