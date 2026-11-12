@@ -81,7 +81,8 @@ def job_input(run_dir: str | None, name: str) -> str:
     if not run_dir:
         return ""
     try:
-        d = json.load(open(os.path.join(run_dir, "job.json")))
+        with open(os.path.join(run_dir, "job.json")) as f:
+            d = json.load(f)
         return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
@@ -170,7 +171,10 @@ def preserve(path: str, run_id: str) -> None:
     """Register ``run_id`` on the pod guard's durability list (once)."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        have = open(path).read().split("\n") if os.path.exists(path) else []
+        have: list[str] = []
+        if os.path.exists(path):
+            with open(path) as f:
+                have = f.read().split("\n")
         if run_id not in have:
             with open(path, "a") as f:
                 f.write(run_id + "\n")

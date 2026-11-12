@@ -751,8 +751,6 @@
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "SIM115", "symbol": "release_line", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 5},
     {"file": "verity_vllm/pipeline/remote_session.py", "kind": "T201", "symbol": "commit_session", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/research.py", "kind": "SIM115", "symbol": "job_input", "detail": "Use a context manager for opening files"},
-    {"file": "verity_vllm/pipeline/research.py", "kind": "SIM115", "symbol": "preserve", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/research.py", "kind": "T201", "symbol": "_row_json", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/research.py", "kind": "T201", "symbol": "_tee", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/research.py", "kind": "T201", "symbol": "chain", "detail": "`print` found"},
