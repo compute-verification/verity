@@ -172,7 +172,8 @@ def test_the_observer_reads_evictions_waits_and_preemptions_off_the_replay():
       whose hash goes; the second waits on that preemption, then resumes past a lookup cut 1 block short.
     - A step whose 32 tokens the first prompt fills leaves the second waiting on `tokens`; a pool the first prompt
       fills leaves it waiting on `blocks`.
-    The observer leaves the scheduler and the pool as it found them, and counts nothing on a what-if fork."""
+    The observer leaves the scheduler and the pool as it found them, after an error inside it too, and counts nothing
+    on a what-if fork."""
     before = (P.BlockPool.hit, P.BlockPool._pop_hash, P.BlockPool._get_new_blocks, P.BlockPool.cache_blocks, RP.Scheduler.schedule)
     shared = tuple(range(100, 132))
     one = _seen(_engine(max_num_seqs=1, num_gpu_blocks=5),
@@ -202,6 +203,8 @@ def test_the_observer_reads_evictions_waits_and_preemptions_off_the_replay():
         assert len(seen) == len(rp.steps) and bool(forks) == ask
         runs.append(seen)
     assert runs[0] == runs[1] and sum(s.evicted for s in runs[0]) > 0 < sum(len(s.preempted) for s in runs[0])
+    with pytest.raises(ZeroDivisionError), BC.observing():
+        raise ZeroDivisionError
     assert before == (P.BlockPool.hit, P.BlockPool._pop_hash, P.BlockPool._get_new_blocks, P.BlockPool.cache_blocks,
                       RP.Scheduler.schedule)
 

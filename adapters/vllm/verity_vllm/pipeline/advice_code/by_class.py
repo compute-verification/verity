@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.advice_code import codec as V
 from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
@@ -229,7 +230,8 @@ def observing() -> Iterator[list[Seen]]:
     """What the replay's scheduler and pool do while this is open, one `Seen` an executed step, in the steps' order
     (`replay.Replay.steps`: a `schedule()` that scheduled nothing is no step, and what it did counts at the next that
     is). A what-if run on a fork is not the replay's own and is not counted. It wraps the scheduler's and the pool's
-    methods as `codec.replay_record` wraps them for its lookups, reads what they compute and changes none of it."""
+    methods while it is open (`engine.hooks.Hooks` puts the wrappers on and takes them off), as `codec.replay_record`
+    wraps them for its lookups, reads what they compute and changes none of it."""
     steps: list[Seen] = []
     now: list[Seen] = []                            # what the `schedule()` calls since the last executed step did
     pools: dict[int, tuple[Any, set[int], set[int]]] = {}   # by pool: it, the hashes it has evicted, all it has cached
@@ -295,13 +297,11 @@ def observing() -> Iterator[list[Seen]]:
             steps.append(seen)
         return step, samples
 
-    P.BlockPool.hit, P.BlockPool._pop_hash, P.BlockPool._get_new_blocks, P.BlockPool.cache_blocks = hit, pop, new, cache
-    R.Scheduler.schedule = schedule
-    try:
+    with Hooks("by_class.observing") as hooks:
+        for name, wrapper in (("hit", hit), ("_pop_hash", pop), ("_get_new_blocks", new), ("cache_blocks", cache)):
+            hooks.patch(P.BlockPool, name, wrapper)
+        hooks.patch(R.Scheduler, "schedule", schedule)
         yield steps
-    finally:
-        P.BlockPool.hit, P.BlockPool._pop_hash, P.BlockPool._get_new_blocks, P.BlockPool.cache_blocks = hit0, pop0, new0, cache0
-        R.Scheduler.schedule = schedule0
 
 
 def bits_by_class(data: bytes, record: Record, reg: Registered) -> dict[int, dict[str, int]]:
