@@ -55,7 +55,6 @@ public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
 public import Spot.HiddenDraw
 public import Proofs.Pouw.H1Zy
-public import Proofs.Pouw.Lead
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
 public import Proofs.Pouw.MerkleExtract
@@ -201,20 +200,16 @@ public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
 public import Proofs.Pouw.Lemmas.Game
-public import Proofs.Pouw.Writes
 public import Proofs.Pouw.Dimension.H100LoopFreeProofs
 public import Proofs.Pouw.PearlC.RowSeedFragment
 
 /-!
 # PoUW's proofs
 
-`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
-
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Advantage`, `Barrier`,
-`Dimension`, `Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
-(`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
-are in `Definitions.Pouw`.
+`Dimension`, `Game`, `NCP`, `PearlC`, `Receipt`); the kernel checks them, and nobody reviews them for meaning. The topics'
+maps are in `Definitions.Pouw`.
 -/
 
 @[expose] public section
