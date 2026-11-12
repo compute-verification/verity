@@ -118,6 +118,12 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
 LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "instances_schema": <header schema>, "operand_refs_form": runs|progressions}
 
 
+def _operand_refs(row: dict) -> list:
+    """A retained row's weight references, one list per operand; none on a row that carries no list."""
+    refs = row.get("operand_refs")
+    return refs if refs else []
+
+
 def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
@@ -127,7 +133,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     # the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
     # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
-    p_idx = {i for o in rows for a in o["operand_refs"] for r in a for i in _p_indices(r)}   # the retained rows always carry the list (`load_oracle`)
+    p_idx = {i for o in rows for a in _operand_refs(o) for r in a for i in _p_indices(r)}
     w_param = max(p_idx) if p_idx else n_in - 1
     # the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
     # (exact, even for a fold whose instances read no weight -- a fixture) and cross-checked against the instances' largest "p" index.
@@ -186,8 +192,8 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         hint = o.get("hint") or ""
         mod, _, tail = hint.rpartition("/")
         name = f"{mod}.cos_sin_cache" if tail in ("rope.q", "rope.k") else tail or hint
-        oroots = o["operand_roots"]   # None where the fold recorded no weight names for the instance's operands
-        for k, a in enumerate(o["operand_refs"]):
+        oroots = o.get("operand_roots")   # none where the fold recorded no weight names for the instance's operands
+        for k, a in enumerate(_operand_refs(o)):
             nm = oroots[k] if oroots and k < len(oroots) and oroots[k] else name
             for r in a:
                 if (w := _p_w_span(r, w_param)) is not None:

@@ -51,9 +51,9 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
                 rid, ls, lj = loc
                 back = loc2glob.get(loc)
                 A = comps.get(rid)
-                meta = meta_of.get(B.inst[gi]["k"])   # the fold's own row of the instance; an instance it wrote none for has no entry
+                meta = meta_of.get(B.inst[gi]["k"])   # the fold's own row of the instance; an instance it wrote none for has none
                 ok = back == gi and rid in per_req and A is not None and ls < len(A.steps) and lj < len(A.steps[ls]) \
-                    and A.inst[A.steps[ls][lj]]["spec"] == B.inst[gi]["spec"] and (meta is None or meta.get("request") in (None, rid))
+                    and A.inst[A.steps[ls][lj]]["spec"] == B.inst[gi]["spec"] and (meta.get("request") if meta else None) in (None, rid)
                 if not ok:
                     failures += 1
                     if failures <= 10:
@@ -121,7 +121,8 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
             continue
         if within_step == "sequence":
             if ent.get("executed_steps_equal") is False:
-                perm_targets.append((ent, rid, ent["first_divergence"]["step"]))   # stated with every sequence that is not equal
+                first = ent.get("first_divergence")   # stated with every sequence that is not equal
+                perm_targets.append((ent, rid, first.get("step") if first else None))
         else:
             A_, P_ = comps[rid], proj[rid]
             for s_ in range(min(len(P_.steps), len(A_.steps))):
@@ -134,7 +135,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
             continue
         # Merkle (order-insensitive) matching of the step's instances: B instance -> A index with the same DAG hash -- the leg's
         # matching when it ran (computed where the hashes were), else this process's hashes on both sides
-        pi = perm_facts[rid].get(step) if rid in perm_facts else None
+        pi = perm_facts[rid].get(step) if perm_facts.get(rid) else None
         if pi is None:
             pi = perm_match(A, P, step, ops.dag_hashes(A), ops.dag_hashes(P))
         same_dag = all(x is not None for x in pi)

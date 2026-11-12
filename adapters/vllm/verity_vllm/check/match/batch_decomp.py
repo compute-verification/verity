@@ -449,14 +449,14 @@ def _compare_request(reads: _RequestReads, item) -> tuple:
             ent["criterion"] = "dag-multiset over the live cone (chunked prefill)"
         elif not seq_equal and not diff and within_step == "dag":
             ent["criterion"] = "dag-multiset over the live cone (within-step criterion of record; sequence differs)"
-    splits = cmp.get("splits_values")   # the two sides' own split counts held against each other; absent when either side binds none
-    ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (splits is None or splits["equal"])
+    splits = cmp.get("splits_values")   # the two sides' own split counts held against each other; none when either side binds none
+    ent["canonical_equal"] = (seq_equal or (ent.get("dag_multiset_equal") is True and (chunked or within_step == "dag"))) and (splits.get("equal", True) if splits else True)
     ent["totals"] = cmp["totals"]
     ent["a_steps"], ent["b_steps"] = cmp["a"]["steps"], cmp["b"]["steps"]
-    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further
-    bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or s["wiring"]["operands_different"]]
+    # a step whose spec sequences are equal is wired (`compare_steps`); one whose sequences do not align is compared no further and has no wiring
+    bad = [s for s in cmp["steps"] if not s["spec_seq_equal"] or (s["wiring"].get("operands_different") if s.get("wiring") else None)]
     ent["first_divergences"] = [{"step": s["step"], "n_a": s["n_a"], "n_b": s["n_b"], "div": s.get("first_divergences_T_normalised", [])[:2],
-                                 "wiring_examples": s["wiring"]["examples"][:3] if "wiring" in s else []} for s in bad[:3]]
+                                 "wiring_examples": s["wiring"].get("examples", [])[:3] if s.get("wiring") else []} for s in bad[:3]]
     ent["n_divergent_steps"] = len(bad)
     if prof is not None:
         prof["seconds"] = round(time.time() - prof["t_start"], 3)

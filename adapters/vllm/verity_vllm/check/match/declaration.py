@@ -324,7 +324,7 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
                      "component": {"dir": d, "LP": lp, "T": cap - 1, **({"C": C} if C else {}), "program_digest": built.get("program_digest") if built else None,
                                    "specialization": built.get("specialization") if built else None},
                      "global_address": {k: amap[rid].get(k) for k in ("root_node", "gates", "n_instances", "rule")} if rid in amap else None,
-                     "programmed_steps": chron[rid].get("programmed_steps") if rid in chron else None,
+                     "programmed_steps": chron[rid].get("programmed_steps") if chron.get(rid) else None,
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
     return {"schema": GP_SCHEMA, "builder": f"gprog GP-01 {art.get('schema')} workload_fn={art.get('workload_fn')}", "workload_digest": art.get("workload_digest"),
             "workload": {"path": wl_path, "sha256": art.get("manifest_digest"), "n_requests": len(reqs)},
@@ -356,14 +356,15 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
     OWN attestation (RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json, all locations agreeing)
     -- never guessed: a lag-0 record must carry the flag too, else it is indistinguishable from a lag-1 record with a deleted
     step. Returns (rows, source) with rows None when the record does not attest the flag (GM-01 refuses by name)."""
-    vals = facts["values"].get("async_scheduling")
+    values, sources = facts.get("values"), facts.get("sources")   # what the record's locations attest by key, and where each value was read
+    vals = values.get("async_scheduling") if values else None
     if not vals:
         return None, "not attested"
     v = vals[0]
     if isinstance(v, bool):
-        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
+        return (1 if v else 0), f"async_scheduling={v!r} ({', '.join(sources.get('async_scheduling', []) if sources else [])})"
     if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join(facts['sources']['async_scheduling'])})"
+        return (1 if v.strip().lower() == "true" else 0), f"async_scheduling={v!r} ({', '.join(sources.get('async_scheduling', []) if sources else [])})"
     return None, f"async_scheduling={v!r} is not a boolean"
 
 
@@ -508,7 +509,8 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
-    for src, err in facts.get("unreadable", {}).items():   # stated only when a location is there and cannot be read
+    unreadable = facts.get("unreadable")   # stated only when a location is there and cannot be read
+    for src, err in unreadable.items() if unreadable else ():
         c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (an older artifact): the record's engine conditions cannot be "
@@ -618,7 +620,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         m_s, h_s = manifest_sampling(wl), (dict(served_sampling) if served_sampling else {})
         c.info["sampling"] = {"manifest": m_s, "header": {k: h_s.get(k) for k in ("variant", "temperature", "top_p", "top_k") if k in h_s}}
         # the manifest's own sources (variants table = the driver's, label, explicit fields) must agree: fail closed
-        for conf in m_s.get("conflict", []):   # stated only when the manifest's sources disagree
+        conflicts = m_s.get("conflict")   # stated only when the manifest's sources disagree
+        for conf in conflicts if conflicts else ():
             c.fail(f"manifest of record is not one sampling declaration -- {conf}")
         for k in ("variant", "temperature", "top_p", "top_k"):
             mv, hv = m_s.get(k), h_s.get(k)
@@ -634,7 +637,8 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             if h is None or (rv is None and h.get("variant") is None):
                 continue
             r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
-            for conf in r_s.get("conflict", []) if rv is not None else []:
+            conflicts = r_s.get("conflict") if rv is not None else None
+            for conf in conflicts if conflicts else ():
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf}")
             # a manifest that pins a per-request variant against a header WITHOUT a per-request sampling
             # record is not agreement: the run was not pinned (mirror of the seed rule above) -- a pin added after the run fails closed
