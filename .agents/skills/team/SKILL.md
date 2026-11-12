@@ -156,8 +156,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   infrastructure; don't mimic deployment settings.
 - **Waiting is a bug** (AGENTS.md, Working principles): fix a repeated wait of over about 10 minutes at the source, or
   take it to its owner that day with its numbers.
-- **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) goes on its ask page decided
-  provisionally, for him to review or reverse (the asking-daniel skill). A click only his account can make (the GitHub
+- **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) is the lane's. A PR that
+  changes a lock record needs no ask: its owner marks it, and the landing DM is his notice (Daniel, 11 Nov). A claim
+  decided ahead of its PR goes on its ask page decided provisionally, for him to review or reverse (the asking-daniel
+  skill). A click only his account can make (the GitHub
   organization's admin, billing, the Nebius and Cloudflare consoles, his Cursor settings) gets a way around it where one
   exists, else a blocking card. Keys and access between our own machines and accounts are the lanes' call, set up with
   the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is its lead's call. A change

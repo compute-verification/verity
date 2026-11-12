@@ -42,6 +42,7 @@ AGREE = ("count", "N", "O", "widths", "token_dims")
 STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}
 
 
+@pytest.mark.slow
 def test_a_handover_reads_back(steps) -> None:
     s = steps()
     doc = json.loads(s.path.read_text())

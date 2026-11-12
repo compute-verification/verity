@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Decisive
+public import Definitions.Core.Game.Tape
 public import Definitions.Core.Interaction
 public import Proofs.Core.Game.Prob
 
@@ -13,6 +14,7 @@ sampling design `prob` reads (`prob_eq_prCoin`): the coins of the plays a tape d
 So a finder or a forger built from a strategy samples one tape and reads the play on it (`Tape.out`), and an event of the
 play that implies the finder's success is at most as likely as that success (`prob_le_ofReal_pr`). The play on a tape
 is a run of the game (`Tape.reaches_out`), so a property of every run holds of it.
+`Tape`, `Tape.out` and the tapes' finiteness are `Definitions.Core.Game.Tape`'s.
 -/
 
 @[expose] public section
@@ -22,29 +24,6 @@ namespace Verity.Game
 open scoped ENNReal
 
 variable {α : Type}
-
-/-- **The coins of a play of `g` at the strategy `s`**: at each coin a value, and the coins of the play after every
-value. -/
-def Tape : (g : Game α) → Strategy g → Type
-  | .ret _, _ => Unit
-  | .send _ k, s => Tape (k s.1) s.2
-  | @Game.coin _ C _ _ k, s => C × ((c : C) → Tape (k c) (s c))
-
-/-- The play's output on the tape `t`: at each coin the tape's value, and the tape after it. -/
-def Tape.out : (g : Game α) → (s : Strategy g) → Tape g s → α
-  | .ret a, _, _ => a
-  | .send _ k, s, t => Tape.out (k s.1) s.2 t
-  | @Game.coin _ C _ _ k, s, t =>
-    let t' : C × ((c : C) → Tape (k c) (s c)) := t
-    Tape.out (k t'.1) (s t'.1) (t'.2 t'.1)
-
-open Classical in
-noncomputable instance Tape.instFintype : (g : Game α) → (s : Strategy g) → Fintype (Tape g s)
-  | .ret _, _ => inferInstanceAs (Fintype Unit)
-  | .send _ k, s => Tape.instFintype (k s.1) s.2
-  | @Game.coin _ C _ _ k, s =>
-    haveI := fun c => Tape.instFintype (k c) (s c)
-    inferInstanceAs (Fintype (C × ((c : C) → Tape (k c) (s c))))
 
 instance Tape.instNonempty : (g : Game α) → (s : Strategy g) → Nonempty (Tape g s)
   | .ret _, _ => inferInstanceAs (Nonempty Unit)
