@@ -30,12 +30,12 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "floored_gemm"))
-from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
+from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts
 
 __all__ = ["tile_receipts", "xin13_receipts", "xin_keys"]
 
+HERE = Path(__file__).resolve().parent
 _spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
 fref = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(fref)
@@ -190,7 +190,10 @@ def check(d: Path) -> dict:
     z = np.zeros((T, 32), np.int64)
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
-        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+
+        def rd(name: str, dt, sfx=sfx) -> np.ndarray:
+            return np.fromfile(d / (name + sfx), dt)
+
         x = (rd("x", np.uint16).astype(np.uint32) << 16).view(np.float32).reshape(T, k)
         f = x * inv_s
         X = np.clip(np.floor(f), -127, 126).astype(np.int64) + dither_rows(key, tm * T, T, k)
