@@ -14,21 +14,28 @@ A lane hands over one directory (`write_handover`), and the grader refuses anyth
     step.json.gz       the run's step: `step_program(model, loss_fn, optimizer, batch)`'s Program at the run's batch shape
                        (`codec.encode_program`), named by its digest (`codec.program_digest`, which leaves the annotations
                        out, so `annotations` is the sha512 of their canonical JSON)
-    structure.json.gz  the same step at another batch shape, which says which dims are the tokens': only its occurrences'
-                       views are read, so it may be derived without the step's `cc`, whose routes needn't cover its shapes
+    structure.json.gz  the same step at another batch shape, which says which dims are the tokens': its occurrences are
+                       the step's, one for one (a fused attention where the step has one), and only their views are read,
+                       so at a `cc` it may be lowered without the card's tables, whose shapes needn't cover its own: the
+                       frontend's structure derivation, which marks its `train_step` annotation `structure` and which the
+                       grader refuses as a step
 
 Training's slowdown code is read where it sits, at the commit named, and never copied (`load_slowdown_code`): the grader
 calls its names of the ops that compute products and its Definitions' output widths, and refuses a capture other than the
 one it reads beside (`CAPTURE`).
 
-What it reads (`read`, "grader-products/v1"):
+What it reads (`read`, "grader-products/v2"):
 
 - the step's matrix products (`Cells.products`): one row per mm or bmm occurrence, lowered to cells that each compute
   one row of it (`ROWS`: `LinearRef_v1`, torch CPU's arithmetic, or, derived at a `cc`, the route its cuBLAS takes, each
-  k16 step the tensor core's dot), with its phase (forward, backward or optimizer), MACs, outputs and output wires, those
-  of the cells whose two operands depend on θ′ (the start's weights and the optimizer's state and scalars: `*_both`), the
-  operands' and outputs' word widths as the circuit wires them, its dims, the tokens' among them, and its cells' |C|; the
-  dots other ops are lowered to (`DotRef_v1`) are rows of their own;
+  k16 step the tensor core's dot), and one row per product of a fused attention occurrence (`ATTENTION`: at a `cc`,
+  torch's flash attention forward and backward, lowered to a head Definition a head, whose products are the tensor core's
+  k16 steps: two on the forward, five on the backward), with its phase (forward, backward or optimizer), MACs, outputs
+  and output wires, those of the cells whose two operands depend on θ′ (the start's weights and the optimizer's state and
+  scalars: `*_both`), the operands' and outputs' word widths as the circuit wires them, its dims (a fused product's the
+  bmm's it stands for), the tokens' among them, and its cells' |C|; the dots other ops are lowered to (`DotRef_v1`) are
+  rows of their own;
+- each fused attention occurrence's heads and their |C| (`Cells.attention`), which its products share;
 - N, the MACs of the matrix products whose two operands depend on θ′, and O, their output wires (`totals`);
 - |C| (`circuit_size`): the step Program's census at the Boolean prices of the primitives it calls;
 - given a trace (`against`): the slowdown code's product rows of the same step (its capture's `.products.json`) beside the
@@ -49,18 +56,21 @@ import math
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 
 FORMAT = "grader-handover/v1"
-READ = "grader-products/v1"
+READ = "grader-products/v2"
 #: the capture of training's slowdown code the grader reads beside (its `capture.products.CAPTURE`)
 CAPTURE = "4.23.0"
 THE_CODE = "training's slowdown code"
 #: its package, which sits in `benchmarks/training_slowdown`
 PACKAGE = "training_slowdown"
 DERIVE = "derive the step with step_program, the training-step frontend"
+#: the key of a Program's `train_step` annotation that marks it the frontend's structure derivation, refused as a step
+STRUCTURE_MARK = "structure"
 #: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
 #: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
 #: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K, or split-K over grid.z with a
@@ -71,6 +81,61 @@ ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKG
         "CublasSplitKGemmBf16PartialsAligned_v1", "CublasSplitKGemmAligned_v1", "CublasSerialSplitKGemmAligned_v1")
 DIMS = ("batch", "m", "k", "n")
 PHASES = ("forward", "backward", "optimizer")
+
+
+def _visible(b: dict) -> int:
+    """The (row, key) pairs a causal head of T rows computes a score of: key j of row i for j <= i."""
+    return b["T"] * (b["T"] + 1) // 2
+
+
+def _visited(b: dict) -> int:
+    """The (row, key) pairs of the blocks of BN keys a causal head's rows visit: each row every block at or below it."""
+    return b["BN"] * sum(r // b["BN"] + 1 for r in range(b["T"]))
+
+
+@dataclass(frozen=True)
+class Product:
+    """One matrix product a fused attention's head computes: its name, the bmm of torch's math path it stands for (`mkn`: its
+    m, k and n, each the head's T or D; its batch the occurrence's B x H heads), its multiply-adds and outputs (one f32
+    accumulator word an entry it computes, however the kernel splits the sum) from the head's bindings, and the head's
+    arguments each of its two operands is computed from."""
+    name: str
+    mkn: tuple[str, str, str]
+    macs: Callable[[dict], int]
+    outputs: Callable[[dict], int]
+    operands: tuple[tuple[str, ...], tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class Fused:
+    """A fused attention op: the argument its query is (its view [B, H, T, D]), the head Definitions its cells may be (B x H
+    instances an occurrence, at its T and D) and the products each head computes."""
+    query: int
+    heads: tuple[str, ...]
+    products: tuple[Product, ...]
+
+
+_BWD = ("do", "q", "k", "v", "o", "lse")
+#: the fused attention ops the grader reads as matrix products, by op: torch's flash attention forward and backward, lowered to
+#: their head Definitions (`fa2_train`, `fa2_train_bwd`), whose products are tensor-core k16 steps (`DOT`). The forward computes
+#: the scores of its visible pairs and P V over the blocks it visits; the backward computes the scores again, dP over the
+#: blocks it visits, and dV, dK and dQ from bf16 P and dS
+ATTENTION = {
+    "_scaled_dot_product_flash_attention": Fused(0, ("Fa2TrainHead_v1", "Fa2TrainSplitHead_v1"), (
+        Product("scores", ("T", "D", "T"), lambda b: b["D"] * _visible(b), _visible, (("q",), ("k",))),
+        Product("pv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k"), ("v",))))),
+    "_scaled_dot_product_flash_attention_backward": Fused(1, ("Fa2TrainBwdHead_v1",), (
+        Product("scores", ("T", "D", "T"), lambda b: b["D"] * _visible(b), _visible, (("q",), ("k",))),
+        Product("dp", ("T", "D", "T"), lambda b: b["D"] * _visited(b), _visited, (("do",), ("v",))),
+        Product("dv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k", "lse"), ("do",))),
+        Product("dk", ("D", "T", "T"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q",), _BWD)),
+        Product("dq", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (_BWD, ("k",))))),
+}
+HEADS = {h: f for f in ATTENTION.values() for h in f.heads}
+#: the tensor-core dot a head's products are k16 steps of, whose signature gives their operands' and accumulators' widths
+DOT = "HopperBF16WgmmaDot16"
+#: what a product's gates are counted by: an mm's and a bmm's its cells', a fused attention's its heads' (`gates_by_op`)
+OPS = (*PRODUCTS, "attention")
 
 
 class Refused(ValueError):
@@ -203,6 +268,10 @@ def load_handover(path: Path) -> Handover:
         if "train_step" not in ann or "correspondence" not in ann:
             raise Refused(f"the {key} Program isn't a training step the frontend derived (no train_step or "
                           f"correspondence annotation): {DERIVE}")
+        if key == "step" and ann["train_step"].get(STRUCTURE_MARK):
+            raise Refused(f"the step Program is a structure derivation (its train_step annotation is marked "
+                          f"{STRUCTURE_MARK!r}), whose cells aren't the card's: hand over step_program's Program at the "
+                          f"run's batch as the step")
         try:
             decoded[key] = decode_program(desc, REGISTRY)
         except Exception as e:
@@ -375,7 +444,11 @@ def _same_step(a: _Program, b: _Program) -> None:
 
 
 def _dims(p: _Program, o: int) -> dict:
-    """An mm or bmm occurrence's (batch, m, k, n), from its operands' views."""
+    """An mm or bmm occurrence's (batch, m, k, n), from its operands' views; a fused attention's (B, H, T, D), from its query's."""
+    fused = ATTENTION.get(p.ops[o])
+    if fused is not None:
+        (Q,) = [v for v in p.views[o] if v.arg == fused.query]
+        return dict(zip("BHTD", Q.shape))
     (A,), (B,) = ([v for v in p.views[o] if v.arg == a] for a in (0, 1))
     if p.ops[o] == "mm":
         (M, K), (_, N) = A.shape, B.shape
@@ -384,12 +457,19 @@ def _dims(p: _Program, o: int) -> dict:
     return {"batch": Bt, "m": M, "k": K, "n": N}
 
 
+def _product_dims(x: dict, pr: Product) -> dict:
+    """The (batch, m, k, n) of the bmm a fused attention's product `pr` stands for, at its occurrence's (B, H, T, D) `x`."""
+    return {"batch": x["B"] * x["H"], **{d: x[s] for d, s in zip(DIMS[1:], pr.mkn)}}
+
+
 # -- the step's multiply-add cells, on its circuit -----------------------------------------------------------------------
 
 #: the multiply-add cells a step's circuit computes products with, each instance's MACs and outputs from its bindings: a
-#: row of a matrix product (`ROWS`, `{K, N}`: N dots of K, what every mm and bmm is lowered to) and one dot
-#: (`DotRef_v1{K}`, what other ops' sums of products are lowered to)
-MAC_CELLS = {**dict.fromkeys(ROWS, lambda b: (b["K"] * b["N"], b["N"])), "DotRef_v1": lambda b: (b["K"], 1)}
+#: row of a matrix product (`ROWS`, `{K, N}`: N dots of K, what every mm and bmm is lowered to), one dot (`DotRef_v1{K}`,
+#: what other ops' sums of products are lowered to) and a fused attention's head (`HEADS`: its products' together)
+MAC_CELLS = {**dict.fromkeys(ROWS, lambda b: (b["K"] * b["N"], b["N"])), "DotRef_v1": lambda b: (b["K"], 1),
+             **{h: (lambda b, f=f: (sum(pr.macs(b) for pr in f.products), sum(pr.outputs(b) for pr in f.products)))
+                for h, f in HEADS.items()}}
 
 
 def _instances(nd) -> int:
@@ -405,19 +485,39 @@ def _first_node(refs) -> int:
 
 def _check_products(p: _Program, code) -> None:
     """Refuse a step whose matrix products the grader doesn't read whole: an aten op that computes products (the slowdown
-    code's `opnames.gemm_like`) other than an mm or bmm, and an mm or bmm whose multiply-add cells aren't rows (`ROWS`) of
-    its K and N, one for each of its rows."""
+    code's `opnames.gemm_like`) other than an mm, a bmm or a fused attention (`ATTENTION`); an mm or bmm whose multiply-add
+    cells aren't rows (`ROWS`) of its K and N, one for each of its rows; a fused attention whose cells aren't its heads
+    (`Fused.heads`) at its T and D, one for each of its B x H heads; and a head outside an occurrence of its op."""
     cells: dict = collections.defaultdict(list)
     for k, c in enumerate(p.calls):
         nd = p.nodes[p.n_in + k]
         if getattr(nd.fn, "base_id", None) in MAC_CELLS:
             cells[c["occ"]].append(nd)
+    fix = "derive the step with step_program's training rules"
+    for o, nds in cells.items():
+        stray = sorted({nd.fn.id for nd in nds if nd.fn.base_id in HEADS and (o is None or HEADS[nd.fn.base_id]
+                                                                               is not ATTENTION.get(p.ops[o]))})
+        if stray:
+            where = "no occurrence" if o is None else f"occurrence {p.occs[o]['node']} ({p.occs[o]['op']})"
+            raise Refused(f"{stray[0]} computes a fused attention's products on {where}, not one of its op: {fix}")
     for o, name in enumerate(p.ops):
         where = f"occurrence {p.occs[o]['node']} ({p.occs[o]['op']})"
+        fused = ATTENTION.get(name)
+        if fused is not None:
+            x = _dims(p, o)
+            bad = sorted({nd.fn.id for nd in cells[o] if nd.fn.base_id not in fused.heads
+                          or nd.fn.bindings.get("T") != x["T"] or nd.fn.bindings.get("D") != x["D"]})
+            heads = sum(_instances(nd) for nd in cells[o])
+            if bad or heads != x["B"] * x["H"]:
+                raise Refused(f"{where}, [B, H, T, D] = [{x['B']}, {x['H']}, {x['T']}, {x['D']}], isn't head cells "
+                              f"({', '.join(fused.heads)}) of T={x['T']} and D={x['D']}, one for each of its "
+                              f"{x['B'] * x['H']} heads ({', '.join(bad[:2]) or f'{heads} heads'}): {fix}")
+            continue
         if name not in PRODUCTS:
             if p.aten[o] and code.opnames.gemm_like(name):
                 raise Refused(f"{where} computes matrix products the grader doesn't read (it reads "
-                              f"{', '.join(PRODUCTS)}): derive the step with a rule that lowers it to mm or bmm")
+                              f"{', '.join((*PRODUCTS, *ATTENTION))}): derive the step with a rule that lowers it to one "
+                              f"of those")
             continue
         d = _dims(p, o)
         bad = sorted({nd.fn.id for nd in cells[o] if nd.fn.base_id not in ROWS or nd.fn.bindings.get("K") != d["k"]
@@ -426,7 +526,7 @@ def _check_products(p: _Program, code) -> None:
         if bad or rows != d["batch"] * d["m"]:
             raise Refused(f"{where}, {d['batch']}x{d['m']}x{d['k']}x{d['n']}, isn't row cells ({', '.join(ROWS)}) of "
                           f"K={d['k']} and N={d['n']}, one for each of its {d['batch'] * d['m']} rows "
-                          f"({', '.join(bad[:2]) or f'{rows} rows'}): derive the step with step_program's training rules")
+                          f"({', '.join(bad[:2]) or f'{rows} rows'}): {fix}")
 
 
 class Cells:
@@ -434,11 +534,16 @@ class Cells:
     depend on θ′ (`dep`: the start's weights, the optimizer's state and scalars, and every node computed from them), which
     the loss is computed from (`forward`), which read the optimizer's state (`opt`), and each multiply-add cell
     (`MAC_CELLS`): its occurrence, census class, instances, MACs and outputs, whether each of its two operands depends on θ′,
-    and the operands' and the outputs' word widths, from the cell Definition's signature."""
+    and the operands' and the outputs' word widths, from the cell Definition's signature. A fused attention's head is one
+    record a product it computes (`Fused.products`: `product`), its operands' dependence that of the head's arguments the
+    product names, their widths and its outputs' the tensor-core dot's (`DOT`); `heads` holds each head cell once."""
 
     def __init__(self, p: _Program) -> None:
         from verity.circuits.codec import descriptor_id
+        from verity.definitions.ops import prims
 
+        dot_params, dot_ret = getattr(prims, DOT).signature()
+        dot_widths = [max(t.width_set()) for _, t in dot_params[1:3]]
         self.p = p
         P, S = len(p.layout["params"]), len(p.layout["scalars"])
         seeds = set(p.layout["inputs"][:3 * P + S])
@@ -458,19 +563,29 @@ class Cells:
                     fwd[x] = True
         self.dep, self.opt, self.forward = dep, opt, fwd
         self.cells: list[dict] = []
+        self.heads: list[dict] = []
         logs: dict = {}
         for i in range(n_in, n):
             nd = p.nodes[i]
-            per = MAC_CELLS.get(getattr(nd.fn, "base_id", None))
+            base = getattr(nd.fn, "base_id", None)
+            per = MAC_CELLS.get(base)
             if per is None:
                 continue
-            macs, outs = per(nd.fn.bindings)
             params, ret = nd.fn.signature()
             k = _instances(nd)
+            cell = {"node": i, "occ": p.calls[i - n_in]["occ"], "cell": nd.fn.id, "base": base, "class": descriptor_id(nd.fn),
+                    "phase": self.phase(i), "instances": k}
+            if base in HEADS:
+                self.heads.append(cell)
+                arg = {name: any(dep[x] for x in _ref_nodes(a.refs, logs)) for (name, _), a in zip(params, nd.args)}
+                for pr in HEADS[base].products:
+                    self.cells.append({**cell, "product": pr.name, "macs": k * pr.macs(nd.fn.bindings),
+                                       "outputs": k * pr.outputs(nd.fn.bindings), "out_width": max(dot_ret.width_set()),
+                                       "widths": dot_widths, "dep": [any(arg[a] for a in names) for names in pr.operands]})
+                continue
+            macs, outs = per(nd.fn.bindings)
             self.cells.append({
-                "node": i, "occ": p.calls[i - n_in]["occ"], "cell": nd.fn.id, "base": nd.fn.base_id,
-                "class": descriptor_id(nd.fn),
-                "phase": self.phase(i), "instances": k, "macs": k * macs, "outputs": k * outs,
+                **cell, "product": None, "macs": k * macs, "outputs": k * outs,
                 "out_width": max(ret.width_set()), "widths": [max(t.width_set()) for _, t in params[:2]],
                 "dep": [any(dep[x] for x in _ref_nodes(a.refs, logs)) for a in nd.args[:2]]})
 
@@ -485,22 +600,25 @@ class Cells:
         return next((x for x in PHASES if x in got), "backward")
 
     def products(self, structure: _Program | None = None, C: dict | None = None) -> list[dict]:
-        """Each occurrence with multiply-add cells (and the cells of no occurrence, as one row): its op, phase, cells and
-        their instances, MACs, outputs and output wires, those of cells with both operands depending on θ′ (`*_both`),
-        each operand's dependence (any cell's), the operands' and outputs' word widths, for an mm or bmm its dims
-        from its operands' views (`dims`, their MACs `dims_macs`) and, given the structure Program, its token dims
-        (`token_dims`: those that differ there), and, given the step's |C| (`circuit_size`), its cells' gates (`gates`,
-        each instance at its class's) and the primitives they leave out, with no Boolean version (`unpriced`)."""
+        """Each occurrence with multiply-add cells (and the cells of no occurrence, as one row), and each product a fused
+        attention's heads compute (`product`, one row each): its op, phase, cells and their instances, MACs, outputs and
+        output wires, those of cells with both operands depending on θ′ (`*_both`), each operand's dependence (any cell's),
+        the operands' and outputs' word widths, for an mm or bmm its dims from its operands' views and for a fused product
+        the bmm's it stands for (`dims`, their MACs `dims_macs`) and, given the structure Program, its token dims
+        (`token_dims`: those that differ at the structure's same occurrence), and, given the step's |C| (`circuit_size`),
+        its cells' gates (`gates`, each instance at its class's; None for a fused product, whose heads' gates are their
+        occurrence's, `attention`) and the primitives they leave out, with no Boolean version (`unpriced`)."""
         p = self.p
         classes = None if C is None else {r["class"]: r for r in C["classes"]}
         by: dict = {}
         for c in self.cells:
-            by.setdefault(c["occ"], []).append(c)
+            by.setdefault((c["occ"], c["product"]), []).append(c)
         rows = []
-        for o, cs in sorted(by.items(), key=lambda kv: -1 if kv[0] is None else kv[0]):
+        order = {pr.name: j for f in ATTENTION.values() for j, pr in enumerate(f.products)}
+        for (o, product), cs in sorted(by.items(), key=lambda kv: (-1 if kv[0][0] is None else kv[0][0], order.get(kv[0][1], -1))):
             both = [c for c in cs if all(c["dep"])]
             row = {"occ": o, "node": None if o is None else p.occs[o]["node"], "op": None if o is None else p.ops[o],
-                   "phase": cs[0]["phase"] if o is None else self.occ_phase(o),
+                   "product": product, "phase": cs[0]["phase"] if o is None else self.occ_phase(o),
                    "cells": sorted({c["cell"] for c in cs}), "instances": sum(c["instances"] for c in cs),
                    "macs": sum(c["macs"] for c in cs), "outputs": sum(c["outputs"] for c in cs),
                    "out_wires": sum(c["outputs"] * c["out_width"] for c in cs),
@@ -508,18 +626,41 @@ class Cells:
                    "out_wires_both": sum(c["outputs"] * c["out_width"] for c in both),
                    "dep": [any(c["dep"][a] for c in cs) for a in (0, 1)],
                    "widths": sorted({tuple(c["widths"]) for c in cs}), "out_widths": sorted({c["out_width"] for c in cs})}
-            if row["op"] in PRODUCTS:
-                dims = _dims(p, o)
+            if row["op"] in PRODUCTS or product is not None:
+                if product is None:
+                    dims, d2 = _dims(p, o), None if structure is None else _dims(structure, o)
+                else:
+                    pr = next(x for x in ATTENTION[row["op"]].products if x.name == product)
+                    dims = _product_dims(_dims(p, o), pr)
+                    d2 = None if structure is None else _product_dims(_dims(structure, o), pr)
                 row["dims"] = dims
                 row["dims_macs"] = math.prod(dims.values())
-                if structure is not None:
-                    d2 = _dims(structure, o)
+                if d2 is not None:
                     row["token_dims"] = sorted(d for d in dims if dims[d] != d2[d])
             if classes is not None:
                 cl = [classes[c["class"]] for c in cs]
-                row["gates"] = sum(c["instances"] * (k["gates"] // k["instances"]) for c, k in zip(cs, cl))
+                row["gates"] = None if product is not None else sum(c["instances"] * (k["gates"] // k["instances"])
+                                                                    for c, k in zip(cs, cl))
                 row["unpriced"] = sorted({u for k in cl for u in k["unpriced"]})
             rows.append(row)
+        return rows
+
+    def attention(self, C: dict) -> list[dict]:
+        """Each fused attention occurrence: its op, phase, head cells and their instances, the products they compute, and,
+        at the step's |C| (`circuit_size`), their gates (each instance at its class's: a head's whole, which its products
+        share) and the primitives they leave out (`unpriced`)."""
+        p, classes = self.p, {r["class"]: r for r in C["classes"]}
+        by: dict = {}
+        for h in self.heads:
+            by.setdefault(h["occ"], []).append(h)
+        rows = []
+        for o, hs in sorted(by.items()):
+            cl = [classes[h["class"]] for h in hs]
+            rows.append({"occ": o, "node": p.occs[o]["node"], "op": p.ops[o], "phase": self.occ_phase(o),
+                         "cells": sorted({h["cell"] for h in hs}), "instances": sum(h["instances"] for h in hs),
+                         "products": [pr.name for pr in ATTENTION[p.ops[o]].products],
+                         "gates": sum(h["instances"] * (k["gates"] // k["instances"]) for h, k in zip(hs, cl)),
+                         "unpriced": sorted({u for k in cl for u in k["unpriced"]})})
         return rows
 
 
@@ -585,18 +726,27 @@ def circuit_size(program) -> dict:
 
 # -- the front door ------------------------------------------------------------------------------------------------------
 
-def totals(rows: list[dict]) -> dict:
+def _op(r: dict) -> str | None:
+    """What a row's product is counted under (`OPS`): its op, a fused attention's "attention"; None for another op's dots."""
+    return "attention" if r["op"] in ATTENTION else r["op"] if r["op"] in PRODUCTS else None
+
+
+def totals(rows: list[dict], attention: list[dict]) -> dict:
     """The matrix products' count, MACs, N (the MACs of those whose two operands depend on θ′), O (their output wires) and
-    gates, with N and gates by phase, gates by op and the operands' and outputs' widths; the other ops' dots apart (`dots`)."""
-    prods = [r for r in rows if r["op"] in PRODUCTS]
-    dots = [r for r in rows if r["op"] not in PRODUCTS]
+    gates (an mm's and a bmm's its rows', a fused attention's its occurrences' heads', `attention`), with N and gates by
+    phase, gates by op (`OPS`), the operands' and outputs' widths, and the fused attention occurrences and the products they
+    count among them (`fused`); the other ops' dots apart (`dots`)."""
+    prods = [r for r in rows if _op(r)]
+    dots = [r for r in rows if not _op(r)]
+    gated = [r for r in prods if r["gates"] is not None] + attention
     return {"products": len(prods), "macs": sum(r["macs"] for r in prods), "N": sum(r["macs_both"] for r in prods),
             "O": sum(r["out_wires_both"] for r in prods), "outputs": sum(r["outputs_both"] for r in prods),
-            "gates": sum(r["gates"] for r in prods),
+            "gates": sum(r["gates"] for r in gated),
             "N_by_phase": {ph: sum(r["macs_both"] for r in prods if r["phase"] == ph) for ph in PHASES},
-            "gates_by_phase": {ph: sum(r["gates"] for r in prods if r["phase"] == ph) for ph in PHASES},
-            "gates_by_op": {op: sum(r["gates"] for r in prods if r["op"] == op) for op in PRODUCTS},
-            "unpriced": sorted({u for r in prods for u in r["unpriced"]}),
+            "gates_by_phase": {ph: sum(r["gates"] for r in gated if r["phase"] == ph) for ph in PHASES},
+            "gates_by_op": {op: sum(r["gates"] for r in gated if _op(r) == op) for op in OPS},
+            "fused": {"ops": len(attention), "products": sum(1 for r in prods if _op(r) == "attention")},
+            "unpriced": sorted({u for r in gated for u in r["unpriced"]}),
             "widths": sorted({tuple(w) for r in prods for w in r["widths"]}),
             "out_widths": sorted({w for r in prods for w in r["out_widths"]}),
             "dots": {"rows": len(dots), "macs": sum(r["macs"] for r in dots), "N": sum(r["macs_both"] for r in dots),
@@ -611,12 +761,13 @@ def read(h: Handover, code) -> dict:
     _same_step(step, structure)
     _check_products(step, code)
     C = circuit_size(h.step)
-    rows = Cells(step).products(structure, C)
+    cells = Cells(step)
+    rows, attention = cells.products(structure, C), cells.attention(C)
     return {"format": READ,
             "handover": {"path": str(h.path), "run": h.doc["run"]["id"], "frontend": h.doc["frontend"]["commit"],
                          **{k: {"digest": h.doc[k]["digest"], "batch": h.doc[k]["batch"]} for k in ("step", "structure")}},
             "slowdown_code": {"version": code.version, "commit": code.commit, "checked": code.checked, "capture": CAPTURE},
-            "products": rows, "totals": totals(rows), "C": C}
+            "products": rows, "attention": attention, "totals": totals(rows, attention), "C": C}
 
 
 def load_trace(path: Path) -> dict:
@@ -639,11 +790,14 @@ def _key(phase: str, op: str, dims: dict) -> tuple:
 def against(result: dict, trace: dict, code) -> dict:
     """The circuit's matrix products (`read`'s) beside the slowdown code's product rows of the same step (`trace`,
     `load_trace`), by (phase, op, batch, m, k, n): on each side the products' count, N, O, operand widths, token dims and
-    gates. The trace's widths are those its capture passes; its O has each output at its Definition's output width b_y, as
-    the slowdown code's `he_of_rows` reads it from `work.HE_BITS` (the narrower operand's width for a Definition it
+    gates. A fused attention's products are op "attention" at the dims of the bmm each stands for, and so is every bmm row of
+    the trace at the phase and dims of one of them: the trace computes attention as torch's math path does, and its capture
+    marks no call. The trace's widths are those its capture passes; its O has each output at its Definition's output width
+    b_y, as the slowdown code's `he_of_rows` reads it from `work.HE_BITS` (the narrower operand's width for a Definition it
     doesn't list); its gates are each product's MACs at its gates a MAC (`gates_per_mac`), as its |C| prices them. The
-    circuit's are as it wires and prices them. `agree` says which of count, N, O, widths and token dims match at every key;
-    `C` holds both sides' |C| and their ratio: the step's, each op's products', all products' and the rest's (the step's
+    circuit's are as it wires and prices them, but for attention's, whose gates are its heads' and are not split by product
+    or key (None at a key; `C`'s "attention"). `agree` says which of count, N, O, widths and token dims match at every key;
+    `C` holds both sides' |C| and their ratio: the step's, each of `OPS`'s products', all products' and the rest's (the step's
     less its products')."""
     if trace["capture"] != CAPTURE:
         raise Refused(f"the trace is capture {trace['capture']}'s, and the grader reads beside {CAPTURE}'s: capture the "
@@ -655,17 +809,21 @@ def against(result: dict, trace: dict, code) -> dict:
         return e.setdefault(s, {"count": 0, "N": 0, "O": 0, "gates": 0, "widths": set(), "token_dims": set()})
 
     for r in result["products"]:
-        if r["op"] not in PRODUCTS:
+        if not _op(r):
             continue
-        e = side(_key(r["phase"], r["op"], r["dims"]), "circuit")
+        e = side(_key(r["phase"], _op(r), r["dims"]), "circuit")
         e["count"] += 1
         e["N"] += r["macs_both"]
         e["O"] += r["out_wires_both"]
-        e["gates"] += r["gates"]
+        e["gates"] = None if _op(r) == "attention" else e["gates"] + r["gates"]
         e["widths"] |= {tuple(w) for w in r["widths"]}
         e["token_dims"].add(tuple(r.get("token_dims") or ()))
+    fused = {(k[0], k[2:]) for k in by if k[1] == "attention"}
     for r in trace["rows"]:
-        e = side(_key(r["phase"], r["op"], r["dims"]), "trace")
+        key = _key(r["phase"], r["op"], r["dims"])
+        if r["op"] == "bmm" and (key[0], key[2:]) in fused:
+            key = _key(r["phase"], "attention", r["dims"])
+        e = side(key, "trace")
         e["count"] += r["count"]
         if all(r["affected"]):
             b_y = code.work.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
@@ -687,15 +845,16 @@ def against(result: dict, trace: dict, code) -> dict:
     def ratio(circuit, trace_) -> dict:
         return {"circuit": circuit, "trace": trace_, "ratio": circuit / trace_ if trace_ else None}
 
-    ops = {s: {op: sum(r[s]["gates"] for r in rows if r["op"] == op) for op in PRODUCTS} for s in ("circuit", "trace")}
+    ops = {"circuit": result["totals"]["gates_by_op"],
+           "trace": {op: sum(r["trace"]["gates"] for r in rows if r["op"] == op) for op in OPS}}
     prods = {s: sum(ops[s].values()) for s in ops}
     step = {"circuit": result["C"]["gates"], "trace": trace["gates"]}
-    C = {"step": ratio(step["circuit"], step["trace"]), **{op: ratio(ops["circuit"][op], ops["trace"][op]) for op in PRODUCTS},
+    C = {"step": ratio(step["circuit"], step["trace"]), **{op: ratio(ops["circuit"][op], ops["trace"][op]) for op in OPS},
          "products": ratio(prods["circuit"], prods["trace"]),
          "rest": ratio(step["circuit"] - prods["circuit"], None if step["trace"] is None else step["trace"] - prods["trace"])}
-    return {"rows": rows, "totals": {s: {x: sum(r[s][x] for r in rows) for x in ("count", "N", "O", "gates")}
-                                     for s in ("circuit", "trace")},
-            "agree": agree, "C": C}
+    tot = {s: {x: sum(r[s][x] for r in rows) for x in ("count", "N", "O")} for s in ("circuit", "trace")}
+    tot["circuit"]["gates"], tot["trace"]["gates"] = result["totals"]["gates"], sum(r["trace"]["gates"] for r in rows)
+    return {"rows": rows, "totals": tot, "agree": agree, "C": C}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -718,11 +877,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     t = out["totals"]
-    line = f"grader: {t['products']} products, N {t['N']:,}, O {t['O']:,}, |C| {out['C']['gates']:,} ({t['gates']:,} products')"
+    line = (f"grader: {t['products']} products ({t['fused']['products']} of them {t['fused']['ops']} fused attention ops'), "
+            f"N {t['N']:,}, O {t['O']:,}, |C| {out['C']['gates']:,} ({t['gates']:,} products')")
     if "against" in out:
         C = out["against"]["C"]
         line += (f"; against {THE_CODE}: agree {out['against']['agree']}, |C| ratio "
-                 + ", ".join(f"{k} {C[k]['ratio']}" for k in ("step", "products", *PRODUCTS, "rest")))
+                 + ", ".join(f"{k} {C[k]['ratio']}" for k in ("step", "products", *OPS, "rest")))
     print(line)
     return 0
 
