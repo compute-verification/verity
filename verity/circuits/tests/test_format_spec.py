@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits import codec, cut, partition_object as PO
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.circuits.layout import resolve
 from verity.circuits.parts import n_members
 from verity.circuits.program import INPUT_ID, Program, input_id, is_input
@@ -637,6 +637,23 @@ def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
     assert got == dict(VECTORS["decoder_rejects"])[label], REWRITE
     assert got is not None and why in got
+
+
+def test_the_builders_refuse_a_parameter_name_twice():
+    """What the decoder refuses of a descriptor's Definition, the builders refuse of their own: a primitive, a composite
+    when its body is built, a builder whose parameters were replaced after it took them, and a body made without one."""
+    twice, a = (("a", V32), ("a", V32)), Coll(V32, Affine("p", 0, 0, 1))
+    with pytest.raises(ValueError, match="primitive TTwice_v1: parameters: a name twice"):
+        _prim("TTwice", twice, V32)
+    with pytest.raises(ValueError, match="definition 'TTwice_v1': parameters: a name twice"):
+        _ = bind(_comp("TTwice", (), lambda S: (twice, V32), lambda B, S, a, b: B.call(TAdd, a, b))).body
+    B = Builder((("a", V32), ("b", V32)), V32)
+    B.params = twice
+    with pytest.raises(ValueError, match="parameters: a name twice"):
+        B.finish(a)
+    with pytest.raises(ValueError, match="parameters: a name twice"):
+        Body(twice, V32, [], a.refs, [0])
+    assert Builder((("a", V32), ("b", V32)), V32).finish(a).params == (("a", V32), ("b", V32))
 
 
 def test_the_self_contained_entry_and_v0(decoded):

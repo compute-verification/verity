@@ -97,6 +97,12 @@ def conformance_label(text: str, of: str = "a Definition") -> str:
     return m.group(0)
 
 
+def _a_name_twice(params: Sequence[tuple[str, Type]]) -> bool:
+    """Whether two of `params` have one name. A parameter is read by its name (a port, a registered read), so every decoder
+    and builder refuses a Definition where this holds."""
+    return len({n for n, _ in params}) != len(params)
+
+
 @dataclass(eq=False)
 class PrimitiveDefinition(FunctionDefinition):
     """`tables`: every table the primitive's definition reads by index (its evaluator, or the circuit that proves it), as
@@ -119,7 +125,7 @@ class PrimitiveDefinition(FunctionDefinition):
             raise TypeError(f"a primitive returns exactly one Value<w>; {self.id} declares {self.ret!r}")
         conformance_label(self.conformance, self.id)
         self.params = tuple((n, t) for n, t in self.params)
-        if len({n for n, _ in self.params}) != len(self.params):
+        if _a_name_twice(self.params):
             raise ValueError(f"primitive {self.id}: parameters: a name twice")
         self.tables = tuple((n, k) for n, k in self.tables)
         bad = [k for _n, k in self.tables if k not in TABLE_KINDS]
@@ -322,6 +328,11 @@ class Body:
     nodes: list[Node]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
+
+    def __post_init__(self) -> None:
+        # a frontend may replace its builder's parameters before `finish`, and a body can be made without a builder
+        if _a_name_twice(self.params):
+            raise ValueError("parameters: a name twice")
 
     @property
     def gates(self) -> int:
@@ -731,7 +742,7 @@ class Builder:
     its fields) and every node a reference names exists."""
 
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
-        if len({n for n, _ in params}) != len(params):
+        if _a_name_twice(params):
             raise ValueError("parameters: a name twice")
         self.params = params
         self.ret_type = ret_type
