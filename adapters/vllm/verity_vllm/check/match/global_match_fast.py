@@ -393,7 +393,7 @@ class _MemoProjection(_CanonMemo, PJ.Projection):
     decoded fold + components) and GM-01's G3 build one each per request; `projection()` below hands G3 the X-09 one (relabelled) instead
     of rebuilding + recanonicalising it."""
 
-    def __init__(self, oracle, label, inst_idx, tok_node, weights_node, seed_node=None, peer_node=None):
+    def __init__(self, oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node=None):
         super().__init__(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
         key = _proj_key(oracle, inst_idx, tok_node, weights_node, seed_node, peer_node)
         _proj_registry[key] = (oracle, self)
@@ -475,23 +475,6 @@ def producer_chronology(P, idxs: list[int], B, engine_step_of: dict, weights_nod
                     fam = r["spec"].split("{")[0]
                 xstep[fam] += early
     return late, xstep, weight_reader
-
-
-def dep_order_violations(P, rid: str) -> list[dict]:
-    """The record's G8 dependency-order scan of one request's projection (every canon tuple: producer emitted at or after its consumer
-    inside the request = a violation, one record per tuple, in scan order).  Same records, same order; operands with no violation
-    (all of them on a valid record) are settled by one any() instead of the per-tuple loop."""
-    out: list[dict] = []
-    steps = P.steps
-    canon = P.canon
-    for s_, loc in enumerate(steps):
-        for pos, i in enumerate(loc):
-            for a in canon(i, False):
-                if any(t[0] == "N" and steps[t[1]][t[2]] >= i for t in a):
-                    for t in a:
-                        if t[0] == "N" and steps[t[1]][t[2]] >= i:
-                            out.append({"request_id": rid, "local_step": s_, "emission": pos, "consumer": i, "producer": steps[t[1]][t[2]]})
-    return out
 
 
 # ------------------------------------------------------------------------------------------------ the fast path's Programs and operations
