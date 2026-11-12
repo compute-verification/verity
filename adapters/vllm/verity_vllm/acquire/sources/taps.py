@@ -19,21 +19,37 @@ the last layer's prompt rows before the last) whenever the manifest names narrow
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
-                                         linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
-                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (
+    attention_source,
+    call_boundary_source,
+    dsv4_attention_source,
+    int8_source,
+    linear_quant_source,
+    moe_align_source,
+    moe_source,
+    narrowed_source,
+    norm_scale_source,
+    route_source,
+    router_softmax_source,
+    scale_products_source,
+    vocab_range_source,
+)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
-from verity_vllm.acquire.sources import moe_source
+from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
+
+logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
 SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
@@ -169,8 +185,6 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
     hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
-    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
     for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
         states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
@@ -191,7 +205,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
             required_classes = (*required_classes, fam)
         versions[key] = states
         versions["required_classes"] = list(required_classes)
-        print(f"[tp2commit] {fam} source attached on every rank ({states[min(states)]}); required classes {list(required_classes)}", flush=True)
+        logger.info("[tp2commit] %s source attached on every rank (%s); required classes %s", fam, states[min(states)], list(required_classes))
     return required_classes
 
 

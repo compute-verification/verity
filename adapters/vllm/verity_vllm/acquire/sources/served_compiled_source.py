@@ -38,6 +38,8 @@ Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains i
 """
 from __future__ import annotations
 
+import gc
+import hashlib
 import json
 import os
 import time
@@ -45,7 +47,11 @@ from typing import Any
 
 import torch
 
-from verity_vllm.acquire.sources.inductor_hooks import FLUSH, PREFIX, install_codegen_hooks
+from verity_vllm.acquire.sources.inductor_hooks import (
+    FLUSH,
+    PREFIX,
+    install_codegen_hooks,
+)
 from verity_vllm.engine import hooks
 
 GRAPH_MODES = ("FULL", "PIECEWISE")
@@ -551,9 +557,6 @@ class ServedCompiledSource:
         that launched.  A live autotuner's state is no record of a launch: the one a wrapper's call() runs need not be any module's
         global, nor even the live one of its kernel text (Qwen3-8B's combo kernels: one live autotuner each, never run).  The served
         Build binds each launch to its one executed config (`acquire.served`) and refuses a kernel launched with two."""
-        import gc
-        import hashlib
-
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
 
         def cfg(c: Any) -> dict[str, Any]:

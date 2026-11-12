@@ -22,9 +22,13 @@ launch (`verity_set_tap_v8`); the kernel arms only if its compile-time tile equa
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 KBLOCK_N = 128          # hd 64 (legacy constant; use fa2_kblock_n)
 KBLOCK_M = 64           # every split-KV kernel (flash_fwd_launch_template.h: kBlockM = 64 fixed for all head dims)
@@ -54,7 +58,7 @@ def fa2_swapped(max_seqlen_q: int, H: int, Hk: int, head_dim: int, window_left: 
     UN-swapped kernel (b*H slabs of 1 row); a mirror of `max_seqlen_q == 1 and H > Hk` alone would declare the swapped geometry there and
     the kernel would refuse the launch (arm check b*h <= vt.H fails: verity_tap_skipped++ -> 'skipped by the kernel' -> X-03 COMMIT FAIL, never
     a wrong binding).  This mirrors the kernel's own rule so the declared (HB, M) is the launched one."""
-    return (int(max_seqlen_q) == 1 and H > Hk and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
+    return (int(max_seqlen_q) == 1 and Hk < H and int(window_left) < 0 and int(window_right) < 0 and float(dropout_p) == 0.0
             and head_dim % 8 == 0 and alibi_slopes is None)
 
 
@@ -479,7 +483,9 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
 def with_hidden_class(classes: tuple[str, ...], family: str | None) -> tuple[str, ...]:
     """`classes` with its attention hidden class replaced by `family` in place, or dropped when `family` is None."""
     hidden = set(HIDDEN_STREAM_BY_FA.values())
-    return tuple(family if c in hidden else c for c in classes if family or c not in hidden)
+    if not family:
+        return tuple(c for c in classes if c not in hidden)
+    return tuple(family if c in hidden else c for c in classes)
 
 
 def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], *,
@@ -500,7 +506,7 @@ def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: t
     if out != required_classes:
         versions["required_classes"] = list(out)
         versions["required_classes_source"] = f"{versions.get('required_classes_source', '')} + attention hidden class {fam or 'none'} ({states[min(states)]['why']})"
-        print(f"[tp2commit] attention hidden class {fam or 'none'} on every rank ({states[min(states)]['why']}); required classes {list(out)}", flush=True)
+        logger.info("[tp2commit] attention hidden class %s on every rank (%s); required classes %s", fam or "none", states[min(states)]["why"], list(out))
     return out
 
 
