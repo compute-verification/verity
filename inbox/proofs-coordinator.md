@@ -103036,3 +103036,39 @@ Plan:
 5. Next entry by 22:40Z with item 1 started; the driver change pushed and a run launched by Fri 03:00Z.
 
 Not established: everything above is a plan; no line of code changed.
+
+## ONSITE, Thu 12 Nov 21:38Z: checkpoint, ending my turn as told: two runs of mine wait in vy-nebius-cpu-10's proofs line, #9486's ready line waits on one, and the move's own quick tier is 86 of the 127 suites
+
+Tags as before: [read], [run], [derived], [guess]. Your message that tells me to end reached me at 21:36Z.
+
+**Where I am.** `main` is `5f0c008aa040` and #9375 is OPEN at `bafae2eaec2e` [read: `git fetch`, `gh pr view 9375`, 21:31Z]. My mailbox held nothing after your 21:12Z message at 21:31Z [read: `cursor/proofs-inbox`, last commit to my file 21:11:45Z].
+
+**Pull requests and branches.**
+
+- #9455, `cursor/proofs-carve-maps-roots-7c3e`, head `fbaf4e74e3de`, open, unmarked. Its ready line is in my 21:22Z entry; it waits on your mark and its land verdict.
+- #9486, `cursor/proofs-world-map-3b9d`, head `0a13c1c90cb3`, open, unmarked. No ready line: its quick tier has not passed (below).
+- `cursor/proofs-one-stage-package-paths-b7e4` at `3f29ae86e4a4`: not opened, waits on #9375 being on `main`.
+- The rehearsal's base, `cursor/proofs-scratch-carve-base-2de4` at `2de443c648` (lean's `bafae2eaec2e` merged with `main` `5f0c008aa040`, then the four preparation commits) [derived: my merge and cherry-picks of this turn; pushed].
+
+**Runs.**
+
+| Run | What | State at 21:36Z |
+|---|---|---|
+| `r20261112-194809-9cc5` | #9486's quick tier, on vy-nebius-cpu-1 | at its cap (3600 s from its slot, 21:36:44Z) with 6 of 11 suites passed and none failed; still "running" at 21:36:47Z, the cut not yet recorded [run]. Not ended: `verity-vllm`, `research`, `verity/commitments`, `verity-flock`, `verity/protocols/pouw/verifier`. |
+| `r20261112-212908-8f08` | the same command (`suites.py --changed ab3f1d53a606 --quick`) on vy-nebius-cpu-10's proofs pool, cap 7200 s from its slot | waiting since 21:29:30Z [run: `slot.json`]. Its pass is #9486's ready line. |
+| `r20261112-213040-2ca7` | the rehearsal on vy-nebius-cpu-10's proofs pool: the three maps staged on `2de443c648`, `pins.py --regen`, the pins commit, `out/move.bundle` | waiting since 21:31:05Z [run: `slot.json`]. About 20 min once it has a slot [guess: 582 s of staging in `c004` and 7 min of pins in `6ab1`]. |
+| `r20261112-211503-b1a0` | the same rehearsal on vy-nebius-cpu-12's proofs pool | cancelled by me at 21:36Z; it never took a slot in 21 min, and its line read 233 GB short of memory [run: `research cancel`, `slot.json`]. `2ca7` replaces it. |
+
+I launched `8f08` before the cut so it held a place; if `9cc5` is recorded as passed after all, `8f08` is spare and is cancelled. When either starts I can't say: cpu-10's line read 13 to 14 GB free with about 110 GB reserved ahead at 21:36Z [run: `slot.json`'s `why`]; under an hour [guess].
+
+**One fact for your plan, not in my 21:22Z entry.** `suites.py --changed BASE --quick --list` on the staged tip `5b07a3b63200` says the three moves touch 86 of the tree's 127 suites, 27 of them among the 32 that wait on the Lean build, and six suites keep their slow tests in the modules the change reaches [run: on my VM, a listing only, nothing ran; `tools/verity/check/suites.py:212-221`]. So the move's tier before a mark, which `research queue ready` runs again on the head merged onto `main` [read: the testing skill, `:34` and `:99`], is most of the check. Nobody has timed it. The earlier move's own tier was 26 suites [read: #9189's body], so its 11 h from open to `main` is no measure of ours. I meant to time it on the rehearsal's tip; that is step 2 below.
+
+**The exact next step when you resume me.**
+
+1. Read `8f08`. At rc 0 with 11 of 11: append #9486's ready line (the gate and the step are done against `main` `5f0c008aa040`; both again if `main` has moved) and put the verdict in its body.
+2. Read `2ca7`. Fetch `out/move.bundle`; on its four commits run the certificate's checks (each map again changes nothing, the count of non-empty `__init__.py` deleted, the Lake paths, `resolve_check.py`), `pins.py --stale` and `tests/test_pins.py`; push the tip to a scratch branch; launch the changed suites' quick tier on it in the proofs pool with a long cap and say its id. That run's time is the hour the move's ready line costs.
+3. When #9375 is on `main`: the one_stage change put on `main`'s tip and opened; the move's branch built on `main`'s tip; the same job as `2ca7` from it; the checks of step 2; the pull request opened unmarked with the 20:19Z table at the new heads; `main`'s tip merged in scratch and the three maps run again (must change nothing); the ready line with the hour.
+
+Nothing on this VM is needed: the tools are in the notes (`lanes/proofs/tools/onsite_carve_*`), the runbooks in `20261112T2124Z-report-carve-ready-line-9455-world-pr-rehearsal.md` and this hour's note.
+
+**What I wait on:** a slot for `8f08` and `2ca7`; #9375 on `main`; ci's word on the route and on the mover's repinning (yours to ask); your marks.
