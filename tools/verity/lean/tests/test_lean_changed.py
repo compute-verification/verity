@@ -1270,7 +1270,8 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
             else:
                 assert LC.build_files(["Sec/Proofs/Flock/X.lean"], tmp_path / "deps", log=said.append) == 0
             assert marks[-1] == {"package": "Sec/Proofs", "phase": phase}, "nothing for the next run to store from"
-            built = {"sandbox": True, "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
+            built = {"sandbox": True, "bound": [str(LC.AUDIT.FIXED), str(tree)],
+                     "compiled": ["Proofs.Flock.S", "Proofs.Flock.W"]}
             assert [(s, r) for s, r, _ in put] == ([(store, {tree / "Sec/Proofs": built})] if stored else [])
             assert all(isinstance(since, float) for _, _, since in put)
             assert (f"lean-{phase}: Sec/Proofs: 4 module version(s) new in the artifact cache" in said) == stored
