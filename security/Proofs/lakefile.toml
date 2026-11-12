@@ -106,6 +106,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Event",
   "Proofs.Properties.Verity.Sampled.SessionOf",
   "Proofs.Properties.Verity.Sampled.AcceptedChecks",
+  "Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1P",
   "Proofs.Properties.Verity.SampledDraw", "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead",
   "Proofs.Properties.Verity.Sampled.Record", "Proofs.Properties.Verity.Sampled.Record.Facts",
   "Proofs.Properties.Verity.Sampled.Record.Session", "Proofs.Properties.Verity.Sampled.Record.Accepts",

@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Event
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Properties.Verity.Sampled.Trees
-public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1P
 
 /-!
 # The session v2 sets up, built from the parameters and the files (`sessionOf`)
@@ -30,9 +30,8 @@ construction.
   `designAt` then reads the same one (`designAt_of_lawAt`), giving `Live.hsub`.
 * **The bound's parameters** (`SessionBound`): `k`, `Rw`, `M`, the claim's share `ε` and the costs `v`, `w`, `h`, with
   `rateM1 k < 1`.
-* **The tables' rate** (`RateM1`): every table of the hidden-output plan at public inputs `own` has rate at most
-  `rateM1 k`. It is `planZHJ_M1W` and `rateZ_le_m1w` for `planZHJP`, not yet proved; `sessionOf` takes it as a
-  hypothesis.
+* **The tables' rate**: every table of the hidden-output plan at public inputs `own` has rate at most `rateM1 k`
+  (`rateZ_planZHJP_le_m1`).
 * **The session** (`ChecksWitness.live`, `sessionOf`): each binder of `Live` the value the checks compute, its facts
   read off them (`Flock.Bridge.ksScoped_files`: untyped tags, the built unit, the scope, the `--zk` tags;
   `Flock.Bridge.v5Files_of_checksStmt`: no two ports one domain; `Flock.Bridge.popMatches_of_popOk`: the population in
@@ -173,15 +172,6 @@ structure SessionBound where
   w : ℕ
   h : ℕ
 
-/-- **Every table of the hidden-output plan at public inputs `own` has rate at most `rateM1 k`**: `planZHJ_M1W` and
-`rateZ_le_m1w` at `planZHJP`. A statement to prove (`tableZHJP_M1W`, `planZHJP_M1W` beside `planZHJ_M1W` in
-`FailClosed/ZkHiddenM1.lean`); until then `sessionOf` takes it as a hypothesis. -/
-def RateM1 : Prop :=
-  ∀ (I : Exec.Inputs) (own : Option ByteArray) (n mPts : ℕ) (dj : Finset (Fin n) → Lean.Json)
-    (S₀ : Finset (Fin n)) (d₀ : Lean.Json) (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
-    (S : Finset (Fin n)) (R : ByteArray) (j : Fin (planZHJP (Reg := ByteArray) dj y₀ S R).length) (k : ℕ),
-    rateZ (planZHJP (Reg := ByteArray) dj y₀ S R) j k ≤ rateM1 k
-
 namespace ChecksWitness
 
 variable {θ : ByteArray} {cf pf : ByteArray} (W : ChecksWitness θ cf pf)
@@ -237,9 +227,9 @@ theorem hsub : W.design = .subset (Flock.Bridge.lawK W.design) := by
   rw [h]
   rfl
 
-/-- **The session built from the witness**, at the bound's parameters `B`, wherever the tables' rate is
-`rateM1`'s (`RateM1`): each binder the value v2's check computes, at the device's bytes as deployed. -/
-noncomputable def live (B : SessionBound) (hrate : RateM1) : Live where
+/-- **The session built from the witness**, at the bound's parameters `B` and the tables' rate `rateM1 k`: each
+binder the value v2's check computes, at the device's bytes as deployed. -/
+noncomputable def live (B : SessionBound) : Live where
   n := W.n
   I := W.I
   own := none
@@ -279,14 +269,14 @@ noncomputable def live (B : SessionBound) (hrate : RateM1) : Live where
   hM := B.hM
   ρ := rateM1 B.k
   hρ := B.hρ
-  hr S R j := hrate _ _ _ _ _ _ _ _ S R j B.k
+  hr S R j := rateZ_planZHJP_le_m1 _ _ S R j B.k
   ε := B.ε
   v := B.v
   w := B.w
   h := B.h
 
 /-- **The witness's session is ready for openings**: its files pass the ports and roots check. -/
-theorem live_opensReady (B : SessionBound) (hrate : RateM1) : (W.live B hrate).OpensReady :=
+theorem live_opensReady (B : SessionBound) : (W.live B).OpensReady :=
   ⟨W.checks.ports⟩
 
 end ChecksWitness
@@ -304,7 +294,7 @@ theorem ChecksWitness.live_setsUp {θ : ByteArray} {F : Array ByteArray}
     (hr : ∀ θ F, V.read θ F = readOf θ F)
     (hfam : ∀ key label, W.p.base.challenger = some (key, label) →
       (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ)
-    (B : SessionBound) (hε : (V.certOf θ).ε = B.ε) (hrate : RateM1) : SetsUp V θ F (W.live B hrate) where
+    (B : SessionBound) (hε : (V.certOf θ).ε = B.ε) : SetsUp V θ F (W.live B) where
   params := by
     obtain ⟨key, label, hch⟩ := W.checks.challenger
     exact ⟨W.p, W.checks.params, rfl, rfl, W.law, W.checks.program, rfl,
@@ -325,22 +315,22 @@ theorem ChecksWitness.live_setsUp {θ : ByteArray} {F : Array ByteArray}
 
 open Classical in
 /-- **The session v2 sets up on the parameters `θ` and the files `F`**, where its checks pass (`SessionChecks`), at the
-bound's parameters `B` and the tables' rate (`RateM1`); `none` elsewhere. The values the checks compute are unique
+bound's parameters `B`; `none` elsewhere. The values the checks compute are unique
 but for the reference sample, so the choice of witness is the choice of a reference sample at which `verify --zk`
 sets a table up, which `Live`'s plan reads only where no witness satisfies the refused table. -/
-noncomputable def sessionOf (θ : ByteArray) (F : Array ByteArray) (B : SessionBound) (hrate : RateM1) : Option Live :=
-  if h : SessionChecks θ F then some ((Classical.choice h).live B hrate) else none
+noncomputable def sessionOf (θ : ByteArray) (F : Array ByteArray) (B : SessionBound) : Option Live :=
+  if h : SessionChecks θ F then some ((Classical.choice h).live B) else none
 
-theorem sessionOf_some {θ : ByteArray} {F : Array ByteArray} {B : SessionBound} {hrate : RateM1} {A : Live}
-    (h : sessionOf θ F B hrate = some A) :
-    ∃ W : ChecksWitness θ (circuitAt θ F) (publicAt θ F), A = W.live B hrate := by
+theorem sessionOf_some {θ : ByteArray} {F : Array ByteArray} {B : SessionBound} {A : Live}
+    (h : sessionOf θ F B = some A) :
+    ∃ W : ChecksWitness θ (circuitAt θ F) (publicAt θ F), A = W.live B := by
   unfold sessionOf at h
   split at h
   · exact ⟨_, (Option.some.inj h).symm⟩
   · cases h
 
-theorem sessionOf_isSome {θ : ByteArray} {F : Array ByteArray} (B : SessionBound) (hrate : RateM1)
-    (h : SessionChecks θ F) : (sessionOf θ F B hrate).isSome := by
+theorem sessionOf_isSome {θ : ByteArray} {F : Array ByteArray} (B : SessionBound)
+    (h : SessionChecks θ F) : (sessionOf θ F B).isSome := by
   unfold sessionOf
   rw [dif_pos h]
   rfl
@@ -352,15 +342,15 @@ theorem sessionOf_setsUp (V : Vocab dv α) (hc : ∀ θ, V.programDigest θ = pr
     {F : Array ByteArray}
     (hfam : ∀ p key label, ParamsAt θ p → p.base.challenger = some (key, label) →
       (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ)
-    {B : SessionBound} (hε : (V.certOf θ).ε = B.ε) {hrate : RateM1} {A : Live}
-    (h : sessionOf θ F B hrate = some A) : SetsUp V θ F A := by
+    {B : SessionBound} (hε : (V.certOf θ).ε = B.ε) {A : Live}
+    (h : sessionOf θ F B = some A) : SetsUp V θ F A := by
   obtain ⟨W, rfl⟩ := sessionOf_some h
-  exact W.live_setsUp V hc hp hr (fun key label => hfam W.p key label W.checks.params) B hε hrate
+  exact W.live_setsUp V hc hp hr (fun key label => hfam W.p key label W.checks.params) B hε
 
 /-- **The session `sessionOf` builds is ready for openings.** -/
-theorem sessionOf_opensReady {θ : ByteArray} {F : Array ByteArray} {B : SessionBound} {hrate : RateM1} {A : Live}
-    (h : sessionOf θ F B hrate = some A) : A.OpensReady := by
+theorem sessionOf_opensReady {θ : ByteArray} {F : Array ByteArray} {B : SessionBound} {A : Live}
+    (h : sessionOf θ F B = some A) : A.OpensReady := by
   obtain ⟨W, rfl⟩ := sessionOf_some h
-  exact W.live_opensReady B hrate
+  exact W.live_opensReady B
 
 end Verity.Sampled
