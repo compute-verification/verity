@@ -89,6 +89,7 @@ follows.
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it

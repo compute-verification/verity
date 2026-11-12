@@ -24,8 +24,9 @@ what the layout's design has and the tree does not.
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
-    interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
-    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
+    interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
+    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
+    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
     `inference_only/nci/` and `inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
@@ -65,21 +66,27 @@ what the layout's design has and the tree does not.
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
   (its `infra/`) and its `.cursor`, nothing else.
 
-Dependencies point inward, and the import order is one listing, `tests/import_order.toml`, which
-`tests/test_boundaries.py` holds the tree to; every list of either only shrinks. A file loads only what its own row of
-the listing or an earlier row holds, in Python and in Lean, but for the ties the listing names by file. No file under
-a `verifier/` loads one under a `prover/`. Until its protocol's verifier is Lean, a Python verifier and each device
-load and reach only the places the listing's `trusted` entry froze for them, and outside the verifiers and the devices
-only the files its `loaded_by` names load one. What they load and reach is on the soundness path, which only shrinks:
-`verity/circuits`, `verity/commitments`, `verity/configuration`, `verity/hardware`, `verity/protocols/spot` and the
-protocols' own `verity/protocols/pous`, `verity/protocols/poub`, `verity/protocols/pouw` and
-`verity/protocols/certifier`; of `verity/definitions` SPOT's verifier loads the library
-(`verity/definitions/circuits/library.py`), the certifier's the census (`census.py` beside it) and none anything else,
-and none reaches the catalog (`verity/definitions/ops/` and `silicon/`) or the kernels. The rest can't affect
-soundness. A directory under `verity/` with an import root of its own is a distribution the listing names with its
-owner: `verity` loads none of them by name (a load by file is read only into `benchmarks/`) and imports no other
-distribution of the workspace. `infra/` is the last row, so nothing outside it loads it but a listed tie, and nothing
-under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+Dependencies point inward, and which folder may import which is one listing, `tests/import_order.toml`, which
+`tests/test_boundaries.py` holds the tree to. Its order, its distributions and each place's paths are kept by hand; its
+tables are the tree's own, written by `uv run tools/verity/check/import_order.py`, so the listing's diff shows what a
+change opens. A file loads only what its own row of the listing or an earlier row holds, in Python and in Lean, but for
+the ties the listing names by file (`against`, which only shrinks). No file under a `verifier/` loads one under a
+`prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
+Python imports only its own place and the places its `loads` lists: to allow an import, write it, run the generator
+and say why in the pull request. A place under a `verifier/` or a `device/`, or one the listing marks `trusted` (the
+claims' ids, the wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
+the verifiers' side, trusted code; the rest is the provers' side and the Python that mirrors the Lean for speed. Until
+its protocol's verifier is Lean, a trusted place loads and reaches only the places the listing froze for it, and from
+outside the trusted places only the files its `loaded_by` names import one, a test included; these lists only shrink,
+and the generator writes a line into one only under `--grow`. What the trusted places reach outside themselves is the
+soundness path, which only shrinks: `verity/circuits`, `verity/commitments`, `verity/commitments/crypto` and
+`verity/commitments/randomness` (the first two hold a few files outside those directories too, which their `paths`
+name); none reaches the catalog (`verity/definitions/ops/` and `silicon/`) or the kernels. The rest can't affect
+soundness. Python of `verity` in no place only groups packages and imports the standard library alone. A directory
+under `verity/` with an import root of its own is a distribution the listing names with its owner: `verity` loads none
+of them by name (a load by file is read only into `benchmarks/`) and imports no other distribution of the workspace.
+`infra/` is the last row, so nothing outside it loads it but a listed tie, and nothing under `verity/` imports an
+adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
 A Lean package requires Flock's verifier only while `REQUIRES_FLOCK_VERIFIER` lists it, and the three base packages
 require nothing above them (`BASE_LEAN`).
 `benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
@@ -174,9 +181,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
   capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
-- **Lean is the definition and the verifier.** The provers' Python (the `ml.*` units) mirrors it for the prover's
-  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
-  Python verifier and what it loads stay on the soundness path (the listing's `trusted` entries), which gains no load.
+- **Lean is the definition and the verifier.** The provers' Python (the listing's untrusted places) mirrors it for
+  the prover's speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until
+  then its Python verifier and what it loads stay on the soundness path (the listing's trusted places), which gains no
+  load.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
 - **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
