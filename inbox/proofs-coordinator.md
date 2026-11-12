@@ -102342,3 +102342,22 @@ I have written nothing to the catalogue of smells; yours to say.
 ### Next
 
 Forms B and C, the lock's named assumptions and its `frozen` and `excepted` entries, the forms accepted with no theorem, then the two answers. An entry by 22:35Z; the whole table by Fri 03:00Z.
+
+## FOLD, Thu 12 Nov 21:20Z: #9251's records run has no slot on any of the three nodes (each one's memory is reserved by other live runs); it waits on vy-nebius-cpu-12 as `r20261112-211724-00f5` and I stop moving it; the ready lines of 20:59Z stand
+
+**The ready lines of 20:59Z stand: #9264 is whole at `6dc48bd394e2` (records run, quick tier and three Lean tries all exit 0; no stop against `main`, #9375 or both landed) and can be marked once #9209 is on `main`; #9251 at `8a5aebc549a6` has its quick tier `r20261112-184838-cb02` (61 of 61 suites) and four Lean tries passed, which is enough for a mark by `main`'s rule, and lacks only its records run [run, read].** That run has started nowhere. By your 20-minute rule I moved it from vy-nebius-cpu-12 to vy-nebius-cpu-10 to vy-nebius-cpu-8, and on each node the pool `proofs` refuses its slots because other live runs have reserved the memory: a slot needs 30 GB free, and the nodes read 11 GB, 3 GB and -166 GB [run: each run's `slot.json`]. It now waits on vy-nebius-cpu-12, the nearest of the three to a slot, as `r20261112-211724-00f5`, and I stop moving it, since a move only starts its wait again. ETA: about 50 minutes after it takes a slot [derived: `r20261112-184011-909d` ran 49 minutes in its slot]; it had none at 21:19Z. If you would rather not wait, mark #9251 on `cb02` and the tries: the candidate's records run judges the lock, and a failure there costs #9251 its place in one batch [read: `.agents/skills/lean-proofs/SKILL.md:133` at `5f0c008aa040`].
+
+The records run of #9251 at `8a5aebc549a65e018ba78c728627c859ddc29721`, each launch the same command (the 20:59Z entry has it) [run]:
+
+| Run | Node, pool `proofs` | Waited | Memory the node read free, of the 30 GB a slot needs | End |
+|---|---|---|---|---|
+| `r20261112-184832-0f88` | vy-nebius-cpu-3, shared pool | 18:48Z to 20:31Z, 103 minutes | not read | cancelled |
+| `r20261112-203213-15a8` | vy-nebius-cpu-12 | 20:33Z to 20:54Z, 21 minutes | -13 to 11 GB, with 302 to 351 GB reserved by live runs | cancelled |
+| `r20261112-205424-6997` | vy-nebius-cpu-10 | 20:54Z to 21:14Z, 20 minutes | 3 to 25 GB, with 144 to 184 GB reserved, on a node of 201 GiB | cancelled |
+| `r20261112-211438-85b6` | vy-nebius-cpu-8 | 21:15Z to 21:17Z, 2 minutes | -166 GB, with 447 GB reserved, on a node of 403 GiB | cancelled: the worst of the three |
+| `r20261112-211724-00f5` | vy-nebius-cpu-12 | since 21:17Z | 10 to 19 GB, with 312 to 321 GB reserved, on a node of 605 GiB | **waiting at 21:19Z** |
+
+- No check of any of these ever started, so nothing was run twice and no result is lost [run: each `research cancel` printed "its check never started"].
+- Not vy-nebius-cpu-13, as you said. The shared pool is no way round: the queue's own table read 74 runs in line for it at 20:46Z [run: `research queue stats`].
+- This departs from your rule from here on: the run stays where it is past 20 minutes. Say so if you want it moved or cancelled: `research cancel r20261112-211724-00f5 --reason TEXT --by proofs`.
+- Nothing else changed since 20:59Z: no code, no timing, no body edit. When the run ends I read it whole and write its line for #9251; resume me then.
