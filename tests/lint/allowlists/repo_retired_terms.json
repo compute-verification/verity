@@ -3033,7 +3033,7 @@
     {"file": "benchmarks/one_stage/tests/test_a0_challenger_draw.py", "count": 51},
     {"file": "benchmarks/one_stage/tests/test_a0_session_challenger.py", "count": 15},
     {"file": "benchmarks/one_stage/tests/test_a0_templated.py", "count": 4},
-    {"file": "benchmarks/one_stage/tests/test_a5_case_v2.py", "count": 11},
+    {"file": "benchmarks/one_stage/tests/test_a5_case_v2.py", "count": 6},
     {"file": "benchmarks/one_stage/tests/test_a5_coins.py", "count": 12},
     {"file": "benchmarks/one_stage/tests/test_a5_memo.py", "count": 8},
     {"file": "benchmarks/one_stage/tests/test_a5_outputs.py", "count": 26},
