@@ -4237,7 +4237,7 @@
     {"file": "adapters/vllm/verity_vllm/engine/vllm_adapter.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/llm.py", "count": 3},
     {"file": "adapters/vllm/verity_vllm/observe/__init__.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/observe/capture.py", "count": 32},
+    {"file": "adapters/vllm/verity_vllm/observe/capture.py", "count": 36},
     {"file": "adapters/vllm/verity_vllm/observe/fold/patterns/sampling.py", "count": 26},
     {"file": "adapters/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "count": 19},
     {"file": "adapters/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py", "count": 13},
