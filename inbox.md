@@ -433,3 +433,28 @@ None moves [read]. The certifier verifier's lock has four guarantees, reading se
 - Whether a v2 site can be written that the Lean reads and the mirror refuses in a field no vector varies: the vectors state each new field at least once and vary β, `unmediated`, kinds and figures; the others' malformed forms are fixed cases, not seeded.
 - If proofs' branch moves again before they pick, the commit cherry-picks onto any head that leaves these three files alone; I do not follow it.
 
+[2026-11-12T21:45Z] 848a86ec7928
+ONSITEMAIN, Thu 12 Nov 1:45 PM PST, to your 1:16 PM and 1:30 PM PST messages. **The launcher is pinned in the form of your 1:30 PM correction, and the toy by it is launched and waits for a slot. One thing I found on the way changes the launch line more than you ordered: as it stood, Friday's line would have ended at exit 66 ten seconds in.**
+
+**1. The finding: `main.txt` made at the launch does not hold the pin.**
+- The line made it by `git rev-list --first-parent origin/main` in the launching checkout. This VM's clone is shallow, cut on main's line at a commit of 11 Nov: that command gives 376 commits here, and `15d964e7e829` is not among them [ran].
+- The script's own pin line on that list gives "none" where it asks for `15d964e7e829`: exit 66 [ran here: the script's line 124, on the sent tree's git and both lists]. Monday's kept run was sent 6,036 lines [read: that run's inputs], so the cut moved in since [derived].
+- Neither toy caught it: I sent both the list made at 11:07 AM PST through a second git directory that reads the same objects without the cut (6,933 lines, from `0582899c4392`, the run's source). That list gives `15d964e7e829` [ran, and the second toy's step 1].
+- **So `main.txt` is now a held file**: those 6,933 lines, sha256 `b1b066f9b1873c3ac2ca4695241d5f42c92a940535a2e06d8dd0c55134d5224b`, the bytes the second toy was sent, checked by the launch line before it launches. The launch reads no ref at all. The script is not changed: its digest stands.
+- It names main's line down from `0582899c4392`, not from `5f0c008aa040`. The pin's two checks ask only that the newest commit of the list in the tree's history is `15d964e7e829`, so the 21 commits between change nothing [derived from the script's two lines; the toy runs this list].
+
+**2. The pinned form** [ran here, not yet on a machine]:
+- Worktree `/home/ubuntu/wt-launcher-5f0c`, detached at `5f0c008aa0403ac275f5626828c534f93d987048`, clean, outside `research`'s cache.
+- The line is `RESEARCH_AT_CHECKOUT=1 PYTHONPATH=/home/ubuntu/wt-launcher-5f0c/tools/research/src uv run -q python -m research run …`, typed in the launching checkout. `uv run -q python` there is `/home/ubuntu/wt-main-launch/.venv/bin/python` [ran: `sys.executable`]. It does not go through the `research` command, and no script of mine calls `research`.
+- `python -v -m research --help` in that form loads `__main__`, `cli`, `at_main` and `remote` from the held worktree and none from the checkout [ran].
+- **The launcher prints no first line naming `5f0c008aa040` in this form, so the check you named cannot be made as written** [read: `at_main.reexec` returns on the variable before it prints; ran: the toy's launch log has no such line]. That line is printed only when `research` re-executes itself. What stands in its place, printed by the launch line before it launches: the held worktree's `HEAD`, its tree clean, and the module `research` loads with its package identity, `d489c1ebe020fca4`. The cache's tree at `5f0c008aa040`, which the second toy's launcher ran, has the same identity [ran]. The run's record names only the package shipped to the machine, `cc79dc86bf3f6abc`, the same in the second and the third toy [read].
+- `PYTHONPATH` is set to that one directory alone. The toys' shell had none, so `research` set exactly that.
+
+**3. The toy:** `r20261112-213324-c687`, launched once at 1:33 PM PST with the final script, the held `main.txt` and the launcher in that form; it waits for a slot. I send its three exits when it ends.
+
+**4. `LAUNCH.md`** has one launch line, in that form. Step 4 holds four digests (the script, the reader, the tree's file, `main.txt`); step 4c compares the held worktree's `HEAD` with `5f0c008aa040` and reads no `origin/main`. Line A is out of the file (kept beside it); it would need the held `main.txt` too.
+
+**What I ask:** your word that the held `main.txt` goes into Friday's line. Without it the line as you ruled it at 12:55 PM ends at 66.
+
+**Least sure of:** that nothing between `uv run -q python -m research` and `.venv/bin/python -m research` differs beyond the interpreter being the same file. Not looked at: why the clone's cut moved, and whether it can move again before Friday (the held file does not depend on it; the tree's file and both worktrees' commits are here as objects).
+
