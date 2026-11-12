@@ -18,6 +18,7 @@ public import Flock.RecSetup
 public import Flock.RecSparse
 public import Flock.RecSparseCmd
 public import Flock.RecVStar
+public import Flock.Witness
 
 /-! The library `FlockRec`: the recursion's modules, `Flock.Rec*`, above Flock alone and the ZK server. V*'s circuit is
 the library `VStar`. -/

@@ -1,5 +1,6 @@
 """Summarize profile.sh's run dir: the parts of the slice's edited GEMM at o_proj against plain cuBLASLt int8, and ncu's
 counters per kernel. Usage: prof_summary.py OUT_DIR"""
+from __future__ import annotations
 
 import csv
 import glob
@@ -8,16 +9,20 @@ import os
 import sys
 
 
-def ncu_rows(path):
-    lines = open(path, errors="replace").read().splitlines()
-    start = next((i for i, l in enumerate(lines) if l.startswith('"ID"')), None)
+def ncu_rows(path: str) -> list[dict[str, str]]:
+    """An ncu CSV's rows by column name, read from its header line on; none when it has no header."""
+    with open(path, errors="replace") as fh:
+        lines = fh.read().splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith('"ID"')), None)
     if start is None:
         return []
     return list(csv.DictReader(lines[start:]))
 
 
-def main(out):
-    bench = [json.loads(l) for l in open(os.path.join(out, "bench.jsonl")) if l.strip()]
+def main(out: str) -> None:
+    """Print the summary of profile.sh's run directory ``out``."""
+    with open(os.path.join(out, "bench.jsonl")) as fh:
+        bench = [json.loads(line) for line in fh if line.strip()]
     print("# The slice's edited GEMM at o_proj, by part\n")
     for b in bench:
         arms = {k: v["ms"] for k, v in b["arms"].items()}
@@ -27,7 +32,10 @@ def main(out):
         print("| arm | ms | / plain | MHz |\n|---|---|---|---|")
         for k, v in arms.items():
             print(f"| {k} | {v:.4f} | {v / p:.3f} | {mhz[k]:.0f} |")
-        g = lambda k: arms.get(k, float("nan"))
+
+        def g(k: str) -> float:
+            return arms.get(k, float("nan"))
+
         parts = [
             ("custom mainloop, no receipts, against cuBLASLt (cplain - plain)", g("cplain") - p),
             ("duo receipts at L = 32 in the mainloop (cduo - cplain)", g("cduo") - g("cplain")),
@@ -49,17 +57,19 @@ def main(out):
     if os.path.exists(il):
         print("\n## Per-call interleaving (the slice's: the arm, then plain, alternating which goes first)\n")
         print("| arm | arm ms | plain ms | ratio | MHz |\n|---|---|---|---|---|")
-        for l in open(il):
-            if l.strip():
-                j = json.loads(l)
-                print(f"| {j['il']} | {j['edited_ms']:.4f} | {j['plain_ms']:.4f} | {j['ratio']:.3f} | {j['mhz']:.0f} |")
+        with open(il) as fh:
+            for line in fh:
+                if line.strip():
+                    j = json.loads(line)
+                    print(f"| {j['il']} | {j['edited_ms']:.4f} | {j['plain_ms']:.4f} | {j['ratio']:.3f} | {j['mhz']:.0f} |")
     print("\n## ncu (one call, --clock-control none)\n")
     for f in sorted(glob.glob(os.path.join(out, "ncu-*.csv"))):
         arm = os.path.basename(f)[4:-4]
         rows = ncu_rows(f)
         extra = ncu_rows(f.replace("ncu-", "ncu2-")) if not arm.startswith("stall-") else []
         if not rows:
-            print(f"{arm}: no rows ({open(f, errors='replace').read()[-300:]!r})\n")
+            with open(f, errors="replace") as fh:
+                print(f"{arm}: no rows ({fh.read()[-300:]!r})\n")
             continue
         by = {}
         for r in rows + extra:

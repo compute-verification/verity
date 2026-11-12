@@ -1,5 +1,5 @@
 """kappa_count.py on the censuses in the tree: every kind each device's current epoch holds has a destination width, and
-the creation caps κ = 65·d that `ClassPSlots` charges come out as the ISA's widths give them."""
+the creation bounds κ = 65·d that `ClassPSlots` charges come out as the ISA's widths give them."""
 from __future__ import annotations
 
 import importlib.util

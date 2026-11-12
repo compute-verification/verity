@@ -735,8 +735,10 @@ def test_round_two_refuses_a_value_the_prover_registers_after_the_first_stages_s
     assert codes("w1", "w2", filled=False) == ["second-inputs", "second-values"]
 
 
-#: A read's template, as round 2 knows one by its id, and its ports' links, each at a value of its own name.
+#: A read's template, which the auditor's params record as a read of 8 rows (`READ_SIZES`), and its ports' links,
+#: each at a value of its own name.
 READ_T = "EmbeddingRead_v1{V=8,H=2}"
+READ_SIZES = ((READ_T, 8),)
 READ_LINKS = tuple(SS.Link(READ_T, p, p) for p in ("tok", "root", "domain", "row", "salt", "path"))
 #: The roots and domain ids of tables ``t`` and ``u``, and round 1's record registering both.
 T_ROOT, T_DOMAIN, U_ROOT, U_DOMAIN = ("a1" * 64, "a2" * 64, "b1" * 64, "b2" * 64)
@@ -755,13 +757,13 @@ TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS, boundary=READ_RECORD) -> SS.Own:
+             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
     design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
-    reads, and round 1's record `boundary`."""
+    reads, round 1's record `boundary`, and the templates the params record as `reads`."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -802,6 +804,19 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, [*READ_LINKS, SS.Link("Other_v1", "x", "row")]), "row"),
     (_holding(READ_VALUES, [SS.Link("Other_v1{V=8}", x.port, x.value) for x in READ_LINKS],
               ref_reads=(("Other_v1{V=8}", READ_REF[0][1]),)), "row"),
+    (_holding(READ_VALUES, reads=()), "row"),
+    (_holding(READ_VALUES, reads=(("Other_v1{V=8}", 8),)), "row"),
+    (_holding(READ_VALUES, reads=((READ_T, 16),)), "row"),
+    (_holding(READ_VALUES, reads=((READ_T, 16), (READ_T, 8))), "row"),
+    (_holding(READ_VALUES, reads=((READ_T, 8), (READ_T, 16))), None),
+    (_holding(READ_VALUES, boundary={"roots": [{**e, "leaves": 16} for e in READ_RECORD["roots"]]}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": [{**e, "leaves": "8"} for e in READ_RECORD["roots"]]}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": [{k: v for k, v in e.items() if k != "leaves"}
+                                               for e in READ_RECORD["roots"]]}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": [READ_RECORD["roots"][0], {**READ_RECORD["roots"][0], "leaves": 16}]}),
+     "row"),
+    (_holding(READ_VALUES, boundary={"roots": [{**READ_RECORD["roots"][0], "leaves": 16}, READ_RECORD["roots"][0]]}),
+     None),
     (_holding((*READ_VALUES, "w")), "w"),
     (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": "one"}, "w": {"value": "row"}}}),)), "row"),
     (_holding(READ_VALUES, ref_reads=(*READ_REF, ("Other_v1", {"ports": {"x": {"value": "salt"}}}))), "salt"),
@@ -812,20 +827,22 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     """`second_stage.inputs_failure`, the first value of the interior registration that a replay block's input may not
     read. Held without the prover, and passing: a value the verifier fills from its own bytes, or pinned or holds to an
     earlier record. Refused: one the prover registers, or one filled from a root of the interior record. A read's row,
-    salt and path pass where the verifier fills its root and domain with the root and the domain id round 1's record
-    registers for one table, its key is filled or a port of round 1's record, and its verdict port reads a value
-    filled with 1 at every row; and are
-    refused, the row named, where the key is unlinked, the verdict's value has a row that is not 1, no row, is pinned
-    and not filled, is the interior's own port or is not named, where another template reads the row too, or the
-    template is no read. The root and the domain are one table's of round 1's record, by their bytes: refused where the
+    salt and path pass where the auditor's params record the template as a read, the verifier fills its root and domain
+    with the root and the domain id round 1's record registers for one table of the read's rows, its key is filled or
+    a port of round 1's record, and its verdict port reads a value filled with 1 at every row; and are refused, the
+    row named, where the key is unlinked, the verdict's value has a row that is not 1, no row, is pinned and not
+    filled, is the interior's own port or is not named, where another template reads the row too, or the params record
+    no read of the template, another template's alone, or one of another count of rows (a template's first record is
+    its record). The root and the domain are one table's of round 1's record, by their bytes: refused where the
     domain's row is another table's or a root, where the root's row is bytes round 1's record registers nowhere or two
     sources, where the two have other counts of rows or none, where round 1's record registers no table, another one,
-    the root under another domain, or the root and the domain at two ports, and where the two ports' rows are missing
-    or place a unit differently; two tables filled alike row by row pass. A root left as a table's name, which the
-    verifier resolved to no bytes, is none of its values, and is refused by its own name. A key or a root the prover registers is refused by its own name, and so is a value no link names. A row, a
-    salt or a path that a reference statement reads at a port no link names it at is refused too: only its opening may
-    read it; a reference reading it at its link's port, or reading a value the verifier fills anywhere, changes
-    nothing."""
+    the root under another domain, the root and the domain at two ports, or the table at another count of leaves, a
+    count that is no number or none (the port's last entry is its entry), and where the two ports' rows are missing or
+    place a unit differently; two tables filled alike row by row pass. A root left as a table's name, which the
+    verifier resolved to no bytes, is none of its values, and is refused by its own name. A key or a root the prover
+    registers is refused by its own name, and so is a value no link names. A row, a salt or a path that a reference
+    statement reads at a port no link names it at is refused too: only its opening may read it; a reference reading it
+    at its link's port, or reading a value the verifier fills anywhere, changes nothing."""
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
@@ -1303,6 +1320,26 @@ def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
             S.template_circuits(proofs, WINDOW_QUERY)
     with pytest.raises(ValueError, match="a template query"):
         S.template_circuits(_circuits(), {"name": "Q_word", "version": 1, "params": {"X": 16, "W": 32}})
+
+
+def test_the_params_record_a_template_as_a_table_read_beside_its_circuit_file():
+    """`template_reads`: an entry of the auditor's params may record its template as a table read, `"read": {"V", "H"}`,
+    beside the circuit file's SHA-512: the record that the template check accepted that file as the read of a table of
+    V rows of H words. The verifier takes the templates so recorded, each with its rows, and a template with no record
+    as no read; `template_circuits` gives the same entries with or without the record, and refuses a record that is
+    not two positive counts."""
+    ids = [P.template_id(t) for t in WINDOW]
+    entries = _circuits()["templates"]
+    read = {"templates": [{**entries[0], "read": {"V": 8, "H": 2}}, entries[1]]}
+    assert S.template_circuits(read, WINDOW_QUERY) == S.template_circuits(_circuits(), WINDOW_QUERY)
+    assert S.template_reads(read) == ((ids[0], 8),)
+    both = {"templates": [{**entries[0], "read": {"V": 8, "H": 2}}, {**entries[1], "read": {"V": 131072, "H": 576}}]}
+    assert S.template_reads(both) == ((ids[0], 8), (ids[1], 131072))
+    assert S.template_reads(_circuits()) == () and S.template_reads(None) == ()
+    for bad in (None, {}, {"V": 8}, {"V": 0, "H": 2}, {"V": 8, "H": 0}, {"V": True, "H": 2}, {"V": "8", "H": 2},
+                {"V": 8.0, "H": 2}, {"V": -1, "H": 2}, {"V": 8, "H": 2, "x": 1}, [8, 2]):
+        with pytest.raises(ValueError, match="each read two positive counts"):
+            S.template_circuits({"templates": [{**entries[0], "read": bad}, entries[1]]}, WINDOW_QUERY)
 
 
 def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):

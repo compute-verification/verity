@@ -3,10 +3,11 @@
 python3 tb_table.py BENCH.jsonl [RUN_OUT_DIR]
 
 η is m n k over the time, against 1,024 int8 MACs/SM/clk x SMs x the SM clock NVML read at each rep. Arms: lt cuBLASLt
-int8; b the noised call without receipts (form + GEMM + peel); c duo /32 and c2 duo2 /32 (W13's); t4, t2, t1 the
+int8; b the noised call without receipts (form + GEMM + peel); c duo /32 and c2 duo2 /32 (table.py's); t4, t2, t1 the
 tensor-core receipts TB4, TB2, TB1 /32 (form + GEMM), t2w and t1w their k32 packings, a trailing c the chained kinds;
 g0 and every arm ending in g the GEMM alone.
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -17,11 +18,13 @@ from table import LINEAR, ncu_tensor
 ORDER = ["lt", "b", "c", "c2", "t4", "t2", "t1", "t2w", "t1w", "t4c", "t1c", "t2wc", "t1wc"]
 
 
-def label(s):
+def label(s: dict) -> str:
+    """A bench row's shape as the table names it."""
     return "4096³" if s["m"] == s["n"] == s["k"] else f"{LINEAR.get((s['n'], s['k']), s['shape'])} m={s['m']}"
 
 
-def best(bench):
+def best(bench: list[dict]) -> list[dict]:
+    """One row per (m, n, k): each arm at its fastest tile config."""
     by = {}
     for s in bench:
         row = by.setdefault((s["m"], s["n"], s["k"]), {"label": label(s), "arms": {}})
@@ -32,7 +35,8 @@ def best(bench):
 
 
 def main() -> int:
-    bench = [json.loads(l) for l in open(sys.argv[1]) if l.strip().startswith("{")]
+    with open(sys.argv[1]) as f:
+        bench = [json.loads(line) for line in f if line.strip().startswith("{")]
     out = Path(sys.argv[2]) if len(sys.argv) > 2 else None
     call = [a for a in ORDER if all(a in s["arms"] for s in bench)]
     gemm = [a + "g" for a in call if a.startswith("t") and all(a + "g" in s["arms"] for s in bench)]

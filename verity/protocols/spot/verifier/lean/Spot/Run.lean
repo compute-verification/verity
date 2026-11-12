@@ -93,6 +93,7 @@ structure Interior where
   sessionRoots : Json
   statements : Option (Array Json) := none
   circuits : Array (String × String × Json × Json) := #[]
+  reads : Array (String × Nat) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -127,31 +128,55 @@ def digest? : Json → Bool
   | .str s => (s.length == 128 || (s.length == 129 && s.endsWith "\n")) && (s.toList.take 128).all hexDigit
   | _ => false
 
+/-- `service._read_of`: a params entry's `read`, `{"V": <rows>, "H": <words a row>}` of two positive integers, as
+`(V, H)`; none for anything else. -/
+def readOf? (j : Json) : Option (Nat × Nat) :=
+  match keys? j, nat? (getD j "V"), nat? (getD j "H") with
+  | some #["H", "V"], some v, some h => if 0 < v && 0 < h then some (v, h) else none
+  | _, _, _ => none
+
 /-- `service.template_circuits`: the auditor's params naming each template's circuit file and its registered reference
 statement's header and registered reads, a two-stage run's `interior.params.proofs`, `{"templates": [{"template":
 <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
 "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
 registered) in the order the check's template query `query` names the templates (`Select.templateIds`), which is
-REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An error for any other
+REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An entry may also record
+its template as a table read, `"read": {"V": <rows>, "H": <words a row>}` (`templateReads`). An error for any other
 form, a circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object
-nor null, and a list that doesn't name each of the check's templates once, in its order. -/
+nor null, a read that isn't two positive counts, and a list that doesn't name each of the check's templates once, in
+its order. -/
 def templateCircuits (proofs query : Json) : V (Array (String × String × Json × Json)) := do
   if proofs matches .null then return #[]
   let ids ← Select.templateIds query
   let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>, " ++
-    "\"header\": <object>, \"registered\": <object or null>}, ...]}"
+    "\"header\": <object>, \"registered\": <object or null>}, ...]}, an entry's \"read\" {\"V\": <rows>, " ++
+    "\"H\": <words>}"
   let (some #["templates"], .arr es) := (keys? proofs, getD proofs "templates") | throw form
   let named ← es.mapM fun e =>
-    let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each registered " ++
-      s!"an object or null: {e.compress}"
-    match keys? e, getD e "template", getD e "circuit", getD e "header", getD e "registered" with
+    let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each registered " ++
+      s!"an object or null and each read two positive counts: {e.compress}"
+    let keys := (keys? e).map fun ks => ks.filter (· != "read")
+    let read := (field? e "read").all fun r => (readOf? r).isSome
+    match keys, getD e "template", getD e "circuit", getD e "header", getD e "registered" with
     | some #["circuit", "header", "registered", "template"], .str t, .str c, .obj h, r =>
-      if c.length == 128 && c.all hexDigit && ((r matches .obj _) || (r matches .null)) then pure (t, c, Json.obj h, r)
+      if c.length == 128 && c.all hexDigit && ((r matches .obj _) || (r matches .null)) && read then
+        pure (t, c, Json.obj h, r)
       else throw bad
     | _, _, _, _, _ => throw bad
   if named.map (·.1) != ids then
     throw s!"the params name the circuits of {named.map (·.1)}, not the check's templates {ids}, each once, in its order"
   return named
+
+/-- `service.template_reads`: the templates the auditor's params `proofs` record as table reads, each with its
+table's rows, `(template, V)`, for params `templateCircuits` accepted: an entry's `"read": {"V", "H"}` is the auditor's
+record that the template check (`flock-read-tmpl check V H CIRCUIT`, `Flock.ReadNet.check`) accepted the circuit file
+whose SHA-512 the entry names as the read of a table of `V` rows of `H` 16-bit words. The check ran where the params
+were made; the verifier runs none, and takes a template with no such record as no read. -/
+def templateReads (proofs : Json) : Array (String × Nat) :=
+  (match getD proofs "templates" with | .arr es => es | _ => #[]).filterMap fun e =>
+    match getD e "template", (field? e "read").bind readOf? with
+    | .str t, some (v, _) => some (t, v)
+    | _, _ => none
 
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do
@@ -246,7 +271,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
-        fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1) }
+        fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
+        reads := it.reads }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),

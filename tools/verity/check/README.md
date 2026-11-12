@@ -55,7 +55,8 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run, which compiles what it tests and first imports every pass
+the same way, each keyed on what it reads. circuit-check's binding records travel through the store instead, each once
+under its name, which a pack lists (`records.py`). A nightly uncached run, which compiles what it tests and first imports every pass
 the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
 and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s `OPT_IN` names, by name in runs of their
 own with their variables set, which every other check leaves skipped.
@@ -72,6 +73,7 @@ follows.
 | `suites.py` | every test suite, each run in its own process, with passes cached |
 | `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
 | `verdicts.py` | passes carried between machines as one verdict pack |
+| `records.py` | circuit-check's binding records, put on the store once and named in the packs, fetched before circuit-check runs |
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
