@@ -416,11 +416,16 @@ def test_the_host_card_given_is_the_one_read(tmp_path, monkeypatch) -> None:
     (leaf("dram", "dram", ceiling(HOST_DRAM - 1)), "memory.dram.rate is .*memory.bandwidth_max.*state that figure"),
     (leaf("dram", "dram", ceiling(HOST_DRAM + 1)), "memory.dram.rate is .*memory.bandwidth_max.*state that figure"),
     (leaf("hbm", "hbm", ceiling(1)), "memory.hbm.tier is 'hbm'.*one of \\['disk', 'dram'\\]"),
+    (leaf("vda", "disk", ceiling(1)).replace("value = 1, unit = \"B\"", "value = 1.5, unit = \"B\""),
+     "memory.vda.bytes is 1.5; state a whole number of bytes"),
+    (leaf("vda", "disk", ceiling(1)).replace("value = 1, unit = \"B\"", "value = 1, unit = \"GiB\""),
+     "memory.vda.bytes is .*state it as an entry in B"),
 ])
 def test_a_leaf_without_a_ceiling_on_its_read_is_refused(tmp_path, monkeypatch, leaves: str, refusal: str) -> None:
     """A leaf that states no rate, a rate that is no ceiling in bytes a second above 0, a rate above its host's for
-    the tier, a DRAM rate that is not its host's, or a tier that is no host's own gives no leaves: the file loads,
-    as one that states no memory does, and the reader of its rates refuses it and says what to state."""
+    the tier, a DRAM rate that is not its host's, a tier that is no host's own, or a size that is no whole number of
+    bytes gives no leaves: the file loads, as one that states no memory does, and the reader of its rates refuses it
+    and says what to state."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}{leaves}', encoding="utf-8")
     monkeypatch.setattr(nodes, "NODES", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):

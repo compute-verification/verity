@@ -102,6 +102,16 @@ def _ceiling(entry: Any, what: str) -> int:
     return math.ceil(8 * rate)
 
 
+def _bytes(entry: Any, what: str) -> int:
+    """A size entry's bytes, refused unless it is a whole number of them in ``B``."""
+    if not isinstance(entry, Mapping) or set(entry) != cards.ENTRY or entry["unit"] != "B":
+        raise InvalidArtifact(f"{what} is {entry!r}; state it as an entry in B")
+    size = cards.number(entry)
+    if size < 0 or size.denominator != 1:
+        raise InvalidArtifact(f"{what} is {entry['value']!r}; state a whole number of bytes")
+    return int(size)
+
+
 def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None
            ) -> tuple[tuple[Leaf, ...], dict[str, int]]:
     """**A node's memory leaves and their read rates.** For a node file's table (``load(kind)``) registered as host
@@ -140,11 +150,5 @@ def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = 
             raise InvalidArtifact(f"a node's {at}.rate is {bw} bit/s, and {bound}, which bounds the host's {tier} "
                                   f"leaves together, is {together[tier]}; state "
                                   + ("that figure" if tier == "dram" else "a rate at or under it"))
-        try:
-            n = cards.number(size) if size["unit"] == "B" else None
-        except (KeyError, TypeError, ValueError):
-            n = None
-        if n is None or n < 0 or n.denominator != 1:
-            raise InvalidArtifact(f"a node's {at}.bytes is {size!r}; state a whole number of bytes, in B")
-        out.append(Leaf(f"{host}/{name}", tier, int(n), bw))
+        out.append(Leaf(f"{host}/{name}", tier, _bytes(size, f"a node's {at}.bytes"), bw))
     return tuple(out), together
