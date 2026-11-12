@@ -48,7 +48,8 @@ def test_every_vllm_import_of_the_library_is_listed():
 def test_every_entry_resolves_at_the_installed_vllm():
     vllm = pytest.importorskip("vllm")
     assert config.VLLM in vllm.__version__, f"vLLM {vllm.__version__} is installed, not the pin {config.VLLM}"
-    unresolved, unchecked = [], []
+    unresolved: list[str] = []
+    unchecked: list[str] = []
     for key in SURFACE:
         module, _, name = key.partition(":")
         try:
