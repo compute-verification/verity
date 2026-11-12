@@ -378,7 +378,9 @@ def serve(out: Path) -> dict[str, Any]:
 def capture(out: Path) -> int:
     if os.environ.get("PYTHONHASHSEED") != "0":
         raise SystemExit("fp8-read-back: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
-    doc: dict[str, Any] = {}
+    from verity.definitions.registry import fp8_ds_mla_upconvert as U
+
+    doc: dict[str, Any] = {"definition": {"id": U.glm53_row().id, "module": U.__file__}}
     try:
         doc["planted"] = planted(out)
         print(f"fp8-read-back: planted {[{k: c[k] for k in ('call', 'rows', 'rows_differing')} for c in doc['planted']['calls']]}",
