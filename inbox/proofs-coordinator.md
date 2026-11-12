@@ -85986,3 +85986,62 @@ In plain words. The branch vllm said yes to exists and is checked. It is `main` 
 - vllm's rehearsal on #9082's head merged with this branch: vllm's run.
 
 Nothing marked. Nothing posted on Linear or Slack. Pushes this turn: the new branch `cursor/proofs-stops-switch-5035` and this inbox file; nothing to #9116's branch or to `cursor/proofs-stops-1340`.
+
+## MEMBERS, Thu 12 Nov 11:33Z: PRF-585's files half, timed on the two-member test's window: about one more parse of the circuit for a sampled member, four for an unsampled one; nothing is kept, and one lever takes both to zero and one
+
+Clock read: 11:33Z. Branch `cursor/proofs-members-files-61d4` at `0429a81f9848`, unchanged. Tags: [run], [read], [relayed], [derived], [guess].
+
+**In short**
+- A member's files pass costs four parses of its circuit file: 4.0 to 4.5 s a member at circuit files of 62 and 67 MB [run].
+- Against `main`, PRF-585 adds one parse for each sampled member (1.0 to 1.1 s here) and four for each member the sample missed (4.0 to 4.5 s here) [derived from the run].
+- The check keeps nothing: not across members, not between the files pass and a session's verify, and no kept process holds anything for it [read].
+- At the head block I measured nothing. By read it is the same count of parses, at that file's size.
+- One lever, not built: one parse a member, shared by the four checks. Then PRF-585 adds nothing for a sampled member and one parse for an unsampled one, and a sampled member costs two parses fewer than on `main` today.
+- The property was seen on the real case: a member the sample missed, with another member's public or circuit file committed in its place, refuses the run [run].
+
+**What ran** [run `r20261112-112248-d081`, `vy-nebius-cpu-2`, a 16-core slot, one process a case, not pinned, no repeats]
+- The two-member audit (`benchmarks/one_stage/tests/test_audit_two_members.py -k two_sampled_members_pass`) on the real prover and verifier: passed in 101 s. Its per-member case: 10 blobs of 133.8 MB; circuit files of 61.7 MB (K=128) and 67.4 MB (K=256); public files of 3,750 bytes; a program of 8,202 bytes.
+- A scratch harness on that case (`/tmp/scratch/mf/Main.lean`, not in the tree) calls the check's own functions and times each. Peak memory 0.67 to 0.71 GB.
+
+| step | K=128 | K=256 | what it is |
+|---|---|---|---|
+| one parse of the circuit (`ProvedScope.circuitOf`) | 1.0 s (`scopeOf`'s) | 1.08 s | the parse a session's setup runs |
+| `Member.statement` | 2.97 s | 3.40 s | three parses: the scope's, the ports', the units a proof block |
+| `StepAt.filesHeld` | 0.99 s | 1.15 s | one more parse, for `KsScope.filesOf` |
+| the ports and roots, the knowledge-soundness form, the population, the program's digest, each with the parse in hand | 0 to 4 ms | 0 to 4 ms | |
+
+| the run | seconds | result |
+|---|---|---|
+| `membersFiles`, both members | 8.63 | ok |
+| `runMembers`, both sampled | 16.51 | both sessions accept, proved [0, 1] |
+| `runMembers`, the K=256 member's statement left out | 13.24 | the one session accepts, proved [0] |
+
+- The K=128 member's figures over the three cases: `Member.statement` 2.97, 3.07, 2.84 s; `filesHeld` 0.99, 1.03, 1.00 s. A process's first parse took 1.8 to 2.0 s.
+
+**What PRF-585 adds a window** [derived from the run and a read of `main`'s `runMembers`]
+- A sampled member: `main` already reads its statement (three parses), then its session's verify reads the circuit again. PRF-585 adds `filesHeld`'s parse: here 2.1 s on about 14.4 s for the two members.
+- A member the sample missed: `main` reads nothing of it. PRF-585 reads its statement and holds its files: here 4.5 s for the K=256 member. With it left out the run is 13.2 s against about 7.7 s: that 4.5 s and the sampled member's 1.0 s.
+- In general: (sampled members) × 1 parse + (unsampled members) × 4 parses, plus for each unsampled member one read of the shared program (its digest, its parse and strata).
+
+**The head block's descriptor**
+- Not measured: I have no head block case in the per-member form.
+- Does the check read it again? **Yes** [read]. Each member's statement computes the program's digest (`programDigest`, `Spot/OneStageZk.lean` 330-335 at the branch's head: a JSON read, the canonical form, a SHA-512) and parses the program for its strata (`Member.population`, 1070-1074 there), and parses the member's circuit file four times. Nothing is shared between members, though every member's program is the one shared program (`membersOf`).
+- The kept process does not help it [read]: `flock-verify verify-members` (#9190, open) keeps the program's digest and two readings for Flock's `verify` body. It keeps no circuit parse, and no executable reaches the Spot check `membersRun` at all.
+- So, if the 103 to 106 s is one read of the head block's file [relayed; which file it times I did not check]: a member of it costs about four of those in the files pass, 7 minutes, of which PRF-585 adds one (sampled) or four (unsampled) [guess, by multiplying]. Too much for the goal as it stands; the lever below is what makes it affordable.
+
+**The lever, not built** [read; about 25 lines in `Spot/OneStageZk.lean`, no statement changes]
+- `StepAt.ofOwn` parses the circuit once and computes its four checks from that parse (the scope, the ports and roots, the knowledge-soundness form, the units a proof block), keeping their results and not the parse. `filesHeld` then reads results.
+- Cost after: one parse a member in the files pass. PRF-585 adds nothing for a sampled member, one parse for an unsampled one; a sampled member costs two parses fewer than on `main`.
+- It must not keep the parse itself: `membersFiles` holds every member's statement at once, so a kept parse would be every member's circuit in memory together.
+- The program's digest and strata once for all members is a second, separate lever (about 30 lines): a millisecond here, the program's read a member at the head block.
+- Yours to say whether it goes into PRF-585 (its suites run again) or follows it. I have not started it.
+
+**The property on the real case** [run, the same run]
+- The K=256 member's committed `public` digest made the K=128 member's, and its statement left out as though the sample had missed it: `runMembers` refuses, "member …K=256…/c0: refused: a public file that does not load (public file: staged for another circuit)", in 7.4 s. The same with its `circuit` digest made the other's.
+- On `main` nothing reads an unsampled member's files, so the same case would pass its one session [read; not run on `main`].
+
+**Two things this showed that you should know**
+- **The two-member test's case names no challenger** (it samples on the verifier's own coins), so the per-member Lean form refuses its parameters at the parse, and `membersRun` refuses it at `coins:` in 0 ms. What I timed is `runMembers`, the run inside it; the harness read the parameters without that demand, for the measurement only. **`membersRun … = .ok r` has not been seen on any real case**: no case of several members with a challenger exists that I know of [read].
+- Three earlier timing runs gave no member's time (`e473`: no pytest; `b1e1`: my harness did not compile; `1988`: the challenger refusal above).
+
+**Runs still out on the head:** suites `r20261112-110753-e3ca` (`cpu-14`), 27 of 69 passed and none failed at 11:30Z [read], the difftest and Flock suites not yet reported; records `r20261112-110654-154d` (`cpu-11`), the Flock verifier's and the certifier's audits passed, now on `security` [read]. The pull request opens when both pass.
