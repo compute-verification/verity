@@ -86583,3 +86583,105 @@ Follows my 11:35Z entry (`b398a4fdd5c0`). Nothing is pushed to #9087's branch (`
 - [read] Both mailbox files read at 11:45Z: nothing newer than 05:31Z and 07:40Z.
 
 Resume me on `beae`'s end, or on the two landings. The three asks of my 11:35Z entry stand.
+
+## WIDEZK, Thu 12 Nov 11:46Z: `00de` kept two locks and only read definitions move, no guarantee's own record; committed at `16757e170166` on my branch; `main`'s move touches nothing of it; #9108's body updated; the ready line waits on the quick tier `247c` (about 12:30Z)
+
+**One thing for you to rule before the push to #9108's branch.**
+
+- [run r20261112-101722-00de] By the lock's own test nothing stops: no deployed guarantee's statement hash or unfolded-statement hash moves, and no guarantee gains or loses a premise.
+- [read] Six deployed guarantees read changed definitions, and through them say three things they did not say on `main`. In `security`: `Flock.SecurityProofs.RecursiveKSDeployed` (58 of the changed definitions), `RecursiveZKLoopAnySumDeployed` (86), `SessionLoopZKDeployed` (54), `SampledKSLiveV3` (21), `SampledKSLiveV5` (19). In `security/Properties`: `Verity.remote_soundness_of_subprotocols` (24).
+- [read] (1) They take the statement's own version, not today's value fixed: `Zk.schedule st.wideLeaf st.m` where `main` has `Zk.schedule st.m`, and `FlockDeploy.tableErr`, `tableLen`, `tableWeight`, `repRounds`, `Flock.Guarantees.AcceptsPublic`, `AcceptsStmt` and `ClassOk` likewise. So each ranges over statements of either version. At a statement of today's version the schedule, the query count and the per-table numbers are `main`'s by their text (`Zk.queries0 false m`, `Flock.fast100At false m`, `m1Queries₀ false m`). The bounds on a table keep their numbers at either version: error at most 2^-205, level-0 length at most 2^23, weight at most 2^33, at most 2,200 rounds in a rep (`security/Proofs/Flock/Claims/NumbersDeploy.lean`, the theorems' statements unchanged).
+- [read] (2) `Claims.Flock.ZkIdx` is `Fin 15` where it was `Fin 11`, and the extractor's counted decoder `Claims.GS.zkCountedRD`, which the first three read, runs over all 15. Its step bound's constant goes 11 to 15 (`zkStepPoly`, `security/Proofs/Flock/Claims/DeployEfficient.lean:114`). This holds for every masked statement, today's included. #9108's body already had it, from the base's owner, as "One bound grows". No lock reads `zkStepPoly` or `zkSizeRD`.
+- [read] (3) `Claims.ZKMal.Masked.schMax`, read by `RecursiveZKLoopAnySumDeployed`, is the largest over both versions; `schMax_eq_today` (`security/Proofs/Flock/Claims/ZK/OneTape.lean`) proves it the number it was.
+- [derived] I read your 06:22Z item 1 ("`Stmt`, `Setup` and `Tags` gain the leaf's version … that is the change") as covering (1), and (2) as the bound the body states, so I committed, as your 11:24Z message says. If you read (1) or (2) as your item 2's stop, nothing has gone to #9108's branch: the records are one commit on `cursor/proofs-widezk-onmain-e2b7`, which has no pull request.
+- [derived] Of the 101 definitions of `security` whose text differs, 85 change only in lines that name the version. The other 16 are `ZkIdx`, `ZkIdx.m`, `schMax`, `Level0.build` (a wrapped line), `Zk.hooks` and `helloOf` (the wide leaf's profile and query text in the identity), `SpotFlock.shapeOf` and `n₀` (a session's shape is its tables' versions and sizes), and eight new names of `Flock.Tags` and `Flock.Stmt` that my tool printed against their structure.
+
+**1. The records, key by key against `main`'s locks at `33faab2be81c`.**
+
+- [run r20261112-101722-00de] Done, rc 0, outcome `regenerated`, at `d7db58522f0e`. `security` and `security/Properties` regenerated (`check.py --update` exit 0 in 2,810 s and 821 s). The verifier's package (52 s), the network certifier's Lean (32 s) and `security/Proofs` passed as they were. It is the fast path: no kernel replay, no tests.
+- [read] `security/lean-audit.json`: every top-level key but `reads` equals `main`'s, `guarantees` (1,103) among them, with `assumptions` (11), `domain` (94), `open` (465), `deployed`, `trust_gap`, `unwitnessed`, `witnesses` and `shape`. In `reads`: 97 definitions change in 40 modules, 16 are new, none is gone; one module is new, `Flock.WideLeaf`.
+- [read] `security/Properties/lean-audit.json`: every top-level key but `reads` equals `main`'s, `guarantees` (465) among them. In `reads`: 14 definitions change in 6 modules, 10 are new, none is gone.
+- [read] So no record that moves is a guarantee's own record, statement or premise. Every one is a definition a guarantee reads; the constants among them are `ZkIdx` (11 to 15), `Zk.queries0` and `m1Queries₀` (219 at the wide leaf for m 32 to 35, 218 otherwise as before) and `schMax` (equal by theorem).
+- [read] No `why` in either lock holds a bracket with an issue and a date; the `why` fields (152 and 72) are `main`'s, unchanged.
+- [read] Caps: untouched. `unwitnessed` 229 and 182, inline premises 887 and 128, as on `main`, since only `reads` moved; `tools/verity/lean/unread-caps.json` and `tests/test_lean_packages.py` are `main`'s.
+
+**2. The records that move, one by one.** [read, for every line of this section]
+
+`security/lean-audit.json`, moved unless marked new:
+
+- `Flock.Firewall.Level0`: `Level0`, its fields `extra`, `g`, `layers`, `lv`, `m`, `pads`, `root`, `rows`, `salts`, `tPad`, `toIn`, then `build`, `ofDraws`; new `Level0.wideLeaf`.
+- `Flock.Tags`: `all`, `isTmpl`, `templated`; new `WIDE_LEAF_PROFILE`, `circuitTmplWideLeaf`, `circuitWideLeaf`, `tmplWideLeafName`, `wideLeaf`, `wideLeafIdentity`, `wideLeafName`.
+- `Proofs.Flock.Claims.ZkDecodeFlock`: `Claims.Flock.ZkIdx`, `ZkIdx.m`, `zkCols`, `zkLanes`, `zkLen`, `zkLevel0`, `zkPad`, `zkSched`; new `ZkIdx.wideLeaf`.
+- `Flock.Zk`: `hooks`, `queries0`, `schedule`, `shapeOk`, `tags`, `verify`. `Flock.With.Zk`: `Zk.verifyWithM`.
+- `Flock.Firewall.Link`: `In` and its fields `extra`, `g`, `lanePad`, `salt`.
+- `Proofs.Flock.Claims.ZkCols`: `Claims.Flock.ZkRun`, `ZkRun.shape`, `zkProofShape`, `zkRunCols`; new `ZkRun.wideLeaf`.
+- `Proofs.Flock.SpotFlock.Code`: `SpotFlock.base`, `n₀`, `sessionOk`, `shapeOf`, `templateOk`.
+- `Flock.Verify`: `Flock.Setup`, `Setup.ofCircuit`, `instInhabitedSetup.default`; new `Setup.wideLeaf`.
+- `Proofs.Flock.Claims.DeployCode`: `FlockDeploy.runOf`, `tableErr`, `tableLen`, `tableWeight`. `Proofs.Flock.Claims.Deploy`: `FlockDeploy.repRounds`.
+- `Proofs.Flock.Claims.Complete.Ready`: `FlockComplete.betaSlotsZk`, `rankSlotsZk`, `rhoSlotsZk`. `…Complete.Zk.Session`: `FlockComplete.sessionPZk`.
+- `Proofs.Flock.SessionLoop.Statement`: `Claims.ZKServer.Loop.level0At`, `level0Of`, `realOf`. `Proofs.Flock.Claims.ZK.FrameLoop`: `Loop.placeholder`.
+- `Proofs.Flock.Soundness.Accounting.PaddedNumbers`: `FlockSoundness.Accounting.m1Pad`, `m1Queries₀`, `m1Schedule`.
+- `Definitions.Flock.Accounting.Schedule`: new `FlockSoundness.Accounting.fast100At`, `fast100Wide`. `Flock.WideLeaf` (new module): new `Flock.fast100At`, `Flock.fast100Wide`.
+- `Flock.Firewall.SessionPlan`: `Session.repCoins`, `Session.repPlan`. `Flock.Firewall.Drive`: `Drive.start`. `Flock.Firewall.Finish`: `Finish.tabOfLevel0`.
+- `Flock.Statement`: `Flock.helloOf`; new `Flock.Stmt.wideLeaf`. `Flock.RecCoins`: `RecCoins.Inner.load`. `Spot.OneStageZk`: `rootBLen`.
+- `Proofs.Flock.Claims.GS.RadiusFamily`: `Claims.GS.zkCountedRD`, `zkDecodeRD`.
+- `Proofs.Flock.Claims.Recursion.Deploy`: `RecDeploy.betaSlotsO`, `rhoSlotsO`. `…Recursion.DeployOuter`: `RecDeploy.runOfO`.
+- `Proofs.Flock.Claims.ZK.OneTape`: `Claims.ZKMal.Masked.schB`, `schMax`. `…ZK.FirstRefusal`: `Masked.repSlot`. `…ZK.LinkRecheck`: `Masked.linkIn`. `…ZK.CutSession`: `FlockComplete.sessionCut`. `…ZK.MaskedTables`: `ZkHidden.ZkTab`.
+- `Proofs.Flock.Recursive.ExecClass`: `Recursion.AcceptsStmt`, `Recursion.ClassOk`. `Proofs.Flock.Recursive.PublicAudit`: `Flock.Guarantees.AcceptsPublic`.
+- `Proofs.Flock.Soundness.Discharge`: `Composed.DefsJ` (`DrawSetupZJ`, `opnAtZJ`), `ZkHidden.DefsJ` (`DrawSetupZHJ`, `opnAtZHJ`), `ZkHidden.DefsJP` (`DrawSetupZHJP`, `opnAtZHJP`), `ZkHidden.Defs` (`DrawSetupZKH`), `ZkHidden.SoundDefs` (`opnAtZH`), `ZkExec.LiveStatements` (`opnAtZ`), `ZkLink.TablesAt` (`DrawSetupZK`).
+- `Proofs.Flock.Claims.KS.PlainDrawRColsE`: `FlockDeploy.runOfDecR`.
+
+`security/Properties/lean-audit.json`:
+
+- `Flock.Zk`: `hooks`, `queries0`, `schedule`, `shapeOk`, `tags`, `verify`. `Flock.Verify`: `Setup`, `Setup.ofCircuit`, `instInhabitedSetup.default`; new `Setup.wideLeaf`.
+- `Flock.Tags`: `all`, `isTmpl`; new `WIDE_LEAF_PROFILE`, `circuitWideLeaf`, `tmplWideLeafName`, `wideLeaf`, `wideLeafIdentity`, `wideLeafName`.
+- `Flock.Statement`: `helloOf`; new `Stmt.wideLeaf`. `Flock.RecCoins`: `Inner.load`. `Spot.OneStageZk`: `rootBLen`. `Flock.WideLeaf` (new module): new `fast100At`, `fast100Wide`.
+
+**3. The commit.**
+
+- [read] `16757e170166` on `cursor/proofs-widezk-onmain-e2b7`, pushed 11:31Z: `d7db58522f0e` plus the two locks as the run kept them, sha256 `320e99e393d6…` and `1e2e86256567…`, the same as the run's files. Two files, 197 lines added and 161 removed.
+- [read] #9108's branch reaches it by one fast-forward: `8428b506e6b9` is its ancestor. I pushed nothing there.
+
+**4. `main`'s move.**
+
+- [read] `main` is `33866d93e66e`, 9 pull requests and 52 files past `33faab2be81c`. None of the 52 is one of this change's 305 files, and none is a Lean file, a lakefile, a lock or a file of `tools/verity/lean`. The two nearest are #9077's `proof_server.py` and its test, in the prover's package, which this change does not touch.
+- [read] `git merge-tree --write-tree --name-only origin/main 16757e170166`: exit 0.
+- [derived] The head holds a `main` that the records run covers for every file it touches, so the run stands and I did not merge again. Nothing reruns.
+
+**5. Lean's branch.**
+
+- [read] `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d 16757e170166` (`f3837f57d113`): exit 1, 23 files named. `main`'s tip against the same branch names the same 23. Less `main`'s own: none. None of the 23 is a file of this change.
+- [read] Both locks merge there under the driver. At the head it prints five more notes than for `main` alone, each "taken without regenerating it; the lock run after landing regenerates it", for `reads[NetworkCheck.Period]` definitions lean's branch removes. They are notes, not stops.
+
+**6. The quick tier.**
+
+- [run r20261112-113306-247c] `suites.py --changed origin/main --quick` at `16757e170166`, placed by `--on auto` on vy-nebius-cpu-13, slot at 11:33:27Z, limit 7,200 s from the slot. It names 68 suites against the merge base `33faab2be81c`. At 11:44Z: 9 passed, none failed.
+- [guess] It ends about 12:30Z.
+
+**7. #9108's body** (`research queue edit 9108 --body-file`, 11:42Z; no push; the head is still `8428b506e6b9`).
+
+- [read] It was unchanged since 09:13:59Z when I replaced it. The old text is kept in my artifacts.
+- [read] Changed: one line at the top on what the pull request moves; "Not ready: do not mark" kept, with what is missing now (the fast-forward to `16757e170166`, then the quick tier); the Locks section, now the counted list with the six deployed readers, the three points above and the names by module in a collapsed section; under Checks, the merged records run, the quick tier's id, and the merges at the new head. Everything else is the author's text, untouched.
+- [read] One sentence of the old Locks section went: that `Proofs/Flock`'s count of unread modules falls by one. By the facts published for `main` `33faab2be81c`, the deleted module had one of its 15 declarations read, so it was not among the wholly unread.
+- [derived] The body has no section of both texts: your 06:22Z item 1 asks for them for guarantees whose own statement hash moves, and none does. The old and new text of each changed definition is in my artifacts (`widezk-00de-definitions-security.md`, `-properties.md`).
+
+**8. The ready line, as far as it stands. It waits on `247c`.**
+
+- [derived] #9108 at `16757e170166` once its branch is fast-forwarded (today `8428b506e6b9`). Records run `r20261112-101722-00de`: rc 0, two locks regenerated, fast path. Quick tier `r20261112-113306-247c`: running. Onto `main` `33866d93e66e`: merges, exit 0. Against lean's merge `f3837f57d113`: 23 files, all `main`'s own, none of this change's. Notice: no guarantee's own record, statement or premise moves; 97 read definitions change and 16 are new in `security`, 14 and 10 in `security/Properties`; six deployed guarantees read them, and the masked verifier's tables go 11 to 15. No `why` with an issue and a date.
+- [read] Not run: the kernel replay, the axiom check and the tests of the Lean check (the candidate's check runs them); `lean-agreement`; `circuit-check`; the unread ratchet on built facts (my caps count is by read of names); `benchmarks/two_stage/tests/TwoGuard.lean` at this head (it elaborated at `6160c59e6c22`, `r20261112-093333-1368`).
+- [read] The no-growth lint fails at this head, as the body says of the earlier one: `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` exits 1, `tests/lint/allowlists/repo_retired_terms.json` grows 107,212 to 107,221 in total (`Flock/Firewall/Level0.lean` 43 to 47, `Flock/Test/ZkIdentity.lean` 0 to 2, `Discharge/DecodeZL/LIG.lean` 54 to 55 among them). The body says the third pull request mends it.
+
+**9. The control `r20261112-092800-e716`.**
+
+- [run r20261112-092800-e716] Still running at 11:42Z. `security` ended: `check.py --update` exit 0 in 4,970 s. It is in `security/Properties`.
+- [read] For `security` its printed list is the merged run's: the same 113 definitions and the same 132 guarantees that read them. So in `security` every move is this change's own and the merge with `main` adds none.
+- [derived] The line does not wait on it. If it disagreed for `security/Properties`, only the split would change: which of the 24 definitions there move by this change alone. The lock that lands is the merged run's either way. If it failed now, it would be in `security/Properties` on the branch without `main`, which `00de` passed with `main`; I would give you the failing line.
+- [guess] It ends about 12:10Z.
+
+**10. Mine to correct.**
+
+- [read] My checkpoint note at 11:33Z is headed 11:34Z, a minute I had not read.
+- [read] `research fetch --all` on `e716` stopped at a special file in its build tree, so I have its log but not its kept lock yet; I read it when it ends.
+
+- [guess] Runs out: `r20261112-113306-247c` (about 12:30Z), `r20261112-092800-e716` (about 12:10Z). On resume: `247c`'s verdict into the ready line and the body, `e716`'s lock against the merged one.
+- [read] I marked nothing, pushed nothing to #9108's branch, and posted nothing on Linear or Slack.
