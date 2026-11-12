@@ -5,13 +5,9 @@ class's n_rho proof blocks. After the first stage samples Q of them, the prover 
 proof blocks' values, phase ``interior``, as the record `Stream.register_interiors` receives: population Q·n_rho, the
 sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after the boundary registration.
 
-* `Replay`: one request's values replayed on the CPU. Its Program's rows are evaluated by the replay's row kernels
-  (`check.replay.evaluate.evaluated`) on its replayed inputs: its certified prompt ids, the registered weights, and
-  whatever else ``given`` supplies. A row is evaluated only when a read reaches it, so a span is its readers' cone and
-  never its batch-mates: a request's Program is its rows alone at its launch shapes. It answers `CommittedStore.words`,
-  so whatever reads a committed store reads it.
-* `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
-  the committed store (`serving_rows.population`, `serving_rows.read_all`).
+* `span`: one sampled span's units of the stream's template, read from its `Replay` (`check.replay.request_replay`: one
+  request's values replayed on the CPU, a request served from the prefix cache with its hit recomputed) exactly as the
+  serving rows read the committed store (`serving_rows.population`, `serving_rows.read_all`).
 * `port_map`: which committed element or weight each of those units' port words is, read off the same `read_all` over a
   store that answers each element with its own place, so a replay on the GPU gathers them from the recorded tensors;
   `gather` is that gather on the host.
@@ -57,151 +53,18 @@ from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry.dead_free import CHUNK
-from verity.commitments.windows import rows as CS
-from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay.compare import _tp_member_alias
-from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
-from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
+from verity.commitments.windows import links as LK, rows as CS
+from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
+from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine.sampler_capture import CAPTURE
 from verity_vllm.pipeline import chunk_rows as CR, interior_links as IL, serving_rows as SRW
-from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Link, Operand, Supply, history,
-                                                 kept_table, link_schemas, link_values, link_words, sources,
-                                                 span_values, supplied, table_reads)
-from verity_vllm.query.manifest import format as RM
+from verity_vllm.pipeline.interior_links import (DIGEST, HELD, INDEX, READ, TABLE, Cells, Link, Members, Operand, Supply,
+                                                 history, kept_table, link_schemas, link_values, link_words, links,
+                                                 sources, span_values, supplied, table_reads)
 from verity_vllm.records.logits_capture import LogitsCapture
 
 #: the tag `interior_run` hashes under
 RUN_TAG = b"verity-vllm/interior-run/v1\x00"
-Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
-
-
-class Replay:
-    """Request ``rid``'s values replayed from its Program ``pi`` at engine step ``arrive``: ``prompt`` its certified ids,
-    ``weights(field, lo, hi)`` the registered weights, ``given(step, op_path, member, lo, hi)`` (request-local step) any
-    other input its rows read that no row of it computes (a sampler seed, a run value). `words` answers a read of
-    ``(rid, engine step, op_path, member, [lo, hi))`` as `CommittedStore.words` does, evaluating the rows that produce
-    it and, first, every row of theirs not yet evaluated, in Program order. ``seconds`` is the evaluation time by row
-    family and ``rows`` the rows evaluated."""
-
-    def __init__(self, pi: ProgramIndex, rid: str, prompt: Sequence[int], weights: Callable, *, arrive: int = 0,
-                 given: Given | None = None) -> None:
-        if pi.kv_prefix:
-            raise ValueError(f"request {rid} reads a cached prefix another request computed: a span is replayed with "
-                             "prefix caching off")
-        self.pi, self.rid, self.arrive, self.weights, self.given = pi, str(rid), int(arrive), weights, given
-        self.ids = np.asarray(list(prompt), dtype=np.uint32)
-        self.embed = pi.embed_op_path()
-        self.at: dict[tuple[int, str, str], tuple[int, str, dict[int, int]]] = {}
-        for r in pi.rows:
-            d = pi.describe(r)
-            if d is None:
-                continue
-            outs = [(d["op_path"], m[0], int(m[1]), str(m[2]), int(d["row"])) for m in d["members"]]
-            outs += [(c["op_path"], c["member"], int(c["width"]), str(c["dtype"]), int(c["row"])) for c in d.get("copies") or ()]
-            for op, member, width, dtype, row in outs:
-                w, dt, by = self.at.setdefault((int(d["step"]), op, member), (width, dtype, {}))
-                if (w, dt) != (width, dtype) or by.setdefault(row, int(r["i"])) != int(r["i"]):
-                    raise ValueError(f"rows {by[row]} and {r['i']} both commit ({op}/{member}) row {row} at step {d['step']}, "
-                                     f"or as {dt} x {w} and {dtype} x {width}")
-        self.out: dict[int, dict[tuple[str, str], np.ndarray]] = {}
-        self.busy: set[int] = set()
-        self.seconds: dict[str, float] = {}
-        self.rows = 0
-
-    def words(self, rid: str, step: int, op_path: str, member: str, elo: int, ehi: int) -> tuple[np.ndarray | None, str]:
-        if str(rid) != self.rid:
-            return None, f"the replay holds request {self.rid}, not {rid}"
-        s = int(step) - self.arrive
-        if member == IDS_MEMBER and op_path == self.embed and s == 0:
-            if not 0 <= elo <= ehi <= self.ids.size:
-                return None, f"prompt ids [{elo}, {ehi}) of request {rid}'s {self.ids.size}"
-            return self.ids[elo:ehi].copy(), "i32"
-        at = self.at.get((s, op_path, member))
-        if at is None:
-            if self.given is not None:
-                return self.given(s, op_path, member, elo, ehi)
-            return None, f"no row of request {rid} commits ({op_path}/{member}) at its step {s}, and nothing gives it"
-        width, dtype, by = at
-        if ehi <= elo or elo < 0:
-            return None, f"element slice [{elo}, {ehi}) of ({op_path}/{member})"
-        first = elo // width
-        parts = []
-        for row in range(first, (ehi - 1) // width + 1):
-            i = by.get(row)
-            if i is None:
-                return None, f"no row {row} of ({op_path}/{member}) at request {rid}'s step {s}"
-            if i in self.busy:
-                return None, (f"row {i} ({op_path}) reads its own output {member}: a replay computes it, it doesn't read it "
-                              "as a witness")
-            self._ensure(i)
-            parts.append(self.out[i][(op_path, member)])
-        return np.concatenate(parts)[elo - first * width:ehi - first * width], dtype
-
-    def _ensure(self, i: int) -> None:
-        """Row ``i`` and every row of its inputs' cone not yet evaluated, in Program order (a producer precedes its
-        readers), so no evaluation reads an unevaluated row."""
-        if i in self.out:
-            return
-        need, todo, seen = [], [i], set()
-        while todo:
-            j = todo.pop()
-            if j in seen or j in self.out:
-                continue
-            seen.add(j)
-            r = self.pi.by_i[j]
-            d = self.pi.describe(r)
-            if d is not None and (d["members"] or d.get("copies")):
-                need.append(j)
-            todo.extend(int(run[1]) for g in r.get("args") or () for run in node_runs(g))
-        for j in sorted(need):
-            self._evaluate(j)
-
-    def _evaluate(self, i: int) -> None:
-        r = self.pi.by_i[i]
-        d = self.pi.describe(r)
-        fam = d["family"]
-        t0 = time.perf_counter()
-        self.busy.add(i)
-        try:
-            got, why = EV.evaluated(self.pi, self, self.weights, r, self.rid, self.arrive, [])
-        finally:
-            self.busy.discard(i)
-        if why is not None:
-            raise LookupError(f"row {i} ({fam}, {d['op_path']}, step {d['step']}) of request {self.rid}: {why}")
-        if len(got) > 1:
-            got = EV.by_member(got, self.pi.member_of_port(i) or EV.plane_ports(d))
-        if d.get("plane") and d["plane"] not in got and len(got) == 1:
-            got = {d["plane"]: next(iter(got.values()))}
-        one = next(iter(got.values())) if len({id(v) for v in got.values()}) == 1 else None
-        outs: dict[tuple[str, str], np.ndarray] = {}
-        for member, width, dtype in d["members"]:
-            v = got.get(member)
-            if v is None:
-                v = _tp_member_alias(got, member)
-            if v is None and (d.get("copies") and len(got) == 1 or len(d["members"]) == 1):
-                v = one
-            if v is None:
-                raise LookupError(f"row {i} ({fam}): its relation gives no output {member!r} (it gives {sorted(got)})")
-            got[member] = v
-            outs[(d["op_path"], member)] = _words(v, str(dtype), int(width), fam, f"row {i} {member}")
-        for c in d.get("copies") or ():
-            outs[(c["op_path"], c["member"])] = _words(got[c["of"]], str(c["dtype"]), int(c["width"]), fam,
-                                                       f"row {i} {c['member']}")
-        self.out[i] = outs
-        self.rows += 1
-        self.seconds[fam] = self.seconds.get(fam, 0.0) + time.perf_counter() - t0
-
-
-def _words(v: Any, dtype: str, width: int, fam: str, what: str) -> np.ndarray:
-    """An evaluated output as the words a committed member of ``dtype`` holds (`CommittedStore.words`' widths: the
-    sampled token's i64 as u64)."""
-    if dtype in RM.LIFTED_DTYPES:
-        raise LookupError(f"{what}: a lifted member ({dtype}) of the padded MoE construction is not replayed")
-    a = np.asarray(v).reshape(-1)
-    size = 8 if RM.is_token_select(fam) else _ITEMSIZE.get(dtype, 2)
-    if a.size != width or a.dtype.kind not in "ui":
-        raise LookupError(f"{what}: {a.size} {a.dtype} values, not {width} {dtype} words")
-    return a.astype(_NPDTYPE[size])
 
 
 @dataclass(frozen=True)
@@ -388,6 +251,12 @@ def named(m: CS.Member) -> CS.Member:
     return replace(m, rows=tuple((names[r], w) for r, w in m.rows), schemas=tuple((names.get(r, r), s) for r, s in m.schemas))
 
 
+def member(template: str, n: int = 1) -> CS.Member:
+    """``n`` units of template ``template`` as an interior window lays them out: its bit rows as Flock stages a unit
+    (`chunk_rows.unit_member`), each row named after its parameter (`named`)."""
+    return named(CR.unit_member(SRW.template(template), n))
+
+
 def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
@@ -412,7 +281,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
               [s.data["outs"][out]]))
     got = []
     for t, units, ins, outs in split:
-        m = named(CR.unit_member(SRW.template(t), units))
+        m = member(t, units)
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
         scale = units // n
@@ -420,22 +289,22 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     return got[0], got[1]
 
 
+def whole(s: Span) -> Span:
+    """A token select's span ``s`` (`captured`) as its template's own units, one a served token, where the class's replay
+    block is the check's instances and not their bodies (`boundary_rows.Layout.inline` off): its member the template's
+    layout as an interior window's (`member`), its output ``o0``, as round 2 names a link's port."""
+    m = member(s.member.template, s.n)
+    ((port, words),), ((out, wide),) = s.member.rows, s.member.outs
+    if [w for _p, w in m.rows] != [words] or [w for _p, w in m.outs] != [wide]:
+        raise ValueError(f"{s.member.template}: a unit of rows {list(m.rows)} and outputs {list(m.outs)}, not the span's one "
+                         f"row of {words} words and one output of {wide}")
+    return replace(s, member=m, data={"rows": {m.rows[0][0]: s.data["rows"][port]}, "outs": {m.outs[0][0]: s.data["outs"][out]}})
+
+
 def interior_run(boundary: str, sample: Sequence[int]) -> str:
     """The interior window's run: SHA-512 over the boundary registration's digest and the replay sample, in order."""
     body = json.dumps({"boundary": boundary, "replay_sample": [int(u) for u in sample]}, separators=(",", ":"))
     return hashlib.sha512(RUN_TAG + body.encode()).hexdigest()
-
-
-Members = CS.Member | Sequence[CS.Member]
-Cells = int | Sequence[int]
-
-
-def _cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[int, ...]]:
-    ms = (members,) if isinstance(members, CS.Member) else tuple(members)
-    cells = (int(n_rho),) if isinstance(n_rho, int) else tuple(int(n) for n in n_rho)
-    if not ms or len(cells) != len(ms):
-        raise ValueError(f"{len(ms)} templates and cells {list(cells)}: a replay block holds n_t units of each template")
-    return ms, cells
 
 
 def _held(ms: Sequence[CS.Member], cells: Sequence[int], offs: Sequence[int], q: int,
@@ -468,7 +337,7 @@ def interior_window(members: Members, n_rho: Cells, boundary: str, sample: Seque
     the replay block's (`second_stage.replay_wires`). A wired port commits no tree of its own (`rows.Member.wired_trees`):
     its table is its writer's Q·n_w output rows, whole, and unit u of span s reads its writer's unit off_w + s·n_w.
     ``values``: the values its program takes ahead of the templates' parameters (a window stream's, `link_values`)."""
-    ms, cells = _cells(members, n_rho)
+    ms, cells = IL.cells(members, n_rho)
     q = len(sample)
     sizes = [q * n for n in cells]
     offs = [int(o) for o in np.cumsum([0, *sizes[:-1]])]
@@ -552,7 +421,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              replay: str | None = None, previous: str | None = None, kind: str = "served",
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
-             positions: int | None = None, links: Sequence[Link] = ()) -> Interior:
+             positions: int | None = None, links: Sequence[Link] = (), window_root: str | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -574,7 +443,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     record registers: `supplied`'s for a `Supply`, and for an `Operand` the rows its units replayed there. A replayed
     unit whose row there is not the value's at its place (a `Supply`'s row, or the row another unit replayed for the
     same row of an `Operand`) is refused before anything is committed. Several ports may read one value, each its own
-    link."""
+    link. ``window_root``: the open root of the challenger session the second stage samples on, where the stream
+    registers the interior under one (`Stream.register_interiors`' ``window_root``): each `Operand`'s domain binds it."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -588,7 +458,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     readers = [(k, vh) for k, m in enumerate(members) if (vh := IL.reader(m)) is not None]
     q = len(sample)
     window = interior_window(members, n_rho, boundary, sample, wires, link_values(links, q))
-    ports, cells = CS.expected_ports(window), _cells(window.members, n_rho)[1]
+    ports, cells = CS.expected_ports(window), IL.cells(window.members, n_rho)[1]
     placed = IL.placed(window.members, cells, q, links)
     if (bool(readers) or bool(tables)) and len(tables) != len(sample) * bool(readers):
         raise ValueError(f"{len(tables)} tables for a replay sample of {len(sample)} and {len(readers)} templates of table "
@@ -648,7 +518,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
                 reads = [(rows, at) for rows, (y, _k, at) in zip(took, placed, strict=True) if y.value == name]
-                given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key)
+                given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key, window_root)
         held = {name: np.asarray(v.rows, dtype=np.uint16) for name, v in given.items()}
         for rows, (x, k, at) in zip(took, placed, strict=True):
             v = given[x.value]
@@ -672,6 +542,35 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs)
 
 
+def write(it: Interior, directory: str | Path) -> dict[str, Any]:
+    """``it``'s window files under ``directory`` as the one-stage audit reads a window (`ml.windows.rows.write`), its
+    registration the one `interior` made but for the index's hiding leaf, which the written record's window names:
+    -> that record, the one to register (`register`'s ``record``). Each member's header names every port's rows, so a
+    session's registered reads cover its circuit: a port given as rows of a value the interior registers (a link's), that
+    value's rows with their paths to its root; any other, the rows of the port holding it (its own, or a wired port's
+    writer's output) with their paths. ``index.json`` is the spans' index entries (`Interior.entries`), prover only."""
+    c, w = it.committed, it.committed.window
+    held: dict[str, LK.Port] = {}
+    registered: dict[str, dict[str, Any]] = {}
+    for k, m in enumerate(w.members):
+        given, entry = c.by_value(k), {}
+        for p, _w in m.all_rows:
+            if p in given:
+                v, at = given[p].value, [int(x) for x in given[p].positions]
+                entry[p] = {"value": v.value, "positions": at, "paths": [v.path(x).hex() for x in at]}
+            else:
+                port = w.held(m, p)
+                if port not in held:
+                    held[port] = LK.Port.of(c, port)
+                entry[p] = held[port].header(w.held_leaves(m, p))
+        registered[m.key] = entry
+    window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
+    CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
+             kind=it.record["window"]["kind"], registered=registered, registrar=R, previous=it.record["previous"],
+             entries=it.record.get("registered", ()))
+    return json.loads((Path(directory) / "registration.json").read_text())
+
+
 def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
     """``it`` on the two-stage ``stream`` after its first stage ``first``, with the challenger's ports and leaf layer
     (``copies`` override them, and pass `Stream.register_interiors`' other copies): its logged registration."""
@@ -679,7 +578,7 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
                                      leaf_layer=copies.pop("leaf_layer", it.leaf_layer), **copies)
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Replay", "Span",
+__all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Span",
            "Supply", "captured", "committed", "gather", "history", "interior", "interior_ports", "interior_run",
-           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "named", "pieces", "port_map",
-           "register", "sources", "span", "span_values", "supplied", "table_reads"]
+           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "member", "named",
+           "pieces", "port_map", "register", "sources", "span", "span_values", "supplied", "table_reads", "whole", "write"]

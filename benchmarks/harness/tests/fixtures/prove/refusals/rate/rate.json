@@ -1,0 +1,265 @@
+[
+ {
+  "type": "good",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Good_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-good": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "unaccepted",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Unaccepted_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-unaccepted": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 8,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "refused",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Refused_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-refused": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 1,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "void",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Void_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-void": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0,
+  "void": [
+   "out of device memory: prover-gpu0"
+  ]
+ },
+ {
+  "type": "exited",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Exited_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-exited": 0,
+   "prover-gpu0": -9
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "unflat",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Unflat_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-unflat": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": false,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "ungpued",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Ungpued_v1{N=1}",
+   "k_log": 20,
+   "blocks": 8,
+   "full": 8
+  },
+  "exits": {
+   "verifier-ungpued": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "flat": true,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 4.0
+ },
+ {
+  "type": "bare",
+  "provers": 1,
+  "n": 8,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Bare_v1{N=1}",
+   "k_log": 20
+  },
+  "exits": {
+   "verifier-bare": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "statements_per_s": 0.125,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
+ },
+ {
+  "type": "failed",
+  "provers": 2,
+  "error": "RuntimeError: the server didn't start"
+ },
+ {
+  "type": "late",
+  "provers": 4,
+  "skipped": "past the deadline"
+ }
+]

@@ -7,6 +7,19 @@ the gate, what runs, a run, a bound run, a replay and the store. The host's depl
 `tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py` and owns their entries in
 `tools/research/src/research/pods/nebius/deploy.toml`.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `host.py gate VERB ...` (on the host, `vy-verifier-gate VERB ...`) | The gate, the one way into the host's verifier. `run` starts a run from its whitelisted parameters (A run, below); `status [RUN]`, `fetch RUN [--transcripts]`, `replay RUN`, `stop RUN` and `close NODE_HEX` read, replay, stop a run or close a node's registration. It answers on stdout, and a refusal is exit 3 with `{"refused": WHY}`. |
+| `host.py gate wipe_party [--reads K] [--native [--threads T]]`, `challenger_party`, `bw_party (--pous-session SID \| --fixture) [--minutes M]`, `party_key wipe\|pous`, `party_log wipe\|pous [LOG]` | The memory challenger's two parties and the party of PoUB over PoUS's P2 store, each run as `auditor` from the pinned tree, one session per connection: the request line on the gate's stdin, then `{"listening": PORT}` and the signed report on its stdout. `party_key` prints a party's public key and `party_log` its sessions as the host kept them. |
+| `host.py run RUN`, `host.py replay RUN`, `host.py publish RUN` | What the host's units run as `auditor`. A run is the verifier's process with the request's parameters and the host's own, and leaves `runs/RUN/out/` (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`, and the transcripts gzipped with their `SHA256SUMS`) and `end.json`. A replay checks the transcripts against what the run recorded and replays them through both verifiers into `runs/RUN/replay/`. `publish` puts `runs/RUN/` in the evidence store as a tree of kind `verifier-run/v1`. |
+| `host.py pinned COMMIT` and `host.py close NODE_HEX` | `pinned` appends a pin (the commit and the UTC time) to the host's pins log, which a run starts from, and prints it. `close` closes a node's registration in the verifier's registry. |
+
+Nothing imports this directory: every entry point is `host.py` run by its path.
+
 ## A run
 
 ~~~text

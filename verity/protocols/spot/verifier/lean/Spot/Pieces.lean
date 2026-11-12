@@ -10,7 +10,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
   walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
-* `registration`: R1–R7's failure codes for a record against the parameters;
+* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query;
+* `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
 * `produced`: a produced values' record's codes against the verifier's own entries, and the roots the verifiers
@@ -32,6 +33,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
 * `replay_rows`: the rows the design's links' and wires' units read, from the replay block's Definition in a program
   (`SecondStage.replayRows`);
+* `replay_returned`: the bits a replay block returns, from its Definition in a program
+  (`SecondStage.replayReturned`);
 * `second_schedule`: why round 2 refuses the boundary record's schedule, and each replay block's request and positions
   under it (`Schedule.failure`, `Schedule.at?`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
@@ -120,6 +123,7 @@ public import Spot.ChallengerInnerTrees
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
+public import Spot.Returned
 public import Spot.WiresDrawn
 public import Spot.OneStageZk
 public import Spot.HistoryTable
@@ -196,9 +200,35 @@ def unitGates (j : Json) : V Json := do
   let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
   return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
-/-- `{"params", "record"}` to R1–R7's codes. -/
+/-- `{"program", "query", "held"?}`, a program object, a template query and the gates `[[first, count], ...]` of the
+parameters a verifier expects registered, to `{"fanout", "shared"}`: its fan-out and the run Input nodes outside `held`
+its proof blocks don't each read alone (`Partition.fanout`, `Partition.sharedInputs`); refused for another query or one
+that doesn't apply. -/
+def fanout (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let bad : V (Nat × Nat) := throw "held is not a list of [first, count]"
+  let held ← match getD j "held" with
+    | .null => pure #[]
+    | .arr xs => xs.mapM fun x => match x with
+      | .arr #[a, b] => match nat? a, nat? b with
+        | some first, some count => pure (first, count)
+        | _, _ => bad
+      | _ => bad
+    | _ => throw "held is not a list of [first, count]"
+  let some rs := Partition.templateRanges? p (getD j "query") | throw "not a template query that applies"
+  return Json.mkObj [("fanout", Lean.toJson (Partition.fanout p.prog rs)),
+    ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
+
+/-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
+(`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
+record. -/
 def registration (j : Json) : V Json := do
-  return codes (Registration.check (getD j "record") (← params (getD j "params")).verifier)
+  let v := (← params (getD j "params")).verifier
+  let cs := (Registration.check (getD j "record") v).map Json.str
+  let through := Registration.tiedThrough v
+  return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
+    ++ (if through.isEmpty then [] else [("rests_on_period_check", Lean.toJson through)]))
 
 /-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
@@ -765,6 +795,16 @@ def replayRows (j : Json) : V Json := do
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   return Json.arr ((SecondStage.replayRows p.prog key).map SecondStage.Rows.toJson)
 
+/-- `second_stage.replay_returned`'s input to the bits a replay block returns (`SecondStage.replayReturned`): a program
+object and the replay block's descriptor id in it (`replay`); null for none. -/
+def replayReturned (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayReturned p.prog key with
+    | some n => Lean.toJson n
+    | none => .null
+
 /-- `schedule.failure` and `schedule.at`'s input to the boundary record's schedule (`Schedule.failure`, `Schedule.at?`):
 a record and replay blocks (`blocks`), to `{"failure", "at"}`: why round 2 refuses the record's schedule, null for
 none, and each block's `[request, a, b]` under it, null where no run holds the block or the record commits no list of
@@ -822,14 +862,15 @@ def tablesServed (j : Json) : V Json := do
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
-   ("registration", registration),
+   ("fanout", fanout), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
-   ("replay_wires", replayWires), ("replay_rows", replayRows), ("second_schedule", secondSchedule),
+   ("replay_wires", replayWires), ("replay_rows", replayRows), ("replay_returned", replayReturned),
+   ("second_schedule", secondSchedule),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

@@ -41,19 +41,12 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
-    "verity_vllm.engine.forward_pass": "I2: the model runner's one seam around each forward pass (ForwardSeam): observers "
-                                       "that see each pass begin and end, with its runner state, output or error",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
-    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
-    "verity_vllm.engine.collectives.all_reduce": "I2: the CUDA communicator's one seam for its all-reduce (AllReduceSeam): "
-                                                 "one replacement of the routes vLLM picks, which reaches them for the rest",
+    "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
+                                      "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
-    "verity_vllm.engine.plugins": "I1: the distribution's vLLM general plugins (PLUGINS), which pyproject.toml declares, and "
-                                  "the environment that loads exactly the ones a run names (env)",
-    "verity_vllm.engine.pin_op": "I1: one name a vLLM module or op namespace is called through, replaced once before anything "
-                                 "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -61,16 +54,18 @@ PUBLIC = {
                                           "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
-    "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "
-                                   "step's scheduler and model outputs once the scheduler has taken them",
+    "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
+                                   "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
+                                   "benchmarks/network_e2e/encodings drives over recorded traces",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
-    "verity_vllm.engine.stock_kernels": "I1: vLLM's own kernels at the pin, each called as vLLM's serving path calls it: the "
-                                        "baselines kernels and compute accounting time against",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
+    "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
+                                                "them (the session Definition, its Boolean gates by the gate table, a "
+                                                "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
@@ -93,11 +88,16 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
-    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment at serve: each finished request's "
-                                          "b.ingress and b.egress rows by size class, committed as the engine core serves "
-                                          "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
-                                          "layout, record and files (Layout, record, reopen), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
+                                          "and b.egress rows by size class, a class's layout, record and files (Layout, "
+                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
+                                          "computes where a response ends, and a stop class's stop record "
+                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "registers under the verifier's own rule",
+    "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
+                                             "scheduler that commits each window's finished requests by class "
+                                             "(BoundaryWindows), which benchmarks/serve_tax's plugin installs",
     "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
                                             "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
@@ -111,6 +111,9 @@ PUBLIC = {
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
+    "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
+                                       "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
+                                       "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -143,7 +146,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
     "verity_vllm.acquire.sources.served_compiled_source",
     "verity_vllm.acquire.sources.taps",
-    "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
@@ -216,11 +218,7 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
-    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
-    "verity_vllm.program.frontend.rules",
-    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
-    "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",
     "verity_vllm.program.model",
     "verity_vllm.program.predict.batch",
@@ -252,12 +250,11 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.pearl_c.screen",
     "verity_vllm.protocols.pouw.pearl_c.whole",
     "verity_vllm.protocols.remote_bandwidth.binder",
-    "verity_vllm.protocols.remote_bandwidth.commit_map",
     "verity_vllm.protocols.remote_bandwidth.interface",
+    "verity_vllm.protocols.remote_bandwidth.memory_map",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
-    "verity_vllm.query.module_body",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
 })

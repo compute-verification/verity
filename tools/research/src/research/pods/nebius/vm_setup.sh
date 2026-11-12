@@ -135,14 +135,11 @@ apt-get update -q
 # python3. python3.12-dev and build-essential: Triton compiles cuda_utils.c against Python.h at a vLLM engine's first start
 apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev build-essential util-linux ripgrep
 # The trust store: the Nebius images ship with apt's daily timers off, so ca-certificates stayed at the image's and
-# kept roots Ubuntu had removed. Upgrade it now, and let unattended-upgrades keep it, and only it, current: no driver or kernel
-# package moves under a run. Strict: a whitelist that isn't only raises its packages' priority and upgrades everything else
-# too. `research deploy drift` lists a node that still trusts a distrusted root.
+# kept roots Ubuntu had removed. Upgrade it now, and turn the timers on: unattended-upgrades then keeps it and the rest of
+# Ubuntu's security pocket current, by /etc/apt/apt.conf.d/52vy-trust (apt-security-updates.conf, which cloud-init wrote and
+# deploy.toml installs: no kernel or driver package moves under a run). `research deploy drift` lists a node that still
+# trusts a distrusted root.
 apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
-cat > /etc/apt/apt.conf.d/52vy-trust <<'EOF'
-Unattended-Upgrade::Package-Whitelist { "ca-certificates"; "libnss3"; };
-Unattended-Upgrade::Package-Whitelist-Strict "true";
-EOF
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \

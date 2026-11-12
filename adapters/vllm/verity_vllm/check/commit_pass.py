@@ -150,10 +150,11 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     if isinstance(bnd, dict) and (bnd.get("population") or bnd.get("coverage")):
         _oc = oc if isinstance(oc, dict) else ((vc.get("oracle_compare") if isinstance(vc, dict) else None) or
                                                (_comps.get("oracle_compare") if isinstance(_comps, dict) else None))
-        # the replay's seed must be POST-COMMITMENT as a fact, not a label: a prover-chosen --replay-seed (or a
+        # the replay's seed is graded by its form (`C2._replay_seed_of_record`): a prover-chosen --replay-seed (or a
         # root-form label whose seed is not the run root's) makes the replay a mechanism run -- C2 of record then rests on form (B) alone
-        # and the PASS names it; without a complete form (B) the Commit FAILS by name.  Legacy records without a seed source
-        # are graded by the finalizer (report), not here.
+        # and the PASS names it; without a complete form (B) the Commit FAILS by name.  A root-form seed that recomputes is not graded
+        # and changes nothing here: the run root alone, no coin, is a measurement (a prover steers the sample by committing again).
+        # Legacy records without a seed source are graded by the finalizer (report), not here.
         _mech = False
         if isinstance(sr, dict) and sr.get("result") is not False:
             _sok, _swhy = C2._replay_seed_of_record(sr, commit.get("run_root"))

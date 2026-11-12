@@ -7,7 +7,7 @@ derives every table's name and domain from the class's ``commit.json``, as it do
 
 **Rows.** On one rank (rank 0: the latent projections are replicated), `StepHook` follows the model runner's
 ``execute_model``: once a step's forward has written the KV cache, it reads each MLA layer's rows at the step's slots, the
-layer's entry of the step's ``slot_mapping`` (the one `kv_slots_source` reads, which the layer's cache write read), and
+layer's entry of the step's ``slot_mapping`` (the one the layer's cache write read), and
 appends each request's to its rows in `Latents`, by layer, at the positions the step computed. Those rows are
 ``DsaLatentRow_v1``'s output, ``[kv_c | k_pe]`` in bf16: the hook refuses a layer whose cache holds any other row.
 
@@ -117,13 +117,22 @@ def assignment(window: int, run: str, program: str, prompt: int, outputs: int, l
                            int(capacity), tuple((str(e), int(p), int(s), f) for e, p, s, f in spans)).dump()
 
 
+def _kv_layers(model: Any) -> dict[str, Any]:
+    """Layer name -> the module the engine bound that layer's KV cache to (the outermost, when nested modules carry one
+    name)."""
+    out: dict[str, Any] = {}
+    for _path, m in model.named_modules():
+        name, cache = getattr(m, "layer_name", None), getattr(m, "kv_cache", None)
+        if isinstance(name, str) and cache is not None and hasattr(cache, "stride") and cache.numel() and name not in out:
+            out[name] = m
+    return out
+
+
 def mla_layers(model: Any) -> dict[int, tuple[str, Any]]:
     """Layer index -> (layer name, KV cache) of each MLA layer of ``model`` (the modules the engine bound a cache to,
-    `kv_slots_source.kv_layers`, with an MLA latent), refused unless its cache holds `WORDS` bf16 words a row."""
-    from verity_vllm.acquire.sources.kv_slots_source import kv_layers
-
+    `_kv_layers`, with an MLA latent), refused unless its cache holds `WORDS` bf16 words a row."""
     out: dict[int, tuple[str, Any]] = {}
-    for lname, m in kv_layers(model).items():
+    for lname, m in _kv_layers(model).items():
         if getattr(m, "kv_lora_rank", None) is None:
             continue
         layer, cache, dtype = _LAYER.search(lname), m.kv_cache, str(getattr(m, "kv_cache_dtype", "auto"))
@@ -261,7 +270,7 @@ class StepHook:
 class Builder:
     """Rank 0's tables: `build` answers a class's `assignment` with each span's tables over its rows in ``latents`` filled
     to the class's C (`fill`), one a layer in slot order, each built by ``make`` (program, name, words, capacity; by default
-    a `history_tables_device.Table` on ``device``, its salts under a row key fresh for the class), and kept in ``keep``
+    a `history_tables_device.Table` on ``device``, each row's salt fresh from the operating system), and kept in ``keep``
     before its entry is given."""
 
     def __init__(self, latents: Latents, make: Callable[[str, str, int, int], Any] | None = None, device: Any = None,
@@ -273,8 +282,7 @@ class Builder:
             return self.make
         from verity_vllm.commit import history_tables_device as HTD
 
-        row_key = os.urandom(32)
-        return lambda p, n, w, c: HTD.Table(p, n, w, c, key=row_key, device=self.device)
+        return lambda p, n, w, c: HTD.Table(p, n, w, c, device=self.device)
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""

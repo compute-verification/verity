@@ -632,25 +632,6 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
 
 
-def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
-    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
-    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
-    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
-    if st.meta.get("statement") != FC.TMPL_STATEMENT:
-        return {}
-    if not tmpl_unit_bin:
-        raise SystemExit("--layout stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
-    placed = d / "unit.placed"
-    if not placed.exists():
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "unit.tmpl").write_text(FC.template_of(st.text))
-        (d / "unit.layout").write_text(st.meta["layout"])
-        p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
-        if p.returncode:
-            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
-    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
-
-
 def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
     """`UnitStager.stage` with bit 0 of every instance's first output word flipped before the set is committed."""
     from types import SimpleNamespace
@@ -902,7 +883,7 @@ def main() -> int:
                                circuit=sdir / "circuit.txt", bind=bound)
         t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
-        form = templated(st, sdir, a.tmpl_unit_bin)
+        form = a0.templated(st, sdir, a.tmpl_unit_bin)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
@@ -1071,7 +1052,7 @@ def main() -> int:
         (d / "tables").mkdir(exist_ok=True)
         (d / "circuit.txt").symlink_to("../circuit.txt")
         tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
-                 **templated(tst, tdir, a.tmpl_unit_bin)}
+                 **a0.templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
         tlaw = D.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)

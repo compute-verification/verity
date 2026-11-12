@@ -3,7 +3,13 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "verity-exact-kit", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+dependencies = ["verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+
+[project.optional-dependencies]
+# The team's run and store tool and the exact kit, which the suite's tests and the theory scripts use and the public tree
+# doesn't hold (Pearl-C's kernels, which it does, need neither); the workspace installs both with every member.
+research = ["research"]
+exact-kit = ["verity-exact-kit"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -61,6 +67,10 @@ untraced = [
 # before and after vllm's layout move.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
+# test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
+# package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
+# site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
+# (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
@@ -70,7 +80,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/protocols/certifier",
           "verity/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
-          "verity/hardware",
+          "verity/hardware/__init__.py", "verity/hardware/cards",
           "verity/configuration/config/verity_config",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/commit/__init__.py", "verity/commitments/windows/hiding.py",
@@ -155,15 +165,22 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
-          "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
+          "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py",
-          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
-          "verity/definitions/__init__.py", "benchmarks/harness/verity_bench/__init__.py",
-          "verity/protocols/pouw/clear/clear_audit.py", "verity/protocols/pouw/clear/clear_work.py",
-          "verity/protocols/pouw/clear/__init__.py"]
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py", "verity/definitions/circuits",
+          "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py",
+          "verity/protocols/pouw/__init__.py", "benchmarks/datacenter/datacenter", "verity/hardware/registration.py",
+          "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py",
+          "verity/protocols/poub/verifier/codec.py", "verity/hardware/site/__init__.py",
+          "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py", "verity/definitions/__init__.py",
+          "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/pouw/clear/clear_audit.py",
+          "verity/protocols/pouw/clear/clear_work.py", "verity/protocols/pouw/clear/__init__.py",
+          "verity/definitions/boolean.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
+# check runs it as three parts by test id (`lean-suites:verity-pouw-benchmarks:K/3`, `suites.py`'s `id_part_of`), each
+# collecting every file and running the tests whose node id hashes to K, so that ci.toml's plans spread it over three shards
+parts = 3
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check",
              "verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-check-difftest",
@@ -171,6 +188,8 @@ artifacts = ["verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-che
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# test_proved_ticks_placed imports `datacenter` (not an installed package) by path.
+pythonpath = ["../datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

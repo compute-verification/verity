@@ -6,7 +6,7 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
-  whose strata or table don't apply), then R1–R7 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
+  whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
   that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
@@ -25,10 +25,12 @@ check the stream ran on it, in the stream's order.
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
-  `subset:Q·n` (all of them committed), `population-order`, each history table its copies name being a port of the
-  boundary registration's record at the root and domain they computed for it (`tablesServed`: `interior-table`), and
-  its receipt; and `second`: the second stage on its own
+  public-items rule on the interior values, the population (else `interior-population`), its window (else
+  `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
+  digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
+  `population-order`, each history table its copies name being a port of the boundary registration's record at the
+  root and domain they computed for it (`tablesServed`: `interior-table`), and its receipt; and `second`: the second
+  stage on its own
   coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
@@ -193,6 +195,14 @@ def tablesServed (record : Json) (tables : Array (String × ByteArray × ByteArr
     | some (_, r) => jsonStrIs (getD r "root") (Flock.hexOf root) && jsonStrIs (getD r "domain") (Flock.hexOf domain)
     | none => false
 
+/-- **The interior registration's window** is the boundary registration's, or the one the verifier computes from the
+boundary registration's digest `digest` (lowercase hex) and the replay sample (`SecondStage.interiorRoot`); `boundary`
+and `interior` are the two registrations' window roots as the verifier holds them. So one session samples both stages,
+or the second stage's is the session on the one root the boundary registration and its sample name: the second stage
+is sampled on no other window. -/
+def interiorWindowOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
+  interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
+
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
@@ -205,6 +215,9 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
   let ks ← k.over (← Select.templateIds v.query) ns
   let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
+  let boundary ← Registration.digestHex i.record
+  if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
+    return .error ("interiors", #["interior-window"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)

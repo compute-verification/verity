@@ -10,7 +10,8 @@ set, 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
-(`benchmarks/pouw/hashed_gemm/segment_e2e.py`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`, `PouwWinOk_v1`;
+(`archive/benchmarks/pouw/hashed_gemm/segment_e2e.py`, archived): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`,
+`PouwWinOk_v1`;
 and the H1 + fx1 tile's (`verity/ml/protocols/pouw/circuit/`'s `segment.py`, `h1tile.py`, `seeds.py`, `words.py` and
 `boolean.py` at `b5516bef2f`), each as its word Definition (`_v1`) and on bits (`_v2`): its segment dots (`PouwSegDot`'s
 `_v2` and `PouwSegDot0`), its noise (`PouwU129`, `PouwI8AddBit`, `PouwI8Add`, `PouwI8Neg`, and the seeds' composites

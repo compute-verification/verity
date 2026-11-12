@@ -39,7 +39,7 @@ from itertools import combinations
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-MM = HERE.parent / "machine_model"
+MM = Path(__file__).resolve().parents[1] / "machine_model"
 sys.path.insert(0, str(MM))
 
 from verity_machine_model.model import census, model  # noqa: E402

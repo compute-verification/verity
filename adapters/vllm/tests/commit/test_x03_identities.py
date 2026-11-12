@@ -13,7 +13,6 @@ from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource 
 from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
 from verity_vllm.commit.committer.plan_cache import PlanMetas  # noqa: E402
-from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY  # noqa: E402
 
 
 class Attention:  # class names are what `_mro_names` sees
@@ -108,20 +107,6 @@ def test_fa2_row_dropped_or_doubled_fails():
     assert r["ok"] is False and r["violations"][0]["fa2_layers_bad"] == {1: 0, 0: 2}
 
 
-def test_the_top_p_split_count_is_not_held_to_step_0s_multiplicity():
-    """Traffic that mixes greedy and top-p rows binds the split count only on the steps whose batch ran vLLM's split top-p kernels;
-    a module dropped on such a step still fails."""
-    com = _com()
-    com._layouts[0] = _layout(_good_step())
-    com._layouts[1] = _layout(_good_step() + [SPLITS_IDENTITY])
-    com._layouts[2] = _layout(_good_step())
-    r = com.identity_check()
-    assert r["ok"] is True, r["violations"]
-    com._layouts[3] = _layout([n for n in _good_step() if n != "model.layers.1.mlp.down_proj"] + [SPLITS_IDENTITY])
-    r = com.identity_check()
-    assert r["violations_n"] == 1 and r["violations"][0]["missing_modules"] == ["model.layers.1.mlp.down_proj"]
-
-
 def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
     com = _com()
     good = _good_step()
@@ -134,8 +119,8 @@ def test_sampler_ids_must_be_exactly_one_and_unknown_modules_fail():
 
 
 def test_a_sources_own_names_are_no_modules_tensors():
-    """The KV slots (`kv_slots_source`, commit --memory-map) are named by the engine's KV layer, which need not be a hooked module: the
-    source declares them (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
+    """What a source commits that no hooked module produced (here KV slots, named by the engine's KV layer) the source declares
+    (`own_names`), and (1) and (4) count module tensors only; undeclared, they read as an unknown module's."""
     slots = [f"model.layers.{k}.self_attn.mla_attn/slot_mapping" for k in range(2)]
     com = _com()
     for s in range(2):

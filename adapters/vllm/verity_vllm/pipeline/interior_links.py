@@ -6,7 +6,7 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   The interior commits no tree of its own at the port: its rows are rows of that value, ``per`` a sampled span, each unit
   reading the one its place in the block gives it. The stream takes each as a per-span value (`span_values`: its rows a
   sampled span and a row's leaf type), so its interior program sizes it by the replay sample; its row format is its
-  reading port's (`link_schemas`).
+  reading port's (`link_schemas`). `links` reads a block's off its Definition and round 1's record as round 2 does.
 * `Operand`: a parameter the replay gives (a picking unit's scores and count, a table read's row, salt and path). The
   verifier holds none of its bytes, so the value is the interior's own: its rows the replayed units' at their places,
   each under a fresh salt, its root registered before the second draw's coins, and R7 holds its name, rows, words and
@@ -31,7 +31,9 @@ from typing import Any
 
 import numpy as np
 
+from verity.protocols.spot.verifier import second_stage as SS
 from verity.protocols.spot.verifier.one_stage import registered as RG
+from verity.circuits.codec import definitions
 from verity.commitments import hm96, history as HT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.windows import rows as CS
@@ -170,6 +172,54 @@ def link_schemas(members: CS.Member | Sequence[CS.Member], links: Sequence[Link]
     return out
 
 
+Members = CS.Member | Sequence[CS.Member]
+Cells = int | Sequence[int]
+
+
+def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[int, ...]]:
+    """A window's templates and each one's units a span: ``members``, one or one a template, and ``n_rho``, its n_t
+    each."""
+    ms = (members,) if isinstance(members, CS.Member) else tuple(members)
+    ns = (int(n_rho),) if isinstance(n_rho, int) else tuple(int(n) for n in n_rho)
+    if not ms or len(ns) != len(ms):
+        raise ValueError(f"{len(ms)} templates and cells {list(ns)}: a replay block holds n_t units of each template")
+    return ms, ns
+
+
+def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells,
+          supplied: Mapping[str, Sequence[int] | None] | None = None) -> tuple[Link, ...]:
+    """The links of the replay block ``program`` defines under descriptor id ``key``, as the interior registers their
+    values: each parameter of the block a template's port reads, under the name round 2 gives it where round 1's record
+    ``record`` names its ports (`second_stage.replay_links`), with its rows a block and the row each of the template's n_t
+    units reads as round 2 derives them (`second_stage.replay_rows`). ``members`` and ``n_rho``: the window's templates
+    and their units a span, as `interior_rows.interior_window` takes them. ``supplied``: the block's parameters the
+    verifier supplies, by name, each its indices a row or None for a table read's root or domain (a `Supply`); every
+    other is the replay's (an `Operand` of its port's words). A return link names an output port and is none of them.
+    ValueError where the Definition makes no links, or a link names a template the window has none of or a unit no run
+    places."""
+    by = {m.template: (m, n) for m, n in zip(*cells(members, n_rho), strict=True)}
+    bare, named = SS.links_of(definitions(program), key), SS.replay_links(program, key, record)
+    if bare is None or named is None:
+        raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
+    rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+    out: list[Link] = []
+    for b, x in zip(bare, named, strict=True):
+        if x.template not in by:
+            raise ValueError(f"{x.value} is read by {x.template}, a template the window has none of: {list(by)}")
+        m, n = by[x.template]
+        if x.port not in dict(m.rows):
+            continue
+        r = rows[(x.template, x.port)]
+        at = tuple(SS.row_at(r.runs, j) for j in range(n))
+        if any(a is None for a in at):
+            raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
+        if b.value in (supplied or {}):
+            out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value]))
+        else:
+            out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
+    return tuple(out)
+
+
 def _supplies(links: Sequence[Link]) -> tuple[Supply, ...]:
     return tuple(x for x in values(links).values() if isinstance(x, Supply))
 
@@ -239,11 +289,12 @@ def placed(ms: Sequence[CS.Member], cells: Sequence[int], q: int,
 
 
 def operand(program: str, x: Operand, reads: Sequence[tuple[np.ndarray, Sequence[int]]], q: int, schema: str,
-             salt_key: bytes | None) -> Any:
+             salt_key: bytes | None, window: str | None = None) -> Any:
     """`Operand` ``x``'s value for ``q`` sampled spans, committed as core's `Registered` under ``program`` in its ports'
     row format ``schema``: row ``at[u]`` the row unit u replayed at a port that reads it (``reads``: each port's rows
     and ``at``), a row no unit reads the zero row, each under a fresh salt (``salt_key``: tests only, the salts derived
-    from it and the value's name)."""
+    from it and the value's name). ``window``: the interior window's open root, which its domain binds where the
+    challenger names one (`Stream.register_interiors`' ``window_root``: a value registered afresh each window)."""
     own = np.zeros((q * x.per, x.words), dtype=np.uint16)
     for rows, at in reads:
         own[list(at)] = rows
@@ -252,7 +303,7 @@ def operand(program: str, x: Operand, reads: Sequence[tuple[np.ndarray, Sequence
     if salt_key is not None:
         ys = CS.salts(hashlib.sha512(bytes(salt_key) + x.value.encode()).digest()[:32], 0, n)
         salts = [ys[i * CS.SALT_BYTES:(i + 1) * CS.SALT_BYTES] for i in range(n)]
-    return RG.Registered.commit(program, x.value, own.tolist(), salts, schema=schema)
+    return RG.Registered.commit(program, x.value, own.tolist(), salts, schema=schema, window=window)
 
 
 def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, positions: int,
@@ -354,6 +405,6 @@ def opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, t
                              "root at its key, or its h and ok are not the read's")
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Link", "Operand", "Supply", "history", "kept_table", "link_schemas",
-           "link_values", "link_words", "opened", "operand", "placed", "reader", "sources", "span_values", "supplied",
-           "table_reads", "values"]
+__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Supply", "cells", "history",
+           "kept_table", "link_schemas", "link_values", "link_words", "links", "opened", "operand", "placed", "reader",
+           "sources", "span_values", "supplied", "table_reads", "values"]

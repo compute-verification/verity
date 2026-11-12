@@ -69,7 +69,7 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
-#: (``--remote-verifier``) and the Commit's memory map (``--memory-map``)
+#: (``--remote-verifier``)
 DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
@@ -443,16 +443,16 @@ def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> 
     return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
 
-def commit_guard(profile: Any, *, world: int = 1, hot: bool = False, installs: bool = True, settings: Any = None,
+def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, settings: Any = None,
                  commit_scheme: str | None = None) -> Any:
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
-    exit 3 (fail-closed) with every reason printed.  ``hot`` is a hot Commit worker and ``installs`` False a Commit that
-    installs no options (the TP Commit): both refuse any declared set.  ``commit_scheme``, the committer's
+    exit 3 (fail-closed) with every reason printed.  ``installs`` False is a Commit that installs no options (the TP
+    Commit): it refuses any declared set.  ``commit_scheme``, the committer's
     (``--commit-scheme``), must be the one sampled proofs is declared with."""
     try:
         ctx = commit_context(profile, world=world, settings=settings)
-        if ctx is not None and (hot or not installs):
-            raise Refused([f"this Commit ({'the hot worker' if hot else 'TP'}) installs no protocol options yet"])
+        if ctx is not None and not installs:
+            raise Refused(["this Commit (TP) installs no protocol options yet"])
         declared = ctx.scheme("sampled-proofs") if ctx is not None else None
         if commit_scheme is not None and declared is not None and declared != commit_scheme:
             raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "

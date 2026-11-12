@@ -22,14 +22,20 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
 * A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
-  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
+* The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
+  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
+  and the checkpoint, is the window the row driver's in-Commit hook commits over the same step (`_same_commitment`), a
+  stand-in `source1` accepts; it is refused without the tables or the checkpoint, and a TP rank's window is handed both."""
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import random
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -515,7 +521,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived", "rid": 4}
+STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32, "rid": 4}
 
 
 def _request_build(sampling: dict | None = None, named: bool = False, **shape):
@@ -535,7 +541,7 @@ def _request_program(sampling: dict | None = None, **shape):
 
 @pytest.fixture(scope="module")
 def requests_of_tiny():
-    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (seed, splits and its seed rule's inputs beside the prompt)
+    """TINY's greedy request Programs at (LP, T) = (4, 1) and (4, 2), its stochastic one (a seed and its seed rule's inputs beside the prompt)
     and its cached one (a prefix of 16 rows beside the prompt)."""
     return {"greedy": _request_program(LP=4, T=1), "longer": _request_program(LP=4, T=2),
             "stochastic": _request_program(STOCHASTIC, LP=4, T=2), "cached": _request_program(LP=24, T=2, C=16)}
@@ -576,7 +582,7 @@ def _load(root: Path, digest: str):
 
 def test_i2_loads_a_build_whose_body_is_the_program_it_compiled(tmp_path, requests_of_tiny):
     """I2's adapter holds each Build dir to the digest I2 compiled (`build_of`) before the window reads its rows: an honest
-    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, splits, prefix,
+    Build of each request Program loads, its Input batches read as the parameters they bind (prompt, seed, prefix,
     weights)."""
     for name, program in requests_of_tiny.items():
         dg = _build(tmp_path / name / "build_request", program)
@@ -1566,3 +1572,103 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+@pytest.fixture(scope="module")
+def fused(tmp_path_factory) -> dict:
+    """A block-FP8 MoE layer's committed step with the per-expert tables' registration, the checkpoint and the fused cut's
+    partition; over that one step, the row driver's window (``hook``: the in-Commit hook's, ``served``) and a serve-openai
+    window's sealed row dir (``served``), which names no Programs."""
+    pytest.importorskip("torch")
+    root = tmp_path_factory.mktemp("fused")
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", str(root)], cwd=VLLM, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+    return json.loads(p.stdout.strip().splitlines()[-1])
+
+
+@dataclass(frozen=True)
+class OfRecord(Listing):
+    """A compiler whose Program for the window's one request is the Program of record in ``program_dir``, in place of the
+    registered compiler's Programs for the window's advice."""
+
+    program_dir: str = ""
+
+    def load(self, rank, world, requests):
+        with gzip.open(Path(self.program_dir) / "instances.json.gz", "rt") as f:
+            inst = json.load(f)
+        return SimpleNamespace(progs={"r0": inst}, dirs={"r0": self.program_dir}, digs={"r0": inst["digest"]}, arrivals={"r0": 0})
+
+
+def _fused_args(c: dict, **over) -> argparse.Namespace:
+    return argparse.Namespace(**{"bundle": c["served"]["bundle"], "row_dir": c["served"]["row_dir"], "partition": c["partition"],
+                                 "workers": 1, "serving_rows_tables": c["tables"]["registration"],
+                                 "serving_rows_tables_key": c["tables"]["key"], "checkpoint_dir": c["checkpoint"], **over})
+
+
+def _same_commitment(a: Path, b: Path) -> None:
+    """Windows ``a`` and ``b`` commit one thing, as the fixture's own module holds two windows of its layer to one commitment
+    (``tests.pipeline.served_experts --same``): one population program, partition, law, port domains, circuit record and index,
+    the same registered roots, and the same committed rows in every member, each unit's opening of its table among them."""
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", "--same", str(a), str(b)], cwd=VLLM, capture_output=True,
+                       text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+@pytest.mark.slow
+def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
+    """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
+    composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
+    committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
+    its registration walks them at each write.  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
+    this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
+    than the Commit's own window of the step.  A copy of the window with one bit of one row flipped is refused."""
+    a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
+    bound = AW.binding(compiler, "ad" * 64, 8)
+    got = PP.commit1(a, compiler, [], bound, tmp_path / "w")
+    assert got["run"] == fused["run_root"] and got["population"] == sum(n for pair in fused["units"].values() for n in pair)
+    _same_commitment(Path(fused["hook"]), tmp_path / "w")
+    flipped = tmp_path / "flipped"
+    shutil.copytree(tmp_path / "w", flipped)
+    raw = bytearray((flipped / "m0-private.bin").read_bytes())
+    raw[0] ^= 1
+    (flipped / "m0-private.bin").write_bytes(bytes(raw))
+    with pytest.raises(AssertionError, match="the rows of port"):
+        _same_commitment(Path(fused["hook"]), flipped)
+    hook, mine = _registered(Path(fused["hook"]))["window"], _registered(tmp_path / "w")["window"]
+    assert (hook["kind"], hook["run"]) == ("served", fused["run_root"]) and "of" not in hook and "link" not in hook
+    assert mine["kind"] == "stand-in" and mine["of"]["bundle_manifest_sha256"] == fused["served"]["manifest_sha256"]
+    assert mine["of"]["rows"] == PP.ROWS1 and mine["served_programs"] == {"r0": fused["program_digest"]}
+    window, held = PP.window1(a, compiler, [], bound)
+    assert PP.source1(mine, window, held)["codes"] == []
+    assert PP.source1(hook, window, held)["codes"] == ["kind", "of", "link", "compiler", "advice"]
+
+
+@pytest.mark.slow
+def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
+    """Each refusal by name and before any registration is written (seconds once the templates are built, over a minute
+    alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
+    the cut unless it is handed both."""
+    compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
+    with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
+        PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")
+    with pytest.raises(ValueError, match=r"read under its committer's key file \(--tables-key\)"):
+        PP.commit1(_fused_args(fused, serving_rows_tables_key=None, bundle="no-bundle"), compiler, [], {}, tmp_path / "w2")
+    with pytest.raises(LookupError, match=r"registered tensor \S+\.experts\.w\S+ \(checkpoint\) does not open against the committed "
+                                          r"weights root: no checkpoint given"):
+        PP.commit1(_fused_args(fused, checkpoint_dir=None), compiler, [], {}, tmp_path / "w3")
+    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w2", "w3"))
+
+
+def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
+    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
+    assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
+    got = {}
+    monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
+    monkeypatch.setattr(PP, "checkpoint_of", lambda a: ("checkpoint", a.checkpoint_dir))
+    monkeypatch.setattr(AW, "commit_window", lambda commit, r, partition, out, compiler, requests, bound, **kw:
+                        got.update(kw, at=(commit, r, partition, str(out), compiler)) or {"run": "x"})
+    a = argparse.Namespace(tp_commit="c", partition="p", out=str(tmp_path), workers=1, forge=None, checkpoint_dir="ck",
+                           serving_rows_tables="t-rank{rank}.json", serving_rows_tables_key="k")
+    assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
+    assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
+                   "tables": {"key": "k", "registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}

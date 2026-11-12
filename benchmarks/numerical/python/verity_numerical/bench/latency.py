@@ -3,8 +3,8 @@ is a real network round trip, and what pipelining independent batches needs to r
 
 The protocol is INTERACTIVE (``backends/ZK_CONSTRUCTION.md`` 3.3: the verifier-coin commitment gives
 malicious-verifier ZK at +1 depth, where Fiat-Shamir would force a re-parameterisation), so ``rounds.sequential_depth``
-verifier messages are ``depth`` network round trips on the critical path.  Model (``archive/AGENTS.md`` "Latency is a
-first-class axis"; the contract's ``t.e2e.rtt_<x>ms``)::
+verifier messages are ``depth`` network round trips on the critical path.  Model (latency is a first-class axis; the
+contract's ``t.e2e.rtt_<x>ms``)::
 
     t.e2e(rtt, bw) = t.prove + t.verify + depth x rtt + bytes / bw          (the honest serial number for one batch)
 

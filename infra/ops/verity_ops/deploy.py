@@ -4,8 +4,8 @@ pods/nebius/deploy.toml lists every file that infra's loops, timers and services
 comes from, who owns it (a Slack handle), and the patterns (`managed`) under which nothing else should live.
 
   research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
-  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch]
-  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch]
+  research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--no-fetch] [--login USER]
+  research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch] [--login USER]
 
 `drift` reads each node over ssh, as `research run --on` reaches it (a node whose `staged` says why its machine doesn't exist
 yet only when named with --on; `install` takes it as any other), and gives each entry one state:
@@ -28,6 +28,8 @@ clean (an install of the tree adds it), unless the tree is `required`: what runs
 store (/etc/ssl/certs) still holds a distrusted CA root (DISTRUSTED_ROOTS) lists it as `root`, with the upgrade that removes it.
 Exit 0 when every entry is ok, nothing strays and no distrusted root is trusted, else 1. A node marked `admin = true` is reached only by an admin login (vy-admin, whose key only
 Daniel and infra's lead hold, never the research key the relays use), so drift reads it only when `--on` names it.
+`install` and `attic` write as root, so on a node whose lock-out took root from `research` (pods/nebius/lockout) they take
+`--login vy-admin`: the same node, reached as that user instead of the one its registry entry names.
 
 `install` takes files only from a commit that an origin branch holds (a branch, a PR's head, `main`; never the working tree), so
 every installed byte is in a pushed commit. Each file is written beside the old one and renamed over it with the old one's owner
@@ -356,7 +358,8 @@ def origin_branches(commit: str, repo: Path = REPO, most: int = 3) -> list[str]:
     return [b for b in r.stdout.split() if b.startswith("origin/") and b != "origin/HEAD"][:most] if r.returncode == 0 else []
 
 
-def ssh_runner(project: str = PROJECT) -> Runner:
+def ssh_runner(project: str = PROJECT, login: str | None = None) -> Runner:
+    """Runs a command on a node over ssh, as the user its registry entry names, or as `login`."""
     from research import remote
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
@@ -364,7 +367,7 @@ def ssh_runner(project: str = PROJECT) -> Runner:
             t = remote.ssh_host_target(remote.resolve_machine(node, project))
         except remote.Refused as e:
             raise (Unreachable if released(node) else RuntimeError)(f"{node}: {e}") from None
-        return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=t["user"]), argv, stdin=stdin, timeout=300)
+        return remote.ssh_run(remote.ssh_argv(t["host"], t["port"] or 22, user=login or t["user"]), argv, stdin=stdin, timeout=300)
     return run
 
 
@@ -683,6 +686,9 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     a.add_argument("--ref", default="origin/main")
     a.add_argument("--by", required=True, help="who moves them: goes into the node's record")
     a.add_argument("--apply", action="store_true", help="move them (else only say what would move)")
+    for p in (i, a):
+        p.add_argument("--login", metavar="USER", help="the ssh user (default: the node's registry entry's); vy-admin on a node "
+                                                       "whose lock-out took root from research")
     for p in (d, i, a):
         p.add_argument("--no-fetch", action="store_true", help="don't `git fetch origin main` first")
     # argparse leaves a positional that follows an option unmatched, and subparsers rule out parse_intermixed_args
@@ -699,7 +705,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         if r.returncode:
             print(f"research deploy: git fetch in {repo} failed, so REF may be stale: {r.stderr.strip()[-300:]}", file=sys.stderr)
     nodes = load(manifest, manifest_at(ns.ref, repo) if manifest == MANIFEST else None)
-    run = run or ssh_runner()
+    run = run or ssh_runner(login=getattr(ns, "login", None))
     if ns.cmd == "drift":
         reps, rc = {}, 0
         for name in ns.node or sorted(n for n, nd in nodes.items() if not nd.admin):

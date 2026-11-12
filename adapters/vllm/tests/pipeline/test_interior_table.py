@@ -27,9 +27,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
@@ -37,7 +37,8 @@ from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows.interface import digest_words
-from verity_vllm.pipeline import boundary_tables as BT, chunk_rows as CR, interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
+                                  serving_rows as SRW)
 
 RD = E.read(8, 2)
 SPANS, Q, CELLS, SALT, ROW, DELTA = 3, 2, 2, bytes(range(32)), "interior-table-test", 2.0 ** -40
@@ -75,15 +76,14 @@ NAMES = tuple(BT.name(RUN, PROMPT, OUTPUTS, s, LAYER) for s in range(SPANS))
 UNREAD = "c5" * 64
 
 
-def _opt_in(takes: str) -> pytest.MarkDecorator:
-    """The skip of a test that runs only under ``VERITY_VLLM_INTERIOR_TABLE=1``; its reason says how long it ``takes``."""
-    return pytest.mark.skipif(os.environ.get("VERITY_VLLM_INTERIOR_TABLE") != "1",
-                              reason=f"VERITY_VLLM_INTERIOR_TABLE=1: {takes}")
+def _opt_in(var: str, takes: str) -> pytest.MarkDecorator:
+    """The skip of a test that runs only under ``var``=1; its reason says how long it ``takes``."""
+    return pytest.mark.skipif(os.environ.get(var) != "1", reason=f"{var}=1: {takes}")
 
 
 #: a test on the module's one round 1 (`staged`) or its interior (`honest`)
-SHARED = _opt_in("about 5 minutes on a CPU to build the module's round 1 and interior over the table reads once, then up to "
-                 "2 minutes a test")
+SHARED = _opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 5 minutes on a CPU to build the module's round 1 and interior over the "
+                 "table reads once, then up to 2 minutes a test")
 
 
 @functools.cache
@@ -156,8 +156,9 @@ def _first(tables):
 
 @pytest.fixture(scope="module")
 def staged():
-    """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and drawn
-    units. None has its stream accept an interior: a stream takes one a draw, so the test that does stages its own."""
+    """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and
+    sampled proof blocks. None has its stream accept an interior: a stream takes one a first-stage sample, so the test that does
+    stages its own."""
     tables = _tables()
     return (*_first(tables), tables)
 
@@ -193,13 +194,13 @@ def _history(rec, first, it) -> dict:
     return IR.history(rec, [NAMES[u] for u in first.units], 2, C, it.published, bodies)
 
 
-@_opt_in("about 12 minutes on a CPU, the verifier checking the reads' interior program three times on a stream of "
-         "the test's own")
+@_opt_in("VERITY_VLLM_INTERIOR_TABLE", "about 12 minutes on a CPU, the verifier checking the reads' interior program three "
+         "times on a stream of the test's own")
 @pytest.mark.slow
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
-    """Slow, on a stream of its own (a stream takes one interior a draw, and this test's accepts one): it catches the
-    reads' interior and the verifier disagreeing on a supplied row's bytes, format or order, which shows only where the
-    verifier checks the reads' own interior program, here three times.
+    """Slow, on a stream of its own (a stream takes one interior a first-stage sample, and this test's accepts one): it
+    catches the reads' interior and the verifier disagreeing on a supplied row's bytes, format or order, which shows only
+    where the verifier checks the reads' own interior program, here three times.
 
     The interior registers the block's parameters as round 2 names them, the two supplied values ``root`` and
     ``domain`` and then the reads' key and opening, a row a read, the replayed ones (`Operand`), and
@@ -273,6 +274,65 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
 
 @SHARED
 @pytest.mark.slow
+def test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs(staged):
+    """A block's links are all or none (`second_stage.link_runs`), and its return links take a template of one output:
+    the read returns its row and `ok`, so round 2 derives none for the block of reads, and `interior_rows.links` refuses
+    rather than give the parameters' alone. Slow by `staged` and the boundary's program: it is the reads' own block
+    under the record a stream registered, so it catches the day round 2 derives links for a table read, when this
+    module's by-hand `LINKS` must give way to them."""
+    _stream, _reg, _first_, rec, _tables_ = staged
+    with pytest.raises(ValueError, match="makes no links"):
+        IR.links(_boundary().program, descriptor_id(BLOCK), rec, MEMBER, CELLS, dict.fromkeys(IR.TABLE))
+
+
+@SHARED
+@pytest.mark.slow
+def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links(staged, honest):
+    """Round 2's read check (`second_stage._read_ok`) on the reads' ``root`` and ``domain`` ports, under a round-1 record
+    whose ports are named as the serve names them: `boundary_rows.PORTS`, bare, then each span's table, whose name has
+    a ``/``. Round 2 names a link ``<block>/<parameter>`` where any port of that record has a ``/``, so the links carry
+    the names the interior registers, and it holds each read to its span's one row: a read at the other span's row, at
+    another leaf count, of the bare parameter or of the interior's own port is refused. Under the two values' names
+    alone the link is the bare parameter and the same read is refused. The block's return makes no links yet (the
+    read's two outputs), so the links here are the ones its nodes make for its parameters
+    (`second_stage._node_links`), gathered as `link_runs` gathers them. Slow: the entries round 2 reads are the ones
+    the reads' interior registered over a registered round 1, and the links the reads' own block's, so it catches the
+    interior and round 2 naming a table read's ``root`` or ``domain`` apart, which entries written by hand would not show."""
+    _stream, _reg, first, rec, _tables_ = staged
+    it = honest
+    key, rd, m = descriptor_id(BLOCK), P.template_id(RD), _boundary().members[0]
+    names = dict(zip((m.port("ingress"), m.port("egress")), BR.PORTS, strict=True))
+    served = {**rec, "roots": [{**r, "port": names.get(r["port"], r["port"])} for r in rec["roots"]]}
+    assert {r["port"] for r in served["roots"]} == {*BR.PORTS, *NAMES}
+    defs = definitions(_boundary().program)
+    cs = SS._callers_of(defs, defs[key])
+    shares = [x for k, node in enumerate(defs[key].body.nodes) for x in SS._node_links(cs, defs[key], k, node)]
+    runs = SS._gather(lambda x: (x.template, x.port), lambda a, b: a.value == b.value, cs.units, shares)
+    assert SS.replay_links(_boundary().program, key, served) is None
+    assert {(x.template, x.port, f"{key}/{x.value}", per, tuple(SS.row_at(rs, j) for j in range(CELLS)))
+            for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in LINKS}
+    entries = {e["value"]: e for e in it.record["registered"]}
+    roots = {r["port"]: r for r in it.record["roots"]}
+    part, w = SS.Part(rd, 0, CELLS), it.committed.window
+    for record, named in ((served, True), ({**served, "roots": served["roots"][:2]}, False)):
+        assert SS._by_template(record) is named
+        own = SS.Own(tuple(first.units), (part,), it.record, record, (),
+                     links=tuple(SS.Link(x.template, x.port, SS._port_of(named, key, x.value)) for x, _per, _rs in runs),
+                     rows=tuple(SS.Rows(x.template, x.port, per, rs) for x, per, rs in runs))
+        for x in SUPPLIES:
+            port = w.members[0].port(x.port)
+            at = list(it.committed.given[port].positions)
+            assert at == [0, 0, 1, 1]
+            e = {"value": x.value, **{f: entries[x.value][f] for f in ("root", "domain", "leaves")}, "reads": at,
+                 "reads_from": 0}
+            assert SS._read_ok(own, named, part, x.port, e) is named
+            mine = {"value": port, **{f: roots[port][f] for f in ("root", "domain", "leaves")}}
+            for bad in ({"reads": [1, 0, 1, 1]}, {"leaves": e["leaves"] + 1}, {"value": x.port}, mine):
+                assert not SS._read_ok(own, True, part, x.port, {**e, **bad})
+
+
+@SHARED
+@pytest.mark.slow
 def test_a_table_round_1_did_not_register_is_refused(staged, honest):
     """A table that differs from the served one in one row: the interior refuses it by name before anything is committed,
     the challenger's `history` over its strings recomputes another root than round 1's, which `history.roots_of`
@@ -310,7 +370,7 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
     """Two spans of one class, of lengths 5 and 3, each publish C = 6 strings, so the strings never show a span's length:
     a read past its length opens a fill row (the zero row under a salt of its own) and one past C the zero row under the
     zero salt, each the zero row. A table of other than C strings is refused by name. Slow: what is published is the
-    interior's own, read off one built over a registered round 1 and its drawn spans, which the tables alone don't give."""
+    interior's own, read off one built over a registered round 1 and its sampled spans, which the tables alone don't give."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
@@ -397,7 +457,7 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
     """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C, and
     the reads' root and domain are both the verifier's; a table of another capacity and a commitment made on the rows'
     device are refused by name. Slow: each refusal is `interior`'s own, past its building of the reads' window and on
-    round 1's registration and draw; it catches an interior of table reads committed without the tables it must open."""
+    round 1's registration and sample; it catches an interior of table reads committed without the tables it must open."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     spans = _spans(drawn)

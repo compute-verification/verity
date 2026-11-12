@@ -22,22 +22,27 @@ untraced = [
     "tests/test_audit.py",
     "tests/test_axiom_probe.py",
     "tests/test_cache.py",
+    "tests/test_lean_changed.py",
     "tests/test_merge.py",
     "tests/test_moved.py",
+    "tests/test_not_read.py", "tests/test_records_allow.py",
     "tests/test_sandbox.py",
     "tests/test_setup.py",
     "tests/test_siblings.py",
     "tests/test_upstream.py",
     "tests/test_unread.py",
     "tests/test_unread_gate.py",
+    "tests/test_warm.py",
 ]
 # The tests read this directory's README, so its Markdown is keyed (`suites.markdown`), and load `lean_audit.py`, which loads
 # `tools/verity/check/common.py`, and `module_keys.py`, which loads the task graph's contract, whose key vectors
 # `test_module_keys.py` reproduces; `test_lean_changed.py` loads `lean_changed.py`, which loads the check tool's
 # `lean_slot.py` and `slot.py`; `test_siblings.py` runs `verity lean try --siblings`, the CLI's. `test_moved.py` runs the
-# install command's shim, and `lean_changed.py` reads research's record of the layout moves (`moved.py`).
+# install command's shim, and `lean_changed.py` reads research's record of the layout moves (`moved.py`). `test_warm.py`
+# loads `warm.py`, which loads the check tool's `verdicts.py` and with it `settings.py`.
 inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/verity/check/lean_slot.py",
-          "tools/verity/check/slot.py", "tools/verity/graph/verity_graph/contract.py",
+          "tools/verity/check/slot.py", "tools/verity/check/verdicts.py", "tools/verity/check/settings.py",
+          "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/tests/key_vectors.json", "tools/verity/cli/verity_cli/__init__.py",
           "tools/lean/setup.sh", "tools/research/src/research/store/moves.json",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py"]

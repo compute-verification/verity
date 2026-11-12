@@ -1,0 +1,6 @@
+{
+ "table": "prefix_plan.jsonl",
+ "sha256": "629d3156bb320c3e18e63ef75a1f5d9c038f9c74326a65bde1077a0d6a194c79",
+ "plan": "art:0bc087fee04a9f9b690abfdf1950595d34c793ad8b3003c69858eb11690db8fa",
+ "files": ["ctx128k_plan.jsonl", "ctx128k_plan.meta.json"]
+}

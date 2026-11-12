@@ -10,12 +10,13 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
 - ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
-  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_rows.BoundaryWindows`), each window's finished
-  requests committed by size class as the window closes, under ``boundary/``, each class's public part in
-  ``boundary.PID.jsonl``. With ``tables`` in it (``private``, ``layers``, ``capacity``, ``timeout_s``), each span's
-  latent history tables too: rank 0 of Model Runner V2 reads each step's rows (`_tables_runner`) and builds each class's
-  tables once the window assigns its slots, keeping their rows and salts under ``private``, never under ``out`` or the
-  run's directory;
+  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_windows.BoundaryWindows`), each window's finished
+  requests committed by size class as the window closes, each class's public part in ``boundary.PID.jsonl``. A class's
+  directory holds its requests' tokens and its salts, which are values: it goes under ``private``, the configuration's
+  directory for what never leaves the node (``private``/boundary/), and under ``out`` only where none is named. With
+  ``tables`` in it (``private``, ``layers``, ``capacity``, ``timeout_s``), each span's latent history tables too: rank 0
+  of Model Runner V2 reads each step's rows (`_tables_runner`) and builds each class's tables once the window assigns
+  its slots, keeping their rows and salts under the ``private`` it names, never under ``out`` or the run's directory;
 
 and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
 ``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
@@ -618,10 +619,12 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         atexit.register(tc.stop)
         done.append(tc)
     if cfg.get("boundary_rows"):
-        from verity_vllm.pipeline import boundary_rows as BR
+        from verity_vllm.pipeline.boundary_windows import BoundaryWindows
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
-        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], out / "boundary", sink, public=_public(cfg))
+        kept = Path(cfg["private"]) if cfg.get("private") else out
+        released = release_key if cfg.get("release_order") else None
+        done.append(BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, released, public=_public(cfg))
                     .install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests

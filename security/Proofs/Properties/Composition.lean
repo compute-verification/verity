@@ -22,7 +22,7 @@ verifier that accepts everything accepts.
 
 @[expose] public section
 
-open private hex4 from Flock.Canon
+open private hex4 from Base.Canon
 
 namespace Properties.Composition
 

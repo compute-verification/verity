@@ -30,7 +30,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from verity.hardware import load, number
+from verity.hardware.cards import load, number
 
 CARD = load("h200-sxm-141gb")
 FMAX_MHZ = CARD["clock"]["sm"]["value"]

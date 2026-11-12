@@ -18,7 +18,7 @@ Fixture = `fixture/v1`. Proof = `proof/v1`. Probe capture = `tc-evidence/v1`. Th
 CLI: `research data …`. Package: `research.store`. Id prefixes: `art:`, `drv:`. Attempt id = run id as-is.
 Stdlib only (the `research` rule); the S3 client is hand-rolled SigV4.
 
-## 1. Canonical JSON and identity
+## 1. Canonical JSON and identity (`canon.py`, `ids.py`)
 
 `canon.dumps(obj) -> bytes`: `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)`
 encoded UTF-8. Floats render by Python `repr` (shortest round-trip); `-0.0` is rejected (use `0.0`); NaN/Inf are rejected;
@@ -67,7 +67,7 @@ lives only remotely). `meta` may contain `art:` strings too; only `refs` is inde
 
 Manifest identity excludes producer, time, labels. The manifest file is `manifests/<sha256 hex>.json` (canonical bytes).
 
-Kinds are strings `<name>/v<int>`. The store validates only the envelope; kind-specific validation is the producer's
+Kinds are strings `<name>/v<int>`. The store validates only the envelope (`model.py`); kind-specific validation is the producer's
 (`kinds.py` holds the known kinds and a one-line description each; `put` warns on an unknown kind, never refuses).
 
 ## 3. Layout
@@ -83,8 +83,9 @@ snapshots are ordinary artifacts (kind dataset-snapshot/v1)
 trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
-steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
+steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, a mutable key, changed by conditional
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
+packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
                                      write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
@@ -170,7 +171,7 @@ attempt_outputs(attempt, name, artifact)
 attempt_inputs(attempt, name, artifact)
 labels(target, key, value, by, ts, ref, path)
 replicas(id, location, verified_utc, detail)            verifications, which a rebuild keeps (not a local fact)
-replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
+replica_checks(id, location, verified)                  which check (§7): etag-md5 | etag-multipart | sha256-readback
 ~~~
 
 Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
@@ -235,7 +236,8 @@ TC_PROBE = Tool(
 
 Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
 illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
-`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny). A declaration
+`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny; in a tree from before a
+layout move, at the path `moves.json` gives). A declaration
 imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
 back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
 
@@ -270,7 +272,7 @@ taken again. `source.dirty` means the working tree's bytes differ from that comm
 is never the empty string's sha256). `rt.torch` / `rt.triton` are the runner interpreter's
 distributions (`importlib.metadata`, never imported); a workload in another venv may differ.
 
-### 6.4 Derivation id and reuse key
+### 6.4 Derivation id and reuse key (`derivation.py`)
 
 ~~~python
 derivation_doc = {"tool": {"name": ..., "version": ...}, "inputs": {name: art_id}, "params": {k: key params, content-resolved},
@@ -282,7 +284,6 @@ reuse_key = canon.sha256({"derivation": drv_id, "source": {"tree": source.tree, 
 `lookup` matches on `reuse_key` (exact source + exact request: conservative, false misses not false hits).
 `select --derivation drv:…` and `diff` group on `drv_id` across revisions. Closure-scoped reuse (a third key from the recorded
 closure manifest) is a later, explicit optimisation once a Tool's closure has earned trust — it must not be the default.
-The Triton cache incident (W=31 binaries served to a W=22 tree) is why.
 
 ### 6.5 Scratch / caches
 
@@ -307,14 +308,12 @@ class Remote(Protocol):
 `FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None) -> [(key, last modified)]`, what `index()` (§5.1) lists with.
 
 `FsRemote(root)` (a directory, also the test double; its `etag` is the file's MD5) and `S3Remote(endpoint, bucket, access_key,
-secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style
-`<endpoint>/<bucket>/<key>`; one PUT for objects <= 5 GiB, the service's PutObject limit; above that `push` raises `StoreError`
-naming multipart as unimplemented — the planned design is multipart with per-part sha256 recorded in a sidecar key
-`<key>.parts.json`). `S3Remote.put` is HEAD-then-`PUT If-None-Match: *`: a 412 means another writer created the key first
-(`exists`, fine for immutable content); a 400/501 means the service lacks conditional PUT, so it is switched off for the rest of
-the session and the plain PUT is used (the push report carries a note). Cloudflare R2 honours `If-None-Match: *` (checked live).
-The signer is tested against the AWS documented vectors and the client against R2. Config `~/.research/store.toml` (or
-`$RESEARCH_STORE_CONFIG`):
+secret_key, region="auto", session_token=None)` (`remote_s3.py`: SigV4 with signed payload hashes, path-style
+`<endpoint>/<bucket>/<key>`; one PUT for objects <= 64 MiB, a multipart upload above). `S3Remote.put` creates with
+`PUT If-None-Match: *` and never overwrites:
+a key that exists is `skipped` when it holds the same bytes, else a `RemoteConflict`; where the service lacks conditional PUT
+(a 400/501), a plain PUT follows a HEAD for the rest of the session (the push report carries a note). Config
+`~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
 
 ~~~toml
 [remote]
@@ -336,7 +335,7 @@ the token is sent as `x-amz-security-token` inside the SigV4 signed headers on e
 ### 7.1 Temporary credentials for pods — `research data mint-credential`
 
 A pod gets a short-lived, bucket-scoped credential instead of the parent R2 key (`credentials.py`, stdlib). **PRESERVED** means the
-remote holds the manifest and every blob at the right size, its content checked by `etag-md5` (`push`'s HEAD) or `sha256-readback`
+remote holds the manifest and every blob at the right size, its content checked by `etag-md5` or `etag-multipart` (`push`'s HEAD) or `sha256-readback`
 (`verify`), and `replicas.verified` says which. A missing `[remote]` makes the store local-only; a present but unusable one is
 `ConfigError`, so a broken vault never looks like no vault. `fetch` reads local objects, then the repo replica
 (`fixtures/artifacts.json`), then the remote, checking every byte. The detail of all four, with the minting paths and the push
@@ -365,7 +364,7 @@ algorithm: `remote-replicas/README.md`.
   row confirmed by HEAD (manifest + blobs, sizes). Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
 
-### 7.3 Fetched fixtures and the public export
+### 7.3 Fetched fixtures and the public export (`fixtures.py`)
 
 - A registry entry is *tracked* (git holds it; a tracked file is at most 256 KiB) or *fetched* (its path is gitignored).
 - `fetchset.py` fetches any set of ids, `--jobs` at a time: local objects, else the private remote when reachable, else the public
@@ -382,7 +381,7 @@ algorithm: `remote-replicas/README.md`.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
-Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote.
 TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
@@ -397,7 +396,9 @@ An artifact that holds values which must never be shared leaves by `research dat
 (`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
 tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
 also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
-`--apply`; it runs where the store's write keys are, the control pod.
+`--apply`; it runs where the store's write keys are, the control pod. `--path P` withdraws only the files under P. `preserved`
+reports a missing blob a `withdrawn` label covers as withdrawn, not absent (WITHDRAWN, exit 4: delete its local copies, never
+put them back), and `put --tree` refuses them.
 
 ## 8. Labels
 
@@ -412,10 +413,15 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
 Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
 one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
-`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails; a preserved Attempt is not
-preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
+`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
+marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
 trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+
+The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
+rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
+the rest. It is a cache of `labels/`, never its source: a member lands only under a name the remote lists and its
+content hashes to, and a pack that is absent or fails its sha256 is ignored.
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
@@ -453,7 +459,8 @@ prints the table; the groups are:
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
   `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
-  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
+  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
@@ -487,8 +494,11 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
+                                              exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
+research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)
+research data evict --target-free-gb N [--runs] [--dry-run] [--json]   free local disk of copies PRESERVED on the remote (`evict.py`, `sealed.py`)
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
@@ -503,6 +513,7 @@ research data pull --from MACHINE RUN --project P    (the machine is bound to a 
 research data reindex [--remote]
 research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
 research data mint-credential [--ttl 6h] [--permission P] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]   (§7.1)
+research data mint-credential --job push|fetch [--ttl 6h] [--env]   a cluster job's key: custody's actions (§7.1)
 ~~~
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a
@@ -581,19 +592,12 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 1. **A derivation key is a claim of dependency completeness.** Bias to false misses. Exact reuse includes the source tree.
 2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once, never rewritten; the index is disposable. The
    one deletion is §7.4's: blobs of uncited artifacts past their kind's TTL.
-3. **Labels are assertions, not fields.** Keep every assertion; policy chooses.
+3. **Labels are assertions, not fields.** Keep every assertion; policy chooses. A label's `by` is whatever its writer says.
 4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
-   ETag is the object's MD5 and is accepted as the transport check (`etag-md5`); a multipart ETag is not a hash and never is; the
-   manifest's sha256 stays the identity and read-back (`sha256-readback`) stays available for anything that matters more than time.
+   ETag is the object's MD5 (`etag-md5`) and a multipart one the MD5 of its parts' MD5s (`etag-multipart`); the manifest's
+   sha256 stays the identity and read-back (`sha256-readback`) stays available.
 5. **Producers never carry verifier truth.** A proof artifact may hold proof bytes, the claimed statement, prover metadata;
-   the verifier's chain/spec/keys come from its own closure or an explicit trusted input artifact (the `chain.txt` lesson).
+   the verifier's chain/spec/keys come from its own closure or an explicit trusted input artifact.
 6. **Content, not pathname**, is the identity of every input.
 7. **`conditions()` owns normalisation.** One SKU->family map.
 8. **Canonical JSON everywhere** ids are computed.
-
-## 13. Open questions
-
-- **Many-run analytics.** Postgres on Neon is the index now; DuckLake comes only when many-run results outgrow `fields`.
-  No lakeFS or registry server.
-- **Signed labels.** A label's `by` is whatever its writer says. When labels get signed, they become in-toto attestations
-  signed with Sigstore/cosign, not a scheme of our own.

@@ -39,14 +39,14 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
   print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
-  hook); on a VM booted without it, run origin/main's `tools/agent-guard/boot.sh`. A secret is stored as one line (a
+  hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
   key as base64, `NAME_B64`).
 
 ## Landing
 
-`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
-`main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
-(`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
+`main` holds only fully checked commits. ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring
+has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
+it, and fast-forwards `main` only to a candidate with no new failure, each gating task passed or failing on its base too:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
@@ -56,40 +56,37 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
   refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
   its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
-  `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark admits a PR: the
-  sync's own merge onto `next` is the only check before it joins, so a conflict there or a `landing_gates` refusal
-  keeps it out, as a `hold` label does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a
-  fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
-  admission.
+  `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark's preflight refuses a
+  head that conflicts or that drive.toml's `landing_gates` refuse; a Markdown file over its cap only warns (trim it in
+  your next PR). A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
+  team's Apps and Daniel, is refused at its mark and at admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
   pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
-- Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
-  the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
-  moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
-  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
+- Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
+  LANE`); no other per-head grant exists. A PR whose change touches nothing drive.toml's `lowrisk_excludes` names (Lean,
+  locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone, with no verdict (the
+  low-risk lane); a layout move's PR (`Move: tools/move/MAP.toml` in its body) never does.
+- The loop builds candidates from the marked PRs with a land verdict or in the low-risk lane, in the priority file's order
+  and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
+  below, and one `Queue: #N` merge per PR. A PR that doesn't merge onto `main` is left out, and its owner told to merge
+  `main` (across a move, `tools/move/restack.py`) and mark the new head. A candidate holding a change to a
   `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
-  Lake files) or to Lean that runs as code (a `.lean` outside `security/`) lands on its verdict like any other. Drive
-  then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
-  records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
-  ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
-  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
-  with no verdict (the low-risk lane).
-- One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
-  touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
-  body names it or says `fixes suite NAME`) in 30 min, or drive reverts it on `checked`, unless the red is ratchet-gate's
-  (fix that in your next PR); if several touch it, each is rung with @ci and @top, none reverted. A shard whose failures
-  name no failing test or error line first runs again once on other machines, ringing @infra. The next run waits up to
-  45 min after its mark for a marked low-risk fix of a red with no culprit to land. Until circuit-check passes on
-  `checked` no PR touching its inputs lands (a PR whose body says `fixes step circuit-check` does).
-  Citations and tables read only commits whose after-landing run passed: `main`'s.
-- A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
-  mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
-  MAP`, one commit) and leaves it out, telling its owner, unless `move_check.py` certifies it; both scripts, and the
-  restack, are `checked`'s, as the landing gates are, and a member below the move that changes `tools/move/`'s scripts holds
-  it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
-  Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
-  didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
+  Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
+  run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
+  `main` moves only to regenerated records; a records run that fails is a failure like any other.
+- A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
+  machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
+  unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it, and the owner of each
+  unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
+  and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
+  suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
+  and their logs, several are bisected, and in the same tick the candidate and those above it are built again in order
+  without the suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR
+  out. A failure above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s
+  word decides it. A failure of the machines
+  is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
+  its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
+  Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - `check.py --record --on auto --pool research`, from a checkout, records `check` as an Attempt of the clean commit in the
   research pool `research run --on auto` would spill to (`--on M --pool NAME`: M's NAME pool).
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
@@ -133,10 +130,14 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
-  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
-  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
-  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
+- **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: the strongest
+  only where a weaker one would err and no check would catch it. Tier 1, `claude-fable-5-2-xhigh`: no check decides it
+  and an error is expensive (what a guarantee says, protocol or attack design, a proof with no known route, an open root
+  cause, a ruling, review of a verifier, lock or statement, soundness-path code, a claim to Daniel). Tier 2,
+  `claude-opus-5-5-high`: skilled work a check decides (a specified change with tests, a swarm seat, a proof of a fixed
+  statement, a merge resolving code, ordinary review). Tier 3, `claude-sonnet-5-5-medium`: procedure and reading (clean
+  merges, renames, counts, docs-only review). The brief names the tier: the lowest that fits, one up after two failed
+  checks.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
@@ -151,7 +152,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   with a done-condition anyone can check, which its lead proposed and Daniel approved.
 - **Work in a checkout no other agent uses** (your VM, or your own `git worktree` and venv), push only to branches you
   created or were handed, and push after every commit (never `main`, never `--force`).
-- **Slack** (computeverification.slack.com) is for handle holders and named humans; a worker asks its own coordinator.
+- **Slack** is for handle holders and named humans; a worker asks its own coordinator.
   The coordination API is `research msg` (the using-slack skill). Work for another lead goes in as a Linear issue in its
   team; Slack is the conversation around it.
 
@@ -162,8 +163,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   infrastructure; don't mimic deployment settings.
 - **Waiting is a bug** (AGENTS.md, Working principles): fix a repeated wait of over about 10 minutes at the source, or
   take it to its owner that day with its numbers.
-- **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) goes on its ask page decided
-  provisionally, for him to review or reverse (the asking-daniel skill). A click only his account can make (the GitHub
+- **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) is the lane's. A PR that
+  changes a lock record needs no ask: its owner marks it, and the landing DM is his notice. A claim
+  decided ahead of its PR goes on its ask page decided provisionally, for him to review or reverse (the asking-daniel
+  skill). A click only his account can make (the GitHub
   organization's admin, billing, the Nebius and Cloudflare consoles, his Cursor settings) gets a way around it where one
   exists, else a blocking card. Keys and access between our own machines and accounts are the lanes' call, set up with
   the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is its lead's call. A change

@@ -99,13 +99,13 @@ def test_the_source_wraps_the_four_functions_in_the_model_module():
     assert all(getattr(home, f).__name__ == f for f in MS.FUNCTIONS)
 
 
-def test_every_step_binds_the_map_names_of_its_hc_route_once(runs, capsys):
+def test_every_step_binds_the_map_names_of_its_hc_route_once(runs):
     for target, r in runs.items():
         for k, (_md, routes, phase) in enumerate(STEPS):
             want = CM.committer_names(CMAP, ENV, phase=phase, routes=routes, rank=3, binders=(MS.BINDER,), on_target=target)
             assert Counter(r.names(k)) == Counter(set(want)), (target, k)
             if target:
-                assert sorted(r.names(k)) == sorted(map_names(capsys, routes, phase, binders=(MS.BINDER,)))
+                assert sorted(r.names(k)) == sorted(map_names(routes, phase, binders=(MS.BINDER,)))
     split = [k for k, (_md, routes, _p) in enumerate(STEPS) if "hc-split" in routes]
     assert split == [2, 4] and {m for r in runs.values() for f, m, fma in r.fma if f == MS.POST_PRE and not fma} == {20}
     on, off = runs[True], runs[False]
@@ -146,9 +146,9 @@ def test_a_call_with_no_side_s_fn_fails_the_step():
         r.close()
 
 
-def test_the_route_source_admits_a_step_only_with_its_mhc_names(runs, capsys):
+def test_the_route_source_admits_a_step_only_with_its_mhc_names(runs):
     r = runs[True]
-    steps = {k: map_names(capsys, routes, phase, binders=OTHERS) + r.names(k) for k, (_md, routes, phase) in enumerate(STEPS)}
+    steps = {k: map_names(routes, phase, binders=OTHERS) + r.names(k) for k, (_md, routes, phase) in enumerate(STEPS)}
     got = r.check(steps)
     assert got["ok"] is True, got["violations"][:2]
     gone = "model.layers.7/hc_ffn_x"

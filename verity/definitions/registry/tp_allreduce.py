@@ -7,6 +7,7 @@ all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P
                                               (parts, res: Array<N, bf16>, w: Array<N, bf16>) -> (normed, residual')
     AllReduceResidualMnnvl_v1{WORLD,N,SHOT}   (parts, res) -> residual'   (the fused one's all-reduce and residual add)
     RmsNormMnnvl_v1{N,SHOT,CLUSTER,EPS,FMA}   (r: Array<N, bf16>, w) -> normed   (the fused one's norm of residual' r)
+                                              (cut at its scale: `tp_allreduce_split`)
     AllReduceCustomCoordinate_v1{WORLD,START} (col: Array<WORLD, bf16>) -> bf16
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
@@ -541,13 +542,20 @@ def RmsNormMnnvl(B, S, r, w):
 def _mnnvl_norm(B, S, zero, r, w):
     """The fused kernel's normed row of r (one token, `AllReduceRmsNormMnnvl_v1`'s statics), the f32 zero ``zero`` already
     called."""
+    rf = B.batch(P.Bf16ToF32, r, axes=(0,))
+    return _mnnvl_apply(B, strategy(S.SHOT), zero, rf, w, _mnnvl_scale(B, S, zero, r, rf))
+
+
+def _mnnvl_scale(B, S, zero, r, rf=None):
+    """The fused kernel's ``rs`` of r: the sum of squares in `blockReduceSum`'s geometry, then ``rsqrt(sum * rcp(N) + EPS)``.
+    The two-shot sum reads ``rf``, r's f32 words, and makes them when not given."""
     N, shot, cluster = int(S.N), strategy(S.SHOT), int(S.CLUSTER)
     block, warps = _fused_geometry(N, cluster)
-    rf = B.batch(P.Bf16ToF32, r, axes=(0,))
     if shot == 1:
         sq = B.batch(P.Bf16ToF32, B.batch(P.Bf16MulBf16, r, r, axes=(0, 0)), axes=(0,))
         step = lambda acc, j: B.call(P.F32AddFtzV2, acc, sq[j])  # noqa: E731
     else:
+        rf = B.batch(P.Bf16ToF32, r, axes=(0,)) if rf is None else rf
         step = lambda acc, j: B.call(P.F32FmaFtzV2, rf[j], rf[j], acc)  # noqa: E731
     sums = []
     for b in range(cluster):
@@ -573,7 +581,11 @@ def _mnnvl_norm(B, S, zero, r, w):
         arg = B.call(P.F32FmaFtzV2, total, rcp, eps)
     else:
         arg = B.call(P.F32AddFtzV2, B.call(P.F32MulFtzV2, total, rcp), eps)
-    rs = B.call(P.RsqrtApprox, arg)
+    return B.call(P.RsqrtApprox, arg)
+
+
+def _mnnvl_apply(B, shot, zero, rf, w, rs):
+    """The fused kernel's normed elements of r from its f32 words ``rf`` and the scale ``rs``."""
     g = B.batch(P.F32AddFtzV2, zero, B.batch(P.Bf16ToF32, w, axes=(0,)), axes=(None, 0))
     if shot == 1:
         y = B.batch(P.F32MulFtzV2, B.batch(P.F32MulFtzV2, rf, rs, axes=(0, None)), g, axes=(0, 0))

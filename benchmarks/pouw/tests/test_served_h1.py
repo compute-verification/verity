@@ -29,6 +29,7 @@ import importlib.util
 import itertools
 import json
 import random
+import re
 import shutil
 import socket
 import sys
@@ -844,6 +845,14 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
         with pytest.raises(CO.Ch.CoinError, match="signed no coin commitment") as refusal:
             CO.open_window("research@gate", sid, root, run=_gate(sent, {**opened, "commitment": unsigned}))
         assert secret.hex() not in str(refusal.value)
+    # an answer the call can't take (ssh failed after the gate answered; a line after the answer) is quoted without its
+    # long hex runs, the secret among them
+    import subprocess
+    for run in (_gate(sent, opened, rc=255),
+                lambda argv, **_: subprocess.CompletedProcess(argv, 0, json.dumps(opened) + "\nWarning: a line ssh appended", "")):
+        with pytest.raises(CO.Ch.CoinError, match=f'refused open: .*"port": 7811.*"secret": "{re.escape(CO.HEX_WITHHELD)}"') as refusal:
+            CO.open_window("research@gate", sid, root, run=run)
+        assert secret.hex()[:16] not in str(refusal.value) and root.hex()[:32] not in str(refusal.value)
 
 
 def test_a_draw_session_is_reserved_withheld_and_an_open_that_answers_its_root_is_refused():

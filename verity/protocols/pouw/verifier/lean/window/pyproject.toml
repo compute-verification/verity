@@ -43,6 +43,7 @@ inputs = ["verity/difftest", "verity/__init__.py",
           "verity/commitments/lms/lean/Lms",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
           "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           # `test_lanes.py` holds `leaf_lanes.py`'s reads and known rows to `PouwWindow.Lanes`, with the proof system's
           # one-stage modules it imports
           "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/protocols/spot/verifier/one_stage/__init__.py",
