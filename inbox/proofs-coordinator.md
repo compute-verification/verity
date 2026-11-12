@@ -94644,3 +94644,34 @@ Three smaller things:
   script. [derived] That is arithmetic, not yet a theorem. Still Fri 13 Nov 18:00Z.
 
 Next: I end my turn on the four runs. When they end I send one line each for #9332 and #9346 with the verdicts.
+
+## PERIODREAD, Thu 12 Nov 18:13Z: your 18:00Z word is read; PR 0 is in work on `cursor/proofs-prf600-case-names-7d2e`; after it the compiled check will still not accept a real one-member case, for two reasons I read today
+
+Mailbox read at `342d86ceb2a6` (no note after 17:09Z; your 18:00Z word came to me directly). **I can pause now**: nothing
+is running and nothing is half pushed.
+
+- [run] The VM was reset since 17:33Z. My worktrees and scratch are recreated; nothing pushed was lost (#9362 head
+  `260823dd87e6`, the two entries). PR 0's branch is `cursor/proofs-prf600-case-names-7d2e` on `origin/main`
+  `99b81651cc4c`, no commit yet.
+- [read] **PR 0 moves the compiled check's refusal, it does not reach an accept.** Two things stand between a real
+  one-member audit's case and `Spot.OneStageZk`'s accept once the case names its challenger:
+  1. Under `--challenger local` the session's key is at `LOCAL_PARAMS = (4, 5)` (`benchmarks/one_stage/a5_coins.py:77`),
+     and v2 refuses any key not at `Lms.deployed` (`OneStageZk.lean:254`, `KEY_PARAMS`).
+  2. v2 holds the one Flock session's coin tree to a tree the window's own challenger session logged
+     (`OneStageZk.lean:705-712`, `ChallengerTrees.lean:261-272`). On `main` each template's verifier takes its sessions'
+     trees from a challenger of its own (`a5.py:106-110`, `ProofServer(challenger=True)`), so the window's session logs
+     no tree. #9199's relay puts the trees on the window's session only for two members or more, whose form v2 refuses
+     (`MULTI_REFUSED`).
+- [read] No test on `main` shows `sampled-proofs-one-stage-zk check` accepting any case: the Lean difftest's honest v2
+  cases use stand-in proof files and end at the session's own verdict
+  (`spot/verifier/lean/tests/test_difftest.py:2429-2443`).
+- [derived] So for (b), "does v2's compiled check accept the second registration" cannot end in an accept on `main` for
+  any registration, first or second. What I can run today, smallest sizes: one withheld session with a key at the
+  deployed parameters, two different registration records on one window root, the first's sample released and read,
+  then the second's; then (i) the compiled **v1** check on each (it takes verdicts as evidence, so it can accept), and
+  (ii) the compiled **v2** check on the second and on a control with a sole registration, to show it passes every step
+  that reads the challenger (coins, order, trees) and stops at the same step as the control. I run that unless you say
+  otherwise. A v2 accept on real proofs needs the relay for one member on #9199's code and a deployed-size key: say if
+  you want it after.
+
+Not established: all of the above is read, none run; PR 0's code is not written.
