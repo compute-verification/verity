@@ -1626,8 +1626,6 @@
     {"file": "verity_vllm/acquire/sources/call_boundary_plan.py", "kind": "misc", "symbol": "_plan_request", "detail": ""},
     {"file": "verity_vllm/acquire/sources/call_boundary_plan.py", "kind": "return-value", "symbol": "_row_template", "detail": ""},
     {"file": "verity_vllm/acquire/sources/call_boundary_plan.py", "kind": "var-annotated", "symbol": "_Context.part", "detail": "", "count": 2},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "assignment", "symbol": "CompiledGraphSource.wrap_model", "detail": ""},
-    {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "attr-defined", "symbol": "_install_inductor_lowering", "detail": ""},
     {"file": "verity_vllm/acquire/sources/dsv4_attention_source.py", "kind": "arg-type", "symbol": "Dsv4AttentionSource.__init__", "detail": ""},
     {"file": "verity_vllm/acquire/sources/dsv4_attention_source.py", "kind": "assignment", "symbol": "Dsv4AttentionSource.__init__", "detail": ""},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "arg-type", "symbol": "HiddenM1Source._buffer", "detail": ""},
