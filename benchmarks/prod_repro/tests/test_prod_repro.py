@@ -95,6 +95,8 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     replayed(out)
     rc, txt, r = run(out)
     assert rc == 0 and capsys.readouterr().out == txt and r["failed"] == []
+    assert txt.startswith("prod_repro: load burst; stock compiled, stock again compiled-again, ours record; run r-1, commit "
+                          + "c" * 40 + f"\nmodel: repo@rev, as the benchmark names it; the checkpoint served: {out / 'ck'}\n")
     assert ("tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests\n"
             "  2 engine steps, 0 with other rows than the served schedule; 1 requests began from a prefix-cache hit, the "
             "longest 16 tokens\n"

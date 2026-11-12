@@ -254,7 +254,8 @@ def report(out: Path, stock: str, ours: str, again: str | None, load: str, rep: 
     line = cost(out, by, stock, ours, again, load, target)
     if len(sets) == 2 and (differ := settings_differ(sets[stock], sets[ours])):
         line["settings_differ"] = differ
-    return {"schema": SCHEMA, "model": meta.get("model"), "run": meta.get("run_id"), "commit": meta.get("commit"),
+    return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
+            "run": meta.get("run_id"), "commit": meta.get("commit"),
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "tokens": tokens(out, ours, load, rep, replay_dir) if ours in dirs else not_measured(f"{ours} was not served"),
@@ -316,8 +317,9 @@ def _limit(sets: dict, stock: str, ours: str) -> str:
 def text(r: dict) -> str:
     a, sets, t, c = r["arms"], r["settings"], r["tokens"], r["cost"]
     stock, ours = a["stock"], a["ours"]
-    lines = [f"prod_repro: {r['model'] or 'no model read'}, load {r['load']}; stock {stock}, stock again {a['again']}, "
-             f"ours {ours}; run {r['run']}, commit {r['commit']}",
+    lines = [f"prod_repro: load {r['load']}; stock {stock}, stock again {a['again']}, ours {ours}; run {r['run']}, "
+             f"commit {r['commit']}",
+             f"model: {r['model'] or 'not read'}, as the benchmark names it; the checkpoint served: {r['checkpoint'] or 'not read'}",
              f"settings of {ours}, with {stock}'s beside:",
              _setting("prefix caching", "prefix_caching", sets, stock, ours),
              _setting("speculative decoding", "speculative_decoding", sets, stock, ours),

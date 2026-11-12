@@ -33,6 +33,8 @@ differing position.
 
 ## What each line means
 
+- **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
+  `CHECKPOINT` names another model's directory.
 - **settings**: what ours ran with, stock's beside it, each with what says so (the launch line, the engine's own
   configuration in the step trace's header, the engine's counters): prefix caching, speculative decoding, the context
   limit beside the model's own (the checkpoint's `config.json`), compiled or eager, and whether the settings' circuit
