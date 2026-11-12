@@ -19,7 +19,7 @@ documents state of it apart from those, its network ports). Each number is an en
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 | NVIDIA DGX H200, a server none of our nodes is | server | `cards/dgx-h200.toml` | none |
 
-Every card of a kind has the same sections, a host card's `disk` apart. A GPU card's are `sm` (`count`, the SMs, and
+Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
 device memory's),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
@@ -35,10 +35,15 @@ server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM giv
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
 `write_max`, a second reading of the speed, the bandwidth and the write ceiling: the channels at the fastest memory
-the processor takes, whatever DIMMs the server has) and `store` (its caches and allowances,
-and `chip`, the host's on-chip bytes in S_chip); and, only where a run read its node's disks, `disk` (`read`, the bytes
-a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX node's host card
-has it and the H200 nodes' has no entry rather than an invented one). A server card's is `link`: the line rates of the
+the processor takes, whatever DIMMs the server has), `pcie` (the PCI Express lanes into the sockets: `lanes` a
+socket and their `speed`, from the part's page; `other`, what a socket takes from devices apart from them, its
+chipset link, or where the part has no chipset the USB ports that may be its own; and `bandwidth`, the bytes a second
+all of them carry each way, less the coding), `disk` (`read_max`,
+the most the host's disks are read back at, all of them together: the lanes' `bandwidth`, since a disk's bytes are
+outside the sockets and enter them over a lane, whatever the disk is; and, only where a run read its node's disks,
+`read`, the bytes a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX
+node's host card has it and the H200 nodes' has no entry rather than an invented one) and `store` (its caches and
+allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
 machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
@@ -110,10 +115,21 @@ kind's, read on one node of it, and its sources cite what read it by `art:` id.
 | An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | none on record |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
-and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
-`bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
-kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
-no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole.
+and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
+`bytes` and its `rate`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves
+out what the kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read
+on record has no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole.
+
+A leaf's `rate` is the most its bytes are read back at, in `B/s`, marked `ceiling`: the tightest bound on record that
+holds whatever the node runs. The DRAM leaf's is the host card's `memory.bandwidth_max`, the server's channels. A
+disk's is its own interface's where the disk states one: a drive of the server's own is behind its own PCI Express
+link, whose lanes at their rate, less the coding, bound it (`benchmarks/bandwidth/node.py` reads each disk's driver,
+transport and link). A disk that states none takes the host card's `disk.read_max`, the lanes into the server's
+sockets, which every byte of a disk enters by. Both nodes' disks are such: `virtio_blk` devices the hypervisor gives
+the VM, with no model and no transport. That figure bounds the host's disks together as well as each one, so a reader
+that adds the disks' rates takes the smaller of the sum and it. Neither a measured rate nor a limit a provider sets on
+a disk is a ceiling: the measured read stays on the host card (`disk.read`), under the ceiling, and a setting is
+stated nowhere.
 
 `interface.NAME`, one table an interface, is the node's own way out: an interface that carries traffic off the node,
 with its `rate`, the line rate each way in `bit/s`, as the node reports it (`/sys/class/net/NAME/speed`, `ethtool`).
@@ -121,11 +137,20 @@ An interface is one when it is a device's and a route of the node's main tables 
 a tunnel are the node's own software (`benchmarks/bandwidth/node.py` reads both and says which). An interface that
 reports no speed has no table. No latency is stated: nothing reads one, and a link registers at 0.
 
-A node file holds no clock or peak and no card's rate, which are the cards', and no network certifier or memory
-challenger: those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
+A node file holds no clock or peak of a card, which are the cards', and no network certifier or memory challenger:
+those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
 `nodes.load(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
-card of its kind. `nodes.kinds()` lists the files. `Registration.node_entry(node, card, host)`, in the Site
+card of its kind. `nodes.kinds()` lists the files.
+
+`nodes.leaves(node, host, card=None) -> (leaves, together)` is the one reader of the leaves' rates. `leaves` is each
+`memory.NAME` in the file's order as a `Leaf`: its `id`, `host/NAME`, its `tier`, its `bytes` and `bw`, its rate in
+whole bits a second, rounded up. `together` gives, for `dram` and for `disk`, the rate that bounds the host's leaves
+of the tier together, in the same unit: the host card's `memory.bandwidth_max` and `disk.read_max` (`card` is that
+card's table, loaded by the file's `host.sku` when none is given). It refuses a leaf with no `rate`, a rate that is no
+ceiling in `B/s` above 0, a rate above its tier's, and a DRAM rate that is not its tier's.
+
+`Registration.node_entry(node, card, host)`, in the Site
 (`site/__init__.py`), gives the entry a node file's table and its GPU card's table register, under the host id its
 caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the sheet's device
 memory, the host's leaves `host/NAME`, and for each interface a link `host/NAME` from the host to the outside. The
