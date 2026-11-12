@@ -116,7 +116,7 @@ class Scheme:
 SCHEMES = {s.id: s for s in (
     Scheme("stock", "fp8-e4m3-rowwise"),
     Scheme("pearl-plus", "fp8-e4m3-rowwise", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90",
-           "overhead_arm:epsilon"),
+           "overhead_arm:epsilon", commits_y=True),
 )}
 
 

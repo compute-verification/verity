@@ -787,7 +787,8 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
 
 
 def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_without(tmp_path, scheme, monkeypatch, capsys):
-    """Made-up records of one stand-in arm under three entries. pearl-plus's entry commits no y, so its C and L rows carry
+    """Made-up records of one stand-in arm under three entries. The fixture's pearl-plus entry states no `commits_y`, so its
+    C and L rows carry
     `WITHOUT_Y` in both rendered tables and the JSON. A made-up scheme whose entry commits y carries no note, and every
     number of its rows is pearl-plus's. A run recorded before the field (its `arm` record without `commits_y`) carries the
     note whatever today's entry says: the note is the run's, not the entry's. stock, with no arm, carries none. The
