@@ -2830,6 +2830,26 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
+def _table_fences(monkeypatch, m) -> dict[int, int]:
+    """The controller's fences kept in a table, {gpu: pid}, in place of `flock` processes: `fence` and `unfence` write it, and
+    `lock_holders` and `cmdline` answer from it alone.  For a test of what the controller decides, not of the locks: the real
+    `lock_holders` lists every flock on the machine by inode number, whatever its filesystem, so a lock another process holds
+    on a file with a GPU lock's inode number reads as a lease on that GPU, which the controller then leaves unfenced; and a
+    real fence is a process the machine may fail to start."""
+    held: dict[int, int] = {}
+    pids = iter(range(5_000_000, 6_000_000))               # above the kernel's largest pid: no process of the machine's
+
+    def unfence(gone: list[int]) -> None:
+        for i in [i for i, pid in held.items() if pid in gone]:
+            del held[i]
+
+    monkeypatch.setattr(m, "fence", lambda i, t: None if i in held else held.setdefault(i, next(pids)))
+    monkeypatch.setattr(m, "unfence", unfence)
+    monkeypatch.setattr(m, "lock_holders", lambda: {m.lock_path(i).stat().st_ino: [pid] for i, pid in held.items()})
+    monkeypatch.setattr(m, "cmdline", lambda pid: next((["flock", str(m.lock_path(i)), m.FENCE_CMD] for i, p in held.items() if p == pid), []))
+    return held
+
+
 def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
     """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
     link, or swapped a listed file for a symlink) had root make that file world-writable."""
@@ -2876,10 +2896,12 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     assert two.returncode == 75
 
 
-@needs_flock
-def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, reap):
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path):
+    """What the controller decides, tick by tick, over fences it only records (`_table_fences`): that a real fence keeps
+    gpu-lease off its GPU is `test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu`'s."""
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
+    fences = _table_fences(monkeypatch, m)
     c = m.Controller()
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
@@ -2891,18 +2913,19 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"] == {
         "requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}      # no CPU or memory: waiters hold the queue's
     assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
-    assert all(g["fence_pids"] for g in s["gpus"])
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fences[i]] for i in range(4)]
     state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]
     before = len(calls)
     s = c.tick(t + 10)
     assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and not [a for a, _ in calls[before:] if a[0] == "create"]
+    assert sorted(fences) == [0, 2, 3] and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, False, True, True]
     os.close(fd)
     w.unlink()
     c.tick(t + 20)
-    assert not [a for a, _ in calls if a[:2] == ("delete", "job")]
+    assert not [a for a, _ in calls if a[:2] == ("delete", "job")] and sorted(fences) == [0, 2, 3]
     s = c.tick(t + 20 + 121)
     assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == [created[0]["metadata"]["name"]]
-    assert s["gpus"][1]["fence_pids"]
+    assert s["gpus"][1]["fence_pids"] == [fences[1]] and s["gpus"][1]["holder"] is None
 
 
 @needs_flock
