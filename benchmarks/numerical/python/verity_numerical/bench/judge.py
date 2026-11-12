@@ -31,10 +31,15 @@ from typing import Any
 from .. import settings
 from . import contract
 
+__all__ = ["EX_REFUSED", "judge", "load", "main", "render", "resolve", "runs_root"]
+
+#: the exit code for a pair the judge refuses
 EX_REFUSED = 2
 
 
 def runs_root(arg: str | None) -> Path:
+    """The directory runs are looked up under: ``arg`` when given, else ``RESEARCH_RUNS``."""
+
     return Path(arg or settings.RESEARCH_RUNS).expanduser()
 
 
@@ -53,6 +58,8 @@ def resolve(ref: str, root: Path) -> Path:
 
 
 def load(run_dir: Path) -> dict[str, Any]:
+    """The object in ``run_dir``'s ``result.json``; an error where there is no such file or it holds something else."""
+
     p = run_dir / "result.json"
     if not p.is_file():
         raise FileNotFoundError(f"{run_dir}: no result.json (not fetched, or the workload wrote none)")
@@ -63,6 +70,8 @@ def load(run_dir: Path) -> dict[str, Any]:
 
 
 def flatten(d: Any, prefix: str = "") -> dict[str, Any]:
+    """A nested dict as one level, each value under its dotted path; an empty dict is a value."""
+
     if not isinstance(d, dict):
         return {prefix.rstrip("."): d}
     out: dict[str, Any] = {}
@@ -76,6 +85,11 @@ def flatten(d: Any, prefix: str = "") -> dict[str, Any]:
 
 
 def judge(base_dir: Path, cand_dir: Path, allow: list[str]) -> dict[str, Any]:
+    """The report on a baseline and a candidate: their identity fields side by side, the fields that refuse the pair
+    (``refused``; a field named in ``allow`` may differ), the warnings, and each result's problems under the contract.
+    Where nothing refuses, also every field of the fingerprint that differs and each measurement of either result, with its
+    ratio, candidate / baseline, where both give a number in one unit."""
+
     rb, rc = load(base_dir), load(cand_dir)
     fb, fc = dict(rb.get("workload_fingerprint") or {}), dict(rc.get("workload_fingerprint") or {})
     refused = contract.incomparable(fb, fc, allow)
@@ -133,6 +147,8 @@ def _fmt(v: Any) -> str:
 
 
 def render(rep: dict[str, Any]) -> str:
+    """A report of `judge` as the text the command prints: no measurement and no ratio for a refused pair."""
+
     lines = [f"baseline   {rep['baseline']['id']}  {rep['baseline']['dir']}", f"candidate  {rep['candidate']['id']}  {rep['candidate']['dir']}", ""]
     lines.append("[identity]  the fields two results must share before a number is compared")
     for row in rep["identity"]:
@@ -168,6 +184,8 @@ def render(rep: dict[str, Any]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the command.  0: judged; `EX_REFUSED`: the pair is refused; 1: a run could not be read."""
+
     ap = argparse.ArgumentParser(prog="verity bench numerical judge", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("baseline")
