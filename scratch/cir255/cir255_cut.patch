@@ -1,0 +1,37 @@
+diff --git a/tools/verity/circuit_check/src/circuit_check/heavy.json b/tools/verity/circuit_check/src/circuit_check/heavy.json
+index 393310e919..9135476d36 100644
+--- a/tools/verity/circuit_check/src/circuit_check/heavy.json
++++ b/tools/verity/circuit_check/src/circuit_check/heavy.json
+@@ -15,7 +15,6 @@
+  "MhcPreBroadcast_v2{HC=2,H=64,NS=1,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": 7.9,
+  "NetworkHidingRead_v1{N_BITS=1584,D=2}": 6.48,
+  "PouwH1Window_v3{TILES=((64,PouwH1WindowTile_v1{UNIT=PouwH1TileZy_v1{TILE=PouwH1Tile_v1{EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2},R=4,C=8,PAIRS=((0,0),(0,1),(0,2),(0,3),(0,4),(0,5),(0,6),(0,7),(1,0),(1,1),(1,2),(1,3),(1,4),(1,5),(1,6),(1,7),(2,0),(2,1),(2,2),(2,3),(2,4),(2,5),(2,6),(2,7),(3,0),(3,1),(3,2),(3,3),(3,4),(3,5),(3,6),(3,7))}},K=64})),LINEARS=(('q_proj',64,16),('k_proj',64,8)),CALLS=(('q_proj',0),('k_proj',0),('q_proj',1),('k_proj',1)),M=4,PREFIX=''}": 5.62,
+- "verity.definitions.registry.dsa_topk_reads.circuit-check#_model_roots:DsaPositionsMerge_v1-served": 30.96,
+  "verity.definitions.registry.boolean_sigma.circuit-check#_boolean_roots": 23.85,
+  "verity.definitions.ops.boolean.rmsnorm.circuit-check#_boolean_roots": 23.37,
+  "verity.definitions.ops.boolean.rmsnorm.circuit-check#_chunk_sums_roots": 21.03,
+diff --git a/verity/definitions/registry/dsa_topk_reads.circuit-check.py b/verity/definitions/registry/dsa_topk_reads.circuit-check.py
+index 689887f02b..8a0c979d76 100644
+--- a/verity/definitions/registry/dsa_topk_reads.circuit-check.py
++++ b/verity/definitions/registry/dsa_topk_reads.circuit-check.py
+@@ -21,8 +21,10 @@ RANGES = {
+ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
+     """The index units at small statics (a first block and one from AT, the merge of one list and of three, chunks of two of
+     four slots and of five, a slot of four and of five), the long row of 12 keys (its mask whole, so one block), two reads of
+-    a 16-row table, and the merge, chunk and slot the longest row calls (8 blocks, 2,048 slots in chunks of 32, N 2^17): the
+-    merge and the chunk over `targets.MAX_GATES`, each held to its digest pin."""
++    a 16-row table, and the chunk and slot the longest row calls (2,048 slots in chunks of 32, N 2^17): the chunk over
++    `targets.MAX_GATES`, held to its digest pin.  The merge it calls (8 blocks of 2,048 slots) is one traced circuit, every gate
++    built and described, so it is checked at its spot in `RANGES` (``--ranges``) and not in ``--all``, which checks
++    `DsaPositionsMerge_v2` at those statics (`_merge_calls_roots`)."""
+     from verity.circuits.defs import bind
+     from verity.commitments.gates.embedding import read
+     from verity.definitions.registry import dsa_topk_reads as R
+@@ -32,7 +34,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
+         ("DsaMaskPositions_v1-at", lambda: bind(R.DsaMaskPositions, N=6, AT=8, K=4)),
+         ("DsaPositionsMerge_v1", lambda: bind(R.DsaPositionsMerge, M=1, K=4)),
+         ("DsaPositionsMerge_v1-blocks", lambda: bind(R.DsaPositionsMerge, M=3, K=4)),
+-        ("DsaPositionsMerge_v1-served", lambda: bind(R.DsaPositionsMerge, M=8, K=2048)),
+         ("DsaPositionsChunk_v1", lambda: bind(R.DsaPositionsChunk, K=4, W=2)),
+         ("DsaPositionsChunk_v1-odd", lambda: bind(R.DsaPositionsChunk, K=5, W=2)),
+         ("DsaPositionsChunk_v1-served", lambda: bind(R.DsaPositionsChunk, K=2048, W=R.CHUNK)),
