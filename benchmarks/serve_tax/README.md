@@ -24,6 +24,9 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
+| `prod` | stock vLLM at production settings: vLLM's recipe for GLM-5.3 on eight H200s as the pin spells it (`serve_tax.PROD`) | — |
+| `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
+| `prod-record` | the scheduler's step trace on production settings, as `record` is on `compiled` | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -219,6 +222,49 @@ row is also a measurement of its own, named `prefix`, with no target and no verd
 requests are sent as they arrive, and its figures' readings are beside it (`cost`, `kept_up`, `why`, `tokens`,
 `ttft`, `itl_p99`). A job in which a load of the
 number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
+
+## Production settings and the agentic load
+
+`prod` is stock vLLM as vLLM's own recipe for GLM-5.3 on eight H200s starts it
+([recipes.vllm.ai/zai-org/GLM-5.3](https://recipes.vllm.ai/zai-org/GLM-5.3), the FP8 line), and the arms whose parent
+it is add our changes to that engine, so their cost is over stock at the same settings (`serve_tax.root_of`:
+`serve_tax.py cost --arm prod-record` is over `prod`, its noise floor `prod-again`'s). The recipe's settings the arm
+holds are `serve_tax.PROD`: prefix caching on, `--kv-cache-dtype fp8`, `--gpu-memory-utilization 0.95`, speculative
+decoding by the checkpoint's own MTP layer (`--speculative-config`, method `mtp`, five draft tokens a step), the
+`glm47` tool-call and reasoning parsers with `--enable-auto-tool-choice`; with every arm's `--max-num-seqs 256`,
+`--tensor-parallel-size 8` and vLLM's own 8,192 tokens a step, which are the recipe's too. The arm serves GLM-5.3 and
+refuses another model. Where it differs from the recipe, and why:
+
+| the recipe | `prod` | why |
+|---|---|---|
+| a vLLM release that knows GLM-5.3's tokenizer mode, `--tokenizer-mode glm5_next` | the adapter's pin, the tokenizer mode vLLM picks | the pin has no such mode, and the recipe names `auto` for a build without it. The loads send token ids, so no arm tokenizes a prompt |
+| the Rust front end (`VLLM_USE_RUST_FRONTEND=1`, `vllm serve`) | vLLM's Python OpenAI server (`vllm.entrypoints.openai.api_server`) | every arm starts that one module, which is where an arm's plugins load, so both sides of a cost have the same front end |
+| `--max-model-len` unset: the largest context the cards hold | the load's context limit (`MAX_MODEL_LEN`, 131,072 for `agentic`) | a cost is of two engines with one limit, which the job names; the model's own limit is `agentic-full`'s |
+| no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
+| requests through the chat endpoint, text in and out | `/v1/completions` with token ids, each request decoding to its recorded length | every arm then serves the same tokens whatever it generates; the parsers are loaded and parse nothing |
+
+The loads `agentic` and `agentic-full` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
+(`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id for
+each 64-token block of its prompt, with no token and no text. vLLM's client draws a block's tokens from its id
+(its `timed_trace` dataset), so a turn's prompt begins with the tokens of the turn before it and the engine's prefix
+cache serves them; the tokens are synthetic, so a draft token is accepted less often than on text. A session is its
+own chain of requests, without the groups its subagents sent, up to the first request that does not fit the load's
+context with its output: 131,072 tokens for `agentic`, the model's own limit for `agentic-full`
+(`serve_tax.session_lines`). The load is closed-loop. Its rung is its users (`--loads agentic=4`), each a client of its
+own with one request in flight that sends its sessions' turns in order, each once the turn before has ended, so no
+turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is the turns each user sends in a
+pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users' sessions must fit the engine's KV
+pool together, or the prefix cache evicts what a later turn repeats.
+
+`cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock engine with its 95% interval
+over reps, the noise floor (the second lifetime's cost over the first), and the verdict against `--target` or
+`serve_tax.SESSION_TARGET`, the interval widened by the noise floor. It says the share of prompt tokens the load
+plans to repeat beside the share each side's prefix cache served, and gives no verdict where a side left a request
+unserved or the two caches served different shares in a rep: the sides then did not do the same work.
+
+~~~text
+bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-again" --loads agentic=4 --reps 6
+~~~
 
 ## Running it
 

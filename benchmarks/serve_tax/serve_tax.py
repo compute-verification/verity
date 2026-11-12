@@ -11,7 +11,7 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py dataset LOAD [--fetch]
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
-    serve_tax.py cost DIR... [--arm ARM] [--reference compiled] [--target PERCENT] [--json] [--out DIR [--result]]
+    serve_tax.py cost DIR... [--arm ARM] [--reference ARM] [--target PERCENT] [--json] [--out DIR [--result]]
     serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
     serve_tax.py fit ARM_DIR --budget-s S --reps N
     serve_tax.py checkpoint --model-id ID
@@ -64,6 +64,11 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
   is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
+- ``prod``: stock vLLM at production settings, vLLM's own recipe for GLM-5.3 on eight H200s as the pin spells it
+  (`PROD`): prefix caching, an FP8 KV cache, speculative decoding by the checkpoint's own MTP layer, and the model's
+  parsers. It has no parent: the arms on it are costed over it, at the same settings (`root_of`);
+- ``prod-again``: ``prod`` in a second server lifetime, the noise floor of a cost over ``prod``;
+- ``prod-record``: ``prod`` with the scheduler's step trace, as ``record`` is ``compiled`` with it.
 
 An arm is data (`Arm`): its server flags, the changes of `servetax_plugin` it turns on, the other vLLM general plugins
 its server loads, its environment and its boundary commitment's object. What an arm keeps on the node and never under
@@ -114,6 +119,13 @@ one arm from two jobs, each a load of its own, are one arm (`joined`), so a load
 ``--result`` writes the run's result.json too (`result_of`): each load's cost a measurement, and the number one under
 the model's metric id once every load has run.
 
+A sessions load (`Load.sessions`: ``agentic``, ``agentic-full``) is an agent's recorded sessions (`session_lines`),
+each a chain of requests of which each begins as the one before it does. Its rung is its users: each is a client of
+its own with one request in flight, which sends its sessions' turns in order, each once the turn before has ended, so
+a turn finds its session's prefix computed (`drive_bench`, `merged`). `cost` on such a load is `session_cost`: the
+arm's cost over the stock engine it is made from, with its interval, its noise floor and its verdict against
+`SESSION_TARGET`.
+
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
 requests a second that met the SLO (TTFT at most ``--slo-ttft-s`` and time per output token after the first at most
@@ -141,6 +153,7 @@ import tempfile
 import time
 import urllib.request
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -199,6 +212,15 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
+#: production settings: what vLLM's own recipe for GLM-5.3 on eight H200s adds to its serve line, as the pin spells it:
+#: prefix caching (the engine's default, said), an FP8 KV cache, 95% of each card's memory, speculative decoding by the
+#: checkpoint's own MTP layer at five draft tokens a step, and the model's tool-call and reasoning parsers. The README
+#: lists where an arm of these differs from the recipe, each with its reason
+PROD = ("--enable-prefix-caching", "--kv-cache-dtype", "fp8", "--gpu-memory-utilization", "0.95",
+        "--speculative-config", '{"method": "mtp", "num_speculative_tokens": 5}',
+        "--tool-call-parser", "glm47", "--reasoning-parser", "glm47", "--enable-auto-tool-choice")
+#: the model `PROD` is the recipe of: an arm that holds it serves no other (`check_model`)
+PROD_MODEL = "glm53"
 ARMS = {
     "compiled": Arm(None, "stock vLLM, compiled (torch.compile, CUDA graphs)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
@@ -237,6 +259,10 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
+    "prod": Arm(None, "stock vLLM at production settings: vLLM's recipe for the model on these cards (PROD)", PROD),
+    "prod-again": Arm("prod", "stock vLLM at production settings in a second server lifetime: what two starts of that "
+                      "engine differ by", PROD),
+    "prod-record": Arm("prod", "production settings + the scheduler's step trace (StepTrace)", PROD, plugin=("record",)),
 }
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
 #: what a part of a model's target (`Part`) is of
@@ -249,6 +275,23 @@ CHANGES: dict[str, Callable[[Arm], bool]] = {
     "admission on the certified tick": lambda a: a.tick,
     "the edge snapshot": lambda a: a.edges,
 }
+
+
+def root_of(arm: str) -> str:
+    """The stock engine an arm is made from: the arm its parents lead to (itself where it has none), which its cost
+    is over. An arm this file doesn't define is costed over `REFERENCE`."""
+    if arm not in ARMS:
+        return REFERENCE
+    while ARMS[arm].parent is not None:
+        arm = ARMS[arm].parent
+    return arm
+
+
+def check_model(arm: str, model_id: str | None) -> None:
+    """Refuse an arm of production settings (`PROD`) for a model they are not the recipe of."""
+    if ARMS[arm].args[:len(PROD)] == PROD and model_id != PROD_MODEL:
+        raise SystemExit(f"arm {arm} holds vLLM's recipe for {PROD_MODEL} (PROD), and the model is {model_id or 'not named'}: "
+                         f"serve it with --model-id {PROD_MODEL}")
 
 
 def changes_of(arm: str) -> list[str]:
@@ -756,8 +799,10 @@ class Load:
     next when one ends); the context limit its requests fit, which the engines' is at least; its dataset's file, where
     it is one; the bounds of the model's SLO its goodput counts against, by the client's names; its requests, where
     they are planned one by one (`Planned`; the client's file is written from them, `write_trace`, or from the
-    table ``--dataset NAME=FILE`` gives, `read_plan`); and whether its cost enters the number (`cost_report`), which a
-    load that repeats a prefix never does."""
+    table ``--dataset NAME=FILE`` gives, `read_plan`); whether its cost enters the number (`cost_report`), which a
+    load that repeats a prefix never does; and whether its requests are sessions' (`session_lines`, from its file):
+    its rung is then its users, each a client of its own that holds one request in flight and sends its sessions'
+    turns in order, and its prompts are the turns each user sends in a pass."""
     what: str
     dataset: tuple[str, ...]
     prompts: int
@@ -767,6 +812,7 @@ class Load:
     slo: tuple[str, ...] = ("ttft", "tpot")
     plan: tuple[Planned, ...] = ()
     number: bool = True
+    sessions: bool = False
 
 
 #: two prompts near a 131,072-token context limit, each sent once and then again with another ending: the second of
@@ -777,13 +823,27 @@ PAIRS = (Planned(0.0, 130808, 256), Planned(0.0, 130807, 256, after=0, blocks=20
          Planned(0.0, 129016, 256), Planned(0.0, 129016, 256, after=2, blocks=2015))
 
 
+#: the flags of vLLM's client's timed_trace dataset: a file of lengths and block ids, a block of `BLOCK` tokens
+TIMED_TRACE = ("--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", str(BLOCK))
+#: the sessions loads (`Load.sessions`): the agent's sessions cut at the context the serve holds today, and whole
+AGENTIC, AGENTIC_FULL = "agentic", "agentic-full"
+#: SemiAnalysis's AgentX traces (Apache-2.0): recorded sessions of a coding agent, a line a session, each request its
+#: prompt's and its output's tokens and an id for each block of `BLOCK` prompt tokens, with no token and no text
+AGENTX = Dataset("semianalysisai/cc-traces-weka-062126", "23f152f6f0f9399a85901b89a6458def0ef16729", "traces.jsonl",
+                 1847151435, "e9737b2661bf90958672b5aa7b133bf009bd2642d43fb3c22060e85b9f15a4ac"
+                 "ed11b887571578abdfdc7b14df3b72a0825440628437dad16701697e48386470")
+#: the fewest turns a session is sent with (`session_lines`): its opening request and the first to carry its context
+SESSION_TURNS = 2
+
+
 #: chat: the load of vLLM's standing serving tests, ShareGPT's first turns, each decoding its recorded answer's length
 #: (the client keeps prompts of at most 1,024 tokens, 2,048 with the output). long: long context, the client's synthetic
 #: dataset at one long length until a plan of recorded long requests replaces it; its first token takes seconds on any
 #: engine, so its goodput counts the time per output token alone. prefix: the load that repeats a prefix, which chat
 #: and long do not; its cost is the row under the number and never enters it. One request in flight, so each second
 #: request starts once the prompt it repeats is computed; from a table of its own (``--dataset prefix=FILE``), its
-#: requests leave as they arrive instead (`ARRIVING`).
+#: requests leave as they arrive instead (`ARRIVING`). agentic and agentic-full: sessions (`Load.sessions`), which
+#: repeat most of every prompt; a cost on them is `session_cost` and never enters the number.
 LOADS = {
     "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
                  ("--dataset-name", "sharegpt"), 200, (4, 8, 12, 16, 24, 32, 48), 4096,
@@ -795,9 +855,16 @@ LOADS = {
                  ("--dataset-name", "random", "--random-input-len", "8192", "--random-output-len", "128"), 24,
                  (1, 2, 4, 8), 16384, slo=("tpot",)),
     PREFIX: Load("two prompts near the context limit, each sent again with another ending, of synthetic token ids "
-                 "(vLLM's timed_trace dataset)",
-                 ("--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", str(BLOCK)),
+                 "(vLLM's timed_trace dataset)", TIMED_TRACE,
                  len(PAIRS), (1,), 131072, slo=("tpot",), plan=PAIRS, number=False),
+    AGENTIC: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, cut where a "
+                  "request passes 131,072 tokens, of synthetic token ids (SemiAnalysis's AgentX traces; vLLM's "
+                  "timed_trace dataset)", TIMED_TRACE, 24, (4,), 131072, AGENTX, slo=("tpot",), number=False,
+                  sessions=True),
+    AGENTIC_FULL: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, whole "
+                       "up to the model's own context limit, of synthetic token ids (SemiAnalysis's AgentX traces; "
+                       "vLLM's timed_trace dataset)", TIMED_TRACE, 24, (1,), 1048576, AGENTX, slo=("tpot",),
+                       number=False, sessions=True),
 }
 
 
@@ -857,6 +924,60 @@ def write_trace(f: Path, lines: Sequence[dict]) -> str:
     """Write a planned load's file for vLLM's client (`trace_lines`) at ``f``: its path."""
     f.write_text("".join(json.dumps(x) + "\n" for x in lines))
     return str(f)
+
+
+def session_lines(f: Path, users: int, turns: int, context: int) -> list[dict]:
+    """A sessions load's requests from its corpus ``f`` (`AGENTX`'s form: a line a session, its requests in order,
+    each with its prompt's and its output's tokens and an id for each block of its prompt), as vLLM's client's
+    timed_trace dataset reads them (`trace_lines`'s names), each with its ``user``, ``turns`` a user. A session is
+    its own chain of requests, without the groups its subagents sent, up to the first request that does not fit
+    ``context`` with its output; one with fewer than `SESSION_TURNS` such turns is left out. Sessions are dealt in
+    the file's order, each to the user with the fewest turns so far, until every user has ``turns``, and a user's
+    last session is cut there. A block's id is its session's, so two sessions share no block and a turn repeats only
+    its own session's earlier prompts. Refused where the corpus is not in blocks of `BLOCK` tokens or holds too few
+    sessions."""
+    queues: list[list[dict]] = [[] for _ in range(users)]
+    with open(f) as lines:
+        for k, text in enumerate(lines):
+            if all(len(q) >= turns for q in queues):
+                break
+            if not text.strip():
+                continue
+            s = json.loads(text)
+            if s.get("block_size") != BLOCK:
+                raise SystemExit(f"{f}: line {k + 1}: a session in blocks of {s.get('block_size')} tokens, not {BLOCK}")
+            own = []
+            for r in s["requests"]:
+                if "requests" in r:
+                    continue
+                if not (r["in"] > 0 and r["out"] > 0 and r["in"] + r["out"] <= context):
+                    break
+                own.append({"timestamp": 0.0, "input_length": r["in"], "output_length": r["out"],
+                            "hash_ids": [k << 32 | h for h in r["hash_ids"]]})
+            if len(own) >= SESSION_TURNS:
+                min(queues, key=len).extend(own)
+    if any(len(q) < turns for q in queues):
+        raise SystemExit(f"{f}: too few sessions for {users} users of {turns} turns each within a context of {context:,} "
+                         f"tokens: the shortest has {min(map(len, queues))}")
+    return [{**x, "user": j} for j, q in enumerate(queues) for x in q[:turns]]
+
+
+def user_files(dataset: str, users: int) -> list[str]:
+    """A sessions load's file (`session_lines`) as its first ``users`` users' own files, beside it and written once:
+    a client reads one user's requests, in the user's order. Refused where the file holds fewer users."""
+    out, by = [], None
+    for j in range(users):
+        f = Path(dataset).with_name(f"{Path(dataset).name.removesuffix('.jsonl')}.user-{j}.jsonl")
+        if not f.exists():
+            if by is None:
+                by = {}
+                for x in map(json.loads, filter(str.strip, Path(dataset).read_text().splitlines())):
+                    by.setdefault(x["user"], []).append(x)
+            if j not in by:
+                raise SystemExit(f"{dataset} holds {len(by)} users' requests, and the pass is of {users}")
+            write_trace(f, by[j])
+        out.append(str(f))
+    return out
 
 
 def read_plan(name: str, f: Path) -> tuple[Planned, ...]:
@@ -953,14 +1074,18 @@ def client_files(datasets: dict[str, str], traces: dict[str, str]) -> dict[str, 
     return {**datasets, **traces}
 
 
-def passes_of(loads: dict[str, tuple[int, ...]],
-              datasets: dict[str, str]) -> tuple[dict[str, tuple[int, ...]], dict[str, list[dict]]]:
+def passes_of(loads: dict[str, tuple[int, ...]], datasets: dict[str, str],
+              sizes: dict[str, int] | None = None) -> tuple[dict[str, tuple[int, ...]], dict[str, list[dict]]]:
     """``loads`` with the rungs their passes are sent at, and each planned load's lines (`trace_lines`): a planned
     load whose table is given (``datasets``, `parse_datasets`) is sent as its requests arrive (`ARRIVING`,
-    `read_plan`); one with none, at its own rung from its own plan."""
+    `read_plan`); one with none, at its own rung from its own plan. A sessions load's lines are its corpus's
+    (`session_lines`), for the users of its highest rung, each sending the load's turns or ``sizes``'s
+    (``--pass-prompts``), at its own rungs."""
     lines = {n: trace_lines(read_plan(n, Path(datasets[n])) if n in datasets else LOADS[n].plan)
              for n in loads if LOADS[n].plan}
-    return {n: (ARRIVING,) if n in lines and n in datasets else rungs for n, rungs in loads.items()}, lines
+    held = {n: session_lines(Path(datasets[n]), max(loads[n]), (sizes or {}).get(n) or LOADS[n].prompts, LOADS[n].context)
+            for n in loads if LOADS[n].sessions}
+    return {n: (ARRIVING,) if n in lines and n in datasets else rungs for n, rungs in loads.items()}, lines | held
 
 
 def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: float | None = None,
@@ -968,7 +1093,11 @@ def pass_prompts(load: Load, rung: int, lines: Sequence[dict] | None, warm_s: fl
     """The prompts a pass of ``load`` at ``rung`` sends: ``prompts`` (``--pass-prompts``, `parse_pass_prompts`) or the
     load's, the same at every rung, or every line of its file where they leave as they arrive (`ARRIVING`). A warm-up
     (``warm_s``) sends two for each request held in flight, the load's own prompts at most, or the lines that arrive
-    in its first ``warm_s`` seconds, one at least."""
+    in its first ``warm_s`` seconds, one at least. A sessions load's are the turns each of its users sends: a
+    warm-up's are `SESSION_TURNS`, each user's first session's opening and the first prompt that carries its
+    context."""
+    if load.sessions:
+        return (prompts or load.prompts) if warm_s is None else min(SESSION_TURNS, prompts or load.prompts)
     if rung == ARRIVING:
         return len(lines) if warm_s is None else max(1, sum(x["timestamp"] <= warm_s for x in lines))
     return (prompts or load.prompts) if warm_s is None else min(load.prompts, prompts or load.prompts, 2 * rung)
@@ -1047,10 +1176,11 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
     order, each prompt as the token ids the client draws for its blocks (`CLIENT_ENV`), so the server counts each
     prompt's planned length: held at ``rung`` in flight whatever the file's arrivals (``--no-self-timed``), or, at
     `ARRIVING`, each sent at its arrival after the pass starts, which is the client's way with such a file, with no
-    bound on the requests in flight."""
+    bound on the requests in flight. A sessions load's client is one user's (`drive_bench`): its file the user's own,
+    ``rung`` 1."""
     slo = dict(zip(("ttft", "tpot"), model.slo))
-    held = [] if rung == ARRIVING else [*(["--no-self-timed"] if load.plan else []), "--request-rate", "inf",
-                                        "--max-concurrency", str(rung)]
+    held = [] if rung == ARRIVING else [*(["--no-self-timed"] if load.plan or load.sessions else []),
+                                        "--request-rate", "inf", "--max-concurrency", str(rung)]
     return [sys.executable, "-m", "vllm.entrypoints.cli.main", "bench", "serve", "--backend", "openai",
             "--base-url", f"http://127.0.0.1:{port}", "--endpoint", "/v1/completions",
             "--model", model.served, "--tokenizer", str(checkpoint),
@@ -1064,24 +1194,62 @@ def bench_argv(model: Model, checkpoint: Path, port: int, load: Load, rung: int,
             "--save-result", "--result-dir", str(d), "--result-filename", RESULT]
 
 
+def merged(results: Sequence[dict]) -> dict:
+    """The results vLLM's clients saved for one pass of a sessions load, a client a user, as one in the client's keys
+    (`bench_metrics`): requests and tokens summed, and each rate the sum of the users' rates. A user's rate is of its
+    own requests over its own time, from its first send to its last answer, so the seconds a client takes to start
+    are in no rate, and the sum is what the engine serves with every user in flight. ``duration`` is the longest
+    user's, ``met`` the requests within the SLO; it has no median or percentile, which the users' own don't give."""
+    def total(key: str) -> float:
+        return sum(r[key] for r in results)
+
+    good = [r.get("request_goodput") for r in results]
+    return {"users": len(results), "completed": total("completed"), "failed": sum(int(r.get("failed") or 0) for r in results),
+            "total_output_tokens": total("total_output_tokens"), "total_input_tokens": total("total_input_tokens"),
+            "duration": max(r["duration"] for r in results), "output_throughput": total("output_throughput"),
+            "total_token_throughput": total("total_token_throughput"), "request_throughput": total("request_throughput"),
+            "request_goodput": None if None in good else sum(good),
+            "met": None if None in good else sum(round(g * r["duration"]) for g, r in zip(good, results))}
+
+
 def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int, tag: str, d: Path,
                 dataset: str | None = None, seed: int = 0, lib: object | None = None, prompts: int | None = None,
                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> dict:
     """One pass sent by vLLM's client (`bench_argv`): its output in d/bench.log, the result it saved in d/result.json,
-    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved)."""
+    and d/meta.json in `drive_load`'s form (a request the client counted failed is unfinished and unserved). A pass
+    of a sessions load is sent by ``rung`` clients at once, a client a user (`user_files`), each with one request in
+    flight and ``prompts`` turns to send, its log and result in d/user-<j>/: d/result.json is theirs as one
+    (`merged`)."""
     d.mkdir(parents=True, exist_ok=True)
-    argv = bench_argv(model, checkpoint, port, load, rung, d, tag, dataset, prompts, seed)
+    if load.sessions:
+        jobs = [(d / f"user-{j}", f"{tag}-u{j}", 1, f) for j, f in enumerate(user_files(dataset, rung))]
+    else:
+        jobs = [(d, tag, rung, dataset)]
+    argvs = [bench_argv(model, checkpoint, port, load, c, u, name, f, prompts, seed) for u, name, c, f in jobs]
+
+    def client(k: int) -> int:
+        jobs[k][0].mkdir(parents=True, exist_ok=True)
+        with open(jobs[k][0] / "bench.log", "wb") as log:
+            return run(argvs[k], stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
+
     t, t0 = clock(), now()
-    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy, open(d / "bench.log", "wb") as log:
-        rc = run(argv, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **CLIENT_ENV}).returncode
+    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy:
+        if len(jobs) == 1:
+            rcs = [client(0)]
+        else:
+            with ThreadPoolExecutor(len(jobs)) as pool:
+                rcs = list(pool.map(client, range(len(jobs))))
     wall = clock() - t
-    if rc or not (d / RESULT).exists():
-        raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {d / 'bench.log'}")
+    for (u, *_), rc in zip(jobs, rcs):
+        if rc or not (u / RESULT).exists():
+            raise RuntimeError(f"vllm bench serve exited {rc}{'' if rc else ' and saved no result'}: {u / 'bench.log'}")
+    if load.sessions:
+        (d / RESULT).write_text(json.dumps(merged([json.loads((u / RESULT).read_text()) for u, *_ in jobs]), indent=1))
     r = json.loads((d / RESULT).read_text())
     failed = int(r.get("failed") or 0)
     meta = {"tag": tag, "client": BENCH, "concurrency": rung, "rate": None, "requests": r["completed"] + failed,
-            "unfinished": failed, "unserved": failed, "wall_s": round(wall, 3), "t0_unix": t0, "argv": argv[1:],
+            "unfinished": failed, "unserved": failed, "wall_s": round(wall, 3), "t0_unix": t0, "argv": argvs[0][1:],
             "gpu": busy.result()}
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
     return meta
@@ -1090,10 +1258,10 @@ def drive_bench(port: int, model: Model, checkpoint: Path, load: Load, rung: int
 def bench_metrics(r: dict) -> dict:
     """One pass's metrics from the result vLLM's client saved, under `load_metrics`'s names: the client's own figures
     (its goodput, throughputs, token counts, medians and P99s), none recomputed here; the prompt tokens a second are
-    its total throughput less its output throughput."""
+    its total throughput less its output throughput. A sessions load's result is its users' as one (`merged`)."""
     sent = r["completed"] + int(r.get("failed") or 0)
     good = r.get("request_goodput")
-    met = round(good * r["duration"]) if good is not None else None
+    met = r["met"] if "met" in r else round(good * r["duration"]) if good is not None else None
 
     def s(key: str) -> float | None:
         return r[key] / 1e3 if r.get(key) is not None else None
@@ -1231,6 +1399,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
     signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
     arm, model = ARMS[a.arm], MODELS[a.model_id]
+    check_model(a.arm, a.model_id)
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1244,7 +1413,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
         loads = parse_loads(a.loads)
         datasets = parse_datasets(a.dataset, loads)
         sizes = parse_pass_prompts(a.pass_prompts, loads)
-        loads, lines = passes_of(loads, datasets)
+        loads, lines = passes_of(loads, datasets, sizes)
         traces = {n: write_trace(out / f"{n}.trace.jsonl", x) for n, x in lines.items()}
         sent = client_files(datasets, traces)
         context = context_of(loads, a.max_model_len)
@@ -1289,7 +1458,8 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
                              "revision": LOADS[n].file.revision}
                          for n, f in (datasets if bench else {}).items() if LOADS[n].file},
             "planned": {n: {**planned(lines[n]), "sha256": file_digest(Path(f)),
-                            **({"table_sha256": file_digest(Path(datasets[n]))} if n in datasets else {})}
+                            **({"users": max(loads[n])} if LOADS[n].sessions else {}),
+                            **({"table_sha256": file_digest(Path(datasets[n]))} if n in datasets and LOADS[n].plan else {})}
                         for n, f in traces.items()},
             "commit": source_commit(),
             "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
@@ -2007,6 +2177,95 @@ def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
             "rung": rung, **over(arm), "cache_off": over(CACHE_OFF) if arm != CACHE_OFF else None}
 
 
+#: the most a production serve with our changes may cost over stock at the same settings and load, in percent
+SESSION_TARGET = 1.0
+#: a cost report's ``metric`` where it is a sessions load's (`session_cost`)
+SESSION_COST = "session_cost"
+
+
+def session_cost(arms: list[dict], arm: str, reference: str, target: float | None = None) -> dict | None:
+    """The cost of ``arm`` over ``reference`` on the sessions load both served (`Load.sessions`), from arms' metrics
+    (one arm's directories joined: `joined`), every figure in percent: the reference's output tokens a second over
+    the arm's, less one, at the users both served, with its 95% interval over reps (`serving_cost`). Its verdict is
+    against ``target`` (`SESSION_TARGET` where none is given), the interval widened by the noise floor: the size of
+    the cost of another arm that starts the reference's engine (`same_engine`), where one served the load. Beside
+    them: the share of its prompt tokens the load plans to repeat (`planned`), the share each side's prefix cache
+    served in fact, from the engine's own counters, and whether each side served every request of every rep.
+    ``same_work`` says whether both did and their caches served the same share of the same prompts in every rep:
+    where it is false the two sides did not do the same work, and the verdict is "cannot tell". None where ``reference`` served no sessions
+    load; refused where ``arm`` did not serve it, or served another plan."""
+    by = joined(arms)
+    if reference not in by:
+        raise SystemExit(f"cost: no directory of arm {reference} (given: {', '.join(by) or 'none'})")
+    ref = by[reference]
+    load = next((n for n in bench_loads(ref) if LOADS[n].sessions), None)
+    if load is None:
+        return None
+    c = serving_cost(ref, by[arm], load) if arm in by else None
+    if c is None:
+        raise SystemExit(f"cost: {reference} served load {load} and {arm} did not, at no users both served (given: "
+                         f"{', '.join(by)})")
+    plan = (ref.get("planned") or {}).get(load)
+    if plan is None or (by[arm].get("planned") or {}).get(load) != plan:
+        raise SystemExit(f"cost: {reference} and {arm} served load {load} from different plans, or a directory names "
+                         "none (meta.json: planned)")
+    rung = c["rung"]
+    twin = next((x for x in by.values() if x["arm"] not in (reference, arm) and same_engine(x["arm"], reference)
+                 and rung in bench_rungs(x, load)), None)
+    noise = serving_cost(ref, twin, load, rung) if twin else None
+    floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
+    a, b = ({r["rep"]: r for r in bench_rungs(x, load)[rung]} for x in (ref, by[arm]))
+    reps = sorted(set(a) & set(b))
+    sent = rung * plan["requests"] // plan["users"]
+
+    def side(rs: dict[int, dict], of: dict) -> dict:
+        cached = [rs[k].get("prompt_cached_share") for k in reps]
+        return {**of, "cached_share": None if None in cached else _pct(statistics.fmean(cached)),
+                "served_all": all(rs[k].get("ok") == rs[k].get("sent") == sent for k in reps)}
+
+    sa, sb = side(a, c["reference"]), side(b, c["arm"])
+    cached = [(a[k].get("prompt_cached_share"), b[k].get("prompt_cached_share")) for k in reps]
+    same = sa["served_all"] and sb["served_all"] and all(x is not None and x == y for x, y in cached)
+    target = SESSION_TARGET if target is None else target
+    of = {n: by[n]["of"][load] for n in (reference, arm)}
+    return {"value": _pct(c["value"]), "unit": UNIT, "commit": of[arm]["commit"], "run": of[arm]["run"],
+            "metric": SESSION_COST, "better": "lower", "target": target, "target_basis": "given",
+            "ci95": _cost(c)["ci95"], "verdict": verdict(c, target / 100, floor) if same else "cannot tell",
+            "same_work": same, "model": MODELS[by[arm]["model_id"]].served, "arm": arm, "reference": reference,
+            "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"],
+            "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
+            "noise_floor": {"arm": twin["arm"], **_cost(noise), "reps": noise["reps"]} if noise else None,
+            "sides": {"reference": sa, "arm": sb}, "vllm": by[arm].get("vllm"), "gpus": tp_size(MODELS[by[arm]["model_id"]]),
+            "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
+
+
+def session_text(r: dict) -> str:
+    """A sessions load's cost (`session_cost`) as text: the cost with its interval and verdict first."""
+    def rate(x: dict) -> str:
+        cached = "its prefix cache's share unread" if x["cached_share"] is None else \
+            f"{x['cached_share']:.2f}% of its prompt tokens from its prefix cache"
+        return (f"{x['arm']}: {x['output_tok_per_s']:,.1f} output tokens a second, {cached}, "
+                f"{'every request served' if x['served_all'] else 'NOT every request served'}")
+
+    n = r["noise_floor"]
+    plan = r["planned"]
+    lines = [
+        f"serving cost on load {r['load']}: {r['arm']} over {r['reference']}: {_c(r)} of stock's serving compute, "
+        f"{_reps(r['reps'])}, {r['users']} users; target {r['target']:g}%: {r['verdict']}",
+        f"  the load: {r['what']}; {plan['requests']:,} requests of {plan['prompt_tokens']:,} prompt tokens, "
+        f"{plan['repeated_share']:.2f}% of them planned to repeat",
+        "  noise floor: " + (f"{n['arm']} over {r['reference']}: {_c(n)}, {_reps(n['reps'])}; the verdict's interval is "
+                             "widened by its size" if n else
+                             f"not measured: no second lifetime of {r['reference']}'s engine served the load"),
+        *(f"  {rate(r['sides'][k])}" for k in ("reference", "arm")),
+        *([] if r["same_work"] else ["  the two sides did not do the same work (a request unserved, or their prefix "
+                                     "caches served different tokens in a rep): no verdict"]),
+        f"  {r['model']} on {r['gpus']} GPUs, vLLM {r['vllm']}; commit {r['commit']}, run {r['run']}; "
+        f"{r['reference']}: commit {r['reference_commit']}, run {r['reference_run']}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, target: float | None = None) -> dict:
     """The serving cost of ``arm`` over ``reference`` from arms' metrics (`arm_metrics`, one arm's directories joined:
     `joined`), every figure in percent: one cost a load both served by vLLM's client (`serving_cost`), the largest the
@@ -2321,7 +2580,14 @@ def result_of(r: dict) -> tuple[bool, str, dict, list[dict]]:
     its figures are then their readings (``tokens``, ``ttft``, ``itl_p99``), ``cost`` names the ones that are its
     cost and ``why`` says why (`prefix_row`); the
     number's entry carries it (``prefix``) with the number's label; where that load has not run there is no entry
-    under the metric's id either."""
+    under the metric's id either. A sessions load's report (`session_cost`) is one measurement under its load's
+    name, which stands where it has a value and both sides did the same work."""
+    if r["metric"] == SESSION_COST:
+        entry = {"name": r["load"], **{key: r[key] for key in ("value", "unit", "target", "target_basis", "better", "commit",
+                                                              "run", "ci95", "verdict", "what", "reps", "users")}}
+        what = {"benchmark": "serve_tax", "model": r["model"], "arm": r["arm"], "reference": r["reference"],
+                "loads": [r["load"]], "vllm": r["vllm"]}
+        return r["value"] is not None and r["same_work"], session_text(r).splitlines()[0], what, [entry]
     k, row = r["commitment"], r["prefix"]
     figures = [] if not row else [row["tokens"]] if row["cost"] == TOKENS else [row["ttft"], row["itl_p99"]]
     ok = (all(c["value"] is not None for c in r["loads"])
@@ -2526,8 +2792,9 @@ def main(argv: list[str] | None = None) -> int:
     co = sub.add_parser("cost", help="the serving cost of --arm over --reference from arms served by vLLM's client")
     co.add_argument("dirs", nargs="+", type=Path)
     co.add_argument("--arm", default=OURS)
-    co.add_argument("--reference", default=REFERENCE)
-    co.add_argument("--target", type=float, metavar="PERCENT", help="the most it may cost (default: the model's)")
+    co.add_argument("--reference", help="the arm it is costed over (default: the stock engine --arm is made from, root_of)")
+    co.add_argument("--target", type=float, metavar="PERCENT",
+                    help="the most it may cost (default: the model's; on a sessions load, SESSION_TARGET)")
     co.add_argument("--json", action="store_true", help="print the JSON object alone")
     co.add_argument("--out", type=Path, help="write serving_cost.json and serving_cost.txt there")
     co.add_argument("--result", action="store_true",
@@ -2585,6 +2852,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(f"--arms: {name!r} is not an arm ({', '.join(ARMS)})")
             if arm.tick or arm.sampling != "greedy" or arm.logprobs:
                 raise SystemExit(f"--arms: {name} needs the corpus client, not vLLM's")
+            check_model(name, a.model_id)
             if ("boundary_rows" in arm.plugin and not (a.boundary_rows or {}).get("check")
                     and not (a.model_id and MODELS[a.model_id].check)):
                 raise SystemExit(f"--arms: {name}'s boundary commitment needs a check template, and "
@@ -2593,15 +2861,16 @@ def main(argv: list[str] | None = None) -> int:
         context_of(loads, a.max_model_len)
         files = parse_datasets(a.dataset, loads, a.fetch)
         sizes = parse_pass_prompts(a.pass_prompts, loads)
-        loads, lines = passes_of(loads, files)
+        loads, lines = passes_of(loads, files, sizes)
         for n, rungs in loads.items():
             plan = planned(lines[n]) if n in lines else None
             arriving = rungs == (ARRIVING,)
             digest = (None if n not in files else f"SHA-512 {LOADS[n].file.sha512[:16]}" if LOADS[n].file else
                       f"SHA-256 {file_digest(Path(files[n]))[:16]}")
             print(f"[serve-tax] load {n}: {GIVEN if arriving else LOADS[n].what}; "
-                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n), prompts=sizes.get(n)):,} prompts a pass "
-                  f"{at_rung(ARRIVING) if arriving else 'at concurrency ' + ', '.join(map(str, rungs))}"
+                  f"{pass_prompts(LOADS[n], rungs[0], lines.get(n), prompts=sizes.get(n)):,} "
+                  f"{'turns a user' if LOADS[n].sessions else 'prompts'} a pass "
+                  f"{at_rung(ARRIVING) if arriving else ('of users ' if LOADS[n].sessions else 'at concurrency ') + ', '.join(map(str, rungs))}"
                   + (f" (--pass-prompts: the load's own are {LOADS[n].prompts:,})" if n in sizes else "")
                   + (f", from {files[n]} ({digest}...)" if digest else "")
                   + (f", {plan['repeated_tokens']:,} of their {plan['prompt_tokens']:,} prompt tokens repeated"
@@ -2611,16 +2880,21 @@ def main(argv: list[str] | None = None) -> int:
     slo = (a.slo_ttft_s, a.slo_tpot_s) if a.cmd != "cost" and a.slo_ttft_s and a.slo_tpot_s else None
     arms = [json.loads(d.read_text()) if d.is_file() else arm_metrics(d, slo) for d in a.dirs]
     if a.cmd == "cost":
-        rep = cost_report(arms, a.arm, a.reference, a.target)
+        reference = a.reference or root_of(a.arm)
+        rep = session_cost(arms, a.arm, reference, a.target)
+        text = session_text(rep) if rep else None
+        if rep is None:
+            rep = cost_report(arms, a.arm, reference, a.target)
+            text = cost_text(rep)
         if a.result and not a.out:
             raise SystemExit("cost --result: with --out DIR, where the report it cites is written")
         if a.out:
             a.out.mkdir(parents=True, exist_ok=True)
             (a.out / "serving_cost.json").write_text(json.dumps(rep, indent=1))
-            (a.out / "serving_cost.txt").write_text(cost_text(rep))
+            (a.out / "serving_cost.txt").write_text(text)
         if a.result:
             write_result(rep, a.out)
-        print(json.dumps(rep) if a.json else cost_text(rep), end="\n" if a.json else "")
+        print(json.dumps(rep) if a.json else text, end="\n" if a.json else "")
         return 0
     if a.cmd == "metrics":
         print("\n".join(json.dumps(x) for x in arms))
