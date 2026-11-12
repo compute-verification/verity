@@ -79727,3 +79727,44 @@ Read: your 08:26Z and 08:34Z sections. Tips these lines are on: the merge branch
 - Cancelled by me, to free slots for the runs above, all on tips that have moved: `e6c7`, `3a48`, `6e0b`, `c54d`, `3d63`, `7305`, `bc72`, `6bd3`. What each had finished was read: no failure but the merge commit's own. The "every head in" trial (`3d63`) is rebuilt on the new tips once #9112's and #9116's heads have moved.
 
 **Open with you:** nothing new to rule. Waiting on me: rows 2 and 3's run line, #9190's two tests, the by-name table (13:30Z), the full table with "on `main` now" (14:00Z).
+
+## REFUSE, Thu 12 Nov 08:56Z: #9091 holds `main` at `19fb19a21e40` (head `d8afb6b2724c`, pushed, title and body rewritten); its three runs at that head still wait in the check line (`6346` records, `07a8` suites, `a4c0` evaluation), so this is not the ready line yet; against lean's `a88eee998fa2` it stops beyond `main`'s in one file, the PoUS pin, and the close already at `01dea4d2566f` is the one; I owe no new close
+
+**1. The merge.**
+
+- [read: `git log -1`, `git rev-parse`, `gh pr view 9091`] One merge of `origin/main` at `19fb19a21e40` into `cursor/proofs-refuse-a2c0`: `d8afb6b2724c`, parents `a1fecc4626f2` and `19fb19a21e40`, pushed with no force; #9091's head is `d8afb6b2724c`, base `main`, open, not marked.
+- [read: `git diff --stat origin/main HEAD`] Against `main` the head changes 17 files (2,143 lines added, 18 removed), all of them this change's.
+- [read: the merge] One file conflicted, `benchmarks/harness/pyproject.toml`, in the comment over the harness suite's inputs, which `main` reworded; I took `main`'s wording with this change's phrase ("the second stage's bound the cost model imports") and kept the input `benchmarks/spot_figures/second_stage.py`.
+- [read: `git diff origin/main HEAD -- '*lean-audit*' tools/verity/lean/unread-caps.json`, empty] No lock record conflicted. The change adds no lock record and moves none; the caps file is `main`'s. [read: `unread_gate.py origin/main HEAD`] 0 areas above the cap.
+- [read: local, at `d8afb6b2724c`] `pins.py --stale` prints nothing; `tests/test_pins.py` 4 passed, `test_pous_trusted.py` 9 passed, `tests/test_lean_packages.py` with `tests/test_public_boundary.py` and the certifier-import test 86 passed, `test_second_stage.py` 9 passed.
+
+**2. The runs, all at `d8afb6b2724c`, all on vy-nebius-cpu-13, none started.**
+
+- [read: `research inspect`, 08:55Z] `r20261112-084251-6346`, the records run of `security/Proofs` (`lean_changed.py --records security/Proofs --update`, `--cwd clone`): waiting in the check line since 08:44Z, 7 checks ahead.
+- [read: the same] `r20261112-084251-07a8`, `suites.py --changed 19fb19a21e40 --quick`: waiting since 08:43Z, 3 checks ahead.
+- [read: the same] `r20261112-084251-a4c0`, the evaluation of the bound at the planner's two-stage designs at this head: waiting since 08:43Z, 6 checks ahead. I launched it because `main` changed the planner's cost model (the serve tax's parts) since the body's figures were computed at `979ebf0a18`; the body says so and keeps the old figures until this run ends.
+- [read] The line did not move between 08:48Z and 08:55Z. [guess, from earlier runs, each timed from launch: the same suites command took 30 min (`69f0`), the same evaluation 51 min (`b35f`), and one Lean try of `SecondRefused.lean` 17 min (`ee24`); I have never run the records run of this package] Once they start: suites about 30 min, evaluation about 50 min, records between 20 min and its budget of 120. I cannot say when they start.
+
+**3. Against lean's remote-merge branch at `a88eee998fa2`.**
+
+- [read: your `comm -23` command, with the tree's merge drivers registered by `merge.py --install`] Beyond `main`'s stops, one file: `verity/protocols/pous/lean/TRUSTED.sha256`. It still stops after the merge.
+- [read: the same two lists] The head stops in 13 files and `main` in 12, not 14. [read: the command again under `git --attr-source=` the empty tree, so no driver runs] With no driver the head stops in 19 and `main` in 17, and a second file is beyond `main`'s: `security/Proofs/lakefile.toml`, where both sides add roots to one list, which the `lakefile-lists` driver joins. So the count depends on which drivers the clone has; with all of them it is the pin alone.
+- **The close is owed by no one: it exists.** [read: a trial tree, lean's tip with my head merged, never pushed; the pin's own command run there] The command writes a file that differs from lean's tip's in one line, the hash of `security/Proofs/lakefile.toml` (`3de2975ff7d3…`), and is byte for byte the file at `01dea4d2566f` on `cursor/proofs-landing-closes-99d1` (blob `42fdc26ab089`, both). [read: the same tree with that file in place] `pins.py --stale` prints nothing, `tests/test_pins.py` 4 passed, `test_pous_trusted.py` 9 passed. [read: CROSSCLOSE's 08:53Z entry] It says the same of the new tips.
+- For LEAN-249: `verity/protocols/pous/lean/TRUSTED.sha256` by path at `01dea4d2566f`. It holds while `security/Proofs/lakefile.toml` is lean's tip's with #9091's one root; any other change to a file the pin lists makes it stale, and the same command writes it again.
+- [read: the trial merge] Two more files both sides change merge with no stop and read right: `security/Proofs/Flock/Claims/Sampling.lean` (my import and doc lines) and `benchmarks/harness/pyproject.toml` (my comment and input).
+
+**4. Title and body** [read: `research queue edit`'s reply, 08:55Z; 13,905 bytes].
+
+- Title: "(stacks on #8940)" is gone; the rest stands.
+- Body: opens "Its base, #8940, is on `main`", with the merge and #8914 on `main`; `Lane proofs` and `Goal proofs/spot-bind-term` kept; the lock line reads "This change adds no lock record and moves none: `security/lean-audit.json` and `tools/verity/lean/unread-caps.json` are `main`'s, and no guarantee is listed for the new theorems."
+- The counts of points one layout holds are now stated at `main`'s 2^24 coins (121 of 180), with the 54 at 2^20 as what `main` had before #8914. [relayed: the body's figures are run `b35f`'s, at `979ebf0a18`] They are not recomputed at this head yet.
+- The paragraph on what the bound does not cover and the limit of its hypothesis are kept. One paragraph added on what waits on it: `SpotFlock/Counts.lean`'s Pr[refused] term, and that a first read of k words and 64 bytes restates `secondRead`'s summand and three declarations beside it, not the bound's form.
+
+**5. The ready line, as far as it can be written.** #9091, head `d8afb6b2724c`; runs `r20261112-084251-6346` (records), `r20261112-084251-07a8` (suites), `r20261112-084251-a4c0` (evaluation): no verdict, none has started; stops beyond `main`'s: `verity/protocols/pous/lean/TRUSTED.sha256`; close: `01dea4d2566f`, already pushed by CROSSCLOSE. I have not marked it. If the records run keeps a record, the head moves by that one commit and I give the new one.
+
+**Not checked.**
+
+- [not run] That the three modules under `security/Proofs/Properties/Spot/` (`SecondSample`, `SecondFormed`, `SecondRefused`) elaborate on lean's line. [read: `git diff` from the merge base to lean's tip] That line changes three files they read: `Spot/Draw.lean` (the refusal string becomes a constant; `SecondFormed` opens four of that file's private names), `Proofs/Properties/Spot.lean` and `SpotFlock/Code.lean`. [read: CROSSCLOSE's 08:53Z entry] Run `r20261112-073819-235d` tried four files on the older tip `de28a691126b` with #9091 in, exit 0; `Claims/Sampling.lean` among them imports my three modules under `Claims/Sampling/Select/`, and none of the four imports the three under `Properties/Spot/`. One try of `Properties/Spot/SecondRefused.lean` on the closes branch's tip with #9091 merged covers all three. I did not launch it: it runs on a tree that is not my branch. Say if I should, or if it goes to CROSSCLOSE's next run.
+- [not run] The grader README's audit (`bash check.sh`); left to the queue's check, as before.
+
+**Next.** Resume me when a run ends: suites first (I fix only what it names in my 17 files), then the records run (I commit what it kept under `lean-audit/record/`), then the evaluation (the body's figures). Then the ready line whole.
