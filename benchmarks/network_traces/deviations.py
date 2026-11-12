@@ -48,12 +48,11 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
 **What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the certifier's run id,
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
-it was whole; the egress record's cells, each as
-(bucket, slot, kind, stream, id); what the network certifier logged of its watermark (`watermark_log`); and the size
-and SHA-256 of every file of the try's run directory. The table is made
-from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is under
-``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse` keeps
-its own in a directory it removes.
+it was whole; the egress record's cells, each as (bucket, slot, kind, stream, id); what the network certifier logged
+of its watermark (`watermark_log`); and the size and SHA-256 of every file of the try's run directory. The table is
+made from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is
+under ``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse`
+keeps its own in a directory it removes.
 
 **A lost release stops the tries** (`lost_stop`). Under ``--watermark`` (a flag of the rehearsal's, after ``--``)
 the network certifier names on its watermark each release that its server connection lost
@@ -625,9 +624,9 @@ def deviated(cls: str, kept: dict, committed: Mapping[int, Sequence[int]]) -> tu
 def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     """A try's row from what it kept (`keep`): what is changed, the check that refuses it, each check's verdict and
     the refusal's own words, the receiver's score, what the bound charges, the releases its watermark named lost and
-    the error that stopped it, and `ok`: the class did what its check
-    says, by the deviation alone (the module docstring's "A refusal counts only where it is the deviation's"; None:
-    the tie it aims at wasn't run, or the deviation changed no response)."""
+    the error that stopped it, and `ok`: the class did what its check says, by the deviation alone (the module
+    docstring's "A refusal counts only where it is the deviation's"; None: the tie it aims at wasn't run, or the
+    deviation changed no response)."""
     cls, check, conns = kept["class"], kept["check"], kept["connections"]
     params = WardenParams(**kept["params"])
     result = score(cls, [[int(b) for b in c["planted"]] for c in conns], [reading(cls, c, params) for c in conns])

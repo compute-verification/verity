@@ -170,9 +170,9 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   writes holds it: the relay's upstream is the deviating process on the loopback.
 - A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
   release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, the
-  watermark's last line, lost releases and error, and the
-  size and SHA-256 of every file of its run directory. The run directory, with the relay's records and their salts,
-  is under `--scratch`, by default a temporary directory that is removed. The table is made from `DIR` alone.
+  watermark's last line, lost releases and error, and the size and SHA-256 of every file of its run directory. The
+  run directory, with the relay's records and their salts, is under `--scratch`, by default a temporary directory
+  that is removed. The table is made from `DIR` alone.
 - The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
   shorter hold is accepted and isn't seen at the client's bucket. `tokens` and `length` leave id-form cells, which the
   relay's check accepts; the I/O tie's content refuses them (`io_tie.cells_match` on each bucket of the egress
