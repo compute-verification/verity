@@ -685,6 +685,7 @@ class Rule:
     depth: int = 6                 # naming one member for a failure whose suite reads no other member's files
     lean: int = 0
     beside: bool = False           # plain batches are built beside a Lean batch's pending records run
+    hold_inputs: bool = False      # beside one, a change with a Lean input and no Lean source of its own waits for its end
     keep: bool = False             # a failed check removes only the change at fault, and what is rebuilt keeps its passes
     keep_all: bool = False         # under `keep`, so does what is rebuilt when a failure names nobody or several, or when
                                    # others take a member from the queue; else those candidates are dropped as today
@@ -1084,7 +1085,7 @@ class Replay:
         if self.rule.side:
             return self._side()
         chain = list(self.cands.values())
-        busy = {ch.pr for c in self.side for ch in c.changes}
+        busy = self._beside()
         if self.rule.beside:
             for c in [c for c in self.side if t >= c.records_at and len(self.cands) < self.flags()["depth"]][:1]:
                 self.side.remove(c)
@@ -1109,9 +1110,16 @@ class Replay:
             return
         if self.rule.beside and self.side and any(isinstance(a, vq.Build) and self.side[-1].built == t for a in acts):
             # the Lean batch went beside the chain: this tick's build is still free for a plain batch
-            snap, ready = self.snapshot(list(self.cands.values()), self.main, busy={ch.pr for c in self.side for ch in c.changes},
-                                        pins=False)
+            snap, ready = self.snapshot(list(self.cands.values()), self.main, busy=self._beside(), pins=False)
             self.apply([a for a in vq.decide(snap) if isinstance(a, vq.Build)], ready)
+
+    def _beside(self) -> set[int]:
+        """The changes no batch takes this tick: those of a Lean batch in its records run, and under ``hold_inputs`` every
+        change that would move the inputs that run reads."""
+        busy = {ch.pr for c in self.side for ch in c.changes}
+        if self.rule.hold_inputs and self.side:
+            busy |= {ch.pr for ch in self.ready().values() if ch.audit and not ch.lean}
+        return busy
 
     def _side(self) -> None:
         """Batches beside each other, each on the `main` it was built on: one that passes lands at once if `main` hasn't
@@ -1362,6 +1370,8 @@ RULES = (
     Rule("2b. Row 1b, and only: a failed check removes only the change at fault and what is rebuilt keeps its passes", "none",
          keep=True, keep_all=True, pin_all=False),
     Rule("2c. Row 2, but passes are kept only when the loop names one change at fault", "none", beside=True, keep=True),
+    Rule("2d. Row 2, and a change with a Lean input and no Lean source of its own waits while a records run runs", "none",
+         beside=True, keep=True, keep_all=True, hold_inputs=True),
     Rule("3. Batches side by side on `main`, 6 in check at once, each union rechecked on the suites both sides read",
          "a union that fails is dropped and its batch built again on `main`", side=6, beside=True),
     Rule("3b. The same, 4 in check at once", "the same", side=4, beside=True),
