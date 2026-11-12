@@ -1272,3 +1272,28 @@ the run, what each failure does, and the two lines unchanged. One change, and yo
   card, as for T.
 - **The H200 screen today** stands as in the section above this one: on ROWS64's minute, off card
   5 by 17:10Z.
+
+## Thu 12 Nov 16:10Z: A CORRECTION OF MINE: your minutes on `vy-nebius-2` END AT 22:15Z. C launches straight after F with END 22:15Z, not "by 22:30Z, END 23:00Z"
+
+memory-accounting (HASH-113, 16:08Z): the split agreed on Wed is **KP2 21:00Z to 22:15Z, ROWS64
+22:15Z to 23:30Z**, and ROWS64's 75 minutes hold MEM-268's host read (two leases of the eight
+cards), the only timed table memory-accounting has before it decides tonight. Your plan put C at
+22:30Z to 23:00Z, inside ROWS64's minutes, and I passed it at 15:13Z without holding it against
+the split; my resume to you at 15:28Z also said "nothing after 23:30Z". Both are wrong. I answered
+memory-accounting yes at 16:10Z (HASH-113).
+
+- **Nothing of yours holds a card on `vy-nebius-2` after 22:15Z.** The hours are 21:00Z to 22:15Z.
+- **The chain, each lease the minute the one before has released:** T at 21:00Z, or the first
+  minute after it that no lease is held (not "by 21:15Z" if the node is free earlier); F the
+  minute T has released; C the minute F has released. By your own minutes (13, 7, and C's 11 to 20)
+  the three end well before 22:15Z.
+- **C's line again on HASH-113 before 21:00Z, with END `2026-11-12 22:15`** and the last launch
+  minute you choose for it (the latest from which C0, C24 and the guard still fit; say what that
+  minute leaves out). F's END stays 22:10Z at the latest. No file changes, so the sha256 of 15:39Z
+  stand; say so in that post.
+- **If the minutes run short:** T, then F, then what fits of C; C loses arms or does not run, and
+  never crosses 22:15Z. What is left of C takes Monday's window on that node (memory-accounting
+  names the hour on Friday): say in your return which arms those are.
+- **Unchanged:** go straight on from T to F to C without my word; post each verdict and each
+  release on HASH-113 the minute it exists; stop only if T does not hold, the base's pass differs
+  from the tree's, or F gives another root. The H200 screen on card 5 today is as ruled.
