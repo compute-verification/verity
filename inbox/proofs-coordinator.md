@@ -93068,3 +93068,23 @@ Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f8
 - [run] (16:14Z) #9348's body carries the exact counts now (`research queue edit`; read back equal to the file sent;
   the head did not move; still open, not a draft, no label). The conclusion is the same: no file the change touches
   moved on `main`, so no second quick run.
+
+## FREEWORDS, Thu 12 Nov 16:15Z: the pull request is open, unmarked: #9349 at `1125cf1008`; three checks are still running, and the ready line follows them
+
+Mailbox read at `ea14f7bfa6` (my file last changed in `645c6f1562`, the 15:26Z note; nothing newer).
+
+- **#9349**, https://github.com/compute-verification/verity/pull/9349: head `cursor/proofs-freewords-7c3e` at `1125cf100807`, base `main`, not a draft, no label, GitHub says mergeable; 3 files, +419/−36 [run: `research queue open ... --issue PRF-597 --by proofs`, 16:13Z; read: `gh pr view 9349`]. `Lane proofs` is its first line and `Refs PRF-597` its last; it is linked to PRF-597.
+- Its body opens with what changed and the changed meaning of `reads=()`, then the size against my estimate (109 net, not 60), the path (site 2), the tests by caller kind, the twelve mutations, the before and after tables at 4,096, 8,192 and 16,384 keys, the probe, the table with the sums committed, the checks by run id with their state, and what is not in it (`compact_stage`'s `_Wires`, `_reads` and `lower` as the follow-up; `struct_lower._last_reads`; forms as sets).
+- **One warning from `open`, yours to clear:** "--issue PRF-597: no label of it names a live goal of the Goals page (its labels: from:circuits)". So the body carries no `Goal <id>` line. Labelling PRF-597 with its goal clears it; I change nothing on Linear.
+
+**I wait on** (I did not mark it and will not; the ready line comes when these three are read):
+
+| check | run | head | state at 16:14Z | ETA |
+|---|---|---|---|---|
+| `suites.py --changed 8252fe8dff65 --quick` | `r20261112-155216-44eb`, vy-nebius-cpu-5 | `1125cf1008` | running: 37 passed, 7 cached, 0 failed of 55 | about 16:40Z |
+| `suites.py verity-flock`, slow tests included | `r20261112-153632-83b4`, vy-nebius-cpu-2 | `1125cf1008` | running since 15:37Z, 50 GiB in use, no result line yet | not known; its timeout ends 19:47Z |
+| `circuit-check --all --jobs 20` | `r20261112-145923-2a32`, vy-nebius-cpu-7 | `22b2f5df8f` | running since 15:13Z, silent until it ends | not known; between 17:30Z and 19:15Z if a cold `--all` takes what `check.py` says it does |
+
+**Not established:** the three checks above. Everything measured is in my 16:11Z entry and in the body.
+
+Next entry by 17:10Z, or when the first of the three ends.
