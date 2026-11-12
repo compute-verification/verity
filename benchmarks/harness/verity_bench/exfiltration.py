@@ -70,7 +70,7 @@ UNSTATED = "in no stated way"
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
-#: the case of the plan the figure is: the planner's world (rho's world fleet), its row for the registered and served
+#: the case of the plan the figure is: the planner's world (the slowdown calculator's world fleet), its row for the registered and served
 #: cut with every modeled lever at its measured value, and the step of that row that prices the verifier as measured
 #: (a prefix of the step's name)
 WORLD, ROW, STEP = "ours", "(i) honest", "+ the verifier as measured"

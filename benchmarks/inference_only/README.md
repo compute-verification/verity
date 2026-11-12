@@ -63,7 +63,7 @@ The served class leaves the layers' linears outside the circuit, so a block read
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
 
 - **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
-  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are rho's
+  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
   (`verity/protocols/inference_only/slowdown/data/premises.toml`).
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
   every row a unit reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of

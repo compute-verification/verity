@@ -22,7 +22,7 @@ only, and it takes no weight gradient or optimizer step. A circuit may run sever
 step's two) and no backward (evolution strategies). Over a schedule kappa is a ratio of sums, the token-weighted harmonic
 mean of its phases' kappa.
 
-A model's shape is verity/protocols/inference_only/slowdown's (its ``data/models.toml``, read through ``rho.instances``, imported by path); this
+A model's shape is verity/protocols/inference_only/slowdown's (its ``data/models.toml``, read through ``slowdown.instances``, imported by path); this
 module states only each model's pretraining recipe (``RECIPES``).
 
     python verity/protocols/inference_only/nci/kappa.py       # the breakdown per model and phase, each schedule's kappa, and ROWS'

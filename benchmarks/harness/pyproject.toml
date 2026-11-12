@@ -102,7 +102,7 @@ inputs = [
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
     "tools/research/src/research/pods/nebius/slot_only.py",
-    # the overhead table scales γ by the census's datacenter, world and datasheet rates and rho's FLOP-to-gates conversion,
+    # the overhead table scales γ by the census's datacenter, world and datasheet rates and the slowdown calculator's FLOP-to-gates conversion,
     # and `verity bench overhead` is the door's runner, which a test runs
     "benchmarks/census/deployments.json",
     "benchmarks/census/adversary.json",
@@ -115,7 +115,7 @@ inputs = [
     "verity/protocols/inference_only/slowdown/data/reference.toml",
     "benchmarks/prove/run.py",
     # `verity bench exfiltration` composes two other benchmarks' calculators, which its tests run on fixture rows: the
-    # break-even planner's plan (its modules, with the figure's model, the cost model and the cards they read, and rho's
+    # break-even planner's plan (its modules, with the figure's model, the cost model and the cards they read, and the slowdown calculator's
     # world fleet) for the requests, and the network certifier's calculator of K for its term; a test runs its runner
     "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",

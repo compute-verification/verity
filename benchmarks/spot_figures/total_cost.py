@@ -1076,7 +1076,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
 
 
 #: `--serving`'s help, here and in figures.py
-SERVING_HELP = ("where serving's rate comes from: rho's fleet utilization (assumed, the default), or the model's "
+SERVING_HELP = ("where serving's rate comes from: the slowdown calculator's fleet utilization (assumed, the default), or the model's "
                 "serving_rate card (measured)")
 
 
