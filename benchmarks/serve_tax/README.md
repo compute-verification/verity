@@ -59,11 +59,12 @@ that command in two things, each with the recipe's own alternative:
   the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
 - **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
   own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
-  at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
-  when it starts and prints in its log. The recipe's command builder sets 262,144 for these cards instead; a job that
-  wants that, or any other limit, names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by
-  their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
-  refused by the server and counted as failed.
+  at the limit the recipe's command builder sets for these cards, 262,144 tokens. A job that wants another names it
+  (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by their flags alone. `auto`, vLLM's setting
+  for the longest limit the cards' KV cache holds, is a limit a job may name and not the arm's own: the model is then
+  built at its own length before the limit is fitted, and the engine's warm-up does not fit these cards at that
+  length. The runner checks no load against `auto`: a request past the limit the engine resolved is refused by the
+  server and counted as failed.
 
 The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
 pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,

@@ -458,14 +458,14 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     recipe's own tokenizer mode, under the variable that starts it, and no other arm's server has it."""
     glm = S.MODELS["glm53"]
     context = S.published_context("published", "glm53", None)
-    assert context == glm.published_context == S.AUTO == "auto"
+    assert context == glm.published_context == 262144 and S.AUTO == "auto"
     assert [S.published_context("published", "glm53", n) for n in (131072, 262144, "auto")] == [131072, 262144, "auto"]
     stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
     argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
     seqs = stock.index("--max-num-seqs")
     at = stock.index("--max-model-len")
     assert argv == [*stock[:at], *glm.published, "--tokenizer-mode", "auto", *stock[at:seqs], *stock[seqs + 2:]]
-    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "auto"
+    assert argv.count("--max-model-len") == 1 and argv[argv.index("--max-model-len") + 1] == "262144"
     # the recipe's command for the cards, flag for flag, with the front end's fallback for a build without it
     for flag, value in (("--served-model-name", "glm-5.3"), ("--tensor-parallel-size", "8"), ("--tokenizer-mode", "auto"),
                         ("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),

@@ -30,7 +30,7 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.server_argv(record, GLM, Path("/ck"), 8000, max_model_len=context) == argv
     for flag, value in (("--kv-cache-dtype", "fp8"), ("--speculative-config.method", "mtp"),
                         ("--speculative-config.num_speculative_tokens", "5"), ("--tool-call-parser", "glm47"),
-                        ("--reasoning-parser", "glm47"), ("--tensor-parallel-size", "8"), ("--max-model-len", S.AUTO)):
+                        ("--reasoning-parser", "glm47"), ("--tensor-parallel-size", "8"), ("--max-model-len", "262144")):
         assert argv.count(flag) == 1 and argv[argv.index(flag) + 1] == value, flag
     # what the recipe leaves to vLLM stays vLLM's: the requests at once, each card's memory, the prefix cache, the mode
     assert not {"--max-num-seqs", "--gpu-memory-utilization", "--no-enable-prefix-caching", "--enforce-eager"} & set(argv)
