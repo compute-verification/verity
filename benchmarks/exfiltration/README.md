@@ -172,6 +172,9 @@ plan of the case, is left out and listed under "Refused".
 - **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
   and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
   label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
+- **SPOT's resampling holes in the code that ran**, over the compute audit's runs of record: the label (`SPOT`, or
+  `SPOT soundness` only when both holes are closed), each hole's status, and the theorem with its open premises as
+  the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
 
 With `--json` the document holds the same: a scope's monitoring period has its `eps`, its `error` (the two together's,
 null for a scope no run of record holds) and its `phases`, and an amount that has no bound is null.
