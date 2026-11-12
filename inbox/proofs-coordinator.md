@@ -93290,3 +93290,51 @@ At 1,135,341 sessions a sample (2^20.11), one table a session, a budget of 2^80 
 - **Nothing else changed** [run, 16:47Z, `git ls-remote`]: #9313 `19474e53e4f7`, #9312 `b034e9d200b5`, #9249 `e28f52c10a7d`, #9270 `a064cf7c46e4`; the row at a drift of 5·10⁻⁴ is as `r20261112-152030-770d` printed it; records `r20261112-151249-4750` passed.
 - The entry owed by 16:30Z is the one headed 15:38Z (`da3bf9a86c`); I wrote no other after it.
 - Not done: #9313's body still reads "running" for this run. I change that line when you next resume me.
+
+## PERIODREAD, Thu 12 Nov 16:50Z: part 1's pull request is open and unmarked, #9362 at `260823dd87e6`, its quick tier passed; on a real one-member case the compiled check answers `NO_CHALLENGER`, run and not only read
+
+Mailbox read at `b2ce4680b873` (16:50Z): your 16:33Z note is the last one, and this is built as it rules.
+
+### The ready line
+
+- **Pull request:** https://github.com/compute-verification/verity/pull/9362, branch `cursor/proofs-prf600-coins-59c6`, head `260823dd87e69cf20fb3be1d38f1e1dc6b039ca6`, base `main`. Opened with `research queue open`, linked to PRF-600, **not marked**: the mark is yours, after Friday's serve or on network's yes. [run: `gh pr view 9362` at 16:49Z says open, not a draft, mergeable, head as above]
+- **The quick tier at that head passed** [run `r20261112-163335-ae76`, vy-nebius-cpu-1, rc 0, ended 16:48Z]: 4 suites passed, 0 cached, 0 failed: `benchmarks/one_stage` 603 passed, `benchmarks/prove_path` 155, `repository` 350, `verity-graph` 215. The log names `test_audit_two_members.py` and `test_served_integrity.py` among the modules run whole, slow tests included.
+- **Not `3a25`'s result.** I cancelled `r20261112-163031-3a25` at 16:33Z while it waited for a slot: one more commit (`260823dd87`, a docstring line saying a written case is not an accepted one) had superseded its head. `ae76` is the same command at the final head. The body says so.
+
+### `974c`, in one line
+
+- [run `r20261112-162137-974c`, vy-nebius-cpu-13, rc 0, at `18acd4209275`] **Yes, each of the two one-member `--zk` audits wrote `case-v2.json`; the compiled check answered `reject` on each, with `NO_CHALLENGER`'s text**: "params: the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, with window_root), never the prover's record". The Python audit accepted both, and `served_integrity.answer` on each is `accept` with `public.coins`. The body says it in those words.
+- [derived] So on `main` every accept of this answer is the Python audit's, with or without a case file. `public.case_v2.written` says a file is there and nothing more; the module's docstring says that too.
+
+### What the body holds, against your 16:33Z list
+
+- **First under "What changes for a reader of an old record":** "An audit directory written before this change answers `undecided`, and one `undecided` compute audit leaves the certifier's whole period `undecided`." Then why, from `NetworkCheck/Period.lean` (`answered`, `firstFinding`, `check`) [read, not run], and that the mark waits.
+- **One line there is mine, not asked for** [derived]: nothing in the change recomputes the two fields for an old directory, and rerunning its audit would be a second sample on its root, which the no-retries rule excludes. Strike it if you read the rule otherwise.
+- **`--challenger local`:** the digest is the development session's own, nothing in part 1 tells it from the auditor's, the refusal is network's (NET-383).
+- **Tests:** the case-key comparison is on hand-built cases only; `974c` is the one real case.
+- **Lean's merge** [run, at `260823dd87e6`]: 31 files stop, the base's own 31. Of this change's files only `benchmarks/one_stage/a5.py`, at the base's own hunk. Against `main` `87fec6c6491b` [run 16:43Z], #9199's head and #9237's head: clean.
+- **Size:** 7 files, 331 lines added, 17 removed, 197 of the added lines in tests.
+
+### One thing the tool said
+
+- [run] `research queue open` warned: PRF-600 has no label naming a live goal of the Goals page (its only label is `from:proofs`). The label is yours to add.
+
+### The design entry: where the reads stand [read]
+
+Two answers to your 16:33Z asks, short here and in full in the entry:
+
+- **A sampled-proofs session cannot sit in PoUW's period.** `Credit.periodCredit` (`PouwCheck/Credit.lean:2230-2268`) reads the close's sessions as pairs, each window's then its sample's, holds the presented roots to exactly that list (`period`, `:2089-2135`: `missing`, `order`), and credits every one against the period's circuit and PoUW's own evidence. A third session is neither. It is also refused at the gate: the driver opens that period with `--cap 2` (`served_verdicts.py:656`).
+- **So it needs a period of its own, and a lane has one period open at a time** (`ChallengerSession.lean`, `verifyLedger`'s period-open branch; a reserve joins its lane's open period). Either the audits run in a second period on the same lane after PoUW's closes, which fits `served_verdicts.sh`'s order, or under a second lane name, which a deployment that serves continuously needs and infra provisions.
+- **`verity/remote/v1`** needs no change to accept a run: its sampled proofs read the one session the ledger opens on the run's root. What it does not say is that this root is the lane's only one. That is the period's check beside it, with the tie "v1's run root is one of the period's windows".
+
+### Not established
+
+- That a served run meets the old-record case in practice: no served run was made, and I opened no old audit directory.
+- That network's record will read `public.coins` and `public.case_v2` under these names: nothing of theirs reads them yet.
+- Whether a case that names its challenger, once one exists, passes the compiled check on the same evidence: no such case exists on `main` to run.
+- The design entry's statement and its Lean signature: not written yet. I mean to elaborate the signature in one run on a node (`lake env lean` on one scratch file in `verity/protocols/spot/verifier/lean`), read only, nothing committed to the tree.
+
+### What I wait on, and next
+
+- Nothing blocks me. Next is the design entry, due Fri 13 Nov 06:00Z.
+- Part 2: nothing built, and nothing will be before your word.
