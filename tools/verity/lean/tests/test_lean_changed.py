@@ -677,6 +677,70 @@ def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_p
     assert LC.main(["--inputs-key", S, "--head", "0" * 40, "--repo", str(clone)]) == 2
 
 
+def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_path, monkeypatch, capsys):
+    """`--ask PKG` prints the GB a `--records` run of PKG asks, with the GiB under it: the largest build among every package
+    it audits (PKG, its requirers and the packages their `proved_in` names), and no replay, which a records run doesn't
+    run. With `--head` it reads the commit's objects alone, as `--inputs-key` does, so the queue can ask a head it never
+    checked out."""
+    heavy = json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../props"},
+                                     {"type": "git", "name": "Arklib"}]})
+    root = tmp_path / "root"
+    for f, text in {**PAIR, "s/proofs/lake-manifest.json": heavy, "tools/verity/lean/check.py": "x\n"}.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-C", str(root)]
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "c"], check=True)
+    sha = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(root), str(clone)], check=True)
+    monkeypatch.setattr(LC, "ROOT", root)
+    monkeypatch.setattr(LC.LA, "ROOT", root)
+    R = LC.AUDIT.reserve()
+
+    def asked(argv):
+        assert LC.main(["--ask", *argv]) == 0
+        return capsys.readouterr().out.splitlines()
+
+    for pkg in (P, S):                      # s/proofs reads s/props' build, and s names s/proofs under `proved_in`
+        first, under = asked([pkg, "--head", sha, "--repo", str(clone)])
+        assert first == f"{R.gb(R.BUILD_HEAVY_GIB)} GB: research run --mem-gb {R.gb(R.BUILD_HEAVY_GIB)}", pkg
+        assert f"for the {R.BUILD_HEAVY_GIB} GiB the build of s/proofs needs" in under, under
+    assert asked([P])[0].startswith(f"{R.gb(R.BUILD_HEAVY_GIB)} GB: "), "the checkout as it is"
+    (root / "s/proofs/lake-manifest.json").write_text(PAIR["s/proofs/lake-manifest.json"])
+    assert asked([P])[0] == f"{R.gb(R.LIGHT_GIB)} GB: research run --mem-gb {R.gb(R.LIGHT_GIB)}", "no heavy pin left"
+    assert asked([P, "--head", sha, "--repo", str(clone)])[0].startswith(f"{R.gb(R.BUILD_HEAVY_GIB)} GB: "), \
+        "the commit's ask reads the commit, not the checkout"
+    assert LC.main(["--ask", "s/p", "--head", sha, "--repo", str(clone)]) == 2, "`s/p` names two packages"
+
+
+def test_a_records_run_below_the_floor_of_any_build_it_runs_is_refused_with_its_ask(pair, tmp_path, monkeypatch):
+    """A records run builds the packages its packages' `proved_in` names too, so it refuses where it reserved less than
+    the floor of any of those builds, before it takes a slot, and prints its own command at its ask; a run that builds
+    none of them asks nothing of theirs."""
+    root, calls, _ = pair
+    (root / "s/proofs/lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib"}]}))
+    monkeypatch.setenv("CHECK_SLOT_MEM_GB", "16")
+    for v in ("VERITY_LEAN_MEM_FLOOR_GIB", "CHECK_RUN_MEM_GB", "RESEARCH_RUN_MEM_GB"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setattr(LC.AUDIT, "memory_gib", lambda: 1024.0)
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out", log=said.append) == 2 and calls == []
+    why = "\n".join(said)
+    R = LC.AUDIT.reserve()
+    assert f"s/proofs needs at least {R.ONE_JOB_GIB} GiB, and this run reserved 16.0 GiB (CHECK_SLOT_MEM_GB=16" in why, why
+    assert f"--mem-gb {R.gb(R.BUILD_HEAVY_GIB)} " in why and f"lean_changed.py --records {S} --update" in why
+    said.clear()
+    LC.audit_records(P, tmp_path / "deps", update=True, out=tmp_path / "out1", log=said.append)
+    assert calls and not any("needs at least" in s for s in said), "s/props' run audits s/props alone here"
+    monkeypatch.setenv("CHECK_SLOT_MEM_GB", str(R.ONE_JOB_GIB))
+    calls.clear()
+    said.clear()
+    LC.audit_records(S, tmp_path / "deps", update=True, out=tmp_path / "out2", log=said.append)
+    assert calls and not any("needs at least" in s for s in said)
+
+
 def test_the_store_lookup_takes_a_passed_result_on_the_same_inputs_and_fails_closed(tmp_path, monkeypatch):
     """`stored` asks `research data select` for a `lean-fast/v1` result whose `passes` holds the key for the package and
     takes a passed one; with no `research`, a failed or unreadable answer, or none for this package, it finds nothing, and

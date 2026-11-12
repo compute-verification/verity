@@ -654,7 +654,8 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """No audit reads `tools/verity/lean/README.md`, `tools/verity/lean/tests/` or the pin file `lean-deps.json`
     (preflight's, read before the audit), so an edit to them audits no package again. Nor the directory's other files that
     `NOT_READ` lists, such as `merge.py` and `lean_changed.py`, which would otherwise audit every package again on every
-    node. They stay out of the scratch tree too, so an audit that read one would fail."""
+    node. They stay out of the scratch tree too, so an audit that read one would fail, but for `CARRIED` (`reserve.py`,
+    which check.py plans its run by), which every scratch tree carries."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
@@ -679,7 +680,9 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": [f"tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]}))
     rc, _ran, doc = _run(tmp_path, 99)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
-    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
+    assert LA.CARRIED and set(LA.CARRIED) <= set(LA.NOT_READ)
+    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)
+                                              if n not in LA.CARRIED]
 
 
 def test_a_packages_prose_and_pytest_files_are_no_input(tmp_path, monkeypatch):
