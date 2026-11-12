@@ -127,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
