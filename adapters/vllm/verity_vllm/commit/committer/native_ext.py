@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 
 from verity_vllm import settings
-from verity_vllm.commit.committer import native_jit
 from verity_vllm.log import init_logger
 
 logger = init_logger(__name__)
@@ -23,6 +22,9 @@ def ext(build_dir: str | None = None, verbose: bool = False):
     on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
     global _EXT
     if _EXT is None:
+        # Read here, not at import: `native_jit` takes the kernels' headers from the core `verity`, which only a build needs.
+        from verity_vllm.commit.committer import native_jit
+
         _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
                                                parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
                                                cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
