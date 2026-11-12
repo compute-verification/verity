@@ -1026,13 +1026,14 @@ def test_in_the_sandbox_a_dependency_still_missing_ends_the_try_before_lake_and_
         trying, tmp_path, monkeypatch, capsys):
     """Lake in the sandbox clones nothing, and its failure on a package it can't clone reads as FILE's. Where the
     dependencies this node keeps lack one the manifest names, or it keeps none, the try runs no Lake and exits 2: its
-    line says that this is no verdict on the file, what is missing and the records run that fetches it. `--build` skips
-    the package, saying the same. Without a sandbox the try's Lake clones what is missing; `--build` fetches nothing
-    cold there either."""
+    line says that this is no verdict on the file, what is missing and the records run that fetches it onto this tree,
+    which it names: a records run fetches for the one tree it takes. `--build` skips the package, saying the same.
+    Without a sandbox the try's Lake clones what is missing; `--build` fetches nothing cold there either."""
     tree, calls = trying
     deps = tmp_path / "deps"
     packages = fetching(tree, deps, monkeypatch, kept=("mathlib",)) / ".lake" / "packages"
-    records = "`lean_changed.py --records Sec/Proofs --rebuild` here fetches them"
+    records = f"`lean_changed.py --records Sec/Proofs --rebuild --tree {tree}` here fetches them onto this tree"
+    assert LC.kept_tree(tree), "the tree the line names is one `--records --tree` takes"
 
     def tried() -> tuple[int, list[str]]:
         calls["build"].clear()
