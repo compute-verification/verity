@@ -21,8 +21,12 @@ width d_ff and vocabulary V (`MODELS`):
     LM head   = S * O * d * V                                  one row of logits an output token
 
 What has no multiply-accumulate (the embedding's read, the norms, the activations, RoPE, the softmax) is not counted.
-Pearl+ credits linears alone. So the number is at most the linears' share of the model's MACs at the class, which the
-text prints beside it, and a credit above the class's linears is refused: its passes are not one load of the class.
+Pearl+ credits linears, and the LM head where the run's passes hold its calls: the record holds the head when the
+verifier's per-call split (below), over the answer's run commitment, names a call of the head's shape, k = d and n = V
+(`head_calls`). So the number is at most the share of the model's MACs at the class that its passes can hold, the
+linears' (and the LM head's with the head), which the text prints beside it, and a credit above them is refused: its
+passes are not one load of the class. A record that holds no split, as runs before Pearl+'s verifier wrote it do, holds
+no head.
 
 `--from RUN` reads the verifier's side of the run's record in the evidence store, and nothing the developer's node
 reports of what it served:
@@ -37,7 +41,9 @@ reports of what it served:
 - `out/inference-only-policy.json`, the registered policy: the class and the model's name. Where it also counts its
   class's MACs a slot, that count must be this command's;
 - `out/record/verdicts.json`, the run's composed record: PoUW's row. A row that isn't an accept (a development run's
-  reads `missing`) is printed beside the number, never left out: the credit is then the Pearl+ piece's alone.
+  reads `missing`) is printed beside the number, never left out: the credit is then the Pearl+ piece's alone;
+- `out/pieces/pouw/verify.json`, the Pearl+ verifier's document, where the record holds it: its per-call split, which
+  says whether the passes hold the LM head's calls, and which `--per-call` prints.
 
 The record holds neither the tokens the run served nor the seconds it served them in (both stay on the developer's
 node). So the tokens are the class's, and the capacity share (the credited MACs over the card's rate times the seconds
@@ -54,7 +60,9 @@ sampled tiles over the inert-work bound, and the inert-work share ι's) and its 
 over the model are those, the LM head and attention (which Pearl+ doesn't credit), the linears outside the passes, and
 the floor of the credit; they sum to the give-up exactly. The split is the answer's or it is refused (exit 2): its
 commitment and its passes' records roots are the answer's, each call's terms sum as above, and its calls' credited
-cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. The ε deduction is the run's, at its
+cells' MACs are the answer's ``macs`` and their credit, floored, its ``credited``. Where the passes hold the LM head's
+calls, the LM head is no cause of its own: its calls are calls like the linears', and what the head computes outside
+the passes is the cause ``lm_head_outside``, as the linears' is ``outside``. The ε deduction is the run's, at its
 sample: the verifier takes it off the records whose cells hold the most MACs a ticket, so the calls it lands on carry it
 for the whole run. ``--top N`` (default 10) calls are printed, by give-up.
 
@@ -106,7 +114,8 @@ RECORDS = [ANSWER, LEAN, LEAN_CHECK, POLICY, VERDICTS]
 #: the verifier's document, read by `--per-call` alone
 VERIFY = "out/pieces/pouw/verify.json"
 #: the causes of the per-call split's give-up, in the order printed
-CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "attention": "attention, which Pearl+ doesn't credit",
+CAUSES = {"lm_head": "LM head, which Pearl+ doesn't credit", "lm_head_outside": "LM head calls outside the passes",
+          "attention": "attention, which Pearl+ doesn't credit",
           "outside": "linears outside the passes", "excluded_a": "excluded A rows",
           "excluded_b": "excluded B rows' column blocks", "voluntary": "voluntary rows' bands and blocks",
           "kept_width": "side channels (k beyond |K|)", "epsilon_macs": "ε's deduction",
@@ -309,8 +318,22 @@ def row(tree: Path) -> dict:
 def linear(shape: Shape, k: int, n: int) -> str:
     """Which of a layer's linears a call of a model of `shape` is, by its k × n."""
     d, head_dim = shape.hidden, shape.hidden // shape.heads
-    names = {(d, d + 2 * shape.kv_heads * head_dim): "qkv", (d, d): "o", (d, 2 * shape.mlp): "gate_up", (shape.mlp, d): "down"}
+    names = {(d, d + 2 * shape.kv_heads * head_dim): "qkv", (d, d): "o", (d, 2 * shape.mlp): "gate_up", (shape.mlp, d): "down",
+             (d, shape.vocab): "lm_head"}
     return names.get((k, n), f"{k}x{n}")
+
+
+def head_calls(tree: Path, given: Path | None, shape: Shape) -> list[dict]:
+    """The LM head's calls in the run's passes: the calls of the head's shape (k = d, n = V) that the verifier's per-call
+    split names, in its verify document or in `given`, where the split is over the answer's run commitment; none where
+    the record holds no split. Unreadable files are `split`'s to refuse."""
+    try:
+        held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
+        if held is None or "uncredited" not in held or held["commitment"] != _held(tree, ANSWER)["commitment"]:
+            return []
+        return [c for c in held["uncredited"]["calls"] if (c["k"], c["n"]) == (shape.hidden, shape.vocab)]
+    except (OSError, KeyError, TypeError, ValueError, AttributeError) as e:
+        raise Unreadable(f"the per-call split doesn't read as one ({type(e).__name__}: {e})") from e
 
 
 def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, shape: Shape, top: int) -> dict:
@@ -337,6 +360,8 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
             for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *rows.items(), *terms.items()):
                 sums[x] += v
         stated = {x: Fraction(totals[x]) for x in sums}
+        heads = [c for c in calls if (c["k"], c["n"]) == (shape.hidden, shape.vocab)]
+        in_head = sum(c["macs"] for c in heads)
     except (OSError, KeyError, TypeError, ValueError, AttributeError, ZeroDivisionError) as e:
         raise Unreadable(f"the per-call split doesn't read as one ({type(e).__name__}: {e})") from e
     if held["commitment"] != answer["commitment"]:
@@ -348,10 +373,14 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
     if (sums["checked_macs"], int(sums["credited_macs"])) != (work["macs"], credited):
         raise Unreadable(f"the per-call split's calls credit {int(sums['credited_macs']):,} of "
                          f"{int(sums['checked_macs']):,} MACs and the answer {credited:,} of {work['macs']:,}")
-    if sums["macs"] > macs["linears"]:
-        raise Unreadable(f"the per-call split's calls hold {int(sums['macs']):,} real MACs, more than the "
+    if sums["macs"] - in_head > macs["linears"]:
+        raise Unreadable(f"the per-call split's calls hold {int(sums['macs'] - in_head):,} real MACs, more than the "
                          f"{macs['linears']:,} of the class's linears")
-    gave = {"lm_head": macs["lm_head"], "attention": macs["attention"], "outside": macs["linears"] - sums["macs"],
+    if in_head > macs["lm_head"]:
+        raise Unreadable(f"the per-call split's LM head calls hold {in_head:,} real MACs, more than the "
+                         f"{macs['lm_head']:,} of the class's LM head")
+    gave = {("lm_head_outside" if heads else "lm_head"): macs["lm_head"] - in_head, "attention": macs["attention"],
+            "outside": macs["linears"] - (sums["macs"] - in_head),
             **{x: sums[x] for x in (*ROWS, *TERMS[:3])}, "floor": sums["credited_macs"] - credited}
     give_up = sum(macs.values()) - credited
     assert sum(gave.values()) == give_up, (gave, give_up)
@@ -371,23 +400,30 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
                     for c in worst]}
 
 
-def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[str]) -> dict:
+def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[str], given: Path | None = None) -> dict:
     """The printed document of the record under `tree`: the number, its unit, the commit the run ran from and the run,
-    then what the number is made of. `withdrawn` is what was withdrawn of the rest of the record."""
+    then what the number is made of. `withdrawn` is what was withdrawn of the rest of the record, and `given` a per-call
+    split in a file of its own (`head_calls`). Where the passes hold the LM head's calls it also holds ``lm_head``: their
+    count and the MACs Pearl+ can credit at the class, the linears' and the LM head's."""
     c, served, record = credit(tree), load(tree), row(tree)
     macs = served["macs"]
+    heads = head_calls(tree, given, MODELS[served["model"]])
+    creditable = macs["linears"] + macs["lm_head"] * bool(heads)
     most = max(c["credited"], c["passes"] or 0)
-    if most > macs["linears"]:
-        raise Unreadable(f"Pearl+'s answer holds {most:,} MACs, more than the {macs['linears']:,} of the linears of "
+    if most > creditable:
+        of = "the linears and the LM head" if heads else "the linears"
+        raise Unreadable(f"Pearl+'s answer holds {most:,} MACs, more than the {creditable:,} of {of} of "
                          f"the policy's class: its passes are not one load of the class")
     total = sum(macs.values())
+    head = {"lm_head": {"calls": len(heads), "creditable_macs": creditable,
+                        "creditable_share": creditable / total}} if heads else {}
     return {"value": c["credited"] / total, "unit": UNIT, "commit": commit, "run": run, "target": float(TARGET),
             "met": Fraction(c["credited"], total) >= TARGET, "credited_macs": c["credited"], "model_macs": total,
             "macs": macs, "linears_share": macs["linears"] / total, "passes_macs": c["passes"], "scheme": c["scheme"],
             "epsilon_s": c["epsilon_s"], "delta_s": c["delta_s"], "lean": c["lean"], "record": record,
             "withdrawn": withdrawn,
             "model": served["model"], "class": served["class"], "policy_agrees": served["policy_agrees"],
-            "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None}
+            "tokens": served["tokens"], "tokens_from": "class", "wall_s": None, "capacity_share": None, **head}
 
 
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
@@ -446,10 +482,10 @@ def from_run(store, run: str, per_call: bool = False, given: Path | None = None,
     attempt = store.attempt(run)
     if attempt is None:
         raise Unreadable(f"{run} is not in the evidence store this machine reads")
-    tree, withdrawn = store.files(run, RECORDS + [VERIFY] * (per_call and given is None))
+    tree, withdrawn = store.files(run, RECORDS + [VERIFY] * (given is None))
     if tree is None or not (tree / ANSWER).is_file():
         raise NoNumber(f"{run} left no Pearl+ answer (it ended rc {(attempt.get('status') or {}).get('rc')})")
-    doc = document(tree, commit_of(attempt), run, withdrawn)
+    doc = document(tree, commit_of(attempt), run, withdrawn, given)
     if per_call:
         doc["per_call"] = split(tree, given, doc["macs"], doc["credited_macs"], MODELS[doc["model"]], top)
     return doc
@@ -495,9 +531,13 @@ def text(doc: dict) -> str:
     lines.append(f"  {doc['model']} at {cls['slots']} slots of {cls['prompt']} prompt and {cls['outputs']} output "
                  f"tokens: linears {macs['linears']:,}, attention {macs['attention']:,} and LM head {macs['lm_head']:,} "
                  f"MACs" + (", which is the policy's own count of its class" if doc["policy_agrees"] else ""))
-    lines.append(f"  Pearl+ credits linears alone, {100 * doc['linears_share']:.2f}% of the model's MACs at this class: "
+    head = doc.get("lm_head")
+    can, share = (head["creditable_macs"], head["creditable_share"]) if head else (macs["linears"], doc["linears_share"])
+    lines.append(("  Pearl+ credits the linears and the LM head, whose calls the passes hold, " if head
+                  else "  Pearl+ credits linears alone, ")
+                 + f"{100 * share:.2f}% of the model's MACs at this class: "
                  + (f"its passes hold {doc['passes_macs']:,} of them and " if doc["passes_macs"] is not None else "")
-                 + f"its credit is {100 * doc['credited_macs'] / macs['linears']:.2f}% of them all")
+                 + f"its credit is {100 * doc['credited_macs'] / can:.2f}% of them all")
     lines.append(f"  tokens, the class's since the record holds no count of those served: {tokens['prompt']:,} prompt "
                  f"and {tokens['output']:,} output, over {tokens['positions']:,} positions")
     lines.append(f"  capacity share: {ABSENT}")

@@ -351,7 +351,7 @@ def test_a_withdrawal_of_other_files_of_the_record_is_printed_beside_the_number(
     said = f"'the private value of a coin can be recovered (only {OTHERS})', by infra"
     assert doc["withdrawn"] == [said] and doc["value"] == 0.75
     assert text[3] == f"  part of the run's record was withdrawn, none of it a file read here: {said}"
-    assert store.fetched == [C.RECORDS] and store.pulled == [[RUN, f"art:{RUN}"]]
+    assert store.fetched == [[*C.RECORDS, C.VERIFY]] and store.pulled == [[RUN, f"art:{RUN}"]]
     # a later withdrawal of the whole record refuses it
     store.withdraw(f"art:{RUN}", "the rest holds private values too")
     assert bench(store, "--from", RUN) == 2
@@ -409,7 +409,7 @@ def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tm
     store.add(RUN, record)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert store.fetched == [C.RECORDS] and not any("development" in g or "*" in g for g in C.RECORDS)
+    assert store.fetched == [[*C.RECORDS, C.VERIFY]] and not any("development" in g or "*" in g for g in [*C.RECORDS, C.VERIFY])
     assert doc["wall_s"] is None and doc["capacity_share"] is None and text[-1] == f"  capacity share: {C.ABSENT}"
     assert doc["credited_macs"] == CREDITED
 
@@ -557,12 +557,12 @@ def moved(n: Fraction) -> Callable[[dict], None]:
 
 
 def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_most(store, tmp_path, capsys):
-    """`--per-call` reads the verify document beside the answer, and only then: the causes sum to the model's MACs less
-    the credit exactly, and the calls are ordered by what each gives up, named by their linear where the model's shape
-    has one."""
+    """`--per-call` prints the split in the verify document beside the answer (which the number reads too, for the LM
+    head's calls): the causes sum to the model's MACs less the credit exactly, and the calls are ordered by what each
+    gives up, named by their linear where the model's shape has one."""
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN) == 0 and "per_call" not in printed(capsys)[1]
-    assert store.fetched == [C.RECORDS]
+    assert store.fetched == [[*C.RECORDS, C.VERIFY]]
     assert bench(store, "--from", RUN, "--per-call", "--top", "2") == 0
     text, doc, err = printed(capsys)
     assert err == "" and store.fetched[-1] == [*C.RECORDS, C.VERIFY] and doc["value"] == 0.75
@@ -651,3 +651,98 @@ def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_non
         with pytest.raises(SystemExit) as e:
             bench(store, "--from", RUN, *argv)
         assert e.value.code == 2 and "--uncredited and --top go with --per-call" in capsys.readouterr().err
+
+
+def head_call(real_rows: int = 4) -> Callable[[dict], None]:
+    """An edit that adds to a verify document's split one call of the LM head (weight 64, k = d, n = V) with `real_rows`
+    real rows and one excluded vocabulary row, whose block of 64 columns credits nothing, and restates the totals."""
+    def edit(doc: dict) -> None:
+        k, n = LLAMA.hidden, LLAMA.vocab
+        macs, out = real_rows * n * k, real_rows * 64 * k
+        checked = macs - out
+        doc["uncredited"]["calls"].append({
+            "pass": 1, "call": 72, "weight": 64, "m": 16 * -(-real_rows // 16), "k": k, "n": n, "real_rows": real_rows,
+            "k_kept": k, "rows": {"excluded_a": 0, "excluded_b": 1, "voluntary_a": 0, "voluntary_b": 0}, "macs": macs,
+            "checked_macs": checked, "uncredited_macs": {"excluded_a": 0, "excluded_b": out, "voluntary": 0, "kept_width": 0},
+            "epsilon_macs": "0", "over_bound_macs": "0", "rho_macs": str(Fraction(checked, 400)),
+            "credited_macs": str(Fraction(399 * checked, 400))})
+        resum(doc)
+    return edit
+
+
+def head_record(tmp_path: Path, real_rows: int = 4, **edits) -> Path:
+    """The fixture record with the LM head's call `head_call` in its passes, the answer's and the Lean verdict's MACs
+    and credit restated as the split's."""
+    record = a_record(tmp_path, VERIFY=head_call(real_rows), **edits)
+    totals = json.loads((record / C.VERIFY).read_text())["uncredited"]["totals"]
+    for name in (C.ANSWER, C.LEAN):
+        doc = json.loads((record / name).read_text())
+        work = doc["public"]["work"] if name == C.ANSWER else doc["work"]
+        work.update(macs=totals["checked_macs"], credited=totals["credited"])
+        (record / name).write_text(json.dumps(doc))
+    return record
+
+
+#: the LM head call's real MACs, and what of them its excluded vocabulary row's block leaves out
+HEAD_MACS, HEAD_OUT = 4 * 128_256 * 2048, 4 * 64 * 2048
+
+
+def test_a_record_whose_passes_hold_the_lm_heads_calls_counts_the_head_and_drops_it_as_a_cause(store, tmp_path, capsys):
+    """Where the verifier's split names a call of the LM head's shape, the number's text says Pearl+ credits the linears
+    and the LM head, of the MACs both hold, and `--per-call` has no LM head cause: the head's call is a call like the
+    linears' (named `lm_head`, its excluded vocabulary row's block among the excluded B rows' column blocks), and what
+    the head computes outside the passes is a cause like the linears outside them. The causes still sum exactly."""
+    store.add(RUN, head_record(tmp_path))
+    assert bench(store, "--from", RUN) == 0
+    text, doc, err = printed(capsys)
+    credited, can = doc["credited_macs"], MACS["linears"] + MACS["lm_head"]
+    assert err == "" and doc["lm_head"] == {"calls": 1, "creditable_macs": can, "creditable_share": can / TOTAL}
+    assert text[4] == (f"  Pearl+ credits the linears and the LM head, whose calls the passes hold, {100 * can / TOTAL:.2f}% of "
+                       f"the model's MACs at this class: its passes hold {120_000_000_000 + HEAD_MACS - HEAD_OUT:,} of them "
+                       f"and its credit is {100 * credited / can:.2f}% of them all")
+    assert bench(store, "--from", RUN, "--per-call", "--top", "5") == 0
+    text, doc, _ = printed(capsys)
+    got = doc["per_call"]
+    causes = {c["cause"]: Fraction(c["macs"]) for c in got["causes"]}
+    assert list(causes)[:3] == ["lm_head_outside", "attention", "outside"] and "lm_head" not in causes
+    assert causes["lm_head_outside"] == MACS["lm_head"] - HEAD_MACS and causes["outside"] == GIVE_UP["outside"]
+    assert causes["excluded_b"] == HEAD_OUT and sum(causes.values()) == got["give_up"] == TOTAL - credited
+    assert not any("LM head, which Pearl+ doesn't credit" in line for line in text)
+    assert any(line.startswith("    LM head calls outside the passes ") for line in text)
+    head = next(c for c in got["top"] if c["call"] == 72)
+    assert (head["linear"], head["n"], head["causes"]["excluded_b"]) == ("lm_head", 128_256, str(HEAD_OUT))
+
+
+def test_a_credit_above_the_linears_is_refused_unless_the_passes_hold_the_lm_heads_calls(store, tmp_path, capsys):
+    """A credit above the class's linears is no load of the class unless the verifier's split, over the answer's run
+    commitment, names the LM head's calls; then the bound is the linears and the LM head together."""
+    def credit_of(record: Path, credited: int, commitment: str | None = None) -> Path:
+        for name in (C.ANSWER, C.LEAN):
+            doc = json.loads((record / name).read_text())
+            (doc["public"] if name == C.ANSWER else doc)["work"]["credited"] = credited
+            (record / name).write_text(json.dumps(doc))
+        if commitment is not None:
+            doc = json.loads((record / C.VERIFY).read_text())
+            (record / C.VERIFY).write_text(json.dumps({**doc, "commitment": commitment}))
+        return record
+
+    over, above = MACS["linears"] + 1, MACS["linears"] + MACS["lm_head"] + 1
+    store.add(RUN, credit_of(a_record(tmp_path), over))
+    assert bench(store, "--from", RUN) == 2
+    assert f"more than the {MACS['linears']:,} of the linears of the policy's class" in capsys.readouterr().err
+    store.add(RUN, credit_of(head_record(tmp_path / "head"), over))
+    assert bench(store, "--from", RUN) == 0 and printed(capsys)[1]["credited_macs"] == over
+    store.add(RUN, credit_of(head_record(tmp_path / "other"), over, commitment="c1" * 64))
+    assert bench(store, "--from", RUN) == 2
+    assert f"more than the {MACS['linears']:,} of the linears of the policy's class" in capsys.readouterr().err
+    store.add(RUN, credit_of(head_record(tmp_path / "above"), above))
+    assert bench(store, "--from", RUN) == 2
+    assert f"more than the {MACS['linears'] + MACS['lm_head']:,} of the linears and the LM head" in capsys.readouterr().err
+
+
+def test_a_split_whose_lm_head_calls_hold_more_than_the_classs_lm_head_is_refused(store, tmp_path, capsys):
+    """The head's calls in the passes hold at most the class's LM head: 17 real rows of it a call is more than its 16."""
+    store.add(RUN, head_record(tmp_path, real_rows=17))
+    assert bench(store, "--from", RUN, "--per-call") == 2
+    assert (f"compute: the per-call split's LM head calls hold {17 * 128_256 * 2048:,} real MACs, more than the "
+            f"{MACS['lm_head']:,} of the class's LM head") in capsys.readouterr().err
