@@ -554,11 +554,10 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
 
 
 def _commitment(record: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The window record's ``commitment`` object (`pouw_h1.CALLS_FILE`); ValueError on a record that carries none."""
+    """The window record's ``commitment`` (`pouw_h1.CALLS_FILE`), read once: an empty one where the record's is absent
+    or empty."""
     c = record.get("commitment")
-    if not isinstance(c, Mapping):
-        raise ValueError("the window's record carries no commitment object")
-    return c
+    return c if c else {}
 
 
 def manifest_reason(record: Mapping[str, Any]) -> str | None:
@@ -645,7 +644,7 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
         given = _commitment(record).get("draw")
         draw: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
         coin = LiveOpening.from_json(draw.get("coin")).coin.hex()
-    except (CoinError, ValueError) as e:
+    except CoinError as e:
         return None, ("draw", f"the window's draw coin is malformed ({e})")
     return CR.drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, layout, k)
 
@@ -728,7 +727,7 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
     committed (`pouw_h1_served.descriptor`), and `live`, its live Program's evidence (`credit.LIVE_STATEMENTS`: the live
     descriptor in hex and each round's live@<s> proof files), which credit refuses when absent.
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
-    ValueError on a record that carries no commitment, or whose served trees or salt can't be read."""
+    ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocols.pouw.h1 import served as SV
     c = _commitment(record)
     served = c.get("served")
