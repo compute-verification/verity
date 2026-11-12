@@ -374,7 +374,7 @@ def render(doc: Mapping[str, Any]) -> str:
                  {"given": "given", "withheld": f"withheld (`{(final['withheld'] or {}).get('code')}`)",
                   "refused": "refused" + (f" ({E._names(final['codes'])})" if final["codes"] else ""),
                   "none": "no outcome"}[final["final"]],
-                 f"{final['decided_by']}: {final['verifier']}", "—"])
+                 f"{final['decided_by']}: {final['verifier']}", "the theorem the next block cites"])
     lines += ["", *E._table(["verdict", "what", "true", "decided by", "what proves its verifier"], body), ""]
     for stage, what in (("serve", "the serve"), ("first", "the first stage"), ("replay", "the replay of the sampled spans"),
                         ("second", "the second stage")):
