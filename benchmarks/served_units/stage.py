@@ -93,20 +93,20 @@ from typing import Callable
 import numpy as np
 
 from circuit_check import targets as TG
-from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as OG
-from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import program_digest
+from verity.circuits.types import Array
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as OG
+from verity.definitions.ops.boolean import gemm as BG
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
-from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
-from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.ops.prims import HopperE4m3QgmmaDot32
+from verity.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity.definitions.registry import boolean_fp8 as BF
 
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's

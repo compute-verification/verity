@@ -9,9 +9,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.ops import gemm
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.ops import gemm
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fixture as FX
@@ -111,7 +111,7 @@ def test_a_flushing_epilogue_would_differ() -> None:
         return a
     with np.errstate(all="ignore"):
         t = ftz(ftz(z.astype(np.float32) * ftz(sa)[:, None]) * ftz(sw)[None, :])
-    from verity.ml.kernels.tc import f2fp_bf16_batch
+    from verity.definitions.kernels.tc import f2fp_bf16_batch
     flushed = f2fp_bf16_batch(t.view(np.uint32))[0]
     assert (flushed != exact).sum() > 0
 
@@ -120,7 +120,7 @@ def test_the_twin_takes_the_definitions_order_where_the_other_orders_round_diffe
     """Scales searched so that s_w first (CUTLASS c2x's order) or s_a * s_w first rounds to another bf16 word: the twin is
     the Definition there and both other orders differ from it, so a gate through the twin fails a reordered epilogue.
     Random scales rarely tell the orders apart."""
-    from verity.ml.kernels.tc import f2fp_bf16_batch
+    from verity.definitions.kernels.tc import f2fp_bf16_batch
 
     rng = np.random.default_rng(7)
     r, k = 64, 64

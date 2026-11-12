@@ -9,7 +9,7 @@ set -uo pipefail
 export HZ_CONFIGS=forged-proofs HZ_MEM_GB=${FP_MEM_GB:-32}
 [ -n "${FP_CACHE:-}" ] && export HZ_CACHE=$FP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
 "$PY" benchmarks/one_stage/forged_proofs.py --bin "$BIN" --lean "$LEAN" --work "$W/forged" --fixture "$OUT/fixture" 2>&1 \
   | tee -a "$OUT/forged-proofs.log" | cut -c1-4000

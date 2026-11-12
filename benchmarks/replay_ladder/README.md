@@ -44,7 +44,7 @@ from a summary.json's two arms.
 
 ## Running it
 
-On a node with the pinned vLLM venv and the ladder's checkpoints (`integrations/vllm/verity_vllm/ops/pod_bootstrap.sh
+On a node with the pinned vLLM venv and the ladder's checkpoints (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh
 --cpu --cases ROLE,...` installs both on a RunPod pod and checks every shard), under `research run`, with the C4 shard
 `benchmarks/ppl/datasets.json` pins sent with `--send`:
 

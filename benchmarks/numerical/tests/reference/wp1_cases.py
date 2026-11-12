@@ -9,13 +9,13 @@ import random
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.ml.circuits.silicon.term import Term
+from verity.definitions.silicon.term import Term
 from verity_numerical.reference.hawkeye_close import E_ZERO, Gfloat, is_finite_bf16, is_finite_fp32
 
 ROOT = Path(__file__).resolve().parents[4]
-GOLDEN = ROOT / "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
+GOLDEN = ROOT / "verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
 SPECIAL = {
-    device: ROOT / f"verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/{device}/mma_special.reduced.json.gz"
+    device: ROOT / f"verity/definitions/ops/tests/fixtures/tc-total-2026-09-07/{device}/mma_special.reduced.json.gz"
     for device in ("a100", "4090")
 }
 

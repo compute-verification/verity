@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from verity.ml.crypto.blake3 import compress  # noqa: E402
+from verity.commitments.crypto.blake3 import compress  # noqa: E402
 
 NAME = "verity/kv-filler/fill-sk16/v0"
 BLK, UNIT_BLOCKS, ROWS = 4096, 32, 16

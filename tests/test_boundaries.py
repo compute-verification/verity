@@ -21,10 +21,10 @@ have import roots of their own, and only the rule that ml never imports core rea
 file under ``verity/``, tests included, reads another distribution at run time: its package data or a module named in a
 string (`RUN_TIME_READ`, matched in the text, f-strings too).
 
-numpy is a core dependency (architecture decision: `verity.ml.circuits.evaluation` batches over numpy arrays).  The
+numpy is a core dependency (architecture decision: `verity.circuits.evaluation` batches over numpy arrays).  The
 plain-integer references stay numpy-free on purpose, because they are the specification the Rust guest, the Lean vectors and
-the probes are checked against: the rest of `verity.ml.circuits` (the tensor-core step in `verity.ml.circuits.silicon`
-among them).  `verity.ml.randomness` is exact stdlib arithmetic too.
+the probes are checked against: the rest of `verity.circuits` (the tensor-core step in `verity.definitions.silicon`
+among them).  `verity.commitments.randomness` is exact stdlib arithmetic too.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ ALLOWED = {
     # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-block cut, which no verifier reads
     "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
     # Integrations are frontends. An integration hands Verity a window: its circuit, the values it
-    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
+    # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
@@ -96,7 +96,7 @@ ALLOWED = {
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
     "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
-    # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
+    # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.configuration.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`spot.challenger`).
@@ -144,13 +144,13 @@ NUMPY_USERS = ("ml/circuits/evaluation", "ml/circuits/boolean/forms.py", "ml/cir
 #: (globs from ``verity/``), each with why.
 ML_IMPORTS_CORE = {
     "ml/flock/tests/*": "Flock's tests check its prover and the Lean verifier against core's Python verifiers",
-    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.core.claims`",
+    "ml/commitments/tests/test_hm96.py": "checks that the claims hm96's PROTOCOL.md cites are ids of `verity.claims`",
     "ml/commitments/tests/test_block_check.py": "holds the opening unit's reference to the remote bandwidth audit's own "
                                                 "decode, receipts and trees (`remote_bandwidth.codec`, `receipts`, `audit`)",
     "ml/flock/python/verity_flock/rec_*.py": "V*'s builders (rec_outer, rec_residuals, rec_vstage) state the outer statement "
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
-                                             "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
+                                             "(`verity/circuits/population.py`, `verity/ml/commitments/registered.py`), "
                                              "core imports them from there, and this entry then covers only rec_live's coin "
                                              "server, which takes the inner session's coin tree from the challenger's device "
                                              "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`) and holds "
@@ -196,15 +196,15 @@ LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rule
 #: Spot areas and the sampling claims); then the certifier's Python units, modules and Lean (its packages and its
 #: Security areas).
 SPOT_PYTHON = ("core.protocols.spot",)
-SPOT_TREES = ("verity/core/protocols/spot", "verity/core/service/spot", "verity/core/service/flock",
-              "verity/ml/flock", "verity/ml/flock/pod", "verity/ml/flock/verifier", "verity/ml/flock/tool.py")
-SPOT_LEAN = ("verity/core/service/spot", "verity/core/service/flock")
+SPOT_TREES = ("verity/protocols/spot", "verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier",
+              "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py")
+SPOT_LEAN = ("verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier")
 SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
                  "Security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
-CERTIFIER_MODULES = ("verity.core.protocols.certifier", "verity.ml.protocols.certifier", "verity.core.devices.certifier")
-CERTIFIER_LEAN = ("verity/core/protocols/certifier/lean", "verity/core/devices/certifier/lean",
-                  "verity/core/protocols/network/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
+CERTIFIER_MODULES = ("verity.protocols.certifier.verifier", "verity.protocols.certifier.prover", "verity.protocols.certifier.device")
+CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/protocols/certifier/device/lean",
+                  "verity/protocols/certifier/verifier/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Files outside ``infra/`` that import a package of it, each with why.
@@ -218,32 +218,32 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the H200 example: its runner loads benchmark code by path
-    "examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
-    "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
-    "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
-    "examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the staging decode "
+    "archive/examples/h200/e2e_h200/attention.py": "compute-accounting: attn_bf16's reference kernels (`benchmarks/torch_gpu/attn_bf16`)",
+    "archive/examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
+    "archive/examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
+    "archive/examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the staging decode "
                                        "(`benchmarks/torch_gpu/p2_stage`)",
-    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
+    "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
                                                                  "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
-    "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
                                                        "`config.P2_POUS` and `config.P2_STAGE`",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
                                                                           "`config.REMOTE_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
-    "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
+    "adapters/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/ml/flock/pod/gemm_hill.py", "verity/ml/flock/pod/read_gadget.py",
-        "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
-        "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
-        "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/test_backend_bench.py", "verity/ml/flock/tests/test_class_statement.py",
-        "verity/ml/flock/tests/test_gemm_hill.py", "verity/ml/flock/tests/test_ir_lowering_bench.py",
+        "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
+        "verity/protocols/flock/prover/python/verity_flock/bench.py", "verity/protocols/flock/prover/python/verity_flock/circuit_bench.py",
+        "verity/protocols/flock/prover/python/verity_flock/instances.py", "verity/protocols/flock/prover/python/verity_flock/ir_bench.py",
+        "verity/protocols/flock/prover/python/verity_flock/register.py",
+        "verity/protocols/flock/prover/tests/test_backend_bench.py", "verity/protocols/flock/prover/tests/test_class_statement.py",
+        "verity/protocols/flock/prover/tests/test_gemm_hill.py", "verity/protocols/flock/prover/tests/test_ir_lowering_bench.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s contract, cell, generator suites and frozen instances"),
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
@@ -251,38 +251,38 @@ BENCHMARKS_IMPORTERS = {
                     "native_peak, commitments, pouw)"),
     # tests and vector scripts that check against a benchmark's reference
     **dict.fromkeys((
-        "verity/core/protocols/pouw/tests/epoch_coins_vectors.py", "verity/core/protocols/pouw/tests/test_pouw_audit.py",
-        "verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_c.py",
-        "verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py",
-        "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py",
-        "verity/core/protocols/pouw/lean/commit/tests/difftest_vectors.py",
-    ), "compute-accounting: PoUW's clear lifecycle (`benchmarks/pouw/clear`, and `pearl_c4`)"),
-    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
+        "verity/protocols/pouw/verifier/tests/epoch_coins_vectors.py", "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_epoch_coins.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
+        "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py", "verity/protocols/pouw/verifier/tests/test_pouw_pearl_kw.py",
+        "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
+    ), "compute-accounting: PoUW's clear lifecycle (`verity/protocols/pouw/clear`, and `pearl_c4`)"),
+    "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
-    **dict.fromkeys(("verity/core/protocols/pous/check/scripts/difftest_vectors.py",
-                     "verity/core/protocols/pous/check/tests/test_timed_audit.py"),
+    **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
+                     "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
                     "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
                     "responder (`benchmarks/pous/band_gpu/harness.py`)"),
-    "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
+    "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
-                     "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
-                     "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
+    **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py",
+                     "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+                     "adapters/vllm/tests/protocols/test_pouw_h1_circuits.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
-    **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
-                    "proofs: the live challenger's gate and model registry (`benchmarks/live_challenger`)"),
-    **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
-                     "integrations/vllm/tests/engine/int8_store_gpu.py"),
+                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
+    **dict.fromkeys(("adapters/vllm/tests/protocols/challenger_host.py", "adapters/vllm/tests/protocols/local_gate.py"),
+                    "proofs: the live challenger's gate and model registry (`verity/composite/device/live_challenger`)"),
+    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py",
+                     "adapters/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
                     "and `benchmarks/vllm_encoded/paged.py`"),
-    "integrations/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
+    "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
-    "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
+    "_build_unchecked": ("verity/circuits/partition_v2.py",
                          "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
@@ -290,7 +290,7 @@ TEST_ONLY = {
 #: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
 #: import, an attribute or a string), each with the module and why a verifier must not read it.
 PROVER_ONLY = {
-    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+    "trace_cache": ("verity/definitions/ops/boolean/trace_cache.py",
                     "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
                     "entry for a Definition's gates"),
 }
@@ -305,7 +305,7 @@ def _separate(rel: Path) -> bool:
 
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree, and no circuit-check
+    directory (core's Lean builds in ``verity/protocols/flock/verifier/.lake``) or a ``SEPARATE`` tree, and no circuit-check
     sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
@@ -403,7 +403,7 @@ def test_a_run_time_read_is_found() -> None:
     distribution; ``verity``'s own package data is not."""
     src = ('P = resources.files("verity_vllm") / "pins"\nm = importlib.import_module("verity_vllm.pins")\n'
            "n = import_module(f'verity_vllm.{x}')\no = __import__('research')\n"
-           'q = resources.files("verity.ml.circuits.ops") / "tables"\nr = resources.files(__package__)\n')
+           'q = resources.files("verity.definitions.ops") / "tables"\nr = resources.files(__package__)\n')
     assert _run_time_reads(src) == [(1, "verity_vllm"), (2, "verity_vllm"), (3, "verity_vllm"), (4, "research")]
 
 
@@ -624,17 +624,17 @@ def test_spot_never_imports_the_network_certifier_in_lean() -> None:
 def test_a_spot_import_of_the_certifier_is_found() -> None:
     """The check above isn't vacuous: a certifier module that a SPOT root reaches through another module is found with the
     chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules."""
-    files_of = {"B": ["s/B.lean"], "C": ["verity/core/protocols/certifier/lean/C.lean"]}
+    files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/certifier/device/program/lean/C.lean"]}
     imports = {"s/A.lean": ["Mathlib.X", "B"], "s/B.lean": ["C"]}
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
-    assert found == ["verity/core/protocols/certifier/lean/C.lean <- s/B.lean <- s/A.lean"], found
+    assert found == ["verity/protocols/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
     assert _covered("Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
     assert not _covered("Security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
-    modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/core/service/flock/Flock/Bytes.lean"],
-                            ["Security/Proofs/lakefile.toml", "verity/core/service/flock/lakefile.toml"])
+    modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean"],
+                            ["Security/Proofs/lakefile.toml", "verity/protocols/flock/verifier/lakefile.toml"])
     assert modules == {"Proofs.Flock.Bytes": ["Security/Proofs/Flock/Bytes.lean"],
-                       "Flock.Bytes": ["verity/core/service/flock/Flock/Bytes.lean"]}, modules
+                       "Flock.Bytes": ["verity/protocols/flock/verifier/Flock/Bytes.lean"]}, modules
 
 
 def _infra_packages() -> set[str]:
@@ -943,10 +943,10 @@ def test_only_tests_call_a_function_past_a_guard() -> None:
 def test_a_use_past_a_guard_is_found() -> None:
     """The check above isn't vacuous: an import, an attribute call and a ``getattr`` string are each a use, and the
     definition is not."""
-    src = ("from verity.ml.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
+    src = ("from verity.circuits.partition_v2 import _build_unchecked as b\nV._build_unchecked(P)\n"
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
-    assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+    assert _is_test("verity/circuits/tests/test_partition_v2.py") and not _is_test("verity/circuits/partition_v2.py")
 
 
 def test_core_never_names_a_prover_only_module() -> None:

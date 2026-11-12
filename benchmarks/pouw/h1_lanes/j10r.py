@@ -42,17 +42,17 @@ sys.path.insert(0, str(HERE))
 
 import run as RN  # noqa: E402
 from run import U  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw import weights as W  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1tile as H  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
-from verity.core.protocols.spot.one_stage import produced as PR  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
-from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402
+from verity.protocols.pouw.verifier import weights as W  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as H  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 
 RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
 RN.RC = RC

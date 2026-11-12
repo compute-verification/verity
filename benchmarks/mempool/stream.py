@@ -1,4 +1,4 @@
-"""`CacheStep_v3`'s specification (`verity.ml.protocols.certifier.cache_step_v3.Stream`) held to the RAM pool (`pool_ram`,
+"""`CacheStep_v3`'s specification (`verity.protocols.certifier.prover.cache_step_v3.Stream`) held to the RAM pool (`pool_ram`,
 itself held to vLLM's `BlockPool`) after every pool call, over the encodings' traces and synthetic ones: the two pools' states
 agree (but for the memo's stamps, which the RAM pool doesn't have), and so do each call's results, every memoized hit's
 among them. The stream is cut into windows of about ``--window`` slots, the pool carried from one to the next, and each
@@ -22,7 +22,7 @@ import pool_ram as PR
 from difftest import FIXTURES, load, synthetic
 from pool_ram import RP
 
-from verity.ml.protocols.certifier import cache_step_v3 as V3
+from verity.protocols.certifier.prover import cache_step_v3 as V3
 
 T = V3.TAGS
 TRACES = ("async-prefix-cache.jsonl", "async-crush.json.gz", "sync-crush.json.gz")

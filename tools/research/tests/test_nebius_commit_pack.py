@@ -31,7 +31,7 @@ def _load(path: Path, name: str, monkeypatch):
 
 
 def _tree(root: Path, deferred: bool = True) -> Path:
-    tools = root / "integrations/vllm/verity_vllm/pipeline/research_tools.py"
+    tools = root / "adapters/vllm/verity_vllm/pipeline/research_tools.py"
     tools.parent.mkdir(parents=True)
     tools.write_text("VLLM_REPLAY = 'vllm.replay'\n" if deferred else "VLLM_COMMIT = 'vllm.commit'\n")
     return root

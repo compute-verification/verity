@@ -7,7 +7,7 @@
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
 # `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
-# URLs of the pinned upstream build when COMMIT changes verity/ml/flock/ or verity/core/service/flock/ against origin/main, which
+# URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/prover/ or verity/protocols/flock/verifier/ against origin/main, which
 # the run fetches. --agreement sends them whatever the train changes: the lander's rule for a train that adds or changes a
 # guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds

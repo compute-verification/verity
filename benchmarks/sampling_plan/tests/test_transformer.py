@@ -15,11 +15,11 @@ from types import SimpleNamespace
 import pytest
 
 import transformer as T
-from verity.core.protocols.spot.one_stage.draw import work_k
-from verity.core.protocols.spot.optimize import Candidate
-from verity.ml.circuits.codec import descriptor_id
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.ops import gemm as G
+from verity.protocols.spot.verifier.one_stage.draw import work_k
+from verity.protocols.spot.optimize import Candidate
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.definitions.ops import gemm as G
 
 CENSUS = Path(__file__).resolve().parents[2] / "census" / "hardware.json"
 CIR_100 = ("Argmax", "EmbedSelect", "Quant", "Relu", "Rms", "Softmax")

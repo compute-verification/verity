@@ -10,13 +10,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings
 inputs = [
-    "tools/config/verity_config",
+    "verity/configuration/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
-    "integrations/vllm/verity_vllm/__init__.py",
-    "integrations/vllm/verity_vllm/engine/__init__.py",
-    "integrations/vllm/verity_vllm/engine/hooks.py",
-    "integrations/vllm/verity_vllm/engine/step_trace.py",
-    "integrations/vllm/verity_vllm/pipeline/__init__.py",
-    "integrations/vllm/verity_vllm/pipeline/serve_admit.py",
+    "adapters/vllm/verity_vllm/__init__.py",
+    "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/engine/step_trace.py",
+    "adapters/vllm/verity_vllm/pipeline/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
 ]

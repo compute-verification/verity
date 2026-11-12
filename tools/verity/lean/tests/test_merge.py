@@ -1202,10 +1202,10 @@ dependencies = ["numpy>=1.26",
 [tool.verity.tests]
 paths = ["tests"]
 inputs = ["verity/__init__.py", "verity/settings.py",
-          "verity/ml/circuits",
+          "verity/circuits",
           # the H1 units read both.
-          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
-          "verity/ml/protocols/pous/circuit.py"]
+          "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
+          "verity/protocols/pous/prover/circuit.py"]
 untraced = ["fixtures"]
 '''
 
@@ -1220,20 +1220,20 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
     merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
     import tomllib
-    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    tail = '"verity/protocols/pous/prover/circuit.py"]'
     def add(*xs):
         return PYPROJECT.replace(tail, tail[:-1] + "".join(f',\n          "{x}"' for x in xs) + "]")
     text, left = _pyproject(tmp_path, PYPROJECT, add("verity/a.py"), add("verity/b.py"))
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/ml/protocols/pous/circuit.py", "verity/b.py",
+    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/pous/prover/circuit.py", "verity/b.py",
                                                              "verity/a.py"]
     assert doc["project"] == tomllib.loads(PYPROJECT)["project"] and "# the H1 units read both." in text
     gone = PYPROJECT.replace(tail, '"verity/a.py"]')
     text, left = _pyproject(tmp_path, PYPROJECT, gone, add("verity/b.py"))
     assert left == 0, text
     assert set(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:]) == {
-        "verity/core/protocols/pouw/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
+        "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
     def version(v):
         return add(f"verity/{v}.py").replace('version = "0.1.0"', f'version = "{v}"')
     text, left = _pyproject(tmp_path, PYPROJECT, version("1"), version("2"))
@@ -1255,7 +1255,7 @@ def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
     pp = repo / "pyproject.toml"
-    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    tail = '"verity/protocols/pous/prover/circuit.py"]'
     git(repo, "init", "-q", "-b", "main")
     for name in ("main", "a", "b"):
         if name != "main":
@@ -1374,7 +1374,7 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
             in capsys.readouterr().err)
 
 
-SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/service/flock", "verity/core/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",

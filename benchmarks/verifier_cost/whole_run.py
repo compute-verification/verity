@@ -23,11 +23,11 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "verity/core/service/spot/tests"))
+sys.path.insert(0, str(ROOT / "verity/protocols/spot/verifier/lean/tests"))
 
 import test_difftest as T  # noqa: E402
-from verity.ml.circuits import codec, partition_object as PO  # noqa: E402
-from verity.ml.circuits.population import mixed_population_program  # noqa: E402
+from verity.circuits import codec, partition_object as PO  # noqa: E402
+from verity.circuits.population import mixed_population_program  # noqa: E402
 
 L5 = [
     ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),

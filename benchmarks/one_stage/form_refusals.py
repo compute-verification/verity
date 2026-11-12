@@ -1,4 +1,4 @@
-"""The fixture of `verify --zk`'s form refusals (`verity/core/protocols/spot/tests/test_form_refusals.py`): honest
+"""The fixture of `verify --zk`'s form refusals (`verity/protocols/spot/verifier/tests/test_form_refusals.py`): honest
 M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
 `forged_proofs.py` stages them, differing in the statement's form:
 
@@ -11,7 +11,7 @@ M0 `--zk` sessions, each of N instances with every unit sampled and bound to its
 `verify` gives the tail's reason only once every earlier check, the proof's included, has passed. Lean's verdict on the
 honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
       --tmpl-unit flock-tmpl-unit --work DIR --fixture DIR
 
@@ -38,17 +38,17 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.ops.fp32 import F32AddFtz  # noqa: E402
-from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.definitions.ops.fp32 import F32AddFtz  # noqa: E402
+from verity.definitions.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
+from verity.circuits.types import Array, Value  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import tmpl as TM  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
 
 #: statements the flat session's files don't fit, each refused for its own reason: typed, public outputs, plain leaves,
 #: templated
