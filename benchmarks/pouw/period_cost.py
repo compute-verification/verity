@@ -420,16 +420,16 @@ def single_levers(base: Config = TODAY) -> list[dict]:
 LONG_DRAWS = (1.05, 1.1, 1.25, 1.5, 2, 3, 4, 8)
 
 
-def least_one_window_draws(c: Config) -> int:
+def least_one_window_k_d(c: Config) -> int:
     """The least K_d for which some number of rounds brings one window under 1%."""
     need = lam_limit(1, c.r) * c.delta_s_log2 * math.log(2) / (c.u * (TARGET - c.eps_flat))
     return math.floor(need) + 1
 
 
 def long_window(base: Config) -> Config:
-    """One window long enough on its own: of K_d at `LONG_DRAWS` times `least_one_window_draws`, each at the least
+    """One window long enough on its own: of K_d at `LONG_DRAWS` times `least_one_window_k_d`, each at the least
     rounds that bring it under 1% (n falls with M), whichever ends soonest."""
-    best, k0 = None, least_one_window_draws(base)
+    best, k0 = None, least_one_window_k_d(base)
     for k in sorted({math.ceil(k0 * f) for f in LONG_DRAWS}):
         hi = 1
         while windows(replace(base, draws=k, rounds=hi)) > 1:
