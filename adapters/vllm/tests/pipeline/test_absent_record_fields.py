@@ -9,8 +9,9 @@
   none; a replay record states its strata under `sampled_replay`, else under `replay_partition`, else the run has no units; a stored
   Program without `build_dirs` places no request.
 * `verity_vllm.pipeline.match`: the realized shape of a run counts a request's tokens only where its record states no count, reads
-  the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names; the Program
-  writer's request table and instance rows list nothing for a request with no prompt ids or samples and an instance with no views.
+  the engine's steps at the record's top, else under its `timing`, and the steps kept under either of two names.
+* `verity_vllm.pipeline.match_fold`: the Program writer's request table and instance rows list nothing for a request with no
+  prompt ids or samples and an instance with no views.
 * `verity_vllm.pipeline.global_program`: a component states its applicability at its record's top, else under `artifact`; a
   declaration without components, or without a sampler, is a greedy one; a weights record without `unresolved` or `checkpoint`
   lists none and names no directory; the command's summary states null for a block the result does not have.
@@ -41,6 +42,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.pipeline import match as RC
+from verity_vllm.pipeline import match_fold as MF
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import program_graph as PG
 from verity_vllm.pipeline import vu_store as VS
@@ -289,7 +291,7 @@ def _fold(**stated) -> SimpleNamespace:
 
 
 def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_and_an_instance_without_views(tmp_path, monkeypatch):
-    monkeypatch.setenv(RC.INSTANCES_FORM_ENV, "runs")
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, "runs")
     requests = [{"request_id": "r0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}, {"request_id": "r1", "prompt_token_ids": None},
                 {"request_id": "r2", "prompt_token_ids": []}, {"request_id": "r3"}, {"prompt_token_ids": [9]}]
     instances = [{"step": 0, "name": "a"}, {"step": 1, "name": "b", "operand_views": None, "output_views": []},
@@ -299,7 +301,7 @@ def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_a
                           ("some", {"sampled": {"r0": [5, 6], "r1": [], "r2": None, None: [1]}})):
         d = tmp_path / name
         d.mkdir()
-        written = RC.persist_program(_fold(requests=requests, instances=instances, **sampled), d, profile_name="toy", log_path="log")
+        written = MF.persist_program(_fold(requests=requests, instances=instances, **sampled), d, profile_name="toy", log_path="log")
         assert written == {"instances": {"path": str(d / "instances.jsonl"), "bytes": (d / "instances.jsonl").stat().st_size, "n": 3,
                                          "operand_refs_form": "runs"}}
         head, *rows = [json.loads(line) for line in (d / "instances.jsonl").read_text().splitlines()]
@@ -311,7 +313,7 @@ def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_a
     for name, absent in (("no requests", {}), ("null requests", {"requests": None}), ("empty requests", {"requests": []})):
         d = tmp_path / name
         d.mkdir()
-        RC.persist_program(_fold(instances=[], **absent), d, profile_name="toy", log_path="log")
+        MF.persist_program(_fold(instances=[], **absent), d, profile_name="toy", log_path="log")
         assert json.loads((d / "instances.jsonl").read_text())["requests"] == []
 
 
