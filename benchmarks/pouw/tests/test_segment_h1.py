@@ -4,22 +4,14 @@
 from the thread's leaves, coin and sample, and refuses each with one bit changed."""
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
+import checked_strip as cs
 import numpy as np
 import pytest
+from conftest import load
 
 from verity.protocols.pouw.prover.circuit import segment as SG
 
-POUW = Path(__file__).resolve().parents[1]
-
-
-def _load(path: Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+derive = load("floored_gemm/derive.py")
 
 
 def _thread_args(V, W, b, c, U, z, ks, ctid):
@@ -47,8 +39,6 @@ def _thread_args(V, W, b, c, U, z, ks, ctid):
 
 @pytest.mark.parametrize("ks,fold", [(2, "duo"), (4, "duo"), (4, "fx1"), pytest.param(130, "duo", marks=pytest.mark.slow)])
 def test_call_check_accepts_cgemm_refs_receipts(ks, fold):
-    cs = _load(POUW / "theory" / "checked_strip.py", "checked_strip")
-    derive = _load(POUW / "floored_gemm" / "derive.py", "floored_gemm_derive")
     rng = np.random.default_rng(ks)
     k, T = 32 * ks, 128
     V, W = rng.integers(-127, 127, (T, k)), rng.integers(-60, 61, (T, k))

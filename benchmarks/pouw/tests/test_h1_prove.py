@@ -12,39 +12,30 @@ opened ``b || c`` and paths is Flock's own over the rows."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import h1unit as U
+import layer as L
 import numpy as np
 import pytest
+import window as W
+from conftest import load
 
+from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
-sys.path.insert(0, str(H1))
-import h1unit as U  # noqa: E402
-
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-
-
-def _module(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, H1 / file)
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
-RN = _module("h1_prove_run", "run.py")
-W = _module("h1_prove_window", "window.py")
-ST = _module("h1_prove_stage", "stage.py")
+#: by `load`: h1_lanes holds a ``run.py`` and hidden_zk a ``stage.py`` too
+RN = load("h1_prove/run.py")
+ST = load("h1_prove/stage.py")
 
 K = 64
 R, C = U.TILE
@@ -665,7 +656,6 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
 
 def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     """vLLM's quantizer (and H1's) give each row's codes and its f32 scale, the one the window commits beside them."""
-    L = _module("h1_prove_layer", "layer.py")
     x = np.array([[0.5, -2.0, 1.1, 0.26, 9.0], [-4.0, 1.0, 0.016, -0.015, 3.0]], np.float32)
     q, s = L.quant_vllm(x)
     assert q.tolist() == [[7, -28, 16, 4, 127], [-127, 32, 1, 0, 95]]
@@ -687,7 +677,6 @@ def test_a_layers_tokens_come_from_the_seed_or_the_models_tokenizer_and_a_tokeni
     """`layer.tokens_of` gives the seed's ids where a seed is given and a fresh seed's where the model has no tokenizer;
     where it has one, the prompt's ids are the tokenizer's, and a tokenizer that doesn't load raises instead of
     falling back to a fresh seed."""
-    L = _module("h1_prove_layer", "layer.py")
     seeded = L.tokens_of(tmp_path, 6, b"\x01" * 16)
     assert seeded == L._seeded(6, b"\x01" * 16) != L._seeded(6, b"\x02" * 16) and seeded[0] == 128000
     fresh = L.tokens_of(tmp_path, 6, None)
