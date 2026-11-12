@@ -10,12 +10,12 @@ that consumes another's answer.
 -/
 module
 
-public import Flock.Canon
-public import Flock.Draw
+public import Base.Canon
+public import Commitments.Draw
 public import CoreProtocol.Ratio
 meta import Lean.Data.Json
-meta import Flock.Canon
-meta import Flock.Draw
+meta import Base.Canon
+meta import Commitments.Draw
 meta import CoreProtocol.Ratio
 
 @[expose] public section

@@ -1,7 +1,7 @@
 module
 
 public import Lms.Hss
-public import Flock.FV3
+public import Commitments.FV3
 
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
