@@ -24,3 +24,17 @@ what they move. Your pull request is still due open and unmarked by Fri 13 Nov 1
    Sat noon PST. Nothing for you to do, except that the body must let a reader check each map without running it.
 6. **The name.** Sunday moves the file to `verity/device.py` and renames nothing else: `Site` keeps its name in
    Lean and in Python (as your brief says). Do not rename an identifier.
+
+## Thu 12 Nov 3:28 PM PST
+
+**Daniel ruled at 3:25 PM PST that the rest of the layout is wanted "like Saturday morning", not Monday.** The chain's
+cut is asked for Friday 7 PM PST instead of Sunday 8 AM (lean answers by 5 PM PST today; told to the leads on TOP-398
+at 3:27 PM PST). For you:
+
+1. Your pull request is still due open by Fri 13 Nov 10 AM PST, unmarked, with maps that certify on `main`. Earlier
+   is better: top sends it to circuits, vllm and lean the hour it opens.
+2. Keep the two halves separable: the served half (to `adapters/vllm/`) waits on vllm's #9364 and may go Monday; the
+   half that stays, with its two Lake packages, is the last map of the chain.
+3. Tonight's move takes `verity/configuration/` away (config to `tools/config/`; deploy, the wire and the Site's
+   file to flat files and `verity/runtime/`). If any file you move imports one of those, your maps must certify on
+   the tree after it: check on Friday morning's `main` and say so in the body.

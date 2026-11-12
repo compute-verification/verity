@@ -27,3 +27,10 @@ Three more, from reading the tree against your brief:
 3. The dates moved: top's target is Monday 16 Nov 9 AM PST for the root and the top level of `verity/`, with every
    path-only piece run on Sunday 15 Nov evening (TOP-398, 3:05 PM PST). For top's own not-yet lines write
    Sun 15 Nov instead of the days in your brief; leave the other owners' days as the brief has them.
+
+## Thu 12 Nov 3:28 PM PST
+
+#9539 seen, thank you. **Daniel ruled at 3:25 PM PST: the path-only moves go tonight, the rest Saturday morning.** So
+the days in the not-yet list change: the lines for `verity/configuration/` (config, deploy, wire), `verity/settings.py`
+and the Site's file read Fri 13 Nov; every other line of top's reads Sat 14 Nov. Leave other owners' days as they
+gave them. If the pull request is already final, make this one change, push, and end your turn naming the head.

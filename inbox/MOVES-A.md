@@ -39,3 +39,18 @@ run, or Sunday), the pieces with no Lake package go first. So split your work in
    even if a node run is still in line; say at the top of the body what is proved and what is still running.
 2. **Second, by Fri 13 Nov 10 AM PST as before:** the challenger's service to `compose/`, `artifacts.json`, and the
    difftest map (the one with the Lake package, last).
+
+## Thu 12 Nov 3:28 PM PST
+
+**Daniel ruled at 3:25 PM PST: "let's get as much of the cosmetic stuff done as possible ASAP, like by tonight or by
+tomorrow morning. And then the rest can be like Saturday morning". Told to the leads on TOP-398 at 3:27 PM PST.**
+
+1. **Tonight: your `config` and `settings` maps only.** They are the first two links of tonight's chain; MOVES-B's
+   flat files come after them. Your first pull request, open by 7 PM PST, holds exactly those two maps, their hand
+   edits, and the staged moves on today's `main`, certified. Bench instances join it only if they need no hand edit
+   and certify; otherwise they go with the rest. Write in the body, as commands someone else can run on a fresh
+   clone, how to restage it on a newer `main` (which commits are kept, which are generated and regenerated).
+2. **The rest is asked for Saturday morning, not Sunday:** the chain's cut is Friday 7 PM PST if lean can hold it
+   (lean answers by 5 PM PST today). Your second pull request (the challenger's service, `artifacts.json`, difftest
+   last) is still due open by Fri 13 Nov 10 AM PST, certified on `main`.
+3. **End your turn when each pull request is open**, naming its number; everything pushed.

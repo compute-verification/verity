@@ -55,3 +55,24 @@ run, or Sunday), your move is the first piece wanted, so the order of your work 
    `verity/configuration/deploy/`; memory-accounting's #9426 edits nine files there and #9425 adds imports of the
    wire. For each open pull request that touches a file you move, say whether a plain merge onto the moved tree is
    clean (git follows the rename) and whether a line it adds would still name an old module.
+
+## Thu 12 Nov 3:28 PM PST
+
+**Daniel ruled at 3:25 PM PST: "let's get as much of the cosmetic stuff done as possible ASAP, like by tonight or by
+tomorrow morning. And then the rest can be like Saturday morning". Your move goes TONIGHT.** Told to the leads on
+TOP-398 at 3:27 PM PST. What it means for you:
+
+1. **Your pull request is open by 7 PM PST today, complete:** the map, the hand edits (`tests/test_boundaries.py`,
+   `public_boundary.toml`, the three handshake lines, the wire's suite row), and the staged move on today's `main`,
+   certified by `move_check.py`. The suites over the files you move, on a node, as far as the lines allow: say in
+   the body which ran and which are still in line. Unmarked; top reads it and marks.
+2. **Tonight's chain is MOVES-A's config and settings maps first, then yours.** Stage yours on `main` alone for the
+   7 PM pull request. Top builds the chain at about 10 PM PST and tells you then; do not wait for MOVES-A.
+3. **The landing needs a restage at about midnight PST**, on the `main` that holds tonight's landings (lean's merge
+   #9375 among them: it changes 39 of the files you rewrite). So write in the body, as commands someone else can run
+   on a fresh clone, exactly how to restage: which commits are the map and hand edits (kept), which are generated
+   (dropped and regenerated), the `stage.py` and `move_check.py` lines, and what to check after.
+4. **End your turn once the pull request is open**, naming its number. Top resumes you for the restage; a resume is a
+   new machine, so everything must be pushed.
+5. The Sunday items of the 3:08 PM message still hold for your part of the later chain, but that chain's cut is now
+   asked for Friday 7 PM PST (lean answers by 5 PM PST today). Nothing of yours is in it if tonight's move lands.
