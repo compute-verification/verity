@@ -69,10 +69,12 @@ Open premises (`open`):
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
-    is withheld;
+    is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
+    `network/tests/period_case.py` for the third;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`.
+  - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
+    `NetworkCheck.Certificate`'s.
 - **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
   library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
