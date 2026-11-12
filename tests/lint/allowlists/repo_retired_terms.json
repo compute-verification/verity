@@ -3131,6 +3131,7 @@
     {"file": "benchmarks/pous/served_case.py", "count": 5},
     {"file": "benchmarks/pous/served_piece.py", "count": 4},
     {"file": "benchmarks/pous/served_piece.sh", "count": 1},
+    {"file": "benchmarks/pous/streamed_wipe/bench.py", "count": 2},
     {"file": "benchmarks/pous/streamed_wipe/demo.sh", "count": 4},
     {"file": "benchmarks/pous/streamed_wipe/run.sh", "count": 1},
     {"file": "benchmarks/pous/streamed_wipe/served_wipe.sh", "count": 4},
