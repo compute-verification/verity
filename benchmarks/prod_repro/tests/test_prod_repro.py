@@ -239,6 +239,20 @@ def test_what_ran_names_the_arm_that_failed_the_one_that_stopped_and_a_replay_th
             f"  the replay: DID NOT END; its log ends: SystemExit: steps [3] hold rows of another load ({log})\n") in txt
     # a replay that was asked for and did not end fails the job, and the tokens line says where it stopped
     assert rc == 1 and r["failed"] == ["a replay was asked for and the tokens line is not measured"]
+    # where the failed arm's server left a log, the line names the first exception in it: the record's error is the
+    # last thing that failed, and the cause is above it
+    (out / "compiled/server").mkdir(parents=True, exist_ok=True)
+    (out / "compiled/server/server.log").write_text(
+        "INFO 11-12 [model.py:1] Using max model len 262144\n"
+        "(EngineCore pid=7) ERROR 11-12 [core.py:9] torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 24.00 GiB.\n"
+        "RuntimeError: Engine core initialization failed. See root cause above.\n")
+    P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
+    assert ("  compiled: FAILED: RuntimeError: the server exited 1 before it was ready (its record's error; the first "
+            "exception its server's log names: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 24.00 GiB. "
+            "(compiled/server/server.log)); NOTHING of the load was served\n") in (out / "prod_repro.txt").read_text()
+    (out / "compiled/server/server.log").write_text("INFO 11-12 [model.py:1] Using max model len 262144\n")
+    P.main(["report", str(out), "--load", LOAD, "--again", "", "--stock", "compiled", "--ours", "record", "--expect-replay"])
+    assert "its server's log names no exception: compiled/server/server.log" in (out / "prod_repro.txt").read_text()
     assert (f"tokens: not measured: the replay did not end (no replay.json in {out / 'replay-compiled'}); its log ends: "
             "SystemExit: steps [3] hold rows of another load") in txt
     assert "cost: not measured: compiled did not serve load burst" in txt

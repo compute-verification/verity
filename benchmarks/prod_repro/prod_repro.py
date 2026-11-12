@@ -158,9 +158,23 @@ def arm_state(arm_dir: Path, load: str) -> dict:
     meta = json.loads(f.read_text())
     passes = [x for x in meta.get("loads") or [] if of_load(x["load"], load)]
     return {"started": True, "error": meta.get("error"), "stopped": meta.get("stopped"), "startup_s": meta.get("startup_s"),
+            "log_error": first_error(arm_dir / "server" / "server.log") if meta.get("error") else None,
             "passes": len(passes), "requests": sum(x.get("requests") or 0 for x in passes),
             "unfinished": sum(x.get("unfinished") or 0 for x in passes),
             "ok": bool(passes) and not meta.get("error") and not meta.get("stopped")}
+
+
+def first_error(log: Path) -> str | None:
+    """The first line of a log that is an exception's own (``SomeError: what``), from the exception's name on and cut
+    to `LINE_MAX` characters: under a server that failed, the first cause its log names, where the record's error is
+    the last thing that failed for it. None without the log, "" where it names none."""
+    if not log.is_file():
+        return None
+    for x in log.read_text(errors="replace").splitlines():
+        m = re.search(r"\b[\w.]+(?:Error|Exception)\b: .*", x)
+        if m:
+            return m.group(0).strip()[:LINE_MAX]
+    return ""
 
 
 def last_line(log: Path) -> str | None:
@@ -766,7 +780,11 @@ def _arm(name: str, s: dict) -> str:
         f"the load served {s['passes']} time{'' if s['passes'] == 1 else 's'}, {s['requests']:,} requests, "
         + ("every one finished" if not s["unfinished"] else f"{s['unfinished']:,} UNFINISHED"))
     if s["error"]:
-        return f"  {name}: FAILED: {s['error']} (its record's error; its server's log: {name}/server/server.log); {up}{served}"
+        first = s.get("log_error")
+        log = (f"its server's log: {name}/server/server.log" if first is None else
+               f"its server's log names no exception: {name}/server/server.log" if not first else
+               f"the first exception its server's log names: {first} ({name}/server/server.log)")
+        return f"  {name}: FAILED: {s['error']} (its record's error; {log}); {up}{served}"
     if s["stopped"]:
         st = s["stopped"]
         return (f"  {name}: STOPPED before {st.get('before')} rep {st.get('rep')} (--stop-at {st.get('stop_at')}: the pass "

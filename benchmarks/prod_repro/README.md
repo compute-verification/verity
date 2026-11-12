@@ -71,8 +71,10 @@ token that does and the first step.
 - **model**: the model as the benchmark names it and the checkpoint the engines loaded; they are two things where
   `CHECKPOINT` names another model's directory.
 - **what ran**: each arm from its own record (`meta.json`): the seconds its server took to come up, how many times it
-  served the load and how many requests it left unfinished; `FAILED` with the record's error, `STOPPED` before the
-  pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it ended, and where
+  served the load and how many requests it left unfinished; `FAILED` with the record's error and the first exception
+  its server's log names (the record's error is the last thing that failed, and the cause is above it), `STOPPED`
+  before the pass `STOP_AT` left no time for, `NOT SERVED` for an arm with no record. Then the replay: whether it
+  ended, and where
   it did not, the last line of its log (`out/replay-<mode>.log`); and the replay's engine, as the replay's own
   record says: the plugins and environment of ours it ran under and what set them (the replay), or that ours serves
   with no plugin beside its record.
