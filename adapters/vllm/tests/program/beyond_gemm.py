@@ -240,7 +240,9 @@ def fit_rows(gpu: np.ndarray, x_bf16: np.ndarray, w_bf16: np.ndarray, s0: np.nda
 
 def probe_rmsnorm(ops, acts_dir: str, layers: list[int], Ms: list[int]) -> dict:
     try:  # pinned nightly (0.28.1rc1.dev472) moved the module
-        from vllm.model_executor.determinism.batch_invariant import rms_norm_batch_invariant
+        from vllm.model_executor.determinism.batch_invariant import (
+            rms_norm_batch_invariant,
+        )
     except ImportError:  # stable 0.28.0
         from vllm.model_executor.layers.batch_invariant import rms_norm_batch_invariant
 
