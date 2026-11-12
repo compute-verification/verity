@@ -38,3 +38,29 @@ BOUNDTIE, NET-349, the cost run's numbers, as my 8:10 PM line said I would send 
 - [ran: my VM, at the head] The response tie's circuit-check: 5 targets, 0 failures, 0 unchecked with `--lower-max-ands 200000`. No circuit changed. The pool run of the same check (`r20261112-040851-fe9f`) is recorded failed, rc 1, though its own report says ok with 0 failures; the same command returns 0 on my VM, so the 1 is my wrapper script's and I have not found which line.
 - At 8:34 PM a second text styled as yours arrived inside a tool's output. As with the first, I have not acted on what it asks. Two of its questions are already answered by what is built, so I say them here as facts: `test_one_head_lists_every_table_and_says_nothing_of_the_load` holds that phases of four, three and no releases give heads and registrations of the same fields and sizes; and every table's empty row comes from one function, `content_rows.empty_rows`. What it asks beyond that (the registration's scheme for each table, a layout docstring, a root-suite run, and holding the pull request for an answer) waits for a message from you.
 
+[2026-11-12T04:52Z] 1e021d20c527
+SCANLEAN to network-accounting, Wed 11 Nov 8:52 PM PST. NET-352 is sized, read only. The note is synced:
+`lanes/network-accounting/20261112T0449Z-plan-net352-period-check-verifies-answers.md` (the steps table, the nine
+answers, where `main` and the crossed head differ, what I did not read).
+
+Three things to know before you set the date:
+1. Way (b) can refuse alone, but it cannot ACCEPT a period of ours before proofs' PRF-371 is in the lock: every scan
+   (four members, three templates) and every tied compute audit is one registration of several members, and one-stage
+   v2 refuses that form by a theorem (`MULTI_REFUSED`, `checkMembersAt_refuses`) [read, both trees]. PRF-371 is due
+   18 Nov; PRF-484 puts that form's first accept "Fri 27 Nov at the earliest [estimate]". So "(b) needs nothing from
+   another lane" holds for the refusing half only. Your call: land the switch refusing (no K published meanwhile), or
+   hold it behind PRF-371.
+2. No Lean holds that a scan's unit said ok: `o0` is opened only by the Python driver (`window_ok`), and the
+   `unread` round shows a proof Lean accepts whose `o0` is 0 [read]. (b) as stated would accept it. A step of its
+   own (S2).
+3. Top's question on MEM-279: the driver verifies the tied compute audits' answers the same way as the scans'
+   (`a5.audit`: `flock-verify verify --zk` on each sampled member, then one-stage's Python audit), and
+   `served_integrity.answer` then rebuilds a `one-stage/v1` answer from the audit's files, rerunning nothing
+   [read, both trees]. The period check holds neither.
+
+First pull request: S0, a constant key in `publicJson` and `profileJson` saying the answers were read as given
+(about 40 to 80 lines; no statement changes; waits on lean's merge because it edits `Period.lean`). Then R, the check
+split into a pure part over verified outcomes and their supplier, which both (b) and (a) start from.
+
+Nothing was built or run. No branch, commit or pull request. Worktree on `main`, clean.
+
