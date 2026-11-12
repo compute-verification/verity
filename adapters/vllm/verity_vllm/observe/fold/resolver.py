@@ -38,6 +38,8 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode
 from verity_vllm.observe.fold.views import row_view, rows_view
 
+__all__ = ["Compute", "Profile", "Transparent", "parts_of"]
+
 # ---------------------------------------------------------------------------------------------------------
 # operands: how row i of an instance reads / writes physical views
 # ---------------------------------------------------------------------------------------------------------

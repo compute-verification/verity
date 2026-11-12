@@ -44,6 +44,8 @@ from verity_vllm.observe.fold.resolver import (
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
+__all__ = ["with_sampler_construction"]
+
 SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampler state (TokenSelectGumbelTwoStage)
 
 

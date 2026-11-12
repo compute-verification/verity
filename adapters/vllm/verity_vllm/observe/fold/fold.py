@@ -162,6 +162,8 @@ from verity_vllm.observe.log import split_steps
 from verity_vllm.program import model as analytic
 from verity_vllm.program import sampling_event as SE
 
+__all__ = ["FoldResult", "fold", "summarize"]
+
 I32 = Value(32)
 
 #: integer view dtypes that may hold a 32-bit token value (vLLM's int64 token / sampler buffers)

@@ -56,6 +56,8 @@ from verity_vllm.observe.fold.resolver import (
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.log import read_log, split_steps
 
+__all__ = ["Options", "load_profile", "main", "resolve_log"]
+
 
 def load_profile(name: str) -> tuple[Profile, Any]:
     mod_name = name if "." in name else f"verity_vllm.observe.fold.profiles.{name}"
