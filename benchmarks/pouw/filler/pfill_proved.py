@@ -49,6 +49,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scoring as S
 from pfill_arm import fold_share, fold_status, products_per_slot, theorem_k_setting
 
+#: what the tests read
+__all__ = ["readings", "stats_of"]
+
 READINGS = {
     "proved": (0.225, "proved", "Theorem E c/m = 1/4 at phi = 0.9, heads at 8 int8 slots"),
     "theorem-m-week": (0.215, "proved", "Theorem M over a week at gamma_zk = 0.1"),

@@ -207,7 +207,7 @@ PROBE_WRAP = (f'python3 {PL.PROBE} probe --peer "$1" --rtt "$2" --out "${{RESEAR
 
 def probe_pods(cell: Cell) -> dict[str, Any]:
     """A shared-IP pair's full identity before any job: both pods probed over ssh (the prover with its link and TCP-connect RTT to
-    the verifier), merged over the API's (red-team-flock-3 S2)."""
+    the verifier), merged over the API's."""
     try:
         p = PL.remote_probe(cell.prover, cell.verifier_addr)
         v = PL.remote_probe(cell.verifier or "")
@@ -282,8 +282,8 @@ RUN_NAT_KEYS = ("pod_id", "boot_id", "hypervisor", "sys_vendor")
 
 def placement_problems(cell: Cell, prover_run: Path | None, verifier_run: Path | None) -> list[str]:
     """Why the prover and verifier are not shown to be separate machines on a routed link, and whether each run ran on the pod
-    the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own
-    (red-team-flock-3 S2): each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the boot id
+    the cell planned (a run whose pod id differs from the plan's).  Under the NAT exception every value is the runs' own:
+    each run records all of :data:`RUN_NAT_KEYS` (the prover its link and RTT too), and the boot id
     the plan probed on that pod, since the machine id is the plan's."""
     if not (cell.placement or prover_run or verifier_run):
         return []

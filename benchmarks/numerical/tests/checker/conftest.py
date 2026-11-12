@@ -39,7 +39,7 @@ def _fill(pairs: list[tuple[int, int]]) -> tuple[list[int], list[int]]:
 
 
 def structured_cases() -> list[tuple[str, int, list[int], list[int]]]:
-    """(name, c, a, b): every family the handoff names, both groups exercised."""
+    """(name, c, a, b): every family, both groups exercised."""
     cases: list[tuple[str, int, list[int], list[int]]] = []
 
     def add(name: str, c: int, pairs: list[tuple[int, int]]) -> None:

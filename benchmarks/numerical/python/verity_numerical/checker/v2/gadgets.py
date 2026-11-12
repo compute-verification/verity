@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..ctx import Ctx, Value
 from ..gadgets import Contract, _bit, _bits
 from ..params import Params, Reject
 from .params import V2
@@ -69,7 +70,7 @@ class OpDecode:
         return {}
 
     @staticmethod
-    def check(ctx, p: Params, w, h: dict | None = None, tag: str = "op"):
+    def check(ctx: Ctx, p: Params, w: Value, h: dict | None = None, tag: str = "op") -> tuple[Value, ...]:
         return ctx.lookup(f"{tag}.op", op_table(p), w)
 
 
@@ -96,7 +97,7 @@ class StateDecode:
         return {"hdr": c >> p.acc_frac, "f": f, "z": int(t == 0 and f == 0)}
 
     @staticmethod
-    def check(ctx, p: Params, c, h: dict, tag: str = "acc"):
+    def check(ctx: Ctx, p: Params, c: Value, h: dict, tag: str = "acc") -> tuple[Value, Value, Value, Value]:
         hdr, f, z = h["hdr"], h["f"], h["z"]
         s, nz, e = ctx.lookup(f"{tag}.hdr", hdr_table(p), hdr)
         ctx.rng(f"{tag}.f", f, 0, 2**p.acc_frac)
@@ -126,11 +127,12 @@ class Product:
         )
 
     @staticmethod
-    def gen(p: Params, *_args) -> dict:
+    def gen(p: Params, *_args: object) -> dict:
         return {}
 
     @staticmethod
-    def check(ctx, p: Params, a, b, h: dict | None = None, tag: str = "prod"):
+    def check(ctx: Ctx, p: Params, a: Sequence[Value], b: Sequence[Value], h: dict | None = None,
+              tag: str = "prod") -> tuple[Value, Value, Value]:
         (s_a, m_a, e_a), (s_b, m_b, e_b) = a, b
         return m_a * m_b, e_a + e_b, s_a + 2 * s_b
 
@@ -162,15 +164,16 @@ class GroupMax:
         return {"E": max(p.floor, *cands)}
 
     @staticmethod
-    def align(ctx, p: Params, E, cand, s4, tag: str):
+    def align(ctx: Ctx, p: Params, E: Value, cand: Value, s4: Value, tag: str) -> tuple[Value, ...]:
         return ctx.lookup(f"{tag}.align", align4_table(p), 4 * (E - cand) + s4)
 
     @staticmethod
-    def attained(ctx, p: Params, iszs: Sequence, isfloor, tag: str):
+    def attained(ctx: Ctx, p: Params, iszs: Sequence, isfloor: Value, tag: str) -> None:
         ctx.rng(f"{tag}.attained", sum(iszs) + isfloor - 1, 0, len(iszs) + 2)
 
     @staticmethod
-    def check(ctx, p: Params, cands: Sequence, s4s: Sequence, isfloor, h: dict, tag: str = "max"):
+    def check(ctx: Ctx, p: Params, cands: Sequence, s4s: Sequence, isfloor: Value, h: dict,
+              tag: str = "max") -> tuple[Value, list[Value], list[Value]]:
         E = h["E"]
         rows = [GroupMax.align(ctx, p, E, c, s, f"{tag}[{i}]") for i, (c, s) in enumerate(zip(cands, s4s))]
         GroupMax.attained(ctx, p, [r[2] for r in rows], isfloor, tag)
@@ -189,11 +192,11 @@ class ProductShift:
                         hints={}, outputs={"term": (-(2**B) + 1, 2**B)}, tables=("SHIFT",))
 
     @staticmethod
-    def gen(p: Params, *_args) -> dict:
+    def gen(p: Params, *_args: object) -> dict:
         return {}
 
     @staticmethod
-    def check(ctx, p: Params, u, dt, sp, h: dict | None = None, tag: str = "pshift"):
+    def check(ctx: Ctx, p: Params, u: Value, dt: Value, sp: Value, h: dict | None = None, tag: str = "pshift") -> Value:
         R = 2 * V2.dt_rows(p)
         (term,) = ctx.lookup(f"{tag}.shift", shift_table(p), u * R + 2 * dt + sp)
         return term
@@ -212,12 +215,12 @@ class StateShift:
                         outputs={"term": (-(2**W) + 1, 2**W)}, tables=("SSHIFT_HI", "SSHIFT_LO"))
 
     @staticmethod
-    def gen(p: Params, M: int, *_args) -> dict:
+    def gen(p: Params, M: int, *_args: object) -> dict:
         mb = V2.mb(p)
         return {"M_hi": M >> mb, "M_lo": M & (2**mb - 1)}
 
     @staticmethod
-    def check(ctx, p: Params, M, dt, s, h: dict, tag: str = "sshift"):
+    def check(ctx: Ctx, p: Params, M: Value, dt: Value, s: Value, h: dict, tag: str = "sshift") -> Value:
         R = 2 * V2.dt_rows(p)
         M_hi, M_lo = h["M_hi"], h["M_lo"]
         # The halves are range-checked on their own, not only through the packed lookup keys: over F_p the key
@@ -266,7 +269,7 @@ class SignedSum:
         return {"sgn": int(S < 0), "v_hi": v >> vb, "v_lo": v & (2**vb - 1)}
 
     @staticmethod
-    def check(ctx, p: Params, terms: Sequence, h: dict, tag: str = "sum"):
+    def check(ctx: Ctx, p: Params, terms: Sequence, h: dict, tag: str = "sum") -> tuple[Value, Value, Value, Value]:
         SignedSum.premise(p, len(terms) - 1)
         sgn, v_hi, v_lo = h["sgn"], h["v_hi"], h["v_lo"]
         vb = V2.vb(p)
@@ -298,11 +301,12 @@ class Normalise:
         )
 
     @staticmethod
-    def gen(p: Params, *_args) -> dict:
+    def gen(p: Params, *_args: object) -> dict:
         return {}
 
     @staticmethod
-    def check(ctx, p: Params, E, l, v_hi, v_lo, h: dict | None = None, tag: str = "norm"):
+    def check(ctx: Ctx, p: Params, E: Value, l: Value, v_hi: Value, v_lo: Value, h: dict | None = None,
+              tag: str = "norm") -> tuple[Value, Value, Value, Value, Value]:
         koff, A, e_hat, z, ovf, isfloor = ctx.lookup(f"{tag}.leadnorm", leadnorm_table(p), V2.leadnorm_key(p, l, E))
         (t,) = ctx.lookup(f"{tag}.tnorm", tnorm_table(p), v_lo + 2 ** V2.vb(p) * koff)
         M = v_hi * A + t
@@ -327,17 +331,17 @@ class Pack:
         )
 
     @staticmethod
-    def gen(p: Params, *_args) -> dict:
+    def gen(p: Params, *_args: object) -> dict:
         return {}
 
     @staticmethod
-    def word(p: Params, state) -> object:
+    def word(p: Params, state: Sequence[Value]) -> Value:
         s, e_hat, M, z = state
         fld = e_hat + (p.acc_bias - 1) + z * (p.acc_e_min - p.floor)
         return s * 2 ** (p.acc_word_bits - 1) + fld * 2**p.acc_frac + M
 
     @staticmethod
-    def check(ctx, p: Params, state, ovfs: Sequence, h: dict | None = None, tag: str = "pack"):
+    def check(ctx: Ctx, p: Params, state: Sequence[Value], ovfs: Sequence, h: dict | None = None, tag: str = "pack") -> Value:
         fin = Pack.word(p, state)
         any_ovf, inf_sign, none_yet = 0, 0, 1
         for ovf_g, sgn_g in ovfs:
