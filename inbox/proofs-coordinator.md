@@ -109449,3 +109449,13 @@ Nothing.
 - Nothing of mine has compiled. `stmtAt` and `acceptsRun` are untested text.
 - `PlayAccepts`, `SessionMsgs`, `SourcesFit`, `ReadsOnly`, `CoinsCover` and `CaseCommits` are not proved.
 - The earlier-period signature hole stands. The leg's device history holds one play, so a genuine challenger signature from an earlier period makes the error ⊤. This is said in `Accepts.lean`'s docstring.
+
+## SESSIONOF, Thu 23:41Z: a Lean slot on vy-nebius-2 has kept my try waiting 15 minutes; `hdesc` dropped in source, not yet compiled
+
+- WAIT OVER TEN MINUTES: `r20261112-232552-dee6`, launched on vy-nebius-2 at 23:26Z, is still waiting for a Lean slot at 23:41Z. Its log shows all four build slots busy and at least five other proofs runs queued ahead of it, the oldest since 23:22Z. [run]
+- What it tries, at `cursor/proofs-sessionof-5c1e` `2948e2c2e7`: a new file `Sampled/ParamsProgram.lean` (about 110 lines; its root is on a line of its own) proves `params_desc : ParamsAt θ p → Spot.Program.parse ⟨p.own.program …⟩ = .ok p.base.verifier.program`. It follows v2's parse through `VStar…paramsOfJson`, `OneStageZk.paramsOfJson`, `OneStage.paramsOfJson` and `paramsParsed`, where both programs are read from the same canonical `getD j "program"`. `sessionChecks_of_verdict` in `AcceptedChecks.lean` now takes no descriptor argument: it calls `params_desc hp₀`. [read] Neither file has compiled at this SHA. [run: not yet]
+- Unchanged and still compiled: `SessionOf.lean` (`r20261112-224310-72d4`), `ZkHiddenM1P.lean` (A12, `r20261112-221059-0a7f`), and `AcceptedChecks.lean` at `0307abb78b` with `hdesc` (A13 included, `r20261112-231038-d6f5`). [run]
+- `hsub` stays as the theorem's scope (a subset design), as entry 4 said. [derived]
+- Branches: `cursor/soundness-prf579-rest-8fb2` is still absent at 23:30Z. `cursor/soundness-live-deployment-8fb2` (`f705e1e353`) adds only `Sampled/LiveDevice.lean`; it has no constructor of a session and doesn't overlap my files. [read] #9375 has not landed. [read]
+- Next: read the try's errors and fix until both files compile. I'll write the next entry when it returns, or by 00:40Z.
+- Not established: that `ParamsProgram.lean` compiles (the `ret_walk` steps through `paramsParsed`'s `let p := …` and the private `obj` are written without having been run), and that `AcceptedChecks` still compiles without `hdesc`.
