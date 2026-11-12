@@ -811,7 +811,8 @@ def test_a_passed_staged_batch_goes_onto_the_chain_s_top_once_it_has_room_ahead_
 
 def test_a_passed_staged_batch_whose_member_moved_on_goes_only_onto_its_own_base_as_built():
     """A member its owner withdrew, pushed or closed lands as built, which only its own base holds: on another top it isn't
-    merged again, so the batch is dropped, no outcome, and built again at once without it, staged; its new head waits."""
+    merged again, so the batch is dropped, no outcome, and built again at once without it, staged; its new head waits.  One
+    left with no Lean member goes on the chain's top, and the tick's batch goes on it, if the chain has room."""
     passed = waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS))
     s = snap(passed, ready=[pr(1, "h1b", lean=True), lean(2)], records=True, lean=2)
     assert decide(s) == [Commit("c1", MAIN, 2)]
@@ -819,6 +820,9 @@ def test_a_passed_staged_batch_whose_member_moved_on_goes_only_onto_its_own_base
           "other members are built again"
     assert decide(replace(s, candidates=(passed, cand("c2", MAIN, 3)), ready=(*s.ready, pr(3)))) == [
         Drop("c1", why), Build((2,), "c2", 1, records=True, replaces="c1")]
+    plain = replace(s, candidates=(passed, cand("c2", MAIN, 3)), ready=(pr(1, "h1b", lean=True), pr(2), pr(3), pr(4)))
+    assert decide(plain) == [Drop("c1", why), Build((2,), "c2", 1, replaces="c1")]
+    assert decide(replace(plain, depth=3)) == [Drop("c1", why), Build((2,), "c2", 2, replaces="c1"), Build((4,), "c1", 1)]
 
 
 def test_a_records_run_that_failed_drops_its_candidate_ejects_its_lean_members_and_builds_the_rest():
