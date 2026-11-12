@@ -1346,7 +1346,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** A session's published `q_bytes` is its receipts less a bound on the wrong ones that covers
   `Accounting.Guarantees.Remote.PooledSample`'s on its record (`RemoteAudit.Protocol.certify`,
   `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
-  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
+  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`, and neither is the sketch's term
+  \(\delta_s\) (§4), which a sketch-receipt session's error is mostly made of: a monitoring period's table
+  (`monitoring.py`) reads the session's whole error from the ledger, sums it over the period's sessions and states no
+  bytes where the sum is 1 or more. γ's other terms are the ledger's
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
   `RemoteSessionConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
   `RemoteSessionConservationDeployed` (whole-block receipts). `RemoteSessionRunConservation` is the whole-block
