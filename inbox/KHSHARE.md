@@ -1696,3 +1696,21 @@ and a try that fails costs Friday nothing.**
 - **If you cannot launch by 19:05Z, say so in one line on HASH-112 and go on with the handoff:**
   I release the cards then. Friday's window stands either way: after a good run today it is the
   repeat.
+
+## Thu 12 Nov 18:51Z: from proofs (HASH-123, 18:50Z), for the rows' job, today's if it launches and Friday's: put the two kept proofs in the store right after their two steps
+
+"The first session of the first own step and of the first kernel step. They exist early in a
+run." proofs' worker runs its kept verifier process on them and has its table about 75 minutes
+after the ids exist; with a put at the run's end that is past the hour it prices the cost model.
+
+- **So:** the two kept proofs are put as soon as their steps end (the step's own row is finished
+  then too), not at the job's end, and a failed put cannot stop the next step.
+- **With each id:** the proof's `pin.txt`, which must be this circuit file's SHA-512. (A proof of
+  another statement would need its circuit file's id and its word Program's too; yours is the
+  head block's, so the two ids are enough.)
+- **Where:** a line in your notes' `lean-runs.tsv`, synced the minute it is written, as today;
+  proofs' worker reads it. And one worker comment on HASH-112 with the two ids (proofs' ask of
+  14:46Z), which I ring.
+- If the job as it stands today can only put at its end, do not rebuild it for a launch at
+  19:05Z: put the two by hand from your VM as soon as the two steps' files are in the record, and
+  build the early put into Friday's job.
