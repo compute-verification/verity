@@ -88,22 +88,22 @@ noncomputable def blocks : Claims.Sampling.Partition := Flock.Bridge.partOf m.P 
 
 /-- **A trace of the member's circuit as the deployed commitment's sampling witness**: each wire's value in the
 evaluation on the trace's inputs, opened at the wire's claims position under the member's roots. -/
-noncomputable def wit (X : Fin m.Cc.N → Bool) : Claims.Sampling.Wit :=
-  Flock.Bridge.witDep m.Cc m.Cd Claims.Sampling.sha512Msg m.roots X
+noncomputable def wit (Xv : Fin m.Cc.N → Bool) : Claims.Sampling.Wit :=
+  Flock.Bridge.witDep m.Cc m.Cd Claims.Sampling.sha512Msg m.roots Xv
 
 /-- **The member's faulty units at a trace**: the units faulty in its sampling statement under the trace's witness. -/
-noncomputable def faulty (X : Fin m.Cc.N → Bool) : Finset ℕ :=
-  Claims.Sampling.faulty Claims.Sampling.sha512Msg m.Cd m.stmt m.blocks (m.wit X)
+noncomputable def faulty (Xv : Fin m.Cc.N → Bool) : Finset ℕ :=
+  Claims.Sampling.faulty Claims.Sampling.sha512Msg m.Cd m.stmt m.blocks (m.wit Xv)
 
 /-- **The member's transcript at a trace**: the trace's witness, opened at each gate's claims position under the
 member's roots and read at the parsed circuit file's gates with the member's constants. -/
-noncomputable def transcript (X : Fin m.Cc.N → Bool) : (Flock.Bridge.circuitOf m.D m.hU m.n).Trace :=
-  Flock.Bridge.transcriptOf m.D m.hU m.n m.κ ((m.wit X).val Claims.Sampling.sha512Msg m.Cd m.stmt)
+noncomputable def transcript (Xv : Fin m.Cc.N → Bool) : (Flock.Bridge.circuitOf m.D m.hU m.n).Trace :=
+  Flock.Bridge.transcriptOf m.D m.hU m.n m.κ ((m.wit Xv).val Claims.Sampling.sha512Msg m.Cd m.stmt)
 
 /-- **The member's incorrect proof blocks at a registration and a trace**: `wrongRegZc` at the member's canonical
 openings. -/
-noncomputable def wrongAt (R : Reg) (X : Fin m.Cc.N → Bool) : Finset (Fin m.n) :=
-  wrongRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon R X
+noncomputable def wrongAt (R : Reg) (Xv : Fin m.Cc.N → Bool) : Finset (Fin m.n) :=
+  wrongRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon R Xv
 
 /-- **The trace the member's session fixes at registration** at `τ`, played alone at `L`: `XplurZC` at the simulator's
 registration and continuation. -/
@@ -140,35 +140,35 @@ def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.c
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
 
 /-- **The member is read at the claim**, at the committed files `r`, the openings `op`, the trace `tr` of the files'
-circuit and the trace `X` of the member's: the member's files pass the verifier's checks, `r` is how v2 reads them,
+circuit and the trace `Xv` of the member's: the member's files pass the verifier's checks, `r` is how v2 reads them,
 `op` holds wherever the member's deployed commitment opens and at the files' constants, and `tr` is the member's
-transcript at `X`. -/
+transcript at `Xv`. -/
 structure ReadAt (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop)
-    (tr : r.circuit.Trace) (X : Fin m.Cc.N → Bool) : Prop where
+    (tr : r.circuit.Trace) (Xv : Fin m.Cc.N → Bool) : Prop where
   checked : m.Checked
   read : r = m.fileRead
   opens : m.OpensUnder r op
   consts : Verity.Sampled.ConstsOpen r op
-  trace : HEq tr (m.transcript X)
+  trace : HEq tr (m.transcript Xv)
 
 /-- **The units a member's transcript doesn't bind are faulty**: wherever the member is read at the claim, every
 unit of its committed files unbound in the trace is faulty in the member's sampling statement at the member's
 trace. -/
 def UnboundFaulty : Prop :=
   ∀ (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (tr : r.circuit.Trace)
-    (X : Fin m.Cc.N → Bool), m.ReadAt r op tr X → (Accounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty X
+    (Xv : Fin m.Cc.N → Bool), m.ReadAt r op tr Xv → (Accounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty Xv
 
 /-- **A member's faulty units are incorrect proof blocks**: at files that pass the verifier's checks, a unit faulty in
 the member's sampling statement at a trace is incorrect at that trace and every registration. -/
 def FaultyWrong : Prop :=
-  m.Checked → ∀ (R : Reg) (X : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty X → u ∈ m.wrongAt R X
+  m.Checked → ∀ (R : Reg) (Xv : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty Xv → u ∈ m.wrongAt R Xv
 
 end MemberV5
 
 /-- **A member at the trace it is read at.** -/
 structure Seat (Reg : Type) (nJ : ℕ) where
   m : MemberV5 Reg nJ
-  X : Fin m.Cc.N → Bool
+  Xv : Fin m.Cc.N → Bool
 
 /-- **A first member's files and the rest's are read at the claim by the members `ss`, in order**: the first of `ss`
 is read at the first files, at its own gates of the circuits side by side, its part of the trace and the openings at
@@ -176,16 +176,16 @@ its gates, and the rest of `ss` at the rest's; `ss` has as many members as there
 def ReadsWith {Reg : Type} {nJ : ℕ} : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
     ((g : Fin (Verity.FileRead.circuitWith r rs).N) → BitVec ((Verity.FileRead.circuitWith r rs).w g) → Prop) →
     (Verity.FileRead.circuitWith r rs).Trace → List (Seat Reg nJ) → Prop
-  | r, [], op, X, ss => ∃ s, ss = [s] ∧ s.m.ReadAt r op X s.X
-  | r, r' :: rs, op, X, ss => ∃ s ss', ss = s :: ss' ∧
+  | r, [], op, tr, ss => ∃ s, ss = [s] ∧ s.m.ReadAt r op tr s.Xv
+  | r, r' :: rs, op, tr, ss => ∃ s ss', ss = s :: ss' ∧
       s.m.ReadAt r
         (fun i v => op (Fin.castAdd (Verity.FileRead.circuitWith r' rs).N i)
           (v.cast (Verity.Circuit.besideW_left r.circuit (Verity.FileRead.circuitWith r' rs) i).symm))
-        (Verity.Circuit.traceLeft X) s.X ∧
+        (Verity.Circuit.traceLeft tr) s.Xv ∧
       ReadsWith r' rs
         (fun j v => op (Fin.natAdd r.circuit.N j)
           (v.cast (Verity.Circuit.besideW_right r.circuit (Verity.FileRead.circuitWith r' rs) j).symm))
-        (Verity.Circuit.traceRight X) ss'
+        (Verity.Circuit.traceRight tr) ss'
 
 namespace JointAuditV5
 
@@ -208,29 +208,29 @@ noncomputable def seats (τ : Strategy w.game) : List (Seat w.Reg w.nJ) :=
   List.ofFn fun k : Fin w.ms.length => (⟨w.ms.get k, w.memberX τ k⟩ : Seat w.Reg w.nJ)
 
 /-- **The window's committed files are read at the claim** at `τ`: `R`'s members are the window's, in order, each
-read (`MemberV5.ReadAt`) at its own gates of the window's circuit, at its part of the trace `X` and of the openings
+read (`MemberV5.ReadAt`) at its own gates of the window's circuit, at its part of the trace `tr` and of the openings
 `op`, and at the trace its session fixes at the joint registration. -/
 def ReadsAt (R : Verity.WindowFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
-    (X : R.circuit.Trace) (τ : Strategy w.game) : Prop :=
-  ReadsWith R.first R.rest op X (w.seats τ)
+    (tr : R.circuit.Trace) (τ : Strategy w.game) : Prop :=
+  ReadsWith R.first R.rest op tr (w.seats τ)
 
 /-- **The units a window's trace doesn't bind are its incorrect proof blocks.** With the members laid out in unit
 order, wherever the window's committed files are read at the claim at `τ`, every unit of the window's files unbound in
-the trace `X` under the openings `op` is, at the same place of the population, an incorrect proof block of the window
+the trace `tr` under the openings `op` is, at the same place of the population, an incorrect proof block of the window
 at `τ`. -/
 def UnboundWrong : Prop :=
   w.Laid → ∀ (R : Verity.WindowFiles) (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop)
-    (X : R.circuit.Trace) (τ : Strategy w.game), w.ReadsAt R op X τ →
-      (Accounting.unbound R.parts op X).image Fin.val ⊆ (w.wrongSet τ).image Fin.val
+    (tr : R.circuit.Trace) (τ : Strategy w.game), w.ReadsAt R op tr τ →
+      (Accounting.unbound R.parts op tr).image Fin.val ⊆ (w.wrongSet τ).image Fin.val
 
 variable {w}
 
 /-- **The unbound units are at most as many as the window's incorrect proof blocks**, the inequality the claim's
 transfer reads. -/
 theorem UnboundWrong.card_le (h : w.UnboundWrong) (hl : w.Laid) (R : Verity.WindowFiles)
-    (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop) (X : R.circuit.Trace) (τ : Strategy w.game)
-    (hr : w.ReadsAt R op X τ) : (Accounting.unbound R.parts op X).card ≤ (w.wrongSet τ).card := by
-  have hs := Finset.card_le_card (h hl R op X τ hr)
+    (op : (g : Fin R.circuit.N) → BitVec (R.circuit.w g) → Prop) (tr : R.circuit.Trace) (τ : Strategy w.game)
+    (hr : w.ReadsAt R op tr τ) : (Accounting.unbound R.parts op tr).card ≤ (w.wrongSet τ).card := by
+  have hs := Finset.card_le_card (h hl R op tr τ hr)
   rwa [Finset.card_image_of_injective _ Fin.val_injective, Finset.card_image_of_injective _ Fin.val_injective] at hs
 
 end JointAuditV5
