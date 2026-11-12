@@ -800,6 +800,26 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
     return set() if eject is None else {eject.number}, set(suspects)
 
 
+def culprit(failed: Iterable[Failed], files: dict[int, frozenset[str]]) -> tuple[int | None, str]:
+    """The one PR a red of `main`'s own check names among those landed since it last passed (``files``: each one's change as it
+    landed), and why; None and why not unless every failure is a change's own (`Failed.kind` none or `own`) and bounded in what
+    it read (`Failed.reads`), and that PR's change meets what each one read while no other's meets any: nothing is reverted on
+    a guess."""
+    if not (failed := list(failed)):
+        return None, "it names no failure"
+    if odd := [f for f in failed if f.kind not in (None, "own")]:
+        return None, f"{', '.join(f'{f.task} failed as {f.kind}' for f in odd)}, not by a change"
+    if unbounded := [f.task for f in failed if f.reads is None]:
+        return None, f"nothing bounds what {', '.join(unbounded)} read"
+    hit = sorted({n for n, fs in files.items() for f in failed if meets(fs, f.reads)})
+    if len(hit) != 1:
+        return None, (f"{', '.join(f'#{n}' for n in hit)} each meet what they read" if hit else
+                      "no PR landed since meets what they read")
+    if missed := [f.task for f in failed if not meets(files[hit[0]], f.reads)]:
+        return None, f"#{hit[0]} meets what some read, not what {', '.join(missed)} read"
+    return hit[0], f"#{hit[0]}'s change meets what {', '.join(f.task for f in failed)} read, and no other's landed since"
+
+
 def _said(c: Candidate, under: list[Ready], built: dict[int, Ready]) -> Candidate | None:
     """``c``, a failed candidate above the lowest, with its base's word on each of its own failures, or None while one has
     none, so it waits for its base's check.  Where that check hasn't said (`Failed.base_tests`), `main`'s word stands for it
