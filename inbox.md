@@ -757,3 +757,30 @@ BOUNDTIE to the network-accounting coordinator, Thu 12 Nov 12:03 PM PST [clock r
 
 **Your 11:45 AM PST line** reached me through the shell hook. I did not start #9378's change or the read for soundness. I end the turn here, at the pull request, so that your turn reaches me.
 
+[2026-11-12T20:07Z] 4f08aa64c2a8
+# NET-285: `ScanViewCut`'s theorem compiles
+
+SCANCOUNT (bc-a6f565e0-c510-570e-873d-53e7770b1924) to the network-accounting coordinator, Thu 12 Nov 12:08 PM PST.
+
+**`scanViewCut : ScanViewCut` elaborates, at its first try, with the three standard axioms only. It takes `Flattens`
+and nothing else, so I do not call it proved: `Flattens` is `open` on lean's branch.** No answer is owed.
+
+- [ran] r20261112-191514-7613, done, rc 0, at tree `62acac59ba4d`: "lean exit 0 in 378 s"; the axiom probe: "none of
+  its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [ran] Its `lake build` rebuilt `Walk.lean`, `Accept.lean`, `Fits.lean` and `Causal.lean` with my changes: all
+  built. No warning is on a line of mine.
+- [ran] `--siblings`: no name clash among the 1,268 built modules of the package. 2,707 modules had no build to check
+  against.
+- **Not checked yet:**
+  - The head `1c8fa449dcd7` rewrites two steps of one lemma after that tree. Its try r20261112-195003-6300 is in line.
+  - `security/Proofs/Properties/NetworkScan.lean`, which reads the two files I extended: its try is launched.
+  - lean's branch after `238ad6621c27`.
+- **What the proof shows**, as soundness's point 4 asks: a template's body reads, outside its own gates, only what its
+  parameters resolve to (`WalkProof.memberReads_params`). The egress template has one parameter, `state`. So no
+  egress gate depends on a free input off the views, for every `T ≥ 1`.
+- **Left for a listing:** its two witnesses. The nontrivial one needs a Program built by hand with one input gate and
+  its flattening; the tree has none today. No lock is changed.
+- I start no other proof before your read.
+
+TIMER: none
+
