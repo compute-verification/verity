@@ -18,7 +18,9 @@ from tests import fake_vllm
 from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import commit as TPCM
-from verity_vllm.pipeline.tp import rank_worker  # noqa: F401  (before any stand-in: its import arms the switches on the vLLM it finds)
+
+# imported before any stand-in is installed: the module arms its switches on the vLLM it finds at import
+from verity_vllm.pipeline.tp import rank_worker
 from verity_vllm.query.manifest.format import components_fold_digest
 
 pytest.importorskip("torch")
@@ -139,6 +141,7 @@ def _manifest(root: Path, per_rank: dict[str, str], ranks: int = 2) -> str:
 def test_world_is_the_communicator_size_whatever_tp_says(commit):
     llm, out = commit("--tp", "4", "--world", "2")
     assert llm.kw["tensor_parallel_size"] == 2 and llm.kw["max_num_seqs"] == 8 and llm.kw["enable_prefix_caching"] is False
+    assert llm.kw["worker_extension_cls"] == rank_worker.EXTENSION      # every rank's Worker is made with the TP worker's methods
     assert _versions(out)["tp"] == 2
 
 
