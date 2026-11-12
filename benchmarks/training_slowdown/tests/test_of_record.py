@@ -5,7 +5,7 @@ import math
 import pytest
 from synthetic import SHAPE, tiny_registry, write_config
 
-from training_slowdown import as_math, config, library, of_record, starts
+from training_slowdown import as_math, codecs, config, library, of_record, starts
 
 CTX, D = SHAPE["ctx"], SHAPE["d_model"]
 X, S, G = [1, CTX, D], [1, CTX, 1], [D]
@@ -213,6 +213,23 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
     # the sizes are printed and not compared
     assert of_record.e_sizes(["scaledquant"], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
         "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
+
+
+def test_sparse_ternary_codes_are_a_records_quant_and_their_packing_is_named():
+    """The codes a run trained are deltas in codes with a scale a group, a record's `quant`, so a plan of the
+    library's sparse ternary codec is of that kind, alone or beside a rounding of the trained delta. The codec packs
+    them another way than the records' program did, which the E line says beside the two sizes; every codec the
+    tables name is one the library has."""
+    kind = codecs.SparseTernary(0.5, 0).kind
+    assert of_record.e_kind([kind], "quant") == [] == of_record.e_kind(sorted(["scaledquant", kind]), "quant")
+    assert of_record.e_kind([kind], "full") == [
+        "E's kind: the config's plan is sparseternary, the record's format full (identity)"]
+    assert of_record.e_sizes([kind], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
+        "sparseternary, 1,200 B after 2 steps; the record's quant, 1,000 B after 30; expected to differ in size by "
+        "the packing too: sparseternary is one xz stream a matrix at one setting, where the record's program kept "
+        "the smallest of several settings' streams of all its matrices")
+    library_kinds = {c.kind for c in vars(codecs).values() if isinstance(c, type) and issubclass(c, codecs.Codec)}
+    assert {k for kinds in of_record.E_KINDS.values() for k in kinds} | set(of_record.E_PACKING) <= library_kinds
 
 
 def losses(n: int) -> tuple[tuple, tuple]:
