@@ -25,7 +25,7 @@ in `benchmarks/numerical/tests/bench/test_census_data.py` check that.
   the instruction registry names operand dtypes (`bf16`, `e4m3`, `e2m1`); each is a `datatypes.json` id.
 - A subcircuit template id is kebab-case, for example `gemm-coordinate`. A subcircuit (a fully bound template) is
   `<template>/<params>/<semantics>`, for example `gemm-coordinate/k1536/sm90-wgmma-e4m3`,
-  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms bench-spine's generator writes). The
+  `attention-head/d64-bn128/sm80-fa2-bf16` or `rmsnorm-fused-cuda/n2048-eps1e-05/bf16` (the forms the input-set generator writes). The
   params and semantics segments are lowercase and may contain `.`, `_` and `-`. For GEMM, the semantics are the exact
   instruction's architecture, operation and types without its shape, and the full instruction is its `semantics` parameter; `legacy_target` keeps the
   target name it was known by, and `fidelity_notes` record known gaps from what serving runs. An input set's id is its dataset, slugged, for example `bench-instances-fp8-ada-v1`. Every

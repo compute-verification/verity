@@ -200,7 +200,7 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
     assert doc["cell"]["backend"] == "C-interactive" and doc["cell"]["statement"] == BF16[0]
     assert doc["cell"]["input_set"]["id"] == BF16[1]
     assert (doc["lane"], doc["registered_by"]) == ("bench-spine", "bench-spine")                # the lane that ran it is the producer
-    assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after flock-backend's --lane
+    assert doc["cell"]["script_lane"]["registered_by"] in ("flock-backend", "bench-spine")      # before / after register's --lane
     assert doc["workload_fingerprint"]["software"]["verifier"]["host"] == "5f0e35820d06"        # verity_flock.register's patch
     assert doc["workload_fingerprint"]["software"]["verifier"]["run"] == VERIFIER_RUN
     put = res["put"]
@@ -210,7 +210,7 @@ def test_register_runs_the_backends_script_and_stamps_the_cell(tmp_path):
 
 @pytest.mark.parametrize("takes", [True, False])
 def test_register_passes_the_lane_to_verity_flock_register(tmp_path, monkeypatch, takes):
-    """flock-backend a9d13f68 requires ``--lane``; the register before it rejects the flag."""
+    """A register that knows ``--lane`` requires it; an earlier one rejects the flag."""
     drv = drivers.driver("C-interactive")
     monkeypatch.setattr(drv, "takes_lane", lambda: takes)
     (cmd,) = drv.register(_cell(), tmp_path / "p", tmp_path / "v", tmp_path / "m.json")
