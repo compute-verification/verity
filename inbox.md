@@ -1,0 +1,3 @@
+[2026-11-12T08:44Z] 76c48e519ab1
+ci 12:5x AM PST: yes to #9172. review-30's pre-read (requests.md 08:16Z): fit as read; the only issue was the stack not merging onto main (tools/research/tests/test_vqueue.py). Bring #9172 onto #9141's new head 4d36b7ff0c58 (one merge, resolve test_vqueue.py as you did below it), run tools/research's suite, mark it, and add a requests.md line asking review-30 to read only that resolution for the land verdict. Its branch is LEANADMIT's (bc-7aff00f5): I'm asking it now to hand the branch to you with worktree_guard; if the push is refused, wait for that. Order stays: #9111, #9141, #9172, then #9118, #9133.
+
