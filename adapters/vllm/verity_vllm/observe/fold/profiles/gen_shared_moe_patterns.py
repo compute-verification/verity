@@ -364,7 +364,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not isinstance(scores, ViewDesc) or not isinstance(bias, ViewDesc):
             return unsupported(node, "grouped_topk arguments not bound as expected", args={k: repr(v) for k, v in ra.items()})
         got = (ra.get("n_group"), ra.get("topk_group"), ra.get("topk"), ra.get("renormalize"), ra.get("scoring_func"))
-        rsf, want = as_float(ra.get("routed_scaling_factor")), float(as_float(C["ROUTED_SCALING_FACTOR"]))
+        rsf, want = as_float(ra.get("routed_scaling_factor")), float(C["ROUTED_SCALING_FACTOR"])
         if got != (1, 1, TOPK, True, 1) or rsf != want:
             return unsupported(node, "grouped_topk is not one group, renormalized, sigmoid, TOPK at the profile's routed_scaling_factor",
                                observed=list(got) + [rsf], expected=[1, 1, TOPK, True, 1, want])
