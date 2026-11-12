@@ -646,6 +646,12 @@ def test_shape_report_rejects_an_arm_that_skips_work_and_gives_panel_numbers_for
     assert len(b.rejected) == 1
 
 
+def test_an_arms_work_over_the_shapes_macs_is_exact_and_a_string_that_is_no_number_raises():
+    assert (H.w_ratio("12", 8), H.w_ratio("3/2", 3), H.w_ratio("0", 5)) == ("3/2", "1/2", "0")
+    with pytest.raises(ValueError):
+        H.w_ratio("unknown", 8)
+
+
 # ---- identity ------------------------------------------------------------------------------------------------------------------
 
 
