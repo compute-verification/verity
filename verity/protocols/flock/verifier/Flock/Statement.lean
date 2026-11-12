@@ -406,17 +406,40 @@ def sumUpTo (n : Nat) (f : Nat → F128) : F128 := Nat.fold n (fun i _ acc => ac
 def project (base eLo : Array F128) : Array F128 :=
   Array.ofFn (n := 64) fun s => sumUpTo eLo.size fun u => base[s.val + 64 * u]! * eLo[u]!
 
-/-- Entries `s, …, s + fuel − 1` of the 64 from `o`, each times `x` and added into its sum's own cell (`Sparse.addCell`). -/
-def projRow (base : Array F128) (x : F128) (o : Nat) : Nat → Nat → Array F128 → Array F128
+/-- `F128.mulW`'s body, inline where it is used: the product's two words never become a cell. -/
+@[inline] def mulWords (al ah bl bh : UInt64) : F128 :=
+  let (p0l, p0h) := F128.clmul al bl
+  let (p2l, p2h) := F128.clmul ah bh
+  let (ml, mh) := F128.clmul (al ^^^ ah) (bl ^^^ bh)
+  let m1l := ml ^^^ p0l ^^^ p2l
+  let m1h := mh ^^^ p0h ^^^ p2h
+  F128.reduce p0l (p0h ^^^ m1l) (p2l ^^^ m1h) p2h
+
+theorem mulWords_eq (a b : F128) : mulWords a.lo a.hi b.lo b.hi = a * b := rfl
+
+/-- `v + ⟨al, ah⟩ * ⟨bl, bh⟩` as an out-of-line call that owns `v`: the product is added into `v`'s own cell, as
+`Sparse.addCell` adds a matrix entry's coin. -/
+@[noinline] def addMul (al ah bl bh : UInt64) (v : F128) : F128 :=
+  let p := mulWords al ah bl bh
+  ⟨v.lo ^^^ p.lo, v.hi ^^^ p.hi⟩
+
+theorem addMul_eq (a b v : F128) : addMul a.lo a.hi b.lo b.hi v = v + a * b :=
+  (rfl : addMul a.lo a.hi b.lo b.hi v = v + mulWords a.lo a.hi b.lo b.hi).trans (congrArg (v + ·) (mulWords_eq a b))
+
+/-- Entries `s, …, s + fuel − 1` of the 64 from `o`, each times `⟨xl, xh⟩` and added into its sum's own cell
+(`addMul`). -/
+def projRow (base : Array F128) (xl xh : UInt64) (o : Nat) : Nat → Nat → Array F128 → Array F128
   | 0, _, acc => acc
   | fuel + 1, s, acc =>
-    let p := base[s + o]! * x
-    projRow base x o fuel (s + 1) (acc.modify s (Sparse.addCell p.lo p.hi))
+    let b := base[s + o]!
+    projRow base xl xh o fuel (s + 1) (acc.modify s (addMul b.lo b.hi xl xh))
 
 /-- Blocks `u, …, u + fuel − 1` of 64 entries, block `u` times `eLo[u]`. -/
 def projRows (base eLo : Array F128) : Nat → Nat → Array F128 → Array F128
   | 0, _, acc => acc
-  | fuel + 1, u, acc => projRows base eLo fuel (u + 1) (projRow base eLo[u]! (64 * u) 64 0 acc)
+  | fuel + 1, u, acc =>
+    let x := eLo[u]!
+    projRows base eLo fuel (u + 1) (projRow base x.lo x.hi (64 * u) 64 0 acc)
 
 /-- `project` (`project_eq_fast`) with the base read in its own order: a block's 64 entries one after another, each
 product added to its sum, where `project` reads every 64th entry of the whole base for one sum at a time. -/
@@ -428,7 +451,7 @@ theorem sumUpTo_succ (n : Nat) (f : Nat → F128) : sumUpTo (n + 1) f = sumUpTo 
 
 /-- `projRow` adds entry `j`'s product to sum `j`, for each `j` it covers, and leaves the others. -/
 theorem projRow_get (base : Array F128) (x : F128) (o : Nat) : ∀ (fuel s : Nat) (acc : Array F128) (j : Nat),
-    (projRow base x o fuel s acc)[j]? =
+    (projRow base x.lo x.hi o fuel s acc)[j]? =
       if s ≤ j ∧ j < s + fuel then acc[j]?.map (· + base[j + o]! * x) else acc[j]?
   | 0, s, acc, j => by rw [projRow, if_neg (by omega)]
   | fuel + 1, s, acc, j => by
@@ -436,7 +459,7 @@ theorem projRow_get (base : Array F128) (x : F128) (o : Nat) : ∀ (fuel s : Nat
     by_cases h : s = j
     · subst h
       rw [if_neg (by omega), if_pos rfl, if_pos (by omega)]
-      rfl
+      exact congrArg (Option.map · acc[s]?) (funext (addMul_eq base[s + o]! x))
     · rw [if_neg h]
       by_cases h2 : s + 1 ≤ j ∧ j < s + 1 + fuel
       · rw [if_pos h2, if_pos (by omega)]
@@ -458,7 +481,8 @@ theorem projRows_size (base eLo : Array F128) : ∀ (fuel u : Nat) (acc : Array 
   | 0, _, _ => rfl
   | fuel + 1, u, acc => by
     rw [projRows, projRows_size base eLo fuel (u + 1)]
-    have h : ∀ (fuel s : Nat) (acc : Array F128), (projRow base eLo[u]! (64 * u) fuel s acc).size = acc.size := by
+    have h : ∀ (fuel s : Nat) (acc : Array F128),
+        (projRow base eLo[u]!.lo eLo[u]!.hi (64 * u) fuel s acc).size = acc.size := by
       intro fuel
       induction fuel with
       | zero => intro s acc; rfl

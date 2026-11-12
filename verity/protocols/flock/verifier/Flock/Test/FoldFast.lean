@@ -10,7 +10,8 @@ Compiled code runs `Sparse.foldTFast` for `Sparse.foldT` and `Stmt.projectFast` 
 equations), so a call of either function here runs its twin. Each function's body is restated here under another name,
 which no equation rewrites, with `rfl` that the restatement is the function; the twin's result is compared with the
 restatement's on matrices and bases that reach each of its cases: a row twice in a column, an empty row, a zero
-coefficient, more and fewer coefficients than rows, a base that ends inside a block, past its last block, and none.
+coefficient, more and fewer coefficients than rows, a base of many blocks, of one, of none, and one longer than its
+blocks. No case reads past an array's end, which would print a panic for every such read.
 -/
 
 @[expose] public section
@@ -52,17 +53,15 @@ def projectRef (base eLo : Array F128) : Array F128 :=
 
 example : @projectRef = @Stmt.project := rfl
 
-/-- The twin and the restatement agree on a base of `n` entries and `m` blocks' weights. -/
+/-- The twin and the restatement agree on a base of `n` entries and `m` blocks' weights, `64 * m ≤ n`. -/
 def projectAgree (n m : Nat) : Bool :=
   let base := (Array.range n).map fun i => f (300 + i)
   let eLo := (Array.range m).map fun i => f (7000 + i)
   Stmt.project base eLo == projectRef base eLo && (Stmt.project base eLo).size == 64
 
 #guard projectAgree (64 * 37) 37
-#guard projectAgree (64 * 37 - 5) 37
 #guard projectAgree (64 * 37 + 100) 37
 #guard projectAgree 64 1
-#guard projectAgree 0 5
 #guard projectAgree 640 0
 #guard projectAgree (64 * 200) 200
 #guard (Stmt.project ((Array.range (64 * 37)).map fun i => f (300 + i)) ((Array.range 37).map fun i => f (7000 + i))).all (!·.isZero)
