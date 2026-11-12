@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 from tests.check.test_absent_commit_fields import put
-from tests.check.test_absent_link_fields import left_out
+from tests.check.test_absent_link_fields import NOTHING, left_out
 from tests.check.test_oracle_compare import U0, U1, H, make_match
 from verity_vllm.check import match_oracle as MO
 
@@ -229,6 +229,11 @@ def test_a_request_whose_tokens_state_no_generated_id_has_its_prompt_alone(tmp_p
 
 
 # ------------------------------------------------------------------------------------------------------------ what a caller hands in
+
+@pytest.mark.parametrize("workload", NOTHING)
+def test_a_caller_that_hands_in_no_workload_is_not_checked(tmp_path, workload):
+    assert oracle(tmp_path).workload_check(workload) == {"ok": None, "problems": ["no workload given: oracle identity not checked"], "compared": 0}
+
 
 @left_out([])
 def test_a_workload_that_declares_no_request_is_not_checked(tmp_path, stated):

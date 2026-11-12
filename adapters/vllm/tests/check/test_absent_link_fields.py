@@ -44,6 +44,8 @@ LAG_NOT_ON_RECORD = ("lag not attested on the record: the Program declares LAG 1
                      "(executed-prefix condition (b))")
 SERVED_NONE = (f"r0: the Commit served 11 tokens (last {EOS}) but the Match record's tokens.json served 0 (last None)"
                "{}: not one serving transcript (executed-prefix condition (a))")
+#: every value that tests false: each is nothing stated to a reader that takes a value by its truth
+NOTHING = (None, {}, [], 0, "", False)
 
 
 def left_out(empty: Any) -> pytest.MarkDecorator:
@@ -121,9 +123,8 @@ def test_a_token_record_without_its_stop_rule_or_its_lag_attests_no_lag(field, n
     assert link == w.relink(put(w.record(), (field,), dict.fromkeys(BLOCK[field])))     # as a block that states a null for each value
 
 
-@pytest.mark.parametrize("bmap", [None, {}, {"entries": None}, {"entries": []}, {"entries": [{}]}, {"entries": [{"identity": None}]},
-                                  {"entries": [{"identity": {}}]}, {"entries": [{"identity": {"op_path": CT.FAMILY[0]}}]},
-                                  {"entries": [{"identity": {"output_member": CT.FAMILY[1]}}]}])
+@pytest.mark.parametrize("bmap", [*NOTHING, *({"entries": v} for v in NOTHING), {"entries": [{}]}, *({"entries": [{"identity": v}]} for v in NOTHING),
+                                  {"entries": [{"identity": {"op_path": CT.FAMILY[0]}}]}, {"entries": [{"identity": {"output_member": CT.FAMILY[1]}}]}])
 def test_a_binding_map_without_an_entry_that_states_the_sampled_ids_identity_binds_none(bmap):
     assert CT.sampled_ids_committed(bmap) is False
 
@@ -149,6 +150,13 @@ def test_a_commit_whose_driver_served_nothing_names_every_request(served):
 
 
 # ------------------------------------------------------------------------------------------------------------ the Match account
+
+@pytest.mark.parametrize("match_dir", NOTHING)
+def test_a_caller_that_names_no_match_directory_gets_an_account_with_neither_record(match_dir):
+    account = EPL.load_match_account(match_dir)
+    assert (account["tokens"], account["global_match"]) == (None, None)
+    assert account["notes"] == ["no --match-dir: the Match record of this attempt is not beside the Commit"]
+
 
 @left_out({})
 def test_a_prefix_of_record_that_names_no_request_needs_no_match_account(stated, tmp_path):
