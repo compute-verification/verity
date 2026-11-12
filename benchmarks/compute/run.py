@@ -67,7 +67,8 @@ there the evidence store is read with the run's `--store-read` key.
 Under `research run` it also writes, through the harness kit's writer (`verity_bench.kit`), `$OUT/result.json` with the
 fields every resource's benchmark reports (`amounts`), each stamped with this run and its commit and computed from the
 recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
-the free MACs at each data-sheet reading, and the answer's δ_s, the probability beside them. A reading is a clock of a
+the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
+are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
 registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
@@ -413,8 +414,9 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
     measurements: the metric (`metric`, the printed number in its unit, beside its target), the verified amount
     (`verified`, the credited MACs), at each data-sheet reading the capacity (`capacity at clock.tensor`, ..., from the
     registered hardware `site` over the run's span `span_s`) and the free amount (`free at ...`, capacity less verified),
-    and the probability the verified amount holds except with (`delta_s`). Where `site` or `span_s` is None, capacity
-    and free are one entry each, with no value and why. Each is computed from the recorded run."""
+    and the probability the verified amount holds except with (`error`, the answer's δ_s, which its `inputs` name).
+    Where `site` or `span_s` is None, capacity and free are one entry each, with no value and why. Each is computed from
+    the recorded run."""
     inputs = [doc["run"]] if doc["run"] else []
     verified = doc["credited_macs"]
     out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "target": doc["target"],
@@ -428,8 +430,8 @@ def amounts(doc: dict, site: Site | None = None, span_s: Fraction | None = None)
             out += [{"name": f"capacity at clock.{r}", "value": c, "unit": "MAC", "inputs": inputs},
                     {"name": f"free at clock.{r}", "value": c - verified, "unit": "MAC", "inputs": inputs}]
     delta = doc["delta_s"]
-    out.append({"name": "delta_s", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
-                "inputs": inputs, **({"why": "the answer states no δ_s"} if delta is None else {})})
+    out.append({"name": "error", "value": None if delta is None else float(Fraction(str(delta))), "unit": DELTA_S,
+                "inputs": [*inputs, "delta_s"], **({"why": "the answer states no δ_s"} if delta is None else {})})
     return out
 
 

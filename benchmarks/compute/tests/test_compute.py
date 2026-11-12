@@ -447,7 +447,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     assert (out / "result.json").read_bytes() == written
 
 
-def test_the_shared_result_is_the_metric_verified_and_delta_with_capacity_and_free_absent(store, tmp_path, capsys,
+def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_free_absent(store, tmp_path, capsys,
                                                                                          monkeypatch, stamped):
     """The record holds no registration of the run's hardware and no span the verifier holds its passes to, so
     capacity and free are written with no value, each with why, and no reading is named."""
@@ -458,16 +458,19 @@ def test_the_shared_result_is_the_metric_verified_and_delta_with_capacity_and_fr
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert list(got) == ["metric", "verified", "capacity", "free", "delta_s"]
+    assert list(got) == ["metric", "verified", "capacity", "free", "error"]
     assert (got["metric"]["value"], got["metric"]["unit"], got["metric"]["target"], got["metric"]["verdict"]) == (
         0.75, C.UNIT, 0.97, "below target")
     assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
     why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
     for name in ("capacity", "free"):
         assert (got[name]["value"], got[name]["unit"], got[name]["why"]) == (None, "MAC", why)
-    assert (got["delta_s"]["value"], got["delta_s"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["delta_s"]
+    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone
+    assert (got["error"]["value"], got["error"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["error"]
+    assert "the answer's δ_s, sampling's alone" in C.DELTA_S
     for m in got.values():
-        assert (m["run"], m["commit"], m["inputs"], m["host"]) == (BENCH, STAMP["commit"], [RUN], STAMP)
+        assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
+        assert m["inputs"] == ([RUN, "delta_s"] if m["name"] == "error" else [RUN])
     assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
                          "developer's node")
 
@@ -492,7 +495,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
     assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
     got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
     assert list(got) == ["metric", "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
-                         "free at clock.sm", "delta_s"]
+                         "free at clock.sm", "error"]
     assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
         tensor, tensor - CREDITED, sm, sm - CREDITED]
     assert not any("why" in m for m in got.values())
@@ -515,11 +518,11 @@ def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
         C.capacity(unknown, Fraction(1))
 
 
-def test_an_answer_with_no_delta_writes_delta_s_absent_and_says_why(store, tmp_path):
+def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp_path):
     store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d.pop("profile")))
     doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
-    got = {m["name"]: m for m in C.amounts(doc)}["delta_s"]
-    assert (got["value"], got["why"]) == (None, "the answer states no δ_s")
+    got = {m["name"]: m for m in C.amounts(doc)}["error"]
+    assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
 
 
 #: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split puts 4 excluded A rows in call 6
