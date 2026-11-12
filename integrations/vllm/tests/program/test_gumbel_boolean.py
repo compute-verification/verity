@@ -1,6 +1,7 @@
 """`verity.ml.definitions.registry.gumbel_boolean`: the Boolean Gumbel select agrees with its word Definitions (`trace.word_of`).
-`NvLogf_v3` agrees with `NvLogf_v2`, and the log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of
-both signs, the sweeps around their branch points, and random words. The uniform and noise of a Philox word agree on its
+`NvLogf_v3` agrees with `NvLogf_v2`, `NvLogf_v5` with `NvLogf_v4` (and with `NvLogf_v3` but on a subnormal input), and the
+log1pf builder with `nv_log1pf_gpu`, on every special word, every exponent of both signs, the sweeps around their branch points,
+and random words. The uniform and noise of a Philox word agree on its
 edges (0, all ones, the floor, the f32 rounding of large words). `GumbelStreamKey_v2` agrees with `GumbelStreamKey_v1`;
 `GumbelSetup_v1{N}`'s outputs are the lane operands restated; `GumbelLane_v1` on those operands is ``x + GumbelNoiseLane_v1(key,
 v)`` (or ``x``) at every lane index; and `GumbelSelectF32_v2{V}` agrees with `GumbelSelectF32_v1{V}` on logit rows (ties,
@@ -39,6 +40,7 @@ M32 = 0xFFFFFFFF
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
     "NvLogf_v3": (43280, 74409, 2800, "69ad963aa5ff5276e47ea1065d7ab2b65ec7d522b15b9849c2b724ae1acd5bbe9f612a6ba6e097e109ef99207b56b94226c8ff2d2f18a1708448e95693343a3b"),
+    "NvLogf_v5": (43206, 74322, 2808, "c5e4532599511ffa703b6078303a35b89de154eda8a81927031eb896e48eab3c8559fd17f7ec892d022bec660863fa3021bf1595b71aa6465f5dde63036d12bf"),
     "GumbelSetup_v1{N=5}": (1138, 4005, 160, "665163a8e11b818c93cfec66672ff17fd69654c4ac363d8e7e35cc706113df75af13272602207635a6d1d1aff74455febde42587166cfbb27d0931d776cb0274"),
     "GumbelSetup_v1{N=64}": (3859, 13430, 160, "9b9c10135574f923cfbb8b6139811415e652dc2b22dac77ca97cb99ebd1978135cc6cdab0e514097e6da603a835f0c778286c678b26c2a9b1bc68147aa811c7f"),
     "GumbelStreamKey_v2": (9245, 39200, 305, "12e3eed59d4c4a8bb162063b135d04ce5f8164bf0b568e458555a537ea4dcfbe8916f97d6c488c36ad4eaddd75421179883ada1f965e1e2bf6d1f6741e8fb8ac"),
@@ -70,9 +72,9 @@ F32_SPECIALS = np.array([m | s for m in (0x00000000, 0x00000001, 0x007FFFFF, 0x0
 
 
 #: the traced Definitions (`trace.definition`, `sampling_boolean.traced_family`), the lane's noise last
-TRACED = [GB.NvLogf, GB.GumbelSetup, GB.GumbelStreamKeyHead, GB.GumbelStreamKeyTail, GB.GumbelLaneHead, GB.GumbelLaneRounds,
+TRACED = [GB.NvLogf, GB.NvLogfV5, GB.GumbelSetup, GB.GumbelStreamKeyHead, GB.GumbelStreamKeyTail, GB.GumbelLaneHead, GB.GumbelLaneRounds,
           GB.GumbelLaneTail]
-TRACED_SPECS = ["NvLogf_v3", "GumbelSetup_v1{N=5}", "GumbelSetup_v1{N=64}", "GumbelStreamKeyHead_v1", "GumbelStreamKeyTail_v1",
+TRACED_SPECS = ["NvLogf_v3", "NvLogf_v5", "GumbelSetup_v1{N=5}", "GumbelSetup_v1{N=64}", "GumbelStreamKeyHead_v1", "GumbelStreamKeyTail_v1",
                 "GumbelLaneHead_v1", "GumbelLaneRounds_v1", "GumbelLaneTail_v1"]
 
 
@@ -103,7 +105,7 @@ def _check_pin(spec: str, pin) -> None:
 
 # --- pins ------------------------------------------------------------------------------------------------------------------
 
-@pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s == "NvLogf_v3" else s for s in sorted(PINS)])
+@pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s.startswith("NvLogf") else s for s in sorted(PINS)])
 def test_pinned_counts_and_digests(spec) -> None:
     _check_pin(spec, PINS[spec])
 
@@ -175,6 +177,26 @@ def test_nv_logf_agrees_with_its_word_definition() -> None:
     ref = E.evaluate_batch(word, a).astype(np.uint64).reshape(-1)
     bad = np.flatnonzero(got != ref)
     assert not bad.size, f"{bad.size} of {len(a)} words differ from NvLogf_v2, first {[hex(int(a[i])) for i in bad[:5]]}"
+
+
+@pytest.mark.slow
+def test_nv_logf_without_flush_to_zero_agrees_with_its_word_definition() -> None:
+    """`NvLogf_v5` against `NvLogf_v4` on `test_nv_logf_agrees_with_its_word_definition`'s words and 2^16 subnormals of both
+    signs; it differs from `NvLogf_v3` exactly where the input is subnormal (the FTZ build's -inf, here a finite log or, for a
+    negative one, a NaN)."""
+    target = bind(GB.NvLogfV5)
+    word = TR.word_of(target)
+    assert word.id == "NvLogf_v4"
+    rng = _rng("logf-no-ftz")
+    sub = rng.integers(1, 1 << 23, 1 << 16, dtype=np.uint64) | (rng.integers(0, 2, 1 << 16, dtype=np.uint64) << np.uint64(31))
+    a = np.concatenate([_log_inputs(rng, (0x3F800000, 0x3F2AAAAB, 0x00800000, INF), 50_000), sub.astype(np.uint32)])
+    got = BS.evaluate_words(target, a).astype(np.uint64).reshape(-1)
+    ref = E.evaluate_batch(word, a).astype(np.uint64).reshape(-1)
+    bad = np.flatnonzero(got != ref)
+    assert not bad.size, f"{bad.size} of {len(a)} words differ from NvLogf_v4, first {[hex(int(a[i])) for i in bad[:5]]}"
+    ftz = BS.evaluate_words(bind(GB.NvLogf), a).astype(np.uint64).reshape(-1)
+    subnormal = ((a & 0x7F800000) == 0) & ((a & 0x7FFFFF) != 0)
+    assert np.array_equal(got != ftz, subnormal)
 
 
 NvLog1pf = TR.definition("NvLog1pf", 1, GB.nv_log1pf, (("a", F32),), F32, register=False)

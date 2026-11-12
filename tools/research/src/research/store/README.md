@@ -376,7 +376,9 @@ algorithm: `remote-replicas/README.md`.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
-  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
+  Its key may write but not read, so each object is one `PUT If-None-Match: *` (`create`; 412 = already there), and keys a
+  pass saw land, kept under the store's `export/`, aren't sent again (`--fresh` sends all). A superseded id the store lacks
+  comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
@@ -491,7 +493,7 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
                                               copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]

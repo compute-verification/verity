@@ -10,7 +10,7 @@ is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``, as does PoUB's ``commit_map``, which reads the replay's store.  ``OPTIONAL`` names the packages a
-tree may hold or not (a private protocol's driver).  ``engine.hooks``, the one owner of
+tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``engine.makers``, a seam's parts, ``settings``,
 the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
@@ -56,11 +56,13 @@ LAYER = {
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
+    "verity_vllm.commitments": "core",                         # the commitment scheme's reference; imports nothing else from verity_vllm
     "verity_vllm.engine.served_seed": "core",                  # the served seed rule's functions; imports only engine.hooks
 }
 
-#: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`): placed where present
-OPTIONAL = ("verity_vllm.protocols.remote_bandwidth",)
+#: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`) and the commitment scheme's
+#: reference: placed where present
+OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
 LIBRARY_PACKAGES = ("verity_vllm", "verity.ml.definitions")
@@ -105,6 +107,13 @@ def modules() -> dict[str, str]:
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
+@lru_cache(maxsize=None)
+def core_packages() -> tuple[str, ...]:
+    """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
+    return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
+                 if (init := d / "__init__.py").is_file() and not R.in_library(init))
+
+
 def _resolve(target: str, known: dict[str, str]) -> str | None:
     parts = target.split(".")
     for i in range(len(parts), 0, -1):
@@ -132,13 +141,14 @@ def edges() -> tuple[Edge, ...]:
                 if node.level:
                     anchor = pkg.split(".")[: len(pkg.split(".")) - node.level + 1]
                     base = ".".join([*anchor, *([base] if base else [])])
-                targets = [f"{base}.{a.name}" if f"{base}.{a.name}" in known else base for a in node.names]
+                targets = [name if name in known or in_group(name, core_packages()) else base
+                           for name in (f"{base}.{a.name}" for a in node.names)]
             else:
                 lit = R.dynamic_module(node) if isinstance(node, ast.Call) else None
                 if lit:
                     targets = [lit]
             for t in targets:
-                if not any(t == p or t.startswith(p + ".") for p in LIBRARY_PACKAGES):
+                if not in_group(t, LIBRARY_PACKAGES) or in_group(t, core_packages()):
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:

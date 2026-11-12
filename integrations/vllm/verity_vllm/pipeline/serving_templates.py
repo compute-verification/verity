@@ -1,9 +1,9 @@
 """The templates of the serving rows (`pipeline.serving_rows`, whose module text states their rules): a template read through its
 word link (:func:`template`), and the templates a Program row's Definition holds instances of (:func:`unit_templates`: the row
 itself, a ``CUT`` family's batched members, a ``COORDS`` family's coordinates, a ``COLS`` family's column blocks, a ``PARTS``
-family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``SPLITS`` row's split parts and combine, a
-``CHAINS`` row's key blocks and end, a ``STAGES`` row's stages, and an ``EXPERTS`` row's per-expert blocks and table reads and a
-``SLOTS`` router row's slots), and the unit of one output word of a row (:func:`coordinate`)."""
+family's parts, a ``SLICES`` family's slices, a ``KCHUNKS`` row's K-chunks, a ``CHAINS`` row's key blocks, ends and combines,
+a ``STAGES`` row's stages, and an ``EXPERTS`` row's per-expert blocks and table reads and a ``SLOTS`` router row's slots), and
+the unit of one output word of a row (:func:`coordinate`)."""
 from __future__ import annotations
 
 import importlib
@@ -73,18 +73,18 @@ for _row, _ps in PARTS.items():
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
 KCHUNKS = {"MoeExpertFp8Gemm_v1": "MoeExpertFp8CoordinateChunk_v1"}
-#: the row Definitions whose heads are cut along their keys into split parts and a combine (the ``split`` layout, `split_rows`), by
-#: the row family: its part family, one split's (o_partial, lse) at each split's key count, and its combine family over the row's
-#: non-empty splits (`sparse_mla_split.SparseMlaSplitPart_v1` and `SparseMlaCombine_v1`: FA3's split kernel and its combine)
-SPLITS = {"SparseMlaSplit_v1": ("SparseMlaSplitPart_v1", "SparseMlaCombine_v1")}
-SPLIT_OF = {f: row for row, fs in SPLITS.items() for f in fs}
-#: the row Definitions whose heads are cut along their keys into a chain (the ``chain`` layout, `chain_rows`), by the row family:
-#: its block family, one key block of a head carrying the online softmax's state to the next in FA3's visit order (the first
-#: visited block FIRST at its key count, every later one at BN), and its end family, the head's epilogue on the last block's
-#: lanes and O; the units are the cut the row's module names (`sparse_mla.CUTS`: `head_chain`), which circuit-check holds to
-#: the Flock block in the row's place
-CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1")}
-CHAIN_OF = {f: row for row, fs in CHAINS.items() for f in fs}
+#: the row Definitions whose heads are cut along their keys into chains (the ``chain`` layout, `chain_rows`), by the row family,
+#: the families of its units in their roles (`CHAIN_ROLES`): its block family, one key block carrying the online softmax's state
+#: to the next in FA3's visit order (a chain's first visited block FIRST at its key count, every later one at BN), its end family,
+#: a head's epilogue on its last block's lanes and O, and a split row's (`sparse_mla_split.SparseMlaSplit_v1`, FA3's split
+#: kernel and its combine) split end in column blocks and its combine of each column block of the splits; the units are the cut
+#: the row's module names (`sparse_mla.CUTS`, `sparse_mla_split.CUTS`), which circuit-check holds to the Flock block in the row's
+#: place
+CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1"),
+          "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaSplitEndCols_v1", "SparseMlaCombine_v1")}
+#: a ``CHAINS`` unit's role by its index in its row family's entry
+CHAIN_ROLES = ("block", "end", "cols", "combine")
+CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
 #: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, every split
 #: count's top-p pipeline (stats blocks and their parts, probabilities, each round's step blocks and combines) and the select's
 #: chunks, each carrying what the stage after it reads; the units are the cut the row's module names (`sampling.CUTS`:
@@ -123,12 +123,11 @@ class Template:
     """A partition's template as the rows are read for it: its descriptor id and Definition (the population program's), the id of
     the word Definition it computes (its own for a word Definition), and its member layout (``LAYOUTS``; ``"coord"`` for a
     ``COORDS`` family at N = 1 or a ``WIDE_COORDS`` one at a power of two N dividing its G, ``"cols"`` for a ``COLS`` family, ``"part"`` for any other ``PARTS`` part, ``"slice"`` for a
-    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"split"`` for a ``SPLITS`` part or combine
-    family, ``"chain"`` for a ``CHAINS`` block or end family, ``"stage"`` for a ``STAGES`` stage family, ``"expert"``,
-    ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's block GEMMs, fused blocks, table reads and router slots
-    (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a ``HISTORY`` row's history reads (`history_read`); else
-    ``"row"``).
-    ``packed``: a row, coordinate, slice, part, K-chunk, split, chain, stage, expert or slots template with a port that is not 16-bit
+    ``SLICES`` family at every axis 1, ``"kchunk"`` for a ``KCHUNKS`` chunk family, ``"chain"`` for a ``CHAINS`` unit family,
+    ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
+    block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
+    ``HISTORY`` row's history reads (`history_read`); else ``"row"``).
+    ``packed``: a row, coordinate, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
     committed as Flock's bit rows."""
@@ -187,14 +186,14 @@ def template(t: str) -> Template:
     sl = SLICES.get(spec_base(word))
     layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COLS
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
-              else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
+              else "kchunk" if spec_base(word) in KCHUNKS.values()
               else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else "history" if history_read(word) else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused", "history"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice", "part", "kchunk", "split", "chain", "stage", "expert", "slots") or any(
+        if layout not in ("row", "coord", "slice", "part", "kchunk", "chain", "stage", "expert", "slots") or any(
                 len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16 for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
@@ -288,12 +287,12 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
     at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also in coordinates), for
     a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
-    each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a
-    ``SPLITS`` row family in NS > 1 splits, its part at each split's key count k (`split_keys`; NH times the splits of k keys)
-    and its combine over the non-empty splits (NH), for a ``CHAINS`` row family, its cut (`sparse_mla.head_chain`: the first
-    visited block at its key count, the later blocks at BN and the end; NH, NH (blocks - 1) and NH of them), for a ``STAGES``
-    row family, its cut (`topp_stages.cut`: each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS``
-    row family, at each block of n rows (`block_rows`), its
+    each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
+    row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
+    the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
+    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
+    each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS`` row family, at each block of n rows
+    (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
     them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
     them), and for a ``SLOTS`` row family, its slots family at its statics (one).  None when the spec does not bind to exactly
@@ -346,18 +345,10 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                 for first, last, n in ((True, False, 1), (False, False, C - 2), (False, True, 1)):
                     if n and (c := _bind(spec, fam, K=kc, FIRST=first, LAST=last)) is not None:
                         hit += ((descriptor_id(c), n * int(S["N"])),)
-        if (fams := SPLITS.get(spec_base(spec))) is not None and int(spec_statics(spec)["NS"]) > 1:
-            S = spec_statics(spec)
-            ks = split_keys(int(S["T"]), int(S["NS"]), int(S["BN"]))
-            for k in dict.fromkeys(ks):
-                if (c := _bind(spec, fams[0], T=k)) is not None:
-                    hit += ((descriptor_id(c), ks.count(k) * int(S["NH"])),)
-            if (c := _bind(spec, fams[1], NSPLIT=len(ks))) is not None:
-                hit += ((descriptor_id(c), int(S["NH"])),)
         if spec_base(spec) in CHAINS:
-            from verity.ml.definitions.registry.sparse_mla import CUTS
+            from verity.ml.definitions.registry import sparse_mla, sparse_mla_split
 
-            hit += tuple((descriptor_id(c), n) for c, n in CUTS[spec_base(spec)](sp))
+            hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
         if spec_base(spec) in STAGES:
             from verity.ml.definitions.registry.topp_stages import cut
 
@@ -427,14 +418,6 @@ def fused_block(spec: str, n: int) -> Any:
 def block_rows(N: int, G: int) -> list[int]:
     """The rows n of an ``EXPERTS`` row's blocks: each power of two that divides N and G, so a block's rows are one G-block's."""
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
-
-
-def split_keys(T: int, NS: int, BN: int) -> list[int]:
-    """Each non-empty split's key count, in split order, of a ``SPLITS`` row of T keys in NS splits of BN-key blocks
-    (`sparse_mla_split.split_blocks`: only the token's last block is partial)."""
-    from verity.ml.definitions.registry.sparse_mla_split import split_blocks
-
-    return [min(T, b1 * BN) - b0 * BN for b0, b1 in split_blocks(T, NS, BN)]
 
 
 def _bind(spec: str, family: str | None = None, **over: Any) -> Any:

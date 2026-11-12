@@ -8,11 +8,19 @@ table named from its own sample under round 1's root and read from the strings t
 opening (``tok``, ``row``, ``salt``, ``path``) are the block's parameters too, which the replay gives: values the
 interior registers as its own, a row a read. An interior is
 refused before anything is committed where a read doesn't open its table, where a table isn't the one round 1 registered
-under its name, and where a table holds other than C strings."""
+under its name, and where a table holds other than C strings.
+
+Every program over the reads holds their SHA-512 openings, so building, digesting or checking one is far past a quick
+test's seconds. The module builds none at import (`_boundary`, `_program`), its tests share one round 1 (`staged`) and
+one interior over it (`honest`), and each test that needs a program is marked slow, with what it alone catches. Each
+of those takes a minute or more, or waits for the shared round 1 and interior, minutes to build, so it also runs only
+where ``VERITY_VLLM_INTERIOR_TABLE=1`` asks (`_opt_in`)."""
 
 from __future__ import annotations
 
+import functools
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 
@@ -62,19 +70,44 @@ MEMBER = IR.named(CR.unit_member(SRW.template(P.template_id(RD)), CELLS))
 OPERANDS = tuple(IR.Operand(P.template_id(RD), p, f"{descriptor_id(BLOCK)}/{p}", CELLS, tuple(range(CELLS)), w)
                  for p, w in MEMBER.rows if p not in IR.TABLE)
 LINKS = (*SUPPLIES, *OPERANDS)
-BOUNDARY = CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
-                      RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
-PROGRAM = P.program_digest(BOUNDARY.program)
 NAMES = tuple(BT.name(RUN, PROMPT, OUTPUTS, s, LAYER) for s in range(SPANS))
+#: a program digest for a table no program reads: round 1's own (`_program`) takes its boundary's program to derive
+UNREAD = "c5" * 64
 
 
-def _tables(lengths=LENGTHS, seed: int = 0, fill: bool = True) -> list[HT.HistoryTable]:
+def _opt_in(takes: str) -> pytest.MarkDecorator:
+    """The skip of a test that runs only under ``VERITY_VLLM_INTERIOR_TABLE=1``; its reason says how long it ``takes``."""
+    return pytest.mark.skipif(os.environ.get("VERITY_VLLM_INTERIOR_TABLE") != "1",
+                              reason=f"VERITY_VLLM_INTERIOR_TABLE=1: {takes}")
+
+
+#: a test on the module's one round 1 (`staged`) or its interior (`honest`)
+SHARED = _opt_in("about 5 minutes on a CPU to build the module's round 1 and interior over the table reads once, then up to "
+                 "2 minutes a test")
+
+
+@functools.cache
+def _boundary() -> CS.Binding:
+    """Round 1's stand-in boundary, one member of the replay block's `SPANS` units. Built on first use, never at
+    import: every test worker imports the module to collect it, and the boundary's program holds every span's reads."""
+    return CS.Binding(P.population_program(BLOCK, SPANS), P.template_instance_query(BLOCK), {"law": "subset", "k": Q},
+                      RUN, (CS.Member(P.template_id(BLOCK), (("ingress", 64),), (("egress", 64),), SPANS),))
+
+
+@functools.cache
+def _program() -> str:
+    """Round 1's program, which its tables' domains bind: the boundary's digest, derived once."""
+    return P.program_digest(_boundary().program)
+
+
+def _tables(lengths=LENGTHS, seed: int = 0, fill: bool = True, program: str | None = None) -> list[HT.HistoryTable]:
     """Round 1's table for each span: its ``lengths[s]`` rows, filled to C (`boundary_tables.fill`), each under a salt of
-    its own."""
+    its own. ``program``: the tables', round 1's (`_program`) where none is given."""
+    program = _program() if program is None else program
     rng = np.random.default_rng(seed)
     out = []
     for name, n in zip(NAMES, lengths, strict=True):
-        t = HT.HistoryTable(PROGRAM, name, 2, CAP)
+        t = HT.HistoryTable(program, name, 2, CAP)
         rows = rng.integers(0, 1 << 16, (n, 2), dtype=np.uint16)
         rows = BT.fill(rows, PROMPT, OUTPUTS, CAP) if fill else rows
         t.append(rows, [rng.bytes(192) for _ in rows])
@@ -85,7 +118,7 @@ def _tables(lengths=LENGTHS, seed: int = 0, fill: bool = True) -> list[HT.Histor
 def _spec() -> S.Spec:
     """The served values (the boundary's and each span's table) and the interior's: its ports, and the block's
     parameters, registered: the reads' two supplied values and the four the replay gives."""
-    names = {m.port(p): (m.schema(p), "serve") for m in BOUNDARY.members for p in CS.port_leaves(m)}
+    names = {m.port(p): (m.schema(p), "serve") for m in _boundary().members for p in CS.port_leaves(m)}
     names |= {n: (HT.SCHEMA, "serve") for n in NAMES}
     w = IR.interior_window(MEMBER, CELLS, "00", [0], values=IR.link_values(LINKS, Q))
     names |= {m.port(p): (m.schema(p), "interior") for m in w.members for p in CS.port_leaves(m)}
@@ -106,26 +139,35 @@ def _first(tables):
     """A window stream over `RD` taking the reads' values a sampled span (`interior_rows.span_values`), and round 1, a stand-in boundary
     whose record registers each span's table as a port, registered and its first stage drawn (spans 0 and 2)."""
     draws = iter([[0, 2]])
+    boundary = _boundary()
     stream = S.Stream(_spec(), [RD], span_values=IR.span_values(LINKS), replay=BLOCK, budget=1, delta=DELTA,
                       challenger="challenger-test", clock=lambda: 0.0,
                       sampler=lambda law, n: next(draws) if law["law"] == "subset" else [0] * len(law["strata"]))
-    c = CS.commit(BOUNDARY, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
+    c = CS.commit(boundary, [{"rows": {"ingress": np.zeros((SPANS, 64), np.uint16)},
                               "outs": {"egress": np.ones((SPANS, 64), np.uint16)}}], salt_key=SALT)
     rec = CS.registration(c, {"stand_in": "boundary"}, None, registrar=R)
     rec["roots"] += [{"port": t.value, "root": t.root.hex(), "leaves": t.leaves, "domain": t.domain.domain_id.hex()}
                      for t in tables]
-    ports = CS.expected_ports(BOUNDARY) | {t.value: {"leaves": t.leaves, "domain": t.domain.domain_id.hex()} for t in tables}
+    ports = CS.expected_ports(boundary) | {t.value: {"leaves": t.leaves, "domain": t.domain.domain_id.hex()} for t in tables}
     reg = stream.register(rec, ports, leaf_layer=CS.leaf_layer({m.key: c.public_body(k)
-                                                                for k, m in enumerate(BOUNDARY.members)}))
+                                                                for k, m in enumerate(boundary.members)}))
     return stream, reg, stream.select(reg), rec
 
 
 @pytest.fixture(scope="module")
 def staged():
-    """Round 1's tables and `_first`'s stream once for the module, for the tests that only read its record, digest and
-    drawn units."""
+    """Round 1's tables and `_first`'s stream once for the module, for the tests that read its record, digest and drawn
+    units. None has its stream accept an interior: a stream takes one a draw, so the test that does stages its own."""
     tables = _tables()
     return (*_first(tables), tables)
+
+
+@pytest.fixture(scope="module")
+def honest(staged):
+    """The interior over the tables `staged`'s round 1 served, under the test key, once for the module: the tests that
+    take it only read it."""
+    _stream, reg, first, rec, tables = staged
+    return _interior(reg, first, rec, [tables[u] for u in first.units])
 
 
 def _spans(tables) -> list[IR.Span]:
@@ -151,8 +193,15 @@ def _history(rec, first, it) -> dict:
     return IR.history(rec, [NAMES[u] for u in first.units], 2, C, it.published, bodies)
 
 
+@_opt_in("about 12 minutes on a CPU, the verifier checking the reads' interior program three times on a stream of "
+         "the test's own")
+@pytest.mark.slow
 def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them():
-    """The interior registers the block's parameters as round 2 names them, the two supplied values ``root`` and
+    """Slow, on a stream of its own (a stream takes one interior a draw, and this test's accepts one): it catches the
+    reads' interior and the verifier disagreeing on a supplied row's bytes, format or order, which shows only where the
+    verifier checks the reads' own interior program, here three times.
+
+    The interior registers the block's parameters as round 2 names them, the two supplied values ``root`` and
     ``domain`` and then the reads' key and opening, a row a read, the replayed ones (`Operand`), and
     publishes each sampled span's table's C strings. From the challenger's `history` alone (its own sample's names, round 1's record and
     the published strings) `history.roots_of`, the verifier's mirror, recomputes round 1's root and domain for each, and
@@ -222,15 +271,18 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                        supplied=IR.sources(LINKS, Q, names), schemas=formats).digest
 
 
-def test_a_table_round_1_did_not_register_is_refused():
+@SHARED
+@pytest.mark.slow
+def test_a_table_round_1_did_not_register_is_refused(staged, honest):
     """A table that differs from the served one in one row: the interior refuses it by name before anything is committed,
     the challenger's `history` over its strings recomputes another root than round 1's, which `history.roots_of`
-    refuses, and so does the stream (`R7-history`)."""
-    tables = _tables()
-    stream, reg, first, rec = _first(tables)
+    refuses, and so does the stream (`R7-history`). Slow: the stream's own refusal is the verifier's, over the reads'
+    interior program; without it a prover's strings for another table would be held only by the Python mirror. The
+    stream is `staged`'s: it refuses, and no other test asks it anything."""
+    stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     served = drawn[1]
-    other = HT.HistoryTable(PROGRAM, served.value, 2, CAP)
+    other = HT.HistoryTable(_program(), served.value, 2, CAP)
     rows = np.array(served.rows)
     rows[1, 0] ^= 1
     other.append(rows, served.salts)
@@ -238,7 +290,7 @@ def test_a_table_round_1_did_not_register_is_refused():
     swapped = [drawn[0], other]
     with pytest.raises(ValueError, match="is not the one round 1 registered under its name"):
         _interior(reg, first, rec, swapped)
-    it = _interior(reg, first, rec, drawn)
+    it = honest
     published = {**it.published, other.value: [bc.hex() for bc in other.bcs]}
     c = it.committed
     bodies = {m.key: c.public_body(k) for k, m in enumerate(c.window.members)}
@@ -252,14 +304,17 @@ def test_a_table_round_1_did_not_register_is_refused():
     assert refused.value.verdict.codes == (R.HISTORY,)
 
 
-def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(staged):
+@SHARED
+@pytest.mark.slow
+def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(staged, honest):
     """Two spans of one class, of lengths 5 and 3, each publish C = 6 strings, so the strings never show a span's length:
     a read past its length opens a fill row (the zero row under a salt of its own) and one past C the zero row under the
-    zero salt, each the zero row. A table of other than C strings is refused by name."""
+    zero salt, each the zero row. A table of other than C strings is refused by name. Slow: what is published is the
+    interior's own, read off one built over a registered round 1 and its drawn spans, which the tables alone don't give."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     assert [len(t.rows) for t in drawn] == [C, C] and [LENGTHS[u] for u in first.units] == [5, 3]
-    it = _interior(reg, first, rec, drawn)
+    it = honest
     assert [len(v) for v in it.published.values()] == [C, C]
     zero = np.zeros(2, np.uint16)
     for t in drawn:
@@ -273,13 +328,16 @@ def test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length(stag
         _interior(reg, first, rec, [short[u] for u in first.units])
 
 
-def test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain(staged):
+@SHARED
+@pytest.mark.slow
+def test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain(staged, honest):
     """Serving gives no test key: the reads' interior commits with every salt fresh from the OS but its linked ports',
     whose rows keep their value's. Its ``root`` and ``domain`` register the entries the keyed interior's do (a supplied
-    value's salts are public), and each value the replay gives the same rows, words and domain under a new root."""
+    value's salts are public), and each value the replay gives the same rows, words and domain under a new root. Slow: it
+    commits the reads' interior as serving does, the one path every other test's key replaces."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
-    keyed, served = _interior(reg, first, rec, drawn), _interior(reg, first, rec, drawn, salt_key=None)
+    keyed, served = honest, _interior(reg, first, rec, drawn, salt_key=None)
     a, b = ({e["value"]: e for e in it.record["registered"]} for it in (keyed, served))
     assert list(b) == [x.value for x in LINKS]
     for x in SUPPLIES:
@@ -309,6 +367,8 @@ def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
     assert bits == v["supplied"]["rows_bits"]
 
 
+@SHARED
+@pytest.mark.slow
 @pytest.mark.parametrize("bad, why", [
     ("read row", "does not open its table there"),
     ("wrong root", "takes a root or domain id other than its table's"),
@@ -317,7 +377,8 @@ def test_a_tables_bytes_and_its_reads_rows_are_cores_history_read_vector():
 ])
 def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed(staged, bad, why):
     """A read whose row isn't the table's at its key, one at the other span's table's root, one at key 2 with key 1's
-    opening and one whose verdict is 0 open nothing."""
+    opening and one whose verdict is 0 open nothing. Slow: `interior` reaches a read's opening only past its window's
+    program digest and round 1's record, so each case catches a bad read that would otherwise be committed."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     spans = _spans(drawn)
@@ -330,10 +391,13 @@ def test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_commi
         _interior(reg, first, rec, drawn, spans=[_with(spans[0], kind, port, 0, value), spans[1]])
 
 
+@SHARED
+@pytest.mark.slow
 def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read(staged):
     """Each sampled span brings its table exactly when a template reads one, with round 1's record and its class's C, and
     the reads' root and domain are both the verifier's; a table of another capacity and a commitment made on the rows'
-    device are refused by name."""
+    device are refused by name. Slow: each refusal is `interior`'s own, past its building of the reads' window and on
+    round 1's registration and draw; it catches an interior of table reads committed without the tables it must open."""
     _stream, reg, first, rec, tables = staged
     drawn = [tables[u] for u in first.units]
     spans = _spans(drawn)
@@ -343,7 +407,7 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
         _interior(reg, first, rec, drawn[:1], spans=spans)
     with pytest.raises(ValueError, match="give round 1's record"):
         IR.interior(spans, CELLS, reg.digest, first.units, row=ROW, tables=drawn)
-    wide = [HT.HistoryTable(PROGRAM, t.value, 2, 2 * CAP) for t in drawn]
+    wide = [HT.HistoryTable(_program(), t.value, 2, 2 * CAP) for t in drawn]
     with pytest.raises(ValueError, match="reads a table of 8 rows of 2 words"):
         _interior(reg, first, rec, wide, spans=spans)
     with pytest.raises(ValueError, match="a replay block of table reads commits on the host"):
@@ -354,9 +418,10 @@ def test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_c
 
 def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_1s_entry():
     """`kept_table` commits a kept table's rows again under its kept salts (`boundary_tables.Served`, as `load` gives it) to
-    round 1's entry, and refuses a kept table whose rows commit to another."""
-    t = _tables()[0]
-    kept = BT.Served(**t.entry(), program=PROGRAM, rows=np.array(t.rows), salts=b"".join(t.salts))
+    round 1's entry, and refuses a kept table whose rows commit to another. No program reads the table, so it is under
+    `UNREAD`."""
+    t = _tables(program=UNREAD)[0]
+    kept = BT.Served(**t.entry(), program=UNREAD, rows=np.array(t.rows), salts=b"".join(t.salts))
     again = IR.kept_table(kept)
     assert again.entry() == t.entry() and again.bcs == t.bcs
     rows = np.array(t.rows)
@@ -365,8 +430,12 @@ def test_a_drawn_spans_table_is_rebuilt_from_what_rank_0_kept_and_held_to_round_
         IR.kept_table(replace(kept, rows=rows))
 
 
+@SHARED
+@pytest.mark.slow
 def test_the_challengers_history_refuses_a_table_round_1_did_not_register(staged):
-    """`history` names only tables round 1's record registers, under the domain of their words and leaves."""
+    """`history` names only tables round 1's record registers, under the domain of their words and leaves. Slow by
+    `staged` alone: the record is the one a stream registered, so it catches `history` and a registered record's roots
+    and program drifting apart, which a record written by hand would not show."""
     _stream, _reg, _first_, rec, _tables_ = staged
     with pytest.raises(ValueError, match="registers no table"):
         IR.history(rec, [BT.name(RUN, PROMPT, OUTPUTS, SPANS, LAYER)], 2, C, {}, {})

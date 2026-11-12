@@ -156,9 +156,10 @@ theorem entryOf_sameAt {k : UInt8} {nm : String} {e x : Json} {rs ds : String} {
     rw [← hexMsg_of_jeq h2]
     exact hexMsg_str hdu
 
-/-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: the
-boundary port a link names, the interior record's port the read names, or the registered value either record
-registers, each of which `sameAt` holds to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
+/-- **A read `readOk` passes has its fields at the entry `readKey` names** in the record `readsInterior` picks: at a
+port a link names, the value of its name the interior registration registers, else the boundary port it names; the
+interior record's port the read names; or the registered value either record registers, each of which `sameAt` holds
+to the read's root, domain and leaves, of at most `MAX_LEAVES`. -/
 theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {port v rs ds : String} {e : Json}
     {r d : ByteArray} {n : ℕ}
     (hok : Spot.SecondStage.readOk own (Spot.SecondStage.byTemplate own.interior) p port e = true)
@@ -179,19 +180,32 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
     rw [hlk] at hok
     simp only [Bool.and_eq_true, beq_iff_eq] at hok
     obtain ⟨hvl, hm⟩ := hok
+    cases hri : Spot.SecondStage.registeredEntry own.interior v with
+    | some x =>
+      cases hro : Spot.SecondStage.rowsOf own p.template port with
+      | none => simp [hri, hro] at hm
+      | some ro =>
+        simp only [hri, hro, Bool.and_eq_true] at hm
+        have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hri]
+        have hRK : readKey own p.template port v = .reg v := by simp [readKey, hlk, hri]
+        rw [hRI, hRK]
+        refine ⟨entryOf (1, v, x), ?_, hs hm.1⟩
+        show recKeyAt own.interior (.reg v) = _
+        rw [recKeyAt_reg, hri]; rfl
+    | none =>
     cases hf : (Spot.Record.byPort own.boundary).find? (·.1 == v) with
-    | none => simp [hf] at hm
+    | none => simp [hri, hf] at hm
     | some kb =>
       obtain ⟨k, b⟩ := kb
       cases hpop : Spot.nat? (Spot.getD own.boundary "population") with
-      | none => simp [hf, hpop] at hm
+      | none => simp [hri, hf, hpop] at hm
       | some m =>
         cases hro : Spot.SecondStage.rowsOf own p.template port with
-        | none => simp [hf, hpop, hro] at hm
+        | none => simp [hri, hf, hpop, hro] at hm
         | some ro =>
-        simp only [hf, hpop, hro, Bool.and_eq_true] at hm
-        have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk]
-        have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hvl]
+        simp only [hri, hf, hpop, hro, Bool.and_eq_true] at hm
+        have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hri]
+        have hRK : readKey own p.template port v = .port v := by simp [readKey, hlk, hri, ← hvl]
         rw [hRI, hRK]
         refine ⟨entryOf (0, k, b), ?_, hs hm.1⟩
         show recKeyAt own.boundary (.port v) = _
