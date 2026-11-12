@@ -104,7 +104,8 @@ tick() {
   )
 }
 
-# What a launch leaves behind (train.sh's tree and its log, check.py's Lean deps), 40 min after its last change, and never
+# What a launch leaves behind (train.sh's tree and its log, check.py's Lean deps, the tree of a job of the steps after a landing
+# that was killed: `research-after-land-*`), 40 min after its last change, and never
 # while a process works in it or under it (a log: in its tree). train.sh starts check.py in the tree, on the venv under it,
 # where it can stay for as long as its run, and the tree's own time stays at the launch. The processes seen are this user's,
 # which every launch of the loop's is.
@@ -112,7 +113,7 @@ sweep() {
   local before busy p changed at
   before=$(( $(now) - 2400 ))
   busy=$'\n'$(readlink /proc/[0-9]*/cwd 2>/dev/null)$'\n'
-  for p in "$TRAIN_TREES"/train-* "$TMPDIR"/train-* "$TMPDIR"/check-lean-deps-*; do
+  for p in "$TRAIN_TREES"/train-* "$TRAIN_TREES"/research-after-land-* "$TMPDIR"/train-* "$TMPDIR"/check-lean-deps-*; do
     changed=$(stat -c %Y "$p") || continue
     [ "$changed" -lt "$before" ] || continue
     at=$(readlink -f "${p%.log}") || continue
