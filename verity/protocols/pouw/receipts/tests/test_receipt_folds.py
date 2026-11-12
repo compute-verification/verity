@@ -9,7 +9,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-
 import receipt_conform as C
 import receipt_folds as F
 
