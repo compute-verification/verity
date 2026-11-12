@@ -50,15 +50,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+import of_record as OR
 import verity_difftest as D
 
 from verity.protocols.pouw.verifier import coins as Co
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import verifier as PV
 from verity.protocols.pouw.verifier import window as Wd
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/protocols/pouw/verifier/lean/check"

@@ -441,7 +441,8 @@ def price_fused(strata, how="h200"):
     for x in strata:
         e = expert(x) if x.get("kind") == "fused" else None
         if e:
-            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG)}
+            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG),
+                     "table_blocks": tc.table_blocks(FUSED_K_LOG)}
             if how == "cpu":
                 r = FUSED_CPU[e]
                 x |= {"fixed_seconds": x["fixed_seconds"] * r, "seconds_per_block": x["seconds_per_block"] * r,

@@ -1,4 +1,4 @@
-"""The SASS gate (`harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
+"""The SASS gate (`benchmarks/pouw/harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
 `ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
@@ -14,17 +14,17 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import json
+import math
+import re
 import struct
 import subprocess
-import sys
 from pathlib import Path
 
+import ieee_pin
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
-import sass_gate as SG
-
+#: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
+SG = ieee_pin.SG
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
@@ -312,6 +312,31 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
     assert verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800000"))["covered"] == PLAIN_COVERED
     v = verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800001"))
     assert {o["function"] for o in v["offending"]} == {"udiv16_k"} and "__cuda_sm20_div_u16's body" in v["offending"][0]["why"]
+
+
+def test_a_float_immediate_is_the_bits_struct_packs_and_none_exactly_where_float_or_struct_refuse():
+    """`_float_bits` asks before it converts. On every token of the fixtures' listings, and at the edges of `float`'s
+    grammar and of each format's range, it is `struct`'s bits of `float(text)`, and None exactly where one of them raises."""
+    edges = ["", "+", "-", ".", "e5", "1e", "1e+", "1.", ".5", "+.5e-3", "1E5", "inf", "-Infinity", "infinit", "nan", "-NAN",
+             "+INF", "-INF", "+QNAN", "-QNAN", "+SNAN", "0x3f800000", "0x1p+3", "1e39", "-1e39", "1e400", "1e-50", "4.9e-324",
+             "65504", "65519.999", "65520", "-65520", "65536", "3.4028234663852886e+38", "١٢"]
+    for past in SG._PAST.values():
+        edges += [repr(past), repr(-past), repr(math.nextafter(past, 0.0)), repr(-math.nextafter(past, 0.0))]
+    listed = set().union(*(re.split(r"[\s,;]+", f.read_text()) for f in sorted(FIX.glob("*.txt"))))
+    assert {"+INF", "2.125", "1.78813934326171875e-07", "16777216", "R4", "0x4b800000"} <= listed
+    for fmt, word in (("f", "<I"), ("e", "<H")):
+        for text in sorted(listed.union(edges)):
+            got = SG._float_bits(text, fmt)
+            if got is None:
+                with pytest.raises((ValueError, OverflowError)):
+                    struct.pack("<" + fmt, float(text))
+            else:
+                assert got == struct.unpack(word, struct.pack("<" + fmt, float(text)))[0], text
+    assert SG._float_bits("+INF", "f") == 0x7F800000 and SG._float_bits("15", "e") == 0x4B80
+    assert SG._float_bits("16777216", "f") == 0x4B800000 and SG._float_bits("16777216", "e") is None
+    assert SG._float_bits("+QNAN", "f") is None and SG._float_bits("R4", "f") is None
+    # what `float` reads and no disassembler prints: digit separators and surrounding space
+    assert [SG._float_bits(text, "f") for text in ("1_0", " 1", "1 ")] == [None] * 3 and float("1_0") == float(" 1 ") * 10
 
 
 def test_a_sections_flags_line_keeps_its_function():
@@ -1057,6 +1082,20 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
         monkeypatch.setattr(SG, "read_mapped", lambda s, n, data=data: data.ljust(n, b"\0"))
         with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
             SG.SassChecker(tools=TOOLS, cache=None).discover()
+
+
+def test_a_semaphores_page_the_gate_cant_read_fails_it_by_the_error(monkeypatch):
+    def refused(start, n):
+        raise PermissionError(13, "Permission denied")
+
+    fake = "/dev/shm/sem.mp-planted (deleted)"
+    monkeypatch.setattr(SG, "mapped", lambda: [fake])
+    monkeypatch.setattr(SG, "regions", lambda p: [(0x1000, 0x1000 + SG.PAGE)])
+    monkeypatch.setattr(SG, "read_mapped", refused)
+    with pytest.raises(SG.SassGateFailed, match=r"sem\.mp-planted \(deleted\) is mapped but deleted, and the gate can't read its "
+                                                r"page \(\[Errno 13\] Permission denied\)") as ex:
+        SG.SassChecker(tools=TOOLS, cache=None).discover()
+    assert isinstance(ex.value.__cause__, PermissionError)
 
 
 def test_this_process_maps_the_python_interpreter():

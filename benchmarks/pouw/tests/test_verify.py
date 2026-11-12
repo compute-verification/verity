@@ -10,14 +10,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import sys
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
 import arm as A
+import pytest
 import verify as V
 
 RUN, COMMIT = "r20260930-120000-abcd", "0123456789abcdef0123456789abcdef01234567"

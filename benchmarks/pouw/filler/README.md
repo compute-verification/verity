@@ -91,6 +91,6 @@ three arm runners build with `nvcc` and take a lease.
 
 The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
 A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
-directories on pytest's `pythonpath`. `test_comm_report.py` still loads `comm/report.py` by file, since the harness
-has a `report.py` too.
+directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
+`comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
 `../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.

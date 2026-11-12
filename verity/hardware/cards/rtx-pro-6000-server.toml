@@ -50,6 +50,7 @@ l2 = { value = 5, unit = "word/SM-clock", mark = "measurement", source = "measur
 bus = { value = 512, unit = "bit", mark = "ceiling", source = "product page: 512-bit GDDR7" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "the product page's 1597 GB/s over 512 bits is 24.96 Gb/s a pin: two transfers a clock of the 12481 MHz nvidia-smi reports" }
 bandwidth = { value = 1.597568e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8; the product page's 'Memory Bandwidth 1597 GB/s'" }
+read = { value = 1.539e12, unit = "B/s", mark = "measurement", source = "the fastest bare read of an encoded store measured on one card: 91,268,055,040 B in 59.29 ms in an honest session's prover, 1539.26 GB/s rounded down, 96.3% of memory.bandwidth (art:661a9041cf81; verity/protocols/poub/verifier/timing.py's GPU_READ_BYTES_PER_S)" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]

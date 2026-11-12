@@ -33,14 +33,19 @@ def value(card: dict, key: str) -> Fraction:
 def test_the_cards_we_run() -> None:
     assert skus("gpu") == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
     assert skus("host") == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
-    assert skus() == sorted(skus("gpu") + skus("host"))
+    assert skus("server") == ["dgx-h200"]
+    assert skus() == sorted(skus("gpu") + skus("host") + skus("server"))
+
+
+#: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
+FEWEST = {"gpu": 20, "host": 20, "server": 4}
 
 
 @pytest.mark.parametrize("sku", skus())
 def test_every_number_is_sourced_and_marked(sku: str) -> None:
     card = load(sku)
     numbers = entries(card)
-    assert len(numbers) >= 20
+    assert len(numbers) >= FEWEST[card["kind"]]
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
 
 
@@ -65,19 +70,30 @@ def test_a_measurement_cites_the_run_that_measured_it() -> None:
         "measures it")
 
 
+#: The entries a card of a kind holds only where a run measured them: a figure of one node's VM that no document gives
+#: for another's, so a card without the measurement has no entry rather than an invented one.
+MEASURED_ONLY = {"host": {"disk.read"}}
+
+
 @pytest.mark.parametrize("kind", KINDS)
 def test_one_schema_across_the_cards_of_a_kind(kind: str) -> None:
-    """A reader can take any number from any card of a kind by the same key."""
-    keys = {sku: sorted(entries(load(sku))) for sku in skus(kind)}
+    """A reader can take any number from any card of a kind by the same key, the entries of `MEASURED_ONLY` apart: a
+    card that has one marks it a measurement, and some card has each."""
+    apart = MEASURED_ONLY.get(kind, set())
+    keys = {sku: sorted(set(entries(load(sku))) - apart) for sku in skus(kind)}
     assert len({tuple(k) for k in keys.values()}) == 1, keys
+    for key in apart:
+        marks = {card[key]["mark"] for card in map(entries, map(load, skus(kind))) if key in card}
+        assert marks == {"measurement"}, (key, marks)
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
 def test_derived_gpu_numbers(sku: str) -> None:
-    """Device memory's bandwidth is its clock's transfers over the bus."""
+    """Device memory's bandwidth is its clock's transfers over the bus, which bound its read."""
     card = load(sku)
     assert value(card, "memory.bandwidth") == (value(card, "clock.memory") * 10 ** 6 * value(card, "memory.transfers")
                                                * value(card, "memory.bus") / 8)
+    assert 0 < value(card, "memory.read") <= value(card, "memory.bandwidth")
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))
@@ -131,9 +147,19 @@ def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
     assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
 
 
+@pytest.mark.parametrize("sku", skus("server"))
+def test_derived_server_numbers(sku: str) -> None:
+    """A server's line rate is its network ports' together, every class of them, each in bits a second."""
+    link = load(sku)["link"]
+    assert {e["unit"] for e in link.values()} == {"bit/s"}
+    assert value(link, "rate") == sum(value(link, k) for k in link if k != "rate")
+
+
 def test_the_quoted_numbers() -> None:
-    """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
-    one is deliberate: among them the HOST_ figures of PoUB's timing.py, which the RTX node's host card states."""
+    """The firmware ceilings, host peaks, bandwidths and measured reads already quoted outside this package, pinned so
+    that a change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host
+    card states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO
+    6000's card states."""
     server, h200, b200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb"), load("b200-sxm-180gb")
     clocks = ("clock.sm", "clock.tensor", "clock.memory")
     assert [value(server, k) for k in clocks] == [2430, 2430, 12481]
@@ -141,11 +167,13 @@ def test_the_quoted_numbers() -> None:
     assert [value(b200, k) for k in clocks] == [1965, 1965, 3996]
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6
     assert value(h200, "memory.bandwidth") == 4916736 * 10 ** 6
+    assert [float(value(card, "memory.read")) for card in (server, h200)] == [1.539e12, 4.26e12]
     granite, sapphire = load("xeon-6776p-2s"), load("xeon-platinum-8468-2s")
     assert round(float(value(granite, "rate.ops")), -11) == 1.0453e15
     assert round(float(value(sapphire, "rate.ops")), -11) == 7.471e14
     timing = ("memory.read", "memory.bandwidth", "memory.write", "store.chip")
     assert [float(value(granite, k)) for k in timing] == [606.8e9, 819.2e9, 819.2e9, 1_000_341_504]
+    assert float(value(granite, "disk.read")) == 4.311e9
 
 
 def test_the_rates_readers_quote() -> None:
@@ -175,7 +203,8 @@ def test_the_rates_readers_quote() -> None:
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    every = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s",
+             "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
 

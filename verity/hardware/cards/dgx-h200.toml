@@ -1,0 +1,20 @@
+# The NVIDIA DGX H200, a server: the one source of its numbers (verity/hardware/README.md).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this server and firmware exceeds it, what
+# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
+# (neither, open). A server card is what the server's own documents state of it apart from its CPUs and DRAM (a host
+# card's) and its GPUs (their own cards): its network ports. None of our nodes is a DGX H200, so nothing here is measured.
+
+kind = "server"
+sku = "dgx-h200"
+name = "NVIDIA DGX H200"
+gpus = "eight h200-sxm-141gb cards"
+host = "two Intel Xeon Platinum 8480C sockets, which have no host card: xeon-platinum-8468-2s is the host of our H200 nodes, another server"
+
+# The line rates of the server's network ports, which a boundary link of a host of this model carries at most each way:
+# the data rate of each port's fastest standard, the guide's "Up to". Every port is in one class, and `rate` is all of
+# them together.
+[link]
+cluster = { value = 3.2e12, unit = "bit/s", mark = "ceiling", source = "NVIDIA DGX H100/H200 User Guide, Introduction, Table 1 (Component Description), 'Network (Cluster) card': '4 x OSFP ports for 8 x NVIDIA ConnectX-7 Single Port InfiniBand Cards', each 'InfiniBand (default): Up to 400Gbps' or Ethernet at 400GbE and below: 8 ports x 4e11" }
+storage = { value = 1.6e12, unit = "bit/s", mark = "ceiling", source = "the same table, 'Network (storage and in-band management) card': '2 x NVIDIA ConnectX-7 Dual Port Ethernet Cards', each at 'Ethernet (default): 400GbE' and below or 'InfiniBand: Up to 400Gbps', read as each port's (Table 5, Network Port Mapping: Slot1 and Slot2, P1 and P2): 4 ports x 4e11" }
+management = { value = 2.11e11, unit = "bit/s", mark = "ceiling", source = "the same table, 'System management interfaces': 'Dual port 100GbE in slot 3 and 10 GbE RJ45 interface', and 'BMC (out-of-band system management)': '1 GbE RJ45 interface': 2 x 1e11 + 1e10 + 1e9" }
+rate = { value = 5.011e12, unit = "bit/s", mark = "ceiling", source = "link.cluster + link.storage + link.management: every network port the guide lists (Table 5's fifteen and the BMC's), each at its highest line rate" }

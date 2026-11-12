@@ -1,8 +1,8 @@
 """The timing gate: what a timed loop executes, checked on the kernel's SASS before it is timed.
 
-`harness/sass_gate.py` is the numeric gate (no .FTZ, no bare FP32 MUFU). This gate checks what a timing measures, and it
-reuses that gate's cubin reader, disassembly and instruction model rather than a copy of them. For each kernel `--kernels`
-names (fnmatch on the mangled name, or on the name the mangling holds), it checks the following.
+`benchmarks/pouw/harness/sass_gate.py` is the numeric gate (no .FTZ, no bare FP32 MUFU). This gate checks what a timing
+measures, and it reuses that gate's cubin reader, disassembly and instruction model rather than a copy of them. For each
+kernel `--kernels` names (fnmatch on the mangled name, or on the name the mangling holds), it checks the following.
 
 - **clock:** the kernel reads SR_CLOCKLO at least twice. The timed region runs from the first read to the last.
 - **loops:** every loop (a backward branch) in the timed region is found. None may be nested in another or straddle a clock
@@ -25,7 +25,7 @@ A refusal names the kernel, the check and the fix.
 
   python sass_gate.py BINARY --kernels K... [--expect OP=N[,OP=N...]]... [--forbid LDL,STL] [--smem FILE] [--numeric]
                          [--json OUT]
-  # exit 0: every kernel passes; 8: one is refused (named, with its reasons); `--numeric` also runs the harness's gate
+  # exit 0: every kernel passes; 8: one is refused (named, with its reasons); `--numeric` also runs the numeric gate
 """
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ from itertools import permutations
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-HARNESS_GATE = HERE.parent / "harness" / "sass_gate.py"
+HARNESS_GATE = HERE.parents[2] / "benchmarks/pouw/harness/sass_gate.py"
 
 
 def _load(name: str, path: Path):
@@ -234,7 +234,7 @@ def stored_regs(ins) -> set[str]:
 
 
 def judge_kernel(fn, expect: list[dict[str, int]], forbid=FORBID, smem: list[dict] | None = None) -> dict:
-    """The gate's verdict on one kernel (`harness/sass_gate.Function`): its checks, and every reason it is refused."""
+    """The gate's verdict on one kernel (the numeric gate's `Function`): its checks, and every reason it is refused."""
     insns, reasons = fn.insns, []
     rec: dict = {"kernel": fn.name, "sass_sha256": sass_sha256(fn), "instructions": len(insns)}
 
@@ -409,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--expect", action="append", default=[], help="one timed loop's OP=N[,OP=N...]; repeat for each loop")
     p.add_argument("--forbid", default=",".join(FORBID), help="opcodes refused anywhere in the kernel (default %(default)s)")
     p.add_argument("--smem", type=Path, help="JSON: each shared-memory access's op and 32 lane byte offsets")
-    p.add_argument("--numeric", action="store_true", help="also run harness/sass_gate.py's numeric gate on the binary")
+    p.add_argument("--numeric", action="store_true", help="also run the numeric gate on the binary")
     p.add_argument("--json", type=Path, help="write the verdict here")
     a = p.parse_args(argv)
     try:

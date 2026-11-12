@@ -1,12 +1,14 @@
 """Each directory's runner, `run.sh JOB [ARGS...]`: a job is a script beside it, named without `.sh`, every one but those
 the jobs source, and the directory's README has a table row a job, but a job whose name holds a term the Glossary
-retires, which it describes under the table.  A name that is no job is refused with the usage, before anything starts."""
+retires, which it describes under the table, and a cost job that is ahead of the README (`AHEAD`).  A name that is no job
+is refused with the usage, before anything starts."""
 
 from __future__ import annotations
 
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,24 +20,49 @@ RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set(), "h1_pr
 STEP_BESIDE = ("h1_prove", "h1_lanes")
 #: each directory -> how many of its jobs the README describes without a row
 NO_ROW = {"served_h1": 1, "h1_prove": 1}
+#: the directories where a job named `*_cost` may be beside the runner before the README describes it: a branch that adds
+#: one need not hold the README.  The README's test fails once it describes a job this still excuses
+AHEAD = ("h1_prove", "h1_lanes")
 
 
 def jobs(d: str) -> list[str]:
     return sorted(p.stem for p in (POUW / d).glob("*.sh") if p.stem not in RUNNERS[d] | {"run"})
 
 
+def described(d: str) -> list[str]:
+    """The jobs `d`'s README has to describe."""
+    return [j for j in jobs(d) if not (d in AHEAD and j.endswith("_cost"))]
+
+
 @pytest.mark.parametrize("d", RUNNERS)
 def test_the_readme_has_a_row_for_every_job_and_no_other(d):
     text = (POUW / d / "README.md").read_text()
     rows = re.findall(r"^\| `([a-z0-9_]+)` \|", text, re.M)
-    assert set(rows) <= set(jobs(d)) and len(set(rows)) == len(rows)
-    assert len(jobs(d)) - len(rows) == NO_ROW.get(d, 0) == text.count("One more job has no row")
+    assert set(rows) <= set(described(d)) and len(set(rows)) == len(rows)
+    assert len(described(d)) - len(rows) == NO_ROW.get(d, 0) == text.count("One more job has no row")
 
 
 @pytest.mark.parametrize("d", RUNNERS)
 def test_the_usage_names_every_job(d):
     r = subprocess.run(["bash", str(POUW / d / "run.sh")], capture_output=True, text=True)
-    assert r.returncode == 2 and r.stderr.split("JOB: one of ")[1].split(" (got")[0].split() == jobs(d)
+    assert r.returncode == 2 and sorted(r.stderr.split("JOB: one of ")[1].split(" (got")[0].split()) == jobs(d)
+
+
+@pytest.mark.parametrize("d", AHEAD)
+def test_a_cost_job_may_be_ahead_of_the_readme_and_no_other_job(d, tmp_path, monkeypatch):
+    """A copy of the directory's README and scripts with one more job, `JOB_cost`, that the README has no row for: the
+    README's test and the usage's still pass, whichever of the two names the shell lists first.  With another job the
+    README has no row for, the README's test fails."""
+    (tmp_path / d).mkdir()
+    for p in (POUW / d / "README.md", *(POUW / d).glob("*.sh")):
+        shutil.copy(p, tmp_path / d)
+    monkeypatch.setattr(sys.modules[__name__], "POUW", tmp_path)
+    (tmp_path / d / f"{jobs(d)[0]}_cost.sh").write_text("exit 0\n")
+    test_the_readme_has_a_row_for_every_job_and_no_other(d)
+    test_the_usage_names_every_job(d)
+    (tmp_path / d / "other.sh").write_text("exit 0\n")
+    with pytest.raises(AssertionError):
+        test_the_readme_has_a_row_for_every_job_and_no_other(d)
 
 
 @pytest.mark.parametrize("d", RUNNERS)
