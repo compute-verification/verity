@@ -62,7 +62,7 @@ from verity_vllm.observe.kernel_trace import (
     summarize_kernels,
 )
 from verity_vllm.properties import kernel_allowlist
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)

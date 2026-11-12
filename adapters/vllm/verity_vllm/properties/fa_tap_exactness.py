@@ -61,8 +61,8 @@ from verity_vllm.acquire.sources.hidden_source import (
     fa3_tile,
 )
 from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
-from verity_vllm.properties.record import REGISTRY, digest_of
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import REGISTRY, digest_of
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["fa_tap_exactness"].schema
 RECORD = "fa_tap_exactness.json"

@@ -29,8 +29,8 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from verity_vllm.properties.record import REGISTRY, digest_of
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import REGISTRY, digest_of
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = REGISTRY["norm_tap_exactness"].schema
 RECORD = "norm_tap_exactness.json"

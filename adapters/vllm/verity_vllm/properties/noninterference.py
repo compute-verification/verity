@@ -66,7 +66,7 @@ from verity_vllm.properties.noninterference_families import (
     parallel_residual_boundaries,
     unfused_norm_boundaries,
 )
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # the decoder-layer module and the final norm under their family's vLLM names: Llama-style
 # `model.layers.N` / `model.norm` (SmolLM2, Qwen, Gemma-2, Phi-3, the MoE families) and GPT-NeoX `gpt_neox.layers.N` /

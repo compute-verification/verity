@@ -29,7 +29,12 @@ from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
 from verity_vllm.check.verdict_names import OLD_TO_NEW
 from verity_vllm.pipeline import cli
-from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
+from verity_vllm.records.property_record import (
+    REGISTRY,
+    PropertyRecord,
+    digest_of,
+    seal,
+)
 
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")

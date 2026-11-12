@@ -25,7 +25,7 @@ from typing import Any
 
 from verity_vllm.check.gates import HOLDOUT_GATES
 from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator samples from this pool.
