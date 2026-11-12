@@ -1,4 +1,4 @@
-"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each sampled member's units in
+"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `benchmarks/one_stage/interfaces`) proved: each sampled member's units in
 one Flock `prove --zk` session (SPOT[Flock]'s proof server; behind the Lean ZK server under ``--firewall``, the core
 protocols' path), served the bundle's own sample, and decided by Lean's `verify --zk`,
 the verifier; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
@@ -51,16 +51,16 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "examples" / "h200" / "interfaces"),
-                str(REPO / "verity" / "ml" / "flock" / "verifier")]
+sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
+                str(REPO / "verity" / "protocols" / "flock" / "agreement")]
 
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 FORMAT = "verity/prove-bundle/v0"

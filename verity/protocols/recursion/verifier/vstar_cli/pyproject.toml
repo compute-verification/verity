@@ -1,0 +1,29 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_vstar_difftest.py", "tests/test_vstar_in_difftest.py", "tests/test_vstar_menu.py"]
+# Test-only: the references are Flock's Python builders (verity_flock) over core's forms, gadgets and codec, and a
+# statement's bindings are the one-stage audit's partition (`one_stage.partition`, which `rec_residuals.statement` reads)
+# and its registered values (`one_stage.registered`, which the stagers commit V*'s port inputs under);
+# `lake` builds this package against Flock's verifier and the difftest harness, both required by path.
+inputs = ["verity/protocols/flock/prover/python", "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/definitions/kernels",
+          "verity/commitments/randomness", "verity/commitments/windows", "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py",
+          "verity/protocols/flock/verifier",
+          "verity/difftest", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/protocols/spot/verifier/__init__.py",
+          "verity/protocols/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/spot/verifier/one_stage/partition.py",
+          "verity/protocols/spot/verifier/one_stage/registered.py",
+          # `recursive/` (`vstar-recursive`, test_vstar_recursive) also requires the interface, the one-stage audit and LMS
+          "verity/protocols/interface", "verity/protocols/spot/verifier/lean", "verity/commitments/lms/lean",
+          # `research data fetch`, which test_vstar_recursive runs under VERITY_VSTAR_RECURSIVE_DATA=fetch
+          "tools/research/src/research"]
+# Each test builds what it runs (`verity_difftest.build`, one at a time across processes) and opens its own server, so the
+# 2100 s of tests (the longest 440 s) spread over workers.
+parallel = true
+# its test-file task's bound: test_vstar_difftest.py holds most of those 2100 s, past the test-file family's default
+timeout_s = 3600

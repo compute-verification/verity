@@ -18,7 +18,7 @@ PY=$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python
 SCRIPT=${SCRIPT:-bench.py}
 if [ "$SCRIPT" = serve.py ] || [ "$SCRIPT" = step_profile.py ]; then
   WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
-  export PYTHONPATH=$PWD:$PWD/integrations/vllm FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf} \
+  export PYTHONPATH=$PWD:$PWD/adapters/vllm FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf} \
     CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
   . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
   cat "$WORK"/models/llama-3.1-8b-instruct/*.safetensors > /dev/null

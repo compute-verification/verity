@@ -6,4 +6,4 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # test_helpers reads int8_fused's source, which it holds exactlin.py's helpers to.
-inputs = ["integrations/vllm/verity_vllm/engine/int8_fused.py"]
+inputs = ["adapters/vllm/verity_vllm/engine/int8_fused.py"]

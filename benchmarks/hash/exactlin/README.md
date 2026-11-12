@@ -6,7 +6,7 @@ epilogue is `int8_exact.dequantize`. Each is gated bit for bit against `int8_exa
 evaluators, then timed against stock vLLM int8, at kernel level and served. The kernels run on an RTX PRO 6000 (sm_120),
 an H200 (sm_90) and a B200 (sm_100).
 
-The kernels are the vLLM integration's: `integrations/vllm/verity_vllm/engine/int8_fused.py`, the CUDA bodies
+The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_fused.py`, the CUDA bodies
 `engine.int8_ops` registers for both ops, with their config table in `engine.profiles.int8_gemm_configs`. Every gate
 and bench here imports that module, so a gate's pass and a timing describe the kernels vLLM serves. This directory holds
 no kernel or table of its own. `exactlin.py` holds only the three Triton helpers `benchmarks/hash/dither/dither_a.py`

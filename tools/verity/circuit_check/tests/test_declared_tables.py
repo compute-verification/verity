@@ -1,5 +1,5 @@
 """Every table a primitive reads by index is declared (`PrimitiveDefinition.tables`): the guard
-(`verity.ml.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
+(`verity.definitions.circuits.operations.program_data`) sees a table only through its primitive's declaration, so an undeclared one passes it.
 
 A primitive reads a table when its evaluator reaches an indexable constant (one it closes over, or a global or module
 attribute of the code it calls) or a memoized loader that returns anything but a word, or when Flock's lowering of it reads
@@ -23,14 +23,14 @@ import pytest
 
 from circuit_check import sidecars as SC
 from circuit_check import targets as TG
-from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.ml.circuits.types import Array
-from verity.ml.circuits.ops.prims import F32
+from verity.circuits.defs import REGISTRY, PrimitiveDefinition
+from verity.circuits.types import Array
+from verity.definitions.ops.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
-from verity.ml.definitions.registry import lifted as L
-from verity.ml.definitions import registry as R
+from verity.definitions.registry import lifted as L
+from verity.definitions import registry as R
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16

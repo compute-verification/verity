@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 COPY = ROOT / "benchmarks/hash/exactlin/exactlin.py"
-SERVED = ROOT / "integrations/vllm/verity_vllm/engine/int8_fused.py"
+SERVED = ROOT / "adapters/vllm/verity_vllm/engine/int8_fused.py"
 HELPERS = {"_rni_s32", "_membar_gl", "_epilogue"}
 
 

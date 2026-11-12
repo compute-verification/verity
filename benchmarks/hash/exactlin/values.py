@@ -2,7 +2,7 @@
 linears' y checked bit for bit against steps.py's CPU oracle, int8_exact on the CPU, a GPU rerun and every row alone) with
 `engine.int8_fused`'s `row_quant` and `product`, the two ops' CUDA bodies, counting their calls.  The counts go to
 OUT/exactlin_calls.json, so a run where the two Triton kernels never served shows it.  Arguments are int8_exact_gpu's,
-plus `--scratch` (ignored), as served.sh passes it; run from integrations/vllm.  `--at` and `--by` are the pin entry's
+plus `--scratch` (ignored), as served.sh passes it; run from adapters/vllm.  `--at` and `--by` are the pin entry's
 resolved_at and resolved_by.
 
     SERVED_SCRIPT=benchmarks/hash/exactlin/values.py SERVED_KGATE=1 bash benchmarks/hash/exactlin/served.sh \

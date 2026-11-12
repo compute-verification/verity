@@ -18,7 +18,7 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1 import vectors as V  # noqa: E402
 from p2_v1 import wire as Wi  # noqa: E402
-from verity.core.protocols.pous.verifier import MerkleTree  # noqa: E402
+from verity.protocols.pous.verifier.verifier import MerkleTree  # noqa: E402
 
 
 def _load(path: Path) -> dict:
@@ -26,7 +26,7 @@ def _load(path: Path) -> dict:
 
 
 def test_the_files_are_the_pinned_ones_under_this_randomness():
-    """A failure here after `verity.ml.randomness` moves is the cue to rerun `python -m p2_v1.vectors`."""
+    """A failure here after `verity.commitments.randomness` moves is the cue to rerun `python -m p2_v1.vectors`."""
     for path, pin in ((R.VECTORS, R.VECTORS_SHA512), (R.AUDIT_VECTORS, R.AUDIT_VECTORS_SHA512),
                       (R.NEGATIVE_VECTORS, R.NEGATIVE_VECTORS_SHA512)):
         assert hashlib.sha512(path.read_bytes()).hexdigest() == pin, path.name

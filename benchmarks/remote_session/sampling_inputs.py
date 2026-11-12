@@ -48,10 +48,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import audit, timing  # noqa: E402
-from verity.core.protocols.spot import costfit  # noqa: E402
+from verity.protocols.poub.verifier import audit, timing  # noqa: E402
+from verity.protocols.spot import costfit  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096

@@ -12,7 +12,7 @@ import pytest
 
 import slots as S
 import slots_gpu as G
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.commitments.identity import identity_digest_sha512
 
 needs_cxx = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 

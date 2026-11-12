@@ -120,7 +120,7 @@ def name(unit: str, n: str) -> str:
 
 def key() -> str:
     """prove_time.sh's KEY: the staging tree's digest that names each statement's directory."""
-    return subprocess.run(["bash", "-c", "find benchmarks/served_units/stage.py verity/ml integrations/vllm/verity_vllm "
+    return subprocess.run(["bash", "-c", "find benchmarks/served_units/stage.py verity/ml adapters/vllm/verity_vllm "
                            "tools/verity/circuit_check/src -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum "
                            "| cut -c1-16"], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
 

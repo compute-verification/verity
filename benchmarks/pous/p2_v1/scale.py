@@ -142,7 +142,7 @@ def cpu_cmd(a: argparse.Namespace) -> int:
     import gmpy2
 
     from p2_v1 import reference as R
-    from verity.core.protocols.pous.schemes import p2 as S
+    from verity.protocols.pous.verifier.schemes import p2 as S
 
     out = Path(a.out)
     cpus = [int(x) for x in a.cpus.split(",") if x]
@@ -203,7 +203,7 @@ def _lscpu_model() -> str:
 
 def _setup_encode(job: tuple[Any, bytes, bytes, int, int]) -> list[bytes]:
     q, salt, w_seg, lo, hi = job
-    from verity.core.protocols.pous.schemes import p2 as S
+    from verity.protocols.pous.verifier.schemes import p2 as S
 
     chain, keys, p = Chain(q.w, q.c0), S.segment_keys(q, salt, 0), (1 << q.w) - q.c0
     pb, nb, out = q.payload_bytes, q.block_bytes, []
@@ -219,9 +219,9 @@ def _setup_encode(job: tuple[Any, bytes, bytes, int, int]) -> list[bytes]:
 def setup_check_cmd(a: argparse.Namespace) -> int:
     import multiprocessing as mp
 
-    from verity.core.protocols.pous import setup
-    from verity.core.protocols.pous.schemes import p2 as S
-    from verity.ml.commitments.identity import canonical_json_bytes
+    from verity.protocols.pous.verifier import setup
+    from verity.protocols.pous.verifier.schemes import p2 as S
+    from verity.commitments.identity import canonical_json_bytes
 
     out = Path(a.out)
     scratch = Path(a.scratch)

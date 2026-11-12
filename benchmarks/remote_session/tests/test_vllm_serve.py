@@ -14,7 +14,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 SERVE = HERE.parent / "serve.py"
-sys.path[:0] = [str(HERE.parents[2]), str(HERE.parents[2] / "integrations" / "vllm")]
+sys.path[:0] = [str(HERE.parents[2]), str(HERE.parents[2] / "adapters" / "vllm")]
 
 
 def remote_or_skip():

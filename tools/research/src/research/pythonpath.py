@@ -161,7 +161,7 @@ def package_dirs(tree: Path | str, name: str) -> list[str]:
     """Where `tree` ships the import package `name`, relative to the tree: the package itself when it sits at the workspace root
     (a `shim` entry), then `<root>/<name>` for each workspace import root that holds it, in member order.  One directory for a
     regular package, one per member for a namespace split across members.  A closure, a dirty check or a source identity over a
-    package names these, so a member that moves or splits stays covered.  A dotted `name` (`verity.ml.circuits`) is that
+    package names these, so a member that moves or splits stays covered.  A dotted `name` (`verity.circuits`) is that
     subpackage's directory in each of its top-level package's.  Raises LookupError when no root holds `name`, so a caller
     never gets a list over nothing."""
     t = Path(tree)

@@ -46,7 +46,7 @@ WARPS = (4, 8)
 STAGES = (2, 3, 4, 5)
 QUANT_WARPS = (4, 8, 16, 32)
 # where `gemm`'s winners go: the table `int8_fused.pick` reads, in the integration's engine profile
-CONFIGS_FILE = "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py"
+CONFIGS_FILE = "adapters/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py"
 
 
 def coarse_grid(m: int, tma: bool = False) -> list[X.Cfg]:

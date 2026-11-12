@@ -1,4 +1,4 @@
-"""MemCheck_v1's pool vectors (`verity/ml/circuits/tests/fixtures/memcheck_pool.json`): the RAM pool's log (`pool_ram`) on
+"""MemCheck_v1's pool vectors (`verity/circuits/tests/fixtures/memcheck_pool.json`): the RAM pool's log (`pool_ram`) on
 the encodings' traces, cut to a window of whole operations, its four memories under one record layout (`LAYOUT`), with the
 window's touched list and the fingerprints under fixed coins that pool_ram's own field arithmetic gives.
 
@@ -24,7 +24,7 @@ import pool_ram as PR
 LAYOUT = {"G": 2, "A": 128, "V": 128, "T": PR.GLM.TW}
 #: (trace, where its window starts): its first operation, a little before its first eviction, or before its first free
 WINDOWS = (("async-prefix-cache.jsonl", "start"), ("async-crush.json.gz", "eviction"), ("sync-crush.json.gz", "free"))
-OUT = Path(__file__).resolve().parents[2] / "verity" / "ml" / "circuits" / "tests" / "fixtures" / "memcheck_pool.json"
+OUT = Path(__file__).resolve().parents[2] / "verity" / "circuits" / "tests" / "fixtures" / "memcheck_pool.json"
 
 
 def address(a: tuple) -> tuple[int, int]:

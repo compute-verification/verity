@@ -54,7 +54,7 @@ from typing import Any
 import numpy as np
 
 import slots as S
-from verity.ml.commitments.merkle import merkle_depth
+from verity.commitments.merkle import merkle_depth
 
 __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
 

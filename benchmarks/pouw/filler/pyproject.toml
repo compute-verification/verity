@@ -10,19 +10,19 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_pfill_r9.py", "tests/test_pfill_ref.py"]
 # The scorer refuses an arm whose record the attempt ledger (harness/ledger.py) or the evidence store's canonical form, ids
 # and manifest model would refuse (arms.record_problems), so the tests import both; the ledger takes its variant record's
-# schema from verity.core.protocols.pouw.serving when that imports (`ledger.serving`). pfill.cuh and pfill_ref.py take
+# schema from verity.protocols.pouw.verifier.serving when that imports (`ledger.serving`). pfill.cuh and pfill_ref.py take
 # their folds, key rules and lane starts from the receipts reference. capacity_of.py reads its σ through machine_model's
 # capacity over its data's Π. The ledger reads its variables through PoUW's benchmarks' registry (benchmarks/pouw/settings.py).
-inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/config/verity_config",
-          "benchmarks/pouw/receipts", "benchmarks/pouw/machine_model/verity_machine_model",
+inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/configuration/config/verity_config",
+          "verity/protocols/pouw/receipts", "benchmarks/pouw/machine_model/verity_machine_model",
           "benchmarks/pouw/machine_model/data", "tools/research/src/research/__init__.py",
           "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", "verity/core/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
-          "verity/core/protocols/pouw/serving.py",
-          # serving.py takes its tags from the table of domain separators, verity.ml.commitments.domains
-          "verity/errors.py", "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto",
+          "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py",
+          "verity/protocols/pouw/verifier/serving.py",
+          # serving.py takes its tags from the table of domain separators, verity.commitments.domains
+          "verity/errors.py", "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
-          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/ml/kernels/sha512.cuh"]
+          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/definitions/kernels/sha512.cuh"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
