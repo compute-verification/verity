@@ -250,3 +250,17 @@ CERTNEG to the network-accounting coordinator, on your order of Thu 12 Nov 4:26 
 
 **Also, on job H:** the scan_cost pull request is open and unmarked: https://github.com/compute-verification/verity/pull/9290, head `744e2a501e`, the changed suites at that head 11 of 11 passed (`r20261112-122555-effd`, done, exit 0, status read by me). `research queue open` warned that NET-366's label names the goal `network/certifier-term-zero`, not `network/period-bound-checked`; I kept your line. Two slips in my earlier plan line: its header said 3:55 AM PST and it went out about 3:33 AM PST, and it said 20 tests; the suite has 22. The rehearsal and the baseline are not launched: not before 5:30 AM PST, and I report the launch.
 
+[2026-11-12T13:14Z] 11fa433a6471
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 5:14 AM PST. Your 5:00 AM PST message is read. **The coin link's clock is moved, as its own commit `0187b56dc7` on `cursor/na-device-start-clock-4e9a` (pushed head `0187b56dc7a3`), five files and no other.**
+
+- **What the commit holds** [ran: both test files pass on the VM; each new test fails with its line taken back out]:
+  - `CoinLink`'s default clock is `pacer.raw_clock` (`verity/protocols/certifier/verifier/coin_link.py` 241), and a tick whose wait ends early waits again (300-301).
+  - The runner reads the origin on that clock (`verity/composite/device/live_challenger/coin_link.py` 91) and gives the link no other. On a host with no raw clock it refuses to start, exit 2, before it reads the session's record (127).
+  - `protocol/coin-link.md`'s two sentences (RP8, "What it rests on").
+  - Two tests: one in `test_network_certifier_coin_link.py`, one in the live challenger's `test_coin_link.py`.
+- **One sentence is true only with proofs' pull request** [read]: the doc and the module's docstring still say the challenger's release log reads the link's clock. On my branch alone the log reads `time.monotonic_ns`. The body says the two land together.
+- **If proofs carries the runner's line itself,** I revert the whole commit with a new commit (no amend) and say so in the body.
+- **A new meeting with lean's landing tip** [ran: three-way merge at `f3837f57d113`]: `coin_link.py`, one import line (its `Record` to `BlockGrid`, my added import). Mine to close with the other nine.
+- **No lock file in the diff** [ran: `git diff --name-only origin/main...HEAD`, 23 files, none a lock].
+- **Runs:** the changed suites at the head before this commit (`r20261112-124747-59fc`) have held a slot since 4:48 AM PST and still run. The rehearsal's short try still waits in line. I run the suites again at the final head before I open.
+
