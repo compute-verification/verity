@@ -1,4 +1,4 @@
-"""The training rules' embedding gradient at a compute capability (`rules.training.EmbeddingDenseBackward` at `cc`): an f32 table's
+"""The training rules' embedding gradient at a compute capability (`rules.training_loss.EmbeddingDenseBackward` at `cc`): an f32 table's
 gradient as embedding_dense_backward_cuda's kernels compute it, one `torch_embedding_f32.EmbeddingGradF32_v1` call, word for word
 against `torch_kernels.embedding_dense_backward`, the model `verity/definitions/tests/test_torch_embedding_f32.py` holds the
 Definition to: int64 and int32 ids, ids out of range, the feature kernel's chunks and the sort path; and the refusal of sort keys
