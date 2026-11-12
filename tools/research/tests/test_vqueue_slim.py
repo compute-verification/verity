@@ -891,19 +891,18 @@ def test_a_suite_s_reads_are_narrowed_by_what_its_run_traced_unless_a_program_no
     assert traced_reads(None, dirs, "pkg", {"pkg/tests/test_a.py"}, report, trace) is None
 
 
-def test_a_suites_guard_report_or_reads_that_was_never_fetched_reads_as_none_and_a_malformed_report_raises(tmp_path):
+def test_a_suites_guard_report_that_was_never_fetched_or_was_cut_short_reads_as_none(tmp_path):
     """A failed suite's guard report and children's reads beside its log: absent (a suite with none, or a fetch that brought
-    none) reads as no report and no reads, which leave its declared inputs whole; a report that isn't a JSON object raises
-    rather than reading as absent."""
+    none) reads as no report and no reads, which leave its declared inputs whole; so does a report that is empty, cut short
+    or not a JSON object, the one a pytest that died in its session finish leaves, as `suites.read_report` reads it."""
     report, trace = tmp_path / "pkg.json", tmp_path / "pkg.reads"
     assert _json(report) is None and _text(trace) == ""
     report.write_text('{"traced": []}')
     trace.write_text("F\tpkg/tests/test_a.py\tpkg/a.py\n")
     assert _json(report) == {"traced": []} and _text(trace) == "F\tpkg/tests/test_a.py\tpkg/a.py\n"
-    for bad in ('{"traced": [', "[]"):
+    for bad in ("", '{"traced": [', "[]"):
         report.write_text(bad)
-        with pytest.raises(ValueError):
-            _json(report)
+        assert _json(report) is None
 
 
 @pytest.mark.parametrize("more", ["", RECORD])

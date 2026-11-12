@@ -65,6 +65,7 @@ import os
 import re
 import shutil
 import signal
+import sys
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -838,13 +839,16 @@ def audit_failures(log: str, rest: str) -> set[str]:
 
 
 def _json(path: Path) -> dict | None:
-    """The JSON object at ``path`` (a failed suite's guard report), None when the run dir has none; one that isn't a JSON
-    object raises."""
-    if not path.exists():
+    """The JSON object at ``path`` (a failed suite's guard report), None when there is none to read: missing, empty, cut
+    short or not an object, as `suites.read_report` reads the report a pytest that died in its session finish left.  A
+    raise here would fail every tick that judges the run, since a refetch brings the same bytes."""
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        if path.exists():
+            print(f"research queue vqueue: {path}: no report ({type(e).__name__}: {e})", file=sys.stderr)
         return None
-    if not isinstance(doc := json.loads(path.read_text()), dict):
-        raise ValueError(f"{path}: not a JSON object")
-    return doc
+    return doc if isinstance(doc, dict) else None
 
 
 def _text(path: Path) -> str:
