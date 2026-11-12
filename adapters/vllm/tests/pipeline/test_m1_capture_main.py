@@ -327,6 +327,9 @@ def test_the_capture_arm_serves_the_workload_under_the_observer_and_records_what
         "sampling": SAMPLING, "engine_kwargs": SHOWN, "row_id": "the-row", "declared_execution": "eager",
         "effective_execution": {"enforce_eager": True}}
     tokens = read(world, "tokens.json")
+    assert list(tokens) == ["requests", "per_step_sampled", "timing", "observer", "protocols", "profile_id", "case", "model",
+                            "serving_profile", "context_class", "expected_engine_steps", "engine_steps", "lag", "all_equal_accepted"]
+    assert [list(r) for r in tokens["requests"]] == [list(ROW0), list(ROW1)]
     assert tokens.pop("lag").items() >= {"value": 1, "async_scheduling": True}.items()
     assert tokens == {"requests": [ROW0, ROW1], "per_step_sampled": {"0": [7, 5], "1": [8, 2]}, "timing": timing(2.0), "observer": True,
                       "protocols": [], "profile_id": "profile-1", "case": "B0", "model": "org/model", "serving_profile": "mixed",
@@ -392,7 +395,7 @@ def test_tokens_that_differ_from_the_accepted_ones_are_recorded_as_unequal(world
     assert tokens["requests"] == [
         row("r0", [7, 8, 9, 10], None, None, finish=STEPS["r0"], executed=4, exhausted=True, stopped=False, lag=1),
         row("r1", [5, 3, 2], [5, 2], False, finish=STEPS["r1"], executed=4, exhausted=False, stopped=True, lag=1)]
-    assert tokens["children"] == [{"request_id": "1_r1", "generated_token_ids": [5, 4]}]
+    assert tokens["children"] == [{"request_id": "1_r1", "generated_token_ids": [5, 4]}] and list(tokens)[-1] == "children"
     assert said()[6:10] == ["INFO [m1] r0: prompt_len=3 arrive=0 steps=0..3 (length) generated [7, 8, 9, 10]", "INFO [m1]   accepted  None  equal=None",
                             "INFO [m1] r1: prompt_len=2 arrive=0 steps=1..2 (stop) generated [5, 3, 2]", "INFO [m1]   accepted  [5, 2]  equal=False"]
 
