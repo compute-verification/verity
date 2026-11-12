@@ -68,14 +68,13 @@ TRAIN_SDPA_BWD = {(2, 8, 1024, 64): (64, 128), (2, 12, 1024, 64): (64, 128), (2,
                   (2, 24, 1024, 64): (64, 128)}
 
 _FA2 = EVIDENCE["cc12_fa2_backward_capture"]
-CONFORMANCE = ("exact-model-tested: words of dQ, dK and dV of torch's flash attention backward "
+CONFORMANCE = ("exact-model-tested: every word of dQ, dK and dV of torch's flash attention backward "
                "(aten._scaled_dot_product_flash_attention_backward, causal, bf16, head dim 64) under deterministic algorithms "
-               "on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at B = 2 and T = 1,024 "
-               "(`flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel`, BM = 64, BN = 128), v N(0, 1) and a random bf16 dO: dQ of five "
-               "rows of an H = 24 head (4 dQ buffers) with q and k N(0, 9), one of whose words tells the buffers from the sum in "
-               "the key blocks' order, and dK and dV of the last key block of an H = 16 head with q and k N(0, 1) "
-               f"(capture {_FA2['capture']}, run record {_FA2['run_record']}); the dP sum's FFMA and the dQ atomics' "
-               "flush-to-zero are the capture's SASS, which no captured word tells apart")
+               "on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at B = 2, T = 1,024 and H = 8, 12, 16 and 24 "
+               "(`flash_bwd_dq_dk_dv_loop_seqk_parallel_kernel`, BM = 64, BN = 128, and the dQ convert kernel), on each batch "
+               "member's first and last heads with q and k N(0, 1) and N(0, 9), v N(0, 1) and a random bf16 dO "
+               f"(capture {_FA2['capture']}, run record {_FA2['run_record']}, fit {_FA2['fit']}); the dP sum's FFMA and the "
+               "dQ atomics' flush-to-zero are the capture's SASS, which no captured word tells apart")
 
 
 def _refuse(b: dict) -> str | None:
