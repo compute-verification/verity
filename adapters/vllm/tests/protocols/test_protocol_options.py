@@ -210,8 +210,87 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     assert any(r.startswith("sampled-proofs:rows-sha512: SPOT runs in the Commit stage") for r in got)
     with pytest.raises(PO.Refused) as e:
         PO.install(Model(), ctx)
-    assert e.value.reasons == got
+    assert e.value.reasons == got and str(e.value) == "protocol options refused: " + "; ".join(got)
     assert PO.refusals(_serve("pouw:ncp-v2")) == ("pouw:ncp-v2: pouw registers no scheme 'ncp-v2' (registered: ncp-v1)",)
+
+
+def test_an_unknown_protocol_has_no_adapter():
+    with pytest.raises(PO.Refused) as e:
+        PO.adapter("zk")
+    assert e.value.reasons == ("unknown protocol 'zk' (known: pouw, pous, sampled-proofs)",)
+    assert str(e.value) == "protocol options refused: unknown protocol 'zk' (known: pouw, pous, sampled-proofs)"
+
+
+def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    model = Model()
+    with PO.install(model, _serve("pouw:ncp-v1")):
+        live = hooks.live()
+        with pytest.raises(PO.Refused) as e:
+            PO.install(model, _serve("pous:s1"))
+        assert e.value.reasons == ("options installed outside this composition are live: ['pouw:ncp-v1']",)
+        assert hooks.live() == live
+
+
+def test_a_capture_runs_the_set_without_sampled_proofs_and_refuses_what_the_set_refuses(monkeypatch):
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
+    ctx = PO.capture_context(p, settings={"pouw": {"draws": 7}, "sampled-proofs": {}})
+    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"draws": 7}})
+    assert PO.capture_context(None) is None and PO.capture_context(TargetProfile()) is None
+    with pytest.raises(PO.Refused) as e:
+        PO.capture_context(p, settings={"pous": {}})
+    assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
+    assert str(e.value) == "protocol options refused: the protocols config names ['pous'], which this run does not enable"
+
+
+def test_a_protocols_config_holds_one_object_a_protocol(tmp_path):
+    assert PO.load_settings(None) == {} and PO.load_settings({"pouw": {"draws": 7}}) == {"pouw": {"draws": 7}}
+    (tmp_path / "protocols.json").write_text(json.dumps({"pous": {"rounds": 2}}))
+    assert PO.load_settings(tmp_path / "protocols.json") == {"pous": {"rounds": 2}}
+    with pytest.raises(ValueError, match=r"protocols config: the entries of \['pous', 'pouw'\] are not objects"):
+        PO.load_settings({"pouw": 7, "pous": [], "sampled-proofs": {}})
+
+
+def test_an_adapter_this_tree_does_not_hold_fills_nothing_from_the_engine(monkeypatch):
+    """`engine_fills` and `from_engine` pass over an entry whose adapter cannot be imported: `refusals` names it."""
+    monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+    ctx = _serve("pous:s1", filled={"pous": ("runner",)})
+    assert PO.engine_fills(ctx) == {}
+    got = PO.from_engine(ctx, object())
+    assert (got.enabled, got.settings, got.filled) == (ctx.enabled, {}, {})
+    assert any("not_landed_here is not on this tree" in r for r in PO.refusals(got))
+
+
+def test_a_composition_binds_only_what_it_installed_and_one_option_releases_a_weight(monkeypatch):
+    def released(name):
+        def install(scheme, target):
+            return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"), decoded=lambda: {"l0.weight": "W0"})
+        return install
+
+    _fake_adapter(monkeypatch, "pouw", released("pouw"))
+    _fake_adapter(monkeypatch, "pous", released("pous"))
+    with PO.install(Model(), _serve("pous:s1")) as comp:
+        assert comp.weights() == {"l0.weight": "W0"}
+        with pytest.raises(ValueError, match=r"no bindable option 'pouw' in \['pous:s1'\]"):
+            comp.bind("pouw", weight_roots="w")
+    with PO.install(Model(), _serve("pouw:s1", "pous:s1")) as comp, \
+            pytest.raises(ValueError, match=r"'l0.weight' is released by two options \(pous:s1 and an earlier one\)"):
+        comp.weights()
+
+
+def test_an_adapter_that_installs_another_entry_leaves_nothing_installed(monkeypatch):
+    def install(scheme, target):
+        h = target.hooks("pous:other")
+        h.wrap(target.model.layers[0].quant_method, "apply", lambda orig: orig)
+        return PO.Option(name="pous:other", hooks=h)
+
+    _fake_adapter(monkeypatch, "pous", install)
+    model, before = Model(), hooks.live()
+    with pytest.raises(ValueError, match="the pous adapter installed 'pous:other' for 'pous:s1'"):
+        PO.install(model, _serve("pous:s1"))
+    assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
 
 
 def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
