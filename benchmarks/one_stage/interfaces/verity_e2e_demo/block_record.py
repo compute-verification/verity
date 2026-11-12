@@ -10,8 +10,9 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
-  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
-  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
+  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``
+  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it; S0 is PoUS's state bound
+  ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
@@ -111,7 +112,7 @@ def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fractio
         return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
                 frac(row["delta"]), "delta")
     if leg == "pous":
-        return ({"symbol": "S_cert", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
+        return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
                 frac(q["eps"]), "quantity.eps")
     if leg == "bandwidth":
         return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")

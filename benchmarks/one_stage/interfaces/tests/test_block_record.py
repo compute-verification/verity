@@ -179,6 +179,23 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
 
 
+def test_pous_writes_its_state_bound_and_a_record_under_the_older_name_still_reads() -> None:
+    """A record built here carries PoUS's quantity as `S0`, as the fixtures do. The same record under `S_cert`, the
+    quantity's older name, fits the schema and checks clean, and a symbol the schema doesn't list is refused."""
+    report, wipe = _accepting_report()
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    assert rec["legs"]["pous"]["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
+    validator = jsonschema.Draft202012Validator(SCHEMA)
+    for written in (rec, _load("block-record-r2-period0"), _load("block-record-b71a-w30")):
+        assert written["legs"]["pous"]["quantity"]["symbol"] == "S0"
+        older = copy.deepcopy(written)
+        older["legs"]["pous"]["quantity"]["symbol"] = "S_cert"
+        validator.validate(older)
+        assert R.check(older) == {}
+        older["legs"]["pous"]["quantity"]["symbol"] = "S"
+        assert not validator.is_valid(older)
+
+
 def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_answers() -> None:
     report, wipe = _accepting_report()
     rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
