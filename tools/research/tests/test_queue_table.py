@@ -2,6 +2,7 @@
 import ast
 import importlib.util
 import json
+import subprocess
 import types
 
 import pytest
@@ -266,13 +267,13 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
     assert "the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU node read" in row["how"]
     groups = [
         {"group": "check", "pools": ["check"], "nodes": 2, "slots": 4, "busy": 3, "blocked": 0, "waiting": 3, "free": 1,
-         "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}},
+         "longest": {"node": "vy-nebius-cpu-7", "waiting": 3}, "unread": []},
         {"group": "executor", "pools": ["executor"], "nodes": 2, "slots": 6, "busy": 1, "blocked": 0, "waiting": 3, "free": 5,
-         "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}},
+         "longest": {"node": "vy-nebius-cpu-1", "waiting": 3}, "unread": []},
         {"group": "shared", "pools": ["research"], "nodes": 3, "slots": 22, "busy": 18, "blocked": 1, "waiting": 7, "free": 3,
-         "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}},
+         "longest": {"node": "vy-nebius-cpu-7", "waiting": 5}, "unread": []},
         {"group": "own", "pools": ["lean-train"], "nodes": 1, "slots": 3, "busy": 0, "blocked": 1, "waiting": 0, "free": 2,
-         "longest": None}]
+         "longest": None, "unread": []}]
     assert qt.slot_groups(d) == groups
 
     # the command's own output: the row as printed, and as JSON beside the nodes' slots files, whose fields are as they were
@@ -299,6 +300,18 @@ def test_the_slots_row_says_which_free_slots_a_run_sent_with_on_auto_can_take(mo
         "; lanes' own pools, which `--on auto` places no run in (lean-train, network, proofs, soundness, tries): 4 of 11 busy, "
         "1 free but blocked, 4 runs in line")
     assert [g["group"] for g in qt.slot_groups(d)] == ["check", "executor", "shared", "own"]
+
+    # a slots file that gave no answer is named, where its slots would have counted: cpu-3's own pools count nowhere
+    slow = {"why": "no answer in 30 s"}
+    d = slots_doc()
+    d["nodes"]["vy-nebius-cpu-3"]["slots"] = d["nodes"]["vy-nebius-cpu-3"]["slots"][:1]
+    d["nodes"]["vy-nebius-cpu-3"]["slots_unread"] = [dict(slow, pool="research"), dict(slow, pool="lean-train")]
+    d["nodes"]["vy-nebius-cpu-7"]["slots_unread"] = [dict(slow, pool="proofs")]
+    assert {r["name"]: r for r in qt.table(d)}[SLOTS_ROW]["now"] == (
+        f"{check}; {executor}; research slots, the shared pool `--on auto` places runs in, on every CPU node with one (2): 16 of 16 "
+        f"busy, 0 free but blocked, 0 free, 6 runs in line, 5 of them on cpu-7, not read: cpu-3 (no answer in 30 s); {own}; "
+        "proofs slots, a lane's own pool: 0 of 0 busy, 0 free but blocked, 0 runs in line, not read: cpu-7 (no answer in 30 s)")
+    assert qt.slot_groups(d)[2]["unread"] == [{"node": "vy-nebius-cpu-3", "pool": "research", "why": "no answer in 30 s"}]
 
     # a window that ended in the past has no slots of its own: the machines only say what they hold now
     monkeypatch.setattr(qt, "window_end", lambda until, now: qt.ts(at("02:00")))
@@ -609,6 +622,25 @@ def node_function(name: str, tmp_path, **given):
     for key, value in given.items():
         setattr(module, key, value)
     return getattr(module, name)
+
+
+def test_a_node_says_why_a_slots_file_gave_no_answer(tmp_path):
+    asked = []
+
+    def answers(stdout: str):
+        def run(argv, **kw):
+            asked.append((argv, kw["env"]["CHECK_SLOTS"], kw["timeout"]))
+            return types.SimpleNamespace(stdout=stdout)
+        return types.SimpleNamespace(run=run, TimeoutExpired=subprocess.TimeoutExpired, SubprocessError=subprocess.SubprocessError)
+
+    def slow(argv, timeout, **kw):
+        raise subprocess.TimeoutExpired(argv, timeout)
+
+    read = lambda sub: node_function("slot_status", tmp_path, subprocess=sub, json=json)("/src/t/slot.py", "/locks/research/slots")   # noqa: E731
+    assert read(answers('{"slots": [], "waiters": []}')) == ({"slots": [], "waiters": []}, None)
+    assert asked == [(["python3", "/src/t/slot.py", "--status", "--json"], "/locks/research/slots", 30)]
+    assert read(types.SimpleNamespace(run=slow, TimeoutExpired=subprocess.TimeoutExpired)) == (None, "no answer in 30 s")
+    assert read(answers("usage: slot.py --status")) == (None, "JSONDecodeError('Expecting value: line 1 column 1 (char 0)')")
 
 
 def test_a_node_says_why_an_audit_log_that_is_there_was_not_read(tmp_path):

@@ -352,28 +352,38 @@ for d in sorted(glob.glob(ROOT + "/runs/r2*")):
             row["first_own_s"] = own if isinstance(own, (int, float)) else None
     runs.append(row)
 
-slots = []
+def slot_status(slot_py, f, limit=30):
+    """[`slot.py --status --json`'s document for the slots file ``f``, None], or [None, why it gave none]."""
+    try:
+        out = subprocess.run(["python3", slot_py, "--status", "--json"], capture_output=True, text=True, timeout=limit,
+                             env=dict(os.environ, CHECK_SLOTS=f)).stdout
+        return json.loads(out), None
+    except subprocess.TimeoutExpired:
+        return None, "no answer in %d s" % limit
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        return None, repr(e)[:120]
+
+slots, unread = [], []
 try:
     trees = sorted((e.path for e in os.scandir(ROOT + "/src") if os.path.exists(e.path + "/tools/verity/check/slot.py")),
                    key=os.path.getmtime)
 except OSError:
     trees = []
-for f in ([ROOT + "/locks/slots"] + sorted(glob.glob(ROOT + "/locks/*/slots"))) if trees else []:
-    try:
-        out = subprocess.run(["python3", trees[-1] + "/tools/verity/check/slot.py", "--status", "--json"], capture_output=True,
-                             text=True, timeout=30, env=dict(os.environ, CHECK_SLOTS=f)).stdout
-        doc = json.loads(out)
-    except (OSError, ValueError, subprocess.SubprocessError):
+for f in [ROOT + "/locks/slots"] + sorted(glob.glob(ROOT + "/locks/*/slots")):
+    pool = "check" if f == ROOT + "/locks/slots" else f.split("/")[-2]
+    doc, why = slot_status(trees[-1] + "/tools/verity/check/slot.py", f) if trees else (None, "no shipped tree there has slot.py")
+    if doc is None:        # said, never dropped: a pool left out reads as slots the node doesn't have
+        unread.append({"pool": pool, "why": why})
         continue
     ss = doc.get("slots") or []
-    slots.append({"pool": "check" if f == ROOT + "/locks/slots" else f.split("/")[-2], "slots": len(ss),
+    slots.append({"pool": pool, "slots": len(ss),
                   "busy": sum(1 for s in ss if s.get("holder")), "blocked": sum(1 for s in ss if s.get("blocked") and not s.get("holder")),
                   "waiting": len(doc.get("waiters") or []), "mem": {s.get("name"): s.get("mem") for s in ss if s.get("mem")}})
 time.sleep(max(0.0, sample - (time.time() - t0)))
 s1 = stat()
 print(json.dumps({"now": time.time(), "cores": os.cpu_count(), "load": open("/proc/loadavg").read().split()[:3],
                   "busy": (s1[0] - s0[0]) / max(1, s1[1] - s0[1]), "stat": s1, "hz": os.sysconf("SC_CLK_TCK"),
-                  "slots": slots, "runs": runs}))
+                  "slots": slots, "slots_unread": unread, "runs": runs}))
 '''
 
 
@@ -895,37 +905,49 @@ def slot_groups(doc: dict) -> list[dict]:
     finds a place.  Every other pool but the check slots and the executor's is a lane's own: a run takes its slots only when
     sent to it by name (`research run --pool`), so its free slots start no run that waits in the shared pool's line.
 
-    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, longest}`: `group` is `check`, `executor`, `shared`
-    or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are the slots nothing
-    holds and nothing blocks; `longest` is the node with the longest line and the runs in it, None with no run in line.  A
-    run waits in the line it joined, one node's and one pool's, so a slot free on another node starts none of them either."""
+    Each is `{group, pools, nodes, slots, busy, blocked, waiting, free, longest, unread}`: `group` is `check`, `executor`,
+    `shared` or `own`; `pools` names what it adds up; `nodes` counts the nodes that list a slot of it; `free` are the slots
+    nothing holds and nothing blocks; `longest` is the node with the longest line and the runs in it, None with no run in
+    line; `unread` are its slots files that gave no answer, each `{node, pool, why}`, whose slots none of its numbers
+    count.  A run waits in the line it joined, one node's and one pool's, so a slot free on another node starts none of
+    them either."""
     checks = set(doc["check_nodes"])
     found: dict[tuple[str, str], list[tuple[str, dict]]] = {}
+    unread: dict[tuple[str, str], list[dict]] = {}
+
+    def key(n: str, pool: str) -> tuple[str, str] | None:
+        group = {"check": "check", "executor": "executor", SPILL_POOL: "shared"}.get(pool, "own")
+        return (group, pool) if group == "shared" or n in checks else None
+
     for n, d in doc["nodes"].items():
         for s in d["slots"]:
-            group = {"check": "check", "executor": "executor", SPILL_POOL: "shared"}.get(s["pool"], "own")
-            if group == "shared" or n in checks:
-                found.setdefault((group, s["pool"]), []).append((n, s))
+            if k := key(n, s["pool"]):
+                found.setdefault(k, []).append((n, s))
+        for u in d.get("slots_unread") or []:
+            if k := key(n, u["pool"]):
+                unread.setdefault(k, []).append({"node": n, "pool": u["pool"], "why": u["why"]})
     out = []
 
     def add(group: str, pools: list[str]) -> None:
         entries = [e for p in pools for e in found.get((group, p), [])]
-        if not entries:
+        missing = [u for p in pools for u in unread.get((group, p), [])]
+        if not entries and not missing:
             return
         line: dict[str, int] = {}
         for n, s in entries:
             line[n] = line.get(n, 0) + s["waiting"]
         total = {k: sum(s[k] for _, s in entries) for k in ("slots", "busy", "blocked", "waiting")}
-        node = max(sorted(line), key=line.get)
+        node = max(sorted(line), key=line.get, default=None)
         out.append({"group": group, "pools": pools, "nodes": len({n for n, s in entries if s["slots"]}), **total,
                     "free": total["slots"] - total["busy"] - total["blocked"],
-                    "longest": {"node": node, "waiting": line[node]} if line[node] else None})
+                    "longest": {"node": node, "waiting": line[node]} if node and line[node] else None, "unread": missing})
 
     add("check", ["check"])
     add("executor", ["executor"])
     add("shared", [SPILL_POOL])
     # a slots file that lists no slot and has no line is no pool to name
-    own = sorted(p for (g, p), entries in found.items() if g == "own" and any(s["slots"] or s["waiting"] for _, s in entries))
+    own = sorted({p for (g, p), entries in found.items() if g == "own" and any(s["slots"] or s["waiting"] for _, s in entries)}
+                 | {p for g, p in unread if g == "own"})
     for pools in [own] if len(own) > OWN_POOLS_NAMED else [[p] for p in own]:
         add("own", pools)
     return out
@@ -934,7 +956,7 @@ def slot_groups(doc: dict) -> list[dict]:
 def slots_text(g: dict) -> str:
     """One of `slot_groups` in the table's words.  The shared pool's free slots are counted out, being the places a run
     launched with `--on auto` can take now; the shared pool's line and the check slots' name the node that holds over half
-    of it."""
+    of it; and a slots file that gave no answer is named, since its slots are in none of the numbers."""
     pools, longest = g["pools"], g["longest"]
     name = {"check": "check slots", "executor": "executor slots",
             "shared": f"{pools[0]} slots, the shared pool `--on auto` places runs in, on every CPU node with one ({g['nodes']})"
@@ -944,7 +966,10 @@ def slots_text(g: dict) -> str:
     line = f"{g['waiting']} runs in line"
     if g["group"] in ("check", "shared") and longest and 2 * longest["waiting"] > g["waiting"]:
         line += f", {longest['waiting']} of them on {longest['node'].replace('vy-nebius-', '')}"
-    return f"{name}: {g['busy']} of {g['slots']} busy, {g['blocked']} free but blocked, {free}{line}"
+    unread = ", ".join(("" if len(pools) == 1 else f"{u['pool']} on ") + f"{u['node'].replace('vy-nebius-', '')} ({u['why']})"
+                       for u in g["unread"])
+    return f"{name}: {g['busy']} of {g['slots']} busy, {g['blocked']} free but blocked, {free}{line}" + (
+        f", not read: {unread}" if unread else "")
 
 
 def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()) -> list[dict]:
@@ -1247,7 +1272,8 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         "`slot.py --status --json` for each slots file, added up by whose runs take its slots: the check slots and the executor's, "
         "on the check nodes; the shared pool, the one `research run --on auto` places a run in (`auto.SPILL_POOL`), on every CPU "
         "node read, since a launch asks each of them; and the lanes' own pools, on the check nodes, each taking only the runs "
-        "sent to it by name (`--pool`). Free: nothing holds the slot and nothing blocks it, though a run asking more memory than "
+        "sent to it by name (`--pool`). A slots file that gave no answer (in 30 s) is named as not read, and no number counts its "
+        "slots. Free: nothing holds the slot and nothing blocks it, though a run asking more memory than "
         "the slot reserves may still wait; node 2's share, which takes an `--on auto` run when no pool has a place for it, is not "
         "read. A run waits in the line it joined, one node's and one pool's, so a slot free elsewhere starts none of the runs in "
         "line: a node is named when over half of a line is its own. The pools share cores with each other and with the check "
