@@ -167,4 +167,4 @@ def as_the_loader_does(model: nn.Module, vllm_config) -> dict:
             "post_load_tensors": post_load_tensors_as_the_loader_does(model)}
 
 
-__all__ = ["fp8_block_weights_as_the_loader_does", "post_load_tensors_as_the_loader_does", "as_the_loader_does"]
+__all__ = ["as_the_loader_does"]

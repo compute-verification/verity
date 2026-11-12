@@ -725,6 +725,4 @@ class NegCond(nn.Module):
 __all__ = ["MLP2", "TiedMLP", "RMSNorm", "LinearNoTP", "RotaryEmbedding", "SiluAndMul", "Attention", "DecoderLayer", "SingleLayer", "Model",
            "CausalLM", "GreedyServe", "HFRMSNorm", "HFDecoderLayer", "NegUnknownOp", "NegHiddenConstant", "NegInPlace", "NegDataDependent",
            "NegCustomOp", "NegReturnsWeight", "NegCond", "Conv1D", "GPT2MLPBlock", "GPT2Attention", "GPT2Block", "GPT2TinyLM", "GPT2Greedy",
-           "NegMutatesWeight", "NegStaleAlias",
-           "StochasticServe", "PaddedGreedyServe", "HFRotaryEmbedding", "hf_apply_rotary_pos_emb", "HFTinyLM",
-           "HFGreedy"]
+           "NegMutatesWeight", "NegStaleAlias"]

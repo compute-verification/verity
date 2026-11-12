@@ -118,4 +118,4 @@ def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
     ctx.node_hints[len(ctx.B.nodes) - 1] = NAME
 
 
-__all__ = ["NAME", "KEYS", "stop_ids", "spec", "of", "body_refusal", "what", "check", "definition", "in_derive"]
+__all__ = ["NAME", "KEYS", "stop_ids", "spec", "of", "body_refusal", "check", "definition", "in_derive"]

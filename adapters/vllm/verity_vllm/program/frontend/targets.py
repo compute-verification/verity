@@ -684,4 +684,4 @@ __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "tar
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
            "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys",
-           "moe_fp8_tuned_tile_refusal", "graph_tokens", "graph_launch", "launch_graph", "softcapped"]
+           "moe_fp8_tuned_tile_refusal", "graph_launch", "launch_graph", "softcapped"]

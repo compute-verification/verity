@@ -212,5 +212,4 @@ def _reemit(ctx, node, args: tuple, slots: list[int], app_i: int, nodes: list, a
         ctx.stale.update(stale)
 
 
-__all__ = ["RelabelRefused", "rank_report", "shard_map", "tp_sites",
-           "COLLECTIVES", "EMBEDDING"]
+__all__ = ["RelabelRefused", "rank_report", "shard_map", "tp_sites"]

@@ -627,9 +627,7 @@ def op_histogram(ep) -> dict[str, int]:
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
            "attention_impls", "export_facts", "BI_TRITON_KERNELS",
-           "WithPeers", "SeededWithPeers", "SeedRuleWithPeers", "with_peers", "probe_collectives",
-           "ChunkedGreedyRequest", "StochasticEngineStep", "StochasticRequest", "registered_policy_splits",
-           "mean_dim_override_facts"]
+           "with_peers", "probe_collectives"]
 
 
 def attention_impls(model: nn.Module) -> dict:

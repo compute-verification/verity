@@ -524,5 +524,4 @@ def attach(program, doc: dict) -> None:
     program.annotations[NAMESPACE] = doc
 
 
-__all__ = ["emit_correspondence", "kept_correspondence", "attach", "NAMESPACE",
-           "MAX_SPANS"]
+__all__ = ["emit_correspondence", "kept_correspondence", "attach", "NAMESPACE"]

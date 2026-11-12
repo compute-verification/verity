@@ -1015,4 +1015,4 @@ def _no_rule(ctx: Ctx, node, reasons: list[str]) -> NoReturn:
 
 
 __all__ = ["derive", "derive_report", "DeriveReport", "DerivationTail", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
-           "REASONS", "DERIVE_VERSION", "module_registrations", "fx_arg_nodes"]
+           "REASONS", "DERIVE_VERSION", "fx_arg_nodes"]
