@@ -681,7 +681,6 @@
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "var-annotated", "symbol": "KvDevice.encode", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "misc", "symbol": "BoundaryWindows.check", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "var-annotated", "symbol": "BoundaryWindows.__init__", "detail": "", "count": 2},
-    {"file": "tests/engine/test_stock.py", "kind": "attr-defined", "symbol": "fake_vllm", "detail": "", "count": 4},
-    {"file": "tests/lint/test_vllm_surface.py", "kind": "var-annotated", "symbol": "test_every_entry_resolves_at_the_installed_vllm", "detail": "", "count": 2}
+    {"file": "tests/engine/test_stock.py", "kind": "attr-defined", "symbol": "fake_vllm", "detail": "", "count": 4}
   ]
 }

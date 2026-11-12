@@ -49,7 +49,8 @@ def test_every_entry_resolves_at_the_installed_vllm():
     vllm = pytest.importorskip("vllm")
     assert stock.build() in stock.BUILDS, (f"vLLM {vllm.__version__} ({stock.build()}) is installed, no build of "
                                            f"engine.stock.BUILDS: {', '.join(stock.BUILDS)}")
-    unresolved, unchecked = [], []
+    unresolved: list[str] = []
+    unchecked: list[str] = []
     for key in SURFACE:
         module, _, name = key.partition(":")
         try:
