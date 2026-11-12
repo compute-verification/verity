@@ -22,7 +22,7 @@ if TYPE_CHECKING:
         @property
         def vllm(self) -> vllm.LLM: ...
 
-    Engine = Wrapper | vllm.LLM | LLMEngine
+    type Engine = Wrapper | vllm.LLM | LLMEngine
 
 __all__ = ["engine_of", "executor", "model_runner", "scheduler", "scheduler_or_none", "structural_output_lag"]
 
