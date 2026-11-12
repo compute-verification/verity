@@ -738,9 +738,14 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
     ok = audit.audit_record(*args, session_registered={"W": reg.root.hex()})
     assert ok["accepted"] and "registered" not in ok["checks"]
     assert ok["integrity_profile"]["inputs"]["registered"] == [{k: reg.entry()[k] for k in ("value", "root", "leaves", "domain")}]
-    for opened in (None, {}, {"W": "cd" * 64}, {"W": reg.root.hex(), "V": "cd" * 64}):
+    for opened in (None, {}):
+        unread = audit.audit_record(*args, session_registered=opened)
+        assert unread["accepted"] and "registered" not in unread["checks"], "a registered value needs no reported read"
+        assert unread["integrity_profile"] == ok["integrity_profile"]
+    for opened, wrong in (({"W": "cd" * 64}, ["W"]), ({"W": reg.root.hex(), "V": "cd" * 64}, ["V"]), ({"W": None}, ["W"])):
         r = audit.audit_record(*args, session_registered=opened)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
+        assert r["checks"]["registered"]["detail"] == {"registered": ["W"], "opened": sorted(opened), "wrong": wrong}
     v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
@@ -749,7 +754,8 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier opened, and fails closed on anything else."""
+    passes on what the verifier opened and on a verdict that reports no read, and fails on a read reported at another
+    root, by one verdict or by one of two."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
@@ -768,9 +774,11 @@ def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
                                   0.25, session_registered=audit.session_registered(verdicts))
 
     assert decide({"lean": lean})["accepted"]
-    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}, {"lean": {k: x for k, x in lean.items() if k != "registered"}}):
+    assert decide({"lean": {k: x for k, x in lean.items() if k != "registered"}})["accepted"]
+    for verdicts in ({"lean": other}, {"lean": lean, "lean-2": other}):
         r = decide(verdicts)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"], verdicts
+        assert r["checks"]["registered"]["detail"]["wrong"] == ["W"], verdicts
 
 
 # -- supplied values ---------------------------------------------------------------------------------------------------------

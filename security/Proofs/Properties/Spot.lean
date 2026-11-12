@@ -110,8 +110,8 @@ theorem none_fail_base (d p : Check) :
     (∀ x ∈ #[("draw", d), ("proved", p)], Fails x = false) ↔ p.codes = #[] := by
   simp [Fails, Array.isEmpty_iff]
 
-theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true ↔ SameRoots a b := by
-  simp only [Record.sameDict, SameRoots, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
+theorem subDict_iff (a b : Array (String × Json)) : Record.subDict a b = true ↔ OpenedRegistered a b := by
+  simp only [Record.subDict, OpenedRegistered, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
 
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
   rw [← Array.size_eq_zero_iff, Verity.QSort.size_qsort, Array.size_eq_zero_iff]
@@ -126,10 +126,9 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
     (∀ s, served = some s → s.qsort (· < ·) = units.qsort (· < ·)) ∧
     (∀ roots, sessionRoots = some roots → roots ≠ #[] ∧
       ∀ pr ∈ roots, ∃ r, (Record.byPort reg).find? (·.1 == pr.1) = some r ∧ jeq (getD r.2 "root") pr.2 = true) ∧
-    ((field? reg "registered").isSome = true ∨ opened.isSome = true →
-      SameRoots (opened.getD #[]) (Record.registeredRoots reg)) := by
+    OpenedRegistered (opened.getD #[]) (Record.registeredRoots reg) := by
   unfold Record.checks
-  extract_lets o0 j3 want opened' wrong j2 registered j1 j0 o1
+  extract_lets o0 want opened' j3 wrong j2 registered j1 j0 o1
   rcases hs : served with _ | s <;> rcases hr : sessionRoots with _ | roots
   all_goals simp (config := {failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   all_goals simp only [j0, hs]
@@ -147,7 +146,7 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
   all_goals simp only [Bool.true_eq_false, imp_false, Bool.not_eq_true, Bool.not_eq_false', Bool.or_eq_false_iff,
     none_fail_base, Bool.or_eq_true, bne_eq_false_iff_eq, Array.isEmpty_iff, Array.isEmpty_eq_false_iff,
     not_or, sortStrings, qsort_eq_empty, Array.filterMap_eq_empty_iff,
-    sameDict_iff, opened', registered,
+    subDict_iff, opened', registered,
     want, reduceCtorEq, false_implies, implies_true, and_true, true_and, Option.some.injEq, forall_eq', and_assoc]
   all_goals clear j0 j1 j2 j3 o0 o1 wrong want opened' registered
   case some.some =>

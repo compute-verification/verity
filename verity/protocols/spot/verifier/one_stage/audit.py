@@ -140,8 +140,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
-    registered values needs it, each the registered root."""
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); each read it
+    reports must be of a registered value, at that value's registered root, and a registered value needs no reported read."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -153,13 +153,12 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
-    if "registered" in registration or session_registered is not None:
-        want = {e["value"]: e["root"] for e in registration.get("registered", [])}
-        opened = dict(session_registered or {})
-        if opened != want:
-            checks["registered"] = {"ok": False, "codes": ["registered"],
-                                    "detail": {"registered": sorted(want), "opened": sorted(opened),
-                                               "wrong": sorted(v for v in want if v not in opened or opened[v] != want[v])}}
+    want = {e["value"]: e["root"] for e in registration.get("registered", [])}
+    opened = dict(session_registered or {})
+    wrong = sorted(v for v in opened if v not in want or opened[v] != want[v])
+    if wrong:
+        checks["registered"] = {"ok": False, "codes": ["registered"],
+                                "detail": {"registered": sorted(want), "opened": sorted(opened), "wrong": wrong}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)
