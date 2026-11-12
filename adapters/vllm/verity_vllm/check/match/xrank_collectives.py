@@ -37,7 +37,8 @@ from typing import Any
 
 import numpy as np
 
-FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}           # the two-rank identities (world 2)
+__all__ = ["ROUTED_FAMILIES", "check_picks", "coverage_of_unreplayable", "fold_pairs", "is_embedding_site",
+           "pick_strata", "routed_expected", "spec_key", "words"]
 
 
 def collective_family(kind: str, world: int) -> str:
@@ -394,16 +395,18 @@ def fold_pairs(per_pair: list[dict[str, Any]]) -> dict[str, Any]:
     rs = [p.get("result") for p in per_pair]
     fam: dict[str, dict[str, int]] = {}
     for p in per_pair:
-        for f, c in (p.get("by_family") or {}).items():
+        by_family = p.get("by_family")   # the pair's picks by collective family; a pair that states none adds none
+        for f, c in by_family.items() if by_family else ():
             d = fam.setdefault(f, {"picks": 0, "equal": 0, "mismatch": 0, "missing": 0})
             for k in d:
                 d[k] += int(c.get(k) or 0)
+    coverage = [p.get("coverage_of_unreplayable") for p in per_pair]   # a pair that states no coverage is not complete and reads as an empty block
     return {"result": (all(r is True for r in rs) if rs and all(r is not None for r in rs) else (False if any(r is False for r in rs) else None)),
             "pairs": len(per_pair), "picks": sum(int(p.get("picks") or 0) for p in per_pair), "equal": sum(int(p.get("equal") or 0) for p in per_pair),
             "mismatch_n": sum(int(p.get("mismatch_n") or 0) for p in per_pair), "missing_n": sum(int(p.get("missing_n") or 0) for p in per_pair),
             "by_family": fam, "families": sorted(fam), "why": next((p.get("why") for p in per_pair if p.get("result") is not True and p.get("why")), None),
-            "coverage_of_unreplayable": {"complete": (all(((p.get("coverage_of_unreplayable") or {}).get("complete") is True) for p in per_pair) if per_pair else None),
-                                         "per_pair": [(p.get("coverage_of_unreplayable") or {}) for p in per_pair]},
+            "coverage_of_unreplayable": {"complete": (all((cov.get("complete") is True if cov else False) for cov in coverage) if per_pair else None),
+                                         "per_pair": [cov if cov else {} for cov in coverage]},
             "rule": (per_pair[0].get("rule") if per_pair else None), "seed": "the pair's combined run root (fixed after commitment)"}
 
 
@@ -424,8 +427,9 @@ def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any
             continue
         for f, ss in us.items():
             sites_by_fam.setdefault(f, set()).update(str(x) for x in (ss or []))
-    strata: dict[str, set[str]] = {k.split("|")[0]: set() for k in (res.get("by_stratum") or {})}
-    for k, v in (res.get("by_stratum") or {}).items():
+    by_stratum, by_family = res.get("by_stratum"), res.get("by_family")   # the pass's picks by "site|..." stratum and by family; None where it drew none
+    strata: dict[str, set[str]] = {k.split("|")[0]: set() for k in by_stratum} if by_stratum else {}
+    for k, v in by_stratum.items() if by_stratum else ():
         strata[k.split("|")[0]].update(v.get("families") or ())
     strata_sites = set(strata)
 
@@ -438,8 +442,9 @@ def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any
     fams: dict[str, dict[str, Any]] = {}
     for f, ss in sorted(sites_by_fam.items()):
         miss = sorted(x for x in ss if not covered(x, f))
+        counts = by_family.get(f) if by_family else None   # a family with no pick in the pass has no entry, and its counts read None
         fams[f] = {"sites": len(ss), "covered": len(ss) - len(miss), "missing": miss,
-                   "picks": ((res.get("by_family") or {}).get(f) or {}).get("picks"), "equal": ((res.get("by_family") or {}).get(f) or {}).get("equal")}
+                   "picks": counts.get("picks") if counts else None, "equal": counts.get("equal") if counts else None}
     complete = bool(sites_by_fam) and not errors and all(not v["missing"] for v in fams.values())
     out = {"complete": complete, "families": fams, "strata_sites_n": len(strata_sites), "errors": errors or None,
            "rule": "every site of every replay-unreplayable collective family (from the rank Programs) has >= 1 stratum in this pass; else missing by name"}
