@@ -2,8 +2,9 @@
 exfiltration --served-run` prints from the run's record (`served_record`), read against the tree.
 
 The record holds what the run's files say: the sessions' verdicts counted by kind, the driver's checks, the stream's
-outcome and its codes, the layout the serve committed. This module decides nothing about the run; it reads from the
-tree who decided each of those and what proves it, and prints (`account`, `render`):
+outcome and its codes, the layout the serve committed. The audit's verdict is that outcome's, never the summary's
+top-level ``accepted``, which is the one-stage record of the sessions alone. This module decides nothing about the
+run; it reads from the tree who decided each of those and what proves it, and prints (`account`, `render`):
 
 * **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proofs the Lean
   verifier accepted, then the final accept as the stream's outcome gave it: given, refused with its codes, or
@@ -12,7 +13,8 @@ tree who decided each of those and what proves it, and prints (`account`, `rende
 * **What the audit covered** (`covered`): the replay block as the layout names it: the stand-in, instances of the
   check's template, or a Definition of the class's own.
 * **To fully proved** (`open_items`), from the run's own files and the lock entries of its own verdicts: the replay
-  block where it is the stand-in; every verdict a verifier that is not Lean decided (`TABLE`'s ``decided_by``);
+  block where it is the stand-in; its inputs where the interior registers them, which is after the first stage's
+  sample (`AFTER_SAMPLE`); every verdict a verifier that is not Lean decided (`TABLE`'s ``decided_by``);
   every Lean verdict whose lock entry (``proved_by``, in ``security/lean-audit.json``) is missing or lists open
   premises; and the final accept where it was not given. The resampling holes and the cited theorem are not listed
   here: `spot_status` prints them, in the same command.
@@ -50,6 +52,9 @@ PROOFS = "lean-verify"
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the word for
 #: an accept the verifier withheld; while the command's words hold none, such a verdict's record reads `refuse`
 PIECE, WITHHELD = "second_stage", "withheld"
+#: a fact of a two-stage run as served, beside what its form waits on: the values the replay block reads are
+#: registered by the interior registration, which follows the first stage's sample
+AFTER_SAMPLE = "the replay block's inputs are committed after the sample"
 
 
 def table(path: Path | None = None) -> dict:
@@ -188,6 +193,10 @@ def open_items(cover: Mapping, kinds: Sequence[Mapping], audit_checks: Sequence[
     elif cover["stand_in"]:
         items.append({"item": "replay block", "said": f"the replay block is the stand-in (`{cover['check']}`), not a "
                                                       "Definition of the request: the model's layers are not covered"})
+    if cover.get("registered"):
+        items.append({"item": "inputs after the sample",
+                      "said": f"{AFTER_SAMPLE}: the interior registers {E._names(cover['registered'])} after the first "
+                              "stage's sample"})
     other = [f"`{k['kind']}` ({k['verifier']})" for k in kinds if k["decided_by"] != LEAN]
     other += [f"`{c['check']}` ({c['verifier']})" for c in audit_checks if c["decided_by"] != LEAN]
     if final["decided_by"] != LEAN:
@@ -216,7 +225,8 @@ def verdict_record(doc: Mapping) -> dict | None:
         return None
     proved = doc["verdict"]["mark"] == PROVED
     if final["final"] == "withheld":
-        word, waits = WITHHELD, final["withheld"]["why"]
+        word = WITHHELD
+        waits = "; ".join([final["withheld"]["why"], *([AFTER_SAMPLE] if doc["covered"].get("registered") else [])])
     elif final["final"] == "refused":
         word, waits = "refuse", "the verifier refused it" + (f": {', '.join(final['codes'])}" if final["codes"] else "")
     else:

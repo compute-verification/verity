@@ -55,7 +55,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     """One fixture each way: the same run, table and files, under a lock whose entries are closed and under one where
     the verdicts' entry takes a premise."""
 
-    record = record_of(tmp_path, outcome=GIVEN, layout=OWN)
+    record = record_of(tmp_path, outcome=GIVEN, layout=OWN, registered=())
     doc = W.account(record, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
     out = W.render(doc)
     assert doc["verdict"]["mark"] == W.PROVED and doc["to_fully_proved"] == []
@@ -76,9 +76,10 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
 
 
 @pytest.mark.parametrize("how", ["theorem", "hole", "unknown hole", "no entry named", "entry not in the lock", "python",
-                                 "stand-in", "no layout"])
+                                 "stand-in", "no layout", "inputs after the sample"])
 def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
-    record = record_of(tmp_path, outcome=GIVEN, layout=LAYOUT if how == "stand-in" else OWN)
+    record = record_of(tmp_path, outcome=GIVEN, layout=LAYOUT if how == "stand-in" else OWN,
+                       registered=("logits",) if how == "inputs after the sample" else ())
     kinds, holes, root = json.loads(json.dumps(ALL_LEAN)), dict(CLOSED), tree(tmp_path)
     if how == "theorem":
         root = tree(tmp_path, theorem=["Made.Premise"])
@@ -106,7 +107,9 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
         "stand-in": ["the replay block is the stand-in (`Select{V=8}`), not a Definition of the request: the model's "
                      "layers are not covered"],
         "no layout": ["the replay block is not known: no layout is given (the first stage's `stage1.json`, or the serve's "
-                      "`commit.json`)"]}[how]
+                      "`commit.json`)"],
+        "inputs after the sample": ["the replay block's inputs are committed after the sample: the interior registers "
+                                    "`logits` after the first stage's sample"]}[how]
     # the holes and the theorem are the other block's to print: this one reads them for its mark and says nothing of them
     assert doc["mark_reads"] == {"theorem": THEOREM, "open_premises": int(how == "theorem"), "holes": holes}
     # (the verdict's record names the theorem in its own fields, as the command's verdicts of record do)
@@ -121,12 +124,17 @@ def test_one_thing_open_and_the_mark_is_run_not_proved(tmp_path, how):
 
 
 def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
-    """Under the tree's own table: every check held and the outcome is refused by the two-stage form alone."""
+    """Under the tree's own table: every check held and the outcome is refused by the two-stage form alone. The
+    audit's verdict is the stream's outcome: the summary's top-level ``accepted`` is the one-stage record of the
+    sessions alone, and where it is true beside an outcome that is not, the accept is still withheld."""
 
-    record = record_of(tmp_path)
+    record = record_of(tmp_path, sessions_record=True)
+    assert record["audit"]["one_stage_record"]["accepted"] is True and record["audit"]["outcome"]["accepted"] is False
     doc = W.account(record, tree(tmp_path), holes=CLOSED)
     out = W.render(doc)
     assert doc["outcome"]["final"] == "withheld" and doc["verdict"]["mark"] == E.RUN_NOT_PROVED
+    assert doc == W.account(record_of(tmp_path / "other", sessions_record=False), tree(tmp_path), holes=CLOSED) | {
+        "one_stage_record": doc["one_stage_record"]}
     assert doc["verdict"]["line"] == ("every sampled proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
                                       "withheld, reason `two-stage-form` (the two-round form's soundness is not proved)")
     assert "final accept given" not in out and "| withheld (`two-stage-form`) |" in out
@@ -140,7 +148,13 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert doc["verdict_record"] == E.verdict(doc["verdict_record"], "the section's record") == {
         "piece": "second_stage", "control": None, "run": record["run"],
         "verifier": {"module": "sampled-proofs-verifier", "commit": record["commit"]}, "verdict": "withheld",
-        "proved_by": None, "open": "the two-round form's soundness is not proved"}
+        "proved_by": None,
+        "open": "the two-round form's soundness is not proved; the replay block's inputs are committed after the sample"}
+    assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
+           "first stage's sample" in out
+    # a run whose interior registers nothing names the form alone
+    plain = W.account(record_of(tmp_path / "plain", registered=()), tree(tmp_path), holes=CLOSED)
+    assert plain["verdict_record"]["open"] == "the two-round form's soundness is not proved"
     # no issue's id is printed, and none is in the table
     assert not E.ISSUE_ID.search(out + W.TABLE.read_text())
 

@@ -149,11 +149,12 @@ From a record that holds `audit` the command prints one more section, before the
 - **The verdict**, in the verifier's own words: how many of the sampled proofs the Lean verifier accepted, then the
   final accept as the stream's outcome gave it: given, refused with its codes, or withheld, where every check of the
   second stage held and the outcome is refused by one code the table names a reason for. An accept the verifier
-  withheld is never printed as given.
+  withheld is never printed as given. The summary's top-level `accepted` is the one-stage record of the sessions
+  alone and is never read as the audit's verdict.
 - **What the audit covered**: the replay block as the layout names it, the stand-in (instances of the check's
   template) or a Definition of the class's own.
-- **To fully proved**: the replay block where it is the stand-in; every verdict a verifier that is not Lean
-  decided; every Lean verdict whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and
+- **To fully proved**: the replay block where it is the stand-in; its inputs where the interior registers them,
+  which is after the first stage's sample; every verdict a verifier that is not Lean decided; every Lean verdict whose lock entry (`security/lean-audit.json`) is missing or lists open premises; and
   the final accept where it was not given. Which verifier decides each kind of verdict, and the lock entry that
   covers it, are data (`verity_bench/data/served_row.json`). The resampling holes and the cited theorem are the next
   block's, and this one prints no line on them.

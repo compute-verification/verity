@@ -154,8 +154,11 @@ WITHHELD = {"accepted": False, "interior": ["statements"], "replay_sample": [], 
             "registered": {"interior": None, "replay_sample": None}}
 
 
-def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), layout=LAYOUT):
-    """A served run's four runs' directories, each holding what that run publishes."""
+def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), layout=LAYOUT, sessions_record=False,
+           registered=("logits",)):
+    """A served run's four runs' directories, each holding what that run publishes. ``sessions_record`` is the
+    summary's top-level ``accepted``, the one-stage record of the sessions alone; ``registered`` the values the
+    interior registers."""
 
     verdicts = verdicts or {"lean-verify/m0": True, "lean-verify/m1": True, "lean-draw/m0": True, "lean-draw/m1": True,
                             "m0-verifier/m0": True, "m0-verifier/m1": {"accepted": True}}
@@ -163,9 +166,10 @@ def served(tmp_path, *, outcome=WITHHELD, held=True, verdicts=None, units=(2,), 
               "draw": {"k": 1, "law": "subset", "population": 8, "units": list(units)}}
     summary = {
         "first_stage": {"registration": REGISTRATION, "units": [2]}, "unlinked": False, "held": held, "outcome": outcome,
-        "accepted": False, "record": {"failed": ["registered"]}, "pins": {"m0": True, "m1": True},
-        "round_two": {"ok": True, "codes": []}, "second_stage": {"draw": [1, 2, 3]},
-        "interior": {"population": 16, "registered": ["logits"], "links": [["m0", "logits", "logits"]], "returns": []},
+        "accepted": sessions_record, "record": {"failed": [] if sessions_record else ["registered"]},
+        "pins": {"m0": True, "m1": True}, "round_two": {"ok": True, "codes": []}, "second_stage": {"draw": [1, 2, 3]},
+        "interior": {"population": 16, "registered": list(registered),
+                     "links": [["m0", name, name] for name in registered], "returns": []},
         "audit": {"checks_before_draw": {"a": True, "b": True}, "negatives": {"n0": True, "n1": {"refused": True}},
                   "audit": {"accepted": True, "complete": True, "registered_reads": True, "verdicts": verdicts},
                   "timing": {"m0": session(50.0, 38.25), "m1": session(40.0, 31.5)}}}
