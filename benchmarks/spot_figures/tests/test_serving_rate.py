@@ -201,4 +201,4 @@ def test_a_floors_caption_says_its_bounds_are_floors_and_a_saturated_rates_does_
     floor, most = f.reading_note(said), f.reading_note(said | {"saturated": True})
     assert "one under 300 GB does not show that 300 GB is met. " + f.REGISTRATION_NOTE in floor
     assert "lower bound" not in most and most.endswith("0.025 of that reading's. " + f.REGISTRATION_NOTE)
-    assert "holds at a registration of 1/q requests" in f.REGISTRATION_NOTE
+    assert "samples a whole number of the phase's requests, never fewer than one" in f.REGISTRATION_NOTE

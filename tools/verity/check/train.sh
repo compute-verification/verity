@@ -5,7 +5,7 @@
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
-# `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
+# `check.py --record --on MACHINE --priority --timeout 36000 --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ or a Lean package its verifier requires by path
 # (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
@@ -188,9 +188,12 @@ if [ -n "$deselect" ]; then
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine). The
-# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`
+# commit's own code runs from here, so without the queue's GitHub and Slack credentials: any PR in it could push `main`.
+# --timeout: only a run with one extends its node's lease (`remote.lease_extend_s`), so a node that runs nothing but checks
+# would otherwise stop two hours after its boot; 10 h is past any check's wall time, as the nightly's
 setsid nohup env -u GH_TOKEN -u GITHUB_TOKEN -u GH_CONFIG_DIR -u SLACK_BOT_TOKEN \
-  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
+  uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --timeout 36000 --keep-going \
+  ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
