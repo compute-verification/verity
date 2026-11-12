@@ -338,10 +338,13 @@ def cdiv(a: int, b: int) -> int:
 TILE = 64                                        # the leaf's tile
 #: a tree node's bytes: SHA-512's
 NB = 64
-#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'
-RS_MAX_SEGS = 128
-#: the row-digest kernels with the slot of `i` that holds k, each held to RS_MAX_SEGS segments by `rs_refusal`
-RS_KERNELS = {"s512_rows": 1, "s512_row_segs": 1, "s512_folds": None}
+#: s512_rows' most segments a row (hash_h3.cuh's RS_MAX_SEGS), 1 KiB each, and hash_fast.cuh's header tables'; a wider row
+#: goes to hash_wide.cuh's kernels (`Pipeline.row_digests`), which take RS_WIDE_MAX_SEGS (its constant)
+RS_MAX_SEGS, RS_WIDE_MAX_SEGS = 128, 1024
+#: the row-digest kernels with the slot of `i` that holds k, each held to its most segments by `rs_refusal`
+RS_KERNELS = {"s512_rows": (1, RS_MAX_SEGS), "s512_row_segs": (1, RS_MAX_SEGS), "s512_folds": (None, RS_MAX_SEGS),
+              "s512_heads_w": (0, RS_WIDE_MAX_SEGS), "s512_row_segs_w": (1, RS_WIDE_MAX_SEGS),
+              "s512_folds_w": (1, RS_WIDE_MAX_SEGS)}
 #: hash_fast.cuh's blocks: the segment kernels' (RS_FAST_NT, as built) and s512_folds' (RS_FOLD_NT)
 RS_FAST_NT, RS_FOLD_NT = int(os.environ.get("PEARLC_RS_FAST_NT", "128")), 32
 #: their scratch, the segment digests of A's rows, B's and the tiles'
@@ -379,11 +382,11 @@ PL_VARIANT, PL_ROWS, PL_LEVELS, PL_SEEDS, PL_MAX_ROWS, CHAINS = 851, 16, 7, 32, 
 
 
 def rs_refusal(name: str, i) -> str | None:
-    """Why a launch of one of RS_KERNELS with the ints `i` must not reach the device, None if it may.  The kernels hold no
-    bound of their own: past RS_MAX_SEGS segments a row they write shared memory and read their header tables out of
-    bounds, and can return a wrong digest with no error.  Each takes rows of whole segments (k a positive multiple of
-    256), s512_folds a count of them."""
-    slot, i = RS_KERNELS[name], (*i, 0, 0, 0, 0)
+    """Why a launch of one of RS_KERNELS with the ints `i` must not reach the device, None if it may.  s512_rows,
+    s512_row_segs and s512_folds hold no bound of their own: past RS_MAX_SEGS segments a row they write shared memory and
+    read their header tables out of bounds, and can return a wrong digest with no error; hash_wide.cuh's kernels trap past
+    RS_WIDE_MAX_SEGS.  Each takes rows of whole segments (k a positive multiple of 256), s512_folds a count of them."""
+    (slot, most), i = RS_KERNELS[name], (*i, 0, 0, 0, 0)
     if slot is None:                                         # s512_folds: i1 segments a unit, i3 the rest's
         segs = max(i[1], i[3])
     else:
@@ -391,9 +394,11 @@ def rs_refusal(name: str, i) -> str | None:
         if k <= 0 or k % 256:
             return f"{name} takes rows of whole 1 KiB segments (k a positive multiple of 256), not k = {k}"
         segs = k // 256
-    if segs <= RS_MAX_SEGS:
+    if segs <= most:
         return None
-    return f"{name} takes at most {RS_MAX_SEGS} 1 KiB segments a row (k <= {256 * RS_MAX_SEGS}), not {segs}"
+    wide = (f"; rows up to {RS_WIDE_MAX_SEGS} segments go to hash_wide.cuh's launches (`Pipeline.row_digests`)"
+            if most < RS_WIDE_MAX_SEGS and segs <= RS_WIDE_MAX_SEGS else "")
+    return f"{name} takes at most {most} 1 KiB segments a row (k <= {256 * most}), not {segs}{wide}"
 
 
 def pd_variant(m_real: int, n: int, k: int) -> int | None:
@@ -520,7 +525,10 @@ class Pipeline:
     "fast") picks how the row digests and tile leaves run: "fast", hash_fast.cuh's two launches each (a thread a segment over
     every row or tile, then a thread a row or tile for the fold; scratch `segdig_<tree>`), or "ref", s512_rows (a CTA a row)
     and s512_tile_leaves (a CTA a tile).  Both write the same bytes.  A caller that owns the buffers gets the fast kernels
-    for the trees whose `segdig_<tree>` it gives (`sizes` has them) and the reference kernels for the rest.
+    for the trees whose `segdig_<tree>` it gives (`sizes` has them) and the reference kernels for the rest.  Rows past
+    RS_MAX_SEGS segments (k over 32,768; a tree over y's rows of n words) are hashed by hash_wide.cuh's launches, at most
+    RS_WIDE_MAX_SEGS (`row_digests`): the pipeline keeps their width's header states in a buffer of its own, `rs_heads_w`,
+    written once here.
 
     `widen` (kind, source, scales), when given, makes B's FP32 rows from its stored form first (`widen_b`, the epoch's
     first step: WIDEN), so xb is its output.  `keys` are device pointers: `line_b` (E_B's and the F lines' key), the 64-byte domain ids `dom_a`, `dom_b`, `dom_t`,
@@ -570,8 +578,8 @@ class Pipeline:
         self.tile = tile_suffix(self.bm, self.bn)
         if m % self.bm or n % self.bn or k % 256 or k < 256:
             raise ValueError(f"the kernels take m a multiple of {self.bm}, n of {self.bn} and k of 256, not {(m, n, k)}")
-        if why := rs_refusal("s512_rows", (0, k)):
-            raise ValueError(why)
+        if k // 256 > RS_WIDE_MAX_SEGS:
+            raise ValueError(rs_refusal("s512_row_segs_w", (0, k)))
         self.nb, self.weight = NB, weight
         self.row_bytes = 4 * k
         self.tiles = cdiv(self.m_real, TILE) * (n // TILE)
@@ -594,6 +602,12 @@ class Pipeline:
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
             dev.sync()
             dev.rs_heads = True
+        if self.sha == "fast" and any(x in self.b for x in SEGDIG) and k // 256 > RS_MAX_SEGS:
+            self.size["rs_heads_w"] = NB * (k // 256 + 1)
+            self.b["rs_heads_w"] = dev.alloc(self.size["rs_heads_w"])
+            self.allocated.append("rs_heads_w")
+            dev.launch("s512_heads_w", cdiv(k // 256 + 1, 128), 128, p=(self.b["rs_heads_w"],), i=(k,))
+            dev.sync()
         self.boxes: dict[tuple[str, str], tuple[int, int]] = {}
         self.encode_maps()
 
@@ -702,11 +716,21 @@ class Pipeline:
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
         """The sha512/row-seg/v1 digests of `count` FP32 rows at x into out: s512_rows, or with a scratch buffer
-        s512_row_segs then s512_folds.  A row they can't take (`rs_refusal`: past RS_MAX_SEGS segments, or not whole
-        segments) is refused here, before any launch."""
+        s512_row_segs then s512_folds.  A row past RS_MAX_SEGS segments, which those can't take, goes to hash_wide.cuh's
+        launches, which need the scratch: s512_row_segs_w then s512_folds_w, from the pipeline's header states
+        (`rs_heads_w`), or under sha "ref" (or with no states) each computing its header.  Past RS_WIDE_MAX_SEGS, or with
+        k not whole segments, no kernel takes the row: refused before any launch."""
         d, segs = self.dev, self.k // 256
-        if why := rs_refusal("s512_rows", (count, self.k)):
+        if why := rs_refusal("s512_row_segs_w", (count, self.k)):
             raise ValueError(why)
+        if segs > RS_MAX_SEGS:
+            if not scratch:
+                raise ValueError(f"a row of {segs} segments (past s512_rows' {RS_MAX_SEGS}) is hashed by hash_wide.cuh's two "
+                                 f"launches, which need its tree's segdig scratch ({NB * segs} bytes a row)")
+            heads = 0 if self.sha == "ref" else getattr(self, "b", {}).get("rs_heads_w", 0)
+            d.launch("s512_row_segs_w", cdiv(count * segs, RS_FAST_NT), RS_FAST_NT, p=(x, scratch, heads), i=(count, self.k))
+            d.launch("s512_folds_w", cdiv(count, RS_FOLD_NT), RS_FOLD_NT, p=(scratch, out, heads), i=(count, self.k))
+            return
         if self.sha == "ref" or not scratch:
             d.launch("s512_rows", count, 128, p=(x, out), i=(count, self.k))
             return

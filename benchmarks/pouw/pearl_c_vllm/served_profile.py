@@ -152,12 +152,12 @@ CATEGORIES = (
     ("pearlc:tile_hash", r"^pd_tiles_"),
     ("pearlc:forming", r"^(stats_s5|stats_r|form_s5|eprime|words|words_u|words_k|gemm_words|pa|pb|quant_s5|plainq|diff_words|gen_f32)$"
                        r"|^(stats_s5|form_s5|gemm_words)"),
-    ("pearlc:row_digests", r"^s512_rows$|^s512_row_segs$"),
+    ("pearlc:row_digests", r"^s512_rows$|^s512_row_segs(_w)?$"),
     ("pearlc:seeds", r"^s512_seeds$"),
     ("pearlc:a_tree", r"^s512_pads$|^hm_leaves$|^s512_frame_leaves$|^s512_nodes$|^s512_tree_small$"),
-    ("pearlc:setup", r"^s512_heads$"),
+    ("pearlc:setup", r"^s512_heads(_w)?$"),
     ("pearlc:tile_hash", r"^s512_tile_leaves$|^s512_tile_segs$"),
-    ("pearlc:folds", r"^s512_folds$"),
+    ("pearlc:folds", r"^s512_folds(_w)?$"),
     ("pearlc:screen", r"screen|^scatter$"),
     ("fp8:quant", r"fp8_quant|scaled_fp8|segmented_max|dynamic_scaled|per_token_group_quant|quant"),
     ("attention", r"flash|fmha|attention|attn|FlashAttn|paged"),
@@ -170,7 +170,7 @@ CATEGORIES = (
 )
 _CAT = [(c, re.compile(p)) for c, p in CATEGORIES]
 #: the segment launch before a ``s512_folds`` on its stream -> the fold's category
-FOLDS = {"s512_row_segs": "pearlc:row_digests", "s512_tile_segs": "pearlc:tile_hash"}
+FOLDS = {"s512_row_segs": "pearlc:row_digests", "s512_row_segs_w": "pearlc:row_digests", "s512_tile_segs": "pearlc:tile_hash"}
 #: a pass end's kernels: its transcript tree, built by the same tree kernels as A's
 PASS_END = {"pearlc:a_tree": "pearlc:transcript_tree"}
 #: `hash_split_ms`'s groups of Pearl-C categories

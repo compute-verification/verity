@@ -1,4 +1,5 @@
-"""hash_h3.cuh and pearl_c_sm120/hash_fast.cuh on the host (pearl_c/hash_host.cpp, built with g++): each -h3 hashing kernel,
+"""hash_h3.cuh and pearl_c_sm120/hash_fast.cuh on the host (pearl_c/hash_host.cpp, built with g++, which builds hash_wide.cuh
+too: test_pearl_c_hash_wide.py): each -h3 hashing kernel,
 launched as pearl_c_sm120/run.py launches it, writes the bytes the verifier's reference computes: the SHA-512 row digests
 (s512_rows, and hash_fast.cuh's segment and fold launches), the seeds and line keys over them at the pinned vectors, the line
 raws, tickets and tile leaves (both ways), and the hm96-sha512 frame-v3-sha512 trees under ChaCha20 salts; then run.py's epoch,
@@ -20,6 +21,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
+WIDE = HERE / "hash_wide.cuh"
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
@@ -81,7 +83,7 @@ def host(tmp_path_factory) -> Host:
 
 def test_every_hash_kernel_is_built(host):
     names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(',
-                           (HERE / "hash_h3.cuh").read_text() + FAST.read_text()))
+                           (HERE / "hash_h3.cuh").read_text() + FAST.read_text() + WIDE.read_text()))
     built = {host.lib.kernel_name(i).decode() for i in range(len(names))}
     assert built == names and host.lib.kernel_name(len(names)) is None
 
