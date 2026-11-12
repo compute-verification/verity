@@ -295,6 +295,15 @@ def Composite.onsite : Composite :=
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"]
 
+/-- The network certifier's check of a period, by its protocol id, the spec's `Verity.Registration.CERTIFIER`. A
+composite that lists it holds every boundary link to a certifier (`Site.Entry.Covered`). -/
+def CERTIFIER : String := "verity/certifier/v0"
+
+/-- The checks a memory challenger takes part in, by their protocol ids, the spec's `Verity.Registration.CHALLENGED`:
+PoUS's check of a run and the wipe. A composite that lists one holds every memory leaf's host to a memory challenger's
+link (`Site.Entry.Reached`). -/
+def CHALLENGED : List String := ["verity/pous/p2/v4/run", "verity/wipe/v0"]
+
 /-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
 structure Digests where
   sheet : Sheet → String
@@ -335,7 +344,7 @@ end Site.Registration
 
 namespace Site.Entry
 
-open Site.Registration (Digests Auditor Composite Refusal)
+open Site.Registration (Digests Auditor Composite Refusal CERTIFIER CHALLENGED)
 
 variable (D : Digests) (A : Auditor) (c : Composite) (S : Site) (e : Entry)
 
@@ -376,12 +385,14 @@ def Owners : Prop :=
   ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
     (x.kind.auditor = false → x.owner = .prover)
 
-/-- `uncertified`, onsite: every boundary link is certified. -/
-def Covered : Prop := c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
+/-- `uncertified`, of a composite that lists the network certifier's check: every boundary link is certified. -/
+def Covered : Prop := CERTIFIER ∈ c → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
 
-/-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/
+/-- `challengerReach`, of a composite that lists a check a memory challenger takes part in: the host of every memory
+leaf is at an end of a memory challenger's link. -/
 def Reached : Prop :=
-  c = .onsite → ∀ x ∈ (S.add e).locs, x.kind = .memory → ∀ h ∈ (S.add e).host? x, h ∈ (S.add e).reached
+  (∃ i ∈ c, i ∈ CHALLENGED) →
+    ∀ x ∈ (S.add e).locs, x.kind = .memory → ∀ h ∈ (S.add e).host? x, h ∈ (S.add e).reached
 
 instance instDecidableFresh : Decidable (Fresh D S e) := by unfold Fresh; infer_instance
 instance instDecidableRefs : Decidable (Refs S e) := by unfold Refs; infer_instance

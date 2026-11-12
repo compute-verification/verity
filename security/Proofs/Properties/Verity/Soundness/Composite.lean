@@ -122,6 +122,12 @@ theorem ofIds_onsite : Composites.ofIds Verity.Registration.Composite.onsite = .
 /-- **The code builds remote's verifier from remote's list.** -/
 theorem ofIds_remote : Composites.ofIds Verity.Registration.Composite.remote = .ok (verifier .remote) := rfl
 
+/-- **The code builds, from the list of network certification, sampled proofs and the wipe, that list's verifier.** -/
+theorem ofIds_network : Composites.ofIds Composites.network = .ok (verifier Composites.network) := rfl
+
+/-- **The code builds, from that list with the inference-only policy and PoUW, that list's verifier.** -/
+theorem ofIds_compute : Composites.ofIds Composites.compute = .ok (verifier Composites.compute) := rfl
+
 /-- **Onsite's and remote's verifiers are the ones the composites' table lists**, each beside its list. -/
 theorem verifier_mem (hk : k = .onsite ∨ k = .remote) : (verifier k, k) ∈ Composites.composites := by
   rcases hk with rfl | rfl

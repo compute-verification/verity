@@ -54,8 +54,8 @@ them), and refused by the first check it fails (`Registration.Entry.refusal`):
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.Accepted`), and its memory figures are the auditor's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
-| `uncertified` | onsite: every boundary link is certified |
-| `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+| `uncertified` | a composite that lists the network certifier's check: every boundary link is certified |
+| `challengerReach` | a composite that lists a check a memory challenger takes part in: the host of every memory leaf is at an end of a memory challenger's link |
 
 What an entry registers is held to the log before it (`Registration.Entry.Once`): no information item is registered
 twice (`duplicateInformation`), and no day is declared twice (`duplicateDeclaration`). The log refuses its next entry by
@@ -363,6 +363,14 @@ sampled proofs. -/
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"]
 
+/-- The network certifier's check of a period, by its protocol id. A composite that lists it holds every boundary link
+to a certifier (`Site.Entry.Covered`). -/
+def CERTIFIER : String := "verity/certifier/v0"
+
+/-- The checks a memory challenger takes part in, by their protocol ids: PoUS's check of a run and the wipe. A composite
+that lists one holds every memory leaf's host to a memory challenger's link (`Site.Entry.Reached`). -/
+def CHALLENGED : List String := ["verity/pous/p2/v4/run", "verity/wipe/v0"]
+
 /-- The digests the log names things by, SHA-512 in the deployed check: a sheet's, an entry's, and the head of a
 composite's empty log. -/
 structure Digests where
@@ -434,7 +442,7 @@ end Site
 
 namespace Site.Entry
 
-open Registration (Digests Auditor Composite Refusal)
+open Registration (Digests Auditor Composite Refusal CERTIFIER CHALLENGED)
 
 variable (D : Digests) (A : Auditor) (c : Composite) (S : Site) (e : Entry)
 
@@ -477,12 +485,14 @@ def Owners : Prop :=
   ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
     (x.kind.auditor = false → x.owner = .prover)
 
-/-- `uncertified`, onsite: every boundary link is certified. -/
-def Covered : Prop := c = .onsite → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
+/-- `uncertified`, of a composite that lists the network certifier's check: every boundary link is certified. -/
+def Covered : Prop := CERTIFIER ∈ c → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
 
-/-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/
+/-- `challengerReach`, of a composite that lists a check a memory challenger takes part in: the host of every memory
+leaf is at an end of a memory challenger's link. -/
 def Reached : Prop :=
-  c = .onsite → ∀ x ∈ (S.add e).locs, x.kind = .memory → ∀ h ∈ (S.add e).host? x, h ∈ (S.add e).reached
+  (∃ i ∈ c, i ∈ CHALLENGED) →
+    ∀ x ∈ (S.add e).locs, x.kind = .memory → ∀ h ∈ (S.add e).host? x, h ∈ (S.add e).reached
 
 /-- **A valid site entry** of a log for the composite `c`, against the Site `S` of the log before it: it passes every
 check of a site entry. -/

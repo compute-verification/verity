@@ -45,6 +45,12 @@ theorem ofOwner_owner (o : Core.Site.Owner) : ofOwner (owner o) = o := by cases 
 /-- The spec's remote is the code's. -/
 @[simp] theorem remote_eq : Verity.Registration.Composite.remote = Composite.remote := rfl
 
+/-- The spec's id of the network certifier's check is the code's. -/
+@[simp] theorem certifier_eq : Verity.Registration.CERTIFIER = Core.Site.Registration.CERTIFIER := rfl
+
+/-- The spec's ids of the checks a memory challenger takes part in are the code's. -/
+@[simp] theorem challenged_eq : Verity.Registration.CHALLENGED = Core.Site.Registration.CHALLENGED := rfl
+
 @[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
   cases c <;> rfl
 

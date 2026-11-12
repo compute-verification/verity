@@ -1,8 +1,14 @@
 /-
 The composite a configuration's subprotocols make (`verity run CONFIG`): onsite (`Core.Onsite.protocol`,
 `verity/onsite/v0`) when they are onsite's, remote (`Core.Remote.protocol`, `verity/remote/v0`) when they are remote's,
-listed in any order. These two are the only composites a verifier runs: protocol soundness covers only these two, so
-`ofIds` refuses any other set by name (an id neither composes, one listed twice, none, or a set that is neither one's).
+and the composite over one of two smaller onsite lists (`network`, `compute`) when they are that list's, listed in any
+order. A composite is its list of ids in the order of the ids, so one set of subprotocols has one composite and one id.
+These four are the only composites a verifier runs, so `ofIds` refuses any other set by name (an id none composes, one
+listed twice, none, or a set that is none of the four).
+
+A list that `ofIds` comes to accept beyond these needs three things in the same change: registration's clauses read the
+list (`Core.Site.Entry.Covered`, `Core.Site.Entry.Reached`: which checks hold a Site to its certifiers and its memory
+challengers), the list is in the order of its ids, and this header and the refusal's text name it.
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
@@ -12,9 +18,11 @@ module
 
 public import CoreOnsite
 public import CoreProtocol.Cli
+public import CoreProtocol.Site
 public import CoreRemote
 meta import CoreOnsite
 meta import CoreProtocol.Cli
+meta import CoreProtocol.Site
 meta import CoreRemote
 
 @[expose] public section
@@ -25,10 +33,34 @@ namespace Core.Composites
 
 open Composition
 
+/-- The ties between subprotocols: every window of PoUW's period on the policy's record, and PoUS and the remote
+bandwidth audit on one store. A composite has each tie whose subprotocols it lists. -/
+def ties : List Tie := [Core.Remote.windows, Core.Onsite.store]
+
+/-- The id of the composite over the list `k` that has no id of its own: its ids, comma-separated, after a prefix no
+protocol's id has. -/
+def idOver (k : List String) : String := "verity/composite/v0:" ++ ",".intercalate k
+
+/-- **The composite over the list `k`**: of onsite's subprotocols, those `k` lists, in the order of their ids, under the
+one rule onsite and remote compose by (`Core.Composition.tiedSameB`), with the subprotocols that commit to one record
+and the ties, each where `k` lists its subprotocols. -/
+def over (k : List String) : BlobProtocol :=
+  tiedSameB (idOver k) (Core.Onsite.tied.filter (· ∈ k)) (ties.filter fun t => t.names.all fun n => n.1 ∈ k)
+    (Core.Onsite.components.filter (·.id ∈ k))
+
+/-- Network certification, sampled proofs and the wipe. -/
+def network : List String := ["verity/certifier/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
+
+/-- `network`'s, the inference-only policy and PoUW over the period. -/
+def compute : List String :=
+  ["verity/certifier/v0", "verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1",
+    "verity/wipe/v0"]
+
 /-- The composites, each with its subprotocols' ids. -/
 def composites : List (BlobProtocol × List String) :=
   [(Core.Onsite.protocol, Core.Onsite.components.map (·.id)),
-    (Core.Remote.protocol, Core.Remote.components.map (·.id))]
+    (Core.Remote.protocol, Core.Remote.components.map (·.id)),
+    (over network, network), (over compute, compute)]
 
 /-- Every subprotocol of some composite, by id. -/
 def known : List String := (composites.flatMap (·.2)).eraseDups
@@ -64,7 +96,33 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 private def onsiteIds : List String := Core.Onsite.components.map (·.id)
 private def remoteIds : List String := Core.Remote.components.map (·.id)
 
-#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0"]
+#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0",
+  "verity/composite/v0:verity/certifier/v0,verity/sampled-proofs/v1,verity/wipe/v0",
+  "verity/composite/v0:verity/certifier/v0,verity/inference-only/v0,verity/pouw/period/v1,verity/sampled-proofs/v1," ++
+    "verity/wipe/v0"]
+-- each composite's subprotocols are the ones its list names, in the list's order, which is the order of the ids
+#guard composites.all fun (_, xs) => xs.all known.contains && xs.eraseDups == xs
+#guard (over network).id == idOver network && (over compute).id == idOver compute
+#guard (Core.Onsite.components.filter (·.id ∈ network)).map (·.id) == network
+#guard (Core.Onsite.components.filter (·.id ∈ compute)).map (·.id) == compute
+#guard orderedB (Core.Onsite.components.filter (·.id ∈ network))
+#guard orderedB (Core.Onsite.components.filter (·.id ∈ compute))
+-- the smaller lists' ties: neither lists PoUS, so neither has the store's; `compute` lists the policy and PoUW's
+-- period, so it has the windows'; `network` lists neither
+#guard (ties.filter fun t => t.names.all fun n => n.1 ∈ network).map (·.what) == []
+#guard (ties.filter fun t => t.names.all fun n => n.1 ∈ compute).map (·.what) == [Core.Remote.windows.what]
+#guard Core.Onsite.tied.filter (· ∈ network) == ["verity/sampled-proofs/v1"]
+#guard Core.Onsite.tied.filter (· ∈ compute) == Core.Onsite.tied
+-- registration's clauses read these lists: both list the certifier's check and a check a memory challenger takes
+-- part in, and remote's lists neither
+#guard Core.Site.Registration.CERTIFIER == NetworkCheck.Period.protocol.id
+#guard Core.Site.Registration.CHALLENGED ==
+  [PousCheck.RunProtocol.protocol.id, MemoryChallenger.WipeProtocol.protocol.id]
+#guard [network, compute, onsiteIds].all fun k =>
+  k.contains Core.Site.Registration.CERTIFIER && k.any Core.Site.Registration.CHALLENGED.contains
+#guard !remoteIds.contains Core.Site.Registration.CERTIFIER &&
+  !remoteIds.any Core.Site.Registration.CHALLENGED.contains
+#guard onsiteIds == Core.Site.Registration.Composite.onsite && remoteIds == Core.Site.Registration.Composite.remote
 #guard onsiteIds.all known.contains && remoteIds.all known.contains
 #guard known.length == (onsiteIds ++ remoteIds).eraseDups.length
 
@@ -73,6 +131,10 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 #guard idOf onsiteIds.reverse == some "verity/onsite/v0"
 #guard idOf remoteIds == some "verity/remote/v0"
 #guard idOf remoteIds.reverse == some "verity/remote/v0"
+#guard idOf network == some (idOver network) && idOf network.reverse == some (idOver network)
+#guard idOf compute == some (idOver compute) && idOf compute.reverse == some (idOver compute)
+#guard idOf (network ++ ["verity/pouw/period/v1"]) == none
+#guard idOf (compute.drop 1) == none
 #guard idOf [] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v1"] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v2"] == none
