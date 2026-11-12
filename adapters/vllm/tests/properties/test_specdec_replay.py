@@ -224,6 +224,7 @@ class Engine:
         core.batch_queue = deque(maxlen=core.batch_queue_size)
         core.is_ec_consumer, core.is_pooling_model, core.aborts_queue = True, False, queue.Queue()
         core.is_mm_encoder_only = False
+        core._weight_version = "default"
         core.use_spec_decode = core.check_for_draft_tokens = draft is not None
         core.async_scheduling = sched.async_scheduling
         self.open: set[str] = set()
