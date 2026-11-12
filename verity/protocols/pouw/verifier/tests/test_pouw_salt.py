@@ -29,14 +29,14 @@ from verity.protocols.certifier.verifier.active import Proxy
 from verity.protocols.certifier.verifier.certificate import LmsKey
 from verity.protocols.certifier.verifier.grid import GridParams
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import identifier as I
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.protocols.pouw.verifier.coins import coin_reason
-from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.protocols.spot.verifier.service import WindowCommitmentRecord
 

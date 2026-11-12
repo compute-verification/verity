@@ -21,22 +21,22 @@ import pytest
 import circuit_fixtures as CF
 import pearl_c_vectors as V
 from verity.circuits import boolean as BL
-from verity.circuits.evaluation import evaluate
 from verity.circuits import partition_object as PO
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
+from verity.commitments.randomness import derive
+from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity.definitions.ops.fp32 import F32FmaV2
 from verity.definitions.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
 from verity.definitions.ops.scalar import I32Le
 from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
-from verity.commitments.rowleaf import sha512_row_seg_digest
-from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc8, plan
-from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.circuit import words as W
-from verity.protocols.pouw.verifier.protocol import DomainError, Tile
+from verity.protocols.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.protocols.pouw.verifier.protocol import DomainError, Tile
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
