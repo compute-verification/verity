@@ -139,7 +139,9 @@ verified amount from below, the free amount from above), a moment or the keys of
 the share the error leaves out, how a period's error forms from its answers' (`Account.Pool`), the key of the capacity
 an answer carries, what an answer holds when nothing is certified, and the terms the error names and does not price.
 `Account.head` is the key under which an accepted answer names the registration's head; a protocol that names none is
-held to no registration.
+held to no registration. `Account.rests` names the answers a protocol's own rest on, those its check read as given and
+did not verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an
+accepted answer `rows` is given.
 
 `Account.rows` reads a Site, the head of its registration, the answers and their accounts into the accounting rows
 (`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). A row's capacity is a function of

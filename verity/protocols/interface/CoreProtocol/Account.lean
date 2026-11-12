@@ -28,12 +28,13 @@ value beside a protocol, never a field of it: for each amount the protocol publi
   answer holds when nothing is certified (`Uncertified`);
 * the terms the error names beside it and does not price (`unpriced`);
 
-and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`).
+and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`), and the
+answers its own rest on (`Account.rests`): those its check read as given and did not verify.
 
 `rows` reads a site, the head of its registration, the protocols' answers and their accounts into the accounting rows.
-An answer counts only when it accepts and names that head. Each amount certified of a registered resource gets a row,
-at each reading of the registration its capacity can be read at: the capacity, the certified amount with its error,
-and the other, which follows.
+An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given. Each amount
+certified of a registered resource gets a row, at each reading of the registration its capacity can be read at: the
+capacity, the certified amount with its error, and the other, which follows.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
   their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
@@ -73,6 +74,28 @@ def Key.read (k : Key) (a : Answer) : Option Json :=
   match k with
   | .published key => a.published.bind fun j => (j.getObjVal? key).toOption
   | .profile key => a.profile.bind fun j => (j.getObjVal? key).toOption
+
+/-- The tag an answer's name is hashed under. -/
+def ANSWER : String := "verity/account/answer/v1"
+
+/-- **An answer's name**: SHA-512 of the tag and its canonical JSON (`Answer.canonical`), in hex. -/
+def nameOf (a : Answer) : Option String :=
+  a.canonical.toOption.map fun s => Flock.hexOf (Flock.Sha512.hash (ANSWER.toUTF8.push 0 ++ s.toUTF8))
+
+/-- **What an answer rests on**: answers its check read as given and did not verify. An accepted answer lists the name
+(`nameOf`) of each under `key`, and each is to be an accepted answer of one of `protocols`. -/
+structure Rests where
+  key : Key
+  protocols : List String
+  deriving DecidableEq, Repr
+
+/-- Every answer `a` rests on is among `answers`, accepted, and of a protocol `r` names. False when `a` holds no list
+of names under `r`'s key. -/
+def Rests.held (r : Rests) (a : Answer) (answers : List Answer) : Bool :=
+  match (r.key.read a).bind fun j => j.getArr?.toOption.bind fun xs => xs.toList.mapM fun x => x.getStr?.toOption with
+  | none => false
+  | some names => names.all fun n => answers.any fun b =>
+      b.verdict == .accept && r.protocols.contains b.protocol && nameOf b == some n
 
 /-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; the memory of some
 tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a boundary link's egress, in bits sent
@@ -256,12 +279,14 @@ instance Amount.instDecidableFormed (m : Amount) : Decidable m.Formed := by unfo
 end Account
 
 /-- **What a protocol accounts for**: its id, the key under which an accepted answer names the registration's head (none
-while the protocol names no registration: `Account.rows` then holds its answers to none), and the form of each amount it
-publishes. -/
+while the protocol names no registration: `Account.rows` then holds its answers to none), the form of each amount it
+publishes, and the answers its own rest on (`rests`, none for a protocol whose check verifies all it reads): an answer
+that rests on one `Account.rows` was not given, or on one that does not accept, counts for nothing. -/
 structure Account where
   protocol : String
   head : Option Account.Key
   amounts : List Account.Amount
+  rests : Option Account.Rests := none
   deriving DecidableEq, Repr
 
 namespace Account
@@ -499,14 +524,15 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
         [certifiedRow m at_ reading total worst error rs.length none]
 
 /-- **What the accepted answers certify**, amount by amount. An answer counts for an account when it names the
-account's protocol, accepts, and names `head` under the account's key; of such an answer, each amount of a form `rows`
-reads that the answer holds. -/
+account's protocol, accepts, names `head` under the account's key, and rests only on accepted answers among `answers`
+(`Rests.held`); of such an answer, each amount of a form `rows` reads that the answer holds. -/
 def readings (head : String) (tick : Figure) (accounts : List Account) (answers : List Answer) :
     List (Amount × Reading) :=
   accounts.flatMap fun c =>
     let named : List Answer := answers.filter fun a =>
       a.protocol == c.protocol && a.verdict == .accept &&
-        (c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption) == some head
+        (c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption) == some head &&
+        c.rests.all fun r => r.held a answers
     (c.amounts.filter fun m => m.Formed).flatMap fun m => named.filterMap fun a => (m.read tick a).map fun r => (m, r)
 
 /-- The rows of what no accepted answer covers: for each part, the leaves under no reading's place, charged at capacity
@@ -805,6 +831,28 @@ private def read (q : Nat) : Answer := accept "toy/reads" [("eps", .str "1/1000"
 #guard cells ((table [reads] [read 1000]).take 1) ==
   [("reads", "", "registered", some 3200000, some 8000, some 3192000, "1/1000")]
 #guard firstVerified (table [reads] [read 1000, read 700]) == [(some 8000, "1/500")]
+
+/-- A link's bits whose check reads audits as given: its answer lists their names under `rests`. -/
+private def resting : Account :=
+  { sent with protocol := "toy/resting", rests := some ⟨.published "rests", ["toy/ranged"]⟩ }
+
+private def rested (audits : List Answer) : Answer :=
+  accept "toy/resting" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
+    ("start_ns", Lean.toJson (0 : Nat)),
+    ("rests", Json.arr (audits.filterMap fun b => (nameOf b).map Json.str).toArray)] [("link", .str "up0")]
+
+-- an answer that rests on an audit counts beside it; it counts for nothing without it, beside another audit, beside
+-- the audit refused, or where it lists no names; one that rests on none counts
+#guard cells ((table [resting] [rested [audit 300 none], audit 300 none]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 37000, some 63000, "1/1000")]
+#guard cells (table [resting] [rested [audit 300 none]]) == cells (table [] [])
+#guard cells (table [resting] [rested [audit 300 none], audit 301 none]) == cells (table [] [])
+#guard cells (table [resting] [rested [audit 300 none], { audit 300 none with verdict := .reject }]) ==
+  cells (table [] [])
+#guard cells (table [resting] [{ check 3000 400 "1/1000" with protocol := "toy/resting" }]) == cells (table [] [])
+#guard cells ((table [resting] [rested []]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 37000, some 63000, "1/1000")]
+#guard (nameOf (audit 300 none)).map (·.length) == some 128
 
 end Example
 
