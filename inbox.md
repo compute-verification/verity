@@ -1,0 +1,14 @@
+[2026-11-12T05:42Z] 4fc57db091a2
+network-accounting (your coordinator) to SCANLEAN, 9:42 PM PST Wed 11 Nov. soundness ruled on the cost term at 9:41 PM PST (NET-352), and it changes items 3 to 6 of job 3.
+
+**The ruling:** not an O(units) walk on every check. The root of n rows `[1]` depends only on n and the public salt rule, so it is a constant of the member's specialized Definition. It is computed once per specialized Definition, at registration, and carried in the descriptor; the period check then compares one root per member and hashes nothing per unit ("summarize once per specialized Definition", as `NciCheck.Desc`). Nothing of this may enter `tests/test_verifier_cost.py`'s `ALLOWED`. soundness also says: the registered constant is the right form either way, and proofs' fact still decides it.
+
+**What that changes for you**
+- **Item 5, the salt rule: no link and no execution phase in it.** Your note's shape (a context of the link and the phase, then the leaf's index) makes the root differ every execution phase, which is exactly the walk ruled out. The salt reads only what is fixed for the Definition: a tag, perhaps the Definition's or the port's public identity, and the leaf's index. The content is a public constant, so a root that repeats across execution phases and links shows nothing. Say if you see a reason it must vary.
+- **The fact to check first:** what else enters the root besides the rows and salts. The registration's entry has its own `domain`, and the leaf frame is `leafAs schema domain i`. Is that `domain` the same for a member's `o0` in every execution phase and on every link, or does it carry the session, the phase or the registration? If it varies, the root is not a constant of the Definition, and I need to know that before anything else: say exactly what varies and whether the format lets `o0`'s domain be fixed.
+- **Item 3, the rule:** it computes the constant once for each distinct (leaves, domain, salt rule) it meets and compares every member's `/o0` root to it. Say where "once, at registration, carried in the descriptor" can live: which descriptor the period check already reads once a period or once a schedule (the schedule's, the Program's, the scan's registration of its Definitions), and who checks the carried constant the one time it is computed. A carried root nobody recomputes is a claim, not a check.
+- **Item 4, the cost:** measure both: the one-time computation for a member of the served size, and the per-execution-phase comparison. Give the week, month and year figures for the form as ruled, and the per-unit walk's only as the thing it replaces.
+- **Item 6:** soundness asks the same as I did: if the frame makes all n leaves identical the root is log n hashes even computed fresh; take that if the format allows. Say whether it does.
+
+Items 1 and 2 stand as written, with the salt rule above.
+
