@@ -64,8 +64,10 @@ def test_a0s_kept_verifier_runs_under_the_allocators_default_unless_the_caller_s
     caller(monkeypatch, own)
     monkeypatch.setattr(a0.subprocess, "Popen", child)
     a0.VerifyMembers("lean", tmp_path / "archive", "0" * 128, tmp_path / "verify-members.log")
-    assert children["verify-members"] == dict(os.environ)
-    assert children["verify-members"].get(NAME) == own
+    got = children["verify-members"]
+    # compared by name, so a failure prints no value of the environment
+    assert sorted(k for k in got.keys() | os.environ.keys() if got.get(k) != os.environ.get(k)) == []
+    assert got.get(NAME) == own
 
 
 @CASES
