@@ -1081,7 +1081,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         a0[zero_a] = 0
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, 16, k)}
-    rows = lambda x: [r.tobytes() for r in x]
+    def rows(x):
+        return [r.tobytes() for r in x]
     work = Workload((Matmul(i0, Shape(32, k, n0), 0), Matmul(i1, Shape(16, k, n1), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
@@ -2653,14 +2654,18 @@ ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_
 
 def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
     """Every input is re-bounded at δ = 0.05/m, m every input the table measures: both models' and a model's fresh trials."""
-    row = lambda run, i, nt, fails=0: {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
-                                       "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "census", "drawn": nt,
-                                       "openings_failed": 0, "failures": fails, "share_max": 5e-5}
-    doc = lambda run, nts: {"m": len(nts), "inputs": [row(run, i, nt) for i, nt in enumerate(nts)]}
-    verify = lambda run, label, ok: {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
-                                     "transcript_sha256": "00", "tiles": [1, 2], "line": f"{'ACCEPT' if ok else 'REJECT'} x", "replay": "batch",
-                                     "cross_checked": [1]}
-    trial = lambda i, fails: row("rq", i, 1) | {"method": "fresh", "drawn": 320, "failures": fails}
+    def row(run, i, nt, fails=0):
+        return {"pass": "decode", "run": run, "manifest_sha256": "ab", "matmul": i, "k": 4096, "n": 4096,
+                "NT": nt, "W": nt * 4096, "w_max": 4096, "method": "census", "drawn": nt,
+                "openings_failed": 0, "failures": fails, "share_max": 5e-5}
+    def doc(run, nts):
+        return {"m": len(nts), "inputs": [row(run, i, nt) for i, nt in enumerate(nts)]}
+    def verify(run, label, ok):
+        return {"manifest": f"/p/{run}/{label}/manifest.json", "accepted": ok, "transcript": f"{run}:/p sha256:00",
+                "transcript_sha256": "00", "tiles": [1, 2], "line": f"{'ACCEPT' if ok else 'REJECT'} x", "replay": "batch",
+                "cross_checked": [1]}
+    def trial(i, fails):
+        return row("rq", i, 1) | {"method": "fresh", "drawn": 320, "failures": fails}
     files = {}
     for name, obj in {"q": doc("rq", [64, 32]), "l": doc("rl", [48]), "v1": verify("rq", "decode", True),
                       "v2": verify("rq", "control", False), "bad": verify("rq", "control", True),
@@ -2709,13 +2714,14 @@ def test_the_served_table_labels_a_windows_fraction_as_the_replay_diagnostic_bes
     inputs.write_text(json.dumps({"m": 1, "inputs": [{"pass": "decode", "run": "rq", "manifest_sha256": "ab", "matmul": 0,
                                                      "k": 4096, "n": 4096, "NT": 64, "W": 64, "w_max": 1, "method": "census",
                                                      "drawn": 64, "openings_failed": 0, "failures": 0, "share_max": 5e-5}]}))
-    audit = lambda n, cap, ok=True: {
-        "ok": ok, "scheme": "pearl-c-sm120-v1-h3", "shape": [8192, 8192, 8192], "t_s": "t0", "t_d": "t1", "verifier_commit": "c",
-        "gemms": {"0": n // 2, "1": n - n // 2}, "tiles": [{"ok": True}] * 3,
-        "controls": [{"label": "tampered", "ok": False}, {"label": "wrong salt", "ok": False}],
-        "checks": [{"check": "gamma", "ok": ok}],
-        "fraction": {"credited_gemms": n, "capacity_gemms": cap, "uncertified_fraction": n / cap, "fraction": 0.98 * n / cap,
-                     "gamma": "1/100", "eps_s": "1/100", "slowdown": cap / n}}
+    def audit(n, cap, ok=True):
+        return {
+            "ok": ok, "scheme": "pearl-c-sm120-v1-h3", "shape": [8192, 8192, 8192], "t_s": "t0", "t_d": "t1", "verifier_commit": "c",
+            "gemms": {"0": n // 2, "1": n - n // 2}, "tiles": [{"ok": True}] * 3,
+            "controls": [{"label": "tampered", "ok": False}, {"label": "wrong salt", "ok": False}],
+            "checks": [{"check": "gamma", "ok": ok}],
+            "fraction": {"credited_gemms": n, "capacity_gemms": cap, "uncertified_fraction": n / cap, "fraction": 0.98 * n / cap,
+                         "gamma": "1/100", "eps_s": "1/100", "slowdown": cap / n}}
     paths = []
     for i, doc in enumerate((audit(5_500, 10_000.4), audit(5_400, 10_000.4))):
         paths.append(tmp_path / f"a{i}.json")
@@ -2796,7 +2802,8 @@ def test_forming_domain_on_a_synthetic_pass(tmp_path, monkeypatch):
     Its pool forks: under forkserver (Python 3.14's default) a worker can't import this file's module to unpickle a task."""
     rng = np.random.default_rng(7)
     k = 256
-    bf16 = lambda a: (np.asarray(a, np.float32).view(np.uint32) >> 16).astype("<u2")
+    def bf16(a):
+        return (np.asarray(a, np.float32).view(np.uint32) >> 16).astype("<u2")
     a = rng.normal(0, 1, (64, k)).astype(np.float32)
     a[5, ::8] = 0
     a[7, 8] = 2.0 ** -70
@@ -2842,7 +2849,8 @@ def test_clopper_pearson_upper():
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) == pytest.approx(1 - (0.05 / 16) ** (1 / 320))
     assert SD.clopper_pearson_upper(0, 320, 0.05 / 16) < 0.02 < math.log(20 * 16) / 64
     up = SD.clopper_pearson_upper(3, 100, 0.05)
-    p_at = lambda p: sum(math.comb(100, i) * p ** i * (1 - p) ** (100 - i) for i in range(4))
+    def p_at(p):
+        return sum(math.comb(100, i) * p ** i * (1 - p) ** (100 - i) for i in range(4))
     assert p_at(up) == pytest.approx(0.05, abs=1e-9) and 0.03 < up < 0.1
     assert SD.clopper_pearson_upper(5, 5, 0.05) == 1.0
 
@@ -2999,7 +3007,8 @@ def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pa
         assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out), *extra]) == 0
         lines[name] = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
     drop = ("seconds", "replay", "cross_checked", "resumed_from")
-    strip = lambda ts: sorted(({k: v for k, v in t.items() if k not in drop} for t in ts), key=lambda t: t["tile"])
+    def strip(ts):
+        return sorted(({k: v for k, v in t.items() if k not in drop} for t in ts), key=lambda t: t["tile"])
     assert strip(lines["scalar"]) == strip(lines["batch"]) and all(t["cross_checked"] for t in lines["batch"])
     assert {t["replay"] for t in lines["batch"]} == {"batch"} and {t["replay"] for t in lines["scalar"]} == {"scalar"}
     out = tmp_path / "resumed"
@@ -3007,7 +3016,8 @@ def test_served_debits_batch_replay_and_resume_record_the_scalar_lines(honest_pa
     assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out), "--resume", str(src)]) == 0
     again = [json.loads(x) for x in (out / f"{path.parent.name}.tiles.jsonl").read_text().splitlines()]
     assert strip(again) == strip(lines["batch"]) and all(t["resumed_from"] == str(src) for t in again)
-    summary = lambda d: {k: v for k, v in json.loads((d / "summary.json").read_text())["passes"][0].items() if k != "cpu_seconds"}
+    def summary(d):
+        return {k: v for k, v in json.loads((d / "summary.json").read_text())["passes"][0].items() if k != "cpu_seconds"}
     assert summary(out) == summary(tmp_path / "batch")
     unstamped = tmp_path / "unstamped.jsonl"
     unstamped.write_text("".join(json.dumps({k: v for k, v in t.items() if k != "manifest_sha256"}) + "\n" for t in lines["batch"]))
@@ -3022,8 +3032,9 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
     s = PPD.scheme_of(SCHEME)
     rng, shape, rows, cols = np.random.default_rng(11), Shape(64, 512, 48), 3, 2
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
-    codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
-                                         for _ in range(r - 1)]
+    def codes(r):
+        return [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
+                                  for _ in range(r - 1)]
     debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows)
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
     assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
@@ -3036,7 +3047,8 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
 
 def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure: str | None = None,
                graphed: bool = False) -> tuple[dict, dict]:
-    reps = lambda mhz: {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
+    def reps(mhz):
+        return {"prefill_8192": [{"clock": {"sm_mhz": mhz}}] * 3, "decode_b32": [{"clock": {"sm_mhz": mhz - 3}}] * 3}
     split = {key: {"shape": shape, "fp8_s": 1.0, "nohash_s": 1.5, "slowdown_vs_fp8": 2.5, "gemm_x_fp8": 1.2, "hashing_x_fp8": 1.0,
                    "else_x_fp8": 0.3, "slowdown_vs_bf16": 1.6} for key, shape in (("prefill_8192", "e2e-llama31-8b-vllm-m8192"),
                                                                                  ("decode_b32_step", "e2e-llama31-8b-vllm-m32"))}
@@ -3047,7 +3059,8 @@ def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure:
         e2e["results"]["fp8-graphs"] = {"reps": reps(2080)}
         for x in split.values():
             x.update(fp8_graphs_s=0.5, slowdown_vs_fp8_graphs=5.0)
-    t = lambda p: f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
+    def t(p):
+        return f"{RUN}:/workspace/pouw/mvp-e2e/passes/{RUN}/{p}/manifest.json sha256:{'ab' * 32}"
     verdicts = {p: {"accepted": p != "control" or control_accepted, "verifier_commit": "c7033d67", "transcript": t(p),
                     "line": f"{'ACCEPT' if p != 'control' or control_accepted else 'REJECT'} {SCHEME} pouw:{SCHEME}: ...; transcript {t(p)}"}
                 for p in ("prefill", "decode", "control")}
@@ -3127,7 +3140,8 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
     E2E.configure(types.SimpleNamespace(batch=128, prompt=2048))
     assert E2E.decode_key() == "decode_b128_p2048" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32, 128]
     assert E2E.SHAPES["decode_b128_p2048_step"] == "e2e-llama31-8b-vllm-m128-p2048" and len(E2E.SHAPES) == 2
-    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    def rec(m, ph):
+        return {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
     t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
     assert set(t["fp8"]["timing"]) == {"prefill_8192_s", "prefill_8192_gemm_s", "decode_b128_p2048_step_s", "decode_b128_p2048_step_gemm_s"}
     assert list(E2E.split(t)) == ["prefill_8192", "decode_b128_p2048_step"]
@@ -3148,7 +3162,8 @@ def test_a_prefill_point_off_8192_tokens_names_its_key():
     assert (E2E.prefill_key(), E2E.PREFILL) == ("prefill_2560", 2560)
     assert E2E.SHAPES == {"prefill_2560": "e2e-llama31-8b-vllm-m2560", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
     assert len(E2E.prompts(1)["prefill"][0]) == 2560
-    rec = lambda m, ph: {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
+    def rec(m, ph):
+        return {"mode": m, "phase": ph, "rep": 0, "s": 1.0, "gemm_s": 0.0, "step_s": 0.01, "gemm_step_s": 0.0}
     t = E2E.timing([rec(m, ph) for m in E2E.MODES for ph in ("prefill", "decode")])
     assert set(t["pearlc"]["timing"]) == {"prefill_2560_s", "prefill_2560_gemm_s", "decode_b32_step_s", "decode_b32_step_gemm_s"}
     assert set(t["pearlc"]["reps"]) == {"prefill_2560", "decode_b32"} and list(E2E.split(t)) == ["prefill_2560", "decode_b32_step"]
@@ -3160,7 +3175,8 @@ def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tm
     NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
     fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
     steps = {"fp8": fp8, "pearlc": [13.2, 25.3], "pearlc-nohash": [14.3, 25.3], "bf16": [9.0, 9.0]}
-    reps = lambda m: [{"rep": i, "step_s": s / 1e3, "clock": {"sm_mhz": 2100}} for i, s in enumerate(steps[m])]
+    def reps(m):
+        return [{"rep": i, "step_s": s / 1e3, "clock": {"sm_mhz": 2100}} for i, s in enumerate(steps[m])]
     e2e = {"run": "r1", "interleave": "rep", "summary": {"gates": {"arm": True}},
            "results": {m: {"reps": {"prefill_8192": [], "decode_b8": reps(m)}} for m in steps}}
     r = NS.run_ratios(e2e)["ratios"]["fp8"]
@@ -3606,7 +3622,8 @@ def test_the_deferred_schedule_hashes_tiles_on_the_side_stream_from_rotating_set
     assert [(n, st) for n, st, _ in log if st in sides] == [("pd_tiles_851", 1), ("pd_tiles_851", 3), ("pd_tiles_851", 1)]
     assert sides == [1, 3] and {st for n, st, _ in log if st not in sides} == {main}
     sets = run.shapes[(32, 256, 1024)].sets
-    ptr = lambda j: (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
+    def ptr(j):
+        return (sets[j]["c"].data_ptr(), sets[j]["u"].data_ptr())
     gemms = [p[2:4] for n, _, p in log if n == "gemm_pearlc_d"]
     leaves = [p[:2] for n, _, p in log if n == "pd_tiles_851"]
     assert gemms == leaves == [ptr(0), ptr(1), ptr(0)] and ptr(0) != ptr(1)
@@ -3775,7 +3792,8 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
         (n, st) for tree, tiles in ((3, 1), (1, 3), (3, 1)) for n, st in (("pd_tree_851", tree), ("pd_tiles_979", tiles))]
     by = {name: [(p, i) for n, _, p, i in log if n == name] for name in ("pd_commit_851", "pd_tree_851", "form_s5_ep",
                                                                           "gemm_pearlc_d", "pd_tiles_851")}
-    ptr = lambda j, x: (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
+    def ptr(j, x):
+        return (sh.keys if j == 0 and x == "keys" else sh.sets[j][x]).data_ptr()
     for c, j in enumerate((0, 1, 0)):
         (cp, ci), (tp, ti) = by["pd_commit_851"][c], by["pd_tree_851"][c]
         assert ci == (32, 1024, 1, 64) and ti == (32, 0, 0, 64)
