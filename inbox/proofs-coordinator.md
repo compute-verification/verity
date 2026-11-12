@@ -98346,3 +98346,51 @@ A statement holds min(2^(35 - k_log), 2^20) blocks. Our comment here of 13:07Z i
 For the table:
 - PRF-502 overhead run: rehearsal `r20261112-192938-e3ae` running since 19:39Z on vy-nebius-cpu-1, verdict about 21:50Z (by 22:20Z at the latest); node A's rows PROVISIONAL until it passes; commit `0803d3669786`, before #9375; the run ends by 06:15Z.
 - CIR-259: the head block and `router-slots` are tonight's units; tonight's end block is `SparseMlaHeadEnd_v2` where circuits' default is `_v1` (I'd take `_v2`); `token-select`, `dsa-q` and `router-row` are not staged tonight; no statement or card changes; the corrections are in the fence above.
+
+## ACCOUNTS, Thu 12 Nov 19:45Z: stopped before writing the three additions, as you ordered: each changes definitions that thirteen listed statements read, the same thirteen all of v2 already moves; say go and they are three commits
+
+**The question you set: does any of the three change what a listed guarantee's statement reads? By the lock's own
+list, yes, and no statement beyond the ones v2 moves already.** I wrote none of it. The two lists (your job 3) go on
+meanwhile.
+
+| Addition | Definitions it changes | Listed statements that read them | Does v2 change them already? |
+|---|---|---|---|
+| 1. A kind for an auditor's host | `Core.Site.Kind` (one more constructor), `Kind.parents`, `Kind.auditor`, `Entry.Owners` | the thirteen `Properties.Site.*` records | `Kind.parents` and `Owners` yes; **the type `Kind` itself no, this is new** |
+| 2. A location's key for the time base's sku | `Core.Site.Loc`, `Entry.Owners`, `Registration.Auditor` | the same thirteen | yes, all three |
+| 3. The premise keyed by the host; the drift read from the device's parent | `Entry.Owners` in `Site.lean`; `Premised` and `rows` in `Account.lean` | the same thirteen for `Owners`; none for `Account.lean` | yes |
+
+- The thirteen are `Properties.Site.checks`, `entryValid`, `refusedAt`, `refuses`, each with its `_honest` and
+  `_nontrivial`, and `fold`: the agreement of the code's Site with the spec's. [read]
+  `security/Properties/lean-audit.json` at `7dbf3bbaffac`: `guarantees`, and `reads/CoreProtocol.Site/definitions`,
+  which lists `Core.Site.Kind` with its seven constructors, `Kind.parents`, `Kind.auditor`, `Loc`, `Entry.Owners`
+- No statement's text changes, and nothing changes in a lock on this branch: the branch regenerates none. No lock
+  reads `CoreProtocol.Account` or `CoreProtocol.Registration`. [read] both locks' `reads`
+- **The one thing new against v2 as you know it:** when the spec's Site follows in PR (3), `Verity.Site.Kind` gains a
+  constructor too. `security/lean-audit.json` lists `Verity.Site.Kind` and its seven constructors under
+  `reads/Definitions.Core.Site`, beside `Verity.Site.Loc` and `Link`, which v2 changes anyway. So the same
+  guarantees' records move, with one more definition in them. Which guarantees those are I did not enumerate; they
+  reach the Site's types through the registration log (`Definitions/Core/RegisteredCircuit.lean`, the game). [read]
+  the lock; [derived] the rest
+
+**What I would write on your go, so you can pass the names on now** [derived; none of it written]:
+
+1. **Kind `auditorHost`, JSON `"auditor-host"`.** Its parent is the site. A certifier's or challenger's parent is
+   the site or an auditor's host. It is the auditor's: owner `auditor`, the key and scheme the auditor holds for its
+   id, as for a certifier. It holds no memory leaf and is at no link's end, so it has no row and counts toward no
+   total, and a challenger's host does not count toward `challenger-reach`. No new refusal: a wrong parent is `kind`,
+   a wrong key is `owner`.
+2. **Location key `timebase`** (the sku of the time base's card, a string; `null` on every other location), and
+   auditor's parameter `timebases` (host id to sku), so the registered sku is held to the auditor's own, as a key
+   is. An auditor's host must state one. No new refusal: a mismatch is `owner`. If you want the key on the location
+   alone, unheld, it is one clause less.
+3. **`Premised {host, drift, premise}`** in place of `{device, …}`. `drift` moves from the auditor's device to
+   its host, in `Loc` and in `Auditor.drift`'s ids; a device states none. `rows` reads a series' drift from its
+   device's parent, applies a host's premise to every series timed on a device under it, and returns a refusal, not
+   rows, where a premise names a host that is no auditor's host of the Site. So `rows` returns
+   `Except String (List Row)`. A device whose parent is the site has no clock of record and can take no premise.
+
+**Runs since my 19:40Z entry** [run]: none has a verdict yet. The package's root at the merged head
+`r20261112-193827-b545` and its three siblings still wait for a slot, as does `r20261112-194215-7cf9`, a try of
+`verity/protocols/certifier/verifier/lean/NetworkCheck/Registered.lean` at the merged head. That file came with
+`main`, reads a link's `β` as a number (its line 106, and literals at 134 to 149), and I expect it to fail on v2's
+optional `β`. It is network-accounting's. [read]; the verdict follows
