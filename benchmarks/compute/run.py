@@ -313,9 +313,24 @@ def linear(shape: Shape, k: int, n: int) -> str:
     return names.get((k, n), f"{k}x{n}")
 
 
+def uncredited_words(c: dict) -> int:
+    """The output words of a per-call split's call `c` that hold at least one MAC its credit leaves out, counted as the
+    words touched, not as its uncredited MACs over k. A word in an excluded A row, an excluded B row's column block or a
+    voluntary row's band or block holds no credited MAC, so those count their cells, the real words less the credited
+    cells (`checked_macs` over |K|). A call that keeps fewer than its k channels (`kept_width`) leaves the side
+    channels' MACs out of every real word, so all its real words count, more than its uncredited MACs over k. Where
+    only whole rows are excluded the two counts agree."""
+    cells, rest = divmod(c["checked_macs"], c["k_kept"])
+    if rest:
+        raise Unreadable(f"the per-call split's call {c['call']} holds checked MACs that are no whole number of cells at "
+                         f"its kept width")
+    return c["real_rows"] * c["n"] - (0 if c["uncredited_macs"]["kept_width"] else cells)
+
+
 def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, shape: Shape, top: int) -> dict:
-    """The give-up of the record under `tree` by cause and by call (module docstring), from the verifier's split in its
-    verify document or in `given`, such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
+    """The give-up of the record under `tree` by cause and by call (module docstring), and the output words that hold
+    any of it over every call (`uncredited_words`), from the verifier's split in its verify document or in `given`,
+    such a split in a file of its own. `Unreadable` unless the split is the answer's. `macs` are the model's MACs at the class and `credited` the answer's credit."""
     try:
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
@@ -326,6 +341,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
         got, records = held["uncredited"], held.get("records")
         calls, totals = got["calls"], got["totals"]
         sums = dict.fromkeys(("macs", "checked_macs", *ROWS, *TERMS), Fraction(0))
+        words = 0
         for c in calls:
             terms = {x: Fraction(c[x]) for x in TERMS}
             rows = {x: c["uncredited_macs"][x] for x in ROWS}
@@ -336,6 +352,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
                                  f"and its causes, or its checked MACs not its terms")
             for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *rows.items(), *terms.items()):
                 sums[x] += v
+            words += uncredited_words(c)
         stated = {x: Fraction(totals[x]) for x in sums}
     except (OSError, KeyError, TypeError, ValueError, AttributeError, ZeroDivisionError) as e:
         raise Unreadable(f"the per-call split doesn't read as one ({type(e).__name__}: {e})") from e
@@ -361,7 +378,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
 
     worst = sorted(calls, key=lost, reverse=True)[:top]
     return {"source": str(given) if given is not None else VERIFY, "give_up": give_up, "calls": len(calls),
-            "causes": [{"cause": x, "macs": str(v), "share": float(v / give_up) if give_up else 0.0}
+            "uncredited_words": words, "causes": [{"cause": x, "macs": str(v), "share": float(v / give_up) if give_up else 0.0}
                        for x, v in gave.items()],
             "top": [{"pass": c["pass"], "call": c["call"], "weight": c["weight"], "linear": linear(shape, c["k"], c["n"]),
                      "m": c["m"], "k": c["k"], "n": c["n"], "real_rows": c["real_rows"], "rows": c["rows"],
