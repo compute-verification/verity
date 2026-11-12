@@ -74829,3 +74829,84 @@ Head `77c1647fa4` (pushed). Nothing was run for this answer but what is cited; I
 **(c) No.** A second form would have to accept a family that shows other roots before the registration's digest. That is exactly the log a redraw leaves: several digests in one family, each followed by its coins. The verifier of one rank cannot tell another rank's digest from the same prover's earlier registration unless it is handed the window's other registrations, which is the rule over a window's runs together that PRF-569 leaves out. [read: PRF-569's "Not in it"; the test above builds both logs with the same calls] I add no second form.
 
 **Since 06:19Z** [run]: the second property compiled and is pushed (`77c1647fa4`): `Properties.Challenger.FamilyOneCommitmentRead` (the name in the code; my 06:19Z entry called it `RunFamilyOneCommitment`, but `Run` is the device's run in that file) with `Drawn.familyOneCommitmentRead`, through one lemma over the four shared checks (`Drawn.session_run`); `r20261112-062230-6e85` `Drawn.lean` lean exit 0 in 76 s, 9 theorems, and `r20261112-062229-0d02` `Coins.lean` lean exit 0 in 84 s, 46 theorems, neither using an axiom beyond `propext`, `Classical.choice`, `Quot.sound`. The five benchmark suites pass at `dc7066ceef` (`r20261112-055939-9958`: network-e2e 70, two_stage 10 and 3 skipped, prove_path 154 and 1 skipped, network-traces 542, one_stage 559). `whole_run.sh run toy 146` at `4599be5623` now builds `Main.lean` and fails in its generator (`r20261112-061500-65ee`, exit 1: `whole_run.py:55` asks for the law `stratified:3`, which `main`'s `_rule` refuses), a second fault of `main`'s that I leave. Not yet done: the lock's two entries, the merge of `main`, any rehearsal.
+
+## CLOSEROUND, Thu 12 Nov 06:36Z: the size. The closing round is one `tree-open` line a session in the window's challenger session's log, and the device, the wire and both clients can already send and log it; what is missing outside Lean is not four files: on `main` no driver puts a session's coin tree in that log, the driver's v2 case names no challenger and carries no coins, and no command of the compiled verifier reaches `checkMembersAt`, so the run answering `MULTI_REFUSED` needs a Lean command
+
+Agent `bc-736059ea-7acb-53e5-a2d6-b00e84b59ce7`. Branch `cursor/proofs-closeround-780f` at `d6075b75d2` (`origin/main`), not pushed, no commit of mine. Checkpoint note `20261112T0633Z-report-closeround`. My mailbox does not exist yet [run: `git show`, 06:35Z].
+
+Tags: [read] file and line on `main` at `d6075b75d2`; [run] a command of this hour; [relayed]; [derived]; [guess]. **I ran nothing but `git`, `rg` and `research msg owners --dry-run`: no build, no suite, no Lean, no cargo, no session.** Every "would refuse" below is derived from reading.
+
+**1. What the closing round is, as the Lean on `main` reads it** [read]
+
+Everything is in one file: the release log (`releases.jsonl`) of the window's one challenger session, the session the sample's coins come from. The verifier reads the trees out of the case's `evidence.coins` (`OneStageZk.lean:674-677`, `treesOf`). For a window with sampled members' sessions s₁ … s_M, in the members' order, the log holds, in this order:
+1. **The sample.** The family's coins released after the registration's digest, all before any line that opens a tree's round (`orderHeld` 739, `sampleLinkFirst`, `ChallengerTrees.lean:313-334`).
+2. **For each session, a `coin-tree` line**: the tree the challenger sampled at that session's Hello. It may come anywhere (`:329`).
+3. **For each session k, its rounds together**: `session` round 0 after the link (`root_F` and each `root_B`); each table's two reps' rounds; then **the closing round**, the last line that opens a round of tree k:
+   `{"after": SHA-512(evidence_k), "coins": SHA-512(""), "event": "tree-open", "n": 0, "round": 1, "stream": "session", "tree": root_k}` (`CLOSING_ROUND` 355, `closes` 371-373, `memberTreeReason` 385-392).
+   No round of tree k+1 opens before it, and none of tree k after it (`membersOrder` 408-424).
+4. **Every tree in the log is exactly one session's** (`SHARED_TREE`, `UNUSED_TREE`, `membersTreeReason` 434-445). A session that sampled a tree and did not finish refuses the audit.
+
+`evidence_k` is `be64(count) ‖ (be64(length) ‖ part)*` over the session's `session.json` bytes, then each proof file's name and bytes in the order of the evidence's `reps` (`evidenceBytes` 1173, `sessionEvidence` 1198-1207).
+
+- **Signed by** the challenger's LMS key only: the session's record, and its close over the whole log (`trustedTreesOf` 277); the auditor's signed ledger names the session. Nobody signs the digest in `after`: whoever asks supplies it, and Lean holds it to the blobs.
+- **Where each lands.** The lines: the challenger's `releases.jsonl`, then the case's `evidence.coins`. The session's record and proofs: `sessions/<id>/session.json` and `<stream>.bin` (`flock-circuit.rs:7143-7150`), then the case's blobs, named by `evidence.proofs.statements[].sessions[]`. The record does not hold the closing round: it is the one opening the record does not give its stream.
+
+**2. The four files, and the ones beside them**
+
+| file | there today [read] | missing | owner [run] | change [guess] | CPU |
+|---|---|---|---|---|---|
+| `spot/device/challenger.py` (2,062 lines) | `open_tree` opens and logs any stream's next round of 0 to `block` coins (`:1871-1890`); Flock's trees have 512 rounds a stream (`flock-circuit.rs:732-736`), so `session` round 1 is in every schedule. `coins_digest([])` is SHA-512("") (`:903`). The checks `coin_trees_of`, `session_tree_reason`, `sessions_tree_reason`, `sample_link_first` (`:868-1075`) | The Python of `closes`, `memberTreeReason`, `membersOrder`, `membersTreeReason` and their three refusals. No new message | `@proofs` | +110, tests +150 | yes |
+| `spot/device/remote.py` (796) | `tree` and `tree-open` frames, generic (`:307-356`, `:593-622`) | nothing | `@proofs` | 0 | — |
+| `tree_from.rs` (298) | `tree_open(root, stream, round, n, after)`, generic (`:152`) | nothing to send the round; a named call and a case in its fake challenger if the coin server asks | `@proofs` | 0, or +25 | yes |
+| `flock-circuit.rs` (7,639), with `lib.rs`, `coin_tree.rs` | `serve_on` writes `session.json` and the proofs and holds both (`:7143-7150`): the one place in Rust that can hash the evidence. `Held::open` is a round's open (`coin_tree.rs:388-395`) | only if the coin server asks: a closing call on `Held` and `Server`, made after the files are written, behind a flag (one-statement v2 refuses a closed tree, `EXTRA_OPENING`, `ChallengerTrees.lean:210`) | `@proofs` | 0, or +60 to 90 with its test | yes |
+| `a5.py` (1,576), with `a5_coins.py` (782), `a0.py`, `verity_flock/proof_server.py` | see below | see below | `@proofs` | +350 to 450, tests +200 | yes |
+
+**The driver is where the work is** [read]:
+- **No session's tree is in the window's log.** Each session takes its tree from a challenger of its own (`a0.py:197-223`, `a5.py:1300-1307`) or the server samples it (`FLOCK_CHALLENGER` unset, as the two-member test runs: `test_audit_two_members.py:117`). The window's session gives the sample and closes when its last rank has drawn (`a5_coins.py:260-294`), before any session starts. KEPT read the same of the kept driver [relayed: 04:51Z, point 1].
+- **The device serves one client** (`live_challenger/serve.py:27-31`: "Once a hello is accepted it stops listening"), and the driver's own client is that one. So `serve --tree-from` cannot also connect.
+- **The driver's v2 case names no challenger and carries no coins**: `replay.params` and `replay.evidence` hold neither `challenger`, `window_root` nor `coins` (`replay.py:505-521`), and `write_case`, `case_v2`, `case_members` add none (`a5.py:1105-1195`). v2 refuses such parameters first (`NO_CHALLENGER`) [derived: `test_difftest.py:2379-2390`]. This holds of the one-statement case too.
+- **`ProofServer` runs two sessions ahead** by default (`proof_server.py:289`, `:465`): a session's link would open before the one before it closes [derived].
+
+What the driver needs, in the per-member mode only:
+1. The window's session stays open through the sessions and closes after the last closing round (`Draws`).
+2. Each session's tree from it: a loopback relay in the driver, speaking `remote.py`'s frames to `serve --tree-from` and passing `tree` and `tree-open` to the driver's one client. It holds a tree's first round until the tree before it has closed. No device change, no Rust.
+3. The closing round after each session's files are written.
+4. One session at a time (`verify_ahead=0`).
+5. The case with `challenger {key, label}`, `window_root` and `coins`.
+6. The trees held by the new check, not by each own challenger's audit.
+
+**3. The Lean run needs a Lean command** [read]
+
+`protocol` parses with `paramsOfJson` and `evidenceOf`, which refuse the per-member keys (`OneStageZk.lean:1310-1324`), and `main` proves it: `checkBlobsAt_parsed` (`:1354-1361`), "So `checkMembersAt` runs on no input `protocol` parses". `members` is parse-only (`MembersParse.lean:6-7`). `check` answers a per-member case "params: the keys of proofs are not circuit, public, registered" (`test_difftest.py:2603-2605`). `paramsEitherOfJson` and `evidenceEitherOf` are called only in `#guard`s [run: `rg`].
+
+So neither the fixture's run nor the twin's rows can get `MULTI_REFUSED` from the compiled verifier today. MEMBERS' "No Lean, no lock" for S9 and the twin (05:46Z) does not hold for the run [derived]. What it takes: one command that parses either form and runs `checkBlobs`. By `checkMembersAt_refuses` it accepts nothing. [guess] 40 to 70 lines in `Spot/MembersParse.lean`, `#guard`s, one difftest row; a try and the package's records run. No lock entry [guess].
+
+**4. What a CPU node can test: all of it.** No GPU anywhere. The device, the wire, the relay and the twins are unit tests. The Rust is `cargo test` on the fake challenger. The fixture's base is `test_audit_two_members.py`: two templates of one proof block each, two sessions on the real prover and the Lean verifier, `--challenger local`, 150 to 210 s and about 5 GB on a node [read: its docstring `:22-23`].
+- [guess] Whether that window gets past `popHeld`, `laidHeld`, `classHeld` and `rootsOf` to `runMembers` I cannot tell by reading; it is the first thing the fixture's run shows. A scan does not [relayed: MEMBERS 05:46Z §5], so the fixture is not `scan_zk.py`'s window.
+
+**5. Is any of it not proofs' to write?** No, by the registry: every file above is `@proofs` [run: `research msg owners --dry-run`]. Two things beside them: `benchmarks/prove_path/records_audit.py` is `@network-accounting` and starts the challenger session for the two-member audit; I keep the change inside `a5.audit` and `Draws` so it is not touched. The Lean command is in MEMBERS' file.
+
+**6. Where REDRAW's rule meets this** [read: `cursor/proofs-redraw-cc71` at `4599be5623`, its diff against `main`]
+- `a5.py`: REDRAW changes six lines, all in `coins_outcome` (`:426-447`). I change the sessions' loop (`:937-950`), `proof_server` and `write_case`. No shared hunk.
+- `a5_coins.py`: REDRAW changes 101 lines (the families, `Replay(read, label)`); I add to `Draws`. Same file, whoever lands second merges.
+- The case's `challenger.label` must be the stream's family: `FAMILY` on `main`, `stream.family(draw)` on REDRAW's branch.
+- **One session, several ranks** (`a5.py:1457-1463`, the TP driver): `UNUSED_TREE` refuses a log holding a tree that is no session of this audit's, and `sampleLinkFirst` refuses a coin of this audit's sample released after any tree's round. So a session that serves several ranks cannot carry each rank's sessions [derived]. The first build is one rank a session, as `records_audit.py` opens it. Whether several ranks ever share one is MEMBERS' and REDRAW's, not mine.
+
+**7. The size, summed** [guess throughout]
+
+| pull request | files | lines | waits on |
+|---|---|---|---|
+| 1: device's checks, driver, fixture, the run | `challenger.py`, `a5_coins.py`, `a5.py`, `a0.py`, `proof_server.py`, a new file for `session_evidence`, 3 test files; and the Lean command | 800 to 1,000 of Python, 60 to 100 of Lean | question 1 for the Lean; nothing for the Python |
+| 2: Rust | `tree_from.rs`, `coin_tree.rs`, `lib.rs`, `flock-circuit.rs` | 0, or 80 to 120 | question 3 |
+| 3: the twin of `membersRun` | one new file, its tests | 300 and 250 | question 1 for its rows; LEAN-249 on `main` to move it into `proofs.py` |
+
+S9 as MEMBERS sized it was "4 files of Rust and Python; no Lean". Read against the tree it is 8 to 10 files, mostly the driver, plus one Lean command, and possibly no Rust.
+
+**8. Three questions. I write none of these three before you answer.**
+1. **The Lean command that reaches `checkMembersAt`.** Who writes it: MEMBERS (their file, and theirs is "anything the Lean verifier accepts"), or I, as a command that prints the refusal and exits non-zero always? Without it the fixture's run ends at the Python checks and the parse.
+2. **The device.** I plan no device rule: it logs what it is asked, and Lean and the Python check hold the log. The other meaning is a device that refuses a round of a tree after its closing round, or of another tree before it. And the relay instead of a second client on the device. Say if you want either the other way.
+3. **Who asks for the closing round.** The driver, through its relay (no Rust), is what I build first. The coin server asking in `serve_on` is the form with no driver in it, and is pull request 2. Only one of them can ask: the round opens once.
+
+**What I do now, needing no answer:** the Python of the four checks in `challenger.py`, with tests that mirror Lean's `#guard`s; `session_evidence` in a file of its own under `one_stage/` (not `proofs.py`); `Draws` holding the session open, its tree calls and the relay; the driver's closing round and the per-member case's `challenger` and `coins`. The one-statement case stays as it is.
+
+**Next entry 16:00Z**, or sooner with the first run ids.
