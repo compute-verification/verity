@@ -26,20 +26,21 @@ is out of range: flock-circuit refuses it.
 
 **Per workload** (:func:`audit`): the padding table's body in its dp4 buckets at B = 16 and its tail at B = 1
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
-the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The cap** is the
-largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
-(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU fit taken as a bound on the CUDA prover's). A unit over the cap
-is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
-ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket.
+the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The limit**
+(:func:`find_limit`; the output's ``cap``) is the largest power of two Z at which a B = 16 session at the workload's least
+ρ is in range and fits one node's memory (:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU fit taken as a bound on
+the CUDA prover's). A unit over the limit is split below the subcircuit into ceil(z / limit) pieces, its pieces in a
+bucket of their own at the limit (sessions ceil(p X / B) for X of its units sampled); every other unit keeps its dp4
+bucket.
 
 **dp4t** (:func:`menu_t`): dp4 places on nonzeros alone, so a rare unregistered type in a bucket of registered ones pads
 every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
 registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
 class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class sampled fewer than
 :data:`RARE_SAMPLES` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
-its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
-the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_SAMPLES` times
-as a tc-step-like unit.
+its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The limits are dp4's (the limit search's session
+holds the workload's largest templates). The what-if registers every generic body type sampled at least
+:data:`RARE_SAMPLES` times as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
 (``verity_flock.circuit``). Affine in the ANDs lowered, wall time and peak RSS each fitted (weighted by 1 / y²) on circuits'
@@ -56,7 +57,7 @@ template to n = 2^ν slots, whose padding pairs the kernel skips; proofs' ``vsta
 measured per ν: a template of 2^ν entries takes the measurement at the least measured ν' ≥ ν (the last beyond). Its memory
 is the committed bits of the bucket's stacked table (its T distinct templates, T padded to a power of two, each at the
 largest's size; bytes per entry) plus the sumcheck's working set (bytes per entry x the session's entries). A session's
-time is Flock's prove plus the sumcheck, its peak memory Flock's peak RSS plus the sumcheck's, and the cap and the prover
+time is Flock's prove plus the sumcheck, its peak memory Flock's peak RSS plus the sumcheck's, and the limit and the prover
 hours use those.
 """
 from __future__ import annotations
@@ -83,7 +84,7 @@ BYTES_PER_NNZ = 6.04
 #: Pc4RowATail_v1{K=256,KS=64} of 5,280 ANDs
 GLUE_BYTES = 55_911_585
 POW2 = tuple(range(16, 33))
-CAP_SEARCH = tuple(range(16, 41))
+LIMIT_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
@@ -330,10 +331,11 @@ def k1(ns: float | Sequence[tuple[int, float]], template: float) -> float:
     return next((v for m, v in pts if m >= nu), pts[-1][1])
 
 
-def cap(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS, **kw: Any) -> float | None:
+def find_limit(rho: float, coef: Mapping[str, Sequence[float]], gib: float, slots: int = SLOTS,
+               **kw: Any) -> float | None:
     """The largest power of two Z in 2^16..2^40 whose session is in range and whose peak (Flock's and the slot
     sumcheck's) fits ``gib`` (None when none does)."""
-    fits = [2.0 ** j for j in CAP_SEARCH
+    fits = [2.0 ** j for j in LIMIT_SEARCH
             if (s := session(2.0 ** j, rho, coef, slots, **kw))["in_range"] and s["peak_gib"] <= gib]
     return max(fits) if fits else None
 
@@ -552,7 +554,7 @@ def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coe
 def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]],
              staging_coef: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
-    """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
+    """One workload's audit under ``menu``, unsplit and at each limit. ``register_bulk``: a what-if with every generic body
     type sampled at least :data:`RARE_SAMPLES` times per audit registered as a GEMM tc-step-like unit (its template, circuit
     text and staging those of one tc step)."""
     K = int(inv["K"])
@@ -584,12 +586,12 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
                            "staging": {"shapes": len(stage), "max": max(stage, key=lambda x: x["peak_gib"], default=None),
                                        "total_h": sum(x["wall_s"] for x in stage) / 3600,
                                        "fits_node": all(x["peak_gib"] <= NODE_GIB for x in stage)},
-                           "range_cap": cap(r0, coef, math.inf, nets=every, **ck)}
+                           "range_cap": find_limit(r0, coef, math.inf, nets=every, **ck)}
     for node, gib in (("cpu", NODE_GIB), ("gpu", GPU_GIB)):
-        c = cap(r0, coef, gib, nets=every, **ck)
+        c = find_limit(r0, coef, gib, nets=every, **ck)
         over = [u for u in units if c is not None and u.z > c]
         at = audit(N, K, units, rho, coef, limit=c, nets=nets, **kw) if over else unsplit
-        out[node] = {"gib": gib, "cap": c, "cap_flock": cap(r0, coef, gib, nets=every, **{**ck, "slot": None}),
+        out[node] = {"gib": gib, "cap": c, "cap_flock": find_limit(r0, coef, gib, nets=every, **{**ck, "slot": None}),
                      "fits_unsplit": unsplit["in_range"] and unsplit["max_peak_gib"] <= gib,
                      "split": [{"unit_type": u.label, "nnz": u.z, "draw_share": u.n / N, "pieces": math.ceil(u.z / c)} for u in over],
                      "at_cap": at,
@@ -601,8 +603,8 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
 
 
 def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
-    """An audit's prover hours and the slot sumcheck's share of them, mean and public (K1 moves no cap, so the band reruns
-    the audit at the same cap)."""
+    """An audit's prover hours and the slot sumcheck's share of them, mean and public (K1 moves no limit, so the band reruns
+    the audit at the same limit)."""
     r: dict[str, Any] = {"k1_ns": k1_ns}
     for m in ("mean", "public"):
         r[f"prover_h_{m}"] = a[f"prover_h_{m}"]
@@ -680,10 +682,10 @@ def _slot_table(pr: Mapping[str, Any]) -> list[str]:
     sl = pr["slot_sumcheck"]
     lo, hi = sl["band"]
     L = ["", f"## Slot sumcheck per workload (K1 {_k1s(sl['k1_ns'])}; {sl['source']})", "",
-         "The heaviest session at the node cap (its Z and its largest template), split into Flock's prove and the slot "
-         "sumcheck; its peak; the caps with the sumcheck and with Flock alone; prover hours per audit at the node cap and "
+         "The heaviest session at the node limit (its Z and its largest template), split into Flock's prove and the slot "
+         "sumcheck; its peak; the limits with the sumcheck and with Flock alone; prover hours per audit at the node limit and "
          f"the sumcheck's share of them, at K1 and at its band's ends (low: {_k1s(lo)}; high: {_k1s(hi)}).", "",
-         "| workload | cap: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
+         "| workload | limit: node / GPU | Flock alone | Z | template | Flock prove | slot sumcheck | session | Flock RSS | "
          "sumcheck memory | peak | prover h mean / public | sumcheck share mean / public | band low: prover h (share) | "
          "band high: prover h (share) |", "|" + "---|" * 15]
     for w in pr["workloads"]:
@@ -709,11 +711,11 @@ def _names(labels: Sequence[str]) -> str:
 
 def _menu_table(pr: Mapping[str, Any]) -> list[str]:
     L = ["", "## Menus: dp4, dp4t, and dp4t with the bulk unregistered types registered (what-if)", "",
-         "Prover hours per audit at the node cap and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
-         "session at the node cap (Z, its largest template, prove + sumcheck, peak); the caps; the body's padding unsplit "
+         "Prover hours per audit at the node limit and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
+         "session at the node limit (Z, its largest template, prove + sumcheck, peak); the limits; the body's padding unsplit "
          "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
          f"(generic body types sampled at least {RARE_SAMPLES} times per audit, each as one GEMM tc step's template).", "",
-         "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | cap: node / GPU | "
+         "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | limit: node / GPU | "
          "zpad / pad_mean / public | registered |", "|" + "---|" * 9]
     for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
         for tag, w in zip(("dp4", "dp4t", "dp4t, registered"), ws):
@@ -771,14 +773,14 @@ def render(pr: Mapping[str, Any]) -> str:
                  f"{la['rss_gib']:.3g} ({r['rss_gib_vs_law']:+.0%}) | {no['rss_gib']:.3g} | {_t(m['prove_s'])} | "
                  f"{_t(po['prove_s'])} ({r['prove_s_vs_posted']:+.0%}) | {_t(la['prove_s'])} ({r['prove_s_vs_law']:+.0%}) | "
                  f"{_t(no['prove_s'])} |")
-    L += ["", "## Per workload: dp4 at B = 16, unsplit and at the cap", "",
-          "cap: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
-          "sumcheck's) fits; units over it split into ceil(z / cap) pieces. Prover hours: Σ sessions x (prove + slot "
+    L += ["", "## Per workload: dp4 at B = 16, unsplit and at the limit", "",
+          "limit: the largest power-of-two bound whose 16-slot session is in range and whose peak (Flock's and the slot "
+          "sumcheck's) fits; units over it split into ceil(z / limit) pieces. Prover hours: Σ sessions x (prove + slot "
           "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
           "template shape, and the largest of every shape in the workload.", "",
-          "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | cap: node / GPU | "
-          "units split at node cap (share of the sample) | sessions at node cap (mean / public) | prover h at node cap | "
-          "prover h at GPU cap | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
+          "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | limit: node / GPU | "
+          "units split at node limit (share of the sample) | sessions at node limit (mean / public) | prover h at node limit | "
+          "prover h at GPU limit | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
           "|" + "---|" * 15]
     for w in pr["workloads"]:
         u, n, g, s, st = w["unsplit"], w["cpu"], w["gpu"], w["top_session"], w["staging"]
@@ -816,7 +818,7 @@ def render(pr: Mapping[str, Any]) -> str:
     L += ["", "## Shapes", "", "| workload | split at | part | Z | k_log | slots | pieces | types | sessions mean / public | "
           "session RSS | session prove | slot sumcheck | its memory | prover h mean | largest staging |", "|" + "---|" * 15]
     for w in pr["workloads"]:
-        for tag, a in (("unsplit", w["unsplit"]), ("node cap", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
+        for tag, a in (("unsplit", w["unsplit"]), ("node limit", w["cpu"]["at_cap"] if w["cpu"]["split"] else None)):
             if a is None:
                 continue
             for part in ("body", "tail"):

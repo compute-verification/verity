@@ -1,5 +1,5 @@
 """F6's prover column: the fit and the posted fit it replaces, the registered check, one session priced from fixed
-coefficients, the range and memory caps, the slot sumcheck's term, descriptions, staging, a tiny audit unsplit and split
+coefficients, the range and memory limits, the slot sumcheck's term, descriptions, staging, a tiny audit unsplit and split
 exactly, and token-select's argmax tree."""
 from __future__ import annotations
 
@@ -50,9 +50,9 @@ def test_a_session_from_fixed_coefficients():
     s = PR.session(2 ** 30, 16, COEF, **TINY)
     assert (s["k_log"], s["in_range"], s["rss_gib"]) == (29, False, 1 + 2 * 8 + 3 * 64)
     # 2^28 is the last in range (2^24 rows, k_log 27): D = 2^31, text 16 GiB, 53 GiB; 2^27 27 GiB
-    assert PR.cap(16, COEF, math.inf, **TINY) == 2 ** 28
-    assert PR.cap(16, COEF, 53, **TINY) == 2 ** 28 and PR.cap(16, COEF, 52.9, **TINY) == 2 ** 27
-    assert PR.cap(16, COEF, 1, **TINY) is None
+    assert PR.find_limit(16, COEF, math.inf, **TINY) == 2 ** 28
+    assert PR.find_limit(16, COEF, 53, **TINY) == 2 ** 28 and PR.find_limit(16, COEF, 52.9, **TINY) == 2 ** 27
+    assert PR.find_limit(16, COEF, 1, **TINY) is None
     # descriptions: the largest 16, each at most Z's; a block term
     s = PR.session(2 ** 20, 16, COEF, nets=[2 ** 10, 2 ** 30, 5], **TINY)
     assert s["circuit_bytes"] == 2 ** 22 + 2 ** 10 + 5
@@ -63,14 +63,14 @@ def test_a_session_from_fixed_coefficients():
 def test_the_slot_sumcheck_at_fixed_coefficients():
     """K1 10 ns, 2 reps, 8 B of committed bits and 16 B of working set per entry. At 2^20, 16 slots each its own template of
     2^20: 2^24 entries, 10e-9 x 2^24 x 2 s, (8 x 16 x 2^20 + 16 x 2^24) / 2^30 = 0.375 GiB. At 2^28 the sumcheck adds
-    32 + 64 GiB to Flock's 53, so the cap at 149 GiB stays 2^28 and drops to 2^27 below it."""
+    32 + 64 GiB to Flock's 53, so the limit at 149 GiB stays 2^28 and drops to 2^27 below it."""
     S = {"k1_ns": 10.0, "band": (5.0, 20.0), "reps": 2, "bits_bytes": 8.0, "work_bytes": 16.0}
     flock, s = PR.session(2 ** 20, 16, COEF, **TINY), PR.session(2 ** 20, 16, COEF, slot=S, **TINY)
     assert (flock["sumcheck_s"], flock["total_s"], flock["peak_gib"]) == (0, flock["prove_s"], flock["rss_gib"])
     assert (s["template"], s["entries"]) == (2 ** 20, 2 ** 24) and s["sumcheck_s"] == pytest.approx(10e-9 * 2 ** 25)
     assert s["sumcheck_gib"] == pytest.approx(0.375) and s["total_s"] == pytest.approx(s["prove_s"] + s["sumcheck_s"])
     assert s["peak_gib"] == pytest.approx(s["rss_gib"] + 0.375)
-    assert PR.cap(16, COEF, 149, slot=S, **TINY) == 2 ** 28 and PR.cap(16, COEF, 148.9, slot=S, **TINY) == 2 ** 27
+    assert PR.find_limit(16, COEF, 149, slot=S, **TINY) == 2 ** 28 and PR.find_limit(16, COEF, 148.9, slot=S, **TINY) == 2 ** 27
     # every slot padded to the session's largest template (at most Z); the stacked table holds T = 2 templates at its size
     s = PR.session(2 ** 20, 16, COEF, nets=[4 * 1000, 4 * 3000], slot=S, **TINY)
     assert (s["template"], s["entries"]) == (3000, 16 * 3000)
