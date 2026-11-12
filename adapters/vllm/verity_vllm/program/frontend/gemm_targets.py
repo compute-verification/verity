@@ -320,3 +320,7 @@ def try_gemm_target_for(compute_capability, arch_family=...) -> tuple[GemmTarget
         return gemm_target_for(compute_capability, arch_family), None
     except UnregisteredGemmTarget as e:
         return None, str(e)
+
+
+__all__ = ["ADA_TABLE_SHA256_RC3", "ADA_TUNED_GEMM", "HOPPER_TUNED_GEMM", "UnregisteredGemmTarget", "GemmTarget",
+           "REGISTERED", "vllm_tuned_gemm_arch_family", "gemm_target_for", "try_gemm_target_for"]
