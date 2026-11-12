@@ -1505,3 +1505,52 @@ step you are in.**
   command of its own with `git -C`, no listing that prints a command line.
 
 Return when the run has its verdict and the card is released, at 17:30Z at the latest.
+
+## Thu 12 Nov 16:49Z: your 16:43Z return is read; the record and Lean's verdict read by me; proofs is rung; Friday's card 6 row STANDS. Now: Friday's three jobs ready, and one question on memory
+
+Fetched and read by me: the record `art:e96fb8385e04…` (the three `device_walk_matches_host`
+cases pass at 4,096/828, 256/11,516 and 1,024/129,633; `gpu_paths_agree` with proofs and
+transcripts equal on both; the firewall's case refused with nothing of the table sent, 14 s and
+335 s; the host-witness sessions accepted, 34 s and 33 s; `look.tsv`; the lease 15:46:02Z to
+16:21:32Z) and Lean's run `r20261112-163017-2fa5` (`accepted: true`, your label, `main`
+`87fec6c6491b`). Rung: proofs on HASH-112 with the verdict, its two "not shown" items, the look and
+the `PROTOCOL.md` hold. Card 3 is released in the calendar; Friday's card 6 row reads STANDS.
+**A first card run that equals the host in every case, with the fused read at twelve times the
+depth as a free last step, and a held commit explained before anyone tripped on it.**
+
+**Ruled:**
+- **The `PROTOCOL.md` commit waits until after Friday's rows: yes.** A file in the build key is
+  not changed between the run that checked the binary and the rows that time it. It is the first
+  commit after the rows, with the code comment in `flock-circuit.rs`. I told proofs; if it wants
+  the sentence sooner, it goes on a branch of its own over `f9fc32ff3f`, not on the timed head.
+- **`launch-lean.sh`'s reader:** your change stands (the prover's own line of the same session,
+  the same demand). Say its sha256 before and after in your return.
+- **The hours for next week's H200** are taken as you gave them (3 h; 1 h 45 min on two cards;
+  1 h 30 min the least). I name them to infra on Friday.
+
+**One question, before Friday's go: memory.** `look.tsv`: the card's peak is 37,561 and 37,559 MiB
+without the walk and 43,125 and 42,591 MiB with it, at one prover. The goal said "it fits beside
+four provers with no more memory"; I have corrected it to say 5.4 GiB more at one prover. **What
+is that 5.4 GiB (the walk's own arrays, a second copy of the statement's levels, a pool that
+grows), does it grow with the number of provers, and do four provers with the walk fit on one
+H200?** Answer from the record and the source; if it cannot be known without a card, Friday's job
+checks it untimed at four provers before any timed step and stops that size cleanly if it does
+not fit. Also say what `prove_total_s` is: it reads 0.94 and 0.71 s without the walk and 1.20 and
+1.27 s with it.
+
+**Friday's three rows (15:45Z to 19:45Z; cards 6, 2 and 3): by Fri 01:00Z, return with each job's
+state**, so that I can say by 02:00Z which of cards 2 and 3 stand:
+1. For each card: the job's sha256, its dry-run count, the head it builds, its one launch line.
+2. **The pinned `steady.sh` (`afe4733816e722d0`) against KSTEADY's copy of this hour**
+   (`5ef421f5…` in the notes' `ksteady-jobs/`): what differs, and that no timed step, check or
+   `finish.sh` line is among it; if one is, take KSTEADY's and dry-run again.
+3. **Card 2's head:** the walk's head merged with proofs' `cursor/proofs-keyedsalts-811d` at its
+   head of this hour; say that head, that the merge is still clean, and what the stand-in dry run
+   gives with the switch on in both kinds.
+4. **The gate before any timed step on Friday:** the twin on the small statement and on the head
+   block on each card, and the firewall's case on the small statement only (335 s on the head
+   block is not spent three times).
+5. proofs' ask of 14:46Z stands: each time `PUT=1 bash launch-lean.sh RUN` has run, one worker
+   comment on HASH-112 with the run and its two art ids.
+
+No card and no lease until Friday's go. CPU nodes by name, not `vy-nebius-cpu-7` blind.
