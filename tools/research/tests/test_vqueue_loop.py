@@ -4936,7 +4936,7 @@ def test_under_gate_check_the_graph2_check_of_a_candidate_whose_check_failed_run
     keys = env.listed(sha, {"pytest:a": ["pkg/tests/test_x.py"]})
     env.result(keys["pytest:a"], "pytest:a", graph2)
     Path(f"{script}.verdict").write_text(json.dumps({"state": graph2, "pending": 0}))
-    env.clock = T0 + 600
+    env.clock = T0 + 300 + L.G2_READ_S                              # graph2's word that it runs stands until then
     (line,) = loop.tick()
     assert (line["action"], line["sha"], line["members"], line["graph2"], line["check"]) == ("compare", sha, [1], graph2, FAIL)
     assert line["why"] == {"pass": "disagree: graph2 pass, the check fail (step pytest)",
@@ -4994,6 +4994,8 @@ def test_under_gate_check_at_most_two_dropped_candidates_graph2_checks_are_follo
         keys = env.listed(sha, {"pytest:a": [f"{k}.txt"]})
         env.result(keys["pytest:a"], "pytest:a", PASS)
         Path(f"{script}.verdict.ready:{sha}").write_text(json.dumps({"state": PASS, "pending": 0}))
+    assert loop.tick() == []                                        # graph2's word that they run stands `G2_READ_S`
+    env.clock += L.G2_READ_S
     compared = loop.tick()
     assert [(r["action"], r["sha"], r["why"]) for r in compared] == [
         ("compare", sha, "agree: graph2 and the check pass") for sha in (second, third)]
@@ -5129,3 +5131,275 @@ def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypa
     with pytest.raises(L.QueueError, match="can't be read.*or remove it"):
         w.cancel_runs(["r-4"], "dropped")
     assert cancelled[-1] == ["r-2"]
+
+
+def test_under_gate_check_graph2_s_reading_of_a_candidate_stands_g2_read_s_between_ticks_and_is_read_again_once_its_check_ended(
+        env, monkeypatch):
+    """graph2 only shadows where the check gates, and each of its verdicts is megabytes and seconds: a candidate's reading is
+    kept beside the log, so the next `--once` tick, a loop of its own, takes it too, and is read again `G2_READ_S` after it,
+    or at once in the tick that finds the candidate's check ended, whose compare line reads graph2 as it is then."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    read: list[str] = []
+    verdict = loop.world.verdict
+    monkeypatch.setattr(loop.world, "verdict", lambda s, *a, **k: read.append(s) or verdict(s, *a, **k))
+    assert _acts(loop.tick()) == ["slim"] and read == [sha]
+    assert set(json.loads((env.log.parent / L.G2_READS).read_text())) == {sha}
+    timed: list[str] = []
+    env.clock += L.G2_READ_S - 1
+    nxt = Loop(loop.world, env.log, slim=vqueue_slim, gate="check", now=lambda: env.clock, out=env.out.append,
+               timing=timed.append)
+    assert nxt.tick() == [] and read == [sha] and timed[-1].endswith(", 1 cached")
+    env.clock += 1
+    assert nxt.tick() == [] and read == [sha, sha] and timed[-1].endswith(", 0 cached")
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", PASS)
+    assert nxt.tick() == [] and read == [sha, sha]                  # graph2 passed it, read `G2_READ_S` from now
+    runs.end(sha)
+    logged = nxt.tick()
+    assert _acts(logged) == ["slim", "compare", "advance", "on_main", "drop"] and read == [sha] * 3
+    assert logged[1]["why"] == "agree: graph2 and the check pass" and logged[-1]["graph2"] == PASS
+
+
+def test_under_gate_check_a_kept_reading_is_read_again_at_the_drop_and_forgotten_at_an_enqueue(env, monkeypatch):
+    """A drop logs graph2's reading and follows by it, so one kept from an earlier tick is read again there; an enqueue (a
+    rerun and a cancel too) of graph2's check forgets the reading of it."""
+    pulled: list[bool] = []
+
+    def decide(s: Snapshot) -> list:
+        return [Drop(c.sha, "a member was pulled") for c in s.candidates] if pulled else policy(s)
+
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, decide)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    read: list[str] = []
+    verdict = loop.world.verdict
+    monkeypatch.setattr(loop.world, "verdict", lambda s, *a, **k: read.append(s) or verdict(s, *a, **k))
+    loop.tick()
+    loop.tick()
+    assert read == [sha] and sha in loop.reads.docs
+    loop.world.enqueue(sha, 5)
+    assert sha not in loop.reads.docs
+    loop.tick()
+    assert read == [sha, sha]
+    pulled.append(True)
+    (drop,) = loop.tick()
+    assert drop["action"] == "drop" and read == [sha] * 3           # kept in the snapshot, read again for the drop
+
+
+def test_under_gate_graph2_no_reading_is_kept_and_a_verdict_is_trimmed_to_what_the_loop_reads(env):
+    """Where graph2 gates, its verdict decides, so it is read each tick; and either way only the fields the loop reads of it
+    are kept, the megabytes of the rest dropped at the read."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    assert loop.reads is None and loop.world.reads is None
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    (built,) = loop.tick()
+    assert loop.tick() == [] and loop.tick() == []
+    assert Path(f"{script}.asked").read_text().splitlines().count(f"ready:{built['sha']}") == 2
+    Path(f"{script}.verdict").write_text(json.dumps({
+        "state": PENDING, "pending": 1, "graph": {"tasks": ["x"] * 1000}, "tasks": "many",
+        "failed": [{"task": "t", "key": "k", "why": "w", "log": "x" * 100}, "junk"],
+        "flaky": [{"task": "t", "key": "k", "inputs": ["a"], "tests": ["x"]}]}))
+    assert loop.world.graph2_verdict(built["sha"]) == {
+        "state": PENDING, "pending": 1, "failed": [{"task": "t", "key": "k", "why": "w"}],
+        "flaky": [{"task": "t", "key": "k", "inputs": ["a"]}]}
+    assert not (env.log.parent / L.G2_READS).exists()
+
+
+def test_a_tick_prints_one_line_of_its_steps_seconds_and_peak_resident_size(env):
+    """Each tick, however it ends, gives `timing` one line: its seconds and peak resident size, then each step's seconds and
+    the peak after it, then graph2's verdicts read (how many, their megabytes, their seconds) and the readings kept."""
+    env.put(1, {"a.txt": "1\n"})
+    timed: list[str] = []
+    now = iter(float(k) for k in range(1000))
+    loop = env.loop(policy, clock=lambda: next(now), peak=lambda: 2.5, timing=timed.append)
+    (built,) = loop.tick()
+    assert built["action"] == "build"
+    (line,) = timed
+    assert line.startswith("research queue vqueue: tick 1: ") and ", peak 2.5 GB; s/GB: log 1.0/2.5 fetch 1.0/2.5 " in line
+    steps = line.split("; s/GB: ")[1].split("; ")[0].split()
+    assert steps[::2] == ["log", "fetch", "ready", "below", "judge", "chain", "decide", "notices", "followed", "on_main",
+                          "build", "keep", "mapped"]
+    assert all(x.endswith("/2.5") for x in steps[1::2]) and line.endswith("; graph2 0 read(s) 0.0 MB 0.0 s, 0 cached")
+
+    def broken():
+        raise L.QueueError("fetch failed")
+
+    loop.world.fetch = broken
+    with pytest.raises(L.QueueError):
+        loop.tick()
+    assert len(timed) == 2 and timed[1].startswith("research queue vqueue: tick 2: ") and "s/GB: log " in timed[1]
+
+
+def test_with_after_the_steps_after_main_moved_start_detached_and_the_tick_that_finds_them_ended_logs_them(env, monkeypatch):
+    """Outside --shadow, the advance's tick starts the steps after `main` moved as a job of their own and returns: nothing
+    in it runs them.  Each later tick looks at the job and logs nothing while it runs; the one that finds it ended logs
+    them done with what they told, or, when they failed, prints why and starts them again."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy, after=["vqueue", "--log", "x"])
+    started: list[tuple[dict, list[str], Path]] = []
+
+    def start_after(job, argv, root):
+        started.append((job, argv, root))
+        (d := root / f"job-{len(started)}").mkdir(parents=True)
+        return {"dir": str(d), "pid": os.getpid(), "out": str(d), "at": env.clock}
+
+    monkeypatch.setattr(loop.world, "start_after", start_after)
+    monkeypatch.setattr(loop.world, "on_main", lambda *a: pytest.fail("the tick ran the steps after `main` moved"))
+    (built,) = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    advance, on_main = loop.tick()
+    assert (advance["action"], on_main["action"], on_main["done"], env.main()) == ("advance", "on_main", False, sha)
+    ((job, argv, root),) = started
+    assert (job["sha"], job["base"], job["members"], argv, root) == (sha, built["base"], [1], ["vqueue", "--log", "x"],
+                                                                     env.log.parent / L.AFTER)
+    assert [(m["pr"], m["head"]) for m in job["merged"]] == [(1, built["heads"][0])] and job["told"] == []
+    assert on_main["job"]["dir"] == str(root / "job-1")
+    (drop,) = loop.tick()                                           # the job runs: nothing of it is logged
+    assert drop["action"] == "drop" and len(started) == 1
+    d = root / "job-1"
+    (d / "result.json").write_text(json.dumps({"done": False, "told": ["stacked:2<1"], "error": "RuntimeError: push"}))
+    (d / "log").write_text("pushing\n")
+    (d / "rc").write_text("0\n")
+    (failed,) = loop.tick()
+    assert (failed["action"], failed["done"], failed["error"], failed["told"]) == ("on_main", False, "RuntimeError: push",
+                                                                                ["stacked:2<1"])
+    assert f"research queue vqueue: tick 4: the steps after `main` moved to {sha[:12]} failed, the next tick runs them " \
+           "again: RuntimeError: push" in env.out
+    assert not d.exists() and len(started) == 1
+    (again,) = loop.tick()
+    assert (again["action"], again["done"], len(started), started[1][0]["told"]) == ("on_main", False, 2, ["stacked:2<1"])
+    assert loop.tick() == []
+    d = root / "job-2"
+    (d / "result.json").write_text(json.dumps({"done": True, "told": ["stacked:2<1"]}))
+    (d / "log").write_text("")
+    (d / "rc").write_text("0\n")
+    (done,) = loop.tick()
+    assert (done["action"], done["done"], done["told"], done["ended"]) == ("on_main", True, ["stacked:2<1"], str(d))
+    assert loop.tick() == [] and len(started) == 2
+
+
+def test_an_after_landing_job_runs_in_a_session_of_its_own_and_the_tick_reads_how_it_ended(tmp_path):
+    """`World.start_after` returns while its job still runs, which `after_ended` says (None); once it exits, it reads what
+    the job wrote, and the job's output is in `AFTER_LOG` beside its directory."""
+    from waits import Gate, wait_exit
+
+    gate = Gate(tmp_path / "gate")
+    w = World(type("Q", (), {"workdir": tmp_path})(), None, None, now=lambda: T0)
+    code = ("import json, pathlib, sys; open(sys.argv[1], 'rb').read(1); print('after'); "
+            "pathlib.Path(sys.argv[3], 'result.json').write_text(json.dumps({'done': True, 'told': ['x']}))")
+    job = w.start_after({"sha": "ab" * 20}, [sys.executable, "-c", code, str(gate.path)], tmp_path / "live" / L.AFTER)
+    try:
+        assert Path(job["dir"]).name.startswith("abababababab-") and json.loads(
+            (Path(job["dir"]) / "job.json").read_text()) == {"sha": "ab" * 20}
+        assert w.after_ended(job) is None
+    finally:
+        gate.release()
+    wait_exit(job["pid"])
+    gate.close()
+    assert w.after_ended(job) == {"done": True, "told": ["x"]} and not Path(job["dir"]).exists()
+    assert (tmp_path / "live" / L.AFTER_LOG).read_text() == "after\n"
+    gone = {"dir": str(tmp_path / "gone"), "pid": job["pid"], "out": str(tmp_path / "gone"), "at": T0}
+    (tmp_path / "gone").mkdir()
+    assert w.after_ended(gone).startswith("its process is gone") and not (tmp_path / "gone").exists()
+
+
+def test_after_landing_runs_the_steps_at_main_and_writes_what_they_did(tmp_path):
+    """`--after-landing DIR` runs the steps of the advance `job.json` names at `main` as origin has it, and writes
+    `result.json`: done with the owners told, or the error."""
+    calls: list = []
+
+    class W:
+        def at_main(self):
+            calls.append("at_main")
+
+        def on_main(self, sha, base, members, told):
+            calls.append((sha, base, members))
+            told.append("stacked:2<1")
+            if sha == "bad":
+                raise RuntimeError("push refused")
+
+    (d := tmp_path / "j").mkdir()
+    (d / "job.json").write_text(json.dumps({"sha": "s" * 40, "base": "b", "merged": [
+        {"pr": 1, "head": "h", "owner": "", "commit": "c"}], "told": ["stacked:3<1"]}))
+    assert L._after_landing(W(), d) == 0
+    assert calls == ["at_main", ("s" * 40, "b", [Q.Member(1, "h", "", "c")])]
+    assert json.loads((d / "result.json").read_text()) == {"done": True, "told": ["stacked:3<1", "stacked:2<1"]}
+    (d / "job.json").write_text(json.dumps({"sha": "bad", "base": "b", "merged": []}))
+    assert L._after_landing(W(), d) == 0
+    assert json.loads((d / "result.json").read_text()) == {"done": False, "told": ["stacked:2<1"],
+                                                           "error": "RuntimeError: push refused"}
+
+
+def test_under_gate_check_a_tick_reads_one_candidate_s_graph2_reading_afresh_and_the_others_wait_their_turn(env, monkeypatch):
+    """A fresh reading lists the check's whole graph and pulls each pending task's results, so a tick reads `G2_FRESH` (one)
+    afresh: the lowest candidate whose reading is out first, each other keeping the one kept of it, or pending, till its turn."""
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    built = [r["sha"] for _ in range(2) for r in loop.tick() if r["action"] == "build"]
+    assert len(built) == 2
+    low, high = built
+    read: list[str] = []
+    verdict = loop.world.verdict
+    monkeypatch.setattr(loop.world, "verdict", lambda s, *a, **k: read.append(s) or verdict(s, *a, **k))
+    loop.reads.docs.clear()
+    loop.tick()
+    assert read == [low]
+    loop.tick()
+    assert read == [low, high]
+    loop.tick()
+    assert read == [low, high]
+    env.clock += L.G2_READ_S
+    loop.tick()
+    loop.tick()
+    assert read == [low, high, low, high]
+
+
+def _wide(sha: str, n: int = 300) -> dict:
+    """A graph/v2 listing of ``sha`` shaped as a real check's is, at a small scale: a few keyed tasks, and many that each read
+    every one listed before them (a real one has thousands of tasks and millions of reads, gigabytes once parsed)."""
+    def task(k: int) -> dict:
+        return {"id": f"t{k}", "kind": "test-file", "env": "py", "argv": ["t"], "vars": {}, "inputs": ["a.txt"],
+                "reads": [{"task": f"t{j}", "output": "out"} for j in range(k)] if k >= 3 else [],
+                "outputs": [{"name": "out", "path": f"t{k}.out"}], **({} if k >= 3 else {"key": f"sha512:{sha[:8]}-{k}"})}
+
+    return {"schema": GRAPH_V2, "commit": sha, "files": {f: f"sha512:{f}" for f in (*SPEC, "a.txt")},
+            "envs": {"py": {"digest": "sha512:env", "spec": list(SPEC)}}, "tasks": [task(k) for k in range(n)]}
+
+
+def test_under_gate_check_a_shadow_read_holds_one_candidate_s_graphs_at_a_time(env, monkeypatch):
+    """A candidate's shadow read lists its check's graph and its base's, each gigabytes for a real check, so a tick holds
+    those of one read at a time (`World.one_read`), however many it reads: three candidates read afresh in one tick peak
+    under two and a half graphs' memory, where graphs kept for the whole snapshot would hold three and more."""
+    import tracemalloc
+
+    for k in (1, 2, 3):
+        env.put(k, {f"{k}.txt": f"{k}\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3, g2_fresh=3)
+    built = [r["sha"] for _ in range(3) for r in loop.tick() if r["action"] == "build"]
+    assert len(built) == 3
+    for sha in built:
+        env.graph2.list_graph(f"ready:{sha}", _wide(sha))
+    tracemalloc.start()
+    try:
+        got = loop.world.tasks.graph_v2(f"ready:{built[0]}")
+        one = tracemalloc.get_traced_memory()[0]
+        del got
+        loop.reads.docs.clear()
+        tracemalloc.reset_peak()
+        base = tracemalloc.get_traced_memory()[0]
+        loop.tick()
+        peak = tracemalloc.get_traced_memory()[1] - base
+    finally:
+        tracemalloc.stop()
+    assert loop.reads.hits == 0 and len(loop.reads.used) == 3
+    assert peak < 2.5 * one, f"a tick of three shadow reads peaked at {peak / one:.1f} graphs"
