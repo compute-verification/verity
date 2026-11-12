@@ -36,4 +36,5 @@ research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_
 PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py ~/.research/runs/RUN/out
 ~~~
 
-The card's `clock.tensor` source cites the run of record by its `art:` id.
+The card's `clock.tensor` source cites the run of record by its `art:` id. Nothing imports this directory:
+`summarize.py` is a command, and it reads the card through `verity.hardware.cards`, never a copy of its numbers.

@@ -52,7 +52,9 @@ src/cluster/
 │               value differs, read over SSH; read-only
 ├── policy_apply.py  the change that converges each key that differs, as a plan, and with --apply written on the node over
 │               SSH, logged in its override log and read back
-└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | policy
+├── usage.py    GPU-seconds held, busy, idle, unmeasured and useful per node, owner, kind and UTC hour: the console imports
+│               it to compute and record the rows on node 1, and `cluster usage` (`research usage`) reads that record
+└── cli.py      cluster validate | plan | submit | ledger … | agent | shadow replay | shadow evaluate | status | usage | policy
 descriptions/nebius.toml   vy-nebius-1 and vy-nebius-2 as their owners describe them, and their policy
 descriptions/nebius-after-n1.toml   node 2 alone, staged for node 1's retirement: it replaces nebius.toml then
 kinds/<owner>.toml         each owner lane's job kinds, read from the tree a submitter ships (kinds.py's docstring)
@@ -100,6 +102,8 @@ uv run cluster ledger verify|quiet|failures LEDGER.jsonl ...
 uv run cluster shadow replay infra/cluster/descriptions/nebius.toml --sampler UTIL.jsonl.gz --preempted preempted.log --out DIR
 uv run cluster shadow evaluate DIR --quiet-log quiet.jsonl
 uv run cluster status [--on nebius-1|nebius-2|all] [--owner OWNER] [--json]   # over SSH with ~/.ssh/research_key
+uv run cluster usage hourly [--on nebius-1|nebius-2|all] [--hours H] [--json]   # per node and UTC hour: busy, useful, held idle
+uv run cluster usage wasters --day YYYY-MM-DD [--top N] [--json]   # that day's holdings with the most held-but-idle GPU-hours
 python3 -m cluster kueue-shadow loop --out RECORD.jsonl --hours H   # on vy-nebius-1; `kueue-shadow down` removes it
 uv run cluster policy show [--on nebius-1|nebius-2|all] [--key K] [--json]   # the policy in force: key, owner, source
 uv run cluster policy diff [--on nebius-1|nebius-2|all] [--json]   # over SSH: exit 1 drift, 3 a value unread

@@ -352,6 +352,17 @@ def test_clock_gate():
     assert not S.clock_gate(stats, [])["ok"]
 
 
+def test_parse_smi_says_which_rows_it_left_out(caplog):
+    """A row with a field that is no number is left out of the reading and named in the log, never dropped silently."""
+    good = "2092, 3090, 410.5, 600.00, [N/A], 2430, 0x0"
+    with caplog.at_level("WARNING"):
+        assert len(S.parse_smi(good + "\n")) == 1 and not caplog.records
+        assert len(S.parse_smi(f"{good}\n2092, 3090, [N/A], 600.00, 2430, 2430, 0x0\nshort, row\n")) == 1
+    assert [r.getMessage() for r in caplog.records] == [
+        "parse_smi: 1 row(s) with a field that is no number are left out, the first "
+        "'2092, 3090, [N/A], 600.00, 2430, 2430, 0x0'"]
+
+
 def test_margin_per_point():
     """filler-scorer/v3's margin readout: the limit less each point's slowdown, with its worst and best rounds', so a
     point whose rounds reach the limit shows it has none even where its median passes (decode 32/1K, whose serving alone

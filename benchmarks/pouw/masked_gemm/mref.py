@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts  # noqa: E402
+from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts
 
 RANKS = [8, 16, 32, 64, 128]
 FMTS = ["i8", "e4"]
