@@ -8,9 +8,8 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(HERE))
-import capacity_of as CO  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import capacity_of as CO
 
 PI = CO.E.machine("VF3r-16")  # the vector of record the readings below are taken on
 GHZ = 2.092e9
