@@ -24,6 +24,8 @@ from verity_flock import synthetic as SY
 from .. import settings
 from . import census
 
+__all__ = ["SUITES", "generate", "main", "register_command", "suite", "workload_suite"]
+
 
 def _versions() -> dict[str, Any]:
     head = settings.RESEARCH_SOURCE_COMMIT

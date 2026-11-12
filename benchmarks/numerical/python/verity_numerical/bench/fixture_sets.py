@@ -21,6 +21,8 @@ from typing import Any, Iterable
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY
 
+__all__ = ["FIXTURES", "check", "committed", "main", "place", "write"]
+
 FIXTURES = Path(__file__).resolve().parents[5] / "verity" / "protocols" / "flock" / "prover" / "tests" / "fixtures" / "synthetic_sets"
 #: the provenance fields a run fills in, cleared in a committed set
 UNRUN = {"research_run": None, "versions": None}

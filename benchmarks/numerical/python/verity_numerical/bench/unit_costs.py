@@ -73,6 +73,26 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import census
 
+__all__ = [
+    "METRICS",
+    "affine",
+    "argmax_scan_law",
+    "argmax_step",
+    "argmax_tree",
+    "at",
+    "attention_steps",
+    "block_law",
+    "build",
+    "draw_count",
+    "inventory",
+    "main",
+    "registered",
+    "render",
+    "retree",
+    "sample_size",
+    "work",
+]
+
 METRICS = ("inputs", "ands", "output_copies", "committed", "nnz_AB", "lookups")
 EPSILON = Fraction(1, 1000)
 DELTA = Fraction(1, 2 ** 40)

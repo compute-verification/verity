@@ -12,6 +12,15 @@ from typing import Any
 
 from verity_numerical.bench import census, contract
 
+__all__ = [
+    "REF_BANDWIDTH_BPS",
+    "interaction",
+    "interaction_problem",
+    "interaction_time",
+    "protocol_problem",
+    "rtt_method_enum",
+]
+
 #: Commitment seconds per batch: the warm median of committing the batch's values afresh (with ``commit.cold_seconds``,
 #: ``commit.reps`` and ``e2e.seconds`` = this + ``t.total``).
 COMMIT = "commit.seconds"

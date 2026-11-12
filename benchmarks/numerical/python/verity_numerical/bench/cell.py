@@ -47,6 +47,25 @@ from verity_flock import input_sets as IS
 from verity_flock import lowerings as LW
 from verity_flock import subcircuit_templates as TM
 
+__all__ = [
+    "BACKENDS",
+    "Cell",
+    "DEFAULT_POINTS",
+    "NotSupported",
+    "PROBE_WRAP",
+    "check",
+    "family_of",
+    "launch",
+    "main",
+    "placement_problems",
+    "plan",
+    "register",
+    "resolve_input_set",
+    "run_files",
+    "runs_root",
+    "split_statement",
+]
+
 FAMILIES = {"A": "A-GKR", "B": "B-Ligero", "C": "C-Flock", "D": "D-SP1"}
 BACKENDS = ("A-interactive", "A-fs", "A-route-a", "B-interactive", "B-fs", "C-interactive", "D-fs")
 DEFAULT_POINTS = "1024 2048 4096 8192 16384 32768 65536"

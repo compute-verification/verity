@@ -18,6 +18,8 @@ from __future__ import annotations
 import importlib
 from types import ModuleType
 
+__all__ = ["driver", "module_path"]
+
 
 def module_name(backend: str) -> str:
     return backend.lower().replace("-", "_")

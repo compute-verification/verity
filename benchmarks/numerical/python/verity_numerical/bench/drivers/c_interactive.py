@@ -24,6 +24,8 @@ import tarfile
 import tempfile
 from pathlib import Path
 
+__all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
+
 BACKEND = "C-interactive"
 FAMILY = "C-Flock"
 INTERACTIVE = True
