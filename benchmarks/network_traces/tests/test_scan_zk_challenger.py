@@ -40,11 +40,14 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
     statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
-    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires. The round
-    names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
-    them through and both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's
-    acceptance rests on a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block
-    (`period_case.UNWIRED`).
+    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires. The
+    registration is a v2 record listing the link-window's two certified row registrations as registered values
+    (`scan_zk.certified_rows`), which the stream is handed as its certified entries, so both verifiers' R7 holds the
+    record's entries to them, and each member's registered read of the network certifier's rows is the record's entry
+    of its value. The round names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each
+    read, tied, so R8 lets them through and both verifiers' registration verdict publishes them
+    (``rests_on_period_check``): this round's acceptance rests on a period check (`NetworkCheck.Period`'s `wired`),
+    which refuses its stand-in block (`period_case.UNWIRED`).
 
     Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,
     and the Lean verifier's checks of the stream's registration, sample and run. It catches what no cheaper test
@@ -114,3 +117,12 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         assert sorted(ports) == sorted(head["registered"]) == sorted(p.name for p in m["ports"]), m["name"]
         assert inst["registered"] == head["registered"], m["name"]
         assert ports["o0"]["root"] == roots[f"{m['at']}/o0"] and ports["o0"]["reads"] == list(range(m["n"]))
+
+    certified = sz.certified_rows(members)
+    assert rec["format"] == M.R.FORMAT_V2 and rec["registered"] == sz.registered_of(certified)
+    assert len(certified) == 2 and not set(certified) & set(roots)
+    for m in members:
+        ports = json.loads(m["registered_file"].read_text())["ports"]
+        for p, doc in m["warden"].items():
+            assert {x: ports[p][x] for x in ("root", "leaves", "words", "domain")} == certified[doc["value"]]
+            assert ports[p]["value"] == doc["value"]

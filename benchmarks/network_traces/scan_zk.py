@@ -90,9 +90,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
   publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
-  this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
-  reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+  this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration also lists, as a
+  registered value under the row registration's own name, ``<link>/<direction>/<w>`` (`certified_rows`), each network
+  certifier row registration a member's network certifier port reads (ingress's ``row``, egress's ``o1``), at the root
+  and domain the verifier read under the deployment's key: R7 holds the entry to the verifier's, the record check holds
+  each read a session opened under that name to the entry's root, and a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
   output rows (`Flock.Registered.checkComplete`, which `flock-verify` runs whenever ``--registered`` is given), so no
   output reads a row the statement commits afresh. A port no scan tree or network certifier row registration holds
@@ -1311,13 +1313,14 @@ def rule_of(k: int, n: int) -> str:
 
 
 def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[str, str], k: int,
-            root: str) -> tuple[S.Spec, list, dict[str, int]]:
+            root: str, certified: dict[str, dict] | None = None) -> tuple[S.Spec, list, dict[str, int]]:
     """The honest round's `service.Spec` (prove_path's `a5.stream_of`): its unit the round's templates in order, its
-    values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``), its
-    public items what the registration shows (N, each template's stratum, the group, the leaf layer and each port's
-    layout), its selection the stratified rate of ``k`` in N (`rule_of`), its proof deadline `MEMBER_DEADLINE_S` a member
-    and its context the group's root. -> (the spec, its proof blocks, `Stream.register`'s counts: each template's proof
-    blocks, over its members)."""
+    values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``) and its
+    ``certified`` values (`certified_rows`), each a registered value, its public items what the registration shows (N,
+    each template's stratum, the group, the leaf layer, each port's layout and each certified value's: its leaves,
+    words and domain, and its word bits where its entry names them), its selection the stratified rate of ``k`` in N
+    (`rule_of`), its proof deadline `MEMBER_DEADLINE_S` a member and its context the group's root. -> (the spec, its
+    proof blocks, `Stream.register`'s counts: each template's proof blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
     law = S.Law(rule_of(k, n))
@@ -1327,11 +1330,15 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the round's provenance: the group's link-windows of the warden's run"),
               ("leaf_layer", "the leaf layer over the members' public files"),
-              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
+              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
+              *((f"{x}:{v}", "a certified value's layout") for v, e in sorted((certified or {}).items())
+                for x in ("leaves", "words", "domain", *((REG.WIDTH_KEY,) if REG.WIDTH_KEY in e else ())))]
     check = S.Check(tuple(PA.program_digest(Program(u)) for u in units), pg.query,
                     proof_deadline=float(MEMBER_DEADLINE_S * len(members)), tied=pg.tied)
-    spec = S.Spec(tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)), law, check,
-                  tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(root))
+    values = tuple(S.Value(p, schemas[p], "serve") for p in sorted(want)) + tuple(
+        S.Value(v, None, "serve", registered=True) for v in sorted(certified or {}))
+    spec = S.Spec(values, law, check, tuple(S.Public(item, "structure", why) for item, why in public),
+                  bytes.fromhex(root))
     counts: dict[str, int] = {}
     for m in members:
         tid = PA.template_id(m["defn"])
@@ -1347,14 +1354,17 @@ def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins) -> S.Str
 
 def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.Stream, draw: S.Draw,
                   rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
+                  verdicts: dict, statement: dict, given: dict,
+                  certified: dict[str, dict] | None = None) -> tuple[dict | None, dict, dict]:
     """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
     `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
     as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
-    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins, `stream_of`). -> (the audit
-    record, None where the stream refused or holds the outcome; the negatives; the coins' record)."""
+    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins, `stream_of`), its
+    registration received with the honest one's ``certified`` entries, so it is refused at its coins and not at its
+    registration. -> (the audit record, None where the stream refused or holds the outcome; the negatives; the coins'
+    record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
     published = coins.draws.evidence()
     ev = AC.evidence(published, segment) if segment is not None else None
@@ -1382,7 +1392,8 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         window = "00" * 64 if name == "coins-for-another-window" else root
         s = stream_on(AC.Replay(read))
         try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts,
+                                    certified=certified))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, evidence)
@@ -1402,22 +1413,30 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
-def warden_roots(members) -> list[dict]:
-    """The registration's ``rows/<direction>/<w>`` roots: each network certifier row registration its members' network
-    certifier ports read (an ingress proof block's ``row``, an egress proof block's ``o1``), its root and domain as the
-    network certifier registered them (`warden_rows.registration`, read back by the verifier), its T rows the leaves. A
-    period check (`NetworkCheck.Period`'s rows form) holds an execution phase's answer to its rows by these, by root and
-    domain.
+def certified_rows(members) -> dict[str, dict]:
+    """The round's certified entries, ``{value: {"root", "leaves", "words", "domain"}}`` with ``word_bits`` where the
+    leaves are not 16 bits (`registration.check`'s ``certified``), in the values' order: each network certifier row
+    registration its members' network certifier ports read (an ingress proof block's ``row``, an egress proof block's
+    ``o1``), under the registration's value (`warden_rows.value_name`, ``<link>/<direction>/<w>``, the name Lean reports
+    the reads under), at the root, rows, words, word bits and domain the verifier read under the deployment's key
+    (`warden_rows.check_registration`), which its ``--registered`` port is built from (`warden_rows.bucket_port`).
 
-    A port is never the row registration's value (``warden/<direction>/<w>``, the name Lean reports the reads under):
-    the audit takes a root port named as a value for a registered value of the record (`audit.session_registered`),
-    which this registration lists none of, and refuses the round."""
+    The registration lists each as a registered value (`registered_of`), R7 holds the record's entry to this one, its
+    root too (``R7-certified``), and the audit's record check holds each read a session opened under the value to the
+    record's root (`audit.session_registered`). A period check (`NetworkCheck.Period`'s rows form) holds an execution
+    phase's answer to its rows by the record's entries."""
     out = {}
     for m in members:
         for doc in m["warden"].values():
-            p = f"rows/{doc['direction']}/{doc['window']}"
-            out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
-    return [out[p] for p in sorted(out)]
+            out[doc["value"]] = {"root": doc["root"], "leaves": doc["rows"], "words": doc["words"],
+                                 "domain": doc["domain"], **REG.width_entry(doc["word_bits"])}
+    return {v: out[v] for v in sorted(out)}
+
+
+def registered_of(certified: dict[str, dict]) -> list[dict]:
+    """The registration's ``registered`` entries of the round's certified values (`certified_rows`), in their order:
+    each value with its certified root, leaves, words and domain, and its word bits where the entry names them."""
+    return [{"value": v, **e} for v, e in certified.items()]
 
 
 def _free_port() -> int:
@@ -1431,8 +1450,9 @@ def _free_port() -> int:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
+    instance or a shared port's table row; the scan's registrations' roots; and, as registered values, the network
+    certifier's row registrations its network certifier ports read, `certified_rows`, which every call of the
+    registration check is handed, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
     on a development challenger's coins, `a0.challenger_draw`; every unit when `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
@@ -1459,10 +1479,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         want[f"scan/{kind}"] = {"leaves": len(reg.rows), "domain": d}
         schemas[f"scan/{kind}"] = BitRowLeaf.hiding_schema
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
-    for r in warden_roots(members):
-        want[r["port"]] = {"leaves": r["leaves"], "domain": r["domain"]}
-        schemas[r["port"]] = WR.SCHEMA
-        roots.append(r)
+    certified = certified_rows(members)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
     n = sum(m["n"] for m in members)
     k = n if k is None else k
@@ -1475,10 +1492,11 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
-    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
+    rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table,
+                   registered=registered_of(certified))
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
-                                      work_table=table, tied=pg.tied or None).to_json()}
+                                      work_table=table, tied=pg.tied or None, certified=certified).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
@@ -1499,13 +1517,14 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             raise SystemExit(f"{name}: flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
-        spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
+        spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root, certified)
         rank = coins.AC.RankCoins(coins.draws, 0)
         draw = refused = None
         try:
             stream = stream_of(a, spec, units, pg, rank)
             rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
-            reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
+            reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts,
+                                  certified=certified)
             rank.commit(bytes.fromhex(reg.digest))
             draw = stream.select(reg)
         except S.Refused as e:
@@ -1565,7 +1584,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
                  "session_roots": session_roots}
         result, neg, told = coins_outcome(a, coins, lambda c: stream_of(a, spec, units, pg, c), counts, stream, draw,
-                                          rec, want, leaf_layer, read, segment, sessions, verdicts, statement, given)
+                                          rec, want, leaf_layer, read, segment, sessions, verdicts, statement, given,
+                                          certified)
         (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
         log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
             f"{told['coins_reason']}, run {told['run']}, negatives refused "
@@ -1687,7 +1707,7 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     registration and, for each link-window W of the group, the scan's answer for W and the warden's ingress and egress
     row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
-    (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
+    (`certified_rows`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
     answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
     slot entry, the stand-in's ``x``: it copies its input) and no steps."""

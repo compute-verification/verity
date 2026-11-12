@@ -10,8 +10,9 @@ with its slot entry unread, every read held and
 its output 0, its state and view the honest ones. A group of link-windows (IO-TIE's) is one registration, a member a
 template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
-registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
-``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
+registration's registered values (`scan_zk.certified_rows`, each under its row registration's own name) the root,
+rows, words and domain of each row registration in ``cells.jsonl``, and refused by name where a row, the key or the
+schedule isn't the warden's. The honest round on the
 challenger's coins (``--challenger``): its flags refused by name where they can't sample, the group's root bound to the
 warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
 its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
@@ -358,9 +359,9 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     assert all(m.refused is None and set(m.outputs) == {1} for m in h.rounds["honest"])
     regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
         tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
-    assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(
-        [{"warden": m.warden} for m in h.rounds["honest"]])} == {
-        f"rows/{d}/0": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
+    assert sz.certified_rows([{"warden": m.warden} for m in h.rounds["honest"]]) == {
+        regs[d]["value"]: {"root": regs[d]["root"], "leaves": sz.PARAMS.window, "words": regs[d]["words"],
+                           "domain": regs[d]["domain"]} for d in ("ingress", "egress")}
 
 
 def _cells(run: Path) -> dict[tuple[str, int], dict]:
@@ -369,37 +370,43 @@ def _cells(run: Path) -> dict[tuple[str, int], dict]:
             for d in map(json.loads, (run / "cells.jsonl").read_text().splitlines()) if "registration" in d}
 
 
-def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp_path):
-    """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
-    and domain): a G = 2 group's honest round names, as ``rows/<direction>/<w>``, each of the four row registrations
-    of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
-    egress only, names the egress rows alone, the re-signed execution phase's in its place. No root is named as the
-    value Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered``
-    of each member) hold none of them, as the registration registers none."""
+def test_the_registration_lists_each_link_windows_certified_rows_as_a_registered_value(tmp_path):
+    """The certified rows in the scan's registration (`certified_rows`, `registered_of`): a G = 2 group's honest round
+    lists, as a registered value under the row registration's own name, each of the four row registrations of the
+    run's ``cells.jsonl``, T leaves each at the registration's words and domain (ingress's row ports and egress's o1
+    read them); the tampered round, egress only, lists the egress rows alone, the re-signed execution phase's in its
+    place. Each is the value Lean reports a read under, so the audit's registered reads
+    (`audit.session_registered`, Lean's ``registered`` of each member) are the record's values at their roots, and
+    the record's own check of them (R7) takes the same entries as the verifier's certified ones."""
     G, T = 2, sz.TEST.params.window
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     regs = _cells(run)
-    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]])
-    assert roots == [
-        {"port": f"rows/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
-        for d in ("egress", "ingress") for w in range(G)]
+    certified = sz.certified_rows([{"warden": m.warden} for m in h.rounds["honest"]])
+    assert list(certified) == sorted(certified) == [regs[d, w]["value"] for d in ("egress", "ingress") for w in range(G)]
+    assert certified == {regs[d, w]["value"]: {"root": regs[d, w]["root"], "leaves": T, "words": regs[d, w]["words"],
+                                               "domain": regs[d, w]["domain"]}
+                         for d in ("egress", "ingress") for w in range(G)}
+    entries = sz.registered_of(certified)
+    assert entries == [{"value": v, **e} for v, e in certified.items()]
+    assert all(set(e) == set(sz.REG.ENTRY_KEYS) for e in entries)
     verdicts = {f"lean-verify/{m.name}": {"of_record": True, "accepted": True, "registered": {
         p: {"value": d["value"], "root": d["root"]} for p, d in m.warden.items()}} for m in h.rounds["honest"]}
-    assert {e["value"] for v in verdicts.values() for e in v["registered"].values()} == {
-        f"warden/{d}/{w}" for d in ("egress", "ingress") for w in range(G)}
-    assert sz.AU.session_registered(verdicts, {"roots": roots}) == {}
-    tampered, w = sz.warden_roots([{"warden": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
-    assert [r["port"] for r in tampered] == [f"rows/egress/{x}" for x in range(G)]
-    assert tampered[w]["root"] == h.at.tampered.registration["root"] != regs["egress", w]["root"]
-    assert all(tampered[x]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
+    assert sz.AU.session_registered(verdicts, {"roots": [], "registered": entries}) == {
+        v: e["root"] for v, e in certified.items()}
+    assert sz.AU.session_registered(verdicts, {"roots": []}) == {}
+    tampered, w = sz.certified_rows([{"warden": m.warden} for m in h.rounds["tampered"]]), h.at.tampered.window
+    assert list(tampered) == [regs["egress", x]["value"] for x in range(G)]
+    assert tampered[regs["egress", w]["value"]]["root"] == h.at.tampered.registration["root"] != regs["egress", w]["root"]
+    assert all(tampered[regs["egress", x]["value"]]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
+    assert sz.certified_rows([{"warden": {}}]) == {} and sz.registered_of({}) == []
 
 
 def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each network certifier port at the root and
     domain of the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from
-    the run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    the run's ``cells.jsonl``), the root `certified_rows` registers for that direction and execution phase. A member whose
     rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
@@ -411,16 +418,18 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     signed = {}
     for (d, w), doc in _cells(run).items():
         head, dom = sz.WR.check_registration(doc, key, session, params, WS.LINK, sz.Direction(d), w)
-        signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
+        signed[head.value] = (head.root.hex(), dom.domain_id.hex())
     assert len(signed) == 2 * G
     honest = h.rounds["honest"]
-    roots = sz.warden_roots([{"warden": m.warden} for m in honest])
-    assert {r["port"]: (r["root"], r["domain"]) for r in roots} == signed
+    certified = sz.certified_rows([{"warden": m.warden} for m in honest])
+    assert {v: (e["root"], e["domain"]) for v, e in certified.items()} == signed
     read: dict[str, set] = {}
     for m in honest:
         ports = sz.registered_file(m)["ports"]
         for p, doc in m.warden.items():
-            read.setdefault(f"rows/{doc['direction']}/{doc['window']}", set()).add((ports[p]["root"], ports[p]["domain"]))
+            assert ports[p]["value"] == doc["value"]
+            assert {k: ports[p][k] for k in ("root", "leaves", "words", "domain")} == certified[doc["value"]]
+            read.setdefault(doc["value"], set()).add((ports[p]["root"], ports[p]["domain"]))
     assert read == {r: {x} for r, x in signed.items()}
 
     w = 1
@@ -432,8 +441,8 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     at = SimpleNamespace(**{**vars(h.at), "sides": {**h.at.sides, "egress": egress}})
     mb = next(mb for mb in sz.members_of(sz.TEMPLATES, G, h.at.T) if mb.template == "egress" and mb.window == w)
     m = sz.member(at, "honest", mb)
-    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"warden": m.warden}])[0]["root"]) == (
-        signed[f"rows/egress/{w}"][0],) * 2
+    (mine_,) = sz.certified_rows([{"warden": m.warden}]).values()
+    assert (sz.registered_file(m)["ports"]["o1"]["root"], mine_["root"]) == (signed[side.head.value][0],) * 2
     assert m.refused == "registered reads: table row 0 does not open the registered root at position 0"
 
     m = next(x for x in honest if x.template == "egress" and x.window == w)
@@ -445,8 +454,8 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
-    stratified over the three templates, its bound 0, for the group's registration, and the tied values R8 let through
-    in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
+    stratified over the three templates, its bound 0, for the group's registration (a v2 record: it lists a link-window's
+    certified rows as a registered value), and the tied values R8 let through in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
     refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
     error."""
     from verity.protocols.pouw.verifier import core_check as CC
@@ -457,9 +466,10 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, law = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
-    reg = R.record(program, query, law, sz.S.SCHEME,
-                   [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
-                   {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    rows = {"link/egress/1": {"root": "aa" * 64, "leaves": T, "words": 8, "domain": "bb" * 64}}
+    reg = R.record(program, query, law, sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                   registered=sz.registered_of(rows))
+    assert reg["format"] == R.FORMAT_V2
     draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
     a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
@@ -569,11 +579,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     progs = [{"root": tr.root.hex(), "leaves": nb, "domain": sz.ADV.domain(tr.binding, nb).domain_id.hex()}
              for tr in trs]
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
-    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
-        *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
+    rows = sz.registered_of(sz.certified_rows([{"warden": m.warden} for m in h.rounds["honest"]]))
+    roots = [*({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}]
     law = sz.DR.parse_design(f"stratified:{2 * T}")
-    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
-                  for x in ("ee", "ff"))
+    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64,
+                           registered=rows) for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
     for name, r in (("tampered", other), ("chain", chain)):
         (scan / name).mkdir()
@@ -628,8 +638,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert x["answer"] == answer and x["registrations"] == [regs["ingress", 0], regs["egress", 0]]
     assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
         ("warden", "ingress", 0), ("warden", "egress", 0), ("warden-fails", "egress", 0)]
-    assert all({"root": d["root"], "domain": d["domain"]} in [{"root": r["root"], "domain": r["domain"]}
-                                                               for r in reg["roots"]] for d in x["registrations"])
+    assert reg["format"] == R.FORMAT_V2
+    assert not {d["root"] for d in x["registrations"]} & {r["root"] for r in reg["roots"]}
+    assert sorted(reg["registered"], key=lambda e: e["value"]) == sorted(
+        ({"value": d["value"], "root": d["root"], "leaves": d["rows"], "words": d["words"], "domain": d["domain"]}
+         for d in x["registrations"]), key=lambda e: e["value"])
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"],
@@ -923,21 +936,39 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     want = {"ingress-0/row": {"leaves": T, "domain": "aa" * 64}, "egress-1/o0": {"leaves": T, "domain": "bb" * 64},
             "scan/state": {"leaves": 2 * T, "domain": "cc" * 64}}
     schemas = {p: sz.BitRowLeaf.hiding_schema for p in want}
-    spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root)
+    certified = {f"link/{d}/0": {"root": x * 64, "leaves": T, "words": 8, "domain": y * 64, **bits}
+                 for d, x, y, bits in (("egress", "a1", "b1", {}), ("ingress", "a2", "b2", {"word_bits": 32}))}
+    spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root, certified)
     assert units == [ING, EG] and counts == {sz.PA.template_id(ING): 2 * T, sz.PA.template_id(EG): 2 * T}
+    assert [(v.name, v.schema) for v in spec.values if v.registered] == [(v, None) for v in certified]
+    assert sz.spec_of(pg, members, want, schemas, k, root)[0].values == tuple(v for v in spec.values if not v.registered)
+    declared = {p.item for p in spec.public}
+    assert {x for x in declared if x.split(":", 1)[-1] in certified} == {
+        *(f"{x}:{v}" for v in certified for x in ("leaves", "words", "domain")), "word_bits:link/ingress/0"}
     rule = f"stratified-rate:{k}/{4 * T}"
     assert sz.rule_of(k, 4 * T) == rule and sz.rule_of(8 * T, 4 * T) == "stratified-rate:128/128"
     assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": rule}
     assert spec.check.proof_deadline == 4 * sz.MEMBER_DEADLINE_S
 
-    def record(ports: dict) -> dict:
+    def record(ports: dict, registered: dict = certified) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
         law, table = sz.S.params_law(rule, program, query, None)
-        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
+        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64,
+                        work_table=table, registered=sz.registered_of(registered))
 
-    assert sz.S.check_public(spec, record(want)).ok
+    rec = record(want)
+    assert rec["format"] == R.FORMAT_V2 and [e["value"] for e in rec["registered"]] == list(certified)
+    assert [e.get("word_bits") for e in rec["registered"]] == [None, 32]
+    assert sz.S.check_public(spec, rec).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
     assert not v.ok and "roots" in v.codes
+    other = {**certified, "link/egress/1": certified["link/egress/0"]}
+    v = sz.S.check_public(spec, record(want, other))
+    assert not v.ok and v.codes == ("roots",) and v.detail["roots"] == ["link/egress/1"]
+    bare, _units, _counts = sz.spec_of(pg, members, want, schemas, k, root)
+    v = sz.S.check_public(bare, rec)
+    assert not v.ok and v.codes == ("roots",) and v.detail["roots"] == list(certified)
+    assert record(want, {})["format"] == R.FORMAT and sz.S.check_public(bare, record(want, {})).ok
     with pytest.raises(ValueError, match="no coins of its own"):
         sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=lambda n: bytes(n))
     assert sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=sz.CC.ChallengerCoins(None)).digest
