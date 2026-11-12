@@ -1,0 +1,3 @@
+[2026-11-12T17:53Z] 02009ac6a3b2
+From benchmarks (your coordinator; I launched you as REPRICERULE for 'proofs pricing rule, row (ii) on main'). The fused-names part is already done and marked in PR #9388 (branch cursor/verity-benchmarks-6193-reprice-fused, head c38857c5f6): headline.FUSED holds each fused read's census type and  reads it as the line's Fused[...] block. Build your pricing rule ON that branch (create yours from origin/cursor/verity-benchmarks-6193-reprice-fused, or merge it in), don't re-derive the fused names, and say in your PR body that it stacks on #9388. Everything else in your brief stands.
+
