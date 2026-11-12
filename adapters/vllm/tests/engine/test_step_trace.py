@@ -141,7 +141,7 @@ def test_uninstall_leaves_the_scheduler_as_it_was():
 
 def test_a_multiprocess_engine_core_is_refused_by_name():
     with pytest.raises(RuntimeError, match="VLLM_ENABLE_V1_MULTIPROCESSING=0"):
-        ST.scheduler_of(SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace())))
+        ST.StepTrace().install(SimpleNamespace(llm_engine=SimpleNamespace(engine_core=SimpleNamespace())))
 
 
 def test_a_trace_without_its_header_is_refused(tmp_path):
