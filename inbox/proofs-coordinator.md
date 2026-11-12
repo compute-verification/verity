@@ -71879,3 +71879,72 @@ No file of the repository is changed; my branch `cursor/proofs-fixedcost-46fc` i
 
 Next: the head's seven-session numbers (`7605`), the two tables runs, the mailbox's second item, then the three numbers
 final.
+
+## KEPT, Thu 12 Nov 05:36Z: in a kept verifier a later member pays 0.29 of the first member's seconds at a 543 MB circuit file and 0.54 at a 1.79 GB one [run `ba14`]; 0.17 and 0.30 with the circuit file kept too [measured `4d4e`]; the session's own check is the floor, 0.15 and 0.27 here, so 0.05 and 0.005 are not reached on these statements; the records run is out (`7fbc`) and the first pull request opens when it passes
+
+Tags: [run] a run I launched, whose `members.json` and log I read today after 05:29Z; [measured] an earlier run of mine, its file read again now; [read] a file, with its place; [derived] arithmetic on those; [relayed] another entry's figure, not checked. `verify-members` is on a branch, not on `main`. Nothing here runs on the served engine: it is the Lean verifier of the first branch (`f6d1341b85`, which holds `main` at `62bf29346f`) on stand-in values. Until the scan is on `main`, a kept process's verdicts are per member only, and a window of more than one member gets no counted verdict. Your three exit codes hold: I read each log (section 5).
+
+**1. The fraction** [run `r20261112-042041-ba14`, exit 0; the guard held: every kept member's verdict lines are byte for byte `verify`'s alone, all accepted].
+
+| statement (one proof block, `--zk`, one table) | a fresh process a member (6 timed) | kept process, first member (2) | kept process, each later member (4) | later ÷ first |
+|---|---|---|---|---|
+| expert GEMM, 3.24 M ANDs: circuit file 542.7 MB, program 141.2 MB | 44.64 s (43.94 to 45.63) | 44.84 s (44.45, 45.24) | 13.06 s (12.99 to 13.12) | **0.29** |
+| expert GEMM, 9.14 M ANDs: circuit file 1.79 GB, program 151.8 MB | 72.15 s (70.53 to 82.53) | 72.68 s (71.88, 73.48) | 39.12 s (38.64 to 39.54) | **0.54** |
+
+- **What was measured.** One block type, `MoeExpertFp8ReadGemm_v1`, at two widths; each is one statement of one proof block, staged, proved and verified once, bound to its own program and partition. That one session is handed in 3 times a way, over 2 rounds: 3 fresh `verify` processes, then one `verify-members` process given the 3 in turn. Seconds are wall seconds, medians with the range. A fresh process's is the whole process; a kept member's runs from its line written to its answer read, so the first member's holds the process's start and the one read of the program.
+- **Machine.** vy-nebius-cpu-11, AMD EPYC-Genoa, 192 CPUs; every verifier process pinned to one core (core 191); node load 40 to 57 while it ran, so one run on a loaded node. Files warm: staged and verified minutes before on a node with 620 GB of memory free [derived: nothing dropped the page cache; no cold read was timed]. The verifier ran under its allocator setting, as its Python callers on `main` start it (`MIMALLOC_PURGE_DELAY=-1`, recorded in `members.json`).
+- **The first member pays what a fresh process pays** (44.84 against 44.64 s; 72.68 against 72.15 s). The saving starts at the second.
+
+**2. What a later member still pays, and why** [run `ba14`, the verifier's own stage lines, medians, seconds].
+
+| part | 543 MB file: fresh | later | 1.79 GB file: fresh | later | what a later member's is |
+|---|---|---|---|---|---|
+| files read, hashed, parsed (`inputs:`) | 19.42 | 6.15 | 32.34 | 18.80 | its own circuit file read, hashed with SHA-512 and parsed again; the program's digest is gone (13.3 and 13.5 s) |
+| statement set up at its sample (`setup:`) | 17.93 | 0.18 | 19.50 | 0.55 | what depends on the session's sample; the program's two readings are gone (17.7 and 19.0 s) |
+| the check | 6.88 | 6.70 | 19.71 | 19.80 | the session's proof against its own coins, in full |
+
+- **The program is all that the first branch keeps.** It was 31.0 s of a fresh process at 141 MB and 32.5 s at 152 MB, 0.21 to 0.22 s a MB [derived from the rows], and a later member pays none of it.
+- **Smaller, step one: keep the circuit file too. Built, on the second branch, not on `main`.** A later member whose circuit file is byte for byte the member before's pays **7.26 s and 20.52 s, 0.17 and 0.30 of the first member** [measured `r20261111-215201-4d4e`, exit 0, guard held: an earlier commit of that branch (`5e87ff2c83`), another node (cpu-6, load 6 to 14), same allocator setting]. `inputs:` falls to 0.68 s and 1.37 s: the file's bytes read and compared in full, no hash and no parse. It keeps one file, the last member's, so sessions of one block type must be handed in one after another to get it.
+- **Smaller, step two: the check, which nothing kept can touch.** It is 88% and 90% of what is left after step one, and it sets the floor: **0.15 and 0.27 of a fresh process** here [derived from the rows]. Below that needs a change to the check itself (the fixed-seconds entry of 05:25Z names it); nobody has built one.
+- **Against the three thresholds, on these two statements:** 0.3 (64 tables a session) is met by the smaller on the first branch and by both, barely, with the circuit file kept. 0.05 (16 tables) and 0.005 (one table) are not met.
+- **The fraction depends on the program's size, and these programs are small.** The cost model charges the read of a 2.2 GB program [read: line 61160 of this file]. By proportion that is about 470 to 480 s a fresh process on `main` as it is now [derived, not measured], which is close to the cost model's own +459 to +462 core-seconds for `main` with #8949 and #9042 in [read: line 58911]. At such a program the same two statements would give about 0.03 and 0.08 on the first branch and 0.015 and 0.04 with the circuit file kept [derived by proportion]. So 0.05 may be in reach for a type whose check is small beside the program's read. 0.005 is not: the check alone is over 0.01 of a fresh process even then.
+- **One thing for the 05:17Z table:** its 1,006 core-seconds a statement is `main` before #8949 and #9042. Both are on `main` since 03:54Z, so at fraction 1 `main` already pays less than half of that for the program [read: line 58911; my rows agree with it by proportion].
+- **Memory:** the kept process holds 7.44 GB and 13.41 GB after its second member and does not grow at the third; a fresh process peaks at 6.75 GB and 9.58 GB [run `ba14`].
+
+**3. Is this "a block type's later sessions keep the statement loaded"? No: narrower in one way, wider in another.** It keeps no statement: it keeps the program's digest and two readings for every member after the process's first, whatever its block type (and, on the second branch, the hash and parse of the one circuit file the member before read), while every session's setup at its sample and its check are paid in full; one process holds one program, for as long as its caller keeps it.
+
+**4. What I did not measure.**
+- Distinct sessions: each member here is the same session's record handed in again. A real window's members differ in public file, sample and coins.
+- Any other block type, and the sparse-attention head block in particular (circuit file 12.19 GB [relayed]). Any program near 2.2 GB: mine are 141 and 152 MB, and the lines above at 2.2 GB are proportion, not runs.
+- More than 3 members a process; sessions of several tables; cold files; an idle node.
+- The second branch at its head: `4d4e` is an earlier commit on another node. Its measurement at `cf5587e216` is launched now (section 5); one short run.
+- The prover's half, and the kept process under vLLM's driver in an audit.
+- **A fuller measurement would be:** the sessions of one served window, several block types with the head block among them, bound to the registered program, handed to one kept process in the driver's order; each member's seconds by block type, first of its type against later, and the memory the process holds. That is the driver's own tool on vLLM's branch (`member_seconds.py`), on an audit that has run; I have not run it.
+
+**5. The runs, each log read by me.**
+
+| run | what | result |
+|---|---|---|
+| `r20261112-041351-488f` | try of `Flock/ProgramRead.lean`, first branch | exit 0, ended 04:54Z; none of its 14 theorems uses an axiom beyond the three standard ones [run] |
+| `r20261112-041422-2ecd` | try of `FlockVerify.lean`, first branch | exit 0; 9 theorems, `verifyMember_eq` among them, the three axioms only [run] |
+| `r20261112-041955-a0e1` | quick tier at `f6d1341b85`, `--changed 62bf29346f76 --quick` | exit 0, ended 05:20Z: 60 suites, 60 passed, none cached, 0 failed [run] |
+| `r20261112-042041-ba14` | the measurement at `f6d1341b85` | exit 0, ended 05:10Z, guard held [run] |
+| `r20261112-052747-7fbc` | **the one records run** at `f6d1341b85`, the verifier's package, no `--update` | out: on cpu-1 (not a node the rule names), in its Lean slot since 05:29Z; ETA about 07:00Z [guess: `277b` took 92 minutes] |
+| `r20261112-043728-486d` | try of `FlockVerify.lean`, second branch at `cf5587e216` | exit 0, ended 05:05Z; 7 theorems, `verifyMember_eq` among them, the three axioms only [run] |
+| `r20261112-043700-4d7c` | try of `Flock/CircuitRead.lean`, second branch | exit 0; 7 theorems, the three axioms only [run] |
+| `r20261112-053423-42ee` | quick tier at `cf5587e216`, `--changed f6d1341b8529 --quick` | out: launched 05:34Z, on cpu-2; ETA about 07:00Z [guess: `a0e1` took 60 minutes from launch, 21 of them waiting] |
+| `r20261112-053448-9a71` | the measurement at `cf5587e216`, with a change of circuit file between members | out: launched 05:35Z, on cpu-7, waiting for a slot at 05:36Z; ETA about 06:40Z [guess: `ba14` took 49 minutes, 17 of them waiting] |
+
+**6. The first pull request: what holds it is the records run alone.**
+- It waited on #8789, #8949 and #9042 (the verifier reads the program's file once a call). All three are on `main` and in the branch through the merge of `62bf29346f` [read: `gh pr view`, 04:26Z]. `main` has moved since (to `d6075b75d2`) and touches none of the branch's 11 files [read: `git diff --stat` of the two, 05:28Z].
+- When `7fbc` passes I open it unmarked with `research queue open --head cursor/proofs-keptverify-604f --sha f6d1341b8529f86c38c61fdae0ae922886c02df3 ... --by proofs` (`Lane proofs`, `Refs PRF-548`, the goal) and write its ready line in an entry. If `7fbc` fails, an entry with the failure, and no pull request.
+
+**7. The second branch, and the isolation rule for soundness.**
+- `cursor/proofs-keptcircuit-7c1e` at `cf5587e216`: both tries passed. Next: its tier and its measurement (launched, above), then its one records run after `7fbc`'s verdict, then its body; it opens after the first.
+- **The isolation rule, on the first branch at `f6d1341b85`:**
+  - the rule in words: `verity/protocols/flock/verifier/Flock/VerifyMembers.lean:34-40` ("Nothing crosses from one member to the next but the kept program's digest and readings"), with `:42-45` (it reaches no other host) and `:47-51` (it fails closed);
+  - the loop that enforces its shape: the same file, `:87-116` (`run` hands a member's check that member's argument list and keeps only its exit status);
+  - the member's check and the equation: `verity/protocols/flock/verifier/FlockVerify.lean:1206-1221` (`verifyMember`, `verifyMember_eq`: whatever program is kept, a member's check is `verify` on its arguments), entered at `:1223-1231` (`verifyMembersCmd`);
+  - what the equation rests on: `verity/protocols/flock/verifier/Flock/ProgramRead.lean:157-188` (`Readers`, `readers_of`, `orOf`, `readers_orOf`: the kept readings are given only on the kept bytes, compared in full, and are the readings anew on every program);
+  - the caller's side: `verity/protocols/flock/agreement/README.md:125-139`.
+  - What no theorem holds: the loop itself is IO, held by `verity/protocols/flock/prover/tests/test_lean_verify_members.py` (five tests, the no-connection one among them), not by an equation.
