@@ -138,7 +138,8 @@ def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_an
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
     assert text[0] == ("memory: 0.156 of the node's memory read rate is left uncertified by this session, at the data "
-                       "sheet's read bandwidth (2.0000 TB/s)")
+                       "sheet's read bandwidth (2.0000 TB/s); its error reads δ + Σ_t adv_t (SHA-512 stream as PRF: "
+                       "not priced, not assumed), δ in the verifier's ledger")
     assert text[1] == (f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier, its verifier not on the "
                        f"auditor's verifier host")
     assert text[2] == "  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory, bound to no checkpoint"
@@ -565,15 +566,23 @@ def test_the_command_takes_exactly_one_way_in(store, capsys, argv):
 
 
 def a_run(monkeypatch, tmp_path: Path) -> Path:
-    """A `research run`, `BENCH`, around the command from here on: its `out`."""
+    """A `research run`, `BENCH`, around the command from here on: its directory."""
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "rundir"))
     monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
-    return tmp_path / "rundir" / "out"
+    return tmp_path / "rundir"
 
 
-def written(out: Path) -> dict[str, dict]:
-    """The measurements of the result under `out`, by name, in the order they were written."""
-    result = json.loads((out / "result.json").read_text())
+def results(held: Path) -> list[Path]:
+    """Every `result.json` in the run's directory `held` and under it."""
+    return sorted(held.rglob("result.json"))
+
+
+def written(held: Path) -> dict[str, dict]:
+    """The measurements of the run's result, by name, in the order they were written. The result is the run
+    directory's own `result.json`, the one file `research` reads a run's result from, and the run holds no other:
+    none under its `out/`."""
+    assert results(held) == [held / "result.json"]
+    result = json.loads((held / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     return {m["name"]: m for m in result["measurements"]}
 
@@ -583,19 +592,20 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     """The fields every resource's benchmark reports, through the harness kit's writer: each is the verifier's record's
     and names the record's key it was read from. Free over capacity is the reading's γ, at the first reading the
     printed number, and verified and free are the capacity. What the command prints, and its `out/memory.json`, are
-    the same to the byte with the result written beside them."""
+    the same to the byte with the result written; `out/` holds the document alone."""
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
     assert bench(store, "--from", RUN) == 0
     alone = capsys.readouterr()
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
     assert capsys.readouterr() == alone
     line = alone.out.splitlines()[-1]
     doc = json.loads(line)
-    assert (out / "memory.json").read_text() == line + "\n"
+    assert (held / "out" / "memory.json").read_text() == line + "\n"
+    assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
     assert list(doc) == ["value", "unit", "commit", "run", "loopback", "host_run", "session", "verdict",
                          "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "beside"]
-    got = written(out)
+    got = written(held)
     assert list(got) == SHARED
     assert {n: m["value"] for n, m in got.items()} == {
         "metric": 0.25, "verified": 6e12, "capacity at spec": 8e12, "free at spec": 2e12,
@@ -611,6 +621,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert got["capacity at measured"]["unit"] == f"{M.BYTES}, at the measured read rate: {M.OWN_RATE}"
     assert {got[n]["unit"] for n in ("verified", "free at spec", "free at measured")} == {M.BYTES}
     assert got["error"]["unit"] == M.ERROR and "PRF advantages" in M.ERROR and "are not in it" in M.ERROR
+    # and says it in the words every δ of the session's is read in, never as a bare error
+    assert "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), this number its δ" in M.ERROR
     rate, span = "ledger.{}.capacity_bytes_per_s", "ledger.inputs.span_ns"
     assert {n: m["inputs"] for n, m in got.items()} == {
         "metric": [RUN, "ledger.spec.gamma"], "verified": [RUN, "ledger.spec.certified_bytes"],
@@ -642,36 +654,36 @@ def test_an_amount_the_record_does_not_hold_is_left_out_of_the_result(store, mon
         at = at[k]
     del at[drop[-1]]
     store.add(RUN, {"out/verifier.json": a_record(s)})
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
-    assert list(written(out)) == [n for n in SHARED if n not in left_out]
+    assert list(written(held)) == [n for n in SHARED if n not in left_out]
 
 
 def test_a_record_that_holds_only_the_share_writes_the_metric_alone(store, monkeypatch, tmp_path):
     store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.375))})
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
-    assert {n: m["value"] for n, m in written(out).items()} == {"metric": 0.375}
+    assert {n: m["value"] for n, m in written(held).items()} == {"metric": 0.375}
 
 
 def test_a_share_of_one_or_more_writes_nothing_verified_and_the_whole_capacity_free(store, monkeypatch, tmp_path):
     """The verifier's certified bytes are then at most none. The metric stays the printed share."""
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(gamma=1.25)))})
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     assert bench(store, "--from", RUN) == 0
-    got = {n: m["value"] for n, m in written(out).items()}
+    got = {n: m["value"] for n, m in written(held).items()}
     assert got == {"metric": 1.25, "verified": 0.0, "capacity at spec": 8e12, "free at spec": 8e12,
                    "capacity at measured": 6.4e12, "free at measured": 6.4e12, "error": 2.0 ** -30}
 
 
 def test_the_node_runs_session_writes_its_amounts_from_the_fire_run(store, capsys, monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     store.add(FIRE, {"out/host-run.txt": "v1",
                      "out/host/v1/out/verifier.json": a_record(with_amounts(a_session(gamma=0.5)))})
     assert bench(store, "some-period", run=gate_run(tmp_path, [])) == 0
     _, doc, _ = printed(capsys)
-    got = written(out)
+    got = written(held)
     assert list(got) == SHARED and got["metric"]["value"] == doc["value"] == 0.5
     assert (got["verified"]["value"], got["free at spec"]["value"]) == (4e12, 4e12)
     assert all(m["inputs"][0] == FIRE for m in got.values())
@@ -679,50 +691,50 @@ def test_the_node_runs_session_writes_its_amounts_from_the_fire_run(store, capsy
 
 def test_a_loopback_writes_no_result(store, capsys, monkeypatch, tmp_path):
     """It certifies nothing: neither the loopback itself nor a recorded one printed with `--from` writes amounts."""
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
 
     def launch(argv, **kw):
-        out.mkdir(parents=True)
-        (out / "verifier.json").write_text(json.dumps(a_record(with_amounts(a_session()))))
+        (held / "out").mkdir(parents=True)
+        (held / "out" / "verifier.json").write_text(json.dumps(a_record(with_amounts(a_session()))))
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setenv("RESEARCH_SOURCE_SHA", COMMIT)
     assert bench(store, "--loopback", run=launch) == 0
-    assert (out / "memory.json").is_file() and not (out / "result.json").exists()
+    assert (held / "out" / "memory.json").is_file() and results(held) == []
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session())),
                     "out/memory.json": {"value": 0.25, "run": RUN, "loopback": True}})
     assert bench(store, "--from", RUN) == 0
-    assert printed(capsys)[1]["loopback"] is True and not (out / "result.json").exists()
+    assert printed(capsys)[1]["loopback"] is True and results(held) == []
 
 
 def test_a_session_that_was_not_accepted_writes_no_result_and_leaves_the_runs_own(store, capsys, monkeypatch, tmp_path):
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(accepted=False, failure="receipt")))})
-    assert bench(store, "--from", RUN) == 1 and not out.exists()
+    assert bench(store, "--from", RUN) == 1 and not held.exists()
     store.add(FIRE, {"out/verifier.json": a_record(with_amounts(a_session()))})
     assert bench(store, "--from", FIRE) == 0
-    kept = (out / "result.json").read_bytes()
+    kept = (held / "result.json").read_bytes()
     capsys.readouterr()
     assert bench(store, "--from", RUN) == 1
-    assert capsys.readouterr().out == "" and (out / "result.json").read_bytes() == kept
+    assert capsys.readouterr().out == "" and (held / "result.json").read_bytes() == kept and len(results(held)) == 1
 
 
 def test_a_second_session_printed_in_one_run_keeps_the_first_ones_result_and_says_so(store, capsys, monkeypatch,
                                                                                     tmp_path):
     """A result holds one measurement a name. The second session's number still prints, the command still exits 0,
     and its `out/memory.json` is the second's, as before."""
-    out = a_run(monkeypatch, tmp_path)
+    held = a_run(monkeypatch, tmp_path)
     store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()))})
     store.add(FIRE, {"out/verifier.json": a_record(with_amounts(a_session(gamma=0.5)))})
     assert bench(store, "--from", RUN) == 0
-    kept = (out / "result.json").read_bytes()
+    kept = (held / "result.json").read_bytes()
     capsys.readouterr()
     assert bench(store, "--from", FIRE) == 0
     _, doc, err = printed(capsys)
-    assert doc["value"] == 0.5 and json.loads((out / "memory.json").read_text()) == doc
+    assert doc["value"] == 0.5 and json.loads((held / "out" / "memory.json").read_text()) == doc
     assert f"memory: the result ({', '.join(SHARED)}) is not written: " in err
     assert "already holds a measurement named metric" in err
-    assert (out / "result.json").read_bytes() == kept and written(out)["metric"]["inputs"][0] == RUN
+    assert (held / "result.json").read_bytes() == kept and written(held)["metric"]["inputs"][0] == RUN
 
 
 class Local:

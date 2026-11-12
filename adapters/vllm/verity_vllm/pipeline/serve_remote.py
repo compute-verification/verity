@@ -97,9 +97,9 @@ class ServeSession:
         return kw
 
     def built(self, llm: Any) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine.handle import model_runner
 
-        self.cs.check(llm.vllm, get_model_runner(llm.vllm))
+        self.cs.check(llm.vllm, model_runner(llm.vllm))
 
     def begin(self, windows: Any) -> None:
         """The session registered and waiting for the first step, once ``windows`` (a `CommitWindows`, or None) has read

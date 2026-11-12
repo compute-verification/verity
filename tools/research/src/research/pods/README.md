@@ -36,7 +36,8 @@ alive. Each module's docstring is its contract.
 - **A lease on every pod** (`lease.py`, `sh/lease.sh`). `create --max-hours H` arms it once sshd answers and
   terminates a pod it could not arm. At the expiry the idle guard ends a pod whose runs all have custody, and the
   lease loop ends it after a grace whatever is unfetched, with the pod's own key. `research run --on` extends the
-  lease to cover the run's `--timeout`; `extend` never shortens it.
+  lease to cover the run's `--timeout`; `extend` never shortens it. A lease the loop cannot read is not an expiry:
+  it keeps the expiry it last read, and with none to keep ends the pod once the error has lasted the grace.
 - **One budget file** (`budgets.py`): `budgets.toml`, where each line is a name prefix with a spending limit (total,
   per rolling day, or both), an expiry, a longest pod age and who approved it. `create` refuses unless the guard
   polled lately and holds a live, untripped line that covers the name.
@@ -50,9 +51,9 @@ alive. Each module's docstring is its contract.
 | File | What it holds | Loaded from outside `research` by |
 |---|---|---|
 | `registry.py` | The machine registry: one TOML file per machine under `machines.d/` in the notes repository. | `infra/ops` (a released node has no files to read), `benchmarks/numerical` (a pod's id) |
-| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. | `benchmarks/numerical`, `tools/verity/check`'s tests |
+| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. A read asks GraphQL when REST gives no answer, each call is a line of `api-calls.log` with the counts RunPod has left, and a pod's last-read address is kept (`$XDG_STATE_HOME/research/runpod/`) and dialled without asking RunPod only at a host that proves the recorded host key. | `benchmarks/numerical`, `tools/verity/check`'s tests |
 | `budgets.py` | `budgets.toml`, every spending limit, at the notes repository's root; `gate` is what `create` asks. | `infra/control` (the guard's host) |
-| `connect.py` | `ssh` and `sync`; `ssh_base` is the ssh command for a name, looked up at call time. | `infra/control` |
+| `connect.py` | `ssh` and `sync`; `ssh_base` is the ssh command for a name: a RunPod machine's kept address while it is under an hour old and its host proves the recorded host key, else read from RunPod. | `infra/control` |
 | `part.py` | The `research pods` router, `create`, and the reference-part check (`check-part`; `create --require-reference-part`). | |
 | `lease.py` | The lease every pod carries from creation, so it ends whether or not anything else is alive. | |
 | `guard.py` | The one budgets guard: it enforces every line of `budgets.toml`, re-read each poll. | |

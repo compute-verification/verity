@@ -109,8 +109,9 @@ KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: this file, it reads nothing of the machine's and leaves nothing on it: the suites give each test a `$CHECK_CACHE` of its
 #: own, which this file doesn't read
 KEEP = False
-#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
-#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+#: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue and `research merge` run holds it shared.
+#: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
 WORKTREES_LOCK = "research-worktrees.lock"
 #: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move
 CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", "json")
@@ -118,6 +119,8 @@ CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", 
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
+#: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
+GIT_OWN = frozenset({"text", "binary", "union"})
 
 
 class ScriptFailed(Exception):
@@ -185,11 +188,11 @@ def out(*args: str, cwd: str | None = None) -> str:
 
 def missing_drivers(cwd: str | None = None) -> list[str]:
     """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
-    `merge.NAME.driver` for."""
+    `merge.NAME.driver` for. Git's own (`GIT_OWN`) need none."""
     attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
     if os.path.isfile(attrs):
         with open(attrs) as f:
-            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())) - GIT_OWN)
     have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
     got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
     return [n for n in names if n not in got]
