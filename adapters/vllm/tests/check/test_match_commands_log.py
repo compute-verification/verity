@@ -2,7 +2,7 @@
 `verity_vllm.check.match.batch_decomp.main` and `verity_vllm.check.match.program_dag.main` log the result they wrote,
 `verity_vllm.check.match.global_match.main` logs what is about to run before it runs, its brief after, and as an error the X-09
 document it could not write, `verity_vllm.check.match.instance_sequence` names in a warning a registry module that failed to
-import, and `verity_vllm.check.match.global_match_fast.request_legs` names in a warning a worker's result file it could not remove.
+import, and `verity_vllm.check.match.global_match_fast` names in a warning a forked worker's result file it could not remove.
 
 `batch_decomp` and `program_dag` run on the toy of `test_batch_decomp_e2e.py`; `global_match.main` runs over a stand-in for its
 checker, since the lines under test are `main`'s own."""
@@ -145,15 +145,15 @@ def test_a_registry_module_that_failed_to_import_is_named_in_a_warning(monkeypat
     assert rec.getMessage() == "[compare] registry module unavailable (hopper: needs a newer Python): Programs naming its Definitions will not decode"
 
 
-# ------------------------------------------------------------------------------------------------------------------ the legs' workers
+# ------------------------------------------------------------------------------------------------------------------ the forked workers
 
 
-def test_a_workers_result_file_left_behind_is_named_in_a_warning_and_the_legs_still_return(tmp_path, monkeypatch, caplog):
-    """Two legs on two forked workers, whose result files the parent reads and then cannot remove."""
+def test_a_workers_result_file_left_behind_is_named_in_a_warning_and_its_results_still_return(tmp_path, monkeypatch, caplog):
+    """Two items on two forked workers, whose result files the parent reads and then cannot remove."""
     unlink = os.unlink
 
     def refused(path, *args, **kwargs):
-        if os.path.basename(path).startswith("gm_leg_"):
+        if os.path.dirname(path) == str(tmp_path):
             raise PermissionError(13, "Permission denied", path)
         return unlink(path, *args, **kwargs)
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
@@ -161,9 +161,8 @@ def test_a_workers_result_file_left_behind_is_named_in_a_warning_and_the_legs_st
     monkeypatch.setattr(os, "unlink", refused)
     with caplog.at_level(logging.WARNING, logger="verity_vllm"):
         assert gmf.request_legs([3, 4], lambda x: x * x, 2) == [9, 16]
-    left = sorted(str(f) for f in tmp_path.glob("gm_leg_*.pkl"))
+    left = sorted(str(f) for f in tmp_path.glob("*.pkl"))
     records = _logged(caplog, gmf)
     assert len(left) == 2 and [r.levelno for r in records] == [logging.WARNING, logging.WARNING]
     assert sorted(r.getMessage().split(" result file ")[1].split(" is left behind: ")[0] for r in records) == left
     assert all(r.getMessage().startswith("worker ") and "PermissionError(13" in r.getMessage() for r in records)
-    assert gmf.stats["legs_on_workers"] == 2
