@@ -292,9 +292,11 @@ async def deviate(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *,
     try:
         # the network certifier never half-closes toward a server: its end of stream is the connection's end. Only a
         # withheld connection is bounded: the watermark's lasts the run
-        await (asyncio.wait_for(closed, linger_s) if dev is not None and dev.withhold else closed)
-    except (TimeoutError, asyncio.TimeoutError):
-        pass
+        if dev is not None and dev.withhold:
+            for task in (await asyncio.wait({closed}, timeout=linger_s))[0]:
+                task.result()
+        else:
+            await closed
     finally:
         answered.cancel()
         closed.cancel()
