@@ -20,6 +20,8 @@ Files:
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
+- `run.sh`: the directory's runner, which `verity bench pouw commit_gpu` runs. It starts `gpu.sh` as it is, with the
+  caller's arguments and environment.
 
 On an RTX PRO 6000 node (MACHINE):
 
@@ -29,6 +31,16 @@ research run --on MACHINE --project verity --source . --cwd source --env GPU_LEA
 ~~~
 
 `BUILDS` defaults to `a0r0l`, the fastest form; the other tags rebuild the forms the measurements below compare.
+
+The job writes under the run's `$OUT`: `rc.txt` (each step's exit code, the builds that were timed and the fastest of
+them), `commit.txt`, `nproc.txt` and `gpu.txt` (the commit, the host's cores and the leased GPU), `build-TAG.log` a
+build, `prepare.jsonl` (the reference's cases, a line each), `selftest.jsonl` (a line a build) and `check-TAG.jsonl`
+(the bit-for-bit check, a line a case and one for the build), and the measurements, a JSON line each: `sha-TAG.jsonl`
+(the raw compression rate), `bench-e2e-TAG.jsonl`, `bench-sweep-TAG.jsonl` and `bench-seg-TAG.jsonl` (the two
+leaf-size sweeps) and `bench-tile-TAG.jsonl` (the tile sweep). Beside them are `smi.csv` (the SM clock, power and
+temperature every half second), `nsys*` (an nsys trace's report of the kernels' launch shapes) and the steps' standard
+error (`*.err`). It writes no `result.json`. Its builds, cases and parameter files are in a directory under `/dev/shm`,
+which it removes. Its last lines are `summary.py`'s, one a measurement.
 
 ## Two phases
 

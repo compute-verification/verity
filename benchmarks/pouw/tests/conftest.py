@@ -5,16 +5,20 @@ name. This file puts every script directory on ``sys.path``, once, so a test nei
 itself.
 
 A name one directory holds is imported by that name. A name two directories hold is imported by name from one of them at
-most, the one whose own scripts import it so: `AHEAD` lists those directories and puts them first, so the name is theirs
-whoever imports it. Another holder's module comes from `load`, under a name of its own. ``test_script_imports.py`` holds
-the tree to this.
+most, the one whose own scripts import it so: `AHEAD` lists those directories and puts them first, and `FirstHolder`, a
+finder ahead of ``sys.path``, keeps the name theirs whoever imports it, whatever a script has put first on the path since
+(a launcher starts a script with its own directory first, and many scripts put it there themselves). Another holder's
+module comes from `load`, under a name of its own. ``test_script_imports.py`` holds the tree to this.
 """
 from __future__ import annotations
 
 import asyncio
+import importlib.abc
 import importlib.util
 import sys
 import threading
+from collections import defaultdict
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
 
@@ -41,6 +45,26 @@ def script_dirs() -> list[Path]:
     return [*ahead, *sorted({p.parent for p in scripts()}.difference(ahead))]
 
 
+def holders() -> dict[str, list[Path]]:
+    """Each script's module name with the directories that hold it, in the path's order."""
+    held, order = defaultdict(set), script_dirs()
+    for p in scripts():
+        held[p.stem].add(p.parent)
+    return {name: [d for d in order if d in dirs] for name, dirs in held.items()}
+
+
+class FirstHolder(importlib.abc.MetaPathFinder):
+    """``import NAME``, for a name two directories hold: its first holder's file, found before ``sys.path`` is read."""
+
+    def __init__(self) -> None:
+        self.files = {name: dirs[0] / f"{name}.py" for name, dirs in holders().items() if len(dirs) > 1}
+
+    def find_spec(self, name: str, path: object = None, target: object = None) -> ModuleSpec | None:
+        if path is None and name in self.files:
+            return importlib.util.spec_from_file_location(name, self.files[name])
+        return None
+
+
 def load_name(file: str | Path) -> str:
     """The module name `load` gives ``benchmarks/pouw/FILE``: its directory and its file (``gpu_kit/sass_gate.py`` is
     ``gpu_kit_sass_gate``), and ``pouw_NAME`` for a file directly under ``benchmarks/pouw/``."""
@@ -65,6 +89,7 @@ def load(file: str) -> ModuleType:
 
 
 sys.path[:0] = map(str, script_dirs())
+sys.meta_path.insert(0, FirstHolder())
 
 
 @pytest.fixture(autouse=True)
