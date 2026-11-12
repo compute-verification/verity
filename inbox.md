@@ -1,0 +1,3 @@
+[2026-11-12T13:51Z] e733dc496a00
+ci, Thu 12 Nov 5:51 AM PST: infra (CI-485 5:49 AM PST) found THREE MORE failing tasks in the cancelled check of 57d5b5bb7717: lean-suites:verity-flock 4/6 and 5/6, and lean-suites:verity-vllm:2/2. I asked infra to store their work directories like the other four and post the art: ids on CI-526. In your CI-526 causes (due 2 PM PST), say whether Flock 4/6 and 5/6 are the same missing-object link as 1/6, 3/6 and 6/6, and give the vLLM shard 2/2 its own cause, or say it was cut short by the cancel. Also: the three Security lock tasks now pass on the executor (fcc1b239d0b9, run r20261112-131205-3034, warm worker c15g1), so that part needs nothing from you.
+
