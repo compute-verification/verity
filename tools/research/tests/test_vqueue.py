@@ -37,8 +37,8 @@ def cand(sha: str, base: str, *members: int, state: str = PENDING, failed: tuple
                      reruns, enqueued)
 
 
-def task(name: str, *inputs: str) -> Failed:
-    return Failed(name, f"key:{name}", frozenset(inputs))
+def task(name: str, *inputs: str, kind: str | None = None) -> Failed:
+    return Failed(name, f"key:{name}", frozenset(inputs), kind=kind)
 
 
 def inherited(name: str, *inputs: str) -> Failed:
@@ -539,7 +539,7 @@ def test_a_failure_its_records_say_the_machine_made_is_infra_never_a_red(kind):
     (`MACHINE_KINDS`) is an infra error: retried at once, rung from the second reading, then split on its inputs as infra,
     ejecting nobody; a lone member is never ejected for it.  Beside a failure of the change's own, only that one blames; one
     the base fails too is inherited, as any failure is; and while other tasks run it waits, never failing early."""
-    oom = replace(task("step pytest", "pkg2/"), kind=kind)
+    oom = task("step pytest", "pkg2/", kind=kind)
     why = "c1's check ended in infra errors: step pytest"
     c = cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(oom,))
     assert decide(snap(c, ready=prs(1, 2, 3, 4))) == [Retry("c1"), Build((4,), "c1", 1)]
@@ -562,7 +562,7 @@ def test_a_failure_its_records_say_the_machine_made_is_infra_never_a_red(kind):
 
 def test_a_flaky_or_own_failure_is_still_a_fail():
     for kind in ("flaky", "own", None):
-        t = replace(task("step pytest", "pkg2/"), kind=kind)
+        t = task("step pytest", "pkg2/", kind=kind)
         acts = decide(snap(cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(t,)), ready=prs(1, 2, 3)))
         assert kinds(acts) == [Eject, Drop, Build] and acts[1].outcome.state == FAIL, (kind, acts)
 
