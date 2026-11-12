@@ -19,12 +19,12 @@ and that count is at least `NUM/DEN` of `n` at every `n` (`rateOn_subset`). So u
 `q = NUM/DEN`, whatever each window registers:
 
 * `samplingBlock_rate`: a window with a unit whose design `subset kd` is `RateOn num den` has `num/den ≤ kd / n`;
-* `integrityHorizon_rate`: `IntegrityHorizon` with every window's design `RateOn num den` in the hypothesis' place, at
+* `pooledIntegrity_rate`: `IntegrityHorizon` with every window's design `RateOn num den` in the hypothesis' place, at
   `q = num/den`;
-* `integrityHorizonCarried_rate`: `IntegrityHorizonCarried`, likewise.
+* `pooledIntegrityCarried_rate`: `IntegrityHorizonCarried`, likewise.
 
 The other five follow the same way, from `samplingBlock_rate`. None of the seven is about a window under
-`stratified-rate:` or `work-rate:`, whose sample is no uniform subset: `lawOn_rate` gives such a window's share, and
+`stratified-rate:` or `work-rate:`, whose sample is no uniform subset: `rateOn_count` gives such a window's share, and
 the period statement of the stratified design, `JointStratifiedHorizon`, takes no share as a hypothesis.
 
 Each statement fixes every window's population before the period. A prover that picks a window's population after
@@ -53,7 +53,7 @@ theorem samplingBlock_rate (w : SamplingBlock) {num den : ℕ} (hn : 0 < w.n)
 `rate:NUM/DEN[:T]` rule meets at every `n_t`: `rateOn_subset`), the probability that every window is accepted and the
 incorrect proof blocks total at least `ln(1/δ) · den/num` is at most `δ + Σ_t (ε_ks,t + δ_link,t)`. Its named
 assumptions are `IntegrityHorizon`'s. -/
-theorem integrityHorizon_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
+theorem pooledIntegrity_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
     (hδ : 0 < δ) (hn : ∀ t < T, 0 < (W t).n) (hrate : ∀ t < T, RateOn num den (.subset (W t).kd) (W t).n)
     (hA3 : ∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (s : Strategy (Period.game W T))
@@ -71,10 +71,10 @@ theorem integrityHorizon_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ 
 
 /-- **`IntegrityHorizonCarried` at a rate.** In a monitoring period of server-time blocks with carried leaves
 (`CarriedBlocks`), each session with a unit and its design `subset kd_t` sampling at least `num/den` of the `n_t`
-units it registers (`RateOn`, as in `integrityHorizon_rate`), the probability that every session is accepted and the
+units it registers (`RateOn`, as in `pooledIntegrity_rate`), the probability that every session is accepted and the
 incorrect proof blocks over the monitoring period total at least `ln(1/δ) · den/num` is at most
 `IntegrityHorizonCarried`'s bound. Its named assumptions are `IntegrityHorizonCarried`'s. -/
-theorem integrityHorizonCarried_rate (S : CarriedBlocks) (num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
+theorem pooledIntegrityCarried_rate (S : CarriedBlocks) (num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
     (hδ : 0 < δ) (hn : ∀ t < S.T, 0 < (S.W t).n)
     (hrate : ∀ t < S.T, RateOn num den (.subset (S.W t).kd) (S.W t).n)
     (hA3 : ∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)

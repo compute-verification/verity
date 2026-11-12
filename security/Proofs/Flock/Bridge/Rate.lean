@@ -16,7 +16,7 @@ least the rate at whatever sizes the prover registers. This file holds that step
 * `rateOn_subset`, `rateOn_stratified`, `rateOn_work`: the designs a rate names are `RateOn`: `subset k` at
   `k = Spot.Rate.count`, `stratified K` at `K = Spot.Rate.stratK` over the strata's sizes, and `work K` at floors
   `Spot.Rate.floor`;
-* `lawOn_rate`: under `LawOn law ns kd` and `RateOn num den law (Σ ns)`, `num · Σ ns ≤ den · kd`; `lawOn_rate_div`:
+* `rateOn_count`: under `LawOn law ns kd` and `RateOn num den law (Σ ns)`, `num · Σ ns ≤ den · kd`; `rateOn_share`:
   `num/den ≤ kd / Σ ns` in the reals (`rate_le_share`).
 
 The statements over a period of `SamplingBlock`s take a share `q ≤ kd/n` as a hypothesis and sample a uniform subset,
@@ -74,7 +74,7 @@ theorem sum_mul_le {α : Type} (f g : α → ℕ) (a b : ℕ) :
 
 /-- **A sampling design at a rate samples at least the rate of its units**: under `LawOn law ns kd`, where every count
 of `law` is at least `num/den` of what it is taken from (`RateOn`), `num · Σ ns ≤ den · kd`. -/
-theorem lawOn_rate {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h : LawOn law ns kd)
+theorem rateOn_count {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h : LawOn law ns kd)
     (hr : RateOn num den law ns.sum) : num * ns.sum ≤ den * kd := by
   cases law with
   | subset k =>
@@ -105,11 +105,11 @@ theorem rate_le_share {num den n kd : ℕ} (h : num * n ≤ den * kd) (hd : 0 < 
   rw [div_le_div_iff₀ (by exact_mod_cast hd) (by exact_mod_cast hn), mul_comm (kd : ℝ)]
   exact_mod_cast h
 
-/-- **The rate as a share**: under `lawOn_rate`'s hypotheses, over a population that is not empty,
+/-- **The rate as a share**: under `rateOn_count`'s hypotheses, over a population that is not empty,
 `num/den ≤ kd / Σ ns`. -/
-theorem lawOn_rate_div {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h : LawOn law ns kd)
+theorem rateOn_share {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h : LawOn law ns kd)
     (hr : RateOn num den law ns.sum) (hd : 0 < den) (hn : 0 < ns.sum) :
     (num : ℝ) / den ≤ (kd : ℝ) / (ns.sum : ℕ) :=
-  rate_le_share (lawOn_rate h hr) hd hn
+  rate_le_share (rateOn_count h hr) hd hn
 
 end Flock.Bridge
