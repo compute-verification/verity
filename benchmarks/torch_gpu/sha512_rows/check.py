@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
 from verity.commitments import hm96
+from verity.commitments.crypto.chacha20 import keystream
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
@@ -29,7 +30,6 @@ from verity.commitments.rowleaf import (
     sha512_row_v2_digest,
     sha512_row_v2_prefix,
 )
-from verity.commitments.crypto.chacha20 import keystream
 
 INST = hm96.SHA512
 KEY = INST.default_key

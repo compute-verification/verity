@@ -40,6 +40,7 @@ PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEME
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
 . verity/protocols/flock/pod/cuda-13.3.sh
+. verity/protocols/spot/verifier/one_stage/verifier_env.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
@@ -223,12 +224,12 @@ if has lean; then
     for set in $d/sessions-*; do
       mode=${set##*/sessions-}
       case $mode in *nsys*) continue ;; *plain*) [ $name = served-plain ] || continue
-        V=(verify --statement verity/flock-circuit+plain-leaves --stratified $n --coins os) ;;
-        *) [ $name = served ] || continue; V=(verify --zk --statement verity/flock-circuit) ;; esac
+        V=(--statement verity/flock-circuit+plain-leaves --stratified $n --coins os) ;;
+        *) [ $name = served ] || continue; V=(--zk --statement verity/flock-circuit) ;; esac
       o=$O/lean/$mode/$name; mkdir -p $o
       for S in $set/*/; do
         [ -f $S/session.json ] || continue; l=$(basename $S)
-        taskset -c $VCPU /usr/bin/time -v -o $o/time-$l.txt $LV "${V[@]}" --circuit $d/circuit.txt --public $d/pub-$n.bin \
+        taskset -c $VCPU /usr/bin/time -v -o $o/time-$l.txt $(verifier_env) $LV verify "${V[@]}" --circuit $d/circuit.txt --public $d/pub-$n.bin \
           --partition $d/partition.json --program $d/program.json --session $S > $o/$l.log 2>&1
         echo $? > $o/$l.rc; [ "$(cat $o/$l.rc)" = 0 ] || { LEAN_BAD=1; echo "lean $mode $name $l refused: $(tail -1 $o/$l.log)"; }
       done

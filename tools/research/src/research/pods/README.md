@@ -50,9 +50,9 @@ alive. Each module's docstring is its contract.
 | File | What it holds | Loaded from outside `research` by |
 |---|---|---|
 | `registry.py` | The machine registry: one TOML file per machine under `machines.d/` in the notes repository. | `infra/ops` (a released node has no files to read), `benchmarks/numerical` (a pod's id) |
-| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. | `benchmarks/numerical`, `tools/verity/check`'s tests |
+| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. A read asks GraphQL when REST gives no answer, each call is a line of `api-calls.log` with the counts RunPod has left, and a pod's last-read address is kept (`$XDG_STATE_HOME/research/runpod/`) and dialled without asking RunPod only at a host that proves the recorded host key. | `benchmarks/numerical`, `tools/verity/check`'s tests |
 | `budgets.py` | `budgets.toml`, every spending limit, at the notes repository's root; `gate` is what `create` asks. | `infra/control` (the guard's host) |
-| `connect.py` | `ssh` and `sync`; `ssh_base` is the ssh command for a name, looked up at call time. | `infra/control` |
+| `connect.py` | `ssh` and `sync`; `ssh_base` is the ssh command for a name: a RunPod machine's kept address while it is under an hour old and its host proves the recorded host key, else read from RunPod. | `infra/control` |
 | `part.py` | The `research pods` router, `create`, and the reference-part check (`check-part`; `create --require-reference-part`). | |
 | `lease.py` | The lease every pod carries from creation, so it ends whether or not anything else is alive. | |
 | `guard.py` | The one budgets guard: it enforces every line of `budgets.toml`, re-read each poll. | |

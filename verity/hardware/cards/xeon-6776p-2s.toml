@@ -1,7 +1,7 @@
 # Two Intel Xeon 6776P sockets, the RTX PRO 6000 node's host: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
-# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host exceeds it, whatever firmware
+# it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
 
 kind = "host"
 sku = "xeon-6776p-2s"
@@ -34,6 +34,16 @@ bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 cha
 bandwidth = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8: timing.py's HOST_SPEC_BYTES_PER_S, '16 channels of DDR5-6400'; a placeholder while memory.speed is" }
 read = { value = 6.068e11, unit = "B/s", mark = "measurement", source = "8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any reader mix measured; DRAM caps the sum, not the root complex (art:3250e5915dd8, note:20261015T0731Z-draft-model-constants; timing.py's HOST_READ_BYTES_PER_S)" }
 write = { value = 8.192e11, unit = "B/s", mark = "placeholder", source = "memory.bandwidth, as timing.py's HOST_WRITE_BYTES_PER_S takes it; above every write measured: 16 cores of one socket wrote 207.69 GB/s by non-temporal AVX-512 stores, 88.16 by rep stosb and 82.35 by cached stores (art:414bbca7c1fd, benchmarks/bandwidth/write_host.c)" }
+# The part's own ceiling, a second reading of speed, bandwidth and write: the channels at the fastest memory the
+# processor takes, whatever DIMMs the server has.
+speed_max = { value = 8800, unit = "MT/s", mark = "ceiling", source = "the fastest memory the part takes: Intel ARK 243691, 'Memory Types DDR5(6400MT/s), MRDIMM(8800MT/s)', above the same page's 'Maximum Memory Speed 8000 MT/s'" }
+bandwidth_max = { value = 1.1264e12, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed_max x memory.bus / 8 (563.2e9 a socket)" }
+write_max = { value = 1.1264e12, unit = "B/s", mark = "ceiling", source = "memory.bandwidth_max: the channels' rate bounds writes as it does reads" }
+
+# The disks of a node's VM, read back at most: a measurement of our node, not a number of the server (as cpu.vm_cores),
+# so a host card has this section only where its node's disks were read.
+[disk]
+read = { value = 4.311e9, unit = "B/s", mark = "measurement", source = "the RTX PRO 6000 node's VM's three virtio disks (275 GB, 1 MiB and 5.39 TB), each one's highest second by /proc/diskstats under fio's read-only direct reads of the raw devices, summed: 0.224 + 1.523 + 2.564 GB/s; the three at once peaked at 3.850 (art:53c2656f4c56; verity/protocols/poub/verifier/session/verifier.py's DISK_BYTES_PER_S rounds it up)" }
 
 # The host's on-chip storage at most, for the whole server whatever share of it the VM gets: the host's part of
 # S_chip (timing.py's HOST_CHIP_BYTES).

@@ -13,10 +13,13 @@ what the layout's design has and the tree does not.
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier`, `inference_only`, `remote` and `onsite`. Remote is what an auditor with no devices at the datacenter
-    runs, and onsite what an auditor with devices there runs. Inside a protocol, `verifier/` is trusted code (a Python
-    verifier until its Lean verifier, its `lean/`, replaces it), `prover/` is what its prover builds and its verifier
-    doesn't read, and `device/` is the auditor's device (the network certifier, the memory challenger, the challenger).
+    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are configurations, not protocols: remote is
+    what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there runs. Target,
+    not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of the audits; `remote/` and
+    `onsite/` under `verity/configurations/`, which no protocol imports; and `experimental/NAME/` for a whole directory
+    no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
+    its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
+    auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
@@ -35,11 +38,11 @@ what the layout's design has and the tree does not.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU or host model), `site` (its
+  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
     top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/`: `wire` (the wire every party speaks), `deploy` (parties, channels, the configuration and
-    the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
+  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
+    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
     and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
@@ -53,9 +56,10 @@ what the layout's design has and the tree does not.
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
-  its reader). `tests/`: invariants of the whole tree. `archive/`: code kept and not developed, in no suite. The archived
-  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
-  archive` restores them.
+  its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
+  deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
+  deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
+  layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
@@ -79,7 +83,7 @@ or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a p
 file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
 protocol or adapter imports it; `circuits/` imports nothing and `commitments/` only `circuits/`; no code imports
 `security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
-audits on those, and remote and onsite on top.
+audits on those, and compose on top; no protocol imports a configuration.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
@@ -229,13 +233,13 @@ unchanged.
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, or are low-risk, onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
 ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
-names), every PR when none does: a lone suspect is ejected, several are bisected, and the candidate is rebuilt without
-them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
+names), every PR when none does: a lone suspect is ejected, several are bisected, and in the same tick the candidate and
+those above it are rebuilt without them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
 `warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
 next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
@@ -348,4 +352,5 @@ and its parameters). What a run measured, what happened and who decided live out
 call something served, end to end, proved or credited), `writing-runs` (a job for `research run`), `friction` (when
 something is in your way, and the standing rulings), `process-design` and `authoring-skills` (at most 16 KB a skill).
 The team's own agents start with `team` (machines, landing, lanes, and where work, notes and evidence live), then
-`coordinating`, `using-slack`, `asking-daniel` and `writing-goals` (your goals in the plan Daniel reads).
+`coordinating`, `using-slack`, `asking-daniel`, `writing-goals` (your goals in the plan Daniel reads) and `team-shapes`
+(which team a piece of work gets, each shape with what its uses measured, and how any agent tries a different practice).
