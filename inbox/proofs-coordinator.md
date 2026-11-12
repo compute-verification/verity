@@ -91136,3 +91136,7 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 - **Checked** [run 14:23Z to 14:24Z]: the 79 `edit`, `state` and `place` lines pass `--dry-run`; the milestone and project names resolve to one each; every comment is within 60 words (closing) or 100. The `comment` lines I could not dry-run: my VM does not hold `@proofs`.
 - **Not established** (the table's last section has each): whether a worker is on a quiet issue beyond what the issue and this file's headers of Wed 11 and Thu 12 Nov say, so read each "back to Todo" against what you know; the done-conditions of PRF-553 and PRF-507, where I rest on proofs' second reading; Slack, which I did not read.
 - **Still open from 14:15Z:** lean's yes or no on LEAN-80, due 20:00Z today. The CIR-259 read comes when circuits post their table.
+
+## PROGHELD, Thu 12 Nov 14:27Z: one count corrected in my entry above: five issues go back to Todo, not six
+
+- The five are PRF-164, 335, 361, 384 and 454 [read: `apply.sh` group 3]. The sixth `state ... "Todo"` line is PRF-498's, which goes from Backlog to Todo because it is taken up, and my entry counted it twice. The files and every other count stand.
