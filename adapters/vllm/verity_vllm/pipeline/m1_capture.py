@@ -305,7 +305,7 @@ def main(args: Options) -> None:
            "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_equal = True
-    per_req = timing.get("requests")       # the run's timing by request: None where the timing has none
+    per_req = timing.get("requests")       # the run's timing by request, where the timing has any
     # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
     # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
     # unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
@@ -324,8 +324,8 @@ def main(args: Options) -> None:
         gen = tokens.get(rid, [])
         eq = (acc is not None and gen == acc[: len(gen)] and len(gen) == len(acc)) if acc is not None else None
         all_equal = all_equal and bool(eq)
-        timed = None if per_req is None else per_req.get(rid)
-        steps_r: dict = {} if timed is None else timed       # a request the timing has no record of has no realized step
+        timed = per_req.get(rid) if per_req else None
+        steps_r: dict = timed if timed else {}                # a request the timing has no record of has no realized step
         _served = len(gen)
         _cap = int(r["max_tokens"])
         _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap

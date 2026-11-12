@@ -79,8 +79,8 @@ def per_token_bytes_of(sizing: dict[str, Any]) -> tuple[int, str | None]:
     if sizing.get("rope_per_layer"):
         return pt, None
     widths, model = sizing.get("widths"), sizing.get("model")
-    rope = 0 if widths is None else int(widths.get(LC.ROTARY) or 0)
-    layers = 1 if model is None else int(model.get("layers") or 1)
+    rope = int((widths.get(LC.ROTARY) if widths else None) or 0)
+    layers = int((model.get("layers") if model else None) or 1)
     if rope and layers > 1:
         return pt + rope * (layers - 1), f"{LC.ROTARY} width {rope} B counted once in the sizing record: x{layers} layers (+{rope * (layers - 1)} B/token)"
     return pt, None

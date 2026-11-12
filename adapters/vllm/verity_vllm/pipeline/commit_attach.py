@@ -41,9 +41,11 @@ def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_v
 def families_named(required_manifest: dict[str, Any] | None) -> dict[str, Any]:
     """How many identities a required-value manifest names of each family (its `populations.by_family`): no family where there is
     no manifest, or it counts none by family."""
-    populations = None if required_manifest is None else required_manifest.get("populations")
-    by_family = None if populations is None else populations.get("by_family")
-    return {} if by_family is None else by_family
+    if required_manifest is None:
+        return {}
+    populations = required_manifest.get("populations")
+    by_family = populations.get("by_family") if populations else None
+    return by_family if by_family else {}
 
 
 def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str, Any] | None, out: Path, *, kind: str,
