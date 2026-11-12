@@ -26,7 +26,11 @@ with any case's evidence, raw or hex, the cases' commitments and digests aside. 
 contain the private one.
 
 With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB...`` and exits with its code: 0
-accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
+accept, 1 reject, 2 undecided. Its record then says what ran the check (`provenance`, ``ran``, and a ``RAN`` line):
+the commit of the tree it was built from (``--tree``), the executable's SHA-512, and the guarantee the accept cites
+(`CITES`) with what that commit's lock says of it. An accept whose cited guarantee that lock doesn't list exits 66
+(``UNCITED``); one with no cited guarantee, no commit or lock, or a tree that isn't its commit's bytes is labelled
+``NOT_ESTABLISHED``. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
 or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
 naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
 """
@@ -37,6 +41,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Iterable, Sequence
@@ -60,8 +65,15 @@ EXCEPTIONS = {
         "it in the clear tonight as a stated exception.\"); v1's private form (division committed under hiding leaves, "
         "compliance proved, padded profile) replaces it after 15:00Z on 28 Oct"),
 }
+#: The listed guarantee each product's accept rests on, as its lock names it: the one theorem over the compiled check its
+#: executable runs. A product with none listed accepts with no theorem behind it, and its record says so.
+CITES = {"remote": "Verity.Sampled.remote_soundness_deployedReady"}
+#: The lock that lists `CITES`' guarantees, at the tree's commit.
+LOCK = "security/lean-audit.json"
 USAGE = 64
 LEAK = 65
+#: An accept whose cited guarantee the lock at the tree's commit doesn't list.
+UNCITED = 66
 #: Public bytes sharing a run of twice this with a case's evidence are refused: the evidence's windows at this stride,
 #: looked up among every window of the public bytes, find any such run.
 WINDOW = 32
@@ -163,11 +175,59 @@ def exceptions(product: str) -> list[str]:
     return [EXCEPTIONS[i] for i in COMPONENTS[product] if i in EXCEPTIONS]
 
 
+def file_sha512(path: Path) -> str:
+    h = hashlib.sha512()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def provenance(product: str, exe: Path, tree: Path) -> dict[str, Any]:
+    """What ran the check: the tree's commit (``commit``, None outside a git checkout) and whether its tracked files are
+    that commit's (``clean``), the executable's SHA-512 (``verifier_sha512``), and the guarantee the product's accept
+    cites (`CITES`, ``cites``) with what the lock at that commit says of it (``lock``: ``listed``, ``deployed``, and
+    its premises still open, ``open``; None where the commit holds no lock)."""
+    git = lambda *args: subprocess.run(["git", "-C", str(tree), *args], capture_output=True, text=True)  # noqa: E731
+    head = git("rev-parse", "HEAD")
+    commit = head.stdout.strip() if head.returncode == 0 else None
+    clean = commit is not None and git("status", "--porcelain", "--untracked-files=no").stdout == ""
+    cites, lock = CITES.get(product), None
+    shown = git("show", f"{commit}:{LOCK}") if commit is not None else None
+    if cites is not None and shown is not None and shown.returncode == 0:
+        audit = json.loads(shown.stdout)
+        g = audit.get("guarantees", {}).get(cites)
+        lock = {"listed": g is not None, "deployed": cites in audit.get("deployed", []),
+                "open": sorted(((g or {}).get("premises") or {}).get("open", []))}
+    return {"commit": commit, "clean": clean, "verifier_sha512": file_sha512(exe), "cites": cites, "lock": lock}
+
+
+def uncited(p: dict[str, Any]) -> str | None:
+    """Why the lock at provenance `p`'s commit refutes the guarantee its accept cites: it lists no such guarantee."""
+    if p["cites"] is not None and p["lock"] is not None and not p["lock"]["listed"]:
+        return f"{LOCK} at {p['commit']} lists no {p['cites']}"
+    return None
+
+
+def unestablished(p: dict[str, Any]) -> str | None:
+    """What provenance `p` leaves unshown about its accept's theorem, short of a refutation (`uncited`)."""
+    if p["cites"] is None:
+        return "the product cites no listed guarantee"
+    if p["commit"] is None:
+        return "the tree is no git checkout"
+    if p["lock"] is None:
+        return f"{p['commit']} holds no {LOCK}"
+    if not p["clean"]:
+        return f"the tree's tracked files differ from {p['commit']}"
+    return None
+
+
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: dict[str, str] | None) -> dict[str, Any]:
-    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
+                  verdict: dict[str, str] | None, ran: dict[str, Any] | None = None) -> dict[str, Any]:
+    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies; with ``ran``, what ran the
+    check (`provenance`)."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "exceptions": exceptions(product),
+            "exceptions": exceptions(product), **({"ran": ran} if ran is not None else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -217,7 +277,7 @@ def run(a: argparse.Namespace) -> int:
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
            *blobs]
-    rc, verdict = 0, None
+    rc, verdict, ran = 0, None, None
     if a.exe:
         p = subprocess.run(cmd, capture_output=True, text=True, check=False)
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
@@ -225,8 +285,14 @@ def run(a: argparse.Namespace) -> int:
         verdict = outcome(PRODUCTS[a.product], answer)
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
+        ran = provenance(a.product, Path(shutil.which(a.exe) or a.exe), a.tree)
+        lines.append(f"RAN {ran['commit']} clean={ran['clean']} sha512={ran['verifier_sha512']} cites={ran['cites']}")
+        lines += [f"NOT_ESTABLISHED {why}"] if (why := unestablished(ran)) else []
+        if rc == 0 and (why := uncited(ran)) is not None:
+            lines.append(f"UNCITED {why}")
+            rc = UNCITED
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, ran))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
@@ -253,6 +319,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--private-out", type=Path, required=True, help="the composed case and the answers (0700)")
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitments and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
+    ap.add_argument("--tree", type=Path, default=Path(__file__).resolve().parents[2],
+                    help="the checkout the executable was built from (default: this file's)")
     return run(ap.parse_args(argv))
 
 
