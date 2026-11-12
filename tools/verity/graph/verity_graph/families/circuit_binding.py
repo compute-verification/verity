@@ -36,9 +36,9 @@ SIDECARS = f"{SOURCE}/sidecars.py"
 SUFFIX = ".circuit-check"
 CATALOG = "circuit-catalog:records"
 RECORDS = {"name": "records", "path": "out/circuit-records.tar.gz"}
-#: the catalog task's slot, the large one (`check.tasks`' LEAN_SLOT, less its disk): every binding task waits on it, and its
-#: builds run as many at once as the memory their heaviest hold leaves room for
-CATALOG_SLOT = {"cores": 32, "mem_gb": 128, "disk_gb": 8}
+#: the catalog task's slot: every binding task waits on it, so its builds run up to `cores` at once, as many as their recorded
+#: peaks fit in `mem_gb` (its circuit-check's --jobs and --mem-gb), which bounds the run; within tasks.toml's `[slot]`
+CATALOG_SLOT = {"cores": 32, "mem_gb": 80, "disk_gb": 8}
 #: the directory of the catalog task's slices, and the part every binding's run shares
 SLICES = "out/slices"
 SHARED = {"name": "shared", "path": f"{SLICES}/shared.json"}
