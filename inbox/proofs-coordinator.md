@@ -86045,3 +86045,104 @@ Clock read: 11:33Z. Branch `cursor/proofs-members-files-61d4` at `0429a81f9848`,
 - Three earlier timing runs gave no member's time (`e473`: no pytest; `b1e1`: my harness did not compile; `1988`: the challenger refusal above).
 
 **Runs still out on the head:** suites `r20261112-110753-e3ca` (`cpu-14`), 27 of 69 passed and none failed at 11:30Z [read], the difftest and Flock suites not yet reported; records `r20261112-110654-154d` (`cpu-11`), the Flock verifier's and the certifier's audits passed, now on `security` [read]. The pull request opens when both pass.
+
+## HEADSPLIT, Thu 12 Nov 11:35Z: the trial merge of #9112 and #9185 into #9087's head closes with one README hunk and one word of #9087's, and the named test and both suites pass on it; the test needs no new assertion; every figure in #9087's body moves by the merge; #9254's seven files read fine but for one comment; its unrefreshed cards do make #9087's figures stale, and the refresh is ours
+
+**Where things stand**
+
+- [run] Heads at 11:08Z: #9087 `0cb0d8dbb679` (nothing pushed to it), #9112 `366a6ece9985`, #9185 `5a4b6dc7102b` (it holds #9112's head), #9254 `aa394f635390` (it holds #9087's head).
+- [run] Neither #9112 nor #9185 is on `main` at 11:35Z (`main` `33866d93e66e`; `git log origin/main --grep` for each prints nothing).
+- [run] The trial is branch `cursor/proofs-headsplit-trial-8038` at `19a4dbf152e4`, pushed: #9087's head, #9112's head merged (`f4abade6b5`), #9185's head merged (`f6d9c38089`), then the mend.
+- [read] Both mailboxes read at 11:35Z: nothing newer than 07:40Z and 05:31Z.
+
+**1. The merge and what I kept**
+
+- [run] #9112's head stops in one file, `benchmarks/spot_figures/README.md`, in one hunk. #9185's head on top of it stops nowhere.
+- [run] Against #9185's head the trial differs in exactly the 28 files #9087 changes; 25 of them are #9087's byte for byte. The other three are the README, `total_cost.py` and `tests/test_total_cost.py`.
+- [run] The hunk is two bullets under "Figure 1". Kept from #9087: its clause on (A″) at the end of the first bullet ("line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut … A new configuration, such as another cut, is a new entry with its own line."). Kept from #9112: its second bullet whole ("A two-stage line's first stage is the one the verifier runs …" to "… that line is the cost model's.").
+- [run] Dropped: `main`'s old second bullet ("A two-stage statement holds one Definition's sampled proof blocks …"), which #9112 rewrites and #9087 never changed; and #9112's unchanged copy of the first bullet's last sentence, which #9087's clause extends. The merged README differs from #9185's by that clause alone (4 lines in, 1 out).
+- [read] Left as it is, for you to say: #9112's sentence "(A) and (A′) are plotted at each of the three sizes" is true of (A″) too and does not name it. #9087 never named it there either.
+
+**2. The test: the assertion is right, #9087's label was stale, and no assertion is new**
+
+- [run] With the two merges alone the named test fails at `tests/test_total_cost.py:557` (locally, 16 s), as the lane's run `7b52` found [relayed].
+- [read] On the merged tree every two-stage line is planned with one stratum a block type. `total_cost.py` passes `stratify=STRATA` (`"template"`) at each of its three planning calls and has no choice a line.
+- [run] In the trial's output all 24 plans of the `head_units` lines read `merged: "template"`, as the 24 of `tokens` and of `per_expert` do (`r20261112-111618-d9e7`).
+- [read] "two-stage, width-stratified" is the label every two-stage line carried when #9087 was written. #9112 renames it on the lines it has; `head_units` is not one of them.
+- [run] So the mend is one word of #9087's own line in `benchmarks/spot_figures/total_cost.py`: `head_units`' `Configuration` now reads `"two-stage, by template"` (commit `19a4dbf152e4`). I did not change the test file.
+- [read] #9112's assertion stands as written and now holds for `head_units` and its three variants: `assert all(c["design"] == "two-stage, by template" for n, c in out["configurations"].items() if n != "every_block")`.
+- [read] The test already holds `head_units` to the fact behind the label: #9087's loop `for name in ("tokens", "per_expert", "head_units")` now runs #9112's `plan["merged"] == "template"` on every point that has a design.
+- [run] The named test on the trial: locally 1 passed in 24 s; through the suite's runner 1 passed in 32 s (`r20261112-111401-134b`, exit 0).
+- [guess] If you still want the test changed, the only true form I see is `c["design"] == f"two-stage, by {t.STRATA}"`. An exception for `head_units` would state something false.
+
+**3. Suites on the trial tree, at `19a4dbf152e4`**
+
+- [run] `benchmarks/spot_figures` whole, slow tests included, run afresh: 239 passed in 898 s. `benchmarks/sampling_plan`: 52 passed in 36 s (`r20261112-111324-f10e`, exit 0).
+- [run] Launched and not ended: the quick tier of the suites #9087's change reaches on the trial tree, `suites.py --changed 5a4b6dc7102b --quick` (`r20261112-112538-beae` on vy-nebius-cpu-14, launched 11:25Z).
+- [guess] It ends about 12:45Z: the same tier at #9087's head was 115 min of test time on 12 cores.
+
+**4. Figures: none in the README; every one in #9087's body moves**
+
+- [read] The README holds no figure, before or after the merge.
+- [run] The data #9087 carries is byte for byte the same through the merge: the planner's card, the partition card, the description sizes and the pins.
+- [read] Two things under the body's figures change: #9112's design (a verification phase samples a whole number of its replay blocks, and each block type its own whole count) and #9185's workload card (the census of record).
+- [run] The body's first table reads the line at one machine's verification phase. On the trial tree that line is at everything the scope serves at 0.1%, 1% and 10% of compute, in all six scopes, for whole key blocks and for the units alike (`d9e7`). At 10% one sampled replay block costs 19.7 of that phase's budgets with whole key blocks and 20.8 with the units.
+- [run] At a 64-machine pod's verification phase there is a design only at 10%: 29.6 TB to 29.5 TB (−0.3% to −0.4%).
+- [run] At a datacenter's verification phase, whole key blocks → scores and values units (`d9e7`; modeled, key rows not held equal; † is everything the scope serves):
+
+| over | it serves | at 0.1% of compute | at 1% of compute | at 10% of compute |
+|---|---|---|---|---|
+| the world, a week | 7 EB | 2.89 PB → 1.94 PB (−33.0%) | 163 TB → 146 TB (−10.0%) | 15.7 TB → 14.1 TB (−10.6%) |
+| the world, a month | 30 EB | 2.89 PB → 1.94 PB (−33.0%) | 163 TB → 146 TB (−10.0%) | 15.9 TB → 14.3 TB (−9.8%) |
+| the world, a year | 365 EB | 2.89 PB → 2.88 PB (−0.4%) | 182 TB → 159 TB (−13.1%) | 16.4 TB → 14.8 TB (−10.1%) |
+| a datacenter, a week | 1.87 PB | 1.87 PB † → 1.46 PB (−21.6%) | 146 TB → 133 TB (−9.2%) | 14.4 TB → 12.7 TB (−11.3%) |
+| a datacenter, a month | 8.01 PB | 1.94 PB → 1.46 PB (−24.6%) | 146 TB → 133 TB (−9.1%) | 14.6 TB → 13 TB (−11.5%) |
+| a datacenter, a year | 97.4 PB | 1.94 PB → 1.46 PB (−24.6%) | 160 TB → 146 TB (−8.8%) | 14.9 TB → 13.4 TB (−10.1%) |
+
+- [run] Before the merge the first table read −6.0% to −6.8% in every row, with bounds from 36 TB to 4.4 PB (`r20261112-090421-226b`).
+- [run] All 48 points with a design, at the pod's and the datacenter's phases, plan more sessions than block types: 723 to 248,152 sessions against 192 block types with whole key blocks and 250 with the units. [read] #9112's README says such a point prices sessions the verifier's second stage refuses. So the table above is the cost model's and no more.
+- [run] The comparison no longer needs my scratch card. #9185's workload card holds the sparse attention as whole key blocks: the scratch card's 84 block types, every field equal. With the scratch card in the partition card's place the lines equal `tokens`' exactly (`d9e7`). So the table is line (A) against line (A″) of the tree's own figure.
+- [run] The driver's own three rows, the world for a year, at 10% of compute: 14,438.4 → 6,770.4 GB, 8,814.3 → 4,887.1 GB and 2,483.6 → 1,452.5 GB (`r20261112-112251-6f72` on the trial, against `r20261112-091117-88b4` at #9087's head).
+- [derived] Those three moves are #9112's and #9185's own: #9087 changes nothing the driver's command reads.
+- [read] The units' sides of the body's driver rows (8,052.2, 8,654.1, 2,439.3 and 2,986.2 GB, and the four without the 128k workload) have no command on the merged tree. My scratch wrapper called `levers.split_cols` and `MLA128_VOLUME` and matched `SparseMlaSplitPart_v1`; all three are gone. They are figures of an older tree until PRF-576 prices the units in the driver.
+- [derived] So after the real merge the body needs a rewrite of "Why", not one more bullet: the sentence you ruled at 06:10Z ("On `total_cost.py`'s line for the short request, the change is worth 6% to 7%") has no row left.
+- [guess] What I would write, unless you say otherwise: the first table becomes the one above, with a sentence that the one-machine line has no design at any budget and the pod's only at 10%; the driver's rows keep their figures labelled as of `0cb0d8dbb679`, with the three new whole-key-block figures beside them and no units' side. I change nothing of the body before the real merge.
+
+**5. #9254's seven files, read at `aa394f635390` against #9087's head**
+
+- [run] `main` changes none of the seven between the two heads, so the diff is #9254's own.
+- `benchmarks/one_stage/a5.py`: fine by read, one comment to change, and one run of mine open on it.
+  - [read] `held` gives registered reads to each member that holds a wired port in its writer's tree, and `own_reads` fills every port of it, the held ones at the writer's root.
+  - [read] No other window gains registered reads by it. `wired_trees` is false only in the two-stage interior, whose driver already hands a5 registered reads for every member (`two_stage.verifier_reads`), which override `held`; and, on #9254, in scores and values units.
+  - [read] The comment on `linked = None` (line 850) still says "the first sampled chunk with registered reads"; it is now the first whose reads name a value of more than one row, else the first.
+  - [read] The two changes to the negatives (the next-row case takes the first port of more than one row; `linked` prefers a member that has one) reach every audit with registered reads: row tables, the two-stage audit, the stand-ins that read registered values. #9254's body cites the audit of `sparse-mla:units` alone.
+  - [run] So I launched the row-tables stand-in at #9254's head, the path those negatives were written for: `r20261112-113402-dade` on vy-nebius-cpu-13, 11:34Z. Its verdict is in my next entry.
+- `benchmarks/one_stage/a5_sparse_mla.py`: fine. [read] `committed` gives each held port its writer's values through the fixture's `held_values`. `stand_in`'s docstring still says "its row at DV = 64 in scores and values units"; the row is now at DV = 64 and DR = 32, with the writers. Small.
+- `benchmarks/one_stage/a5_tp.sh`: fine. [read] A comment only.
+- `benchmarks/one_stage/block_census.py`: fine. [read] Two docstrings only; the units come from `serving_rows.chain_ways`.
+- `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json`: fine. [run] 38 templates: the scores unit on column blocks at 64 and at 16 keys (256 and 1,024 a statement, as #9087's scores units), eight values templates at each (256 and 1,024 a statement, an eighth of #9087's 2,048 and 8,192, a column block being a template of its own), nine writers at each (32 and 128 a statement), and the split end and the combine as they were. Law and scope are unchanged.
+- `benchmarks/one_stage/tests/test_a5_wiring.py`: fine. [read] The new test wires the reader's units to the writer's in reverse and checks unit 0 alone, so it fails if a5 flips the table's first row; it tests what it says.
+- `benchmarks/one_stage/tests/test_block_census.py`: fine as a test. [read] One sentence of its docstring is true only of a rerun: "so the planner's card and the served partition hold one cut of the row". The test compares the served partition with `chain_ways`, not with the card on the tree, and the card on the tree is #9087's.
+- [run] `a5.py` and `tests/test_a5_wiring.py` are two of the five files where lean's branch stops against `main`. That is between circuits and lean.
+
+**6. Do the unrefreshed cards make #9087's figures stale once #9254 lands? Yes. The refresh is ours.**
+
+- [read] `benchmarks/sampling_plan/glm53_blocks.json` and the partition card name #9087's units: a scores unit with its own key rows, one values type, no writer. With #9254 the tree serves a scores unit on column blocks, eight values types (one a column block) and nine writers a key block for all eight heads.
+- [relayed: #9254's body] Proving in block bits: 1.095 times #9087's for a later key block of eight heads, 1.0997 times over the step-16 row.
+- [derived] Block types: the card's sparse attention goes from 142 to 1,173 (65 scores, 65 × 8 values, 64 key counts × 9 writers, 12 others), and a plan's from 250 to 1,281. Under #9112's rule each samples at least one proof block in a session of its own.
+- [guess] That count, more than the 9.5%, is what moves the figures, and against the units: at one machine's phase the units already cost 5.6% more than whole key blocks for one sampled replay block (20.8 against 19.7 budgets, [run]). Not computed for #9254's form.
+- [read] #9254 serves values units only at widths that divide the key row's 64 other columns too, so 128 columns is no longer served. The body's figures at 128 columns (8,654.1 GB, −40.1%; 2,986.2 GB, −66.1%) would be of a partition the tree does not serve.
+- [read] Three statements go false the other way: the card's `label`, `total_cost.py`'s label for (A″) and the README's clause each say no unit writes the key rows. With #9254 one does, and the card still does not price it.
+- [read] Whose: both files are proofs' data. The card's `owner` reads `@proofs`, #9087 wrote both, and #9254's body says it leaves them. The refresh cannot go into #9087: the templates are not on its tree.
+- [guess] It is a pull request of ours on `main` after #9254 lands: `block_census.py` rerun at that tree for the planner's card, the partition card rebuilt from it (a new `art:` id, so a new file name), the three labels, and the figures rerun. It fits as PRF-576's first commit or as an issue of its own; yours to say. Until it lands, #9087's body should say that its units' figures are of the form with a key copy a unit.
+
+**What I ask you**
+
+- The mend as made (the label, not the test), or the test changed as in item 2's last line.
+- The first table after the real merge: item 4's last line, or your wording.
+- Whose issue the cards' refresh is (item 6's last line).
+
+**What I wait on**
+
+- `r20261112-112538-beae`, about 12:45Z [guess], and `r20261112-113402-dade`, no estimate. Resume me on their ends if you want the two verdicts before the landings.
+- The two landings. When both are on `main` I merge `origin/main` into `cursor/proofs-headsplit-c85e` with these closes, push, run the quick tier and the cost model, edit the body and write the ready line.
