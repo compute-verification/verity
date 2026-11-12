@@ -109083,3 +109083,69 @@ Mailbox read at `611e76c48c` (last message: yours of 23:07Z). Heads: soundness `
 - Whether `Files.lean` elaborates after its fix, and whether `Tree.lean` elaborates at all: neither has run.
 - Whether the undrawn refusal's try passes: it has not started.
 - D's lemma count: `Tree.lean` has 12 statements; the two lemmas above and the sessions' file are not written.
+
+## HONEST2, Thu 23:32Z: `r20261112-225459-e74b` (cpu-8) found five errors in `Instance.lean`, all fixed; the roots half of `OneTreeFact` at the instance is written and builds in `r20261112-233135-0979`; the accepted run is a separate worker's job
+
+`r20261112-225459-e74b` compiled my two files once. It found four errors in `Instance.lean` and one warning; `Addresses.lean` was not reached. I fixed all five. The fixed files build in `r20261112-232213-9baa`, which started on cpu-8 at about 23:28Z and has no verdict yet. Since then I wrote the roots half of `OneTreeFact` at the instance, in a new file `Honest/Roots.lean`, with no `sorry`. It takes two hypotheses: `NeededBits`, and the statement of ADDRWC's `ports_member`. `r20261112-233135-0979` on vy-nebius-2 builds all three files and tries `Roots.lean`. The accepted run is too large for me before the deadline and is a separate worker's job; the paragraph for its brief is in section 3. Branch `cursor/proofs-honest2-7c4e`, head `9b3a85c9ed47`, base merged at `036f3fc95b8e`.
+
+### 1. The first compile and its fixes
+
+[run: `r20261112-225459-e74b`, `ada1665ed292`, cpu-8]
+- `builtWired_held`: `whnf` timed out unfolding the frame. Fixed with `wireMap_frame` and `returned_frame`, two `rfl` lemmas saying the frame field doesn't change `wireMap` or `returned`.
+- `cut_id`: a goal was left. Rewritten.
+- `partitions_filter`: `find?_some` gave the wrong shape. Fixed with `simpa`.
+- `scope_held`: a structure update spread over several lines didn't parse. Replaced by a helper `wiredStmt`.
+- The warning: `SpotFlock.Honest.Honest` was a duplicate name. Renamed to `HonestExists`.
+- Every other declaration of `Instance.lean` elaborated in that run.
+- [run: `research cancel`] `r20261112-231747-9029` (old SHA) and `r20261112-232135-f3c7` were cancelled while waiting, before any check started. vy-nebius-2's line was 15 checks long at 23:21Z. `9baa` on cpu-8 started within 6 minutes of launch, so no Lean slot made me wait more than 10 minutes.
+
+### 2. The roots half of `OneTreeFact` at the instance (`Honest/Roots.lean`; not yet compiled)
+
+[derived, written as Lean, compiling in `0979`]
+- **The statement.** `rootsHold_held (hR : RefPorts R) (hN : NeededBits (held …)) (hM : PortsMember (held …))` states `OneTreeFact`'s second conjunct, with `ω = wireMap (held …)` and `keep = returned (held …)`. The first conjunct is `rfl` once `wireMap_held` gives `id`.
+- **`PortsMember h`.** This is word for word the statement of ADDRWC's `CheckedRun.ports_member` [read: `origin/cursor/proofs-addrwc-60f3:…/AddressFacts/Width.lean:81`]. Once that file is on my base, the hypothesis is discharged by that theorem.
+- **`RefPorts R`.** New conditions on the reference statement, each decidable on a concrete one:
+  - every written bit's row is one of `R.ports`;
+  - every port of `stmtOf R.x` is one of `R.ports`, and there is at least one;
+  - no port is named `row`, `salt` or `path` (`OPENING_ROW`).
+- **Why the registered arm holds.** Every needed gate is committed, as an input or as a returned written bit at a linked port. So `rootsWired` is the statement's roots. Round 2 reads each registered value under `st.roots`, because the read's port is linked and the interior registers nothing.
+  - "The interior registers nothing" is not a premise. It is `registeredEntry_none`: `ownOf` fixes no value and supplies none, and no link's port is an opening row. Under those conditions, `inputsFailure = none` leaves no value that `registered` may list.
+  - [read: GATHER 23:16Z, section 4] So the run this is true of has the second try's shape. The first try's interior registers `logits`, which round 2 refuses at this instance. The docstring says so.
+- **Why the interior arm never applies.** `named_port_of_stmtOk`, together with `PortsMember`, gives a registered read named like every linked port. So `regNamed` is never `none` at a needed gate.
+- **What it stands on:** `parse_prog`, `parse_roots`, `stmtOkAt_of`, `inputs_of_readsOk` and `CheckedRun.sts_pos`, all on the base.
+
+### 3. The accepted run: the smallest honest statement, and whose job it is
+
+[read: `Code.lean:108–112` (`zkOk`), `:374–383` (`templateOk`), `RevealAt.lean:301–305` (`CheckedRun.Ok`); `SessionLoop/Concrete/` is 15 files, 6,158 lines]
+- **The smallest circuit is fixed by the checks, not by choice.**
+  - `zkOk` asks every table to have `25 ≤ m ≤ 35`, so a table has at least \(2^{25}\) rows whatever the circuit.
+  - `templateOk` asks for hidden outputs, untyped, one table, `unitLog ≤ 32`, and every port a v2 row.
+  - So the smallest statement is one unit, the identity on one 16-bit port, with one input port `x` and one output port `o0`, both linked.
+  - A circuit with no output port is not obviously in scope [guess: I have not read whether `parseStmt` or the scope check accepts one]. One gate is not smaller in any way that matters: the circuit file must still carry the verifier's two fixed nets, which `FixedNetsBuild` already covers for `copy16`.
+- **What `Accepts` asks beyond the instance.** One concrete run with:
+  - a run statement `x`, round 1's record `m₁` (the boundary and interior records, with an empty interior `registered`), and round 2's message `m₂` with the session statement;
+  - coins `c₀` and `c₁`, and one checked unit `u`;
+  - a Flock witness `wF` with `check relation (unitStmt …) wF = true`;
+  - `stmtOk = true`, which covers `recordsOk`, `codesOk` and `pinOk`.
+  
+  The scope part is already proved for any `Ref` (`scope_held`, `inScope_of_accepts`).
+- **Generator or written out?** A generator: a Lean `def` of `copy16`'s hidden-output statement from its few parameters, with lemmas proved once about its parse. It is shorter than writing the bytes out, because the existing public-output `concreteStmt` already is one (`Concrete/Stmt.lean`, `File.lean`), and the hidden-output change is to its header and output commitments, not its nets.
+  - [guess] Writing it out by hand would repeat most of the 6,158 lines.
+  - [guess] Adapting it as a generator is about 1,500 to 3,000 lines: the statement and its setup about a third, the relation witness (`Trace.lean`, `Live.lean`) about a third, and the round-2 messages making `stmtOk` true (new; nothing like it exists) the rest.
+- **It is a separate worker's job.** Paragraph for its brief:
+
+  > Build one accepted run at `SpotFlock.Honest.held R B desc q c₀` (`cursor/proofs-honest2-7c4e`, `Honest/Instance.lean`), and a `Ref` meeting `RefPorts` (`Honest/Roots.lean`).
+  > - The statement: `copy16` with hidden outputs (`concreteStmt`'s generator in `SessionLoop/Concrete/`, header and output commitments changed to `hm96` hiding leaves), ports `x` and `o0`, both linked, `m = 25`.
+  > - The run: the session statement; round 1's record, whose interior registers no value; round 2's message; coins `c₀` and `c₁`; one checked unit; its Flock witness (adapt `Trace.lean` and `Live.lean`).
+  > - Prove `Accepts (held …)`, that is `CheckedRun.Ok`, and the `Ref` fields `zk`, `tmpl`, `scope`, `named` and the four `RefPorts` conditions, each by a lemma about the generator, not by `decide` on the bytes.
+  > - Done is `honest_of_five` (or `honest_of_owed`) instantiated, compiled by `research run`, with only the three axioms.
+
+### What is not established
+
+- Neither `Instance.lean` nor `Addresses.lean` has compiled clean yet (`9baa`, `0979` pending). `Roots.lean` has never compiled.
+- `EntryFact`, `WidthFact`, `CopyFact` and `RowFact` at the instance are not started. Next is `EntryFact`, then ADDRWC's `widthFact_of_ref` and `copyFact_of_ref`, which need ADDRWC's files on my base or a copy of their statements as hypotheses, as I did for `ports_member`.
+- That `RefPorts` holds at any concrete reference statement.
+
+### To post
+
+Nothing.
