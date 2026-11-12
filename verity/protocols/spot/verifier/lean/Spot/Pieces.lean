@@ -56,6 +56,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `session_registered`: the registered roots the verifiers report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
+* `across`: the verdicts on one read across streams (`Record.across`): the later registration's previous record in the
+  earlier stream's log, the order the challenger's signed log shows, and the earlier stream's audit record, whether it
+  accepted and whether it is complete, as the record the caller hands says: nothing holds that record to the one the
+  earlier stream's verifier wrote;
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
@@ -100,7 +104,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
 two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
-`check_proved`, `record`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it), `hello`,
+`check_proved`, `record`, `across`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
+outcome to it),
+`hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
 module
@@ -110,6 +116,7 @@ public import Spot.Slots
 public import Spot.FilePart
 public import Spot.Service
 public import Spot.Run
+public import Spot.RecordAcross
 public import Spot.Stream
 public import Spot.Fleet
 public import Spot.Hello
@@ -580,6 +587,21 @@ def sessionRegistered (j : Json) : V Json := do
 def record (j : Json) : V Json := do
   return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
 
+/-- One read across streams from `{"window", "log", "audit", "later", "coins", "read"}`: the window's open root, the
+earlier stream's log (a list of registrations), its audit record or null, the later stream's registration, and the later
+sample's coin evidence and the bytes it read, in lowercase hex. -/
+def acrossOf (j : Json) : V Record.Across := do
+  if keys? j != some #["audit", "coins", "later", "log", "read", "window"] then
+    throw "exactly {window, log, audit, later, coins, read}"
+  let .str window := getD j "window" | throw "window is not a string"
+  let .arr log := getD j "log" | throw "log is not a list"
+  let .str read := getD j "read" | throw "read is not lowercase hex"
+  return { window, log, audit := getD j "audit", later := getD j "later", coins := getD j "coins",
+           read := ← Flock.unhex read }
+
+/-- One read across streams (`acrossOf`) to `Record.across`'s verdicts on it. -/
+def across (j : Json) : V Json := do Record.across (← acrossOf j)
+
 /-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
 rule's `{"ok", "codes", "detail"}` (`Service.checkPublic`), the query's digest computed here: a string scheme, the check's query
 an object, each value a string name with a boolean, each declared item a string. -/
@@ -863,7 +885,8 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
+   ("session_registered", sessionRegistered), ("record", record), ("across", across),
+   ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
@@ -889,6 +912,6 @@ def table : List (String × (Json → V Json)) :=
 /-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
 
 end Spot.Pieces
