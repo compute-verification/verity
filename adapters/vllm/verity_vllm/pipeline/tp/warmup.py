@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.c2_replay import rss_kb
+
+logger = init_logger(__name__)
 
 
 def warming(worker: Any, on: bool) -> dict[str, Any]:
@@ -31,16 +34,16 @@ def run(llm: Any, run_once: Callable[[], dict[str, Any]], out: Path, kind: str, 
     fin = llm.collective_rpc("tp2_commit_finalize", timeout=rpc_timeout)
     off = {o["rank"]: o for o in llm.collective_rpc(warming, args=(False,), timeout=rpc_timeout)}
     (out / "finalize_warmup.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
-    print(f"[tp2commit] warm-up instrumented: {r['wall_s']:.3f}s; ranks {[(f['rank'], f['leaves'], f['errors_n'], f['errors'][:2]) for f in fin]}", flush=True)
+    logger.info("[tp2commit] warm-up instrumented: %.3fs; ranks %s", r["wall_s"], [(f["rank"], f["leaves"], f["errors_n"], f["errors"][:2]) for f in fin])
     # a rank whose committer reports no bounded staging (None), or reports it off, learned no plan here and has no entry
     bounded = [{"rank": f["rank"], **f["bounded_staging"], "pinned_pool_bytes": f.get("pinned_pool_bytes"), "plans_cached": f.get("plans_cached"),
                 "host_mem_kb": off.get(f["rank"], {}).get("host_mem_kb"), "errors": f.get("errors")}
                for f in fin if f.get("bounded_staging") and f["bounded_staging"].get("enabled")]
     for b in bounded:
-        print(f"[tp2commit] rank {b['rank']}: bounded staging warm-up ({kind}): learned-only steps {b.get('learned_only_steps')} "
-              f"({(b.get('learned_only_bytes') or 0) >> 20} MiB discarded), transient peak {(b.get('transient_peak_bytes') or 0) >> 20} MiB "
-              f"(budget {(b.get('learn_budget_bytes') or 0) >> 20} MiB), plan mismatches {b.get('plan_mismatches')}, plans cached "
-              f"{b.get('plans_cached')}, pinned pool {(b.get('pinned_pool_bytes') or 0) >> 20} MiB", flush=True)
+        logger.info("[tp2commit] rank %s: bounded staging warm-up (%s): learned-only steps %s (%d MiB discarded), transient peak %d MiB "
+                    "(budget %d MiB), plan mismatches %s, plans cached %s, pinned pool %d MiB", b["rank"], kind, b.get("learned_only_steps"),
+                    (b.get("learned_only_bytes") or 0) >> 20, (b.get("transient_peak_bytes") or 0) >> 20, (b.get("learn_budget_bytes") or 0) >> 20,
+                    b.get("plan_mismatches"), b.get("plans_cached"), (b.get("pinned_pool_bytes") or 0) >> 20)
     if bounded:
         (out / f"bounded_warmup_{kind}.json").write_text(json.dumps(bounded, indent=1, default=str) + "\n")
     llm.collective_rpc("tp2_commit_reset", timeout=rpc_timeout)

@@ -36,12 +36,13 @@ def _write(tmp_path, monkeypatch, replies) -> dict:
     return json.loads((tmp_path / "import_path_runtime.json").read_text())
 
 
-def test_the_import_path_of_record_is_the_drivers_files_with_every_ranks(tmp_path, monkeypatch):
+def test_the_import_path_of_record_is_the_drivers_files_with_every_ranks(tmp_path, monkeypatch, caplog):
     doc = _write(tmp_path, monkeypatch, [RANK_0, RANK_1])
     union = sorted({*DRIVER["files"], *RANK_0["files"], *RANK_1["files"]})
     assert {k: v for k, v in doc.items() if k != "schema"} == {"method": DRIVER["method"], "driver": DRIVER, "ranks": [RANK_0, RANK_1], "union_n": 4,
                                                                 "union": union}
     assert doc["schema"].endswith("/import-path-runtime/v1")
+    assert caplog.messages == ["[tp2commit] import path of record (runtime): driver 2 files, ranks [2, 1], union 4 -> import_path_runtime.json"]
 
 
 def test_a_rank_that_imported_no_repo_file_adds_none(tmp_path, monkeypatch):
@@ -50,6 +51,6 @@ def test_a_rank_that_imported_no_repo_file_adds_none(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("replies", [[RANK_0, None], [RANK_0, {"n": 0, "rank": 1}], RuntimeError("rank 1 did not answer")])
-def test_a_rank_that_answers_nothing_or_without_its_files_leaves_the_record_an_error(tmp_path, monkeypatch, replies):
+def test_a_rank_that_answers_nothing_or_without_its_files_leaves_the_record_an_error(tmp_path, monkeypatch, caplog, replies):
     doc = _write(tmp_path, monkeypatch, replies)
-    assert set(doc) == {"schema", "error"} and doc["error"]
+    assert set(doc) == {"schema", "error"} and doc["error"] and caplog.messages == []

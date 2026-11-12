@@ -5,6 +5,7 @@ no pin settings or no required manifest.  Each reads as what its absence means a
 `linkage_component` and `oracle_compare_component`."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -214,17 +215,41 @@ def test_a_rank_with_no_replay_record_is_not_a_deferred_one():
     assert C2.query_population_component(rows, True)["why"] == "deferred: ranks ['0'] replay from their bundles"
 
 
-def test_a_decided_commit_names_the_runs_that_awaited_a_replay_or_held_no_commit(tmp_path: Path, capsys):
+def test_a_decided_commit_names_the_runs_that_awaited_a_replay_or_held_no_commit(tmp_path: Path, caplog):
     rows = [{"arm": "control", "pair": 0}, {"arm": "instrumented", "pair": 0}, {"arm": "instrumented", "pair": 1, "commit": None},
             _run({}, pair=2, commit_pass=None), _run({}, pair=3, commit_pass=True), _run({}, pair=4, commit_pass=False)]
     summ = {"pass": False}
     C2.seal(tmp_path, summ, rows, {}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={}, all_pass=False, vc_base=None, comps={},
             xrank_pairs=[], xrank_families=[], label=None)
-    assert "the Commit is decided (pass False) with pairs [0, 1, 2] awaiting a replay" in capsys.readouterr().out
+    assert caplog.messages == ["[tp2commit] REPLAY BUNDLES discarded: the Commit is decided (pass False) with pairs [0, 1, 2] awaiting a replay"]
     assert summ == {"pass": False} and list(tmp_path.iterdir()) == []
+    caplog.clear()
     C2.seal(tmp_path, summ, rows[-2:], {}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={}, all_pass=False, vc_base=None, comps={},
             xrank_pairs=[], xrank_families=[], label=None)
-    assert capsys.readouterr().out == ""
+    assert caplog.messages == []
+
+
+def test_a_deferred_commit_seals_each_ranks_bundle_and_says_so_in_the_log(tmp_path: Path, monkeypatch, caplog):
+    sealed = []
+
+    def seal(out, pair, ctx, source, *, hashed, rank):
+        sealed.append((pair, rank, ctx["run_root"], ctx["tp_run_root"]))
+        return {"path": f"/bundles/pair{pair}/rank{rank}", "sha256": f"{rank}a" * 32, "bytes": (3 + rank) << 20, "files": ["store", "plan"]}
+
+    monkeypatch.setattr(RB, "seal", seal)
+    rows = [{"arm": "control", "pair": 0}, _run({"0": {"run_root": "r0"}, "1": {"run_root": "r1"}}, commit_pass=None, tp_run_root="tp")]
+    bundle: dict[str, Any] = {"engine_of_record": {}, "programs": {}, "hashed": None}
+    summ: dict[str, Any] = {"pass": True}
+    C2.seal(tmp_path, summ, rows, {0: {0: bundle, 1: bundle}}, replay_cfg={"requests": []}, required_manifest=None, world=2, versions={},
+            all_pass=True, vc_base=None, comps={}, xrank_pairs=[{"result": True, "by_family": {}}], xrank_families=[], label=None)
+    assert sealed == [(0, 0, "r0", "tp"), (0, 1, "r1", "tp")]
+    assert [re.sub(r"sealed in \d+\.\d s", "sealed in N s", m) for m in caplog.messages] == [
+        "[tp2commit] REPLAY BUNDLE (pair 0, rank 0): /bundles/pair0/rank0 sealed in N s, 2 files, 3 MiB, manifest sha256 0a0a0a0a0a0a0a0a",
+        "[tp2commit] REPLAY BUNDLE (pair 0, rank 1): /bundles/pair0/rank1 sealed in N s, 2 files, 4 MiB, manifest sha256 1a1a1a1a1a1a1a1a"]
+    assert summ["pass"] is None and summ["replay_deferred"]["pending_pairs"] == [0]
+    assert [(b["rank"], b["path"], b["bytes"], b["files"]) for b in summ["replay_deferred"]["bundles"]] == [
+        (0, "/bundles/pair0/rank0", 3 << 20, 2), (1, "/bundles/pair0/rank1", 4 << 20, 2)]
+    assert [f.name for f in tmp_path.iterdir()] == [C2.DEFERRED]
 
 
 PIN = {"result": True, "root_of_record": "aa", "compared": 9, "mismatched_n": 0, "missing": [], "unpinned": [], "all_shards_pinned": True, "committed_weights_root": "cc", "why": None}

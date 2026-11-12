@@ -4,6 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
+
 
 def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
     """The import path OF RECORD, from the RUNNING processes: this driver's repo-local sys.modules + every rank process's (after
@@ -19,6 +23,7 @@ def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
         (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "method": drv["method"],
                                                                    "driver": drv, "ranks": ranks_mods, "union_n": len(union), "union": sorted(union)},
                                                                   indent=1, default=str) + "\n")
-        print(f"[tp2commit] import path of record (runtime): driver {drv['n']} files, ranks {[r.get('n') for r in ranks_mods]}, union {len(union)} -> import_path_runtime.json", flush=True)
+        logger.info("[tp2commit] import path of record (runtime): driver %s files, ranks %s, union %d -> import_path_runtime.json",
+                    drv["n"], [r.get("n") for r in ranks_mods], len(union))
     except Exception as e:  # noqa: BLE001 -- evidence, not a gate
         (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "error": repr(e)[:300]}) + "\n")
