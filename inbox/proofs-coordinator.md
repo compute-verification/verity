@@ -87975,3 +87975,36 @@ ready to mark #9176 at `66b659922f14879b0d9e48145e1e638593c0866c`. [the head on 
 **#9212.** `r20261112-093345-2f31` was still running at 12:37Z; its timeout ends it at 12:43:41Z. [read] After it I merge this head into #9212 and launch its records run. [derived]
 
 **#9080.** Merged with `main` once, at `5456b937e7e5`: head `9e10a010f9ff1b9bc3b55411630aa6a6b0ab62c6`, pushed between 12:23Z and 12:24Z; one conflict, the cap line, resolved to `main`'s 267 / 2,141 plus this branch's 7 modules and 206 declarations = 274 / 2,347. [run] Its runs: the records run `r20261112-122414-0639` (vy-nebius-cpu-11) and the quick tier `r20261112-122456-38f2` (vy-nebius-cpu-2), both running at 12:37Z. [read] No stop against lean's branch beyond `main`'s; it stops against #9043 (`b2585b1f5bb6`) in `tools/verity/lean/unread-caps.json` only. [run, 12:25Z] Its ready line follows the two runs; it stays a draft and unmarked.
+
+## PROGHELD, Thu 12 Nov 12:43Z: READY LINE: #9234 at `95fe2956f926`, on #9190's `f6d1341b85`; all seven runs at that head exit 0; merges onto `main` `1885cf1fe08c` with no stop; no record moves; the body says it sits on #9190. Not marked: yours
+
+Tags: [run] a command I ran, [read] read now at the place given, [relayed], [derived], [guess].
+
+**Ready line.** #9234 https://github.com/compute-verification/verity/pull/9234, branch `cursor/proofs-proghold-467c`, head `95fe2956f92661fe0195762396528ab7c9a18a26` [run: `gh pr view`, 12:43Z: open, no label, that head; GitHub's `mergeable` reads MERGEABLE]. It holds `main` `33866d93e66e` and #9190's marked head `f6d1341b8529f86c38c61fdae0ae922886c02df3`, so it lands after #9190.
+
+**Runs at that head, each exit 0** [run; each read from its fetched `stdout.log` and `out/logs`]:
+
+- `r20261112-113610-c194`: `verity lean try` of `FlockVerify.lean`: lean exit 0 in 87 s; none of its 9 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`.
+- `r20261112-113613-90a7`: `verity lean try` of `Flock/Test/ProgramHeld.lean`: lean exit 0; every `#guard` holds, the pin of `dfa9`'s cases among them (`:123-126` another Program and bytes that are no descriptor refused in `programWhyP`'s words, `:132` no Program is `NO_PROGRAM`).
+- `r20261112-113617-c865`: `lean_changed.py --records verity/protocols/flock/verifier`, no `--update`: AUDIT PASS for the verifier (18,231 declarations in 257 modules, 11 guarantees), `verity/protocols/certifier/verifier/lean`, `security` with `security/Proofs`, and `security/Properties`. Its `audit.json`: `passed` true, `failed` empty, `regenerated` empty. **No record moves**, so no `--update` run was made. It is the fast path, without the kernel replay.
+- `r20261112-113622-8026`: `suites.py benchmarks/one_stage`: 586 passed in 1,059 s.
+- `r20261112-113631-e773`: `suites.py --changed 33866d93e66e --quick`: 61 suites, 61 passed, none cached. `repository` 346 passed, `tests/test_lean_packages.py::test_no_long_module_grows` among them. `verity-flock` 1,483 passed: a `--changed --quick` run takes a changed test module whole, so `test_lean_verify_members.py`'s five tests ran here too.
+- `r20261112-113630-516e`: `suites.py verity-flock -- -k test_lean`, slow tests included: 740 passed, 10 skipped. In it: `test_lean_verify_members.py`'s five, the changed `test_each_member_gets_the_verdict_verify_gives_it_alone_and_nothing_of_another_member` with them (49 s), and both `test_plain_tables_holds_the_program_to_the_circuit` (the built `flock-verify` on real sessions handed another Program: the wrong-Program refusal fires in the binary, not only in the guards).
+- `r20261112-113633-3f0c`: `suites.py verity/protocols/spot/verifier -- -k "test_proofs or test_form_refusals"`, slow tests included: 64 passed.
+- [run on the VM, 12:41Z] `ratchet_gate.py origin/main HEAD` against `main` `1885cf1fe08c`: 1 change, 0 failed.
+- The last quick tier's one failure before the merges (`test_nebius.py::test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle`) did not recur: all 61 suites pass here.
+
+**Merge-trees** [run, 12:43Z for `main`, 12:41Z for lean's]:
+
+- Against `main` `1885cf1fe08c`: no stop. `main` has moved three times since the merge (`33866d93e66e` → `e52d53383d7f` → `8b536f5c1d62` → `1885cf1fe08c`); what it gained under `benchmarks/one_stage` and `verity/protocols/flock` is five files this change does not touch (`block_census.py`, `m1_families.py`, `prove_leg.py`, `proof_server.py` and its test) and one sentence of `benchmarks/one_stage/README.md` away from mine, and no new line reads `program_sha512` or `server_rate`'s `Lean` [run: `git diff 33866d93e66e origin/main`]. I did not merge `main` again: the head the runs are at would move for no stop.
+- Against lean's `cursor/lean-remote-merge-landing-fc8d` `f3837f57d113`: 24 files stop against my head, 27 against `main` `1885cf1fe08c`. Less `main`'s own, one is left: `verity/protocols/flock/verifier/FlockVerify.lean`, at the two places #9190's head alone stops at (the `verifyCmdBy` usage line where lean adds `[--interface F]`; the `RegBound.check` line); the text between the markers is the same, both sides, as #9190's head alone gives [run: `diff` of the two merged files' stops]. (`main`'s own now include four my head does not show, since it holds an older `main`.)
+- **My lines need no more there** [read: `git show` of both commits on `origin/cursor/proofs-landing-closes-99d1`]: CROSSCLOSE's `b7fb9c30eab1` (with #9190; 2,017 lines) and `fed2063c5d79` (with #9190 and #9253; 2,018 lines) are written at my head `95fe2956f926` and each holds `let handed := program.map read.digest`, `ProvedScope.programBound parsed handed` and `ProvedScope.programFields parsed handed ++`. `a8c9ac795709`, the close for #9190 alone, has `let programSha := program.bind read.digest` at that line and is the one not to use once mine is in.
+- #9190 itself against `main` `1885cf1fe08c`: no stop [run].
+
+**Lines** [run: `wc -l`; read: `tests/test_lean_packages.py:554-571`]: `FlockVerify.lean` 1,987 at my head (`main` 1,995; #9190's head 1,985). The package's overlong total on my tree is 700, all `Flock/HmRow.lean`'s, against the cap 700; the test passes in `e773`.
+
+**The body** [run: `research queue edit 9234 --body-file`, 12:42Z, read back]: opens with "Sits on #9190", lands after it; the diff against `main` shows #9190's eleven files beside this change's eleven until #9190 is on `main`. Runs, the two merges and their closes, the lock paragraph and the reviewer's notes are at the new head.
+
+**Not run**: `lean-agreement` (needs the pinned upstream build); the kernel replay (a candidate's check runs it); `circuit-check` and Flock's Rust build and tests (the change holds no circuit and no Rust); the slow tests of suites other than the prover's `-k test_lean` and the spot verifier's two files; nothing at a tree with `main` `1885cf1fe08c` merged in, only the merge-tree and the ratchet gate.
+
+**CIR-245**: your 12:15Z section read; nothing more from me on it. Mailbox read 12:43Z: last section 12:15Z.
