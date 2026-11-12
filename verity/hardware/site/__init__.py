@@ -9,10 +9,12 @@ device of its may run in and one that holds none of the prover's hardware (`PARE
 scheme (`SCHEMES`). An auditor's host states its time base and how far its clock may drift, which is the drift of
 every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
 share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
-capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
-certifier splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
-mediated when no link says so (`Site.mediated`). A network certifier is the leaf that splits an uplink: one link from
-a host to it, one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet
+capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A link may say why no
+certifier splits it (`unmediated`): onsite a boundary link that is not certified says so, and a link states no
+capacity only where it says so. The checks ask no more of it: a link that says so may be any link, a certifier's own
+among them, at a capacity or at none. A site is mediated when no link says so (`Site.mediated`). A network certifier
+is the leaf that splits an uplink: one link from a host to it, one from it to the outside. Hosts carry no compute: a
+device names its sheet by digest. A sheet
 (`Sheet`), a card, is the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the
 tensor clock and the peak rate of each operand class) and its memory figures (bits read from or written to device
 memory a second, bits of on-chip state and bytes of device memory). The auditor's data sheets, public and looked up
@@ -350,7 +352,7 @@ class ClockPremise:
     time, as a share of it, where no data sheet bounds it, with the premise that says so (`name`, as a row that rests
     on it prints it), the time base card's mark (`premise`) and its source. It is the Lean's `Account.Premised`, the
     drift of every device of the auditor's in the host, and never the auditor's figure for the host (`Auditor.drift`):
-    a row that reads it names `name` among its premises, and none of record does."""
+    a row that reads it names `name` among its premises, and no row that takes no premise reads it."""
 
     host: str
     name: str
@@ -680,9 +682,11 @@ class HostFigures:
 @dataclass(frozen=True)
 class Link:
     """A link between two ends, with its capacity `beta` in bits a second each way and its latency in the site's units
-    of time. `unmediated` is, on a boundary link no certifier splits, the reason none does; None on every other link. A
-    link states no capacity (`beta` None) only where it carries `unmediated`: an interface that reads no line rate has
-    none, and no amount is read from it."""
+    of time. `unmediated` is the reason no certifier splits the link, where the link states one. A link states no
+    capacity (`beta` None) only where it carries `unmediated`: an interface that reads no line rate has none, and no
+    amount is read from it. The checks hold `unmediated` to nothing else: a link that carries it may be any link, a
+    certifier's own among them, at a capacity or at none; a reader that needs a certifier's link's capacity refuses
+    one that states none."""
 
     id: str
     ends: tuple[str, str]

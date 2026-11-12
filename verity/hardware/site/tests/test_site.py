@@ -876,7 +876,8 @@ def test_a_site_states_the_sites_unit_of_time() -> None:
 
 def test_a_link_says_why_no_certifier_splits_it() -> None:
     """`Covered` and `Kinds`: a bare boundary link is refused onsite and taken where it says why or remote; a link
-    states no capacity only where it says why, and never a capacity of 0; a site with a reason is not mediated."""
+    states no capacity only where it says why, and never a capacity of 0; a site with a reason is not mediated. The
+    checks hold a reason to nothing else: a certifier's own link may carry one, at a capacity or at none."""
     bare = Link("eth0", ("node0", OUTSIDE), 1_000_000_000, 0)
     why, unrated = replace(bare, unmediated="a stand-in"), replace(bare, beta=None, unmediated="a stand-in")
     locs = (G_ROOT, G_HOST)
@@ -889,6 +890,11 @@ def test_a_link_says_why_no_certifier_splits_it() -> None:
     assert not holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(replace(unrated, unmediated=None),)))
     assert not holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(replace(bare, beta=0),)))
     assert not Site(locs=locs, links=(unrated,)).mediated
+    for own in (replace(G_UPLINKS[0], unmediated="a stand-in"),
+                replace(G_UPLINKS[0], beta=None, unmediated="a stand-in")):
+        split = Entry("", locs=(*locs, G_CERT), links=(own, G_UPLINKS[1]))
+        assert holds("Kinds", G_AUDITOR, split) and holds("Covered", G_AUDITOR, split, composite="onsite")
+        assert not Site(locs=split.locs, links=split.links).mediated
 
 
 def test_a_host_states_the_auditors_figures_for_it() -> None:
