@@ -457,8 +457,8 @@ is written for it, and a sidecar wins.
 
 A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
 directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the only copy.
-One running, queued or in a slot line never goes, and one whose clone stands waits (`scratch/<run id>` goes first).
-To keep one: `research keep RUNDIR ...` before the 7 days are over, or preserve it: `research data custody RUN --publish`.
+One running, queued or in a slot line stays, and one whose clone stands waits (`scratch/<run id>` goes first).
+To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish`.
 gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 ~~~text
@@ -473,8 +473,8 @@ research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root 
 a failed push records nothing. The report lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`).
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (80%) of blocks or inodes, or with `--force`. It deletes
-the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
+Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes, or with `--force`. It deletes
+the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
 path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
 unpreserved run's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
 `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
