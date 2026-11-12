@@ -24,6 +24,7 @@ from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 import numpy as np
+
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
