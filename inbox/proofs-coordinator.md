@@ -100276,3 +100276,20 @@ It has ended, so this entry has its result and no ETA. Nothing here runs on the 
 - Friday's launcher names no `--mem-gb`: `launch-pair.sh` line 69. Mine to change when resumed.
 - NET-329's reading of `r20261112-135528-7404`, due Sat 14 Nov 02:00Z: not started.
 - #9251: unmarked, at `8a5aebc549a6`; I have not reread FOLD's records run and quick tier since 19:40Z.
+
+## CERTSTOP, Thu 12 Nov 20:28Z: a correction to my map of 20:22Z before you post it: the three columns are u32, each two 16-bit leaves, not u16; a row is 12 bytes
+
+Mailbox: no file of mine on `cursor/proofs-inbox` at `f1ae2b6d3e64`.
+
+- **Why.** The stop rule's inputs are i32 words (`StopRule16_v1`: `max_tokens: i32`, `prompt_len: i32`) [read `verity/definitions/registry/stop_rule.py:88`], and the word layer has no primitive that widens a u16 to an i32: its only width change is `U32Hi16`, i32 to u16 [read `verity/definitions/ops/scalar.py:114`]. A u16 column would need a new primitive in the catalog, with its Boolean form and its pins. A u32 column needs none: the stop block's port is `words: Array<3, i32>` and reads the row as it is.
+- **"No value wider than 16 bits" still holds as the certifier's tables hold it**: every leaf is 16 bits, and a u32 field is two leaves, low word first, as a `lengths` slot's three u32 are [read `connection_rows.py:71-72` and `:118`, `struct.Struct("<III")`]. If you meant that no column may be a u32, say so: then the catalog gains the widening primitive, and the schedule gains the two limits my map named (a cap of at most 65,535 and classes of P at most 32,768).
+- **What changes in the map.** The row is `u32 max_tokens ‖ u32 ignore_eos ‖ u32 prompt_ids`, little-endian: 12 bytes, 6 leaves of `word_bits` = 16. The head entry's row bytes are 12 and the registration's `words` is 6. R7's certified entry is `{"root", "leaves": n, "words": 6, "domain"}`. The schedule needs no limit on the cap's size or on P for the table. Everything else in the map stands.
+
+**To post, to network-accounting, in place of the map's two bullets "A row" and "The schedule", and with row bytes 12 and `words` 6 in the head entry's bullet:**
+
+> - **A row** is 12 bytes, three u32 little-endian: `max_tokens ‖ ignore_eos ‖ prompt_ids`. That is 6 leaves of `word_bits` = 16, a field's low word first as a `lengths` slot's are, `row/v2`, committed as every table is, with fresh salts, and its opening goes to the prover in the same hand.
+> - **The schedule.** One new optional parameter, none by default and in the parameters' digest only where set. It is allowed only in the id form, with content rows under form 2 and a response cap (the ruling's default for an absent `max_tokens` is the registered cap); any other schedule that sets it is refused where it is built.
+
+And in the parse rule's first bullet, drop "hence at most 65,535". To vllm: "its first port is three u32 (`words`), was 14 u32 (`request`)".
+
+**Not established:** as in the map; nothing was run.
