@@ -103400,3 +103400,41 @@ Clock: `date -u` read 21:42Z before I wrote this. Mailbox read at 21:42Z, 50 sec
 - TWOLEG, HONEST2, FIRSTACCEPT, SESSIONOF: nothing of mine misstated that I can see; I did not check what they take from PROVED, STOPS or WINDOWAT.
 
 **Not established.** That the base compiles at either head. That #9357's files compile over `recordsOk`. Any hour above.
+
+## PROVED, Thu 12 Nov 21:44Z: CORRECTION to row A13 of my 21:40Z table, before it is posted: that fact has its lemma; the item is glue inside A11, not a missing lemma, and the rows with no holder are 19
+
+**In plain words, for Daniel.** One row of the list I sent at 21:40Z was wrong, in the direction that makes us look worse than we are. Row A13 said that one fact a session needs, that the circuit names no public input port, has no lemma. It has one. The verifier refuses, when it sets a session up, a circuit that names such ports unless it is handed its own recomputation of them, and a proved lemma says exactly that. I had searched four files and the lemma is in a fifth. What is left of the row is a few lines of joining inside the work on premise 4, which has a holder. So the list is 54 items of work and one line of glue, and 19 rows have no holder, not 20. I also went back over the two rows beside it, which stand.
+
+Clock: `date -u` read 21:44Z before the push. Mailbox read at `93f55fdd76`: 3 messages, the newest yours of 21:50Z. No file of the tree changed; no run of mine is out.
+
+### The correction
+
+- **What I wrote** (21:40Z, row A13): "Another has none: that the circuit names no public input port. | `Live.hpi` | NOBODY (nearest: SESSIONOF; its brief does not name it) | not started | A11". And in the evidence: "[run: `rg` over `Event`, `Accepts`, `ScopeGate`, `V5/Accepted`] no lemma gives it from an accept."
+- **What is true** [read]:
+  - The verifier makes the check at setup: `Flock.HmIn.checkOwn` (`verity/protocols/flock/verifier/Flock/HmRow.lean:2182-2186`) throws "the circuit names public input ports; pass the verifier's own recomputation" where the session has no `--public-inputs` file, and the session's setup calls it (`verity/protocols/flock/verifier/Flock/With/Setup.lean:1052`).
+  - The lemma: `checkOwn_none` (`security/Proofs/Flock/Soundness/Discharge/Hidden/Spec.lean:47`): where `checkOwn pi pop none` passes, `pi.ports.isEmpty = true`. `setupHidden_spec'` uses it (`:100`), and so does `SpecOf.lean:76`. `parse_noPorts` (`Hidden/PortsP.lean:126`) then gives the empty leaf map.
+  - The module that defines the session's acceptance says it in words: at `own = none` the setup "refuses a circuit with public input ports" (`security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean:17-19`).
+- **What is left** [derived]: from "the ports are empty" to the exact equation the session carries, `HmIn.parse D.unroll = .ok {}` (`security/Proofs/Properties/Verity/Sampled.lean:141`). That is a step of the walk in A11's `AcceptedChecks.lean`. Not established: that the equation at `{}` follows from empty ports with no further fact about the parse's other fields; I read `parse_noPorts`'s statement, not `parse_ports`'s.
+- **The row, to paste in place of A13:**
+
+| # | the item, in one sentence | Lean name or file | owner | state | waits on |
+|---|---|---|---|---|---|
+| A13 | That the circuit names no public input port is checked by the verifier at setup and has its lemma; only the joining into premise 4's session is left. | `Live.hpi`; `checkOwn_none` | SESSIONOF, inside A11 | not started | A11 |
+
+- **What changes with it.** "NOBODY, 20 rows" becomes 19: strike A13 from that line. In Answer 1, "A13, A14 either proved or ruled" becomes "A14 ruled". The header's "20 have no holder" is 19. Nothing else in the table reads A13.
+- **How it happened.** I tagged a search of four files as "no lemma". The tag was true of the four and the sentence in the first column was not. The same care is owed to A12, so I searched again, wider.
+
+### The two rows beside it, checked again
+
+- **A12 stands** [run: `rg 'M1W'` over all of `security/Proofs`]: the name occurs in three files, `Flock/Bridge/Public.lean`, `Flock/Bridge/PublicRows.lean` and `Flock/Soundness/Discharge/FailClosed/ZkHiddenM1.lean`, all at the plan without public inputs. [run: `rg 'planZHJP'` against `rate`] every theorem at the plan the session uses takes the rate bound as a hypothesis (`Bridge/V5/Statement.lean:127`, `:244`, `:354`; `V5/Rows.lean:79`; `V5/Accepted.lean:327`; `V5/EndToEndHidden.lean:64`). No lemma gives it.
+- **A14 stands, one step firmer** [read]: the design the model reads is `designAt` (`security/Proofs/Flock/Bridge/DrawnLaw.lean:285-288`), which is whatever law `drawnLaw` returns for the registration, or `subset 0` where it refuses. It is not turned into a subset. So at a registration whose law is stratified or by work, the session's field `hsub` (`Sampled.lean:161-163`) cannot hold and the model has no session there. Still not established: whether `drawnLaw` itself returns a subset for some registrations that name another law; I did not read it.
+- **A17 is still open as a question**: I looked again and did not settle what the theorem's claim says of a port that is a registered read.
+
+### Not established
+
+- As above for A13's last step, A14's `drawnLaw` and A17.
+- I have not rechecked the other 52 rows since 21:40Z. Each "no lemma" or "none found" in the evidence list is a search of the files it names and no more: A16 and A11 say "nowhere" from a search of `security/` for a constructor of `Live`, which is the whole tree; A15 from a search of `security/` for `Device.Deployment`.
+
+### To post
+
+- If the table is already posted: "Row A13 corrected: the fact has its lemma (`checkOwn_none`); it is glue inside A11. 19 rows have no holder."
