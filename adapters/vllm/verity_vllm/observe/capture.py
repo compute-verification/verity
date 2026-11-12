@@ -43,25 +43,23 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 import torch
 
-from verity_vllm.observe.events import (Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc,
-                     ViewDesc)
+from verity_vllm.observe.events import (SCHEMA, Event, Note, Root, RunEnd, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
+                                        StorageAlloc, ViewDesc)
 from verity_vllm.observe.log import LogWriter
 from verity_vllm.observe.observer import EmptyMode, ModuleNamer, Observer, Recorder, reenter_impl_name
 from verity_vllm.observe.storage import StorageAdapter
 from verity_vllm.observe import triton_adapter
-
 from verity_vllm.engine import hooks
 from verity_vllm.engine.build import Engine
 from verity_vllm.observe.pinned import DEVICE_BACKED, IDENTITY_ALIAS_OPS, PinnedArena, device_backed, spanned_bytes, storage_bytes_view
 from verity_vllm.engine.run_facts import model_config_subset, profile_manifest
-
-
-SCHEMA = "verity-capture/log/v1"
+from verity_vllm.records.schema_ids import CAPTURE_SNAPSHOTS_SCHEMA
 
 
 @dataclass
@@ -698,6 +696,7 @@ class Capture:
                                      "skipped": why})
             return
         src = storage_bytes_view(t, off, nbytes)
+        assert self._arena is not None
         if self._snap_pending and not self._arena.fits(nbytes):
             self._flush_snapshots(self._cur)
         host = self._arena.take(nbytes)
@@ -738,6 +737,7 @@ class Capture:
 
     def _flush_snapshots(self, st: _Step) -> None:
         """Wait for the step's copies and write them out: at a snapshot step's end, and whenever they fill the pinned arena mid-step."""
+        assert self._arena is not None and self.cfg.snapshot_dir is not None
         t0 = time.perf_counter()
         torch.cuda.synchronize()
         self.timing["sync_s"] += (t1 := time.perf_counter()) - t0
@@ -766,14 +766,14 @@ class Capture:
         self.timing["snapshot_s"] += time.perf_counter() - t1
 
     def _write_snapshot_index(self) -> None:
-        p = Path(self.cfg.snapshot_dir) / "snapshots.json"
-        p.write_text(json.dumps({"schema": "verity-capture/snapshots/v1", "layout": "spanned-storage-bytes",
-                                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
-                                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
-                                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
-                                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes,
-                                 "snapshot_max_bytes": self.cfg.snapshot_max_bytes, "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op,
-                                 "entries": self._snap_index}, separators=(",", ":")))
+        assert self.cfg.snapshot_dir is not None
+        index = {"schema": CAPTURE_SNAPSHOTS_SCHEMA, "layout": "spanned-storage-bytes",
+                 "note": "file = raw bytes of the storage range [byte_offset, byte_offset+nbytes) the view spans, "
+                         "copied D2H stream-ordered right after the call; content-addressed (sha256) so identical "
+                         "bytes share a file; 'sub' = sub-view (dim, index) of an oversize KV-cache tensor",
+                 "steps": sorted(self.cfg.snapshot_steps), "total_bytes": self._snap_bytes, "snapshot_max_bytes": self.cfg.snapshot_max_bytes,
+                 "snapshot_max_bytes_op": self.cfg.snapshot_max_bytes_op, "entries": self._snap_index}
+        (Path(self.cfg.snapshot_dir) / "snapshots.json").write_text(json.dumps(index, separators=(",", ":")))
 
 
 def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_sha256: str | None = None,

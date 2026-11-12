@@ -10,19 +10,37 @@ from __future__ import annotations
 import gzip
 import json
 import random
+from typing import Any
 
 import pytest
-from verity_vllm.query.units import PartitionError, ValueRef, VerificationUnit, boundary, partition_by
+
 from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
-from verity_vllm.query.module_body import boundary_without_literals, literal_calls, without_literals
-from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
+from verity_vllm.query.module_body import (
+    boundary_without_literals,
+    literal_calls,
+    without_literals,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    ProgramView,
+    from_instances,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.units import (
+    PartitionError,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    partition_by,
+)
 
 EPS = '{"f64":"0x1p-17"}'
 PARAMS = [["prompt", "Array<4,Value<32>>"],
           ["weights", "{m.a.weight: Array<4,Array<8,Value<16>>>, m.b.weight: Array<8,Array<4,Value<16>>>, m.n.weight: Array<4,Value<16>>}"]]
 # weights leaves: m.a.weight [0, 32), m.b.weight [32, 64), m.n.weight [64, 68)
-ROWS = [
+ROWS: list[dict[str, Any]] = [
     {"i": 0, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": "m.embed/embedding[0]", "args": [[["p", 0, 0, 1]], [["p", 1, 0, 32]]]},
     {"i": 1, "spec": "Gemm_v1{K=4,N=8}", "form": "call", "name": "m.a/linear[0]", "args": [[["n", 0, 0, 4]], [["p", 1, 0, 32]]]},
     # a fused norm: TWO ports ("0" = normed, "1" = residual); reads Call 1 and the norm weight (a range inside the record)
@@ -193,10 +211,10 @@ def test_the_columnar_boundary_without_literals_is_boundarys(monkeypatch, step, 
     again in a later one keeps its first read), on Programs with outputs among the crossing Values, beside them and made by a literal."""
     monkeypatch.setattr(mb, "_READS_PER_STEP", step)
     P0 = from_instances(doc(attention_like_rows(60, seed)))
-    lit = literal_calls(P0)
+    lit, none = literal_calls(P0), frozenset[int]()
     outs = (ValueRef(len(P0.calls) - 1, "out"), ValueRef(2, "1"), ValueRef(-1, "out"), *(ValueRef(k, "out") for k in sorted(lit)[:1]))
     for P in (P0, ProgramView(P0.calls, P0.params, outs, P0.digest, P0.source)):
-        for literals in (lit, frozenset()):
+        for literals in (lit, none):
             a, b = boundary_without_literals(P, QUERIES[q], literals), without_literals(boundary(P, QUERIES[q]), literals)
             assert a.read_by._d is None
             assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.values == b.values

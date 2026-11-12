@@ -36,7 +36,6 @@
     {"file": "verity/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity/definitions/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
     {"file": "verity/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
-    {"file": "verity/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
-    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 177}
+    {"file": "verity/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805}
   ]
 }

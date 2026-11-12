@@ -8,9 +8,10 @@ pytest.importorskip("torch")
 
 
 def test_a_request_build_descriptor_views_its_roots_body_with_its_inputs_as_parameters():
-    from tests.pipeline import test_single_request_build_path as T
     from verity.circuits.codec import encode_program
     from verity.circuits.program import is_input
+
+    from tests.pipeline import test_single_request_build_path as T
     from verity_vllm.query import program_view as PV
 
     rep = T._derive(V=64, S=2, LP=4, STEPS=2)

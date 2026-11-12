@@ -38,11 +38,13 @@ import gzip
 import json
 import operator
 from array import array
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any
 
 from verity.definitions.call_scope import spec_base, spec_statics
+
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
@@ -131,7 +133,7 @@ class ProgramView:
         raise KeyError(iid)
 
     @property
-    def columns(self) -> "_Columns | None":
+    def columns(self) -> _Columns | None:
         """The columnar body when the view was read from a Build (None for a hand-built tuple of CallViews)."""
         return self.calls._cols if isinstance(self.calls, _Calls) else None
 
@@ -186,7 +188,7 @@ class _Columns:
         self.pread_port = array("H")
         self.views: list[CallView | None] = []
 
-    def call(self, k: int) -> "CallView":
+    def call(self, k: int) -> CallView:
         views = self.views
         if len(views) < self.n:
             views.extend([None] * (self.n - len(views)))
@@ -400,7 +402,8 @@ class _Builder:
             if len(pidx) == 1:
                 if idx not in seen:
                     seen.add(idx)
-                    rc.append(idx); rp.append(pidx[0])
+                    rc.append(idx)
+                    rp.append(pidx[0])
                 return
             hit = False
             for p, pi in zip(port_tables[s], pidx):
@@ -408,19 +411,21 @@ class _Builder:
                     hit = True
                     if (idx, pi) not in seen:
                         seen.add((idx, pi))
-                        rc.append(idx); rp.append(pi)
+                        rc.append(idx)
+                        rp.append(pi)
             if not hit and forms[c.form_idx[idx]] == "batch":  # a batch member beyond the single-instance signature: one port
                 pi = pidx[0]
                 if (idx, pi) not in seen:
                     seen.add((idx, pi))
-                    rc.append(idx); rp.append(pi)
+                    rc.append(idx)
+                    rp.append(pi)
 
         def param(idx: int, lo: int, hi: int, step: int = 0, count: int = 1) -> None:
             """The ports of `count` runs `[lo + k*step, hi + k*step)` of parameter `idx`, in first-touch order (ascending for a
             disjoint ascending table and step > 0, the order the runs one by one give)."""
             pv, pidx, los = params[idx], param_pidx[idx], self._param_lo[idx]
             if len(pidx) == 1:
-                sel = pidx
+                sel: list[int] | tuple[int, ...] = pidx
             elif los is None:
                 sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
             else:                       # a weights struct has thousands of ports: the overlapping ones by bisection
@@ -433,8 +438,10 @@ class _Builder:
             for pi in sel:
                 if (pv.id, pi) not in seen:
                     seen.add((pv.id, pi))
-                    rc.append(pv.id); rp.append(pi)
-                    prc.append(pv.id); prp.append(pi)
+                    rc.append(pv.id)
+                    rp.append(pi)
+                    prc.append(pv.id)
+                    prp.append(pi)
 
         param_lo, param_hi = self._param_lo, self._param_hi
         p_idx = p_lo = p_hi = -1                 # [p_lo, p_hi): the port of parameter p_idx the last one-port progression read
@@ -445,7 +452,10 @@ class _Builder:
                     for key in ports:
                         if key not in seen:
                             seen.add(key)
-                            rc.append(key[0]); rp.append(key[1]); prc.append(key[0]); prp.append(key[1])
+                            rc.append(key[0])
+                            rp.append(key[1])
+                            prc.append(key[0])
+                            prp.append(key[1])
                     continue
             for run in operand:
                 space = run[0]
@@ -464,8 +474,10 @@ class _Builder:
                             pid, pi = params[idx].id, param_pidx[idx][k]
                             if (pid, pi) not in seen:
                                 seen.add((pid, pi))
-                                rc.append(pid); rp.append(pi)
-                                prc.append(pid); prp.append(pi)
+                                rc.append(pid)
+                                rp.append(pi)
+                                prc.append(pid)
+                                prp.append(pi)
                             continue
                         param(idx, lo, hi, dL, cnt)
                         continue
@@ -511,7 +523,8 @@ class _Builder:
 
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
-    from verity.circuits.types import RecordType, Tuple as TupleT
+    from verity.circuits.types import RecordType
+    from verity.circuits.types import Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -567,6 +580,12 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 # readers
 # ---------------------------------------------------------------------------------------------------------------------------------
+
+def _params_of(head: Mapping[str, Any]) -> Iterable[tuple[str, Any]]:
+    """An instance sequence's `params`, its Program's (name, type) pairs; none where its head holds no such field."""
+    params = head.get("params")
+    return () if params is None else params
+
 
 def _params_view(params: Iterable[tuple[str, Any]]) -> tuple[InputView, ...]:
     out = []
@@ -684,7 +703,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     whose rows are not in body order (never written by `derive_step`) is read again as a document; a document's rows are sorted."""
     if isinstance(path_or_doc, str):
         hdr = _read_instance_header(path_or_doc)
-        params = _params_view(hdr.get("params") or [])
+        params = _params_view(_params_of(hdr))
         try:
             b = _instances_columns(params, iter_instance_rows(path_or_doc, expand=False))
         except _OutOfOrder:
@@ -693,7 +712,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
             return from_instances(doc)
         return b.view((), hdr.get("digest"), "instances", check_cids=_check_calls(hdr))
     doc = path_or_doc
-    params = _params_view(doc.get("params") or [])
+    params = _params_view(_params_of(doc))
     rows = sorted(doc["rows"], key=lambda r: int(r["i"]))
     try:
         b = _instances_columns(params, rows, memo=True)

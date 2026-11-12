@@ -4,14 +4,33 @@ Programs with 64-bit gates."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import partition
+from verity.circuits.partition import (
+    ReadinessReport,
+    WidthVerdict,
+    gate_width_readiness,
+    readiness_32bit,
+    validate_partition,
+    validate_width,
+)
 from verity.circuits.parts import Limits, Part
-from verity.circuits.partition import (ReadinessReport, WidthVerdict, gate_width_readiness, readiness_32bit,
-                                 validate_partition, validate_width)
-from tests.query.test_partition_stubs import (OracleBoundary, StubFamily, StubGateSet, body_tiling, family_of,
-                                                  gemm_program,                                                   materialise, members_k, ranges_of, synth_program, tiling,
-                                                  twice_program, whole_body, wide_program)
+
+from tests.query.test_partition_stubs import (
+    OracleBoundary,
+    StubFamily,
+    StubGateSet,
+    body_tiling,
+    family_of,
+    gemm_program,
+    materialise,
+    members_k,
+    ranges_of,
+    synth_program,
+    tiling,
+    twice_program,
+    whole_body,
+    wide_program,
+)
 
 
 @pytest.fixture
@@ -95,7 +114,7 @@ def test_unassigned_nested_node_is_gap(gemm):
 
 
 def test_double_assignment_is_overlap(gemm):
-    rules = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
+    rules: list | dict = [(0, ("whole",)), (1, ("whole",)), (2, members_k()), (2, ("whole",))]  # node 2 in two entries, full ranges both
     fast, sweep = both_paths(gemm, tiling(body_tiling(gemm.root, rules)))
     assert fast.status == sweep.status == "overlap"
     assert fast.codes == ("tiling-members-overlap",)

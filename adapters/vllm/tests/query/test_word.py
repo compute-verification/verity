@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.cut import call_scope
+from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.definitions import word as W
 
 
@@ -168,9 +167,9 @@ def test_uncommitted_boundaries_are_named():
 
 def test_the_manifest_build_runs_the_check(tmp_path):
     from tests.check.test_sampled_replay import _program
+    from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.pipeline import manifest as M
     from verity_vllm.query.program_view import from_instances
-    from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity_vllm.query.required import population
     inst, _w = _program(attn=True)
     P = from_instances(inst)
@@ -188,6 +187,7 @@ def test_the_manifest_build_runs_the_check(tmp_path):
 def _program_dir(tmp_path, **kw) -> str:
     import gzip
     import json
+
     from tests.check.test_sampled_replay import _program
     inst, _w = _program(**kw)
     with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
@@ -286,7 +286,8 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
 
 def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
     # word.Graph is verity.circuits.cut.CallGraph's graph in flat arrays; a Program's cut, as verity/partition/v1, checks in core
-    from verity.circuits import cut, partition_object as PO
+    from verity.circuits import cut
+    from verity.circuits import partition_object as PO
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import tuple_of
@@ -428,6 +429,7 @@ def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     `_reference_verdict`): GLM-5.3's MoE expert FP8 GEMMs scaled down, and a failing cut's violation detail, gate ids and all."""
     import hashlib
     import json
+
     from verity.circuits.codec import canonical_json
     f = CORPUS[name]()
     new = W.unit_rule(f, memo={})
@@ -541,6 +543,7 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     import sys
     from collections import Counter
     from pathlib import Path
+
     from tests.check.test_sampled_replay import LP, T
     d = tmp_path / "row" / f"build_request_LP{LP}_T{T}"
     d.mkdir(parents=True)
@@ -548,7 +551,8 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     with gzip.open(d / "instances.json.gz", "rt") as f:
         hist = Counter(r["spec"] for r in json.load(f)["rows"])
     (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
-    fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
+    requests = [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]
+    fx = {"fixture": "t", "requests": requests}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
     def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -565,7 +569,7 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
     assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
-    fx["requests"][1]["max_tokens"] = T
+    requests[1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
     p = build_global(3, "bad.json")
     assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]

@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from typing import Any, Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.required import _as_list, collective_kind
@@ -65,16 +66,40 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
                                  "workload_request_id": next(r.get("workload_request_id") for r in reqs if r["request_id"] == rid),
                                  "correspondence": p.get("correspondence")} for rid, p in parts.items()},
             # the source of the owning modules across the components: one source (the record on every component, or the fallback on every one)
-            "correspondence": {"source": sorted({(p.get("correspondence") or {}).get("source", "v1_annotations") for p in parts.values()}),
-                               "digests": sorted({d for p in parts.values() if (d := (p.get("correspondence") or {}).get("digest"))})},
+            "correspondence": {"source": sorted({_correspondence(p).get("source", "v1_annotations") for p in parts.values()}),
+                               "digests": sorted({d for p in parts.values() if (d := _correspondence(p).get("digest"))})},
             "complete": all(p.get("complete", True) for p in parts.values()),
-            "unmodelled": {k: v for p in parts.values() for k, v in (p.get("unmodelled") or {}).items()},
+            "unmodelled": _unmodelled(parts.values()),
             "query": _with_partitions(dict(q0), "by_component", {rid: p["query"] for rid, p in parts.items()}),
             "op_path_aliases": parts[reqs[0]["request_id"]]["op_path_aliases"],
             "ranks": ranks, "rank": rank,
             "engine_steps": engine_steps_out, "steps": sorted(by_engine), "requests": [r["request_id"] for r in reqs],
             "populations": {"identities": len(ids), "by_family": dict(fam), "engine_steps": len(by_engine), "requests": len(reqs)},
             "manifest_digest": fmt.manifest_digest(ids), "identities": ids, **fmt.unreturned_block(unreturned)}
+
+
+def _correspondence(part: Mapping[str, Any]) -> Mapping[str, Any]:
+    """A part's `correspondence` block (the reader that gave its owning modules); an empty one for a part written without it,
+    which reads as the v1 annotations' and names no digest."""
+    block = part.get("correspondence")
+    return {} if block is None else block
+
+
+def _digests(part: Mapping[str, Any]) -> list[Any]:
+    """The correspondence digests a part names: a request part's one (`digest`), a composed part's list (`digests`), or none."""
+    block = _correspondence(part)
+    named = block.get("digest") or block.get("digests")
+    return _as_list(named) if named else []
+
+
+def _unmodelled(parts: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """The parts' `unmodelled` families together, a later part's count over an earlier one's; a part that names none adds none."""
+    out: dict[str, Any] = {}
+    for p in parts:
+        unmodelled = p.get("unmodelled")
+        if unmodelled is not None:
+            out.update(unmodelled)
+    return out
 
 
 def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -106,14 +131,15 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
         raise ValueError("merge_ranks: the rank parts declare different step compositions (not the same workload on every rank)")
     aliases: dict[str, list] = {}
     for p in parts:
-        for k, v in (p.get("op_path_aliases") or {}).items():
+        part_aliases = p.get("op_path_aliases")                # a part without the field aliases nothing
+        for k, v in () if part_aliases is None else part_aliases.items():
             want = [str(v[0]), int(v[1])]
             if aliases.setdefault(k, want) != want:
                 raise ValueError(f"merge_ranks: the parts disagree on alias {k!r} ({aliases[k]} vs {want})")
     comp = sorted(per_rank.values())
     ids = sorted((r for p in parts for r in p["identities"]), key=fmt.row_key)
     binding = fmt.tp_peer_binding(parts, collective_kind)
-    unmodelled = {k: v for p in parts for k, v in (p.get("unmodelled") or {}).items()}
+    unmodelled = _unmodelled(parts)
     if binding["unbound"]:
         unmodelled[f"tp peer binding: {binding['n_unbound']} collective output(s) / partial(s) without the peer identity "
                    f"(first: {binding['unbound'][0]})"] = binding["n_unbound"]
@@ -122,9 +148,8 @@ def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
             "program_digest_kind": "tp-ranks-fold", "component_digests": comp, "program_digest_per_rank": per_rank,
             "parts": [{"program_digest": p["program_digest"], "request_id": p["requests"], "steps": p["steps"], "rank": r} for r, p in zip(ranks, parts)],
             **{k: p0[k] for k in ("global", "addressing", "composition_reference", "fixture", "requests_declared", "components", "engine_steps") if k in p0},
-            "correspondence": {"source": sorted({s for p in parts for s in _as_list((p.get("correspondence") or {}).get("source", "v1_annotations"))}),
-                               "digests": sorted({d for p in parts for d in _as_list((p.get("correspondence") or {}).get("digest") or
-                                                                                        (p.get("correspondence") or {}).get("digests") or [])})},
+            "correspondence": {"source": sorted({s for p in parts for s in _as_list(_correspondence(p).get("source", "v1_annotations"))}),
+                               "digests": sorted({d for p in parts for d in _digests(p)})},
             "query": _with_partitions(dict(p0["query"]), "by_rank",
                                       {str(r): p["query"] for r, p in zip(ranks, parts)}),
             "op_path_aliases": aliases, "ranks": world,

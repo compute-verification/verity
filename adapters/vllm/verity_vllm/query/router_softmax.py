@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
+
+from verity_vllm.query.manifest.format import identity_rows
 
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"
@@ -61,7 +64,7 @@ def router_fn(E: int, TOPK: int, VPT: int, renormalize: bool) -> Any:
     return bind(moe.MoeRouterTopKOrderedNorm if renormalize else moe.MoeRouterTopKOrdered, E=E, TOPK=TOPK, VPT=VPT)
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(E: int, TOPK: int, VPT: int, renormalize: bool) -> tuple[int, ...]:
     """The router Call's committed interior gates under `Q_word_v1{16,32}`, as offsets in the Call's canonical layout, in gate order:
     word i of a tapped row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or whose
@@ -149,7 +152,7 @@ def manifest_layers(manifest: Mapping[str, Any] | None) -> dict[int, dict[str, A
     """MoE layer -> {"module", "experts", "topk", "renormalize", "width"} of every `router_softmax` identity of a manifest; a layer named
     with two geometries is refused."""
     out: dict[int, dict[str, Any]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         layer = int(str(r["op_path"]).rsplit("/L", 1)[1])

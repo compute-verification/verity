@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
+
+from verity_vllm.query.manifest.format import identity_rows
 
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"
@@ -49,7 +52,7 @@ def shard_fn(VS: int, H: int, START: int) -> Any:
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
@@ -123,7 +126,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
     """op_path -> {"start", "shard_rows"} of every `vocab_range` identity of a manifest; a site named with two ranges is refused."""
     out: dict[str, dict[str, int]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         g = {"start": int(r["start"]), "shard_rows": int(r["shard_rows"])}

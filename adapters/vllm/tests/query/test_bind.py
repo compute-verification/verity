@@ -9,9 +9,9 @@ LIN, ATT = "model.layers.0.mlp.down_proj", "model.layers.0.self_attn"
 QUANT = {"x_q": Port(frozenset({"DeepGemmFp8Linear_v1"}), "0"), "x_s": Port(frozenset({"DeepGemmFp8Linear_v1"}), "1")}
 
 
-def row(op: str, member: str, *, step: int = 0, inv: int = 0, spec: str = "Gemm_v1{K=4}", port: str | None = None, cid: int = 0, **kw) -> dict:
+def row(op: str, member: str, *, step: int | list[int] = 0, inv: int = 0, spec: str = "Gemm_v1{K=4}", port: str | None = None, cid: int = 0, **kw) -> dict:
     return {"family": "instance_outputs", "request_id": "r0", "step": step, "invocation": inv, "rank": 0, "op_path": op,
-            "output_member": member, "spec": spec, "port": port or member, "position": [cid, 0 if port in (None, "out") else int(port)], **kw}
+            "output_member": member, "spec": spec, "port": port or member, "position": [cid, 0 if port is None or port == "out" else int(port)], **kw}
 
 
 def deepgemm(op: str = LIN, inv: int = 0, cid: int = 0) -> list[dict]:
@@ -180,3 +180,16 @@ def test_two_sources_declaring_one_label_differently_are_refused():
     assert source_ports([S(QUANT), S({"x_q": QUANT["x_q"]}), object()]) == QUANT
     with pytest.raises(ValueError, match="x_q"):
         source_ports([S(QUANT), S({"x_q": QUANT["x_s"]})])
+
+
+def test_an_incomplete_manifest_covers_nothing_and_names_what_it_leaves_out():
+    rows = [row(LIN, "out"), row(LIN, "out", step=1)]
+    lay = {0: [{"name": LIN, "numel": 4}], 1: [{"name": LIN, "numel": 4}]}
+    got = coverage_check({"complete": False, "unmodelled": {"Conv_v1": 2, "Abs_v1": 1}, "identities": rows, "manifest_digest": "d" * 64}, lay)
+    assert not got["ok"] and got["error"] == "manifest incomplete: unmodelled Program families Abs_v1 x1; Conv_v1 x2"
+    assert (got["checked"], got["missing_n"], got["missing_by_family"]) == (2, 2, {"(unmodelled)": 2})
+    assert got["families_missing_entirely"] == ["Abs_v1", "Conv_v1"] and got["unmodelled"] == {"Conv_v1": 2, "Abs_v1": 1}
+    assert got["manifest_digest"] == "d" * 64 and got["missing"] == [] and got["committed_extras_n"] == 0
+    bare = coverage_check({"complete": False}, lay)             # one that names no family and holds no row is refused the same way
+    assert not bare["ok"] and (bare["checked"], bare["unmodelled"], bare["families_missing_entirely"]) == (0, {}, [])
+    assert bare["error"] == "manifest incomplete: unmodelled Program families "
