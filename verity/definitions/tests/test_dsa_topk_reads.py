@@ -320,14 +320,14 @@ def test_the_cut_counts_its_units() -> None:
         t = bind(R.DsaTopKReadRows, N=N, TOPK=SERVED_TOPK, BLOCK=R.BLOCK, READ=READ)
         cut = dict(R.cut(t))
         bl = X.blocks(N, SERVED_TOPK, R.index_block(N, SERVED_TOPK, R.BLOCK))
-        whole = bind(X.DsaTopKMaskWhole, N=N, TOPK=SERVED_TOPK)
+        whole = bind(X.DsaTopKMaskWholeV2, N=N, TOPK=SERVED_TOPK)
         masks = len(X.plan(N, SERVED_TOPK)) if N > X.WHOLE_MAX else 1
         assert (whole in cut) == (N <= X.WHOLE_MAX) and bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=SERVED_TOPK) not in cut
         assert bl == ([(0, N)] if N <= X.WHOLE_MAX else X.blocks(N, SERVED_TOPK, R.BLOCK))
-        assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMerge, M=len(bl), K=SERVED_TOPK)] == 1
+        assert cut[READ] == SERVED_TOPK and cut[bind(R.DsaPositionsMergeV2, M=len(bl), K=SERVED_TOPK)] == 1
         assert cut[bind(R.DsaPositionsChunk, K=SERVED_TOPK, W=R.CHUNK)] == SERVED_TOPK // R.CHUNK == 64
         assert cut[bind(R.DsaPositionsSlot, K=R.CHUNK, N=N)] == SERVED_TOPK
-        assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v1"} == \
+        assert {(d.bindings["N"], d.bindings["AT"]) for d in cut if d.base_id == "DsaMaskPositions_v2"} == \
                {(hi - lo, lo) for lo, hi in bl}
         assert sum(cut.values()) == masks + len(bl) + 1 + 64 + 2 * SERVED_TOPK
     assert R.CUTS == {"DsaTopKReadRows_v1": R.cut}
@@ -336,7 +336,7 @@ def test_the_cut_counts_its_units() -> None:
 #: the row classes the long row serves: N a multiple of TOPK from 4,096 to the table's capacity
 SERVED_CLASSES = range(4096, SERVED_V + 1, SERVED_TOPK)
 #: the units the long row's own Definitions add to its cut: the index's past the mask, and the read
-INDEX_UNITS = ("DsaPositionsMerge_v1", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
+INDEX_UNITS = ("DsaPositionsMerge_v2", "DsaPositionsChunk_v1", "DsaPositionsSlot_v1", "EmbeddingRead_v1")
 
 
 def _served_units() -> dict[str, list]:
@@ -373,14 +373,14 @@ def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
     assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {21}
-    assert max(k["DsaPositionsMerge_v1"]) <= 26
+    assert max(k["DsaPositionsMerge_v2"]) <= 26
 
 
 #: the mask's units and the block positions, each with the least k_log their rows allow over the served classes: a block's
 #: scores, 64 KiB at 16,384 keys, are most of a unit's rows, and the whole mask's are up to WHOLE_MAX keys, 2^27 from 24,576;
 #: positions over the whole row read up to 5 KiB of mask words
-MASK_UNITS = {"DsaTopKMaskWhole_v1": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v1": {23, 24},
-              "DsaTopKMaskBlock_v1": {23, 24, 25, 26}, "DsaMaskPositions_v1": {23, 24}}
+MASK_UNITS = {"DsaTopKMaskWhole_v2": {24, 25, 26, 27}, "DsaTopKDigitCount_v1": {23, 24, 25, 26}, "DsaTopKDigitPick_v2": {23, 24},
+              "DsaTopKMaskBlock_v2": {23, 24, 25, 26}, "DsaMaskPositions_v2": {23, 24}}
 
 
 def test_the_mask_units_pass_the_window_builders_proof_block_check() -> None:
