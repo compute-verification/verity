@@ -89,17 +89,19 @@ def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
     and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
     tree) is one proof block (a subset of one, the least a subset law draws), its proved unit, and it names no session,
-    and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
-    to make."""
+    its params name the circuit and public files `BLOBS` hold, and its record's window names the seed salt the session
+    released, whose evidence the audit's carries. Made once each: a challenger's signed session is slow to make."""
     s, law = OS.SETUPS[i], {"k": 1, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
-    rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
-                      OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    unsalted = OS.R.record(s.program, s.query, law, OS.SCHEME,
+                           [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
+                           leaf_layer=OS.LEAF, partition=part)
+    ch, d, coins, rec, salt = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, unsalted,
+                                                  trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
-                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}}
+                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "seed_salt": salt, "served": None,
+                "session_roots": None, "sessions": [], "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
               "leaf_layer": OS.LEAF, "log": [], "partition": part, "ports": s.ports, "program": s.desc,
               "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": None}, "query": s.query,
@@ -623,8 +625,9 @@ def reusing(made: list[dict]):
     """A window's Commit record as `pouw_credit_cases.period_instance`'s `commit` makes it: R, the run's registration,
     chained after W (``previous``), the serving process's registration of the window's tables in a served window's form,
     and registering those tables under the Commit's names (`commit_names`) as output values that reuse W's entries
-    (``outputs``), of a program whose parameters they are (registered on `ONE_STAGE.PROGRAMS`). Each call appends W, R,
-    R's setup and its outputs to `made`."""
+    (``outputs``), of a program whose parameters they are (registered on `ONE_STAGE.PROGRAMS`), its window naming the
+    seed salt its challenger's session released (`_challenger_draw`, a session whose challenger sampled no coin tree).
+    Each call appends W, R, R's setup, its outputs and that session's draw to `made`."""
     CC = R.POUW_PERIOD_CASES.credit_cases
 
     def commit(true: dict[str, dict], _steps: int, circuit: str, open_root: str) -> str:
@@ -636,12 +639,15 @@ def reusing(made: list[dict]):
         s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
                                [{n: true[v]["words"] for n, v in named}])
         OS.PROGRAMS[s.sha512] = s.program
-        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
-                                   [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
-                                   registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
-                                   anchors=[], previous=OS.R.digest(w),
-                                   partition={"program": s.sha512, "query": s.query}))
-        made.append({"w": w, "record": rec, "setup": s,
+        unsalted = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+                                        [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
+                                        registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
+                                        anchors=[], previous=OS.R.digest(w),
+                                        partition={"program": s.sha512, "query": s.query}))
+        ch, d, coins, rec, salt = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, unsalted,
+                                                      trees=0)
+        rec = OS._json(rec)
+        made.append({"w": w, "record": rec, "setup": s, "drawn": (ch, d, coins, salt),
                      "outputs": {n: {"record": OS.R.digest(w), "value": v} for n, v in named}})
         return CC.Cr._canonical(rec).encode().hex()
     return commit
@@ -649,11 +655,11 @@ def reusing(made: list[dict]):
 
 def reusing_audit(m: dict) -> dict:
     """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
-    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is R's one proof block, its
-    proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
-    file names R's tables, which no proof block of R's program reads."""
+    challenger's coins (`m`'s draw) is R's one proof block, its proved unit, and it names no session, its params name the
+    circuit and public files `BLOBS` hold, its registered file names R's tables, which no proof block of R's program
+    reads, and its evidence carries the evidence of the seed salt R's window names."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins, salt = m["drawn"]
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
@@ -665,8 +671,8 @@ def reusing_audit(m: dict) -> dict:
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
-                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
-                "sessions": [], "statement": {}}
+                "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "seed_salt": salt, "served": None,
+                "session_roots": None, "sessions": [], "statement": {}}
     return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
 
 
@@ -680,7 +686,7 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     period accept, and the policy's record and the window's are R. Sampled proofs' one-stage v2 audit of R names no
     session, so v2 refuses it at `oneSession`, before R1-R7 read R, and remote rejects with that reason, in Lean as in
     Python. With a subprotocol rejecting, remote's `windows` tie decides nothing here: `CoreRemote`'s `#guard`s check v2
-    on R with a session's proofs granted and the tie on a window on R or on W."""
+    on R with its coins, seed salt and a session's proofs granted, and the tie on a window on R or on W."""
     PPC, made = R.POUW_PERIOD_CASES, []
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
         random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))

@@ -19,7 +19,9 @@ from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, 
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 import a5_coins as AC  # noqa: E402
+import fake_challenger as FC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -38,7 +40,7 @@ VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
-    *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
+    *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW))) + (FC.SEED_ITEM,)
 #: one of the PAIR and three of the 9 TRIPLEs
 RULE = S.Law("stratified-rate:1/3")
 SPEC = S.Spec(VALUES, RULE,
@@ -62,20 +64,23 @@ def _ports() -> dict:
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 
-def _record() -> dict:
+def _record(salt: str | None = None) -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     program = P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
     return R.record(program, QUERY, S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(program, QUERY)), S.SCHEME, roots,
-                    {"kind": "served", "run": RUN, "row": 0}, work_table=S.selection_table(RULE, program, QUERY, None))
+                    {"kind": "served", "run": RUN, "row": 0, **({R.SEED_SALT: salt} if salt else {})},
+                    work_table=S.selection_table(RULE, program, QUERY, None))
 
 
 def stream_of(coins) -> S.Stream:
     return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 test, challenger", coins=coins, clock=Clock())
 
 
-def register(stream: S.Stream) -> S.WindowCommitmentRecord:
-    return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
+def register(stream: S.Stream, seeds: FC.Challenger | None = None) -> S.WindowCommitmentRecord:
+    """The window's registration, naming its seed salt, which `stream` draws from `seeds` first (none without)."""
+    salt = None if seeds is None else stream.seed_salt(seeds, ROOT).hex()
+    return stream.register(_record(salt), _ports(), window_root=ROOT, counts=COUNTS)
 
 
 def test_a5s_stream_draws_on_no_coins_of_its_own():
@@ -89,12 +94,14 @@ def test_a5s_stream_draws_on_no_coins_of_its_own():
 
 
 def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
-    """Bytes passed off as the challenger's with no log to show they are its: the outcome fails `run`, the Lean refusing
-    at its select (`coins`), and Python's `coins_reason` refuses the missing evidence."""
+    """Bytes passed off as the challenger's with no log to show they are its, in a window whose seed salt the
+    challenger's log does show: the outcome fails `run`, the Lean refusing at its select (`coins`), and Python's
+    `coins_reason` refuses the missing evidence."""
     stream = stream_of(AC.Replay(bytes([0x5a]) * 4096))
-    draw = stream.select(register(stream))
+    seeds = FC.Challenger("a5-coins/seed-salt", 2, CC.SEED_SALT_FAMILY, window={"root": ROOT})
+    draw = stream.select(register(stream, seeds))
     assert stream.deliver(draw, [SESSION]) is None
-    got = stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=None)
+    got = stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=None, seed_salt=seeds.evidence(ROOT))
     audit = stream.records[-1]["audit"]
     assert not got.accepted and not audit["checks"]["run"]["ok"]
     side = AC.lean_side(audit)

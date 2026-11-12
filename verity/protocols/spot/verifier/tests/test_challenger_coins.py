@@ -18,6 +18,7 @@ import pytest
 
 from verity.protocols.spot.device import challenger as C, coins as T, remote as R
 from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import registration as G
 
 from test_challenger import entropy
 from test_remote import Host, signer  # noqa: F401  (the challenger key's signer fixture)
@@ -189,32 +190,53 @@ def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
 COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
 
 
+def salted(stream: S.Stream, record: dict, window_root: str | None, salt: bytes | None) -> dict:
+    """`record` as a registration of its window names the window's seed salt `salt`, which `stream`, one of the
+    window's streams, takes as the challenger released it once (`Stream.seed_salt_released`); `record` itself without a
+    window root."""
+    if window_root is None or salt is None:
+        return record
+    stream.seed_salt_released(salt, window_root, 0.0)
+    return {**record, "window": {**record["window"], G.SEED_SALT: salt.hex()}}
+
+
 def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
-    """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
-    the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
-    delivered, and its outcome run with the case's evidence (`coins_reason`'s: the challenger key, the auditor's
-    ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
-    files): the honest one; a segment that skips a coin opened after the digest, one with a wrong opening, one that
-    adds an earlier registration's coins; no evidence, empty evidence; a registration without its window root; a
-    session whose pin isn't on the verifier's copy of main (`pinned_session`); and coins a session of another window
-    released after the same digest. Each session's challenger holds `positions` coins of the samples' family.
-    -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
+    """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root, salt)` is case i's
+    stream on the challenger's `coins` and its registration under `window_root`, naming the window's seed salt `salt`,
+    which the stream takes (`salted`; None without a window root): the one coin of the session's seed-salt family
+    released after the window's open root before anything registers (`coins.draw_seed_salt`), once for the window's
+    every stream. Each is sampled after the registration's digest, its proof delivered, and its outcome run with the
+    salt's evidence and the case's (`coins_reason`'s: the challenger key, the auditor's ledger, the verifier's copy of
+    main's first-parent history, the host's pins log, the segment and the session's files): the honest one; a segment
+    that skips a coin opened after the digest, one with a wrong opening, one that adds an earlier registration's coins;
+    no evidence, empty evidence; a registration without its window root; a session whose pin isn't on the verifier's
+    copy of main (`pinned_session`); and coins a session of another window released after the same digest. The salt's
+    evidence is the honest one for each case, so a refusal is the sample's coins'. Each session's challenger holds
+    `positions` coins of the samples' family. -> ({case: (its stream, its outcome, its audit record)}, {case: its
+    segment})."""
     import test_remote
     from test_service import SESSION, _lean
 
-    monkeypatch.setattr(test_remote, "FAMILIES", [("positions", positions), ("replay", 2)])
+    monkeypatch.setattr(test_remote, "FAMILIES", [("positions", positions), ("replay", 2), (T.SEED_SALT_FAMILY, 2)])
     window, other = test_remote.WINDOW, {"root": "22" * 64}
-    draws = {}
+    draws, salt = {}, {}
 
     def serve(host: Host, served: list[str]) -> None:
         client = R.RemoteChallenger.connect(host.address)
         coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
+        seeds = T.ChallengerCoins(C.LiveRecord(client, T.SEED_SALT_FAMILY, itertools.count().__next__))
+        if not salt:
+            salt["coin"] = T.draw_seed_salt(seeds, window["root"])
         for name in served:
-            stream, reg = register(coins, COIN_CASES.index(name), None if name == "no-window" else window["root"])
+            root = None if name == "no-window" else window["root"]
+            stream, reg = register(coins, COIN_CASES.index(name), root, None if root is None else salt["coin"])
             segment = coins.commit(bytes.fromhex(reg.digest))
             draws[name] = (stream, stream.select(reg), segment)
         client.close()
         coins.settle()
+        seeds.settle()
+        if "segment" not in salt:
+            salt["segment"] = seeds.segments[0].to_json()
         for name in served:
             stream, draw, segment = draws[name]
             draws[name] = (stream, draw, segment.to_json())
@@ -234,6 +256,8 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     s = segments["before"]
     earlier = [{**o, "after": s["after"]} for o in draws["wrong"][2]["openings"]]
     segments["before"] = {**s, "openings": earlier + s["openings"], "start": s["start"] - len(earlier)}
+    seeded = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "main": test_remote.MAIN,
+              "pins": test_remote.HOST_PINS, "segment": salt["segment"], "session": files["honest"]}
     out = {}
     for name, (stream, draw, _) in draws.items():
         evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger,
@@ -241,7 +265,8 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
                     "segment": segments[name], "session": files[name]}
         evidence = {"missing": None, "empty": {}}.get(name, evidence)
         assert stream.deliver(draw, [SESSION]) is None
-        out[name] = (stream, stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence),
+        out[name] = (stream, stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence,
+                                            seed_salt=None if name == "no-window" else seeded),
                      stream.records[-1]["audit"])
     return out, segments
 
@@ -268,9 +293,9 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     import test_remote
     from test_service import SESSION, _lean, _ports, _rated, _record, _stream
 
-    def register(coins, i, window_root):
+    def register(coins, i, window_root, salt):
         stream = _stream(coins=coins)
-        rec = _rated(stream.spec.selection.text, 6 + i)
+        rec = salted(stream, _rated(stream.spec.selection.text, 6 + i), window_root, salt)
         return stream, stream.register(rec, _ports(6 + i), window_root=window_root)
 
     outcomes, segments = coin_outcomes(tmp_path, signer, monkeypatch, register, positions=32)
@@ -362,7 +387,8 @@ def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, sig
     """Over a challenger served on loopback for the window, withheld: the stream draws the window's seed salt at its
     open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
     (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the
-    window's open root). A session whose challenger released a second coin after the root (a server picking its salt
+    window's open root), and the run reads it from the same evidence carrying the key (`coins.seed_salt_in`, refused in
+    any other form). A session whose challenger released a second coin after the root (a server picking its salt
     between two) is refused, read alone or both, and so are a forged coin, another family's coins and another window's."""
     import test_remote
     from test_challenger import lms_verify
@@ -405,3 +431,9 @@ def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, sig
     assert "does not open" in read(window, forged)
     assert "family's" in read(window, {**segments[window], "label": "positions"})
     assert isinstance(read(window, at=other), str) and isinstance(read(window, at="33" * 64), str)
+    keyed = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "main": test_remote.MAIN,
+             "pins": test_remote.HOST_PINS, "segment": segments[window], "session": files[window]}
+    assert T.seed_salt_in(keyed, window, lms_verify) == salts[window]
+    for bad in ({k: v for k, v in keyed.items() if k != "key"}, {**keyed, "extra": 1}, None):
+        with pytest.raises(C.CoinError, match=re.escape(T.SEED_SALT_FORM)):
+            T.seed_salt_in(bad, window, lms_verify)

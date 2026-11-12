@@ -57,7 +57,7 @@ def _public(boundary: tuple[str, ...]) -> tuple[S.Public, ...]:
     return (S.Public("population", "structure", "N, the sample's range"),
             S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
             *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k} (step 0)") for v in boundary + INTERIOR
-              for k in ("leaves", "domain")))
+              for k in ("leaves", "domain")), FC.SEED_ITEM)
 
 
 def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:

@@ -30,8 +30,10 @@ and root, or that record's registered value `EARLIER_VALUE`, its domain and root
 R7-output), and be bound to a stream and a prover (`binding`, which the record's window names: R6-stream,
 R6-prover). A verifier may name its window's open root (`window_root`, `WROOT`) and the values it holds across windows
 (`held`): the record registers every other value it doesn't fill, pin or take as an output under `WROOT`'s domain, and
-the log's earlier record under another window's (`EARLIER_WROOT`), its own or none. Such a verifier may read its
-window's seed salt from its challenger (`seed_salt`, `SEED_SALT`), which the record's window names (R6-seed-salt).
+the log's earlier record under another window's (`EARLIER_WROOT`), its own or none. A record's window may name a seed
+salt (`SEED_SALT`), which the verifier reads from its challenger's log in the evidence and the record's window must name
+(R6-seed-salt); the strategies' evidence carries none, and the tests below read one from a challenger's log
+(`Drawn`'s `seeded`).
 The verifier's program is looked up among this file's programs by its descriptor. Inputs
 stay inside what Python reads as Lean does: integers that are not booleans where Python compares with `==`, and integer
 populations in a sample.
@@ -68,7 +70,7 @@ from verity.protocols.spot.verifier.one_stage import (audit, draw as DR, hello a
                                                             registered as G, registration as R)
 from verity.protocols.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.spot.device.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
-                                                        draw_coins, draw_first)
+                                                        draw_coins, draw_first, seed_salt_in, seed_salt_of)
 from verity.protocols.spot.verifier.one_stage.proofs import order_why
 from verity.protocols.spot.verifier.one_stage.verdict import Verdict
 from verity.circuits import codec, partition_object as PO
@@ -521,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "pool")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -610,10 +612,6 @@ def decode_params(j) -> dict:
                                   G.sources(j.get("supplied", {})), j.get("pinned") or {}, j.get("outputs") or {})
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    try:
-        R._seed_salt(j.get("seed_salt"), window)
-    except ValueError as e:
-        raise D.Reject(str(e)) from None
     if "challenger" in j:
         _challenger(j["challenger"], window)
     delta = ratio(j["delta"])
@@ -648,7 +646,7 @@ def decode_commitment(b: bytes) -> tuple[dict, bytes]:
 
 def decode_evidence(b: bytes) -> dict:
     j = PR.canonical_json(b)
-    _exactly(j, EVIDENCE_KEYS | {"coins"} if isinstance(j, dict) and "coins" in j else EVIDENCE_KEYS, "the evidence")
+    _exactly(j, EVIDENCE_KEYS | {k for k in ("coins", "seed_salt") if isinstance(j, dict) and k in j}, "the evidence")
     nats = lambda x: isinstance(x, list) and all(map(_nat, x))  # noqa: E731
     if not (_nat(j["instances"]) and isinstance(j["verdicts"], dict) and all(isinstance(v, dict) for v in j["verdicts"].values())
             and isinstance(j["sessions"], list) and all(isinstance(s, str) for s in j["sessions"])
@@ -668,15 +666,35 @@ def _registered_reads(verdicts: dict) -> None:
             raise D.Reject("a verifier of record reports registered reads that are not objects with a string value and a root")
 
 
-def _registration_verdict(p: dict, rec) -> Verdict:
+def _registration_verdict(p: dict, rec, salt: str | None = None) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   seed_salt=salt, pool=p.get("pool"), tied=p.get("tied"))
 
 
-def _registration(p: dict, rec) -> tuple[str, ...]:
-    return _registration_verdict(p, rec).codes
+def _registration(p: dict, rec, salt: str | None = None) -> tuple[str, ...]:
+    return _registration_verdict(p, rec, salt).codes
+
+
+#: `OneStage.seedSaltOf`'s refusal of evidence that carries no seed salt where the parameters name a challenger and a
+#: window root
+MISSING_SEED_SALT = "missing: the verifier names a challenger and a window root, and the evidence carries no seed salt"
+
+
+def _seed_salt_of(p: dict, e: dict) -> str | None:
+    """`OneStage.seedSaltOf`: the window's seed salt `coins.seed_salt_of` reads from the evidence's `seed_salt` under the
+    verifier's challenger key, on its window; refused when the evidence carries none and the verifier names a challenger
+    and a window root (`MISSING_SEED_SALT`), and none when it names no challenger or no window root and the evidence
+    carries none. Raises `CoinError`."""
+    ch = p.get("challenger")
+    if e.get("seed_salt") is None:
+        if ch is not None and p.get("window_root") is not None:
+            raise CoinError(MISSING_SEED_SALT)
+        return None
+    if ch is None:
+        raise CoinError("the evidence carries a seed salt, and the verifier names no challenger it comes from")
+    return seed_salt_of(ChallengerKey.from_json(ch["key"]), p.get("window_root"), e["seed_salt"], lms_verify).hex()
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -717,15 +735,20 @@ def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | Valu
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the sample's coins don't read
-    (`_coins_of`), on R1-R7, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
-    verdict that ran and did not accept; undecided when only the verifier is missing or has not run; accept
-    exactly when `audit_record` accepts, with the sampled and proved units, the bounds and the profile."""
+    (`_coins_of`), when the window's seed salt doesn't (`_seed_salt_of`), on R1-R7 against that salt, the sample's checks
+    (with coins, that they sample it: `_coins_problem`), the record's checks or a verdict that ran and did not accept;
+    undecided when only the verifier is missing or has not run; accept exactly when `audit_record` accepts, with the
+    sampled and proved units, the bounds and the profile."""
     rec, _ = c
     try:
         coins = _coins_of(p, c, e)
     except CoinError:
         return "reject", "coins"
-    if _registration(p, rec):
+    try:
+        salt = _seed_salt_of(p, e)
+    except CoinError:
+        return "reject", "seed salt"
+    if _registration(p, rec, salt):
         return "reject", "registration"
     mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
@@ -818,8 +841,16 @@ def partition(j):
 
 
 def registration(j):
+    """`Pieces.registration`: R1-R7's codes against the parameters and the seed salt its caller read (`seed_salt`:
+    lowercase hex of 64 bytes beside a window root, or none), refused in any other form."""
     j = _json(j)
-    v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
+    p = _params_of(j)
+    salt = j.get("seed_salt") if isinstance(j, dict) else None
+    try:
+        R._seed_salt(salt, p.get("window_root"))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    v = _registration_verdict(p, j.get("record") if isinstance(j, dict) else None, salt)
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
@@ -1395,7 +1426,8 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
-    order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
+    order. `register`: `check_public` on the values and declared items, the population, the window's seed salt from
+    the run's evidence (`_seed_salt_in`: `seed-salt`), R1-R7 against it under
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a bernoulli sampling design at
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
     (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), then the
@@ -1450,7 +1482,11 @@ def run(j):
         return {"codes": list(e.verdict.codes), "step": "register"}
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    codes = _registration({**p, "law": law, "work_table": table}, rec)
+    try:
+        salt = _seed_salt_in(j.get("seed_salt"), p.get("window_root"))
+    except CoinError:
+        return {"codes": ["seed-salt"], "step": "register"}
+    codes = _registration({**p, "law": law, "work_table": table}, rec, salt)
     if codes:
         return {"codes": list(codes), "step": "register"}
     if service.bernoulli(law):
@@ -1585,7 +1621,11 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     population = rec.get("population") if isinstance(rec, dict) else None
     if not (_nat(population) and population == m):
         return {"codes": ["interior-population"], "step": "interiors"}
-    codes = _registration({**p, "law": {"law": "subset", "k": m}}, rec)
+    try:
+        salt = _seed_salt_in(it.get("seed_salt"), p.get("window_root"))
+    except CoinError:
+        return {"codes": ["seed-salt"], "step": "interiors"}
+    codes = _registration({**p, "law": {"law": "subset", "k": m}}, rec, salt)
     if codes:
         return {"codes": list(codes), "step": "interiors"}
     if not P.in_order(p["program"], p["query"], m):
@@ -1604,6 +1644,19 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     if not _coins_hold(it, rec, src[:at]):
         return {"codes": ["coins"], "step": "second"}
     return {"draw": draw2, "law": service.second_law(sample, ns, ks), "read": at, "receipt": receipt}
+
+
+def _seed_salt_in(evidence, window: str | None) -> str | None:
+    """`Run.seedSaltOf`: the window's seed salt `coins.seed_salt_in` reads from `evidence` on the verifier's window;
+    none only when the evidence is null and the verifier holds no window. Raises `CoinError` where it doesn't read, is
+    null on a window, or the verifier holds no window for it."""
+    if evidence is None:
+        if window is not None:
+            raise CoinError("missing: the verifier names a window root, and the run carries no evidence of its seed salt")
+        return None
+    if window is None:
+        raise CoinError("a seed salt is read on the window's session: it needs the window's open root (window_root)")
+    return seed_salt_in(evidence, window, lms_verify).hex()
 
 
 def _coins_hold(j: dict, rec: dict, read: bytes) -> bool:
@@ -1738,8 +1791,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     log's earlier record (if any) some of them under the same roots, and the verdict of record reports the sessions'
     reads opened against those. Half the v2 verifiers name the window's open root (`WROOT`) and hold some values across
     windows: the record registers the others it neither fills, pins nor takes as an output under `WROOT`'s domain, and
-    the log's record under an earlier window's, the same window's or none. Half of those read the window's seed salt
-    (`SEED_SALT`), which the record's window names."""
+    the log's record under an earlier window's, the same window's or none. The window names no seed salt (`SEED_SALTS`
+    names one)."""
     s = draw(st.sampled_from(setups))
     values = draw(st.sampled_from([*s.values, None, *s.values, {}])) if isinstance(s, RegisteredSetup) else None
     held = draw(st.sampled_from([values, dict(list(values.items())[:1]), None])) if values else None
@@ -1812,16 +1865,13 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if draw(st.booleans()):
         verdicts["upstream"] = {"accepted": draw(st.sampled_from([True, None])), "of_record": False}
     served, session_roots = draw(st.sampled_from([None, list(d["units"])])), draw(st.sampled_from([None, dict(ROOTS)]))
-    seeded = windowed and draw(st.booleans())
-    window = {**WINDOW, **(binding or {}), **({R.SEED_SALT: SEED_SALT} if seeded else {})}
+    window = {**WINDOW, **(binding or {})}
     rec = _record_of(s, values, named, window, log, binding, output=output,
                      window_root=WROOT if windowed else None, fixed=fixed, leaf_layer=LEAF, anchors=anchors,
                      previous=R.digest(log[-1]) if log else None, partition=part, work_table=expanded)
     assert rec["law"] == mine
     if pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
-    if seeded:
-        params["seed_salt"] = SEED_SALT
     if values:
         verdicts["lean"]["registered"] = reads(rec)
     elif none_registered:
@@ -2214,22 +2264,23 @@ WINDOWS = [
 ]
 
 
-def _server_seeded(a: dict, x: int) -> None:
-    """The record's window names a seed salt the verifier read none of: a salt the server chose."""
-    a["record"]["window"] = {**a["record"]["window"], R.SEED_SALT: [SEED_SALT, OTHER_SEED_SALT][x % 2]}
-    a["params"].pop("seed_salt", None)
+def _seeded(salt):
+    """The record's window names `SEED_SALT`, and the registration's caller read `salt(x)` (`a["seed_salt"]`, beside the
+    parameters, the registration piece's; the audit reads the salt from its evidence, which carries none)."""
+    def change(a: dict, x: int) -> None:
+        a["record"]["window"] = {**a["record"]["window"], R.SEED_SALT: SEED_SALT}
+        a["seed_salt"] = salt(x)
+    return change
 
 
-#: One change each to the seed salt the verifier read from its challenger (another, in another form, or none), to the
-#: record's window that names it (another, in another form, or none), and a salt the server chose.
+#: One change each that names a seed salt: the salt the caller read, another or one in another form, none (a salt the
+#: server chose), handed in the parameters (which never carry it), or evidence of one from no challenger.
 SEED_SALTS = [
-    _set("params", "seed_salt", lambda a, x: [OTHER_SEED_SALT, SEED_SALT.upper(), SEED_SALT[:-2], None, 5, "",
-                                              SEED_SALT + "\n", SEED_SALT][x % 8]),
-    lambda a, x: a["params"].pop("seed_salt"),
-    _set("record", "window", lambda a, x: {**a["record"]["window"],
-                                           R.SEED_SALT: [OTHER_SEED_SALT, SEED_SALT.upper(), None, 5][x % 4]}),
-    _set("record", "window", lambda a, x: {k: v for k, v in a["record"]["window"].items() if k != R.SEED_SALT}),
-    _server_seeded,
+    _seeded(lambda x: SEED_SALT),
+    _seeded(lambda x: [OTHER_SEED_SALT, SEED_SALT.upper(), SEED_SALT[:-2], 5, "", SEED_SALT + "\n"][x % 6]),
+    _seeded(lambda x: None),
+    _set("params", "seed_salt", SEED_SALT),
+    _set("evidence", "seed_salt", lambda a, x: [{}, SEED_SALT, {"segment": None}][x % 3]),
 ]
 
 
@@ -2391,12 +2442,15 @@ def decode_params_v2(j) -> dict:
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
-                     keys: list[str] | None = None, seed: int = 0, order: str = "honest") -> tuple[Drawn, dict, dict]:
+                     keys: list[str] | None = None, seed: int = 0,
+                     order: str = "honest") -> tuple[Drawn, dict, dict, dict, dict]:
     """A sample under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
-    the deployed parameters, released after `rec`'s digest and read as `draw_first` reads them, the session's
-    challenger sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`),
-    their links opened after `keys` (that table when none), its log in `order` (`ORDERS`): the session, the sample, and the
-    evidence's `coins` (the session's record without the key, which the verifier's parameters name)."""
+    the deployed parameters, which released its window's seed salt first (`Drawn`'s `seeded`), its coins released after
+    the digest of `rec` with its window naming that salt and read as `draw_first` reads them, the session's challenger
+    sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`), their
+    links opened after `keys` (that table when none), its log in `order` (`ORDERS`): the session, the sample, the
+    evidence's `coins` (the session's record without the key, which the verifier's parameters name), the record naming
+    the salt, and the evidence's `seed_salt` (the salt's segment, as `coins`)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2408,15 +2462,23 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
-              keys=keys, params=[DEPLOYED], seed=seed, order=order)
+    named = {}
+
+    def after(salt: bytes) -> bytes:
+        named["record"] = {**rec, "window": {**rec["window"], R.SEED_SALT: salt.hex()}}
+        return bytes.fromhex(R.digest(named["record"]))
+    d = Drawn(rng, before=True, reads=reads, trees=trees, tables=V2_TABLES, keys=keys, params=[DEPLOYED], seed=seed,
+              order=order, seeded=after)
     at = [0]
 
     def source(k: int) -> bytes:
         at[0] += k
         return d.read[at[0] - k:at[0]]
-    coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
-    return d, draw_first(OwnRandomness(source), mine, s.population), coins
+
+    def keyless(segment) -> dict:
+        return {k: v for k, v in d.evidence(segment.to_json()).items() if k != "key"}
+    return (d, draw_first(OwnRandomness(source), mine, s.population), keyless(d.segment), named["record"],
+            keyless(d.salt_segment))
 
 
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
@@ -2435,17 +2497,18 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
+    unsalted = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                        WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-verdicts")
-    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(unsalted)
 
-    def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
+    def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict, dict]:
+        ch, d, coins, rec, salt = _challenger_draw(rng, s, law, unsalted, trees, keys)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "seed_salt": salt, "served": None,
+                    "session_roots": None, "sessions": [], "statement": {},
+                    "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                   "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
@@ -2453,15 +2516,15 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
-        return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
-                                                        "registered": None}}
+        return ch, rec, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public),
+                                                             "registered": None}}
 
-    ch, evidence, base, p2 = audit(1)
+    ch, rec, evidence, base, p2 = audit(1)
     record, stand_in = D.canonical(ch.trees[0].record).encode(), b"{}"
     blobs = [circuit.hex(), public.hex(), record.hex(), stand_in.hex()]
 
-    def run(e, blobs_=blobs, p=p2):
-        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+    def run(e, blobs_=blobs, p=p2, rec_=rec):
+        case = {"blobs": list(blobs_), "commitment": _hex(rec_), "evidence": _hex(e), "params": p}
         out = server_v2.exchange(_json(case))
         return out["verdict"], out["reason"]
 
@@ -2511,10 +2574,10 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
     assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
     for keys in (["circuit", "z"], ["a", "circuit"], ["circuit-00"], []):
-        ch_k, _, base_k, p_k = audit(1, keys)
+        ch_k, rec_k, _, base_k, p_k = audit(1, keys)
         extra = D.canonical(ch_k.trees[0].record).encode()
         assert run(base_k | {"proofs": proofs(["s"], extra), "sessions": ["s"]},
-                   blobs_=[circuit.hex(), public.hex(), extra.hex()], p=p_k) == (
+                   blobs_=[circuit.hex(), public.hex(), extra.hex()], p=p_k, rec_=rec_k) == (
             "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
@@ -2525,11 +2588,11 @@ def _audit_v1_accepts(s: Setup, seed: str, server) -> tuple:
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    ch, d, coins = _challenger_draw(random.Random(seed), s, law, rec)
+    ch, d, coins, rec, salt = _challenger_draw(random.Random(seed), s, law, rec)
     proved = DR.proved(d)
     base = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-            "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-            "statement": {}}
+            "receipt": R.receipt(rec, "v", received=RECEIVED), "seed_salt": salt, "served": None,
+            "session_roots": None, "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
               "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
               "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
@@ -2644,15 +2707,16 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
     `test_challenger_difftest.py` holds the first to Lean's piece."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
+    unsalted = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                        WINDOW, leaf_layer=LEAF)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(unsalted)
     for order in ORDERS:
-        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
+        ch, d, coins, rec, salt = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, unsalted, 1, order=order)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "seed_salt": salt, "served": None,
+                    "session_roots": None, "sessions": [], "statement": {},
+                    "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
                   "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
                   "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
@@ -2683,24 +2747,25 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     signature was forged, each mutation of the segment, or a session the ledger doesn't open withheld. So is a session
     whose release log, which its coin trees are read from too, is not the whole log the challenger's signed close
     covers: no close, a log a line short of the count the close signs, or the log's lines in another order than its
-    chain, each refused in Python's words. On the challenger's coins it goes on to its own verdicts, and a sample other
+    chain, each refused in Python's words. On the challenger's coins, the registration's window naming the seed salt the
+    session released first and the evidence carrying its log of it, it goes on to its own verdicts, and a sample other
     than theirs is rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                   WINDOW, leaf_layer=LEAF)
-    after = bytes.fromhex(R.digest(rec))
-    circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
+    unsalted = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                        WINDOW, leaf_layer=LEAF)
+    circuit, public = STAND_IN_CIRCUIT, _public_of(unsalted)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
+        """The v2 audit of the seed's record (`rec`, naming its session's seed salt, `salt`)."""
         proved = DR.proved(draw)
         record = D.canonical(d.trees[0].record).encode() if d.trees else b"{}"
         proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": ["s"], "statement": {}}
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "seed_salt": salt, "served": None,
+                    "session_roots": None, "sessions": ["s"], "statement": {}}
         if coins is not None:
             evidence["coins"] = coins
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
@@ -2774,11 +2839,13 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
 
     for seed in range(3):
         rng = random.Random(f"one-stage-v2-coins/{seed}")
-        d, draw, coins = _challenger_draw(rng, s, law, rec)
+        d, draw, coins, rec, salt = _challenger_draw(rng, s, law, unsalted)
+        after = bytes.fromhex(R.digest(rec))
         honest = audit_of(d, draw, coins)
         assert (python(honest), lean(honest)) == ("verdict", "verdict")
-        other = next(x for x in (_challenger_draw(rng, s, law, rec)[1] for _ in range(64)) if x["units"] != draw["units"])
-        stranger = _challenger_draw(rng, s, law, rec, seed=1)[0]
+        other = next(x for x in (_challenger_draw(rng, s, law, unsalted)[1] for _ in range(64))
+                     if x["units"] != draw["units"])
+        stranger = _challenger_draw(rng, s, law, unsalted, seed=1)[0]
         assert stranger.s.key != d.s.key
         elsewhere = Drawn(rng, reads=lambda c: c(COIN_BYTES), params=[DEPLOYED])
         bare = Drawn(rng, before=True, after=after, reads=lambda c: c(COIN_BYTES), withheld=False, params=[DEPLOYED])
@@ -2987,7 +3054,8 @@ READER_SETUPS = [Setup(_readers(2, (("call", 2, _X0 + _X00),) * 2, False), P.tem
                  Setup(_readers(3, (("call", 2, _X0 + _X00), ("call", 2, ((1, 0, 0), (0, 1, 0)) + _X00),
                                     ("map", 2, ((1, 1, 0), (0, 2, 0), (0, 2, 1), (0, 1, 1), (0, 0, 0), (0, 0, 0)))),
                                 False), P.template_instance_query(PAIR.id))]
-_REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
+_REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"],  # noqa: E731
+                              **({"seed_salt": a["seed_salt"]} if "seed_salt" in a else {})}
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits(most=1, setups=READER_SETUPS).map(_REGISTRATION_OF),
     changed_audits([TIED], 1, 1, READER_SETUPS).map(_REGISTRATION_OF),
@@ -3753,8 +3821,8 @@ def _law_text(law, n) -> str | None:
 
 def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
     """`run`'s input from an audit: the rule naming the verifier's law (`_law_text`), every item
-    `_public_items` declares, the challenger's name and place, the coins, and the evidence's statement and verdicts, each
-    verdict of record about the delivered sessions and reporting the public outputs."""
+    `_public_items` declares, the challenger's name and place, the coins, and the evidence's statement, verdicts and seed
+    salt evidence, each verdict of record about the delivered sessions and reporting the public outputs."""
     p, e = a["params"], a["evidence"]
     text = _law_text(p.get("law"), a["record"].get("population") if isinstance(a["record"], dict) else None)
     rule = {"rule": "all"} if text is None else {"law": text, "rule": "law"}
@@ -3770,13 +3838,16 @@ def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
     return {"challenger": "verifier-test", "closure": None, "delta": "1/4", "instances": None, "outputs": outputs,
             "params": p, "proved_units": None, "public": pub["public"], "received": RECEIVED, "record": a["record"],
             "rule": rule, "served": None, "session_roots": e.get("session_roots"), "sessions": delivered,
-            "source": source, "statement": e.get("statement"), "values": pub["values"], "verdicts": verdicts}
+            "source": source, "statement": e.get("statement"), "values": pub["values"], "verdicts": verdicts,
+            **({"seed_salt": e["seed_salt"]} if "seed_salt" in e else {})}
 
 
 def _from_challenger(c: dict, rng: random.Random) -> tuple[Drawn, dict]:
-    """Run `c` sampling from the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's
-    challenger opened after the registration's digest and read by the selection rule's sample (`Drawn`), the source the
-    bytes read, the evidence the session's and the window root the ledger's open's."""
+    """Run `c` sampling from the auditor's challenger, as a `Stream` over a window runs it: the challenger released the
+    window's seed salt first (`Drawn`'s `seeded`), which the record's window names, and its coins a ledger session's
+    challenger opened after that registration's digest and read by the selection rule's sample (`Drawn`), the source the
+    bytes read, the evidence of the coins and of the salt (`seed_salt`) the session's and the window root the ledger's
+    open's."""
     rec, p, rule = c["record"], _params_of(c), _rule(c["rule"])
     law = DR.derive(p["program"], p["query"],
                     service.selection_law(rule, rec["population"], service.selection_sizes(rule, p["program"], p["query"])),
@@ -3791,9 +3862,15 @@ def _from_challenger(c: dict, rng: random.Random) -> tuple[Drawn, dict]:
             return b
         service.select_draw(rule, law, rec["population"], source)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
+
+    def named(salt: bytes) -> bytes:
+        nonlocal rec
+        rec = {**rec, "window": {**rec["window"], R.SEED_SALT: salt.hex()}}
+        return bytes.fromhex(R.digest(rec))
+    d = Drawn(rng, before=True, reads=reads, seeded=named)
     return d, {**c, "params": {**c["params"], "window_root": d.ledger.window["root"]}, "source": d.read.hex(),
-               "coins": d.evidence(d.segment.to_json())}
+               "coins": d.evidence(d.segment.to_json()), "record": rec,
+               "seed_salt": d.evidence(d.salt_segment.to_json())}
 
 
 def _public_change(change):
@@ -3837,7 +3914,7 @@ def _as_rate(c: dict, x: int) -> dict:
 
 #: One change each to the run's own inputs: the rule (a sampling design text of any form, its subset sampling design as a rate law, a rule the
 #: stream doesn't run, or junk), the declared items and values, the challenger's name and place, the closure map, the
-#: coins, where they came from and their evidence, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances, the served units, the
+#: coins, where they came from and their evidence, the seed salt's evidence, the sessions, a verdict, the outputs, the statement, δ, the proved units and instances, the served units, the
 #: session roots, or a field missing.
 RUN_CHANGES = [
     (_with("rule", None), st.one_of(LAW_TEXTS.map(lambda t: {"law": t, "rule": "law"}), st.just({"rule": "all"}),
@@ -3851,6 +3928,7 @@ RUN_CHANGES = [
     (_with("source", None), SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", 5, None])),
     (_with("coin_source", None), st.sampled_from(["challenger", "verifier", "", "Verifier", 5, None])),
     (_with("coins", None), st.sampled_from([{}, {"segment": None}, 5, []])),
+    (_with("seed_salt", None), st.sampled_from([{}, {"segment": None}, 5, [], SEED_SALT])),
     (_with("sessions", None), st.sampled_from([[], ["zz"], ["AB" * 64], [RUN_SESSIONS[0] + "\n"], [5], "s", RUN_SESSIONS[::-1],
                                                [RUN_SESSIONS[0]] * 2, {"s": 1}])),
     (_verdict_change(lambda v, c, x: {**v, "accepted": [False, None, 1][x % 3]}), st.integers(0, 63)),
@@ -3895,7 +3973,8 @@ TWO_STAGE_RULE = {"grain": BOUNDARY.query, "k": 1, "replay": "rate:1/2", "rule":
 def _values_and_items(*setups: Setup) -> tuple[list, list]:
     """Each setup's ports as unregistered values, and every item a registration over them may show, declared."""
     values = [[{"name": n, "registered": False} for n in sorted(s.ports)] for s in setups]
-    public = ["population", "window", "leaf_layer", "anchors", *(f"population:{t}" for t in [*PROGRAMS_TEMPLATES, BLOCK.id]),
+    public = ["population", "window", R.SEED_SALT, "leaf_layer", "anchors",
+              *(f"population:{t}" for t in [*PROGRAMS_TEMPLATES, BLOCK.id]),
               *(f"{k}:{v['name']}" for vs in values for v in vs for k in ("leaves", "domain"))]
     return values, public
 
@@ -3978,12 +4057,11 @@ def _two_stage_text(seed: int) -> str:
     block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
-    (`second_stage.blank_reads`)."""
+    (`second_stage.blank_reads`). Each session's challenger released its window's seed salt first (`Drawn`'s
+    `seeded`), each registration's window names its own, and each carries the evidence of it (`seed_salt`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
     first_law = DR.derive(b.program, b.query, service.selection_law(rule, b.population))
-    rec = R.record(b.program, b.query, first_law, SCHEME, [{"port": p, "root": BOUNDARY_ROOTS[p], **b.ports[p]} for p in b.ports],
-                   WINDOW, leaf_layer=LEAF)
     sample = []
 
     def reads(draw_one):
@@ -3997,19 +4075,31 @@ def _two_stage_text(seed: int) -> str:
             draw_one(source)
             return bytes(got)
         return reader
-    d1 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads(
-        lambda source: sample.extend(service.select_draw(rule, first_law, b.population, source)["units"])))
+
+    def drawn(record, draw_one) -> tuple[Drawn, dict]:
+        """A stage's session, its coins opened after the digest of `record(window)`, the window naming the session's seed
+        salt; and that record."""
+        made = {}
+
+        def after(salt: bytes) -> bytes:
+            made["record"] = record({**WINDOW, R.SEED_SALT: salt.hex()})
+            return bytes.fromhex(R.digest(made["record"]))
+        d = Drawn(rng, before=True, reads=reads(draw_one), seeded=after)
+        return d, made["record"]
+    d1, rec = drawn(lambda window: R.record(b.program, b.query, first_law, SCHEME, [
+        {"port": p, "root": BOUNDARY_ROOTS[p], **b.ports[p]} for p in b.ports], window, leaf_layer=LEAF),
+        lambda source: sample.extend(service.select_draw(rule, first_law, b.population, source)["units"]))
     ns = service.replay_cells(Program(BLOCK), i.query)
     ks = service.second_counts(rule.k, [PAIR.id], ns)
     m = len(sample) * sum(ns)
-    irec = R.record(i.program, i.query, {"law": "subset", "k": m}, SCHEME,
-                    [{"port": p, "root": ROOTS[p], **i.ports[p]} for p in i.ports],
-                    {**WINDOW, "interior": True, "replay_sample": list(sample)}, leaf_layer=LEAF, previous=R.digest(rec))
     second = {}
 
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
-    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage))
+    d2, irec = drawn(lambda window: R.record(i.program, i.query, {"law": "subset", "k": m}, SCHEME, [
+        {"port": p, "root": ROOTS[p], **i.ports[p]} for p in i.ports],
+        {**window, "interior": True, "replay_sample": list(sample)}, leaf_layer=LEAF, previous=R.digest(rec)),
+        second_stage)
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
                   "reads": [b.ports[v]["leaves"] // b.population * sample[u // n] + u % n for u in range(m)]}
@@ -4017,6 +4107,7 @@ def _two_stage_text(seed: int) -> str:
     statements = [_second_statement(irec, SS.Part(i.templates[0], 0, n), len(sample), DR.proved(second["draw"]), False,
                                     {"format": "verity/registered-reads/v1", "ports": linked})]
     (values, ivalues), public = _values_and_items(b, i)
+    salts = {"seed_salt": d1.evidence(d1.salt_segment.to_json())}, {"seed_salt": d2.evidence(d2.salt_segment.to_json())}
 
     def params(s: Setup, law, log, d: Drawn) -> dict:
         return {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log, "partition": None,
@@ -4032,7 +4123,7 @@ def _two_stage_text(seed: int) -> str:
         "instances": None, "outputs": ["credited"], "params": params(b, first_law, [], d1), "proved_units": None,
         "public": public, "received": RECEIVED, "record": rec, "rule": TWO_STAGE_RULE, "served": None,
         "session_roots": dict(BOUNDARY_ROOTS), "sessions": RUN_SESSIONS, "source": d1.read.hex(),
-        "statement": {"instances": len(sample)}, "values": values, "verdicts": verdicts,
+        "statement": {"instances": len(sample)}, "values": values, "verdicts": verdicts, **salts[0],
         "interior": {"params": {**params(i, irec["law"], [rec], d2), "proofs": {"templates": [
                          {"template": i.templates[0], "circuit": "ab" * 64,
                           "header": _second_reference(i.templates[0], 0, m, i.ports),
@@ -4040,7 +4131,7 @@ def _two_stage_text(seed: int) -> str:
                      "replay": _json(codec.encode_program(Program(BLOCK))),
                      "values": ivalues, "record": irec, "received": "2026-10-07T00:01:00Z", "source": d2.read.hex(),
                      "coins": d2.evidence(d2.segment.to_json()), "proved_units": None, "instances": None,
-                     "served": None, "session_roots": dict(ROOTS), "statements": statements}})
+                     "served": None, "session_roots": dict(ROOTS), "statements": statements, **salts[1]}})
 
 
 def _two_stage_case(seed: int = 0) -> dict:
@@ -4132,7 +4223,7 @@ def _reproved(it: dict, x: int) -> dict:
 #: a replay law the record's law isn't, another grain), the
 #: interior registration missing or not one, its record's population, previous record, window or roots, its values,
 #: its copies' query (its params' reference headers then dropped) or program, its params' reference headers
-#: (`_reproved`), its replay block, its coins, their evidence, its received, proved units, instances,
+#: (`_reproved`), its replay block, its coins, their evidence, its seed salt's, its received, proved units, instances,
 #: served units, session roots, second-stage statements (none, not a list, or one changed: `_restated`), links, wires
 #: or rows it names (which the verifier derives, so refuses), a verdict that didn't accept, the reads a verdict reports
 #: (the interior's `x` or the boundary's `x` at their roots, `x` at another or none), and what it names of the session
@@ -4176,6 +4267,7 @@ TWO_STAGE_CHANGES = [
     (_inner(lambda it, x: {**it, "source": [str(it.get("source"))[:-2], str(it.get("source"))[:8], "", "zz", 5][x % 5]}),
      st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "coins": [None, {}, {"segment": None}, 5][x % 4]}), st.integers(0, 63)),
+    (_inner(lambda it, x: {**it, "seed_salt": [{}, {"segment": None}, 5, SEED_SALT][x % 4]}), st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "received": [5, None, ""][x % 3]}), st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "proved_units": [[], [0], [0, 3], "u", [True]][x % 5]}), st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "instances": [0, 1, 5, "1", True][x % 5]}), st.integers(0, 63)),
@@ -5865,33 +5957,35 @@ def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pie
 
 
 def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
-    """Lean and Python agreeing: a verifier naming its window's open root that read the window's seed salt from its
-    challenger accepts a record whose window names that salt, and refuses one naming another salt, one in another form or
-    none (`R6-seed-salt`). A verifier that read none (no `seed_salt`, or null) accepts a window naming none and refuses one
-    naming a salt (`R6-seed-salt`): the server chose it. A salt the verifier holds in another form, or without the
-    window's open root, refuses its inputs."""
+    """Lean and Python agreeing on R1-R7 against the seed salt their caller read (the registration piece's `seed_salt`,
+    beside the parameters): a verifier naming its window's open root accepts a record whose window names that salt, and
+    refuses one naming another salt, one in another form or none (`R6-seed-salt`). Read none (no `seed_salt`, or null),
+    it accepts a window naming none and refuses one naming a salt (`R6-seed-salt`): the server chose it. A salt in another
+    form, or without the window's open root, refuses the inputs, and so do parameters that carry one: the parameters are
+    the harness's, and the salt is read from the challenger's log."""
     s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
     law = {"k": 1, "law": "subset"}
     rec = _record_of(s, values, law, {**WINDOW, R.SEED_SALT: SEED_SALT}, leaf_layer=LEAF, window_root=WROOT)
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [], "parameters": s.signature,
               "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
-              "scheme": SCHEME, "seed_salt": SEED_SALT, "window_root": WROOT, "work_table": None}
+              "scheme": SCHEME, "window_root": WROOT, "work_table": None}
 
-    def codes(window, p=params):
-        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+    def codes(window, salt=SEED_SALT, p=params):
+        j = {"params": p, "record": {**rec, "window": window}, **({} if salt == "absent" else {"seed_salt": salt})}
+        kind, out = D.replay(REGISTRATION, _json(j), pieces)
         return json.loads(out)["codes"] if kind == "output" else kind
 
     assert codes(rec["window"]) == []
     for salt in (OTHER_SEED_SALT, SEED_SALT.upper(), None, 5):
         assert codes({**WINDOW, R.SEED_SALT: salt}) == ["R6-seed-salt"], salt
     assert codes(WINDOW) == ["R6-seed-salt"]
-    unread = {k: v for k, v in params.items() if k != "seed_salt"}
-    for p in (unread, {**params, "seed_salt": None}):
-        assert codes(rec["window"], p) == ["R6-seed-salt"]
-        assert codes(WINDOW, p) == []
+    for unread in ("absent", None):
+        assert codes(rec["window"], unread) == ["R6-seed-salt"]
+        assert codes(WINDOW, unread) == []
     for bad in (SEED_SALT.upper(), SEED_SALT[:-2], SEED_SALT + "\n", "", 5):
-        assert codes(rec["window"], {**params, "seed_salt": bad}) == "reject", bad
-    assert codes(rec["window"], {**params, "window_root": None}) == "reject"
+        assert codes(rec["window"], bad) == "reject", bad
+    assert codes(rec["window"], p={**params, "window_root": None}) == "reject"
+    assert codes(rec["window"], "absent", {**params, "seed_salt": SEED_SALT}) == "reject"
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):
@@ -6301,6 +6395,33 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         assert D.replay(RUN, refused, pieces)[0] == "reject", refused["rule"]
         with pytest.raises(D.Reject):
             run(copy.deepcopy(refused))
+
+
+def test_each_stage_reads_its_windows_seed_salt_from_its_own_evidence(pieces):
+    """A two-stage run whose two sessions each released their window's seed salt (`_two_stage_case`), Lean's the Python's
+    whole: the boundary registration's salt is read from the run's evidence (`seed_salt`) and the interior
+    registration's from its own (the interior's `seed_salt`), each on its own window, and the run fails only round 2's
+    refusal of the two-stage form (`two-stage-form`), which the Python allowing the form (`second_stage.FORM`) accepts.
+    The interior registration is refused (`interiors`) for a record whose window names another salt than its session
+    released, or none (`R6-seed-salt`); and (`seed-salt`) for its evidence missing, as a registration on a window always
+    reads its salt, and for the boundary's evidence, which reads on the boundary's window only. The boundary
+    registration is refused for its evidence missing (`seed-salt` at `register`)."""
+    case = _two_stage_case()
+    out = _ran(pieces, case)
+    inner = json.loads(out["interior"]["audit"])
+    assert out["symbol"] == "reject" and [k for k, c in inner["checks"].items() if not c["ok"]] == ["statements"], out
+    assert inner["checks"]["statements"]["codes"] == ["two-stage-form"]
+    with mock.patch.object(SS, "FORM", True):
+        assert run(copy.deepcopy(case))["symbol"] == "accept"
+    window = case["interior"]["record"]["window"]
+    for named in ({**window, R.SEED_SALT: OTHER_SEED_SALT}, {k: v for k, v in window.items() if k != R.SEED_SALT}):
+        got = _ran(pieces, _inner_record(window=named)(case, 0))
+        assert got == {"codes": ["R6-seed-salt"], "step": "interiors"}, (named, got)
+    for evidence in (None, case["seed_salt"]):
+        got = _ran(pieces, _inner(lambda it, x: {**it, "seed_salt": evidence})(case, 0))
+        assert got == {"codes": ["seed-salt"], "step": "interiors"}, (evidence is None, got)
+    got = _ran(pieces, {**case, "seed_salt": None})
+    assert got == {"codes": ["seed-salt"], "step": "register"}, got
 
 
 def _second_with(c: dict, i: int, **fields) -> dict:
@@ -6914,10 +7035,11 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's challenger opened after
     the registration's digest and read by the selection rule's sample (`Drawn`), Lean's `Run.run` the Python's whole. The
     honest run is accepted, each stratum sampled at least its floor. It is refused at its registration for a window of
-    other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose sampling design samples a
-    stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
-    segment or the bytes, coins opened after another digest, coins of a session the ledger doesn't open withheld,
-    evidence for another window, and none or empty."""
+    other counts (`R2-program`) or the templates in the other order (`query`), for a record whose sampling design samples a
+    stratum short of its floor (`R1-law`), and for the seed salt's evidence missing or the verifier on another window
+    (`seed-salt`); at its select (`coins`) for each mutation of the coins that changes the segment or the bytes, coins
+    opened after another digest, coins of a session the ledger doesn't open withheld, evidence for another window, and
+    none or empty. Each session released its window's seed salt first (`Drawn`'s `seeded`), which its record names."""
     rule, s = service.Law("stratified-rate:1/2"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]
@@ -6935,10 +7057,20 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
         service.select_draw(rule, law, rec["population"], source)
         return bytes(got)
 
-    def case_of(d: Drawn, segment: dict, read: bytes, **change) -> dict:
-        c = _run_case(a, read.hex(), 2, ["credited"])
+    def drawn(rng: random.Random, after: bytes | None = None, **kw) -> tuple[Drawn, dict]:
+        """A session that released its window's seed salt, then its coins after the digest of `rec` with its window
+        naming that salt (after `after` when given); and that record."""
+        made = {}
+
+        def named(salt: bytes) -> bytes:
+            made["record"] = {**rec, "window": {**rec["window"], R.SEED_SALT: salt.hex()}}
+            return bytes.fromhex(R.digest(made["record"])) if after is None else after
+        return Drawn(rng, reads=reads, seeded=named, **kw), made["record"]
+
+    def case_of(d: Drawn, record: dict, segment: dict, read: bytes, **change) -> dict:
+        c = _run_case({**a, "record": record}, read.hex(), 2, ["credited"])
         c["params"] = {**c["params"], "window_root": d.ledger.window["root"]}
-        return {**c, "coins": d.evidence(segment), **change}
+        return {**c, "coins": d.evidence(segment), "seed_salt": d.evidence(d.salt_segment.to_json()), **change}
 
     def ran(c: dict) -> dict:
         out = run(copy.deepcopy(c))
@@ -6947,49 +7079,92 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
 
     for seed in range(3):
         rng = random.Random(f"window/{seed}")
-        d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
-        honest = case_of(d, d.segment.to_json(), d.read)
+        d, named = drawn(rng, before=True)
+        honest = case_of(d, named, d.segment.to_json(), d.read)
         out = ran(honest)
         assert out["symbol"] == "accept" and out["read"] == len(d.read), out
         for stratum in law["strata"]:
-            drawn = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
-            assert len(drawn) == stratum["k"] >= 1, (stratum, out["draw"])
+            sampled = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
+            assert len(sampled) == stratum["k"] >= 1, (stratum, out["draw"])
         other_counts = json.loads(_population(((0, 3), (1, 2))))
         reordered = Setup(P.mixed_population_program([(TRIPLE, 3), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))
         PROGRAMS[reordered.sha512] = reordered.program
-        short = copy.deepcopy(rec)
+        short = copy.deepcopy(named)
         short["law"]["strata"][0]["k"] = 0
-        registers = {"R2-program": {**honest, "params": {**honest["params"], "program": other_counts}},
-                     "query": {**honest, "params": {**honest["params"], "program": reordered.desc, "query": reordered.query}},
-                     "R1-law": {**honest, "record": short}}
-        for code, c in registers.items():
+        registers = [("R2-program", {**honest, "params": {**honest["params"], "program": other_counts}}),
+                     ("query", {**honest, "params": {**honest["params"], "program": reordered.desc,
+                                                     "query": reordered.query}}),
+                     ("R1-law", {**honest, "record": short}), ("seed-salt", {**honest, "seed_salt": None}),
+                     ("seed-salt", {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}})]
+        for code, c in registers:
             out = ran(c)
             assert out["step"] == "register" and code in out["codes"], (code, out)
         tampered = bytearray(d.read)
         tampered[rng.randrange(len(tampered))] ^= 1 << rng.randrange(8)
-        selects = [case_of(d, _mutated(rng, d, name)[0], d.read) for name in DRAW_MUTATIONS
+        selects = [case_of(d, named, _mutated(rng, d, name)[0], d.read) for name in DRAW_MUTATIONS
                    if name not in ("unread", "read-tampered", "other-after")]
-        selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
-        elsewhere = Drawn(rng, reads=reads)
-        bare = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
-        selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
-                    case_of(bare, bare.segment.to_json(), bare.read),
-                    {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
+        selects.append(case_of(d, named, d.segment.to_json(), bytes(tampered)))
+        elsewhere, released = drawn(rng, after=rng.randbytes(64))
+        after = bytes.fromhex(R.digest(named))
+        bare = Drawn(rng, before=True, after=after, reads=reads, withheld=False, window=d.window)
+        windowed = Drawn(rng, before=True, after=after, reads=reads)
+        selects += [case_of(elsewhere, released, elsewhere.segment.to_json(), elsewhere.read),
+                    *({**honest, "coins": x.evidence(x.segment.to_json()), "source": x.read.hex()}
+                      for x in (bare, windowed)),
                     {**honest, "coins": None}, {**honest, "coins": {}}]
         for c in selects:
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
 
 
+def test_the_run_reads_its_windows_seed_salt_from_the_challengers_log(pieces):
+    """A window's run whose challenger released the window's seed salt after its open root, before the registration
+    (`_from_challenger`), Lean's `Run.run` the Python's whole, reads the salt from the run's evidence of it in the
+    challenger's log (`seed_salt`: `Run.seedSaltOf`, `coins.seed_salt_in`), never from its parameters, which refuse
+    one. The run of the record whose window names that salt is accepted. It is refused at its registration
+    (`R6-seed-salt`) for a record whose window names another salt than the one its seeds were derived with, or none; and
+    (`seed-salt`) for the evidence missing, as a verifier holding a window always reads its salt, and for evidence that
+    doesn't read: a forged coin, the sample's coins or another family's segment, another window's session, its key
+    missing, none of its form, and a verifier holding no window."""
+    for seed in range(2):
+        rng = random.Random(f"seed-salt/{seed}")
+        d, honest = _from_challenger(_run_case(_v1_audit("stratified", SETUPS[3]), "", 2, ["credited"]), rng)
+        assert _ran(pieces, honest)["symbol"] == "accept"
+        window = honest["record"]["window"]
+        assert window[R.SEED_SALT] == d.salt.hex()
+        for named in ({**window, R.SEED_SALT: OTHER_SEED_SALT}, {k: v for k, v in window.items() if k != R.SEED_SALT}):
+            changed = {**honest, "record": {**honest["record"], "window": named}}
+            assert _ran(pieces, changed) == {"codes": ["R6-seed-salt"], "step": "register"}, named
+        for missing in ({**honest, "seed_salt": None}, {k: v for k, v in honest.items() if k != "seed_salt"}):
+            assert _ran(pieces, missing) == {"codes": ["seed-salt"], "step": "register"}
+        segment = d.salt_segment.to_json()
+        opening = segment["openings"][0]
+        elsewhere = Drawn(rng, seeded=lambda salt: rng.randbytes(64))
+        unread = [d.evidence({**segment, "openings": [{**opening, "coin": _flip(opening["coin"], rng.randrange(64))}]}),
+                  d.evidence(d.segment.to_json()), d.evidence({**segment, "label": "draw"}),
+                  elsewhere.evidence(elsewhere.salt_segment.to_json()),
+                  {k: v for k, v in honest["seed_salt"].items() if k != "key"}, {}, 5]
+        for evidence in unread:
+            assert _ran(pieces, {**honest, "seed_salt": evidence}) == {"codes": ["seed-salt"], "step": "register"}
+        windowless = {**honest, "params": {k: v for k, v in honest["params"].items() if k != "window_root"}}
+        assert _ran(pieces, windowless) == {"codes": ["seed-salt"], "step": "register"}
+        handed = {**honest, "params": {**honest["params"], "seed_salt": d.salt.hex()}}
+        assert D.replay(RUN, handed, pieces)[0] == "reject"
+        with pytest.raises(D.Reject):
+            run(copy.deepcopy(handed))
+
+
 def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
     """A one-stage audit whose verifier names the auditor's challenger (`challenger`, with `window_root`) reads its sample's
     coins through `Challenger.drawCoins` (`coins.draw_coins`): under the verifier's key, on its window, of its family,
-    released after the registration's digest, Lean's the Python's. The sample from those coins is accepted; it is rejected
-    for another sample, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
-    coins under another key, on another window, of another family, opened after another digest, each mutation of the
-    segment, or a session the ledger doesn't open withheld (one whose challenger may have released its root before the
-    prover's commitment), and refused for a challenger without a window. A verifier that names no challenger decides as
-    before, and rejects evidence that carries coins."""
+    released after the registration's digest, Lean's the Python's. Its session released the window's seed salt first
+    (`Drawn`'s `seeded`), which the registration's window names and the evidence carries the log of. The sample from
+    those coins is accepted; it is rejected for another sample, the evidence's coins carrying a key (`coins_reason`'s
+    form, where the prover named the key), none, coins under another key, on another window, of another family, opened
+    after another digest, each mutation of the segment, or a session the ledger doesn't open withheld (one whose
+    challenger may have released its root before the prover's commitment), and refused for a challenger without a
+    window. A verifier that names no challenger decides as before, with no salt to read, and rejects evidence that
+    carries coins."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     mine = DR.derive(s.program, s.query, law, None)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -7014,18 +7189,25 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
 
-    def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
+    def keyless(evidence: dict) -> dict:
+        return {k: v for k, v in evidence.items() if k != "key"}
+
+    def audit_of(d: Drawn, draw: dict, coins, seeds: tuple[dict, dict | None] = (rec, None), **params) -> dict:
+        """The audit of `seeds`' record, its evidence carrying `seeds`' seed salt evidence when there is one."""
+        record, salt = seeds
         proved = DR.proved(draw)
         evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "receipt": R.receipt(record, "v", received=RECEIVED), "served": None, "session_roots": None,
                     "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
         if coins is not None:
             evidence["coins"] = coins
+        if salt is not None:
+            evidence["seed_salt"] = salt
         p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
              "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
              "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
         return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
-                "record": rec}
+                "record": record}
 
     def verdict(a: dict) -> str:
         return D.replay(ONE_STAGE, _json(_case(a)), server)[0]
@@ -7035,33 +7217,133 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
 
     for seed in range(3):
         rng = random.Random(f"one-stage-coins/{seed}")
-        d = Drawn(rng, before=True, after=after, reads=reads)
-        coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
+        named = {}
+
+        def salted(salt: bytes) -> bytes:
+            named["record"] = {**rec, "window": {**rec["window"], R.SEED_SALT: salt.hex()}}
+            return bytes.fromhex(R.digest(named["record"]))
+        d = Drawn(rng, before=True, reads=reads, seeded=salted)
+        seeds = (named["record"], keyless(d.evidence(d.salt_segment.to_json())))
+        coins = keyless(d.evidence(d.segment.to_json()))
         draw = drawn_from(d.read)
-        accepts(audit_of(d, draw, coins))
+        accepts(audit_of(d, draw, coins, seeds))
         other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
         stranger = next(x for x in (Drawn(rng, before=True, after=after, reads=reads) for _ in range(16))
                         if x.s.key != d.s.key)
         elsewhere = Drawn(rng, reads=reads)
-        rejected = [audit_of(d, other, coins), audit_of(d, draw, d.evidence(d.segment.to_json())),
-                    audit_of(d, draw, None), audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),
-                                                                                 "label": "draw"}),
-                    audit_of(d, draw, coins, window_root=d.other_window(rng)),
-                    audit_of(d, draw, coins, challenger={"key": d.s.key.to_json(), "label": "other"}),
-                    audit_of(elsewhere, drawn_from(elsewhere.read),
-                             {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"}),
-                    audit_of(d, draw, coins, challenger=None)]
-        rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
+        rejected = [audit_of(d, other, coins, seeds), audit_of(d, draw, d.evidence(d.segment.to_json()), seeds),
+                    audit_of(d, draw, None, seeds),
+                    audit_of(d, draw, coins, seeds, challenger={"key": stranger.s.key.to_json(), "label": "draw"}),
+                    audit_of(d, draw, coins, seeds, window_root=d.other_window(rng)),
+                    audit_of(d, draw, coins, seeds, challenger={"key": d.s.key.to_json(), "label": "other"}),
+                    audit_of(elsewhere, drawn_from(elsewhere.read), keyless(elsewhere.evidence(elsewhere.segment.to_json()))),
+                    audit_of(d, draw, coins, seeds, challenger=None)]
+        rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}, seeds) for name in DRAW_MUTATIONS
                      if name not in ("unread", "read-tampered", "other-after")]
         bare = Drawn(rng, before=True, after=after, reads=reads, withheld=False)
-        bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
+        bare_coins = keyless(bare.evidence(bare.segment.to_json()))
         rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
         with pytest.raises(CoinError, match="withhold"):
             draw_coins(bare.s.key, bare.ledger.window["root"], "draw", after, bare_coins, lms_verify)
         assert [verdict(a) for a in rejected] == ["reject"] * len(rejected)
-        refused = audit_of(d, draw, coins, window_root=None)
+        refused = audit_of(d, draw, coins, seeds, window_root=None)
         assert answer(_json(_case(refused)))["reason"].startswith("params:") and verdict(refused) == "reject"
         accepts(audit_of(d, draw, None, challenger=None))
+
+
+def test_the_audit_reads_its_windows_seed_salt_from_the_challengers_log(server):
+    """A one-stage audit whose verifier names the auditor's challenger reads the window's seed salt from its evidence
+    (`seed_salt`: `OneStage.seedSaltOf`, `coins.seed_salt_of`): the first coin of the seed-salt family that the session
+    the ledger opens on the verifier's window, under the verifier's key, released after the window's open root
+    (`Drawn`'s `seeded`), and never from its parameters, which refuse one. Lean's the Python's. The audit of the record
+    whose window names that salt is accepted. It is rejected for a record whose window names another salt than the one
+    its seeds were derived with, or none, the sample's coins released after that record's digest so that only the salt
+    differs (`R6-seed-salt`); for the salt's evidence missing, by name (`MISSING_SEED_SALT`: a verifier naming a
+    challenger and a window root always reads one), whether the record's window names a salt or none; and for evidence
+    that doesn't read: a forged coin, the sample's coins, another window's session, carrying a key (`seed_salt_in`'s
+    form, where the prover named the key), or a salt with no challenger to read it from."""
+    s, law = SETUPS[3], {"k": 3, "law": "stratified"}
+    mine = DR.derive(s.program, s.query, law, None)
+
+    def record(salt: str | None) -> dict:
+        window = {**WINDOW, R.SEED_SALT: salt} if salt is not None else WINDOW
+        return R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                        window, leaf_layer=LEAF)
+
+    def reads(coins) -> bytes:
+        got = bytearray()
+
+        def source(k: int) -> bytes:
+            b = coins(k)
+            got.extend(b)
+            return b
+        draw_first(OwnRandomness(source), mine, s.population)
+        return bytes(got)
+
+    def seeded(rng: random.Random, name) -> tuple[Drawn, dict]:
+        """A session whose challenger released the window's seed salt, then the sample's coins after the digest of the
+        record whose window names `name(salt)`, and that record."""
+        made = {}
+
+        def after(salt: bytes) -> bytes:
+            made["record"] = record(name(salt.hex()))
+            return bytes.fromhex(R.digest(made["record"]))
+        d = Drawn(rng, before=True, reads=reads, seeded=after)
+        return d, made["record"]
+
+    def keyless(evidence: dict) -> dict:
+        return {k: v for k, v in evidence.items() if k != "key"}
+
+    def audit_of(d: Drawn, rec: dict, salt, coins: bool = True, **params) -> dict:
+        at = [0]
+
+        def source(k: int) -> bytes:
+            at[0] += k
+            return d.read[at[0] - k:at[0]]
+        draw = draw_first(OwnRandomness(source), mine, s.population)
+        proved = DR.proved(draw)
+        evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        if coins:
+            evidence["coins"] = keyless(d.evidence(d.segment.to_json()))
+        if salt is not None:
+            evidence["seed_salt"] = salt
+        p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
+             "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+             "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
+        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
+                "record": rec}
+
+    def outcome(a: dict) -> tuple[str, str]:
+        verdict, out = D.replay(ONE_STAGE, _json(_case(a)), server)
+        return verdict, json.loads(out)["reason"]
+
+    for seed in range(2):
+        rng = random.Random(f"one-stage-seed-salt/{seed}")
+        d, rec = seeded(rng, lambda salt: salt)
+        salt = keyless(d.evidence(d.salt_segment.to_json()))
+        assert outcome(audit_of(d, rec, salt))[0] == "accept", answer(_json(_case(audit_of(d, rec, salt))))["reason"]
+        for name in (lambda salt: OTHER_SEED_SALT, lambda salt: None):
+            other, named = seeded(rng, name)
+            got = outcome(audit_of(other, named, keyless(other.evidence(other.salt_segment.to_json()))))
+            assert got == ("reject", "registration: R6-seed-salt"), got
+        unsalted, plain = seeded(rng, lambda salt: None)
+        for a in (audit_of(d, rec, None), audit_of(unsalted, plain, None)):
+            assert outcome(a) == ("reject", f"registration: seed salt: {MISSING_SEED_SALT}")
+        segment = d.salt_segment.to_json()
+        opening = segment["openings"][0]
+        elsewhere = Drawn(rng, seeded=lambda salt: rng.randbytes(64))
+        unread = [audit_of(d, rec, {**salt, "segment": {**segment, "openings": [{**opening, "coin": _flip(opening["coin"])}]}}),
+                  audit_of(d, rec, {**salt, "segment": d.segment.to_json()}),
+                  audit_of(d, rec, keyless(elsewhere.evidence(elsewhere.salt_segment.to_json()))),
+                  audit_of(d, rec, d.evidence(d.salt_segment.to_json())),
+                  audit_of(d, rec, salt, coins=False, challenger=None)]
+        for a in unread:
+            verdict, why = outcome(a)
+            assert verdict == "reject" and why.startswith("registration: seed salt: "), why
+        refused = audit_of(d, rec, salt, seed_salt=d.salt.hex())
+        assert answer(_json(_case(refused)))["reason"].startswith("params:") and outcome(refused)[0] == "reject"
 
 
 def _ran(pieces, case: dict) -> dict:

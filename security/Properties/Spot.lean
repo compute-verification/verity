@@ -14,10 +14,13 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
-  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); and for a v2 record its registered
-  values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
-  rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
-  its proof blocks don't each read alone (`R8`);
+  window's stream and prover and its pool's reset, once a week (`R6`); and for a v2 record its registered values
+  (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public rule or
+  its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input its proof
+  blocks don't each read alone (`R8`);
+* **the seed salt**: the record's window names the window's seed salt the verifier read from the challenger's log, in
+  the evidence under its challenger's key, which parameters naming a challenger and a window root always read; none
+  only when the parameters name no challenger or no window root and the evidence carries none (`SeedSaltNamed`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
@@ -138,10 +141,10 @@ def R8 (v : Registration.Verifier) : Prop :=
   (Registration.tiedBad v).isEmpty = true ∧
     Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
 
-/-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
-read none. -/
-def WindowSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
-  jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
+/-- The record's window names `salt`, the window's seed salt the verifier read from the challenger's log, and none when
+it read none (`R6-seed-salt`). -/
+def WindowSeedSalt (rec : Json) (salt : Option String) : Prop :=
+  jeq (getD (getD rec "window") "seed_salt") (match salt with | some s => .str s | none => .null)
 
 /-- The record's window names the reset serving chose for the verifier's pool (`Registration.Pool.reset`), and none for
 a verifier with no pool. -/
@@ -166,8 +169,8 @@ def PoolResetOnce (v : Registration.Verifier) : Prop :=
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset, week and
-spent mark (`WindowPoolReset`, `WindowPoolWeek`, `WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
+window name both, and its window names its pool's reset, week and spent mark (`WindowPoolReset`, `WindowPoolWeek`,
+`WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -175,7 +178,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
+  WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -291,6 +294,13 @@ chain and its pinned roots (`PinnedHeld`) when the verifier expects values regis
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
     (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v
+
+/-- The window's seed salt reads from the challenger's log (`OneStage.seedSaltOf`: the evidence's, under the verifier's
+challenger key, on its window, its evidence missing refused where the parameters name a challenger and a window root;
+none only where they don't and the evidence carries none), and the record's window names it (`WindowSeedSalt`): never a
+salt the parameters or the record supply. -/
+def SeedSaltNamed (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  ∃ salt, OneStage.seedSaltOf p e = .ok salt ∧ WindowSeedSalt c.record salt
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -419,14 +429,15 @@ def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : 
 sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
 values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
-the profile `profileOf`. -/
+the profile `profileOf`; and the record's window names the seed salt read from the challenger's log
+(`SeedSaltNamed`). -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e law d n ∧ prof = profileOf p c e d n
+        pub = publicOf p e law d n ∧ prof = profileOf p c e d n ∧ SeedSaltNamed p c e
 
 /-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:
 `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/
@@ -440,5 +451,111 @@ def BernoulliBounds : Prop :=
     OneStage.check p c e = .accept pub prof →
       ∀ (r : Core.Ratio) (l : Core.Level), l ∈ prof.levels → l.draw = some (.bernoulli r) →
         pub.bound = Bound.bernoulliBound l.size r p.delta
+
+/-! ## An honest one-stage audit, and its window with the seed salt's evidence missing
+
+A program of one Call of a one-gate, 16-bit template, partitioned by `Q_template_instance` into its one unit; a v1
+record keeping R1–R6 against the verifier's copies, its partition's and query's digests the SHA-512s its check computes;
+a `subset` sample of that unit, its receipt naming the record's digest, and one verdict of record that accepted. The
+verifier names no challenger, so the window names no seed salt (`params`). `saltParams` names a challenger and the
+window's open root for the same window, whose evidence carries no seed salt: a check that accepts everything accepts it,
+publishing `barePublic` and `bareProfile`, and `AcceptMeans` refuses it. -/
+
+/-- Public outputs of no units, with a bound of 0. -/
+def barePublic : Public := { drawn := #[], proved := #[], bound := 0, perTemplate := none }
+
+/-- The profile of no program and no level. -/
+def bareProfile : Core.Integrity :=
+  { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := ⟨0, 1⟩, drawn := #[] }
+
+namespace Honest
+
+/-- The template: one primitive gate of 16 bits. -/
+def templateDefn : Flock.Program.Defn :=
+  { key := "T", id := "T_v1", prim := true, params := #[], ret := .value 16, gates := 1, paramLeaves := 0,
+    outLeaves := 1 }
+
+/-- The root: one Call of the template, returning its output. -/
+def rootDefn : Flock.Program.Defn :=
+  { key := "R", id := "R_v1", prim := false, params := #[], ret := .value 16,
+    body := { params := #[], retType := .value 16, nodes := #[{ form := .call, fn := 1, args := #[], out := .value 16 }],
+              ret := { parts := #[.affine false 0 0 1], starts := #[0], count := 1 }, offsets := #[0] },
+    gates := 1, paramLeaves := 0, outLeaves := 1 }
+
+/-- The program, its SHA-512 named by 64 zero bytes. -/
+def prog : Flock.Program.Prog :=
+  { defs := #[rootDefn, templateDefn], index := {}, root := 0, programFn := "R", sha512 := ⟨Array.replicate 64 0⟩ }
+
+def program : Program := { desc := .ofProg prog, prog }
+
+def templateParams : List (String × Json) := [("template", .str "T")]
+
+def queryItems : List (String × Json) :=
+  [("name", .str "Q_template_instance"), ("params", Json.mkObj templateParams), ("version", Lean.toJson (0 : Nat))]
+
+/-- The query: every instance of the template is a unit. -/
+def query : Json := Json.mkObj queryItems
+
+/-- The program's SHA-512, in hex. -/
+def hex : String := Flock.hexOf prog.sha512
+
+/-- The canonical partition object over the program and the query. -/
+def partitionItems : List (String × Json) :=
+  [("format", .str Flock.HmRow.PARTITION_V1), ("program", .str hex), ("query", query)]
+
+/-- The sampling design: one unit, uniformly. -/
+def law : Json := Json.mkObj [("law", .str "subset"), ("k", Lean.toJson (1 : Nat))]
+
+/-- The one port's layout. -/
+def port : Json := Json.mkObj [("domain", .str "d"), ("leaves", Lean.toJson (1 : Nat))]
+
+def rootEntry : Json :=
+  Json.mkObj [("domain", .str "d"), ("leaves", Lean.toJson (1 : Nat)), ("port", .str "x"), ("root", .str "00")]
+
+def window : Json := Json.mkObj [("kind", .str "served")]
+
+/-- The partition's digest as the check computes it. -/
+def partitionHex : String := (Partition.digest (Json.mkObj partitionItems)).getD ""
+
+/-- The query's digest as the check computes it. -/
+def queryHex : String := match Registration.queryDigest query with
+  | .ok q => q
+  | .error _ => ""
+
+def recordItems : List (String × Json) :=
+  [("anchors", .arr #[]), ("format", .str Registration.FORMAT), ("law", law), ("leaf_layer", .null),
+   ("partition", .str partitionHex), ("population", Lean.toJson (1 : Nat)), ("previous", .null), ("program", .str hex),
+   ("protocol", .str Registration.PROTOCOL), ("query", .str queryHex), ("roots", .arr #[rootEntry]),
+   ("scheme", .str "s"), ("window", window)]
+
+/-- The registration record. -/
+def record : Json := Json.mkObj recordItems
+
+def verifier : Registration.Verifier :=
+  { program, query, law, workTable := none, scheme := "s", ports := #[("x", port)], leafLayer := none,
+    anchors := #[], log := #[], partition := none }
+
+/-- The commitment to the record, under the record's own digest (`OneStage.commitmentOf`). -/
+def commitment : Commitment := { record, digest := (Flock.WindowRecord.digest record).toOption.getD .empty }
+
+def draw : Json :=
+  Json.mkObj [("k", Lean.toJson (1 : Nat)), ("law", .str "subset"), ("population", Lean.toJson (1 : Nat)),
+    ("units", .arr #[Lean.toJson (0 : Nat)])]
+
+/-- The evidence: the sample of the one unit, proved, and a verdict of record that accepted; no seed salt. -/
+def evidence : Evidence :=
+  { receipt := Json.mkObj [("registration", .str (Flock.hexOf commitment.digest))], draw, provedUnits := #[0],
+    instances := 1, statement := .null,
+    verdicts := #[("v", Json.mkObj [("accepted", .bool true), ("of_record", .bool true)])], sessions := #[],
+    served := none, sessionRoots := none }
+
+def params : Params := { verifier, delta := ⟨1, 2⟩ }
+
+/-- The same verifier and window, naming a challenger and the window's open root. -/
+def saltParams : Params :=
+  { verifier := { verifier with windowRoot := some (Flock.hexOf ⟨Array.replicate 64 0⟩) }, delta := ⟨1, 2⟩,
+    challenger := some (⟨⟨64, 8, 10⟩, ⟨Array.replicate Challenger.PUBLIC_BYTES 0⟩⟩, "sample") }
+
+end Honest
 
 end Properties.Spot

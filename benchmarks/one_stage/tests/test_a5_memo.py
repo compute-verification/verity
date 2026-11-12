@@ -14,13 +14,16 @@ from pathlib import Path
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
+from verity.protocols.spot.device import coins as CC
 from verity.protocols.spot.verifier import service as S
 from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
+import fake_challenger as FC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5MemoTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -39,7 +42,7 @@ VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
-    *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
+    *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW))) + (FC.SEED_ITEM,)
 #: one of the PAIR and three of the 9 TRIPLEs
 RULE = S.Law("stratified-rate:1/3")
 SPEC = S.Spec(VALUES, RULE,
@@ -67,12 +70,13 @@ def _table(program: Program | None = None) -> dict:
     return S.selection_table(RULE, program or _program(), QUERY, None)
 
 
-def _record() -> dict:
+def _record(salt: str | None = None) -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
     law = S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
     return R.record(_program(), QUERY, law, S.SCHEME, roots,
-                    {"kind": "served", "run": RUN, "row": 0}, work_table=_table())
+                    {"kind": "served", "run": RUN, "row": 0, **({R.SEED_SALT: salt} if salt else {})},
+                    work_table=_table())
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
@@ -95,14 +99,18 @@ def _asked(monkeypatch) -> Counter:
 
 def _negatives() -> dict[str, dict]:
     """a5's negatives on the challenger's coins: each its own stream on the honest sample's bytes, registering the same record
-    (in its window), sampling, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
+    (in its window, which names the window's seed salt, the one coin a seed-salt session the ledger opens for the window
+    released, of the same value in each window), sampling, and its outcome with its evidence and the salt's. -> by name:
+    accepted, the Lean run's side, the record."""
     out = {}
     for name, (coins, window) in NEGATIVES.items():
         s = S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 memo test, challenger", coins=AC.Replay(READ),
                      clock=lambda: 0.0)
-        d = s.select(s.register(_record(), _ports(), window_root=window, counts=COUNTS))
+        seeds = FC.Challenger("a5-memo/seed-salt", 2, CC.SEED_SALT_FAMILY, window={"root": window})
+        salt = s.seed_salt(seeds, window).hex()
+        d = s.select(s.register(_record(salt), _ports(), window_root=window, counts=COUNTS))
         assert s.deliver(d, [SESSION]) is None
-        got = s.outcome(d, VERDICTS, {"statement": "stub"}, coins=coins)
+        got = s.outcome(d, VERDICTS, {"statement": "stub"}, coins=coins, seed_salt=seeds.evidence(window))
         audit = s.records[-1]["audit"]
         out[name] = {"accepted": got.accepted, "lean": AC.lean_side(audit), "audit": audit}
     return out
