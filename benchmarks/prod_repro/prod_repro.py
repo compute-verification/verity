@@ -132,8 +132,8 @@ NOT_SESSIONS = ("the interval over lifetime pairs is the benchmark's for a sessi
                 "this load is not one")
 #: why a cost on a sessions load is not shown whatever its interval: the benchmark's own cost has no verdict there
 #: (`serve_tax.session_cost`'s ``same_work``)
-UNEQUAL = ("the arms did not do the same work (one left a request unserved, or their prefix caches served different "
-           "shares of the prompts in some rep)")
+UNEQUAL = ("the arms did not do the same work (one left a request unserved, they served another count of output "
+           "tokens, or their prefix caches served different shares of the prompts in some rep)")
 
 
 def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[str, str, str]:
@@ -552,6 +552,11 @@ def kept_up(dirs: list[Path], arm: dict, load: str) -> dict:
             "arrivals_span_s": max(a for _, a in tails)}
 
 
+#: what the benchmark's own cost says of each side beside the cost, which the cost line prints and adjusts nothing
+#: for: the engine steps a pass, the share of its draft tokens accepted (percent) and the tokens a draft gave
+SIDE = ("steps", "draft_accepted_share", "tokens_per_draft")
+
+
 def _frac(x: float | None) -> float | None:
     """A figure of the benchmark's own cost, which is percent, as a fraction."""
     return None if x is None else x / 100
@@ -563,8 +568,10 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
     cost is the mean over the server lifetimes an arm of each one's cost, its interval is over the lifetimes, and the
     verdict is the benchmark's, which reads that interval alone (`VERDICTS`). So a job of one lifetime an arm, which
     has no such interval, shows nothing, nor does one whose arms did not do the same work. Beside it and in no
-    verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost and
-    the spread between lifetimes and between a lifetime's passes (``lifetimes``), and the noise floor, a lifetime
+    verdict: the cost over the passes taken as independent with its interval (``passes``), each lifetime's cost, the
+    spread between lifetimes and between a lifetime's passes, the same cost under the benchmark's other readings of
+    a pass's rate of work (``readings``) and each side's engine steps and accepted drafts (``sides``: `SIDE`), all
+    in ``lifetimes``, and the noise floor, a lifetime
     pair its unit too: stock again over stock where a twin of stock was served, else stock's own lifetimes, each
     second one over the one before it. On another load the cost is the one over the passes taken as independent, the
     noise floor is ``again`` over ``stock`` measured the same way, and there is no verdict. ``leaves_out_zero`` says
@@ -602,7 +609,10 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             same, value, verdict, n = own["same_work"], _frac(own["value"]), VERDICTS[own["verdict"]], own["noise_floor"]
             lives = {"pairs": own["lifetimes"], "ci95": own["ci95"] and [x / 100 for x in own["ci95"]],
                      "each": own["by_lifetime"] and [{**x, "value": _frac(x["value"])} for x in own["by_lifetime"]],
-                     "spread_points": own["spread"], "left_out": own["left_out"]}
+                     "spread_points": own["spread"], "left_out": own["left_out"],
+                     "readings": {k: _frac(v) for k, v in (own.get("readings") or {}).items()},
+                     "sides": {a: {k: x.get(k) for k in SIDE} for a, x in zip((stock, ours), (
+                         own["sides"]["reference"], own["sides"]["arm"]))}}
             noise = n and {"arm": n["arm"], "over": "lifetimes", "value": _frac(n["value"]),
                            "ci95": n["ci95"] and [x / 100 for x in n["ci95"]], "pairs": n["pairs"],
                            "own": "lifetimes" in n}
@@ -1037,14 +1047,27 @@ def _lifetimes(c: dict) -> list[str]:
     def spread(x: float | None) -> str:
         return "not measured" if x is None else f"{x:.2f} points"
 
-    left = life.get("left_out")
-    return ["  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in "
-            "it (serve_tax.session_cost)"
+    def side(name: str, x: dict) -> str:
+        steps = "steps not read" if x.get("steps") is None else f"{x['steps']:,.0f} engine steps a pass"
+        drafts = "" if x.get("draft_accepted_share") is None else (
+            f", {x['draft_accepted_share']:.1f}% of its draft tokens accepted"
+            + ("" if x.get("tokens_per_draft") is None else f", {x['tokens_per_draft']:.2f} tokens a draft"))
+        return f"{name} {steps}{drafts}"
+
+    left, other, sides = life.get("left_out"), life.get("readings") or {}, life.get("sides") or {}
+    return ["  the cost is the mean of the lifetimes' costs, a lifetime's being ours's seconds for the passes both arms "
+            "counted in it over stock's, less one, a pass's seconds from its users' first send to the last one's last "
+            "answer (serve_tax.session_cost)"
             + (f"; the first {left['passes']} of each lifetime's passes, its warm-up, served and left out" if left else ""),
             *(["  by lifetime: " + ", ".join(f"{_pct(x['value'])} ({x['reps']} pass{'es' * (x['reps'] != 1)})"
                                              for x in life["each"])] if life.get("each") else []),
             f"  the cost's spread (standard deviations): {spread(points['between'])} between lifetimes, "
-            f"{spread(points['within'])} between a lifetime's passes"]
+            f"{spread(points['within'])} between a lifetime's passes",
+            *(["  other readings of the same passes, in no verdict: " + ", ".join(
+                f"{_pct(v)} by {S.READINGS.get(k, k)}" for k, v in other.items() if v is not None)]
+              if any(v is not None for v in other.values()) else []),
+            *(["  beside the cost, which is adjusted for neither: " + "; ".join(side(a, x) for a, x in sides.items())]
+              if any(v is not None for x in sides.values() for v in x.values()) else [])]
 
 
 def _noise(n: dict | None, stock: str) -> str:

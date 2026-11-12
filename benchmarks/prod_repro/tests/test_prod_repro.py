@@ -618,7 +618,8 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert c["lifetimes"]["pairs"] == 3 and c["lifetimes"]["ci95"][1] < 0.01
     assert [round(100 * x["value"], 2) for x in c["lifetimes"]["each"]] == [x["value"] for x in own["by_lifetime"]] == [0.5, 0.6, 0.45]
     assert P._lifetimes(c) == [
-        "  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in it "
+        "  the cost is the mean of the lifetimes' costs, a lifetime's being ours's seconds for the passes both arms counted "
+        "in it over stock's, less one, a pass's seconds from its users' first send to the last one's last answer "
         "(serve_tax.session_cost)",
         "  by lifetime: +0.50% (2 passes), +0.60% (2 passes), +0.45% (2 passes)",
         f"  the cost's spread (standard deviations): {own['spread']['between']:.2f} points between lifetimes, 0.00 points "
@@ -644,8 +645,34 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
     assert c["measured"] and (c["same_work"], c["verdict"]) == (False, "not shown")
-    assert P._verdict(c) == "not shown, the arms did not do the same work (one left a request unserved, or their prefix " \
-                            "caches served different shares of the prompts in some rep)"
+    assert P._verdict(c) == ("not shown, the arms did not do the same work (one left a request unserved, they served "
+                             "another count of output tokens, or their prefix caches served different shares of the prompts "
+                             "in some rep)")
+    # so does a rep in which the arms served another count of output tokens, as sampled passes can
+    by["prod-record"]["loads"]["agentic@4"][2] |= {"prompt_cached_share": 0.94, "output_tokens": 59000}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    assert c["measured"] and (c["same_work"], c["verdict"]) == (False, "not shown")
+    by["prod-record"]["loads"]["agentic@4"][2]["output_tokens"] = 60000
+    # beside the cost and in no verdict: the benchmark's other readings of the same passes, and each side's engine
+    # steps and accepted drafts, where the passes hold them
+    assert c["lifetimes"]["readings"] == {"busy_gpu_s": None, "users_s": None, "users_rates": None}
+    assert not any("other readings" in x or "beside the cost" in x for x in P._lifetimes(c))
+    for name, busy, steps, share in (("prod", 240.0, 2000, 0.75), ("prod-record", 247.2, 2100, 0.7)):
+        for rep in by[name]["loads"]["agentic@4"]:
+            rep |= {"busy_gpu_s": busy, "users_s": 4 * busy, "users_output_tok_per_s": 60000 / busy, "steps": steps,
+                    "draft_accepted_share": share, "accepted_per_draft": 4 * share}
+    c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
+    own = S.session_cost(list(by.values()), "prod-record", "prod")
+    assert c["lifetimes"]["readings"] == {k: v / 100 for k, v in own["readings"].items()} and own["readings"]["busy_gpu_s"] == 3.0
+    assert c["lifetimes"]["sides"] == {
+        "prod": {"steps": 2000, "draft_accepted_share": 75.0, "tokens_per_draft": 4.0},
+        "prod-record": {"steps": 2100, "draft_accepted_share": 70.0, "tokens_per_draft": pytest.approx(3.8)}}
+    assert P._lifetimes(c)[-2:] == [
+        "  other readings of the same passes, in no verdict: +3.00% by the GPUs' busy seconds, +3.00% by the users' seconds "
+        "summed, +3.00% by the users' own rates summed",
+        "  beside the cost, which is adjusted for neither: prod 2,000 engine steps a pass, 75.0% of its draft tokens "
+        "accepted, 4.00 tokens a draft; prod-record 2,100 engine steps a pass, 70.0% of its draft tokens accepted, 3.80 "
+        "tokens a draft"]
     assert P._verdict(c | {"settings_differ": ["the context limit"]}) == "not shown, the arms are not at the same settings"
     # a twin of stock is the floor, a lifetime pair its unit too
     by = {n: sessions_arm(n, x) for n, x in (("prod", [2.0] * 6), ("prod-again", [1.998] * 6), ("prod-record", ours))}

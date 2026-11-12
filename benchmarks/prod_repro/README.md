@@ -121,15 +121,20 @@ replay that differs, the first token that does and the first step.
   `reproduced` means no token and no step differs. Where one does: the first token that differs, the one serving
   emitted in the earliest step (its request, its position, the id served and the id replayed there, and that step),
   and the first step whose rows differ, with the rows only serving ran and the rows only the replay ran.
-- **cost**: stock's output tokens a second over ours, less one: the share of stock's serving time our changes add at
-  equal tokens. The verdict's unit is a server lifetime: the passes of one share its server's state, so an interval
-  over them as if independent is too narrow, and the estimate alone shows nothing.
+- **cost**: ours's time for the same work over stock's, less one: the share of stock's serving time our changes add.
+  The verdict's unit is a server lifetime: the passes of one share its server's state, so an interval over them as if
+  independent is too narrow, and the estimate alone shows nothing.
   On a sessions load every figure is the benchmark's own cost's (`serve_tax.session_cost`). The cost is the mean of
-  the lifetimes' costs, a lifetime's the mean over its passes, with its 95% interval over the lifetimes an arm.
+  the lifetimes' costs, a lifetime's being ours's seconds for its passes over stock's, less one, a pass's seconds
+  from its users' first send to the last one's last answer, with its 95% interval over the lifetimes an arm.
   `under 1%: yes` is printed only where the benchmark says that interval's upper end is under the target; `NO` where
   its lower end is over it; `not shown` otherwise, with the reason: one lifetime an arm (no such interval), an upper
-  end that is not under the target, arms that did not do the same work, or settings that differ. Under it: each
-  lifetime's cost and the spread between lifetimes and between a lifetime's passes; the cost over the passes taken
+  end that is not under the target, arms that did not do the same work (a request unserved, another count of output
+  tokens, another share of the prompts from the prefix cache), or settings that differ. Under it: each
+  lifetime's cost and the spread between lifetimes and between a lifetime's passes; the same cost under the
+  benchmark's other readings of a pass (by the seconds its GPUs were busy, by its users' seconds summed, by the sum
+  of its users' own rates), in no verdict; each side's engine steps a pass and the share of its draft tokens
+  accepted, which the cost is adjusted for neither of; the cost over the passes taken
   as independent, the paired ratio's median with its interval, in no verdict; and the noise floor, beside and not
   added (each lifetime pair already holds two servers' draws): stock served a second time over stock where the job
   served it, else stock's own lifetimes, each second one over the one before it, a lifetime pair its unit too, with
