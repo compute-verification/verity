@@ -424,7 +424,9 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     record_path = out / "serve" / "pouw-h1-calls.json"
     record = json.loads(record_path.read_text())
     c = record["commitment"]
-    sid, R = c["session"]["session"], c["session"]["root"]
+    sid = c["session"]["session"]
+    if "root" not in c["session"]:
+        raise KeyError("root")
     weights, table = c["weights_root"], c["requests_root"]
     other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
     g = out / "gate"
