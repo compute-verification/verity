@@ -358,8 +358,9 @@ def decide(s: Snapshot) -> list[Action]:
     head a pass outcome holds: it is on `main`.  A staged batch (`Candidate.waits`) is off the chain and has no verdict to read:
     what its records run calls for (`_first`), and nothing is built on it.  Once its run passed it goes onto the chain's top
     (`Commit`) as soon as the chain has room, in a tick that rebuilds nothing, and the tick's builds go on it there
-    (`Build.after`), as the next tick's would; one whose member isn't marked at the head it was staged at goes only onto its
-    own base, as built, and is dropped, built again without that member, when that is no longer the top.  Beside a staged
+    (`Build.after`), as the next tick's would; one whose member isn't marked at the head it was staged at, or isn't taken
+    there (its drop names why: `_untaken`), goes only onto its own base, as built, and is dropped, built again without that
+    member, when that is no longer the top.  Beside a staged
     batch, one kept or the one this tick stages, the tick's other batch takes no Lean PR, so one is staged at a time, nor a
     PR changing a Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside
     (`_aside`), which goes behind it as behind any PR waiting.
@@ -415,8 +416,10 @@ def decide(s: Snapshot) -> list[Action]:
             if not told:
                 acts.append(Ring(c1.sha, _owner_why(c1), m))
             if aside:
+                why = _untaken(c1, m, s) if gone else None
                 acts.append(Drop(c1.sha, f"{_ring_why(c1)}, with only #{m} merged"
-                                         + (f", which isn't marked at {c1.heads[0][:12]} now" if gone else "")
+                                         + (f", which isn't taken at {c1.heads[0][:12]} now ({why})" if why else
+                                            f", which isn't marked at {c1.heads[0][:12]} now" if gone else "")
                                          + ": it goes behind the PRs waiting, and nobody is ejected for it",
                                  Outcome(c1.members, c1.heads, INFRA, c1.members, c1.base)))
                 acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
@@ -466,8 +469,10 @@ def decide(s: Snapshot) -> list[Action]:
                 acts.append(Commit(c.sha, base, s.depth - len(chain)))
                 chain, after = [*chain, c], c.sha
             else:
-                acts.append(Drop(c.sha, f"#{gone} isn't marked at the head it was staged at, so it isn't merged again onto "
-                                        f"{base[:12]}, main's chain's top now: its other members are built again"))
+                cause = (f"#{gone} isn't taken at the head it was staged at ({why})" if (why := _untaken(c, gone, s))
+                         else f"#{gone} isn't marked at the head it was staged at")
+                acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
+                                        "other members are built again"))
                 kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept)
                 base = chain[-1].sha if chain else main
             flying = {m for d in chain for m in d.members if m in built}
@@ -511,6 +516,15 @@ def _aside(members: tuple[int, ...], ready: dict[int, Ready], outcomes: list[Out
 def _unmarked(c: Candidate, ready: dict[int, Ready]) -> int | None:
     """The first member of ``c`` not marked ready at the head it was built at, None when none is."""
     return next((m for m, h in zip(c.members, c.heads) if m not in ready or ready[m].head != h), None)
+
+
+def _untaken(c: Candidate, m: int, s: Snapshot) -> str | None:
+    """Why the loop doesn't take member ``m`` of ``c`` at the head ``c`` holds it at, where `Snapshot.left` gives a cause
+    there other than its mark (a move `main` landed that it lacks, `queue.lacked_moves`); None when its mark is withdrawn or
+    missing there, or its head moved."""
+    head = c.heads[c.members.index(m)]
+    why = next((w for n, h, w in s.left if n == m and h == head), None)
+    return None if why is None or why.startswith(("it isn't marked", "its ready mark")) else why
 
 
 def meets(files: Iterable[str], inputs: Iterable[str]) -> bool:
