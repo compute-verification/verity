@@ -113,6 +113,14 @@ def tp_world(build_summary: Any) -> int:
     return int(tp.get("world") or 1) if isinstance(tp, dict) else 1
 
 
+def _of_rank(ranks: dict[str, Any], r: int, block: str, field: str) -> Any:
+    """`field` of rank `r`'s `block` in a TP Build's summary; None where the rank or its block is absent, null or empty (a rank whose
+    Build did not get that far)."""
+    rank = ranks.get(f"rank{r}")
+    part = rank.get(block) if rank else None
+    return part.get(field) if part else None
+
+
 def program_digest(d: Path, row: str = "") -> dict[str, Any]:
     """The Build's digests of record, from build_summary.json (never from the manifest): `program_digest` = the request Program's at
     B=1, GP-01's workload Program digest at B>=2 (the harness's `program_digest_of_record`); the step and workload digests beside."""
@@ -122,12 +130,11 @@ def program_digest(d: Path, row: str = "") -> dict[str, Any]:
     world = tp_world(s)
     if world > 1:
         ranks = _dict(s.get("ranks"))
-        wds = [((ranks.get(f"rank{r}") or {}).get("workload") or {}).get("workload_digest") for r in range(world)]
-        step = (ranks.get("rank0") or {}).get("build_step") or {}
+        wds = [_of_rank(ranks, r, "workload", "workload_digest") for r in range(world)]
         # the TP manifest's header digest (`tp-ranks-fold`, required.merge_ranks): the fold of the rank digests its identities are keyed by
         of_record = tp_ranks_fold_digest([str(w) for w in wds]) if all(wds) else None
-        return {"program_digest": of_record, "request_digest": None, "step_digest": step.get("program_digest"), "workload_digest": None,
-                "rank_workload_digests": wds, "tp": world}
+        return {"program_digest": of_record, "request_digest": None, "step_digest": _of_rank(ranks, 0, "build_step", "program_digest"),
+                "workload_digest": None, "rank_workload_digests": wds, "tp": world}
     req, step, wl = _dict(s.get("request")), _dict(s.get("step")), _dict(s.get("workload"))
     request_digest, step_digest, workload_digest = req.get("program_digest"), step.get("program_digest"), wl.get("workload_digest")
     of_record = (workload_digest or request_digest) if row_batch(row) > 1 else (request_digest or s.get("program_digest"))
@@ -262,12 +269,13 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
         if doc is None:
             meta["decision_record_missing"] = rel
         elif config:
-            rp = doc.get("replay") or {}
-            meta.update(outcome=doc.get("outcome"), why=doc.get("why"), replay_equal=rp.get("equal"), replay_k=rp.get("k"))
+            rp = doc.get("replay")   # the config run's C2 replay; a record written before it ran states none
+            meta.update(outcome=doc.get("outcome"), why=doc.get("why"), replay_equal=rp.get("equal") if rp else None,
+                        replay_k=rp.get("k") if rp else None)
         elif tp:
             meta.update(tp_pass=doc.get("pass"), tokens_equal=doc.get("tokens_equal"), pairs=doc.get("pairs"))
         else:
-            runs_ = doc.get("runs") or {}
+            runs_ = doc.get("runs")   # commit_delta's count of its runs by arm; a verdict without it states no count
             meta.update(outcome=doc.get("outcome"),
                         n_runs=(int(runs_.get("instrumented") or 0) + int(runs_.get("control") or 0)) if runs_ else None,
                         runs_failed=runs_.get("failed") if runs_ else None)
@@ -311,8 +319,9 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
 
 def inputs_from_job(run_dir: Path) -> dict[str, str]:
     job = _read_json(run_dir / "job.json") or {}
-    ins = ((job.get("store") or {}).get("inputs") or {}) if isinstance(job, dict) else {}
-    return {k: v for k, v in ins.items() if isinstance(v, str) and v.startswith("art:")}
+    store = job.get("store") if isinstance(job, dict) else None
+    ins = store.get("inputs") if store else None   # what the launch gave the run by name; a job launched with no input names none
+    return {k: v for k, v in ins.items() if isinstance(v, str) and v.startswith("art:")} if ins else {}
 
 
 @dataclass(frozen=True, kw_only=True)

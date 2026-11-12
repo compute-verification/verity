@@ -46,12 +46,21 @@ def word_check(row: Any) -> None:
         raise Stop(20)
 
 
+def _deferred_bundles(row: Any) -> list[dict[str, Any]]:
+    """The replay bundles the Commit's verdict names (`commit/verdict.json`: `replay_deferred.bundles`); none where the verdict, its block
+    or the block's list is absent, null or empty (a Commit that deferred nothing, or one that wrote no verdict)."""
+    verdict = R.load_json(f"{row.d}/commit/verdict.json")
+    deferred = verdict.get("replay_deferred") if verdict else None
+    bundles = deferred.get("bundles") if deferred else None
+    return bundles if bundles else []
+
+
 def commit_verdict(row: Any, rck: int, wall: int) -> bool:
     """The Commit's decision by its one instrumented run (`commit/summary.json`, only-arm): there is no control arm or Match for `verdict
     from-record` to grade.  True when the run's C2 replay was deferred to its sealed bundle (`--replay-deferred`): PENDING, and the row
     writes no `config_record.json` until `row stage replay` decides it."""
     sm = R.load_json(f"{row.d}/commit/summary.json") or {}
-    bundles = ((R.load_json(f"{row.d}/commit/verdict.json") or {}).get("replay_deferred") or {}).get("bundles") or []
+    bundles = _deferred_bundles(row)
     pending = rck == 0 and sm.get("commit_pass") is None and len(bundles) == 1
     ok = "PASS" if rck == 0 and sm.get("commit_pass") is True else "PENDING" if pending else "FAIL"
     tail = f", replay bundle {bundles[0]['path']} (manifest sha256 {bundles[0]['manifest_sha256'][:16]})" if pending else ""
@@ -84,7 +93,7 @@ def discard_bundles(row: Any) -> list[str]:
 def replay(row: Any) -> None:
     """The deferred C2 of the config run's Commit, on CPU (`commit-replay`), from the one bundle the Commit sealed: the Build's Programs
     of this row dir, the checkpoint of record opened against the committed weights root.  Its exit decides the stage."""
-    bundles = ((R.load_json(f"{row.d}/commit/verdict.json") or {}).get("replay_deferred") or {}).get("bundles") or []
+    bundles = _deferred_bundles(row)
     row.tl("stage.replay", "start")
     why = ("the replay stage decides a config run's deferred Commit (--config-run 1)" if not row.config_run else
            f"{len(bundles)} replay bundles named in commit/verdict.json (a deferred config-run Commit seals one)" if len(bundles) != 1 else
