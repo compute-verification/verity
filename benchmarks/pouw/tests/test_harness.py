@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.protocols.pouw.verifier import serving
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
 import arm as A
@@ -644,6 +646,12 @@ def test_shape_report_rejects_an_arm_that_skips_work_and_gives_panel_numbers_for
             assert p["item_ms_ratio"] == pytest.approx(1.8 / 0.9)
             assert row["w_ref_over_mkn"] == "1" and row["credited_over_mkn"] == "1/2"
     assert len(b.rejected) == 1
+
+
+def test_an_arms_work_over_the_shapes_macs_is_exact_and_a_string_that_is_no_number_raises():
+    assert (H.w_ratio("12", 8), H.w_ratio("3/2", 3), H.w_ratio("0", 5)) == ("3/2", "1/2", "0")
+    with pytest.raises(ValueError):
+        H.w_ratio("unknown", 8)
 
 
 # ---- identity ------------------------------------------------------------------------------------------------------------------
@@ -1421,13 +1429,8 @@ def test_phases_are_step_groups_or_v04s_names_never_both_and_the_side_stream_tak
     v0.4's one ``after`` can't be split that way, so it gets no side chain."""
     assert isinstance(FakeArm(), A.BenchArm) and A.VERSION == "v0.6"
     assert set(A.PARTS["after"]) == A.MOVABLE and sum(A.PARTS.values(), ()) == A.GROUPS and A.DEFERRED <= A.MOVABLE
-    try:
-        from verity.protocols.pouw.verifier import serving
-    except ImportError:
-        serving = None
-    if serving is not None:
-        assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
-        assert A.DEFERRED == serving.DEFERRED.side
+    assert (A.GROUPS, A.MOVABLE) == (serving.GROUPS, serving.MOVABLE)
+    assert A.DEFERRED == serving.DEFERRED.side
     f = {g: (lambda s, g=g: g) for g in A.GROUPS + ("before", "after", "hash")}
     parts, named = A.phase_parts({g: f[g] for g in ("forming", "gemm", "screen")})
     assert named and {p: [fn(0) for fn in fns] for p, fns in parts.items()} == {
