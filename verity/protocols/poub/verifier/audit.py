@@ -1656,7 +1656,9 @@ class GammaTerms(_Terms):
     checked against is within, when appended blocks are credited (`Scheduled.cap`, `Params.schedule_cap`; the layout is
     then `SteeredLayout` at cap + 1), None when none are.  `error` is the
     probability the per-window reading fails, every window's δ and AuditRO's 2^-slack_log2 a pass, plus the link's δ;
-    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s."""
+    `error_horizon` the horizon's, one δ in place of the windows'.  A sketch-sha512 record adds `SketchBound`'s.
+    Neither holds the windows' PRF advantages: each reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not
+    assumed; `ledger.DELTA_FORM`), and a record names the term beside them (`ledger.NAMED_TERMS`)."""
 
     timing: float
     sample: float
