@@ -11,9 +11,9 @@ A Boolean Build's descriptor holds its Boolean Definitions, and each of its rows
 the row is graded as (``spec``).  A small Program lifted to bits and written as the Build writes it: both loaders take it, and
 refuse it by name once a Boolean body moved, a row's ``bits`` names another word Definition than its ``spec``, or a row names no
 ``bits``.  A Boolean row's kernel is also held to its ``bits`` family's gates, on the kernel self-check's own specialisations and
-inputs: both loaders refuse gates that give another word, and the check refuses a ``bits`` family this tree does not name for
-those specialisations and a function the Build binds at another version than the gates were checked with.  What a pass still
-leaves unshown is on the replay's record, and the verdict's rule carries it."""
+inputs: both loaders refuse gates that give another word, and the check refuses a ``bits`` family none of whose Definitions
+names those specialisations as its word and a function the Build binds at another version than the gates were checked with.
+What a pass still leaves unshown is on the replay's record, and the verdict's rule carries it."""
 from __future__ import annotations
 
 import copy
@@ -285,12 +285,12 @@ def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
 
 
 def test_a_boolean_row_s_gates_are_its_bits_family_s_with_the_functions_its_build_binds(monkeypatch):
-    """A row whose ``bits`` is of another family than this tree names for the kernel's check specialisations is refused: no
+    """A row whose ``bits`` is of a family that does not name the kernel's check specialisations as its word is refused: no
     gates of that family were compared.  So is one whose Build binds a function at another version than the gates were checked
     with; a function the Build binds nowhere (the check's other dot) is this tree's."""
     _unchecked(monkeypatch)
     assert DF.kernel_refusal([(SILU, "SiluMul_v4{I=4}")]) == \
-        "SiluMul_v1: SiluMul_v1{I=8}: this tree's Boolean Definition of it is a SiluMul_v3, and its rows' is a SiluMul_v4"
+        "SiluMul_v1: no Boolean version of SiluMul_v1: SiluMul_v1{I=8}: no registered SiluMul_v4 names it as its word"
     gemm = 'Gemm_v2{K=4,N=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 
     def bits(dot: str) -> str:

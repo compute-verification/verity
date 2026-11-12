@@ -21,8 +21,8 @@ A Boolean Build's row names two Definitions (`build_instances._word_rows`): ``sp
 kernel grades it, and ``bits``, the Boolean Definition the Program Calls, the one of the two the Build's descriptor holds.
 `refusal` holds ``bits`` to the descriptor's entry, and to the row's ``spec`` by the word Definition this tree's ``bits``
 names, the link the Build wrote the row through.  `kernel_refusal` then holds the row kernel to the gates, by the self-check's
-own sample: at each of the kernel's check specialisations, the Boolean Definition this tree names for it
-(`verity.definitions.boolean.boolean_version`), refused unless it is of the row's ``bits`` family, gives the kernel's rows on the
+own sample: at each of the kernel's check specialisations, the Boolean Definition of the row's ``bits`` family that names it as
+its word (`verity.definitions.boolean.boolean_version`, refused where this tree has none) gives the kernel's rows on the
 self-check's inputs, bit-sliced (`_gates_differ`).  At those small statics the Boolean Definition's function-valued statics are
 this tree's newest Boolean versions, refused where the Build binds that function at another version and otherwise left to this
 tree, and its body may reach Definitions the served one does not.  Nothing holds the kernel to the gates at a served binding,
@@ -142,9 +142,9 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
     """Why the row kernel of word ``family`` does not compute the gates of the Boolean family ``bits``, named, and the families
     of the function-valued statics the gates were bound with.  At each check specialisation of the kernel's self-check, on that
     self-check's inputs (`kernel_registry.check` and core `self_check` derive both so): the rows the kernel computes against the
-    Boolean Definition this tree names for the specialisation, evaluated bit-sliced through its word view (`evaluate_words`).
-    A specialisation whose Boolean Definition is not of ``bits``, whose gates this tree does not build, or on which the kernel
-    computes no row, is named too: nothing was compared there."""
+    Boolean Definition of ``bits`` that names the specialisation as its word, evaluated bit-sliced through its word view
+    (`evaluate_words`).  A specialisation no Definition of ``bits`` names, whose gates this tree does not build, or on which the
+    kernel computes no row, is named too: nothing was compared there."""
     import zlib
 
     import numpy as np
@@ -157,21 +157,17 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
     from verity.definitions.numerics.rows import KERNEL
 
     from verity_vllm.commit import challenge as CH
-    from verity_vllm.query.manifest.format import spec_family
 
     (reg,) = (r for r in KR.registered() if (r.key, r.kernel) == (family, KERNEL))
     out: list[str] = []
     bound_with: set[str] = set()
     for t in map(resolve, reg.check_targets(CH.generator(zlib.crc32(f"{family}/{KERNEL}".encode())))):
         try:
-            b = boolean_version(t)
+            b = boolean_version(t, family=bits)
         except NoBooleanVersion as e:
             out.append(str(e))
             continue
         fid = descriptor_id(b)
-        if spec_family(fid) != bits:
-            out.append(f"{t.id}: this tree's Boolean Definition of it is a {spec_family(fid)}, and its rows' is a {bits}")
-            continue
         bound_with.update(_FN.findall(fid))
         params, _ret = signature_of(t)
         statics = statics_of(t)
