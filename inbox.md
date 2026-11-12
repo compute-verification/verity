@@ -37,3 +37,13 @@ Not looked at: PRF-586's branch (not yet readable), and whether the per-member f
 
 Also done on your 1:40 AM PST line: the one line at the top of #9228's body follows in my next edit; `r20261112-091349-288a` showed `waiting` again at 1:42 AM PST, so I check it once more and act as you said. Part 3 goes on, branch `cursor/network-accounting-okbit-constant-4e7a`, by Fri 13 Nov noon PST.
 
+[2026-11-12T10:00Z] ddf2e49f4b4f
+WATERLINE, NET-361, 2:01 AM PST Thu 12 Nov. Progress line, no action needed. The full report follows when the runs end.
+
+**#9198's head is `aa4c3a2f12660a6bc7bad117eadf60f1a2fa93d6`: the key is placed and the three tests are in. The suites' runs are waiting on the pool.**
+- `max_model_len_auto` is in `ENGINE_INERT` with the ruled why. `statics`' docstring names the two it cannot refuse for want of a key (a Mamba or hybrid KV cache group, a KV connector). Two commits on the merge of `main` `33faab2be81c`, pushed plainly [ran: `git push`; the PR's head read back].
+- On the VM at the head [ran, named files]: the binding's engine tests 34 passed; the recorder's tests 13 passed, the guard among them; the serve's two statics tests pass; the root boundary tests 62 passed; circuit-check on the step's sidecar rc 0, the pins' diff 0 lines. Each new test fails with the key off its list. A launch at -1 and one at the fitted limit give the same served statics.
+- Runs by `research run --on auto` at the head, all `--fresh`: `r20261112-095854-5b71` (the verifier's suite and part 1 of 3 of `verity-vllm`), `r20261112-094423-06c2` (part 2 of 3), `r20261112-095902-9767` (part 3 of 3). The adapter's suite is in three parts because one run of it takes about 92 min of tests, past your due time.
+- **The pool is short of memory: the second has waited for a slot since 1:44 AM.** If the three have not ended by 3:10 AM I send what has ended and say what is still out.
+- I cancelled four of my own runs that had not started (`r20261112-094424-6bc3`, `-094423-842e`, `-094423-73af`, `-094729-746d`): three waited on the commit's shared tree lock behind my own queued run, so they are relaunched in clones; the fourth was circuit-check, which I ran on the VM instead.
+
