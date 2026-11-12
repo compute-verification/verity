@@ -629,6 +629,7 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
         "ruff.toml"
       ],
       "linear": "VLLM",
