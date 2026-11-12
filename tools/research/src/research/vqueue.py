@@ -95,6 +95,17 @@ class Failed:
     tree: bool = False             # infra: graph2 saw it err on two or more nodes, so the tree breaks the machines
     launch: bool = False           # infra: its check registered no run because its launch outran its wait or the pod lost
                                    # it, not because the launcher, which runs the candidate's own check.py, exited
+    reads: frozenset[str] | None = None  # every path it can have read, paths and globs as `meets` reads them (its declared
+                                         # inputs, narrowed by what its run traced): None when nothing bounds them
+    named: frozenset[str] = frozenset()  # the repository paths and `art:` ids its records name: its failing tests' files,
+                                         # its frames, what its report says; what it read only where `reads` holds them
+    kind: str | None = None        # what its records say failed (`KINDS`), None when they don't say
+
+
+#: what a failure's records can say failed (`Failed.kind`): the change's own work; the machine (its disk or memory full); a
+#: kill (a signal, 128+N); a timeout; a flake (a test that failed and passed on one tree); the state of a store or a build
+#: tree the run shares (its build's outputs changed under it, an unreachable store)
+KINDS = ("own", "infra", "killed", "timeout", "flaky", "store-state")
 
 
 @dataclass(frozen=True)

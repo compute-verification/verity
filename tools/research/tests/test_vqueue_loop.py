@@ -3645,7 +3645,9 @@ def test_under_gate_check_a_step_one_shard_fails_fails_the_candidate_though_anot
     assert _acts(logged) == ["slim", "slim", "compare", "eject", "drop"] and env.main() == main
     assert logged[1]["record"]["verdict"]["failed"] == [
         {"task": "step pytest", "key": vqueue_slim.key(loop.world.repo, sha, "pytest"), "inputs": ["pkg/tests/test_x.py"],
-         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"]}]
+         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"],
+         "reads": sorted(vqueue_slim.suite_reads(loop.world.repo, sha, "pkg")[0]), "named": ["pkg/tests/test_x.py"],
+         "kind": "own"}]
     assert "pytest" not in logged[1]["record"]["verdict"]["passed"]
     assert logged[2]["why"] == "disagree: graph2 pass, the check fail (step pytest)" and env.withdrawn == [(1, head)]
 
@@ -3717,7 +3719,9 @@ def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_su
     judged, eject, drop, rebuilt = logged[1:5]
     assert "verdict" not in judged["record"] and judged["record"]["early"]["failed"] == [
         {"task": "step pytest", "key": vqueue_slim.key(loop.world.repo, sha, "pytest"), "inputs": ["pkg/tests/test_x.py"],
-         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"]}]
+         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"],
+         "reads": sorted(vqueue_slim.suite_reads(loop.world.repo, sha, "pkg")[0]), "named": ["pkg/tests/test_x.py"],
+         "kind": "own"}]
     assert env.withdrawn == [(1, head)] and f"failing pkg::{NEW}" in eject["text"]
     assert drop["sha"] == sha and drop["outcome"]["state"] == FAIL and drop["beside_cancelled"] == ["c-4", "c-5", "c-6"]
     assert drop["early_red"] == {"failed_at": L.stamp(T0 + 60), "dropped_at": L.stamp(T0 + 300)}

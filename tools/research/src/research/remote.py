@@ -2286,7 +2286,9 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     if everything:
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; tar -cf - .{TAR_CHANGED_OK}"]
     else:
-        names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
+        # each name once: tar stores a second copy of a name as a hard link, which `extract` can't read off a stream, and the
+        # files after it never arrive
+        names = " ".join(shlex.quote(n) for n in dict.fromkeys((*SMALL_FILES, *also)))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; ls {names} 2>/dev/null | tar -cf - -T -{TAR_CHANGED_OK}"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory

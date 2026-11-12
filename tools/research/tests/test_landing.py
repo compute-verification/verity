@@ -226,12 +226,34 @@ def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_nam
 
 
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
+    """A frame in the check's tree (job.json's `run.cwd`) points at its repository path, one outside it at nothing."""
     from research.landing import implicated
 
-    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3')
-    assert implicated(d) >= {"pkg/tests/test_x.py", "/x/site/pkg/conftest.py"}
+    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3\n'
+                                                         'File "/usr/lib/python3.12/runpy.py", line 9')
+    assert implicated(d) == {"pkg/tests/test_x.py"}
+    (d / "job.json").write_text(json.dumps({"run": {"cwd": "/x/site"}}))
+    assert implicated(d) == {"pkg/tests/test_x.py", "pkg/conftest.py"}
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed"}\n')
     assert implicated(d) is None
+
+
+def test_a_runs_tree_root_is_its_job_jsons_run_cwd_and_a_malformed_job_json_raises(tmp_path):
+    """No job.json, or one naming no absolute `run.cwd`, gives no root; a job.json that isn't a JSON object raises rather than
+    reading as a run with no root."""
+    from research.landing import tree_root
+
+    assert tree_root(tmp_path) is None
+    for doc, root in (({"run": {"cwd": "/x/site/"}}, "/x/site"), ({"run": {"cwd": "site"}}, None), ({"run": None}, None),
+                      ({"environment": {}}, None)):
+        (tmp_path / "job.json").write_text(json.dumps(doc))
+        assert tree_root(tmp_path) == root, doc
+    (tmp_path / "job.json").write_text('{"run": {"cwd": "/x/si')
+    with pytest.raises(ValueError):
+        tree_root(tmp_path)
+    (tmp_path / "job.json").write_text("[]")
+    with pytest.raises(AttributeError):
+        tree_root(tmp_path)
 
 
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
