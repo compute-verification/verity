@@ -104688,3 +104688,27 @@ That is not a few lines while the kept window has no session.
 Clock: `date -u` read 22:14Z before I wrote this. Mailbox read at 22:12Z; no file for me.
 
 **Not established.** That any file compiles. That `ShapeFact` is satisfiable by one map at every gate a unit needs; a gate needed by units in two cells is the case to look at. The tables question above. The sizes and the hour.
+
+## PERIODREAD, Thu 12 Nov 22:15Z: A24's statement elaborates (22:12Z), in two forms, one of which takes nothing of the device; PR 2's difftest passes against the Lean; PR 3's three statements are written on the real functions and in a run
+
+Mailbox read at `bf6f5af8a8` (nothing new since 21:51Z). **I can pause now.**
+
+**A24: the signature elaborates** [run: `r20261112-220846-2e77`, vy-nebius-cpu-8, rc 0, ended 22:12Z]. Scratch, in no tree; the file's sha256 is `a8c2e08666da8a5d8dc3776ff41588a379581613e34b48c93a8800d239a69519` (the run prints the same). Both statements are `Prop`s on `propext`, `Classical.choice`, `Quot.sound` alone. My first try (`ae36`, rc 1) had an `open` that Lean read as another namespace; fixed.
+- **`Properties.Spot.Period.LedgerLinesOfDevice`: no premise.** For every device history, parameters and ledger that `Spot.Period.read` accepts: the ledger is a list of lines that reaches the period's end, and the line at each place `i` is an entry numbered `i` that says, its signature aside, what a line of the device's own ledger says; or `Break` (the model's own, on the presented ledger). Its shape is `DrawnByDevice`'s: inputs, one hypothesis that the function returned, a conclusion ending in the break.
+- **`Properties.Spot.Period.LedgerOfDevice`: takes `Numbered dev pk`** (line `i` of the device's ledger is an entry numbered `i`). Then the presented lines are the device's first lines, as many as presented, in order, none missing; or `Break`.
+- **So the choice I put to you at 22:01Z is sharper** [derived]. "The device's own" needs nothing new: the first form says it. "Whole" (no line dropped) is the second form, and it is the first plus the numbering, with no use of the key or the hash again. Without the numbering, a device that wrote two lines under one number would satisfy the first form while the presented ledger held only one of them. That the device does not is its behaviour on `trusted-host` (`challenger.py:1503` numbers each line by the ledger's length) [read]. I build on neither until you say; my proposal is to state both in PR 3, the first as the property and `Numbered` as the second's one premise.
+- **Not established:** nothing is proved; no one but me has read either statement; signatures are not claimed equal; order is the ledger's, not clock time.
+
+**PR 2's difftest passes** [run: `r20261112-215441-ef46`, rc 0, at `5b92156ab8`]: 24 passed in 118 s, both period test files. The Lean check agrees with the Python reference on the sampled requests and on each of the 29 named cases, and the check on one-stage v2 itself answers a real sample's case as the reference does (undecided at the proofs; a segment released after another registration refused). Still true: no accept of a real proof is tested, only through the stand-in.
+- Its quick tier is launched: `r20261112-221328-8e84` (vy-nebius-cpu-10, 22:13Z, waiting for a slot; ETA 23:30Z once it holds one). Its body is drafted. It opens after PR 1.
+
+**PR 1:** `r20261112-215441-6715` waited 18 minutes for a check slot on cpu-12 and holds one since about 22:13Z; ETA 23:00Z. `main` moved one pull request (`783b526ab6`, `benchmarks/compute` only); `git merge-tree` against it is clean [run on the VM].
+
+**PR 3, started** (`cursor/proofs-prf600-period-statements-e2a7` at `0585c05181dd`, on PR 2's head): `security/Properties/Spot/Period.lean` holds `LedgerMeans`, `AcceptMeans` and `CommittedOnce` on the real functions (`windowsOf`, `checkWith` at any inner audit, so `checkBlobs` is one case). No proof, **no lock entry yet**, only the module in the lakefile's roots. Elaboration: `r20261112-221307-809e` (vy-nebius-cpu-8, 22:13Z, ETA 22:35Z). Not elaborated yet.
+- What changed from the 17:32Z sketch, since the code did [derived]: "in the monitoring period" is the run of the ledger's entries, not a stamp; a root on a session that cannot be sampled is published among `others` and the statement says so; each window has exactly one audit (one-member windows only), so "no registration audited twice on a session" is that.
+
+**Corrections to my 22:01Z entry:** two run ids were wrong. PR 1's quick tier is `r20261112-203704-77ca` (not `203218`), and the `auditedIn` split's build is `r20261112-204826-f29e` (not `205407`). And `taggedBytes_inj2` is `Window.lean:197`, not `Break.lean`.
+
+**The hours I gave stand:** `CommittedOnce` proved in a run by Fri 22:00Z, with a word by Fri 12:00Z on whether it holds.
+
+**Need from you:** the word on A24's two forms and `Numbered`; the PR 2 words (a `shared_rows` file refused under `names`; `members` as its own code; no executable before PR 3).
