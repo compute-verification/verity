@@ -3281,6 +3281,38 @@ def test_a_tick_whose_commit_stages_its_batch_again_or_is_held_builds_nothing_af
         [1], beside["sha"], again["sha"], [3], fixed["sha"]), lines
 
 
+@pytest.mark.parametrize("names", [False, True])
+def test_a_staged_batch_whose_records_run_passed_after_a_move_landed_is_merged_again_on_the_chain_s_top_unless_it_names_it(
+        env, names):
+    """A Lean batch staged before a move lands, its records run passing after: its member's head lacks the move.  Where its
+    own change names nothing the move's map retires, the loop takes it (`queue.lacked_moves`) and the tick puts the batch
+    onto main's chain's top, its member merged again there, as for any move of `main`.  Where it names a retired path, the
+    batch is dropped naming the move, the names and the fix (`vqueue._untaken`), never "isn't marked" (its head and mark are
+    as staged), and its owner is told once (`Loop._lacking`)."""
+    loop, records, sha, one, _ = _records_loop(env, files={**LEAN, **({"e.txt": "reads c.txt\n"} if names else {})})
+    _, move = _landed_move(env.o, '[paths]\n"c.txt" = "moved/c.txt"\n', {"c.txt": None, "moved/c.txt": "c\n"})
+    env.listed(move, {})
+    records.verdicts["regen-1"] = RecordsRun(PASS)
+    lines = loop.tick()
+    if not names:
+        (fixed,) = (r for r in lines if r["action"] == "build")
+        assert "drop" not in _acts(lines) and "lacks" not in _acts(lines), lines
+        assert (fixed["members"], fixed["heads"], fixed["base"], fixed["repairs"]) == ([1], [one], move, sha), fixed
+        assert _git(env.o.origin, "merge-base", "--is-ancestor", move, fixed["sha"]) == "" and env.posts == []
+        return
+    (told,) = (r for r in lines if r["action"] == "lacks")
+    (drop,) = (r for r in lines if r["action"] == "drop")
+    why = (f"it lacks the move {move[:12]} `main` landed (tools/move/x_map.toml), whose retired names its own change names "
+           "(`c.txt`): merge `main` into it and rename them, or cross it with `tools/move/restack.py`, and mark the new head "
+           "ready")
+    assert (drop["sha"], drop["why"]) == (sha, f"#1 isn't taken at the head it was staged at ({why}), so it isn't merged "
+                                               f"again onto {move[:12]}, main's chain's top now: its other members are built "
+                                               "again"), drop
+    assert (told["number"], told["heads"], told["base"], told["why"]) == (1, [one], move, why), told
+    assert "build" not in _acts(lines) and len(env.posts) == 1, lines
+    assert "lacks" not in _acts(loop.tick()) and len(env.posts) == 1
+
+
 def test_a_staged_batch_whose_chain_top_changed_its_lean_inputs_is_staged_again_there_its_records_run_first(env):
     """`main` moved by another to a change of a Lean input (a file of the staged batch's Lean package) leaves its records
     regenerated on a tree whose Lean inputs aren't the chain top's: none are carried, and its members merged onto that top are

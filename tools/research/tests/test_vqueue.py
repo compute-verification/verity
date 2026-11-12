@@ -938,6 +938,20 @@ def test_a_passed_staged_batch_whose_member_moved_on_goes_only_onto_its_own_base
         Drop("c1", why), Build((2,), "c2", 2, replaces="c1"), Build((1, 4), "c1", 1)]
 
 
+def test_a_passed_staged_batch_whose_member_isnt_taken_at_the_head_it_was_staged_at_says_why_and_unmarked_only_for_its_mark():
+    """A member out of `ready` at the very head it was staged at is dropped with the loop's cause there (`Snapshot.left`: a
+    move it lacks, `queue.lacked_moves`); one whose mark was withdrawn or is missing there still isn't marked."""
+    passed = waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS))
+    s = snap(passed, cand("c2", MAIN, 3), ready=[lean(2), pr(3)], records=True, lean=2)
+    tail = ", so it isn't merged again onto c2, main's chain's top now: its other members are built again"
+    lacks = "it lacks the move m1 `main` landed (tools/move/x_map.toml), whose retired names its own change names (`c.txt`)"
+    for why, cause in ((lacks, f"#1 isn't taken at the head it was staged at ({lacks})"),
+                       ("its ready mark was withdrawn by lane-1", "#1 isn't marked at the head it was staged at"),
+                       ("it isn't marked ready", "#1 isn't marked at the head it was staged at")):
+        assert decide(replace(s, left=((1, "h1", why),)))[0] == Drop("c1", cause + tail), why
+    assert decide(replace(s, left=((1, "h1b", lacks),)))[0] == Drop("c1", "#1 isn't marked at the head it was staged at" + tail)
+
+
 def test_a_records_run_that_failed_drops_its_candidate_ejects_its_lean_members_and_builds_the_rest():
     """Each Lean member is ejected with the run's reason, out of the next batch until it is marked again; the others are built
     again at once without them, with no Lean member left, so its check starts at once; the outcome suspects the Lean
