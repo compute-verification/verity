@@ -47,6 +47,7 @@ from typing import Any
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.commitments import domains
 from verity.commitments.randomness import Key, derive
+
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, PoUWScheme
 
 from .ncp2 import Shape

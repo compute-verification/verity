@@ -31,7 +31,6 @@ honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`benchma
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import math
 import re
 import sys
@@ -41,12 +40,13 @@ from pathlib import Path
 
 from verity_machine_model import eps as E
 from verity_machine_model.model import device
+from verity_machine_model.skip import design_skip
 
 #: What other files read of it: the tests of both exporters, `theory/cpw_floor.py` and `lean_headline_dc.py`, which is
-#: this exporter for the data-centre families and also takes its private `_eps_budget`, `_list`, `_words` and `_wrap`.
+#: this exporter for the data-centre families and also takes its private `_list`, `_words` and `_wrap`.
 __all__ = ["BULK_FLOORS", "CATCH_ALL", "E", "EPS", "EPS_M", "LN2", "LN_P", "LN_P_M", "OFF_MENU", "P", "P_OPERAND", "Q",
-           "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "exact", "exact_logs", "instance", "load", "main",
-           "measured", "mload", "price", "stars"]
+           "ROOT", "SM120", "VECTOR", "VEC_64", "branches", "coef", "design_skip", "exact", "exact_logs", "instance",
+           "load", "main", "measured", "mload", "price", "stars"]
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -126,13 +126,6 @@ BULK_FLOORS = {
     "into shared memory, u by a bulk copy out": {"IMAD": Fraction(8), "ALU": Fraction(4), "NOROW": Fraction(1),
                                                  "LDG256": Fraction(1, 2), "UTMABIG": 1536 * BULK},
 }
-
-
-def _eps_budget():
-    spec = importlib.util.spec_from_file_location("pouw_eps_budget", HERE / "eps_budget.py")
-    m = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
-    spec.loader.exec_module(m)
-    return m
 
 
 def exact(x: float) -> Fraction:
@@ -229,7 +222,6 @@ def shape(k: str, fms: dict[str, E.Form], h: E.Honest) -> tuple[int, int] | None
 
 
 def instance(fam: Family = SM120) -> Instance:
-    B_ = _eps_budget()
     pi = E.machine(fam.device, fam.data)
     d = E.design(fam.design, fam.data)
     h = E.honest(d.honest, fam.data)
@@ -276,7 +268,7 @@ def instance(fam: Family = SM120) -> Instance:
         folds.append({E.UNI: exact(d.fold_cost())})
     nw = {k: exact(v) for k, v in h.tensor("floor", d.floor).items()}
     nf = {k: exact(v) * Nw / E.LANES for k, v in d.fold.items()}
-    eps_skip = exact(B_.design_skip(d, data=fam.data, vector=fam.device).eps_time)
+    eps_skip = exact(design_skip(d, data=fam.data, vector=fam.device).eps_time)
     vec = vector_classes(pi.cuda, classes)
     i = Instance(fam, classes, macs, peak, pipe, smem, writers, vec, folds, nw, nf, {}, Nw, int(d.checks),
                  "", eps_skip, Fraction(0), Fraction(0), Fraction(0))
@@ -356,7 +348,6 @@ def mload(m: Measured, row: str, n: dict[str, Fraction]) -> Fraction:
 def measured(i: Instance | None = None) -> Measured:
     """sm_120's measured instance: H1 + fx1 and ♭ (`i`'s word and fold counts) on `VECTOR` at q = q_T = 9/8."""
     i = i or instance()
-    B_ = _eps_budget()
     pi = E.machine(VECTOR)
     d = E.design(DESIGN)
     h = E.honest(d.honest)
@@ -368,7 +359,7 @@ def measured(i: Instance | None = None) -> Measured:
         if k.kind in pi.c and k.kind not in OFF_MENU:
             writers.append((k.kind, math.ceil(Fraction(k.words) * Fraction(round(k.depth * k.split), k.split) / d.L)))
     writers += [(k, w) for k, w in UNIFORM.items() if k in pi.c and k not in OFF_MENU]
-    eps_skip = exact(B_.design_skip(d, vector=VECTOR).eps_time)
+    eps_skip = exact(design_skip(d, vector=VECTOR).eps_time)
     n0 = {k: i.nw.get(k, 0) + i.nf.get(k, 0) for k in {*i.nw, *i.nf}}
     e = E.eps(d, pi, float(Q_M), operands="free", credit="floor")
     star = {r: w for r, w in e.cheat.pi.items() if w > 1e-9}
