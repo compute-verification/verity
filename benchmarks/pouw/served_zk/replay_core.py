@@ -483,5 +483,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if t["same_verdict"] == t["cases"] and t["lean_same"] == t["compared"] else 1
 
 
+__all__ = ["store_runs"]
+
 if __name__ == "__main__":
     sys.exit(main())
