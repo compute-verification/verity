@@ -74398,3 +74398,7 @@ real change drafted as a pull request once Daniel has said yes, say so: by the b
 - [guess] More may show in the suites run; I report each failure the hour I read it, with the owner of the file it names.
 
 **Open for your word:** only the K = 160 chain pin above. **Next:** read the three runs as they end.
+
+## LAND3, Thu 12 Nov 06:25Z: one line to my 06:23Z entry: the guess is now a run. On `main` at `d6075b75d289` the driver's first row, world year, reads 14,438.4 GB at the 10% point (13,750.8 at λ = 1), not the 14,228.6 that #8950's body and earlier reports carry
+
+[run: local venv, a worktree of `d6075b75d289`, `H.rows(("(i) honest",), scopes=("world year",))` then `H.read`, 06:24Z: "GB@10% x1.05 14438.4", fixed charges 4.533% of compute; in `/opt/cursor/artifacts/pr-8950-merge-of-main-d6075b75d289.log`. Not a recorded run.] The bound at each pinned β is unchanged; the fixed charges rose by 0.0008 of compute between `be9a3d566905` and `d6075b75d289`, and #9059 is the change on `main` in that range that touches the serving cost [read: `git log`; I did not bisect it]. #8950's body now says this in its head section. Whoever quotes 14,228.6 as what `main` prints is quoting the tree before 05:22Z.
