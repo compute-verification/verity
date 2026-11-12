@@ -75046,3 +75046,64 @@ You asked for this at once (06:27Z, point 3). Read only; nothing run. The full l
 - **Then:** the records commit, the quick tier against `58a598e615b1`, and the ready line, by 09:00Z. It can't open against `main` before #8940 lands, or its diff carries #8940's 31 files; say if you want it opened on #8940's branch as its base instead.
 
 **5. #8414 and #8363:** drop, as in my 04:13Z entry. I close nothing.
+
+## A4ROWS, Thu 12 Nov 06:47Z: #9167 is ready to mark at `b399e186d61c` (ASSUMPTIONS.md only; quick tier `r20261112-063821-13ed` passed at 06:45Z, 3 suites, none failed); the Lean headers' replacement text is below, one of them stale in substance and not only in a name; A4 entered `trust.extra` in `8a1ee6635d` on 7 Nov, whose message gives a ruling of Daniel's, relayed by proofs, as the reason
+
+Read at `origin/main` = `d6075b75d289` [read 06:47Z]. Mailbox `inbox/a4rows.md`: does not exist [read 06:47Z]. My VM restarted before this turn; nothing was lost but scratch.
+
+### 1. The pull request: ready line
+
+- **#9167**, https://github.com/compute-verification/verity/pull/9167, branch `cursor/proofs-a4-stale-c55b`, head `b399e186d61cd40038fa6892f224ada4fab8305c`: one commit on `d6075b75d289`, one file, +6 −4, Markdown only. `Lane proofs`, `Refs MEM-279`, linked through the Linear app [read: `research queue open`'s output].
+- **Ready to mark at that head**: `research queue ready 9167 --mark --by proofs`. I did not mark.
+- **Quick tier**: run `r20261112-063821-13ed`, launched 06:38Z from the branch's checkout on vy-nebius-cpu-5's research pool (vy-nebius-2 takes no `--on auto` job until 07:45Z), `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick`; that SHA is the merge base and is `origin/main`. It ended 06:45:20Z with rc 0: `3 suites: 3 passed (0 cached), 0 failed` (repository 310 passed, verity-graph 208, verity/protocols/pouw/verifier 1845) [read: the run's `stdout.log`].
+- **Ratchet gate**, here: `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` passed, no new lane-text or retired-term site [read].
+- **`open` warned** that MEM-279 carries no label naming a live goal (its labels: `asker:daniel`, `from:compute-research`), so the body has no `Goal` line. A warning, not a refusal; the label is not mine to set.
+
+What it changes in `security/Proofs/Flock/Soundness/ASSUMPTIONS.md` (lines at `d6075b75d289`), each named in the body with its evidence:
+
+| line | it said | the code | now |
+|---|---|---|---|
+| 440-441 | seed coins' second assumption is "SHA-256 in counter mode is a PRF" | `live/src/coin_seed.rs:10` (`coin-commit/sha512`), `derive` 41/45, `stream` 56/64, `commitment` 74/75, all SHA-512; `bin/flock-circuit.rs:398-399` (`coin_derivation`: `sha512 (verity.randomness)`); SHA-256 is earlier recorded sessions' (`Flock/Tags.lean:119, 199-200`) [read] | SHA-512 (`prf/sha-512`), SHA-256 only for the earlier recorded sessions |
+| 364 | "What it gives, and `δ_tree`": `assumption-notes/hm-row-computes.md` | no such file; the directory holds nine notes, none on `HmRowComputes` [read] | `README.md` §1.3 (The value binding) and the document's own section |
+| 369 | "Proved so far … ; `assumption-notes/hm-row-computes.md`" | the same | the pointer dropped |
+
+Looked at and left alone, so you know it was not missed:
+
+- **A5's sentence** (lines 345-346: the window secret is `secrets.token_bytes(32)`, `Ledger.open`). It matches code on `main`: `verity/protocols/pouw/prover/circuit/anchors.py:397-410` (`Ledger.open` derives the key from `_fresh_source()`), `:362-367` (`secrets.token_bytes(SOURCE_BYTES)`, `SOURCE_BYTES = 32` at 300) [read]. This adds to the question you sent compute-accounting: the keyed sample that `Guarantees/Window.lean:46-47` calls retired still has its code on `main`.
+- **`docs/zk-proof-public.md`** (line 281) is not in the tree, but nine Lean files under `Soundness/ZK/` cite it, three of them as "in the Project store" (`CoinBinding.lean:11`, `Masking.lean:11`, `Adaptivity.lean:10`), so it is a document outside the repository, not a dead path [read]. Whether the tree should cite it at all is another question; not touched.
+- **Size**: the file is 49,123 bytes after, 29 under its 48 KB cap (it was 191 under). The next edit that adds to it has to move something to `assumption-notes/`. Its retired-term sites are 46 before and after, under an allowance of 48 [read: the lint's `sites`, run here on both texts].
+- I did not audit the other 490 lines against the Lean they describe. I checked every backticked path in the file against the tree, and four coin passages against the Rust (133-136 the seed default, 138-141 the tree's key and blocks, 158-161 the leaf count, 259-262 the binary's default); those hold [read].
+
+### 2. Lean headers, not in the pull request
+
+All five files are `@proofs`'s [read: `research msg owners`]. Lines at `d6075b75d289`.
+
+| file, lines | it says | replacement |
+|---|---|---|
+| `security/Proofs/Flock/Soundness/PlanDraw.lean:8` | `` `verity/ml/protocols/pouw/circuit/plan.py`'s `draw` `` | `` `verity/protocols/pouw/prover/circuit/plan.py`'s `draw` `` [read: the file exists, `draw` at 334] |
+| `security/Proofs/Flock/Soundness/ExecDraw.lean:10` | `` (`backends/flock/verifier/lean/Flock/Draw.lean`) `` | `` (`verity/commitments/lean/Commitments/Draw.lean`) `` [read: `namespace Flock.Draw` at 21, `subset` at 45] |
+| `security/Proofs/Flock/SessionLoop/SampledChosenTwo.lean:14` | `` (`Flock.Firewall.Salts.interiorKey`) `` | `` (`Flock.Firewall.Salts.interiorAnswer`) `` [read: `Salts.lean:176`; no `interiorKey` in the tree] |
+| `security/Proofs/Flock/SessionLoop/SampledAuditTwo.lean:29` | `` (`Flock.Firewall.Salts.interiorKey`) `` | `` (`Flock.Firewall.Salts.interiorAnswer`) `` |
+| `security/Proofs/Flock/ZkAny/SampledChosenTwo.lean:31-35` | see below | see below |
+
+**The last one is stale in substance.** It says, from "The value service's interior commits" to "they are `k₁` here":
+
+> The value service's interior commits draw the interior's salts from the operating system and tag each interior session under a key of its own, `SHA-512(k ‖ L' ‖ s)` (`Flock.Firewall.Salts.interiorKey`), from the boundary's key at the session's fresh sample `s`. Once one PRF term at the fresh input `s` is paid, those keys and salts are uniform and independent of the boundary and of the auditor's coins: they are `k₁` here.
+
+The code derives no interior key. `verity/protocols/flock/verifier/Flock/Firewall/Values.lean:73-77` draws the session `s`, the salts `ys` and the key `ks` each from `draw`, which is `IO.getRandomBytes` (149); `Salts.lean:31-39` says the same, and `keyTagOf` (288) only tags `ks` under `k` [read]. So there is no PRF term at `s` to pay. Replacement text for those sentences [derived; it changes what the header says the bound leaves out, so whoever carries it should read the two sentences after it too]:
+
+> The value service's interior commits draw from the operating system the interior's salts and each interior session's own key `ks` (`Flock.Firewall.Values.answer`'s `interior`, `Flock.Firewall.Salts.interiorAnswer`), and only tag `ks` under the boundary's key (`Salts.keyTagOf`). So those keys and salts are the operating system's bytes, no function of the boundary's key, uniform and independent of the boundary and of the auditor's coins: they are `k₁` here.
+
+The header's next sentence ends "with `k₁` uniform: that term is not in its bound"; with the text above it should read "with `k₁` uniform" and stop, since no such term exists.
+
+This bears on row 3 of the table: for interior commits the value-salt stream is already OS bytes in the code and, with this fix, in the header.
+
+Not ours, one line: the dead prefix `verity/ml/protocols/pouw/circuit/` is in eleven more Lean headers under `security/` (`Definitions/Pouw/H1Zy*`, `Definitions/Accounting/…`, `Proofs/Accounting/TS/J10RChecks.lean:10`, `Proofs/Pouw/LiveCredit.lean:47`), compute-accounting's by the one I checked (`LiveCredit.lean`) [read: `rg`; owners of the other ten not checked].
+
+### 3. Flag 1: the commit
+
+`8a1ee6635d37`, committed 2026-11-07T19:00:56Z, "Security lock: the zero-knowledge guarantees' own trust", one file (`Security/lean-audit.json`, +12 −1), found by `git log -S` on the reason's text over `origin/main` (the path-limited search shows only the later move commits) [read]. It adds `trust.extra` with three entries for each of `SessionLoopZKDeployed` and `RecursiveZKLoopAnySumDeployed`: `Claims.ZKServer.Loop.Src`, `HashDerivedKey`, `KeyedStreamsUniform`. Its message, in full on why:
+
+> Daniel's rulings (relayed by proofs, 7 Nov): commitment hiding and the prover-side firewall's randomness are trusted for the zero-knowledge guarantees only. SessionLoopZKDeployed and RecursiveZKLoopAnySumDeployed take, as trust.extra, hash-derived-key (FlockSoundness.Assumptions.HashDerivedKey), prf/sha-512 (KeyedStreamsUniform) and Loop.Src (Claims.ZKServer.Loop.Src); Claims.Hm96Hiding is not one, since it holds at its gap with no hypothesis. SessionLoopZKDeployed's gap drops Loop.Src.
+
+It carries `Co-authored-by: danielreuter`. So the message reads `prf/sha-512` as one of the two things "commitment hiding" covers [read]. It does not say which statement takes A4; no record of the lock does (flag 1 stands), and I did not find the ruling's own text, which is outside the tree. GitHub's commit-to-pull-request lookup names #7985, whose title is unrelated, so I name no pull request [read].
