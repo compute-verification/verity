@@ -41,7 +41,7 @@ def row(family, op, member, *, step=0, **extra):
 
 
 def manifest(rows, **hdr):
-    fams = {}
+    fams: dict[str, int] = {}
     for r in rows:
         fams[r["family"]] = fams.get(r["family"], 0) + 1
     d = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "populations": {"identities": len(rows), "by_family": fams}, "wrapper_prefix": "", "op_path_aliases": {}}

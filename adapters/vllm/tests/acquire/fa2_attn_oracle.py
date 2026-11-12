@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from verity.definitions.registry import prims as P  # PYTHONPATH=.
@@ -25,7 +26,7 @@ from verity.definitions.registry import prims as P  # PYTHONPATH=.
 NEG_INF = 0xFF800000
 BF16_KEYS = {"q", "k", "v", "pb", "out"}
 PLAIN = {"n_block", "nvis", "M", "T", "D", "BN", "case", "causal", "softmax_scale", "is_first", "lse_approx", "softcap", "window"}
-CASES = {  # 1 head; BN = fa2_kblock_n(D); every case has row-schedule == kernel tile-schedule (checked at run time)
+CASES: dict[str, dict[str, Any]] = {  # 1 head; BN = fa2_kblock_n(D); every case has row-schedule == kernel tile-schedule (checked at run time)
     "p0a": dict(M=16, T=128, D=64, causal=True, seed=11, spread=1.0),   # one block: Is_first only, prefix mask
     "p0b": dict(M=16, T=144, D=64, causal=True, seed=12, spread=1.0),   # two blocks: rescale path, mask, K/V zero pad
     "p0c": dict(M=3, T=160, D=64, causal=False, seed=13, spread=1.0),   # decode shape (3 rows = 3 heads of a KV group)
@@ -129,7 +130,7 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
     if (limit + BN - 1) // BN != nb:
         raise SystemExit("row-level schedule != kernel tile schedule (a row with no visible key in the tile's last "
                          "block): outside AttentionHead_v3's domain -- pick M, T so every row sees >= 1 key there")
-    m = lanes = o = None
+    m, lanes, o = 0, [0] * 4, [0] * D
     blocks = []
     for b in range(nb - 1, -1, -1):
         lo, nvis = b * BN, min(limit, (b + 1) * BN) - b * BN
@@ -137,8 +138,7 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
         vb = [V[j] if j < T else [0] * D for j in range(lo, lo + BN)]
         first = b == nb - 1
         rec = {"n_block": b, "nvis": nvis, "is_first": first}
-        m, lanes, o = attn_block(q, kb, vb, nvis, first, 0 if first else m, [0] * 4 if first else lanes, [0] * D if first else o, sl2, D, BN, rec,
-                             softcap_bits)
+        m, lanes, o = attn_block(q, kb, vb, nvis, first, m, lanes, o, sl2, D, BN, rec, softcap_bits)
         blocks.append(rec)
     total = P.F32AddFtz.evaluate(P.F32AddFtz.evaluate(lanes[0], lanes[2]), P.F32AddFtz.evaluate(lanes[1], lanes[3]))
     inv = P.Fa2InvSum.evaluate(total)

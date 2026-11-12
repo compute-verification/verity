@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import random
 import types
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
@@ -18,10 +19,13 @@ from tests.query.test_scale_products import fp8_program
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.query import scale_products as SP
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import scale_products_source as S  # noqa: E402
-from verity_vllm.acquire.sources import taps  # noqa: E402
+from verity_vllm.acquire.sources import scale_products_source as S
+from verity_vllm.acquire.sources import taps
 
 K, N, G = 256, 384, 128
 KB, NB = K // G, N // G
@@ -63,7 +67,11 @@ def test_the_source_commits_only_inside_the_site_during_a_step():
     com = Recorder()
     src = S.ScaleProductsSource(com, _model(), {"down_proj": {"n_blocks": NB, "k_blocks": KB}})
     launches = []
-    fn = src._wrap(lambda *a: launches.append(a) or None)
+
+    def launch(*a):
+        launches.append(a)
+
+    fn = src._wrap(launch)
     rng = random.Random(0x5CA1E)
     xs = _f32([[rng.randrange(100, 127) << 23 | rng.getrandbits(23) for _ in range(KB)] for _ in range(2)])
     ws = _f32([[rng.randrange(100, 127) << 23 | rng.getrandbits(23) for _ in range(KB)] for _ in range(NB)]).t()
