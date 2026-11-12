@@ -1,14 +1,14 @@
 """`eps1-sm120-h1fx1` on words: a non-registered reference for the first EPS1 design, sm_120's H1 + fx1.
 
 The one registered `eps1-sm120-h1fx1` is `h1tile`'s compile-pass scheme (`compile.SCHEMES`); the design is one across
-schemes, so there is one registration.  This module is kept only as that design on words and on sampled proofs' primitives
+schemes, so there is one registration.  This module is kept only as that design on words and on SPOT's primitives
 (`circuit.segment`): a second, independent implementation that `h1tile`'s gates are tested against (`test_h1tile_matches_eps1`),
 and the home of the scheme's attack catalog (`test_eps1_attacks`).  Nothing registers it, and `circuit.traced_as` does not
 reach it.
 
 PoUW is a compile pass over the served Program, not an executor: a matmul `A·Bᵀ` keeps serving its exact
 s8 product, and PoUW adds, around it, a per-call seed, the noise the seed derives, a committed receipt and one spot check.
-Everything else is sampled proofs': hm96 leaves, the live sampling coin, one audit, one ε.
+Everything else is SPOT's: hm96 leaves, the live sampling coin, one audit, one ε.
 
 **The seed**, with its call-index binding:
 
@@ -212,7 +212,7 @@ def unit(shape: Shape):
 
 def work_ref(shape: Shape) -> dict[str, int]:
     """`W_ref` per dot product: `K` served MACs a output coordinate (`ops.s8.counts`), and the call's and the execution phase's totals.
-    The sample law weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
+    The sampling design weights a unit by the MACs its thread's call covers; the closure is empty (`closure`)."""
     shape.check()
     per_dot = OS8.counts({"N": 1, "K": shape.k, "TAIL": _TAIL})["served_macs"]  # = K
     entries = 4 * 8  # 32 accumulator words a thread (4 row slots × 8 column slots)
@@ -270,7 +270,7 @@ def _onehot(n: int, i: int) -> list[int]:
 
 @dataclass(frozen=True)
 class Eps1Traced:
-    """What sampled proofs traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
+    """What SPOT traces for one H1 + fx1 call of a shape (the EPS1 analogue of `circuit.Traced`): the served arm,
     the spot check that is the sampled proof block, the work table and the empty closure, each from the shape alone.  The verifier
     builds these itself and never takes the prover's."""
 
@@ -302,7 +302,7 @@ class Eps1Traced:
 
 
 def traced_as(m: int, k: int, n: int) -> Eps1Traced:
-    """The circuit sampled proofs traces for one H1 + fx1 call of shape m × k → n, the verifier's own (never a prover's)."""
+    """The circuit SPOT traces for one H1 + fx1 call of shape m × k → n, the verifier's own (never a prover's)."""
     shape = Shape(m, k, n)
     shape.check()
     return Eps1Traced(SCHEME, shape, arm(k), check(shape.ks), work_ref(shape), closure(shape))
