@@ -736,7 +736,8 @@ def _instrument() -> None:
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
     if not isinstance(D.REGISTRY.defs, _RecordedDefs):
         D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
-    add0 = D.Registry.add
+    table = type(D.REGISTRY)
+    add0 = table.add
 
     def add(self, d):
         _INTERNAL.append(True)                         # registering is no lookup
@@ -756,7 +757,7 @@ def _instrument() -> None:
                 _REGISTRAR[fid] = mods
         return out
 
-    D.Registry.add = add
+    table.add = add
     build0 = D._build_body
 
     def _build_body(sp):

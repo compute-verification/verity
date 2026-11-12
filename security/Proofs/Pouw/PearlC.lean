@@ -5,7 +5,6 @@ public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
 public import Proofs.Pouw.PearlC.DeviceFp4Gap
 public import Proofs.Pouw.PearlC.Fp4IssueGap
 public import Proofs.Pouw.PearlC.RowSeedGap
-public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.UOnlyGap
@@ -13,6 +12,8 @@ public import Proofs.Pouw.PearlC.TTOutW1
 public import Proofs.Pouw.PearlC.TTOutFp4W1
 public import Proofs.Pouw.PearlC.TTOutW1Item1
 public import Proofs.Pouw.Lemmas.PearlC
+public import Proofs.Pouw.QTree
+public import Proofs.Pouw.PearlC.RowSeedSkip
 
 /-!
 # Proofs of Pearl-C's guarantees

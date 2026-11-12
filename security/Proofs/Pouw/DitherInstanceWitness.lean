@@ -107,7 +107,7 @@ noncomputable abbrev accelAt (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr
 
 /-- The layout that moves nothing. -/
 noncomputable def idLayout (c : Verity.Accel.Card) (x : Verity.Accel.Open) (hr : HostRow) :
-    Layout ((devs c hr).machine x) twRound :=
+    RoundPlan ((devs c hr).machine x) twRound :=
   ⟨fun _ M => M, fun _ => fun _ _ _ => 0⟩
 
 theorem devs_oth_pos (c : Verity.Accel.Card) (hr : HostRow) (hh : 0 < hr.amx ∧ 0 < hr.sha) :
@@ -212,7 +212,7 @@ devices `D`, accelerator `G`, layout `L` of the no-fold round `twRound`, match `
 premises of `WorkSoundAt c pb hr` on them hold together. The proof's instance is `honest_at`'s. -/
 theorem honest_exists (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow) (hh : 0 < hr.amx ∧ 0 < hr.sha)
     (pb : PubBest c) (u : ResUnits) (hu : u ∈ pb.sha) :
-    ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ),
       c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
         CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1 :=
@@ -224,7 +224,7 @@ where the premises `honest_exists` concludes hold, `WorkBound` fails under the v
 premises are an `∃` over their proof, so that past its `∃`s the statement is `¬ WorkBound …`. -/
 theorem nontrivial_exists (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : HostRow)
     (hh : 0 < hr.amx ∧ 0 < hr.sha) (pb : PubBest c) (u : ResUnits) (hu : u ∈ pb.sha) :
-    ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices c) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ)
       (_ : c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
         CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1),
@@ -246,7 +246,7 @@ honest prover passing, none of the named assumptions (`SAKMatmul` is false at `c
 within the rates) and none of the statement's hypotheses on the work split and the call bound. -/
 theorem WorkSoundAtTables_honest :
     ∃ (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) (D : Devices c) (G : Accel)
-      (L : Layout (D.machine x) twRound) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G)
+      (L : RoundPlan (D.machine x) twRound) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G)
       (μ : G.Res → ℝ),
       c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
         CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1 :=
@@ -277,7 +277,7 @@ hold together at some instance. The statement names the table, the menu and the 
 holds, and binds the rest by `∃`; the proof supplies `honest_exists`'s instance with the call step at `pubShaH200`'s
 first schedule. It shows no honest prover passing and none of the named assumptions. -/
 theorem WorkSoundH200_honest :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ),
       Verity.Accel.H200.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
         OnCard G Verity.Accel.H200.card x D twRound L e ∧ HostsCounted D hostH200 ∧ CallsAtPub G e pubBestH200 ∧
@@ -291,7 +291,7 @@ sampling blocks under the verdict that accepts everything, at `ε = κ = 1/2`. T
 and the row and binds the rest by `∃`; the proof's instance is `WorkSoundH200_honest`'s, and the prover the bound
 fails at is the idle one (`idleAt`). -/
 theorem WorkSoundH200_nontrivial :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ)
       (_ : Verity.Accel.H200.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
         OnCard G Verity.Accel.H200.card x D twRound L e ∧ HostsCounted D hostH200 ∧ CallsAtPub G e pubBestH200 ∧
@@ -307,7 +307,7 @@ and the period hold together at some instance. The statement names the table, th
 definitions tree holds, and binds the rest by `∃`; the proof supplies `honest_exists`'s instance with the call step
 at `pubShaSm120`'s first schedule. It shows no honest prover passing and none of the named assumptions. -/
 theorem WorkSoundSm120_honest :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ),
       Verity.Accel.Sm120.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
         OnCard G Verity.Accel.Sm120.card x D twRound L e ∧ HostsCounted D hostSm120 ∧ CallsAtPub G e pubBestSm120 ∧
@@ -321,7 +321,7 @@ sampling blocks under the verdict that accepts everything, at `ε = κ = 1/2`. T
 and the row and binds the rest by `∃`; the proof's instance is `WorkSoundSm120_honest`'s, and the prover the bound
 fails at is the idle one (`idleAt`). -/
 theorem WorkSoundSm120_nontrivial :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : Layout (D.machine x) twRound)
+    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
       (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ)
       (_ : Verity.Accel.Sm120.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
         OnCard G Verity.Accel.Sm120.card x D twRound L e ∧ HostsCounted D hostSm120 ∧ CallsAtPub G e pubBestSm120 ∧

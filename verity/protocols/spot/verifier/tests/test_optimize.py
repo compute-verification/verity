@@ -22,7 +22,7 @@ import pytest
 from verity.protocols.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table
 from verity.protocols.spot.optimize import (HM96_ANDS, KAPPAS, PROVING_ONLY, SESSIONS, SHA512_ANDS, SHA512_ROWS, Candidate,
-                                                           Cell, Commitment, CostModel, Grain, Objective, ReplayGrain,
+                                                           Cell, TensorCommit, CostModel, Grain, Objective, ReplayGrain,
                                                            MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
@@ -379,12 +379,12 @@ def test_the_commitments_weight_moves_the_switch_and_proving_only_leaves_them_ou
         CostModel(commit_weight=-1.0)
 
 
-SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
-         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
-         Commitment("commit", "y", 500.0),
-         Commitment("commit", "kv", 400.0, chain=4.0),
-         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
-         Commitment("remote", "receipts", 0.0, cost=7.0))
+SERVE = (TensorCommit("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         TensorCommit("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         TensorCommit("commit", "y", 500.0),
+         TensorCommit("commit", "kv", 400.0, chain=4.0),
+         TensorCommit("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         TensorCommit("remote", "receipts", 0.0, cost=7.0))
 
 
 def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
@@ -406,7 +406,7 @@ def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(ba
     assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
     assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
     with pytest.raises(ValueError, match="non-negative"):
-        Commitment("commit", "x", -1.0)
+        TensorCommit("commit", "x", -1.0)
     unweighed = frontier(cands, replace(served, commit_weight=PROVING_ONLY), objective, grid=41)
     assert [dict(p.sizes) for p in unweighed] == [dict(p.sizes) for p in plans]
     for p, q in zip(unweighed, plans):

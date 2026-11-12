@@ -12,9 +12,14 @@ from pathlib import Path
 import jsonschema
 import pytest
 
+from verity.periods import block_count
+from verity.protocols.reporting import PERIODS
 from verity_e2e_demo import block_record as R
 
 FIXTURES = Path(__file__).parent / "fixtures"
+#: the census's deployments, which the block record's reference deployment is held to here (the record itself is public
+#: and the census is the team's, so the record carries the entry and doesn't read the file)
+CENSUS = Path(__file__).resolve().parents[3] / "census" / "deployments.json"
 SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 NAMES = ("block-record-r2-period0", "block-record-r1-window10", "block-record-b71a-w30")
 ONSITE = {"protocol": "verity/onsite/v0", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
@@ -272,3 +277,19 @@ def test_a_report_of_another_format_is_refused() -> None:
     report, _ = _accepting_report()
     with pytest.raises(ValueError, match="not one of"):
         R.from_period({**report, "format": "verity/all-protocols-window/v0"}, steps=(0, 2), deployment=R.REFERENCE)
+
+
+def test_the_reference_deployment_is_the_census_entry_the_fixtures_carry() -> None:
+    census = [d for d in json.loads(CENSUS.read_text()) if d["role"] == "reference"]
+    assert len(census) == 1 and R.REFERENCE == {k: v for k, v in census[0].items() if k != "sources"}
+    for name in (*NAMES, "block-record-b71a-w30"):
+        assert _load(name)["monitoring_period"]["deployment"] == R.REFERENCE
+
+
+def test_a_period_s_blocks_are_core_s_block_count() -> None:
+    window_s, machines = R.REFERENCE["window_s"], R.REFERENCE["machines"]
+    periods = R.monitoring_period(R.REFERENCE, Fraction(1, 2**40))["periods"]
+    assert [(name, p["seconds"]) for name, p in periods.items()] == list(PERIODS)
+    for p in periods.values():
+        assert p["blocks_per_machine"] == block_count(p["seconds"], window_s)
+        assert p["blocks"] == block_count(p["seconds"], window_s, machines)

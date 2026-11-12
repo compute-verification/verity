@@ -3,7 +3,6 @@ module
 public import Definitions.Flock.ZK.RealView
 public import Flock.Zk
 public import Proofs.Flock.Level3.ArithFacts
-public import Proofs.Flock.Soundness.CROnly
 public import Proofs.Flock.Soundness.CROnly.Hm96Defs
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
 public import Proofs.Flock.Soundness.Discharge.Hm.Mask
@@ -24,6 +23,11 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import VCVio.Prelude.Core
+public import Proofs.Flock.Soundness.CROnly.ZKKey
+public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.Registered.Binding
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.CROnly
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages

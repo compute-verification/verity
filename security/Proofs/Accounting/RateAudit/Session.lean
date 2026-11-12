@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Accounting.Guarantees.RateAuditHorizon
+public import Definitions.Accounting.Guarantees.RateAuditPooled
 public import Definitions.Accounting.Guarantees.RateAuditNamed
-public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Pooled
 public import Proofs.Accounting.RateAudit.Named
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +37,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.RateAudit.Chain
+public import Proofs.Accounting.RateAudit.Chain
+public import Definitions.Accounting.RateAuditRemote
 import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
@@ -47,7 +48,7 @@ import Proofs.Pous.Prob
 
 **A window.** The window's sample of `d` openings is uniform over its `P·N` receipts and independent of its passes'
 coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the sample lands
-in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_sample_le`).
+in it with probability `(#correct/(P·N))^d` (`Pooled.pr_sample'`, `Chain.pr_sample_le`).
 
 **The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
 correct receipts read the store, the earlier windows' coins, their samples among them, and its own passes' coins, never
@@ -56,7 +57,7 @@ its own sample. `PooledSampling` bounds the session's shortfall over its windows
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
 windows up to `w`, and the good sets then hold at most `(n − 1)·M + K_w` items in all. `PooledSampling` bounds it,
-with no union over the windows (`Horizon.pr_floor_le`).
+with no union over the windows (`Pooled.pr_floor_le`).
 
 **Paid.** A session with more than `K` correct receipts in all, or more than `K_w` in every window, whose reads fall
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
@@ -71,7 +72,7 @@ open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth (pr_mono pr_or_le pr_exists_le)
 
-namespace Horizon
+namespace Pooled
 
 /-- `d` uniform items of a finite type all land in a set `G`: `(|G|/|α|)^d`. -/
 theorem pr_sample' {α : Type} [Fintype α] (G : Finset α) (d : ℕ) :
@@ -140,7 +141,7 @@ theorem pr_floor_le (n M k d : ℕ) (X : Fin n → Type) [∀ i, Fintype (X i)]
     rw [Nat.cast_mul d, Nat.cast_mul d n, show (M : ℝ≥0∞) * (d * n) = d * (n * M) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-end Horizon
+end Pooled
 
 namespace Chain
 
@@ -170,11 +171,11 @@ theorem pr_sample_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
   refine pr_le_of_fiber _ _ (fun y => ?_)
   by_cases hK : (A.correctAll y.1 y.2).card ≤ K
   · refine (pr_mono (Q := fun I : Fin d → Fin P × Fin N => ∀ t, I t ∈ A.correctAll y.1 y.2)
-      (fun I hI => hI.1)).trans (le_of_eq_of_le (Horizon.pr_sample' _ d) ?_)
+      (fun I hI => hI.1)).trans (le_of_eq_of_le (Pooled.pr_sample' _ d) ?_)
     simp only [Fintype.card_prod, Fintype.card_fin, Nat.cast_mul]
     exact pow_le_pow_left₀ zero_le (ENNReal.div_le_div_right (by exact_mod_cast hK) _) _
   · refine (pr_mono (Q := fun _ : Fin d → Fin P × Fin N => False) (fun I hI => hK hI.2)).trans ?_
-    rw [Horizon.pr_false]
+    rw [Pooled.pr_false]
     exact zero_le
 
 /-- A window's unpaid words from a per-pass bound, with its sample beside: at most `P·ε`. -/
@@ -258,8 +259,8 @@ theorem pr_samples_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
   have hcard : ∀ ω w, (G w ω).card = ((A.chain w (e.symm ω)).correctAll E (e.symm ω w).1).card :=
     fun ω w => Finset.card_map _
   refine (pr_mono (fun ω hω => ?_)).trans ((pr_or_le _ _).trans (add_le_add
-    ((Horizon.pr_causal_le' n (P * N) (d * K) X (fun _ => d) G hG).trans (le_of_eq ?_))
-    ((Horizon.pr_floor_le n (P * N) Kw d X G hG).trans (le_of_eq ?_))))
+    ((Pooled.pr_causal_le' n (P * N) (d * K) X (fun _ => d) G hG).trans (le_of_eq ?_))
+    ((Pooled.pr_floor_le n (P * N) Kw d X G hG).trans (le_of_eq ?_))))
   · obtain ⟨hall, hK | ⟨w, hw⟩⟩ := hω
     · refine Or.inl ⟨fun w t => hmem ω w t (hall w t), ?_⟩
       show ∑ i, d * (G i ω).card ≤ d * K

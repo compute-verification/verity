@@ -71,7 +71,7 @@ theorem take_run (src : ByteArray) (need p : ℕ) :
   unfold _root_.Spot.Draw.take
   by_cases h : src.size < p + need <;> simp [h, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get,
     StateT.get, set, StateT.set, pure, StateT.pure, throw, throwThe, MonadExceptOf.throw, StateT.lift, Except.bind,
-    Except.pure]
+    Except.pure, _root_.Spot.Draw.RAN_OUT]
 
 /-- `take` on bytes with more after them returns what it returns on the bytes. -/
 theorem take_append (src t : ByteArray) (need : ℕ) :
