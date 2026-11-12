@@ -141,8 +141,8 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
     of the function-valued statics the gates were bound with.  At each check specialisation of the kernel's self-check, on that
     self-check's inputs (`kernel_registry.check` and core `self_check` derive both so): the rows the kernel computes against the
     Boolean Definition this tree names for the specialisation, evaluated bit-sliced through its word view (`evaluate_words`).
-    A specialisation whose Boolean Definition is not of ``bits``, or on which the kernel computes no row, is named too: nothing
-    was compared there."""
+    A specialisation whose Boolean Definition is not of ``bits``, whose gates this tree does not build, or on which the kernel
+    computes no row, is named too: nothing was compared there."""
     import zlib
 
     import numpy as np
@@ -182,7 +182,11 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
             out.append(f"{t.id}: the row kernel computes none of its self-check's {SAMPLES} inputs, so no row is held to {fid}'s gates")
             continue
         rows = np.asarray(vals).reshape(SAMPLES, -1)[kept].astype(np.uint64)
-        gates = np.asarray(evaluate_words(b, *(a[kept] for a in args))).reshape(kept.size, -1).astype(np.uint64)
+        try:
+            gates = np.asarray(evaluate_words(b, *(a[kept] for a in args))).reshape(kept.size, -1).astype(np.uint64)
+        except (LookupError, TypeError, ValueError) as e:
+            out.append(f"{t.id}: this tree does not build {fid}'s gates, so no row is held to them ({type(e).__name__}: {e})")
+            continue
         differ = kept[(rows != gates).any(axis=1)]
         if differ.size:
             out.append(f"{t.id}: the row kernel's rows are not {fid}'s gates on {differ.size} of the {kept.size} inputs it computes "
