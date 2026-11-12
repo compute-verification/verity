@@ -35,9 +35,10 @@ check the stream ran on it, in the stream's order.
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links and wires and the rows their units read, which
-  the verifier derives from the replay block's Definition in the challenger's program (`SecondStage.replayLinks`,
-  `SecondStage.replayWires`, `SecondStage.replayRows`), as its `statements` check
+  interior registration, the second stage's cells and the design's links and wires, the rows their units read and the
+  names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
+  program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
+  `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -74,9 +75,10 @@ the interior values, the record and its place in the log, the second stage's coi
 record's proved units, instances, served units and session roots, the second-stage sessions' statements
 (`SecondStage.Stmt`), and the circuit file each template's sessions verify against, by SHA-512, with the reference
 header and registered reads round 2 holds their statements to (`SecondStage.headerOk`, `SecondStage.valuesOk`), as the
-auditor's params name them (`templateCircuits`). The design's links and wires and their rows are the verifier's own,
-from the replay block's Definition in the boundary program (`SecondStage.replayLinks`, `SecondStage.replayWires`,
-`SecondStage.replayRows`), and never part of it. -/
+auditor's params name them (`templateCircuits`). The design's links and wires, their rows and the names of what the
+block returns are the verifier's own, from the replay block's Definition in the boundary program
+(`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`, `SecondStage.replayReturns`), and
+never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -242,6 +244,7 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1) }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
