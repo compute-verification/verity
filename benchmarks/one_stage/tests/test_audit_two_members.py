@@ -164,6 +164,11 @@ def _coin_trees(out: Path) -> tuple[str, bool]:
     return summary["coin_trees"], "challengers" in summary
 
 
+def _evidence_hex(evidence: dict) -> str:
+    """A case's ``evidence`` of the object ``evidence``, as a driver writes it."""
+    return json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()
+
+
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
@@ -221,7 +226,8 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
     window's session's. On that case Lean's check passes everything before the per-member form's refusal and answers
     `MULTI_REFUSED`, with exit 1; with one proof file of the first session changed after its closing round, it refuses
-    the session's coins as the driver's check of the log does."""
+    the session's coins as the driver's check of the log does; and with the second session left out, the log shows a
+    tree no session records, which both refuse (`challenger.UNUSED_TREE`)."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -246,8 +252,14 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     assert [(x["n"], x["after"]) for x in closing] == [(0, MT.closing_after(d).hex()) for d in dirs]
     named = list(zip(evidence["sessions"], dirs))
     assert MT.trees_reason(log, named) is None and MT.trees_reason(log, named[::-1]) == C.MEMBERS_ORDER
+    left_out = f"the challenger's release log shows 2 coin trees and the sessions use 1: {C.UNUSED_TREE}"
+    assert MT.trees_reason(log, named[:1]) == left_out
 
     assert M.case_refusal(case) == (M.ALL_PASSED, True)
+    # the second member's statement and its session taken out of the evidence, everything else as the audit wrote it
+    first = {**evidence, "sessions": evidence["sessions"][:1],
+             "proofs": {"statements": evidence["proofs"]["statements"][:1]}}
+    assert M.case_refusal({**case, "evidence": _evidence_hex(first)}) == (f"proofs: {left_out}", True)
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
@@ -255,7 +267,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     changed.write_bytes(rep.read_bytes() + b"\0")
     sessions[0]["reps"][rep.name] = PF.file_sha512(changed)
     other = {**case, "blobs": [str(changed) if Path(b) == rep else b for b in case["blobs"]],
-             "evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":"), allow_nan=False).encode().hex()}
+             "evidence": _evidence_hex(evidence)}
     assert str(rep) in case["blobs"] and other["blobs"] != case["blobs"]
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
     assert M.case_refusal(other) == (f"proofs: {why}", True)
