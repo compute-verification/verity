@@ -44,8 +44,9 @@ PROTOCOL SUMMARY (Commit stage: local replay (`C2`) of record = sampled exact VU
 
 The check runs here; its steps live beside it: `index` (the Program rows), `population` and `coverage` (what may be sampled
 and what the query population names), `sample` (the stratified sample and its seed), `opening` (committed words by
-identity), `evaluate` and `compare` (one VU), and `linkage` (the exhaustive boundary linkage).  A caller wires the check
-through this module: the names in `__all__` are its interface.
+identity), `evaluate` and `compare` (one VU), `replay_record` (the fold of the picks' results, its grade and the record's
+sections over them), and `linkage` (the exhaustive boundary linkage).  A caller wires the check through this module: the
+names in `__all__` are its interface.
 """
 from __future__ import annotations
 
@@ -57,7 +58,8 @@ import sys
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -67,10 +69,10 @@ from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import recomputed_prefix as RP
+from verity_vllm.check.replay import replay_record as RR
 from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.fork import WorkerDied
-from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT, why_class
+from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT
 from verity_vllm.commit.opened import opened_in_children
 from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
@@ -209,14 +211,11 @@ class PoolDoesNotFit(RuntimeError):
 
 
 def _cgroup_memory() -> tuple[int, int] | None:
-    read = []
-    try:
-        for p in CGROUP_MEMORY:
-            with open(p) as f:
-                read.append(f.read().strip())
-    except OSError:
+    """The cgroup's (memory.max, memory.current) in bytes; None where it states no limit: a file of `CGROUP_MEMORY` is absent (no
+    cgroup v2 memory controller) or memory.max is `max`.  A file that is there and cannot be read raises."""
+    if not all(os.path.exists(p) for p in CGROUP_MEMORY):
         return None
-    lim, cur = read
+    lim, cur = (Path(p).read_text().strip() for p in CGROUP_MEMORY)
     return (int(lim), int(cur)) if lim.isdigit() and cur.isdigit() else None
 
 
@@ -429,6 +428,28 @@ def _picks_by_request_step(results: list) -> dict[str, dict[str, list[int]]]:
     return {r: {str(s): v for s, v in sorted(d.items())} for r, d in sorted(picks_by_step.items())}
 
 
+def _strata_keys(strata: dict[str, dict], ranks: list[int], all_vus: list[dict], picked: list[dict], ring_slots: int | None,
+                 anchors: dict[str, dict]) -> dict[str, Any]:
+    """The record's `strata_keys`: what the strata's keys range over, with the rule of each field."""
+    steps_seen = sorted({v["step"] for v in picked})
+    return {"mechanisms": sorted({k.split("|")[0] for k in strata}), "requests": sorted({k.split("|")[1] for k in strata}),
+            "ranks": (["rank 0 (tp1, or the rank-0 shard of a per-rank map)"] if ranks == [0] else [f"rank {r}" for r in ranks]),
+            "steps": {"early": sorted(s for s in steps_seen if s <= 1), "late": sorted(s for s in steps_seen if s > 1)},
+            "phases": sorted({k.split("|")[3] for k in strata}),
+            "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
+            "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
+                   "(the block-count mechanism; the row's own spec keeps T)",
+            "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
+                         "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
+                                 "identities); else fresh-window; unwindowed collectors: one value, stated",
+                         "sampled": dict(Counter(v["lifetime"] for v in picked))},
+            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
+                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
+                      "prefix are 'not-executed', split out of the pool by name)"),
+            # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
+            "phase_anchor": {r: anchors[r] for r in sorted(anchors)}}
+
+
 #: the replay's own population, kept for one reader after it (the VU exporter, `pipeline.vu_store`, which arms `keep_population`
 #: and takes it right after the replay record); never read by the replay or a verdict
 _POPULATION: dict[str, Any] = {}
@@ -604,10 +625,6 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         return planned(picked, indices, store, arrivals, t_start)
     if len(ranks) > 1:                                                            # TP: the map carries rank-local partials this version does not replay
         not_ev[f"multi-rank map (ranks {ranks}): rank-local partials / collectives not replayed at v1 (rank 0 module outputs only)"] += 0
-    evaluated, equal, mism, not_evald = 0, 0, [], []
-    strata_eval: Counter = Counter()
-    strata_mism: Counter = Counter()
-    fam_time, fam_n = Counter(), Counter()
     own = RP.stores(indices, store, weights, arrivals)                            # warm requests whose Programs recompute their hits
 
     def _one(vu: dict) -> tuple[dict, dict, float]:
@@ -630,75 +647,16 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
         workers = 1
     results, workers, note, prewarmed, memory = _evaluated(_one, picked, indices, weights, int(workers), worker_peak)
     pool_note = note or pool_note
-    unev_by_stratum: dict[str, dict] = {}
     child_reads = opened_in_children(results, forked=int(workers) > 1)
-    for vu, rec, dt in results:
-        fam_time[vu["family"]] += dt
-        fam_n[vu["family"]] += 1
-        if rec.get("result") is None:
-            ne = {k: rec.get(k) for k in ("spec", "request_id", "step", "op_path", "row", "why")}
-            ne["why_class"] = why_class(ne.get("why"))
-            not_evald.append(ne)
-            u = unev_by_stratum.setdefault(vu["stratum"], {"stratum": vu["stratum"], "spec": vu["spec"], "request_id": vu["request_id"], "phase": vu["phase"],
-                                                            "op_path": vu["op_path"], "n": 0, "why": ne.get("why"), "why_class": ne["why_class"], "classes": []})
-            u["n"] += 1
-            if ne["why_class"] not in u["classes"]:
-                u["classes"].append(ne["why_class"])
-            continue
-        evaluated += 1
-        strata_eval[vu["stratum"]] += 1
-        if rec["result"]:
-            equal += 1
-        else:
-            mism.append(rec)
-            strata_mism[vu["stratum"]] += 1
-    for k in strata:
-        strata[k]["evaluated"] = int(strata_eval.get(k, 0))
-        if strata_mism.get(k):
-            strata[k]["mismatch"] = int(strata_mism[k])                       # the stratum's own count, uncapped
+    fold = RR.fold(results, strata)
+    mism, not_evald = fold.mismatch, fold.not_evaluated
     picks_by_request_step = _picks_by_request_step(results)
-    # EVERY mismatch counted by name, uncapped (the first-12 list below carries the inputs/outputs detail only): a
-    # reader of the record learns which mechanisms / requests / phases / modules disagree without re-running the replay
-    mism_by = {"by_family": dict(Counter(m["spec"].split("{")[0] for m in mism)),
-               "by_request": dict(Counter(str(m["request_id"]) for m in mism)),
-               "by_phase": dict(Counter(str(m.get("phase")) for m in mism)),
-               "by_family_phase": dict(sorted(Counter(f"{m['spec'].split('{')[0]}|{m.get('phase')}" for m in mism).items())),
-               "by_family_request_phase": dict(sorted(Counter(f"{m['spec'].split('{')[0]}|{m['request_id']}|{m.get('phase')}" for m in mism).items())),
-               "by_module": dict(sorted(Counter(f"{m['spec'].split('{')[0]}|{m.get('op_path')}" for m in mism).items())),
-               "strata": {k: int(v) for k, v in sorted(strata_mism.items())}}
     strata_unevaluated = sorted(k for k, v in strata.items() if v["population"] > 0 and v["evaluated"] == 0)
     fams = sorted({v["family"] for v in all_vus})
     wc = dict(weights_check) if isinstance(weights_check, dict) else None
-    if wc is not None and wc.get("equal") is False:
-        result, grade = False, "mismatch"
-        why = f"weights at replay != committed weights root ({wc.get('why') or 'the registered inputs the relations consume are not the committed ones'})"
-    elif mism:
-        result, grade = False, "mismatch"
-        why = mism[0]["why"] + (f" (+{len(mism) - 1} more)" if len(mism) > 1 else "")
-    elif evaluated == 0:
-        result, grade = None, "not-evaluated"
-        why = "no VU could be evaluated: " + (not_evald[0]["why"] if not_evald else "empty population")
-    elif strata_unevaluated:
-        result, grade = None, "partial"
-        why = f"{len(strata_unevaluated)} strata not evaluated: {strata_unevaluated[:3]}"
-    elif not_evald:
-        # picks not evaluated INSIDE strata that still had an evaluated pick used to leave the grade 'complete'
-        # with sample.not_evaluated_n > 0 -- a run-time fault (missing committed input, bytes not retained, evaluator error, device) on
-        # some picks then rode a PASS unnamed.  'complete' means every picked VU was evaluated: any not-evaluated pick -> partial, the first
-        # fault named (fault classes first; a by-name pick inside a mixed stratum is named too and, having no fully unevaluated stratum,
-        # cannot be lifted by the named-gap rule -- fail closed).  Real records: 0 complete-with-not-evaluated picks (rev, 38 pairs).
-        faults = [ne for ne in not_evald if ne.get("why_class") not in WHY_CLASSES_BY_NAME]
-        first = (faults or not_evald)[0]
-        by_cls = Counter(ne.get("why_class") or "other" for ne in not_evald)
-        result, grade = None, "partial"
-        why = (f"{len(not_evald)} pick(s) not evaluated inside evaluated strata ({', '.join(f'{c} x {n}' for c, n in sorted(by_cls.items()))})"
-               f"{' -- run-time fault, not a gap on the record' if faults else ''}: {first.get('spec')} {first.get('op_path')} "
-               f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]}")
-    else:
-        result, grade, why = True, "complete", None
+    result, grade, why = RR.grade(fold, wc, strata_unevaluated)
     chk = checks_of({rid: indices[rid] for rid in programs}, store, weights, arrivals, executed_prefix, certified)
     result, grade, why = fold_checks(result, grade, why, chk)
-    steps_seen = sorted({v["step"] for v in picked})
     catch = _catch_probability(strata)
     # the population of record is Q(P) (the required manifest), never the replay's own enumeration: reconcile the reach
     # identity by identity and carry query_total / sampled_strata / uncovered_by_name on the record (a required identity the exact replay
@@ -707,24 +665,13 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     qpop = query_population(manifest, addresses, evaluated_keys, ranks=ranks, strata=strata, executed_prefix=executed_prefix,
                             controller_rows=controller_rows_of(programs, indices))   # [R4 c2] the replay's own guard-row count per request
     return {"schema": SCHEMA, "method": "sampled-exact-replay", "result": result, "grade": grade, "why": why, "catch_probability": catch,
-            "population": {"vus": len(all_vus), "source": "Program instances.json.gz rows (every row; evaluable = families with a registered evaluator)",
-                           "requests": sorted(programs), "by_family": dict(Counter(v["family"] for v in all_vus)), "not_evaluable_by_family": dict(not_ev_fam),
-                           "not_evaluable": dict(not_ev), "not_evaluable_codes": {k: codes.get(k) or RC.reason_code("other") for k in not_ev}, "strata_n": len(strata),
-                           "authority": "Q(P) -- the required manifest; `vus` above is the replay's enumeration of the Program rows, reconciled below",
-                           "query_total": qpop["query_total"], "sampled_strata": qpop["sampled_strata"], "uncovered_by_name": qpop["uncovered_by_name"],
-                           "not_executed_by_family": qpop["not_executed_by_family"], "not_executed_rule": qpop["not_executed_rule"],
-                           "not_executed_by_rule": dict(qpop["not_executed_by_rule"], vus=len(not_exec_vus),
-                                                        vus_by_request=dict(Counter(v["request_id"] for v in not_exec_vus)),
-                                                        strata_excluded={k: {"population": int(n), "label": "not evaluable: unexecuted"}
-                                                                         for k, n in sorted(Counter(v["stratum"] for v in not_exec_vus).items())}),
-                           "uncovered_identities": qpop["uncovered_identities"], "controller": qpop.get("controller"),   # [R4] the lifted controller, by name
-                           "query_checks": qpop["query_checks"], "scope": qpop["scope"]},
+            "population": RR.population_record(all_vus, sorted(programs), not_ev, not_ev_fam, codes, len(strata), qpop, not_exec_vus),
             "addresses": addr_rec,
             "sample": {"per_stratum": int(replay_k or per_stratum), "seed": int(seed), "seed_source": seed_source, "strata_by": replay_draw if replay_k else "unit", **({"k": int(replay_k)} if replay_k else {}),
                        # under the verifier-challenge form the FULL challenge is on the record: a reader recomputes
                        # sha256(challenge|run_root)[:8] (challenge_seed) as a fact -- the source text alone (challenge[:16], repr) cannot be
                        **({"challenge": str(seed_challenge)} if seed_challenge is not None else {}),
-                       "picked": len(picked), "evaluated": evaluated, "equal": equal,
+                       "picked": len(picked), "evaluated": fold.evaluated, "equal": fold.equal,
                        "mismatch_n": len(mism), "not_evaluated_n": len(not_evald), "max_evaluate": int(replay_k or max_evaluate), "cap_effective": int(cap),
                        "stratified_picked": min(cap, n_strat), "targeted": targeted, "targeted_n": n_targeted,
                        "order": "round-robin across strata (every stratum's first pick before any second); targeted VUs appended, outside the cap",
@@ -733,8 +680,9 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                        # step of a pick is arrival + step -- the arrival per request beside it, so a mixed-arrivals reader adds it, not guesses
                        "picks_by_request_step_key": "[picked, evaluated, mismatch] per (request, request-relative step); engine step = picks_by_request_arrival[request] + step; targeted picks included",
                        "picks_by_request_arrival": {r: int(arrivals.get(r, 0)) for r in picks_by_request_step}},
-            "timing": {"wall_s": round(time.perf_counter() - t_start, 3), "workers": int(workers), "cpu_s_sum": round(sum(fam_time.values()), 3),
-                       "per_family_s": {f: round(fam_time[f], 3) for f in sorted(fam_time)}, "per_family_n": {f: int(fam_n[f]) for f in sorted(fam_n)}},
+            "timing": {"wall_s": round(time.perf_counter() - t_start, 3), "workers": int(workers), "cpu_s_sum": round(sum(fold.family_seconds.values()), 3),
+                       "per_family_s": {f: round(fold.family_seconds[f], 3) for f in sorted(fold.family_seconds)},
+                       "per_family_n": {f: int(fold.family_n[f]) for f in sorted(fold.family_n)}},
             # how the committed store was read: the collector's retention and the evaluator that ran (forked pool / serial)
             "evaluator": {"retention": retention, "workers_requested": workers_requested, "workers": int(workers),
                           "mode": "forked pool" if int(workers) > 1 else "serial (parent process)", "note": pool_note,
@@ -745,39 +693,17 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
             "strata": strata, "strata_unevaluated": strata_unevaluated, **({"value_reads_in_children": child_reads} if child_reads else {}),
             **({"checks": chk} if chk is not None else {}),
             # EVERY unevaluated stratum with its reason and class, uncapped (the verdict's named-gap rule decides per stratum)
-            "unevaluated_strata": [unev_by_stratum[k] for k in strata_unevaluated if k in unev_by_stratum],
+            "unevaluated_strata": [fold.unevaluated_by_stratum[k] for k in strata_unevaluated if k in fold.unevaluated_by_stratum],
             "why_classes": {"by_name": list(WHY_CLASSES_BY_NAME), "fault": list(WHY_CLASSES_FAULT),
                             "rule": "a by-name class is a gap of this replay version (may be carried on a PASS when form (B) covers the values); "
                                     "a fault class is a run that did not evaluate (never carried)"},
-            "strata_keys": {"mechanisms": sorted({k.split("|")[0] for k in strata}), "requests": sorted({k.split("|")[1] for k in strata}),
-                            "ranks": (["rank 0 (tp1, or the rank-0 shard of a per-rank map)"] if ranks == [0] else [f"rank {r}" for r in ranks]),
-                            "steps": {"early": sorted(s for s in steps_seen if s <= 1), "late": sorted(s for s in steps_seen if s > 1)},
-                            "phases": sorted({k.split("|")[3] for k in strata}),
-                            "modules": len({k.split("|")[4] for k in strata if k.count("|") >= 4}),
-                            "key": "spec | request | rank | phase | module op_path | lifetime (window); attention rows: spec with T -> NB = ceil(T/BN) "
-                                   "(the block-count mechanism; the row's own spec keeps T)",
-                            "lifetime": {"values": dict(Counter(v["lifetime"] for v in all_vus)), "ring_slots": ring_slots,
-                                         "rule": "engine step >= ring_slots -> recycled-window (storage the ring already committed under an earlier step's "
-                                                 "identities); else fresh-window; unwindowed collectors: one value, stated",
-                                         "sampled": dict(Counter(v["lifetime"] for v in picked))},
-                            "phase": ("prefill / first-decode / mid / last EXECUTED step of each request (`last` is anchored to n_exec - 1 "
-                                      "under the executed prefix -- the lag step of an EOS-stopped request -- else to the cap; steps past the "
-                                      "prefix are 'not-executed', split out of the pool by name)"),
-                            # per request: the step `last` is anchored to, the anchor's rule, and the lag step when there is one
-                            "phase_anchor": {r: anchors[r] for r in sorted(anchors)}},
+            "strata_keys": _strata_keys(strata, ranks, all_vus, picked, ring_slots, anchors),
             "mismatch": [{k: m.get(k) for k in ("spec", "request_id", "step", "engine_step", "op_path", "row", "phase", "inputs", "outputs", "why")} for m in mism[:12]],
-            "mismatch_by": mism_by,                                       # every mismatch by name, uncapped
+            "mismatch_by": RR.mismatch_by(fold),                          # every mismatch by name, uncapped
             "not_evaluated": not_evald[:12],
             # mechanisms of the Program's rows this replay does NOT read even when the row IS evaluated (named, counted)
             "uncovered_mechanisms": _uncovered_mechanisms(all_vus, not_ev_fam),
-            # Not-evaluable families BY NAME WITH COUNTS + reason (footnoted on the row; bounds the claim)
-            "unreplayable": [{"family": f, "n": int(not_ev_fam[f]),
-                              "why": NOT_YET.get(f.split(" (")[0], "structure / interior: no identity" if "(structure" in f
-                                                 else "recomputed prefix: computed by the warm request's replay, never served by it" if "(recomputed prefix" in f
-                                                 else ("interior producer: composed into its consumer's VU" if "(interior" in f
-                                                       else ("MoE plane row -> plane slice mapping failed: see population.not_evaluable" if "(plane mapping failed)" in f
-                                                             else "no registered evaluator")))}
-                             for f in sorted(not_ev_fam)],
+            "unreplayable": RR.unreplayable(not_ev_fam),
             "weights": (wc if wc is not None else {"equal": None, "note": "by reference, unverified at replay (no weights check supplied)"}),
             # the committed up plane is not the down plane's bytes, per (request, step, layer) -- beside the replay
             "moe_planes": {"alias_check": moe_plane_alias_check(store)},

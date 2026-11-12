@@ -11,8 +11,13 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
-from verity_vllm.check.commit_rules import HIDDEN_CLASS_BY_FA, hidden_classes_required, required_classes_default
+from verity_vllm.acquire.sources import hidden_source as HS
+from verity_vllm.acquire.sources import taps as TAPS
+from verity_vllm.check.commit_rules import (
+    HIDDEN_CLASS_BY_FA,
+    hidden_classes_required,
+    required_classes_default,
+)
 
 
 def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_version: int | None) -> tuple[tuple[str, ...], str | None]:

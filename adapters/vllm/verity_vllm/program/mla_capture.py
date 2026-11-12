@@ -33,8 +33,6 @@ D = DL + DR
 H = 20
 SCALE = 0.0625  # GLM-4.7-Flash: (qk_nope 192 + qk_rope 64) ** -0.5, no yarn
 
-_M = np.uint64(0xFFFFFFFFFFFFFFFF)
-
 
 def _splitmix(x: np.ndarray) -> np.ndarray:
     with np.errstate(over="ignore"):
@@ -327,8 +325,8 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
     instance one token); a combine key one case (a row and an instance are one token)."""
     from collections import defaultdict
 
-    from verity.circuits.evaluation import bits as BS
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import bits as BS
     from verity.definitions.registry import mla as M
 
     G = M.GLM47_FLASH
