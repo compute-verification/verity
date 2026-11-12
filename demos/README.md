@@ -94,3 +94,19 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
+
+## The smaller sets of onsite's subprotocols
+
+Two files beside the directories, each a `verity run` configuration of the same served int8 window on
+`onsite_served/`'s table (`served_table.SETS`): the parties its subprotocols declare, on the machines `onsite_served/`
+places them on, the hosts and addresses only in the deploy bindings.
+
+| File | Subprotocols | `verity run demos/FILE` |
+| --- | --- | --- |
+| `onsite_network.toml` | sampled proofs, the network certifier, the wipe | refused `composite` |
+| `onsite_compute.toml` | those three, PoUW (`pouw`, onsite's work subprotocol), the inference-only policy | refused `composite` |
+
+Neither set is a composite's (`verity.configuration.deploy.config.COMPOSITES`, `Core.Composites.ofIds`): protocol
+soundness covers onsite's seven and remote's three alone, so `verity run` refuses each file by name before it reads a
+party, and neither is a demo with a `demo.toml`. `tools/verity/cli/tests/test_onsite_served.py` holds each file to the
+table's declarations and to that refusal.
