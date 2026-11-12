@@ -223,14 +223,14 @@ for f in sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.pa
 '''
 
 #: `move_check.py --json`: each call's arguments appended to LOG; while REFUSE exists, a refusal, or as it says, no report
-#: (`garbage`), a report certifying the move with a refusal's exit (`exit`) or one not certifying it with exit 0 (`zero`)
+#: (`garbage`, or JSON that isn't one: `list`), a report certifying the move with a refusal's exit (`exit`) or one not certifying it with exit 0 (`zero`)
 CHECK = """import json, pathlib, sys
 log, refuse = pathlib.Path(LOG), pathlib.Path(REFUSE)
 with log.open("a") as f:
     f.write(json.dumps(sys.argv[1:]) + "\\n")
 mode = refuse.read_text().strip() if refuse.exists() else None
-if mode == "garbage":
-    print("Traceback: boom")
+if mode in ("garbage", "list"):
+    print("Traceback: boom" if mode == "garbage" else "[]")
     sys.exit(2)
 no = mode is not None and mode != "exit"
 if mode == "zero":
@@ -465,7 +465,7 @@ def test_a_move_isnt_built_above_a_pr_in_flight_that_changes_the_move_scripts_ma
     assert [b["members"] for b in _builds(recs)] == [[3]] and not [r for r in recs if r["action"] == "skip"], recs
 
 
-@pytest.mark.parametrize("mode", ["garbage", "exit", "zero"])
+@pytest.mark.parametrize("mode", ["garbage", "list", "exit", "zero"])
 def test_a_move_check_that_gives_no_report_or_exits_as_refusing_doesnt_certify(env, mode):
     """`move_check.py` certifies only with its report saying so and its exit 0: no report, a report it exits 1 on or one not
     saying so, is a refusal, and the move on its mark alone is left out."""
@@ -474,8 +474,8 @@ def test_a_move_check_that_gives_no_report_or_exits_as_refusing_doesnt_certify(e
     m.move(1, verdict=False)
     recs = env.loop(policy).tick()
     (skip,) = [r for r in recs if r["action"] == "skip"]
-    assert not _builds(recs) and ("couldn't judge" if mode == "garbage" else "isn't certified") in skip["why"], skip
-    assert {"garbage": "Traceback: boom", "exit": "exit 1)", "zero": "exit 0)"}[mode] in skip["why"], skip
+    assert not _builds(recs) and ("couldn't judge" if mode in ("garbage", "list") else "isn't certified") in skip["why"], skip
+    assert {"garbage": "no JSON report (", "list": "(exit 2): []", "exit": "exit 1)", "zero": "exit 0)"}[mode] in skip["why"], skip
 
 
 def test_a_move_runs_main_s_move_check_whatever_a_member_below_it_does_to_that(env):
