@@ -2,8 +2,9 @@
 scheduler's step trace, then replayed from the trace's header alone; the replay's steps, every token and every cached row's
 bytes are held to the served ones.
 
-The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers and `EXPERTS` routed experts, served
-tensor-parallel 1 on one card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer. ``--weights dummy``
+The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers, `EXPERTS` routed experts and `HEADS`
+attention heads (one rank's of tensor-parallel 8, which decides how an FP8 cache is read), served tensor-parallel 1 on one
+card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer. ``--weights dummy``
 keeps vLLM's values; ``--weights scaled`` redraws every weight at `STD` after the load (`rescale`), so a token depends on its
 whole context and one differing bit of a cached row shows in the tokens.
 
@@ -15,7 +16,7 @@ its own:
   indexer's top-k, more than fit one batch) arrive between engine iterations. After each step's forward, `Rows` reads at
   every layer with a KV cache the rows the step wrote: the layer's cache at the step's slots. The phase writes the trace, each
   request's tokens, a digest of each request's rows at each layer, and what the engine chose (`chosen`): the cache format its
-  config holds once built, and each layer's attention backend, cache dtype and row bytes.
+  config holds once built, each layer's attention backend, cache dtype and row bytes, and each backend's read path.
 - ``--phase replay``: an engine built from the trace's header, each request put back before the step the trace says it
   arrived before; the scheduler decides the rest. It writes the same. ``--cache named`` gives the engine the cache format
   the served engine's config held instead, for a tree whose header does not carry the format.
@@ -53,6 +54,10 @@ ADAPTER = Path(__file__).resolve().parents[2]
 CONFIG = ADAPTER / "verity_vllm/engine/profiles/hf_configs/GLM53.config.json"
 #: the stand-in's decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and experts
 LAYERS, EXPERTS = 7, 16
+#: the stand-in's attention heads: a rank's when GLM-5.3's 64 are split over tensor-parallel 8. vLLM's FlashMLA sparse
+#: backend reads an FP8 cache with its FP8 kernel at every token below 32 heads a rank; at 32 or more a prefill token reads
+#: a bf16 copy of the rows instead, a path GLM-5.3 on eight cards never takes
+HEADS = 8
 #: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight drawn uniform on [-1, 1]
 STD = 0.02
 FP8_SCALE = STD * 3 ** 0.5
@@ -73,7 +78,8 @@ STEP_KEYS = ("T", "order", "rows", "new", "resumed", "cache_hit", "preempted", "
 
 def stand_in(where: Path) -> None:
     cfg = json.loads(CONFIG.read_text())
-    cut = {**cfg, "num_hidden_layers": LAYERS, "n_routed_experts": EXPERTS}
+    cut = {**cfg, "num_hidden_layers": LAYERS, "n_routed_experts": EXPERTS, "num_attention_heads": HEADS,
+           "num_key_value_heads": HEADS}
     for k in ("indexer_types", "mlp_layer_types"):
         cut[k] = cfg[k][:LAYERS]
     (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
@@ -161,7 +167,8 @@ def kv_layers(model: Any) -> dict[str, Any]:
 
 
 def chosen(eng: Any, runner: Any) -> dict[str, Any]:
-    """What the built engine holds: its config's cache format and block size, and each layer with a KV cache."""
+    """What the built engine holds: its config's cache format and block size, each layer with a KV cache, and each
+    attention backend's metadata builder: whether it holds an FP8 cache and reads it in one mixed batch."""
     cc = eng.vllm_config.cache_config
     layers = []
     for name, m in kv_layers(runner.model).items():
@@ -172,7 +179,13 @@ def chosen(eng: Any, runner: Any) -> dict[str, Any]:
                        "impl": type(m.impl).__name__ if getattr(m, "impl", None) is not None else None,
                        "dtype": str(c.dtype).removeprefix("torch."), "shape": list(c.shape),
                        "row_bytes": int(c.shape[-1]) * c.element_size()})
-    return {"cache_dtype": str(cc.cache_dtype), "block_size": int(cc.block_size), "layers": layers}
+    builders = []
+    for group in (g for groups in getattr(runner, "attn_groups", None) or [] for g in groups):
+        b = (getattr(group, "metadata_builders", None) or [None])[0]
+        builders.append({"backend": getattr(group.backend, "__name__", None), "layers": len(group.layer_names),
+                         "heads": getattr(b, "num_heads", None), "fp8_cache": getattr(b, "use_fp8_kv_cache", None),
+                         "fp8_mixed_batch": getattr(b, "fp8_use_mixed_batch", None)})
+    return {"cache_dtype": str(cc.cache_dtype), "block_size": int(cc.block_size), "layers": layers, "builders": builders}
 
 
 class Rows:
@@ -385,6 +398,7 @@ def summary(doc: dict[str, Any]) -> dict[str, Any]:
         k = f"{x['module']}/{x['backend'] or x['impl']} {x['kv_cache_dtype']} {x['dtype']} {x['row_bytes']} B"
         kinds[k] = kinds.get(k, 0) + 1
     return {"cache_dtype": doc["chosen"]["cache_dtype"], "block_size": doc["chosen"]["block_size"], "layers": kinds,
+            "builders": doc["chosen"]["builders"],
             "cache_hits": {rid: n for s in doc["steps"] for rid, n in s["cache_hit"].items()}, "steps": len(doc["steps"]),
             "tokens": sum(map(len, doc["tokens"].values())), "distinct_tokens": len({t for ids in doc["tokens"].values() for t in ids}),
             "rows": sum(x["positions"] for by in doc["rows"].values() for x in by.values()), "rows_skipped": doc["rows_skipped"]}

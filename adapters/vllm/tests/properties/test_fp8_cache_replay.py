@@ -179,3 +179,5 @@ def test_the_plan_shares_a_prefix_holds_one_prompt_past_the_top_k_and_samples_ha
     cut = json.loads((tmp_path / "config.json").read_text())
     assert (cut["num_hidden_layers"], cut["n_routed_experts"], len(cut["indexer_types"]), len(cut["mlp_layer_types"])) == (
         X.LAYERS, X.EXPERTS, X.LAYERS, X.LAYERS)
+    # a rank's heads at tensor-parallel 8, below the 32 at which vLLM reads an FP8 cache's prefill rows through a bf16 copy
+    assert cut["num_attention_heads"] == cut["num_key_value_heads"] == X.HEADS == 64 // 8 < 32
