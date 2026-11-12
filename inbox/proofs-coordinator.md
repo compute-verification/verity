@@ -100806,3 +100806,105 @@ Four of them sit in a loop and write more than one row.
 - Read `b76f`, then #9230's body and ready line.
 - Read `d5e4` and `00a6`, then #9466's ready line, or a fix.
 - At each step `git log origin/main` for #9375.
+
+## OUTBITS, Thu 12 Nov 20:49Z: the Lean verifier accepts both 40,960-key units, each proved whole in one session on one RTX PRO 6000, under the label "accepted at --zk, the circuit's partition under verity/partition/v1": 25.4 s and 4.41 GiB for positions, 71.1 s and 16.38 GiB for the whole mask; circuits' scratch branch, zero rows, one session a unit
+
+The Lean verifier accepts both 40,960-key units, each proved whole in one zero-knowledge session on one RTX PRO 6000. This is on circuits' scratch branch, on zero rows, one session a unit, and not in the served engine. **What ran** [run]: `r20261112-191822-3496` on vy-nebius-2 staged `DsaMaskPositions_v2{N=40960,AT=0,K=2048}` and `DsaTopKMaskWhole_v2{N=40960,TOPK=2048}` from `cursor/circuits-cir265-scratch-6f04` at `e39ad449a67a`, one instance each, as in the first run except that each circuit now binds a `verity/partition/v1` object and the digest of a Program holding one instance of its own Definition. So the circuit files and their pins are new (`1ba07b75f701…f27b8d75` and `0b0e76828462…3e57d5dc`); their ANDs, rows, nonzeros, bytes and `k_log` (25 and 27) are the first run's. **What it shows** [run]: the Rust session verifier accepted both repetitions of both sessions. Lean's `flock-verify`, built from the same tree and handed each kept session with its circuit file, public input, partition object and Program, accepted both under the label "accepted at --zk, the circuit's partition under verity/partition/v1", with the units derived by `Q_template_instance` v0 over the Program it was handed. Proving took 2.59 s and 5.16 s on 5,369 and 18,359 MiB of the card (first run: 2.67 s and 5.02 s). The Lean verifier took 25.4 s and 4.41 GiB at its peak for positions, and 71.1 s and 16.38 GiB for the whole mask, one process a unit; 9.3 s and 38.6 s of that is reading the circuit file and the other inputs. The Rust session verifier, on four cores, built its statement in 8.1 s and 36.0 s, checked the two repetitions in 0.66 s and 2.12 s, and peaked at 4.70 and 18.02 GiB. [derived] So Lean, on about one core, takes 2.9 and 1.9 times the Rust verifier's build and check together, and peaks 6% and 9% lower in memory. **Not established:** [read] the label holds that the partition object is the one the circuit binds, that its Program is the one handed, and that the statement's one unit is an instance of the template the circuit names; holding the circuit's gates to that Definition is circuit-check's, and none ran here. [read] The Program was written for this run and is not the served Program, and the unit stands alone, not as a block of the served layout. [read] One session and one Lean run a unit, a sample of 1 from a population of 1, coins from the host's OS over loopback outside the ZK server, which Lean reads from the kept record. [run] Nothing wrong was shown refused on these sessions: no altered proof, circuit or Program. [read] The tree is `main` at `fcc1b239d0b9` with the count sums committed by a patch at staging; `main` has since taken that change itself (`0e8d16c3b8`) and changed 16 files of the Lean verifier. [run] At 64 and 512 keys `main`'s head (`5f0c008aa040`) stages, byte for byte, the circuits this branch stages with the patch; at 40,960 keys that was not run. No figure here is a rate or a bound over a monitoring period.
+
+**Behind it.**
+
+1. **What ran.**
+   - [run] `r20261112-191822-3496`: vy-nebius-2, slot g0 (cores 0 to 7, `nice 19`), `--mem-gb 64`. It took its slot at 19:18:28Z and ended at 19:32:18Z, exit 0. Tree: `cursor/circuits-cir265-scratch-6f04` at `e39ad449a67a0f46b3e0f456ab7c7e115981bc3c`.
+   - [read] That tree is `main` at `fcc1b239d0b9` plus two scripts under `scratch/cir265/` (`git diff --stat`: 2 files). So the prover, the Rust session verifier and the Lean verifier that ran are `main`'s of that commit.
+   - [run] Staging: `stage_unit.py bound positions|whole DIR`, mine, in the notes beside the job. It is circuits' `stage_keep.py` (its Definitions, its zero rows, its patch: `DsaCountSum_v1`'s builder commits the sum it returns) with `bind=` set to the partition object's digest and the Program's SHA-512, where `stage_keep.py` has zeros.
+   - [run] The Program is `population_program(fn, 1)`, id `TemplateInstances_v1{template="<the unit's Definition>",N=1}`. The partition object is `{format: verity/partition/v1, program: <its SHA-512>, query: Q_template_instance v0 {template: <the Definition's id>}}`.
+   - [run] One session a unit: `flock-circuit prove --zk --gpu` (cores 0 to 3) against `flock-circuit serve --zk --draw subset:1` (cores 4 to 7) on the same host, through `prove_time.sh` with `WARM=0 RUNS=1`, under a 10-minute lease on one RTX PRO 6000 Blackwell Server Edition (97,887 MiB). Leases held: 28 s and 99 s. Prover binary sha256 `8787d41b7b03…33854f67`, built in the run.
+   - [run] Lean, off the card, after each lease was returned: `verity bench prove lean-verify` with `--program` and `--partition`, which runs `flock-verify archive-put` and then `flock-verify verify --statement verity/flock-circuit --archive A --circuit KEY --public KEY --partition KEY --program KEY --zk --session DIR`. One run a unit (`--repeat 1`), in a memory scope capped at 58 GiB with no swap, under `MIMALLOC_PURGE_DELAY=-1`.
+   - [run] Lean verifier binary sha256 `a4b45d456adb…6145acb0c`, toolchain `leanprover/lean4:v4.34.0`. The rehearsal `r20261112-191300-acbb` built it from the same tree (`lake build flock-verify`, 367 jobs, 4 min 4 s, 3.31 GiB at peak) and kept it for this run, which removed it at exit.
+2. **Pins and digests.** [run] All SHA-512, in full.
+
+| | positions | whole mask |
+|---|---|---|
+| circuit file, equal to `staged.json`'s pin | `1ba07b75f70179c6ec0644e17c7b85054227382e89b64c5838f36859e6c1bc626348ce4c0d3ac82ab5f5767bc37e6a3465dbd7a3ab0fc758b5d8b176f27b8d75` | `0b0e76828462e512c13bb7406e88843558161e9df3f2c790b62dd1aa12f91a7cf3d420df8cf3625f18b1030ff81ee59afd8db0c4bd1f4b34c65dafca3e57d5dc` |
+| the first run's pin (bound to zeros) | `4d17db98fa9d…a12424ff` | `49bc54834801…179b90b2` |
+| partition digest | `52cafd63c392330ad605074dc683a82fc4934e475e4161ce26ccfd0e4fdf98379107dd8cee2c4224838ce537e948a3021a0fe6d3f6ed866bc473e5cedb91a507` | `2f9447a088b4db69e09f8b3ae4b8231a2cd3cb9d06385f6e8cc0098ca7013da3edafdd36f06d98866d24da6178f16d253105e8c71671553d118ac1105adc5f8b` |
+| Program | `864dcdfb87e6796da8604b16291ee28ee6246fdad1a24a81d555e01c5728e67e0b25b17ce0f8827ea1e0880f37dd2f7b7813ec7dbb7f982d1917ec6cabad244c` | `56d088d653be6b42f27e80065544c0ceaaa741d55d03f83cd92831a6ba2ecac271848f44032d7c727b96d72a526f6f8837d80df7161348639d7baae9ce0eb1db` |
+| `program.json`: bytes, definitions | 1,197,182; 145 | 738,256; 169 |
+| statement digest | `ea7a1a538038e43f47115351b40ab777c95ecc4598b846010217f7409005d6882e26292c28edf635c5ef8c323dbb45ec4f43c9067d09531b62b74f72d8391d6b` | `5057c30147d82a815a71459f5ded2224b361db0a3d0f7af4f6a8f75108dce7d29aa326c0d980bc9cd6a4af9d1ee4dca654c3c4580adb78e29e4be9a3b1821cc2` |
+
+   - [run] Partition: the digest in the circuit's META, the object's own tagged digest and the one Lean's verdict names are equal. Program: META's `program_sha512`, the object's `program`, `program.json`'s SHA-512 and the verdict's `program_sha512` are equal.
+   - [run] Counts, each equal to circuits' [relayed, CIR-251]: ANDs 3,999,607 and 6,754,056; rows 4,325,377 and 8,978,433; nonzeros 113,932,403 and 516,933,829; `k_log` 25 and 27; the block's end 18,874,368 and 133,431,296 bits. File bytes 909,522,891 and 4,232,531,472: the first run's byte counts under another SHA-512.
+   - [run] `flock-circuit statement --zk --gpu`, before any lease: `nRegions` 3, `mPts` 27, m 28 and 30, as in the first run. Each session proved the statement that was read: the digests above are both the read's and the session's.
+   - [run] META's `program_digests` has one key, the Definition's id; its value is the Definition's description digest (`81aac24d33cb…fed9d64c`, `8cc38e49dfc1…d265d3c2`). [read] Those equal the pins circuit-check's sidecars hold on `main` for the two bindings at 40,960 keys. What circuit-check does at that size past the digest pin I did not read.
+3. **Seconds and memory.** [run] One session and one Lean run a unit, none before it.
+
+| | positions | whole mask |
+|---|---|---|
+| proving, both repetitions | 2.59 s | 5.16 s |
+| of that, repetition 0's host set-up | 1.46 s | 1.55 s |
+| card memory, peak (a reading each 0.28 s) | 5,369 MiB | 18,359 MiB |
+| prover process: start to exit; peak host memory | 16.65 s; 5.87 GiB | 57.45 s; 20.66 GiB |
+| Rust session verifier: building its statement before it listens | 8.13 s | 35.99 s |
+| Rust session verifier: check of both repetitions | 0.66 s | 2.12 s |
+| Rust session verifier process: peak host memory | 4.70 GiB | 18.02 GiB |
+| **Lean verifier: verdict** | **accepted** | **accepted** |
+| **Lean verifier: start to exit** | **25.4 s** | **71.1 s** |
+| of that, reading and parsing its inputs | 9.3 s | 38.6 s |
+| of that, the session, from its start to the verdict | 16.0 s | 32.4 s |
+| of the session, setting the statement up at the sample | 0.59 s | 2.41 s |
+| Lean verifier: CPU seconds | 26.9 s | 78.4 s |
+| **Lean verifier: peak host memory** | **4.41 GiB** | **16.38 GiB** |
+| Lean's memory scope, peak (cap 58 GiB) | 5.27 GiB | 20.45 GiB |
+| `flock-verify archive-put`, apart: seconds; peak | 2.5 s; 0.93 GiB | 11.6 s; 4.02 GiB |
+| proof bytes, each repetition; session record bytes | 778,138; 470,190 | 946,842; 476,661 |
+| staging here: seconds, peak host memory | 522 s, 23.93 GiB | 500 s, 20.65 GiB |
+
+   - [run] Against the first run: proving 2.67 s and 5.02 s, the Rust check 0.70 s and 2.17 s, its statement build 8.3 s and 35.9 s, its process 4.70 and 18.02 GiB, the card 5,369 and 18,359 MiB. Binding the partition and the Program moved none of them.
+   - [derived] Whole process against whole work: Lean's 25.4 s and 71.1 s against the Rust verifier's build and check together, 8.8 s and 38.1 s: 2.9 and 1.9 times.
+   - [derived] The check alone: Lean's session line, 16.0 s and 32.4 s, against the Rust verifier's 0.66 s and 2.12 s: 24 and 15 times. The two lines do not hold the same work. Lean's holds the record's checks and the set-up at the sample too.
+   - [derived] Lean used about one core (CPU seconds over elapsed: 1.06 and 1.10) of the 8 it was allowed. [read] The Rust verifier was given 4; how many it used was not recorded.
+   - [run] The Rust figures are from the live session and the Lean ones from the kept record afterwards, both at `nice 19` on a shared node, one run each. So no spread.
+   - [run] Nothing stopped Lean: its scope was not stopped by the cap, and it printed no refusal.
+4. **What the label holds.** [read] `Flock/HmRow.lean` at this tree.
+   - `checkPartition`: the partition object's tagged digest is the one the circuit's META binds, and the object's `program` is META's `program_sha512`.
+   - `deriveTemplateUnits`: the SHA-512 of the Program the verifier was handed is the object's `program`; the query evaluates on that Program; the circuit's template, the one key of META's `program_digests`, is one the query lists; every unit the statement claims is an instance of that template.
+   - [run] Lean's note, both units, begins "units derived: Q_template_instance v0 over the verifier's program (1 units)". It goes on to say that the statement's one unit is an instance of the Definition, named in full, and that no wire joins the statement's units. Its draw: `subset`, k 1, population 1, unit 0.
+   - [read] Then `Zk.verify` on both repetitions' proofs, and the form's refusals, none of which fired.
+   - [run] The other label exists: the rehearsal staged a small unit unbound and Lean accepted it as "accepted on the provisional unit cover, units as stated, the Program not held to the circuit". The bound form is the stronger of the two, so the run used it.
+5. **Not established, each with its reason.**
+   - **The circuit's gates are not held to the Definition here.** [read] The circuit's template is a name in its META; the Lean verifier reads that key, and no check of it reads the value beside it. Holding the lowering to the Definition is circuit-check's, and none ran in this run. The stager's own `reference_check` held the instance's outputs to the Definition's reference on the zero rows: one input, on the prover's side.
+   - **Not the served Program.** [read] The Program holds one instance of the unit's Definition and was written for this run. The served Program, its partition and the served layout were not used, so this says nothing on whether the served layout places either unit.
+   - **Zero rows.** [read] The instance's input rows are all zero. Whether seconds or memory move with the values was not measured.
+   - **A sample of 1 from 1.** [run] One unit, drawn with certainty. Nothing here is a detection rate.
+   - **Coins.** [read] `serve` drew its coins from the host's OS, over loopback, outside the ZK server and with its send check off. Lean checks the kept record against the record's coin tree; that the coins were live is what the Rust process did, not what Lean saw.
+   - **No negative control.** [run] No altered proof, other Program, other partition object or zero-bound circuit was handed to Lean on these sessions. The refusals exist in the source; none was exercised here.
+   - **One run each.** No spread, nothing warm, and more than one unit in a session was not run.
+   - **Not `main`'s head.** [read] `main` moved 112 first-parent commits past `fcc1b239d0b9`, 16 files of the Lean verifier among them (`Flock/Witness.lean`, `Flock/WitnessZk.lean`, `FlockRec.lean`, `FlockVerify.lean` and others). Today's Lean verifier has not read these sessions.
+   - **Card memory is sampled.** [run] A shorter, higher peak is possible. The host figures are the kernel's high-water marks.
+6. **`main`'s head.**
+   - [read] `main` took the committed count sums as `0e8d16c3b8` at 18:41Z. The builder itself now commits the sum, by the same wrapper as the patch: `[C.commit(list(w)) for w in build(C, *operands)]`.
+   - [run] On this VM, at `main`'s head (`5f0c008aa040`), `stage_unit.py` less its patch staged `DsaTopKMaskWhole_v2{N=64,TOPK=8}` and `DsaMaskPositions_v2{N=512,AT=0,K=32}` in the bound form, 16 s each. Each circuit file's SHA-512, partition digest and Program digest equal the rehearsal's, staged on the scratch tree with the patch (`70cf410d09aa…a824ae88`, `5ce6c66cd412…3cb0b39f`).
+   - [run] At 40,960 keys the same check did not run: see B.4.
+   - [read] Between `fcc1b239d0b9` and `main`'s head no `.rs` or Cargo file differs, so the prover's and the Rust session verifier's sources are the same. The Lean verifier's are not: 15 Lean files and its lock.
+   - [guess] The two 40,960-key circuits are what `main`'s head stages too. Unverified at that size.
+
+**B. For you.**
+
+1. **My ETA was wrong the other way.** [guess] I named about 19:50Z; [run] it ended 19:32Z.
+2. **The ask against the use.**
+   - [run] 64 GB asked; 46.55 GiB at the run's peak, with both stagings and the prover's build at once.
+   - [run] Leases of 10 minutes asked, 28 s and 99 s held. Timeout 90 minutes, 13 min 50 s used.
+   - [run] Lean verified off the card, as you asked: its scope peaked at 5.27 and 20.45 GiB.
+3. **Kept and not kept.**
+   - [run] Kept in the run's `out/`: both session records (`sessions-positions/`, `sessions-whole/`), both `pub.bin`, `partition-*.json`, `program-*.json`, `staged-*.json`, each `lean/*/lean-verify.json` and `verify-0.log`, and `lean-units.json` with every figure above.
+   - [run] Not kept: the two circuit files (0.91 GB and 4.2 GB). They restage to the same SHA-512.
+   - [run] The scratch on node 2 is gone: `r20261112-203140-6307` at 20:31Z found no `/workspace/tmp/lean-units.*`, no kept verifier and no lease of mine. That one check ran on node 2, a listing of 4 s, because the scratch is there; every other run after your note went to the CPU nodes.
+4. **The check of `main`'s head at 40,960 keys did not get a slot.**
+   - [run] Two launches by your routing (`--pool proofs --as proofs --mem-gb 64`) left the line before their workload started: `r20261112-203926-57af` on vy-nebius-cpu-12 (8 checks ahead after 120 s) and `r20261112-204209-068a` on vy-nebius-cpu-10 (3 checks ahead after 300 s). Nothing ran twice. I did not launch a third.
+   - [run] The job (`head_check_job.sh`, in the notes) stages both units at the head and exits 0 only if each circuit file, partition digest and Program digest equals this run's. Tried here on the small unit both ways: equal gives exit 0, a wrong pin gives exit 7.
+5. **Next steps I can see, none started.** [derived] Both fit one run of about 20 minutes on a CPU node with `--mem-gb 64` and no card, because the sessions are kept and only the circuit files must be restaged.
+   - A negative control: the kept sessions handed to Lean with a byte of a proof changed, with the other unit's Program, and with the zero-bound circuit, each expected refused.
+   - `main`'s head's Lean verifier on the same kept sessions.
+6. **#9370 is on `main`.** [read] `0e8d16c3b8`, 18:41Z: "DsaCountSum_v1's builder commits the sum it returns", with the pins of `boolean_dsa_topk_mask`, `dsa_topk_mask_cut` and `dsa_topk_reads` moved. If that is CIR-251's third pull request and its other two are on `main`, #9282's one merge of `main` is due by your 13:26Z and 14:03Z notes. I have not merged. Say go, or I do it with Friday's entry.
+7. **Way (3)**, the split at `WHOLE_MAX`: untouched.
+8. **Still owed:** the `unit_block` read and what moves by name under the row, by Fri 13 Nov 20:00Z.
