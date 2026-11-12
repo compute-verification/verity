@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import enum
 import json
+import logging
 import sys
 from types import SimpleNamespace as NS
 from typing import Any
@@ -199,7 +200,7 @@ def test_the_flash_attention_versions_a_models_layers_carry() -> None:
     assert build.observed_flash_attn_version(_Model()) is None
 
 
-def test_vllms_flashinfer_verdict_or_none(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_vllms_flashinfer_verdict_or_none_and_why_none_at_debug(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     fake = fake_vllm.install(monkeypatch)
     for held, want in ((True, True), (False, False), (1, True), ("", False)):
         fake.set("vllm.utils.flashinfer:has_flashinfer", lambda held=held: held)
@@ -209,9 +210,13 @@ def test_vllms_flashinfer_verdict_or_none(monkeypatch: pytest.MonkeyPatch) -> No
         raise OSError("no nvcc")
 
     fake.set("vllm.utils.flashinfer:has_flashinfer", fails)
-    assert build.vllm_has_flashinfer() is None
-    monkeypatch.setitem(sys.modules, "vllm.utils.flashinfer", None)
-    assert build.vllm_has_flashinfer() is None, "a vLLM with no such module"
+    with caplog.at_level(logging.DEBUG, logger="verity_vllm"):
+        assert build.vllm_has_flashinfer() is None
+        monkeypatch.setitem(sys.modules, "vllm.utils.flashinfer", None)
+        assert build.vllm_has_flashinfer() is None, "a vLLM with no such module"
+    said = [r.getMessage() for r in caplog.records if r.name == "verity_vllm.engine.build"]
+    assert len(said) == 2 and "OSError('no nvcc')" in said[0] and "ModuleNotFoundError" in said[1]
+    assert {r.levelno for r in caplog.records if r.name == "verity_vllm.engine.build"} == {logging.DEBUG}
 
 
 class _Target:

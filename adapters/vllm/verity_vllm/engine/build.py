@@ -20,6 +20,9 @@ import torch
 
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import handle, served
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
@@ -255,7 +258,8 @@ def vllm_has_flashinfer() -> bool | None:
     try:
         from vllm.utils.flashinfer import has_flashinfer
         return bool(has_flashinfer())
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("vLLM's has_flashinfer gave no verdict: %r", e)
         return None
 
 
