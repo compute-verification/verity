@@ -104888,3 +104888,55 @@ def membersParamsOfJson (j : Json) : V Params := do
 - For the file's holder: "A14: refuse `stratified` and `work` at the one statement's form. `OneStageZk.paramsOfJson` splits into `paramsParsed` (today's body, which `membersParamsOfJson` reads) and a wrapper that throws `SUBSET_ONLY kind` unless the parsed law's kind is `subset`. Twins: `decode_params_v2` and `_one_stage_params`. Tests: the last loop of `test_the_audit_refuses_what_soundness_does_not_cover`, and `test_v2_reads_its_draw_from_the_challengers_coins` moves to a subset law. New lemma for premise 4: an accepted parse has kind `subset`."
 - For the first accept's worker: "aim at a `rate:` rule; the `stratified:1` audit will be refused at the parameters once A14 lands."
 - A question for you: is Friday's one-stage run tied to the weights' window? If yes, A14 as a refusal and that run cannot both stand, and the row becomes "the window theorem at one member".
+
+## ADDRWC, Thu 22:19Z: the width fact compiles and reduces to one condition on the members; the copy fact reduces to Flock's copy rows; a wired reader port narrower than its writer's port leaves the width fact unprovable
+
+The width and copy facts of `SpotFlock.Addresses` are both stated and on my branch. At an accepted run, a session's port has its template member's port width, and a run compiled that. So the width fact comes down to one condition on the registration (the members and the address) that no check decides today. The copy fact follows at an accepted run from Flock's copy rows, for input columns and for output columns. It comes down to the row fact's `Counted` plus one more condition on the registration: the member circuit copies the address's bit at the gate's column. Those proofs are written, and a run compiling them is going now. One finding, not yet a counterexample: nothing refuses a wired reader port whose width differs from its writer's output port. For such a registration the width fact holds only up to a SHA-512 collision, so as a plain premise it is false.
+
+Branch `cursor/proofs-addrwc-60f3`, SHA `66b95e4e7e`. Runs:
+- `r20261112-213858-25a6`, done: `Width.lean` compiled; `Copy.lean` failed on one name.
+- `r20261112-214642-6377` and `r20261112-214841-24e2`, done: errors in `Copy.lean`, now fixed.
+- `r20261112-215348-5e70`, cut off: it hit the try's time limit while building imports in a cold slot, before reaching my file.
+- `r20261112-221841-8986`, running, ETA 22:45Z: `Copy.lean` with every proof.
+
+**The map.**
+- **Width.** `WidthHolds h S g` (`AddressFacts/Width.lean`): every accepted run whose checked unit needs `g` has `S.place.1 = 16 * (r.sts[0]!.c.ports[S.port r.u]!).words`. That is `RowAt`'s first conjunct (`RevealAt.lean:338`).
+  - What an accepted session gives:
+    - `CheckedRun.stmt_member`: the session's statement circuit is its template's member circuit (`pin_of_stmtOkAt`, `stmt_of_pin`, `templateOk_facts`).
+    - `ports_member`: its ports are the member's (`accepted_check` in `UnitRows.lean`, and `unrolled_ports`).
+    - `words_eq`.
+    - [run] `r20261112-213858-25a6` compiled the first form of `ports_member` and `words_eq`. The refactored `stmt_member` is in `r20261112-221841-8986`.
+  - What is new: `WidthRef h S U`, that each unit in `U` names a port of width `S.place.1` in its template's member. `widthHolds_of_ref` turns it into the width fact. [run] `r20261112-213858-25a6`.
+  - Not given by any check: `WidthRef` itself. [read]
+- **Copy.** `CopyHolds h S g` (`AddressFacts/Copy.lean`): the unit's row `S.port r.u` holds, at its instance and bit `S.place.2`, the bit the layout reads for `g`. That is `RowAt`'s second conjunct. `rowAt_of_holds` puts the two facts together into `RowAt`.
+  - What an accepted session gives:
+    - `copy_of_copies`: where the layout's column copies an input message bit (`HiddenExec.copy_siteH`) or an output row's bit (`HiddenExec.out_copyH`, with `rowsFitS_check`), the row's bit is the one the layout reads.
+    - `inBlock_of_counted`: the row fact's `Counted` puts the unit's block in its table (`setupHidden_n`, `Integrate.fits_blocks`).
+    - [derived] Compiled only if `r20261112-221841-8986` passes.
+  - What is new: `CopyRef h S g U`, a condition on the registration alone. For each unit in `U`, its template's member circuit copies the address's bit at the column `pickAny` gives `g`: either an input whose key in the member is that message bit, or a computed output column (`CopiesRef`, `OutRef`).
+    - `copies_of_ref` turns it into the session's condition at an accepted run (`Hidden.srcKey_commit`, `unrolled_unit_commit`).
+    - `copyHolds_of_ref` turns `CopyRef` plus `Counted` into the copy fact.
+    - [derived] Written; compiled only if `r20261112-221841-8986` passes.
+  - Not given by any check: `CopyRef` itself. [read] [derived] Its dependence on `pickAny`'s classical choice is harmless: a unit's inputs on one wire share one key (`Placed.keyProg_wire_key`), so any choice gives the same key.
+
+**GAP (candidate, not a counterexample yet).**
+- [read] `RowAt`'s width conjunct is a plain equation over every accepted run of every unit that needs `g`, the writer and its readers alike, with one `S.place.1`.
+- [read] Round 2 holds a wire's reader port to its writer's output tree (`SecondStage.heldPort`, `wiresOk`), and nothing compares the two ports' widths. The base's `SecondWires.wiresWide` asks only that the writer write every bit of the reader port, not that the widths be equal, and no check calls it (its module docstring says so).
+- [derived] Take a registration where a wire's reader port is narrower than its writer's output port. No `S` satisfies the width conjunct for both units, so `Addresses` is false at any accepted run where both need `g`.
+- [derived] Such a run exists mathematically: it takes only a SHA-512 collision between the two rows' commit strings. A plain premise can't rest on collision resistance.
+- The check that would close it: `wiresWide` requires the reader port's `words` to equal the writer's output port's, and `readsOk` calls it. That is FRAME's file and the verifier owner's. The other fix is to state the width conjunct at the writer's port.
+- [guess] I have not built a concrete registration.
+
+**NEEDS.** From FRAME, or the owner of `security/Proofs/Flock.lean`: add `public import Proofs.Flock.SpotFlock.AddressFacts.Width` and `public import Proofs.Flock.SpotFlock.AddressFacts.Copy`, or have FRAME's `AddressFacts.lean` import them. Meanwhile both are lakefile roots on lines of their own, as the coordinator asked.
+
+**Size.** 2 files, 606 lines.
+- Width: 0 theorems left; it reduces to `WidthRef`, a condition on the registration.
+- Copy: 0 theorems left to write; I fix whatever `r20261112-221841-8986` reports.
+- [guess] Both compiled by 00:30Z Fri.
+- Then FRAME's `AddressFacts.lean`, once it is on the base.
+
+**Not established.**
+- These are not compiled until `r20261112-221841-8986` passes: `copy_of_copies`, `inBlock_of_counted`, `copies_of_ref`, `copyHolds_of_ref`, `rowsFitS_check` and the refactored `stmt_member`.
+- Whether `WidthRef` and `CopyRef` hold for the demonstration's registrations.
+- Whether the width GAP has a concrete instance.
+- I have not merged the base's move to `056097eb27`. It touches `Pin.lean`, `Code.lean`, `Facts.lean` and `Sessions.lean`, which I read but don't edit.
