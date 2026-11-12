@@ -56,8 +56,8 @@ What each one checks, and the Lean or the test that reads it.
 - `scalar_route.py`: whether a program outside class P makes a fresh word in fewer than 2.03 issue slots without tables
   (`ScalarRoute`), over the four shapes class P's proof doesn't cover.
 - `isa_cap_check.py` with `isa_cap.c`: two radix packings that create more incidences in one sm_120 instruction than a
-  cap of 32/7, checked over every entry. They are why no per-instruction cap is a premise (`TS.lean`).
-- `kappa_count.py`: the per-opcode creation cap κ = 65·d from each device's census, the Lean's `ClassPSlots`
+  bound of 32/7, checked over every entry. They are why no per-instruction bound is a premise (`TS.lean`).
+- `kappa_count.py`: the per-opcode creation bound κ = 65·d from each device's census, the Lean's `ClassPSlots`
   (`created_le_65`).
 - `scope_offload.py`: how much of a credited GPU's int8 work a helper off the die (the host, a peer GPU, a NIC, device
   memory) can do, and which bound applies.

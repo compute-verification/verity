@@ -276,7 +276,7 @@ def main() -> int:
         u, y, r = rng.getrandbits(32), rng.getrandbits(32), rng.randrange(1, 32)
         t = u32(u * (1 << r) + y)
         ok &= u32((u * (1 << r) + (t << 32)) >> 32) == u32(rotl(u, r) + y)
-    ck.check("route IMAD+IMAD.HI writes duo's rotate-add rotl(u, r) + y bit-exactly (20000 draws, every r)", ok,
+    ck.check("route IMAD+IMAD.HI writes duo's rotate-add rotl(u, r) + y bit-exactly (20000 samples, every r)", ok,
              "2 IMAD-pipe instructions against LEA.HI's 1 ALU")
     # 1b. the funnel shift: SHF.L.W(u, u, r) is rotl, then an IADD3; 2 instructions for LEA.HI's 1.
     ck.check("route SHF.L.W + IADD3 writes rotl(u, r) + y bit-exactly",

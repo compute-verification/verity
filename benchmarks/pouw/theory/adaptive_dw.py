@@ -2,13 +2,13 @@
 
 The committed word is word(i, j, t) = −β_j + Σ_{τ ≤ t} (data dot of k32 step τ + coin term of step τ). Designs:
 
-- `tag` (`ssn-1l-tag`): step 1 holds 24 data lanes, T(i)·G[:, j] (G ∈ [−3, 3]^{4×n} drawn after B) and a₁·C[:, j]
+- `tag` (`ssn-1l-tag`): step 1 holds 24 data lanes, T(i)·G[:, j] (G ∈ [−3, 3]^{4×n} flipped after B) and a₁·C[:, j]
   (a₁ ∈ {0, 1}⁴); each later step holds 31 data lanes and (1 + b_t[i])·1.
 - `hw` (`ssn-1l-hw`): step 1 holds 28 data lanes and a₁·C[:, j] (a₁ ∈ {0..15}⁴); each later step holds 31 data lanes
   and (1 + 2b_t[i])·σ_t[j], σ_t ∈ {±1}ⁿ public.
-- `fix2`: `tag` with each later step's (1 + b_t[i])·w_t[j], w_t ∈ {±1}ⁿ drawn after B.
+- `fix2`: `tag` with each later step's (1 + b_t[i])·w_t[j], w_t ∈ {±1}ⁿ flipped after B.
 - `blc` (`ssn-1l-tag + blc4a-t64-e7`): `tag` with 28 data lanes a later step and three coin lanes, A′ = 1 against
-  B′ = s_t[tile, ℓ, j], odd and uniform in ±127 for each tile of 64 rows and column, drawn after A.
+  B′ = s_t[tile, ℓ, j], odd and uniform in ±127 for each tile of 64 rows and column, flipped after A.
 - `rot` (`blc4a-t64-e7-rot`): `blc` with A′ = (127, 1, 1) on even rows and (1, 127, 1) on odd rows. `lane_bounds`
   gives either design's exact chance of a kept word and tile, and `kept_sweep` counts them.
 
@@ -35,7 +35,7 @@ grow. `entry_credit` sets a check that credits each entry's distinct values besi
 word write costs one, moves free) and W (a whole register of consecutive columns costs its lanes). `masked_rows` is a
 cross-row prover under free predicates, which that check doesn't see. `class_shared` bounds what a class of outcomes
 (the coins a program's uniform branches pin, `CLASSES`) shares across entries, `Priced.shared`'s residual: the
-(entry, value) pairs another entry takes at every outcome drawn in the class. `at_scale` runs the walk at Llama's S.
+(entry, value) pairs another entry takes at every outcome sampled in the class. `at_scale` runs the walk at Llama's S.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def public(design: str, n: int, s: int, rng: np.random.Generator) -> dict:
 
 
 def coins(design: str, m: int, n: int, s: int, rng: np.random.Generator) -> dict:
-    """The coins, drawn after the data: a₁, the step bits, and G and w for the tagged designs."""
+    """The coins, flipped after the data: a₁, the step bits, and G and w for the tagged designs."""
     co = {"b": rng.integers(0, 2, size=(m, s))}
     co["a1"] = rng.integers(0, 16 if design == "hw" else 2, size=(m, 4))
     if design in ("tag", "fix2", *BLC):
@@ -400,10 +400,11 @@ def kept(words: np.ndarray, rows: int = 1, cols: int = 1) -> float:
 
 
 def lane_bounds(design: str) -> dict:
-    """Exact bounds from the coin law, for any data fixed before the coins. A word is kept only if its row's weighted
-    lane sum (odd) hits the one target whose parity the row bit picks: at most half the law's largest point mass. A 16 × 8
-    tile is kept only if one column's lanes, which pin all 16 row bits, are joined by 7 more columns' lanes hitting every
-    row class's targets: at most 2⁻¹⁶ times the classes' joint largest point mass to the 7th."""
+    """Exact bounds from the coin distribution, for any data fixed before the coins. A word is kept only if its row's
+    weighted lane sum (odd) hits the one target whose parity the row bit picks: at most half the distribution's largest
+    point mass. A 16 × 8 tile is kept only if one column's lanes, which pin all 16 row bits, are joined by 7 more
+    columns' lanes hitting every row class's targets: at most 2⁻¹⁶ times the classes' joint largest point mass to the
+    7th."""
     v = 2 * np.arange(2 ** BLC_E) - (2 ** BLC_E - 1)
     lanes = np.stack(np.meshgrid(v, v, v, indexing="ij"), axis=-1).reshape(-1, BLC_LANES)
     sums = lanes @ np.unique(lane_weights(design, 2), axis=0).T
@@ -415,7 +416,7 @@ def lane_bounds(design: str) -> dict:
 
 def kept_sweep(seed: int = 41, m: int = BLC_TILE, n: int = 2048, s: int = 265) -> list[dict]:
     """Kept words and tiles on zero data at one coin tile and Llama's width, where `rot`'s rarer lane hits still occur:
-    one seed draws the same coins for `blc` and `rot`."""
+    one seed gives the same coins for `blc` and `rot`."""
     out = []
     for design in BLC:
         rng = np.random.default_rng(seed)
@@ -447,8 +448,9 @@ def shared_count(key: np.ndarray, entry: np.ndarray) -> int:
 
 def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: int = 8, k_max: int = 64) -> dict:
     """Each class's shared pairs, as a share of the words, beside check (b)'s credit at the first outcome. Outcomes are
-    drawn in the class (the coins it pins kept, the rest afresh), at least k and then until no pair is left or k_max:
-    a pair two entries hold equal at every draw is only an upper bound, which more draws can only shrink."""
+    sampled in the class (the coins it pins kept, the rest flipped afresh), at least k and then until no pair is left
+    or k_max: a pair two entries hold equal at every sample is only an upper bound, which more samples can only
+    shrink."""
     rng = np.random.default_rng(seed)
     pub = public(design, n, s, rng)
     a, b = data(case, design, m, n, s, pub, rng)
@@ -461,19 +463,19 @@ def class_shared(design: str, case: str, m: int, n: int, s: int, seed: int, k: i
     entry = np.repeat(np.arange(m * n), s)
     first = refine(np.zeros(entry.size, dtype=np.int64), words)
     for name, keep in CLASSES.items():
-        key, drawn, shared = first, 0, shared_count(first, entry)
-        while keep is not None and (drawn < k or shared) and drawn < k_max:
+        key, sampled, shared = first, 0, shared_count(first, entry)
+        while keep is not None and (sampled < k or shared) and sampled < k_max:
             fresh = coins(design, m, n, s, rng)
             key = refine(key, honest(design, a, b, pub, {c: co[c] if c in keep else fresh[c] for c in co}, s))
-            drawn += 1
-            shared = shared_count(key, entry) if drawn >= k else shared
-        out[f"shared_{name}"], out[f"draws_{name}"] = shared / words.size, drawn
+            sampled += 1
+            shared = shared_count(key, entry) if sampled >= k else shared
+        out[f"shared_{name}"], out[f"draws_{name}"] = shared / words.size, sampled
     return out
 
 
 def class_sweep(seed: int = 31, design: str = "blc") -> list[dict]:
     """A coin-lane design's class residuals: the four cases at the small shape and `same` at a tile and two at both of
-    Llama's S. One seed draws the same data and coins for `blc` and `rot`, which differ only in A′."""
+    Llama's S. One seed gives the same data and coins for `blc` and `rot`, which differ only in A′."""
     shapes = [(design, case, 48, 64, 67) for case in ("zero", "same", "cancel", "walk")]
     shapes += [(design, "same", m, 64, s) for s in STEPS.values() for m in (BLC_TILE, 2 * BLC_TILE)]
     return [class_shared(*shape, seed=seed + i) for i, shape in enumerate(shapes)]
@@ -582,9 +584,10 @@ def main(argv: list[str] | None = None) -> int:
     checks += [{"name": f"blc/same m {r['m']} S {r['S']} same-level masks from held step-1 words copy honest words",
                 "ok": r["mask_mismatch"] == 0} for r in res["level_sweep"]]
     blc = res["lane_bounds"][0]
-    checks.append({"name": "blc's lane law keeps a word with at most 3/1024 and a 16 × 8 tile with 2⁻¹⁶(3/512)⁷",
+    checks.append({"name": "blc's lane distribution keeps a word with at most 3/1024 and a 16 × 8 tile with "
+                           "2⁻¹⁶(3/512)⁷",
                    "ok": blc["kept_word_bound"] == 3 / 1024 and blc["kept_tile_16x8_bound"] == 2.0 ** -16 * (3 / 512) ** 7})
-    checks.append({"name": "blc's kept words at one tile and n 2,048 are within 10% of the law's 3/1024",
+    checks.append({"name": "blc's kept words at one tile and n 2,048 are within 10% of the distribution's 3/1024",
                    "ok": abs(res["kept_sweep"][0]["kept_word"] / blc["kept_word_zero_data"] - 1) < 0.1})
     for r in res["class_sweep"] + res["class_sweep_rot"] + res["kept_sweep"]:
         tag = f"{r['design']}/{r['case']} m {r['m']} S {r['S']}"
