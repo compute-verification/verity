@@ -74,7 +74,9 @@ def _bf16_value(w: int) -> Fraction | None:
 
 def _exact_bf16_sum(a: int, b: int) -> int:
     """RN-even of the EXACT sum of two finite bf16 values to bf16 (the reference `add.rn.bf16x2` semantics), by rational arithmetic."""
-    x = _bf16_value(a) + _bf16_value(b)
+    va, vb = _bf16_value(a), _bf16_value(b)
+    assert va is not None and vb is not None
+    x = va + vb
     if x == 0:
         return 0x8000 if (a >> 15) & (b >> 15) & 1 else 0
     neg = x < 0
@@ -394,25 +396,25 @@ def test_evidence_link_joins_every_collective_on_both_ranks(evidence_link):
     assert link["links_per_step"] == {"0": 59, "3": 59} and link["invalid_rows"] == []
     # per step: 57 all-reduces on tp:0 (k = 0..56) then the logits all-gather (k = 57); the vocab lookup is rank-local (no k)
     for step in (0, 3):
-        ks = [(l["key"]["k"], l["kind"]) for l in link["links"] if l["key"]["step"] == step and l["key"]["communicator"] == "tp:0"]
+        ks = [(ln["key"]["k"], ln["kind"]) for ln in link["links"] if ln["key"]["step"] == step and ln["key"]["communicator"] == "tp:0"]
         assert ks == [(k, "all_reduce") for k in range(57)] + [(57, "all_gather")]
     # every all-reduce: N = rows x 1536 (32 prompt rows at step 0, 1 decode row at step 3), bf16, sum, the quarantine definition, and a
     # required (today unjournaled) write of the result on BOTH ranks with identical geometry
-    for l in link["links"]:
-        if l["kind"] != "all_reduce":
+    for ln in link["links"]:
+        if ln["kind"] != "all_reduce":
             continue
-        rows = 32 if l["key"]["step"] == 0 else 1
-        assert l["count"] == rows * 1536 and l["dtype"] == "bfloat16" and l["reduce_op"] == "sum"
-        assert l["definition"]["id"] == f"AllReduceSumBf16_v1{{N={rows * 1536},R=2}}"
-        assert set(l["required_writes"]) == {"0", "1"}
-        assert l["required_writes"]["0"]["shape"] == [rows, 1536] == l["required_writes"]["1"]["shape"]
-        assert l["ranks"]["0"]["result"]["alloc"] == l["ranks"]["1"]["result"]["alloc"]
-        assert all(l["agreement"].values())
+        rows = 32 if ln["key"]["step"] == 0 else 1
+        assert ln["count"] == rows * 1536 and ln["dtype"] == "bfloat16" and ln["reduce_op"] == "sum"
+        assert ln["definition"]["id"] == f"AllReduceSumBf16_v1{{N={rows * 1536},R=2}}"
+        assert set(ln["required_writes"]) == {"0", "1"}
+        assert ln["required_writes"]["0"]["shape"] == [rows, 1536] == ln["required_writes"]["1"]["shape"]
+        assert ln["ranks"]["0"]["result"]["alloc"] == ln["ranks"]["1"]["result"]["alloc"]
+        assert all(ln["agreement"].values())
 
 
 def test_evidence_link_producers_and_consumers_match_the_mechanism_note(evidence_link):
     _, link = evidence_link
-    by = {(l["key"]["step"], l["key"]["communicator"], l["key"]["k"]): l for l in link["links"]}
+    by = {(ln["key"]["step"], ln["key"]["communicator"], ln["key"]["k"]): ln for ln in link["links"]}
     # embedding all-reduce (step 0, first on tp:0): operand a383 written by event 87 `_C.vocab_parallel_embedding`, result a384 read by
     # 90 reshape / 91 empty_like / 92 `_rms_norm_kernel` (input_layernorm) -- MECHANISM §1.4 / §1.5
     emb = by[(0, "tp:0", 0)]
@@ -461,7 +463,7 @@ def test_evidence_link_agrees_with_the_fold_gap_and_the_empty_instances(evidence
     for r in (0, 1):
         gap = json.loads((FIX / f"fold_gap.shard.rank{r}.json").read_text())
         fip = gap["first_insufficiency_point"]
-        emb = next(l for l in link["links"] if l["key"] == {"communicator": "tp:0", "step": 0, "k": 0})
+        emb = next(ln for ln in link["links"] if ln["key"] == {"communicator": "tp:0", "step": 0, "k": 0})
         pr = emb["ranks"][str(r)]
         assert fip["producer_of_that_allocation"]["event"] == pr["event"] == 88
         assert fip["unresolved_view"]["alloc"] == pr["result"]["alloc"] == 384
@@ -471,21 +473,21 @@ def test_evidence_link_agrees_with_the_fold_gap_and_the_empty_instances(evidence
     # the fold produced no instances, so nothing joins: the record says so instead of inventing a producer instance
     assert link["instances_given"] == {"0": 0, "1": 0}
     assert link["producer_instances_joined"] == 0 and link["consumer_instances_joined"] == 0
-    assert all(pr["producer_instance"] is None for l in link["links"] for pr in l["ranks"].values())
+    assert all(pr["producer_instance"] is None for ln in link["links"] for pr in ln["ranks"].values())
 
 
 def test_evidence_body_summary_shapes_match_the_links(evidence_link):
     _, link = evidence_link
     body = json.loads((FIX / "tp2_body.summary.json").read_text())
     assert body["summary"]["body_ok"] == 116
-    step0 = [l for l in link["links"] if l["key"]["step"] == 0 and l["kind"] == "all_reduce"]
+    step0 = [ln for ln in link["links"] if ln["key"]["step"] == 0 and ln["kind"] == "all_reduce"]
     for ex in body["checked_examples"]:
         if ex.get("status") != "ok" or ex["op"] != "vllm.all_reduce.default":
             continue
-        l = step0[ex["ordinal"]]
-        assert l["module"] == ex["module"] and l["ranks"]["0"]["operand"]["shape"] == ex["shape_in"] and l["ranks"]["0"]["result"]["shape"] == ex["shape_out"]
+        ln = step0[ex["ordinal"]]
+        assert ln["module"] == ex["module"] and ln["ranks"]["0"]["operand"]["shape"] == ex["shape_in"] and ln["ranks"]["0"]["result"]["shape"] == ex["shape_out"]
         assert ex["body"].startswith("bf16(sum_r f32(shard_r))") and ex["out_sha_equal_across_ranks"] is True
-        assert l["definition"]["id"] == "AllReduceSumBf16_v1{N=49152,R=2}"
+        assert ln["definition"]["id"] == "AllReduceSumBf16_v1{N=49152,R=2}"
 
 
 def test_cli_round_trip(tmp_path):
