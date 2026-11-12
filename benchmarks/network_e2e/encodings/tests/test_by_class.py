@@ -131,7 +131,8 @@ def test_the_fields_are_the_window_codes_and_each_rule_is_on_one_line(monkeypatc
     package = Path(BC.__file__).parent
     for name, rule in BC.RULES.items():
         file, line = BC.where(name)
-        assert rule.line in (package / file).read_text().splitlines()[line - 1], name
+        first = rule.line.split()[0] if rule.prose else rule.line
+        assert first in (package / file).read_text().splitlines()[line - 1], name
     assert {r for rules in BC.NO_FIELD.values() for r in rules} <= set(BC.RULES)
     assert set(BYC.OF) == {*BC.CLASSES, *BC.NO_FIELD} == {name for name, _ in BYC.COLUMNS}
     assert {e for es in BYC.OF.values() for e in es} | {e for _, es in BYC.COLUMNS for e, _ in es} <= set(BYC.EVENTS)
@@ -144,6 +145,30 @@ def test_the_fields_are_the_window_codes_and_each_rule_is_on_one_line(monkeypatc
     monkeypatch.setitem(BC.RULES, "caps", BC.Rule("as before", "codec", "CAPS"))
     with pytest.raises(V.AdviceCodeError, match="moved"):
         BC.where("caps")
+
+
+def test_a_rule_that_cites_a_docstring_is_found_however_its_lines_break(monkeypatch, tmp_path):
+    """A rule that cites a docstring's words (`prose`) is found wherever the docstring's lines break, at the line its
+    words begin on, and is refused once the words are changed or there twice. A rule that cites a line of code is
+    found on one line only, as before: the same words broken over two lines are refused."""
+    monkeypatch.setattr(BC, "__file__", str(tmp_path / "by_class.py"))
+    monkeypatch.setitem(BC.RULES, "said", BC.Rule("as said", "said", "aborts and stop strings", prose=True))
+    monkeypatch.setitem(BC.RULES, "coded", BC.Rule("as coded", "said", "aborts and stop strings"))
+    file = tmp_path / "said.py"
+    file.write_text("It refuses what it doesn't model\n(structured output, aborts and stop strings) rather\nthan guess.\n")
+    assert BC.where("said") == BC.where("coded") == ("said.py", 2)
+    file.write_text("It refuses what it doesn't model (a draft,\nstructured output, aborts\nand stop strings) rather.\n")
+    assert BC.where("said") == ("said.py", 2)
+    with pytest.raises(V.AdviceCodeError, match="the rule 'coded' is on 0 lines of said.py"):
+        BC.where("coded")
+    file.write_text("It refuses\n\n    what it doesn't model: aborts\n    and  stop\n    strings, rather than guess.\n")
+    assert BC.where("said") == ("said.py", 3)
+    file.write_text("It refuses aborts or stop strings.\n")
+    with pytest.raises(V.AdviceCodeError, match="the rule 'said' is on 0 lines of said.py"):
+        BC.where("said")
+    file.write_text("It refuses aborts and stop strings.\nAgain: it refuses aborts and\nstop strings.\n")
+    with pytest.raises(V.AdviceCodeError, match="the rule 'said' is on 2 lines of said.py"):
+        BC.where("said")
 
 
 def _io(prompt, n: int = 1):

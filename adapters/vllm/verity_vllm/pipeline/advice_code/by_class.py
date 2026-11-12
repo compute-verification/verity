@@ -39,6 +39,7 @@ from contextlib import contextmanager
 import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any, NamedTuple
 
 from verity_vllm.engine.hooks import Hooks
@@ -69,11 +70,13 @@ _CAP = {"decisions": "arrived", "order": "order", "hits": "hits", "resumes": "re
 
 
 class Rule(NamedTuple):
-    """A rule of the code: what it holds, and the module of this package and the text of the one line that holds it."""
+    """A rule of the code: what it holds, and the module of this package and the text that holds it there: one line
+    of code or, with `prose`, words of a docstring, which break over lines wherever the docstring is wrapped."""
 
     why: str
     module: str
     line: str
+    prose: bool = False
 
 
 RULES = {
@@ -95,7 +98,7 @@ RULES = {
     "no lengths": Rule("a registration that sends no lengths has no length term in any window", "codec",
                        "if not reg.send_lengths:"),
     "aborts unmodelled": Rule("the replay refuses what it doesn't model, aborts among them", "replay",
-                              "aborts and stop strings"),
+                              "aborts and stop strings", prose=True),
     "aborts refused": Rule("a record with an output the stop rule doesn't end is refused", "codec",
                            "its output isn't one the stop rule ends"),
     "release certified": Rule("each output's release bucket is read from the certified record", "codec",
@@ -115,11 +118,17 @@ def no_field(reg: Registered) -> dict[str, tuple[str, ...]]:
 
 
 def where(rule: str) -> tuple[str, int]:
-    """The file (in this package) and the 1-based line that hold `RULES[rule]`; refuses a rule whose text is no longer
-    on exactly one line there."""
+    """The file (in this package) and the 1-based line that hold `RULES[rule]`, for prose the line its words begin on;
+    refuses a rule whose text is no longer there exactly once: on one line or, for prose, as those words in that order
+    with any white space between them, so a docstring wrapped anew keeps its rule."""
     r = RULES[rule]
     name = f"{r.module}.py"
-    at = [n for n, text in enumerate((Path(__file__).parent / name).read_text().splitlines(), 1) if r.line in text]
+    text = (Path(__file__).parent / name).read_text()
+    if r.prose:
+        words = r"\s+".join(map(re.escape, r.line.split()))
+        at = [text.count("\n", 0, m.start()) + 1 for m in re.finditer(words, text)]
+    else:
+        at = [n for n, line in enumerate(text.splitlines(), 1) if r.line in line]
     if len(at) != 1:
         raise AdviceCodeError(f"the rule {rule!r} is on {len(at)} lines of {name}, not one: {r.line!r} moved, so "
                               "by_class.RULES names it anew")
