@@ -81,6 +81,12 @@ theorem stageByte_at {R : ℕ} (cs : Fin R → FlockDeploy.Coin) (j : Fin R) (t 
   unfold SpotFlock.stageByte
   rw [this]
 
+/-- Byte `j · L + t` of `R` rounds' coins, at its index, is byte `t` of coin `j`. -/
+theorem stageByte_mk {R : ℕ} (cs : Fin R → FlockDeploy.Coin) (j : Fin R) (t : Fin SpotFlock.L)
+    (h : j.val * SpotFlock.L + t.val < R * SpotFlock.L) :
+    SpotFlock.stageByte cs ⟨j.val * SpotFlock.L + t.val, h⟩ = SpotFlock.coinByte (cs j) t :=
+  stageByte_at cs j t _ rfl
+
 /-- **Coin `j`'s first `w` bytes are bytes `j · L` to `j · L + w` of the coins'.** -/
 theorem stageSrc_extract {R : ℕ} (cs : Fin R → FlockDeploy.Coin) (j : Fin R) {w : ℕ} (hw : w ≤ SpotFlock.L) :
     (SpotFlock.stageSrc cs).extract (j * SpotFlock.L) (j * SpotFlock.L + w) =
@@ -95,13 +101,11 @@ theorem stageSrc_extract {R : ℕ} (cs : Fin R → FlockDeploy.Coin) (j : Fin R)
     generalize j.val * SpotFlock.L = m at *
     omega
   · intro t h1 h2
-    simp only [Array.getElem_extract, Array.getElem_ofFn]
     have ht : t < SpotFlock.L := by
       simp only [Array.size_extract, Array.size_ofFn] at h2
       omega
-    rw [stageByte_at cs j ⟨t, ht⟩ _ rfl]
-    congr 2
-    exact Fin.ext (Nat.zero_add t).symm
+    simp only [Array.getElem_extract, Array.getElem_ofFn, Nat.zero_add]
+    rw [stageByte_mk cs j ⟨t, ht⟩]
 
 /-- Bytes `s` to `e` of `b ++ z` are `b`'s, where `e` is within `b`. -/
 theorem extract_append_within {b z : ByteArray} {s e : ℕ} (he : e ≤ b.size) : (b ++ z).extract s e = b.extract s e := by
@@ -124,7 +128,8 @@ theorem stageCoinsOf_src {h : SpotFlock.Held} {b : ByteArray} {cs : SpotFlock.St
   · rw [if_pos hL] at hc
     cases hc
     refine ⟨hL, fun j hw => ?_⟩
-    rw [← stageSrc_extract _ j (Nat.min_le_left _ _), Classical.epsilon_spec (hB h.stage b hL)]
+    rw [← stageSrc_extract _ j (w := stageWidth b j) (Nat.min_le_left _ _),
+      Classical.epsilon_spec (hB h.stage b hL)]
     apply extract_append_within
     unfold stageWidth at hw ⊢
     generalize j.val * SpotFlock.L = m at *
