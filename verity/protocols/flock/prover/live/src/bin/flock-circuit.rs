@@ -1571,9 +1571,14 @@ fn zk_masking<C: flock_transcript::challenger::Challenger>(st: &Arc<Stmt>, ch: C
     (mch, sent)
 }
 
-/// Whether this process's `--zk` statements run behind the ZK server: `FC_FIREWALL=1`.
+/// Whether this process's environment puts its `--zk` statements behind the ZK server.
 fn zk_server_asked() -> bool {
     std::env::var("FC_FIREWALL").as_deref() == Ok("1")
+}
+
+/// Starts the ZK server's Lean tap for this process, which is before any sample of the prover's.
+fn start_lean_tap() {
+    flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
 }
 
 /// Whether the ZK server's send check (PROTOCOL.md §10) runs: `FC_FIREWALL=1` on a `--zk` statement.
@@ -7459,11 +7464,12 @@ fn serve_queue(c: Composite, path: &str) {
 /// or session tables, and a templated unit comes on its circuit's line, not `--tmpl-unit`.
 ///
 /// Behind the ZK server (`--zk` with `FC_FIREWALL=1`) each session is a `prove` process's, one after another: the Lean tap
-/// starts before the first sample, as `prove` starts it, and each session goes through a Lean session loop of its own
-/// ([`lean_loop`]), set up on its line's circuit and tables as a `prove` process's is on its `--circuit` and `--tables`
-/// (`FC_FIREWALL_STATEMENT` and `FC_FIREWALL_HELLO_ARGS` are the process's, so every line's). The loop starts at the
-/// session's turn, once the session before it has its verdict, and ends once its own verdict is emitted: no
-/// `FC_VERIFY_AHEAD`, and no session's front ahead of the previous session's reps.
+/// starts before the first sample, as `prove` starts it ([`start_lean_tap`]), and each session goes through a Lean session
+/// loop of its own ([`lean_loop`]), set up on its line's circuit and tables as a `prove` process's is on its `--circuit`
+/// and `--tables` (the statement's name and the `Hello` flags are the process's environment's, so every line's:
+/// [`lean_statement`], [`lean_statement_args`]). The loop starts at the session's turn, once the session before it has
+/// its verdict, and ends once its own verdict is emitted: no `FC_VERIFY_AHEAD`, and no session's front ahead of the
+/// previous session's reps.
 fn prove_stream(path: &str) {
     if tables_arg() > 1 || !arg("--salt-refs", "").is_empty() || !arg("--firewall-state", "").is_empty() || !arg("--tmpl-unit", "").is_empty() {
         refuse("--stream: one table a session, no --salt-refs or --firewall-state, and a templated unit on its line (\"tmpl_unit\"), not --tmpl-unit".into());
@@ -7476,7 +7482,7 @@ fn prove_stream(path: &str) {
         if verify_ahead != 0 {
             refuse("--stream behind the ZK server (FC_FIREWALL=1) proves one session at a time, each verdict before the next session's loop starts: FC_VERIFY_AHEAD=0".into());
         }
-        flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+        start_lean_tap();
     }
     let (tx, rx) = std::sync::mpsc::channel();
     let path = path.to_string();
@@ -7654,7 +7660,7 @@ fn main() {
         }
         "prove" => {
             if firewall_on(&st) {
-                flock_live::firewall::lean_tap(&flock_live::firewall::lean_frame_exe()).unwrap_or_else(|e| refuse(e));
+                start_lean_tap();
             }
             let runs: usize = arg("--runs", "1").parse().unwrap();
             let warm: usize = arg("--warm", "0").parse().unwrap();
