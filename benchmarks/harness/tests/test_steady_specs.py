@@ -15,6 +15,7 @@ from test_steady_point import tree
 from verity_bench import jobs
 from verity_bench import prove_records as R
 from verity_bench import steady as S
+from verity_bench import steady_node as N
 from verity_bench import steady_plan as P
 from verity_bench import steady_spec as SP
 from verity_bench.vllm.presets import SPEC_ROOT
@@ -146,6 +147,14 @@ def test_another_pin_and_another_stored_statement_are_a_change_to_the_spec_alone
     assert not any(old in said for old in (art, *pins))
     harness = "".join(path.read_text() for path in sorted((ROOT / "benchmarks/harness/verity_bench").glob("*.py")))
     assert not any(old[:16] in harness for old in (art.removeprefix("art:"), *pins)), "no pin or artifact is a constant in code"
+
+
+def test_the_lease_tool_a_node_without_gpu_lease_is_told_to_install_is_the_trees():
+    """The refusal of a node that can't run `gpu-lease` names a script of the tree: it is there, and it is the tool the
+    kit's lease calls."""
+    script = ROOT / N.LEASE_SOURCE
+    assert script.is_file(), f"{N.LEASE_SOURCE} is gone: name the lease tool's script where it is now"
+    assert "gpu-lease N [--wait]" in script.read_text(), "the script is the lease tool: its usage names it `gpu-lease`"
 
 
 def test_the_setup_is_part_of_every_points_identity(tmp_path):

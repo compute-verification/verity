@@ -6,8 +6,8 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 
 1. **Before any card is asked for** it holds the run to its point: the identity it was launched with is the one this
    tree gives the point (`steady_spec.point_identity`: a changed file of the closure is another point); the run's
-   environment is the spec's; the prover is the one the setup built (`VERITY_BENCH_STEADY_BIN`); and the run's CPUs are
-   exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
+   environment is the spec's; the node can run `gpu-lease` (`lease_tool`); the prover is the one the setup built
+   (`VERITY_BENCH_STEADY_BIN`); and the run's CPUs are exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
    `benchmarks/served_units/stage.py`, or takes the one the row names as `staged`: a copy of a directory on the node,
    or a directory of an artifact fetched from the store (`fetched`), onto the node's disk and never into its memory.
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
@@ -61,6 +61,10 @@ REFUSED = 4
 STOPPED = 128 + signal.SIGTERM
 #: the seconds a command this process was waiting for has to end, once sent TERM, before it is killed
 STOP_S = 30
+#: the exit code `_ask` gives for a command the node couldn't run at all, as a shell gives it
+NOT_RUN = 127
+#: the lease tool in the tree, which a node has on its path as `gpu-lease`
+LEASE_SOURCE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 #: the files of a staged statement the node side reads; the prover reads the rest
 STAGED = ("stage.json", "circuit.txt", "pin.txt")
 #: the store's fetch, from the shipped tree (`steady_point.sh` puts its package on the path)
@@ -107,7 +111,7 @@ def _ask(argv: Sequence[str]) -> tuple[int, str]:
     try:
         process = subprocess.run(list(argv), capture_output=True, text=True, check=False)
     except OSError as error:
-        return 127, f"{type(error).__name__}: {error}"
+        return NOT_RUN, f"{type(error).__name__}: {error}"
     return process.returncode, process.stdout if process.returncode == 0 else process.stdout + process.stderr
 
 
@@ -272,6 +276,18 @@ def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence
     memory = ["--mem-gb", str(spec.admission.mem_gb)] if spec.admission.mem_gb is not None else []
     *lease, command = kit.lease(1, minutes)
     return [*lease, *near, "--preemptible", *memory, command, *inside]
+
+
+def lease_tool(ask: Asker) -> None:
+    """Refuses a node on which `gpu-lease` can't be run, before a statement is staged or fetched for a lease that could
+    not be taken: the kit's lease calls it by its bare name."""
+
+    tool = kit.lease(1, 1)[0]
+    rc, text = ask([tool, "status"])
+    if rc == NOT_RUN:
+        raise Refused(f"`{tool}` can't be run on this node ({text.strip()[-200:]}), and the timed step runs under its "
+                      f"lease of one card: put {LEASE_SOURCE} of this tree on the node's path as `{tool}`. A copy on "
+                      "the node's own disk goes when the node is reset")
 
 
 # ---- inside the lease ---------------------------------------------------------------------------------------------------------
@@ -451,6 +467,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
                               "identity": identity, "files_sha256": files_sha256}
     scratch = None
     try:
+        lease_tool(ask)
         record["prover"] = prover()
         own = own_cores(spec, cpus())
         record["cores"] = {"count": spec.cores, "list": _spans(own)}

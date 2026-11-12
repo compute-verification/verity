@@ -272,9 +272,10 @@ the node's disk. A point whose row names its statement in the store is launched 
 (`research run --store-read`). The node side:
 
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
-   an environment that isn't the spec's, a run whose CPUs aren't exactly the spec's `cores`, and a statement (staged
-   there, copied from `staged` on the node, or fetched from `staged` in the store) whose circuit isn't the row's `pin`
-   or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
+   an environment that isn't the spec's, a node that can't run `gpu-lease` (the kit's lease calls it by its bare name:
+   the refusal names the tree's script to put on the node's path), a run whose CPUs aren't exactly the spec's `cores`,
+   and a statement (staged there, copied from `staged` on the node, or fetched from `staged` in the store) whose
+   circuit isn't the row's `pin` or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
    in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,
    as is a disk with less free than the statement twice, and the node's own store keeps no copy;
 2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's

@@ -1113,6 +1113,39 @@ def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_p
     assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
 
 
+def test_a_node_that_cannot_run_gpu_lease_is_refused_before_a_statement_is_staged_with_the_script_to_install(
+        tmp_path, monkeypatch):
+    """The kit's lease calls `gpu-lease` by its bare name. A node without it on its path would stage or fetch the
+    statement and then fail to take the lease; the point says so first, with what to put on the path."""
+    node = Node(tmp_path, monkeypatch)
+    answered = node.ask
+    node.ask = lambda argv: ((N.NOT_RUN, "FileNotFoundError: [Errno 2] No such file or directory: 'gpu-lease'")
+                             if list(argv) == ["gpu-lease", "status"] else answered(argv))
+
+    assert node.point() == N.REFUSED
+    assert node.ran == [], "nothing is staged, fetched or leased"
+    refused = node.read(N.POINT_FILE)["refused"]
+    assert refused == ("`gpu-lease` can't be run on this node (FileNotFoundError: [Errno 2] No such file or directory: "
+                       "'gpu-lease'), and the timed step runs under its lease of one card: put "
+                       "tools/research/src/research/pods/sh/gpu_lease.sh of this tree on the node's path as "
+                       "`gpu-lease`. A copy on the node's own disk goes when the node is reset")
+    assert node.read(kit.RESULT)["validation"] == {
+        "status": "failed", "checker": "verity_bench.steady_spec.point_why",
+        "detail": f"refused, nothing timed: {refused}", "evidence": [N.POINT_FILE]}
+    assert not list(node.scratch_root.iterdir()), "no scratch was made"
+
+
+def test_a_command_the_node_cannot_run_is_asked_with_the_exit_code_a_shell_gives(tmp_path):
+    rc, text = N._ask([str(tmp_path / "no-such-program")])
+    assert rc == N.NOT_RUN == 127 and text.startswith("FileNotFoundError: ")
+
+
+@pytest.mark.parametrize("answer", [(0, "0 free\n"), (1, ""), (2, "gpu-lease: no state directory")])
+def test_a_gpu_lease_that_runs_is_not_refused_at_the_start_whatever_its_status_says(answer):
+    """Only a tool that can't be run at all is refused there: what a lease that can't be taken says is the lease's own."""
+    N.lease_tool(lambda argv: answer)
+
+
 #: a node that doesn't say which cards are on the NUMA node of the run's CPUs: what it says instead, and why the lease
 #: is asked of any card
 ANY_CARD = [
