@@ -6,6 +6,8 @@ import gzip
 import json
 import re
 
+__all__ = ["read_steps", "request_params"]
+
 _TAG_RE = re.compile(r'^\{"\$e":\s*"(\w+)"')
 
 

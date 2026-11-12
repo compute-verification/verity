@@ -36,7 +36,16 @@ from verity.circuits.types import Array, RecordType, Type, Value
 
 from verity_vllm.program.inputs import check_params
 
-from .build import BUILDER_ID, I32, I64, WRAPPERS, BuildResult, _Model, decoder
+from .build import (
+    BUILDER_ID,
+    I32,
+    I64,
+    WRAPPERS,
+    BuildResult,
+    _Model,
+    decoder,
+    request_shape,
+)
 from .common import (
     Unexpressible,
     _arr_shape,
@@ -177,8 +186,9 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
-    nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
-    n = M if wrapper == "step" else int(LP)
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    nets = [decoder(p, M, pos0 + M if wrapper == "step" else prompt_rows + decode_steps) for p in phis]
+    n = M if wrapper == "step" else prompt_rows
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
@@ -197,8 +207,9 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     P = node_parameters(phi, wrapper, LP=LP, T=T, M=M, pos0=pos0)
     phis, nets, params, theta = P.phis, P.nets, P.params, P.theta
     world, kind = len(phis), (phi.sampling or {}).get("kind", "greedy")
-    n = M if wrapper == "step" else int(LP)
-    events = 1 if wrapper == "step" else int(T) + 1
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    n = M if wrapper == "step" else prompt_rows
+    events = 1 if wrapper == "step" else decode_steps + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
     W = [Coll(RecordType(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
          for at, ls in zip(P.weights_at, P.leaves)]
@@ -210,7 +221,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         s = phi.sampling
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
-    batch = launch_batch(phis[0], LP, T) if wrapper == "request" else None
+    batch = launch_batch(phis[0], prompt_rows, decode_steps) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r) for r in range(world)]
     models = []
@@ -218,7 +229,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         model = nets[r].model(B, W[r], peers[r])
         in_launch(model, batch, nets[r].model_class, note=f", {len(phi.requests)} requests")
         if wrapper == "request" and isinstance(model, _Model):
-            model.ctx = launch_rows(phis[r], LP, T)
+            model.ctx = launch_rows(phis[r], prompt_rows, decode_steps)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world
@@ -242,7 +253,11 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
         raise lockstep.error
     if len(set(lockstep.taken)) != 1:
         raise AssertionError(f"the ranks took {lockstep.taken} collectives")
-    out = Coll(Array(world * events, I32), concat([t.refs for ts in toks for t in ts]))
+    refs: list = []
+    for r, ts in enumerate(toks):
+        assert ts is not None, f"rank {r} ended with no error and no samples"
+        refs += [tok.refs for tok in ts]
+    out = Coll(Array(world * events, I32), concat(refs))
     B.ret_type = out.type
     body = B.finish(out)
     t_body = time.time()
