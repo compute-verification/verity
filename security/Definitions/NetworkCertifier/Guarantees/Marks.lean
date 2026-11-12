@@ -19,7 +19,7 @@ open NetTiming
 /-- **What the network certifier holds uncut at a bucket is cut within the tail.** On a schedule `s` whose connections
 each have at most `E` egress cells, in execution phases of `T` buckets: every egress cell `j` of a connection `c`
 admitted before bucket `t` is sent in a phase at most `⌊t/T⌋ + spanTail`. The cells of the connections admitted before
-`t` are all of the server's bytes the device holds at `t`: its code reads the server's bytes only on a connection it
+`t` are all of the server's bytes the device reads by `t`: its code reads the server's bytes only on a connection it
 opened when it admitted the client's (`warden.py`). -/
 def HeldCutInTail : Prop :=
   ∀ {κ : Type} (s : CertifierSchedule κ) (E T t : ℕ) (c : κ) (j : ℕ),
@@ -37,7 +37,7 @@ def MarkOrders : Prop :=
 execution phases of `T` buckets, for a start mark handled in bucket `t₀` and an end mark handled in bucket `t₁`: every
 egress cell `j` of a connection `c` admitted before `t₁` that is sent at or after `t₀` is sent in a phase from
 `markPhase T t₀` to `markPhase T t₁ + spanTail`. So a count over those phases is over every cell the device sends from
-the start mark on out of what it held by the end mark. -/
+the start mark on out of what it read by the end mark. -/
 def SpanCovers : Prop :=
   ∀ {κ : Type} (s : CertifierSchedule κ) (E T t₀ t₁ : ℕ) (c : κ) (j : ℕ),
     s.cells c ≤ E → j < s.cells c → s.adm c < t₁ → t₀ ≤ s.bucket c j →

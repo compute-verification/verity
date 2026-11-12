@@ -436,7 +436,12 @@
   "MemoryChallenger.Properties.CountRan": {
    "owner": "@network-accounting",
    "digest": "9907064fdef4064960c0a1ddf17bc939f3227dc1419f2aa9c97039448d2bec32",
-   "issue": "NET-353",
+   "issue": "NET-409",
+   "due": "2026-11-30"
+  },
+  "MemoryChallenger.Properties.SentWithinCapacity": {
+   "owner": "@network-accounting",
+   "issue": "NET-409",
    "due": "2026-11-30"
   },
   "MemoryChallenger.Properties.WipeRun.Plays": {
@@ -544,7 +549,7 @@
   "NetTiming.Guarantees.SpanCovers": {
    "owner": "@network-accounting",
    "digest": "026ae400f7149c79b9f15801e7ff64be2525852d001de0d3c80d5592e6259fd3",
-   "issue": "NET-355",
+   "issue": "NET-409",
    "due": "2026-11-30"
   },
   "Pous.Component.AcceptsAll": {
