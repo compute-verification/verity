@@ -42,7 +42,7 @@ and a run's log is published. While a suite runs, `os.environ`'s repr names its 
 a copy holding most of what the process started with, is explained by the names that differ and prints neither side
 (`pytest_assertrepr_compare`). A copy still prints where no comparison holds it, as a call's argument, a test's own argument
 or in a message, and so does the environment of a Python a test starts (the forms: `STILL` in `tests/test_guard.py`). To see
-a value, run the test alone in an emptied environment.
+a value, run the test alone by plain pytest, which loads no guard, in an emptied environment (`env -i`).
 """
 from __future__ import annotations
 
@@ -409,8 +409,8 @@ if _ACTIVE:
     pytest.importorskip = importorskip
 
 
-#: how to read a value the guard withholds from a failure's text
-SEE_VALUES = "to see them, run the test alone in an emptied environment"
+#: how to read a value the guard withholds from a failure's text: a pytest the runner didn't start loads no guard
+SEE_VALUES = "to see them, run the test alone by plain pytest under `env -i`"
 #: how far into a compared value's lists, tuples and mappings an environment is looked for
 ENVIRON_DEPTH = 3
 _Environ = type(os.environ)
