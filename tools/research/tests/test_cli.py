@@ -11,6 +11,7 @@ import pytest
 
 from research import runs as R
 from research.cli import main
+from research.result import env_defaults
 
 
 def test_run_records_and_inspects(tmp_path, capsys):
@@ -55,7 +56,7 @@ def test_local_env_is_applied_to_the_workload_recorded_and_scoped(tmp_path, monk
     assert Path(seen["cwd"]).resolve() == run_dir.resolve() and list(src.iterdir()) == [], "default cwd is the run dir: the checkout stays clean"
     assert "RSEC_FOO" not in os.environ and os.environ["RSEC_API_TOKEN"] == "callers", "--env is scoped to the workload"
     params = json.loads((run_dir / "job.json").read_text())["store"]["params"]
-    assert params["env"] == {"RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}
+    assert params["env"] == {**env_defaults(os.environ), "RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--env", "NOEQUALS", "--", "true"]) == 2
 
 
@@ -409,8 +410,8 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     (repo / "tools/verity/check").mkdir(parents=True)
     (repo / "tools/verity/check/suites.py").write_text(
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\nif rev == 'broken':\n    sys.exit(2)\n"
-        "hit = 'none' if rev == 'nothing' else 'verity-vllm, verity/core'\n"
-        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else 2}: {hit}')\n")
+        "hit = {'nothing': 'none', 'core': 'verity/core'}.get(rev, 'verity-vllm, verity/core')\n"
+        "print(f'suites: the change from {rev[:12]} touches {0 if hit == \"none\" else hit.count(\",\") + 1}: {hit}')\n")
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -423,13 +424,15 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync
-            ([], [*suites, "--quick"], (None, 36, 19140)),       # in whole minutes; 4 workers x 9 GB: a process a CPU, once
+            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes; 4 workers x vllm's 8 GB: a process a CPU, once
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 72, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
             # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
             (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
-                                              "--changed main --quick"], (8, 72, 17040)),
+                                              "--changed main --quick"], (8, 64, 17040)),
             (["--cpus", "8", "--mem-gb", "144"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),   # a lead's own
+            # a change touching only a suite that declares no worker_gb: 8 workers x suites.py's TEST_PROCESS_GB, 4.5
+            (["--cpus", "8"], [*suites, "--changed", "core", "--quick"], (8, 36, None)),
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),
@@ -444,11 +447,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     assert "32 GB and 250 min, from the [tool.verity.tests] of verity-vllm" in capsys.readouterr().err
 
 
-def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its_suites_may_reach(tmp_path):
-    """A `--changed` run, or one of every suite, reserves a test process for each CPU it asks, at the largest figure a process of
-    its suites may reach (TEST_PROCESS_GB where none is declared). The reservation is the budget suites.py divides among its
-    processes, so twice that started processes beyond the CPUs asked, and a node kept it from every other run for as long
-    as the run held its slot."""
+def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_share_of_it(tmp_path):
+    """A `--changed` run, or one of every suite, budgets a test process for each CPU it asks, at the largest figure a process of
+    its suites may reach (TEST_PROCESS_GB where none is declared): suites.py divides that among its processes, so twice it
+    started processes beyond the CPUs asked. A pool's slot keeps its reservation from every other run for as long as the run
+    holds the slot, and the run's processes are at their figure only while the few suites that reach it run, so it reserves
+    MANY_RESERVED of the budget there, never under the kind's own memory. A run of named suites reserves its budget whole."""
     from research import suite_size
 
     repo = tmp_path / "repo"
@@ -464,17 +468,22 @@ def test_a_run_of_many_suites_reserves_one_test_process_a_cpu_at_the_largest_its
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\n"
         "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
     run = ["uv", "run", "tools/verity/check/suites.py"]
-    for cmd, cpus, workers, gb in (
-            ([*run, "--changed", "small"], None, 4, 36),             # no suite declares one: 4 processes x TEST_PROCESS_GB
-            ([*run, "--changed", "small", "--quick"], 12, 12, 108),
-            ([*run, "--changed", "big"], None, 4, 64),               # a's workers may reach 16 GB each
-            ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32),   # its --jobs is the processes it runs
-            ([*run], None, 4, 64),                                   # every suite
-            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16)):   # 9 GB: never under the kind's own 16
-        got = suite_size.size(repo, cmd, cpus)["mem_gb"]
-        assert got == gb, (cmd, cpus)
+    old = suite_size.size(repo, [*run], None)
+    assert old["mem_gb"] == 64 and "reserve_gb" not in old, "a tree whose slot.py takes no --budget-gb reserves its budget whole"
+    (repo / suite_size.SLOT_PY).write_text(f'USAGE = "slot.py [{suite_size.BUDGET_OPT} GB] -- CMD..."\n')
+    for cmd, cpus, workers, gb, reserved in (
+            ([*run, "--changed", "small"], None, 4, 18, 16),         # no suite declares one: 4 processes x TEST_PROCESS_GB
+            ([*run, "--changed", "small", "--quick"], 12, 12, 54, 27),
+            ([*run, "--changed", "big"], None, 4, 64, 32),           # a's workers may reach 16 GB each
+            ([*run, "--changed", "big", "--jobs", "2"], 8, 2, 32, 16),   # its --jobs is the processes it runs
+            ([*run], None, 4, 64, 32),                               # every suite
+            ([*run, "--changed", "small", "--jobs", "1"], None, 1, 16, 16)):   # 4.5 GB: never under the kind's own 16
+        shape = suite_size.size(repo, cmd, cpus)
+        assert (got := shape["mem_gb"]) == gb, (cmd, cpus)
         assert got // suite_size.TEST_PROCESS_GB >= workers, "suites.py's default --jobs gives it a process for each CPU it asked"
-    assert suite_size.size(repo, [*run, "a"], None)["mem_gb"] == 64, "named suites: their workers at their worker_gb, as before"
+        assert shape["reserve_gb"] == reserved, (cmd, cpus)
+    named = suite_size.size(repo, [*run, "a"], None)
+    assert named["mem_gb"] == 64 and "reserve_gb" not in named, "named suites: their workers at their worker_gb, reserved whole"
 
 
 def test_gpus_with_on_reaches_the_machine_and_without_on_or_queue_means_nothing(tmp_path, monkeypatch, capsys):
@@ -539,6 +548,55 @@ def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_place
     assert on(old, "--pss-every", "5") == 0 and on(new, "--pss-every", "0", "--pss-max-rss-gb=4") == 0
     assert [remote.flag_value(a, "--pss-every") for a in launched] == ["5", "0"] and "--pss-max-rss-gb=4" in launched[1]
     assert queue(new, "--pss-every", "0") == 3 and len(placed) == 1 and "placement reached" in capsys.readouterr().err
+
+
+#: the shipped tree's `tools/verity/lean/lean_audit.py` as `lean_records_urls` reads it: `url_file` writing two URLs, one of an
+#: artifact bundle (`SHARED`) and one of a pinned dependency bundle
+STUB_LEAN_AUDIT = """\
+import json
+from pathlib import Path
+SHARED = "lean-artifacts/"
+def url_file(dest):
+    p = Path(dest) / "lean-deps-urls.json"
+    p.write_text(json.dumps({SHARED + "ab" * 32: "https://r2.example/a?X-Amz-Signature=s", "k": "https://r2.example/d?s"}))
+    return p
+"""
+
+
+def test_a_lean_records_run_is_sent_the_shipped_trees_lean_bundle_urls(tmp_path, monkeypatch, capsys):
+    """`research run --on M --source TREE -- ... lean_changed.py --records PKG` sends the run TREE's `lean_audit.url_file`
+    as inputs/lean-deps-urls.json: the presigned URLs of the newest checks', mark audits' and records runs' artifact bundles, which
+    the run takes into its node's artifact cache before it builds, so it restores what another node already compiled. Any
+    other run is sent none; the launcher's copy is gone once the request is staged; a tree that can't presign sends none."""
+    from research import cli, remote
+
+    src, sends = tmp_path / "tree", []
+    (src / "tools" / "verity" / "lean").mkdir(parents=True)
+    (src / cli.LEAN_AUDIT).write_text(STUB_LEAN_AUDIT)
+
+    def launch(**kw):
+        sends.append({p: p.read_text() for p in kw["sends"]})
+        return {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r", "launch": {"runner_pid": 1}}
+
+    monkeypatch.setattr(remote, "launch", launch)
+    on = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "verity", "--source", str(src), "--cwd", "source",
+          "--no-custody-r2", "--"]
+    records = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
+    assert main([*on, *records]) == 0
+    [(sent, text)] = sends[-1].items()
+    assert sent.name == "lean-deps-urls.json" and json.loads(text)["lean-artifacts/" + "ab" * 32].startswith("https://r2.example/a")
+    assert not sent.parent.exists(), "a URL grants a read until it expires: the launcher keeps no copy"
+    err = capsys.readouterr().err
+    assert "a Lean records run: sending presigned URLs for 1 Lean artifact bundle(s)" in err and "X-Amz-Signature" not in err
+    assert main([*on, "bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records Security"]) == 0
+    assert [p.name for p in sends[-1]] == ["lean-deps-urls.json"]
+    for other in (["python3", "tools/verity/lean/lean_changed.py", "--try", "X.lean"], ["python3", "tools/verity/lean/check.py"]):
+        assert main([*on, *other]) == 0 and sends[-1] == {}, other
+    assert cli.lean_records_urls(tmp_path / "no-tree", records) is None and cli.lean_records_urls(None, records) is None
+
+    (src / cli.LEAN_AUDIT).write_text("def url_file(dest):\n    raise OSError('no remote')\n")
+    assert main([*on, *records]) == 0 and sends[-1] == {}
+    assert "research run: no Lean bundle URLs sent (OSError: no remote)" in capsys.readouterr().err
 
 
 def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monkeypatch):

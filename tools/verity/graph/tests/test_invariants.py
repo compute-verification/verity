@@ -81,6 +81,13 @@ def test_every_key_is_the_rule_s(audited):
         assert e["digest"] == contract.env_digest(e["spec"], doc["files"]), name
 
 
+def test_the_packed_listing_unpacks_to_the_listing_and_is_a_tenth_of_its_bytes_at_most(audited):
+    doc, _outside = audited
+    packed = graph.pack(doc)
+    assert graph.unpack(packed) == doc
+    assert 10 * len(contract.canonical(packed)) < len(contract.canonical(doc)), "the tasks' inputs and reads no longer pack"
+
+
 def test_what_a_task_run_lists_is_the_listing_s(audited, tmp_path):
     """`verity graph run`'s graph for a task of each kind, listed (`graph.task_graph`): the listing's tasks, each with the
     priority of the chains that graph holds, its digests and envs; and handed its part of the listing (`graph.part`), taken here

@@ -23,10 +23,12 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
 - `run.sh`: one card. It builds outside the lease, then under one gpu-lease sets the power limit and, for each clock,
   locks it, warms the card and runs every arm, class, fill, burst and duty; at exit it resets the clock and the power
   limit. Last it runs `summarize.py`, and exits nonzero unless the card passes. Its header lists the knobs.
-- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.hardware.rate`), exiting 0
+- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.hardware.cards.rate`), exiting 0
   only on PASS; then the maximum by clock, arm and class against both readings, each clock's and arm's duty x class
   table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdict to
   the card on made-up points.
+
+`verity bench tensor_duty` runs `run.sh`, which writes under a run's `$OUT` and refuses without one, so run it as:
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \

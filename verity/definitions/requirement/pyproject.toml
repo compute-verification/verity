@@ -7,13 +7,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difftest.py"]
 # Test-only: the reference is `verity.definitions.circuits.requirement` (with its census path), and two of its Programs are rows
-# of the Definitions (`verity.definitions.registry`: `b1`, over `prims`); the memory-map test holds the Commit's
-# builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) on request Programs `verity_vllm.program.predict.build`
-# builds, whose imports reach most of
+# of the Definitions (`verity.definitions.registry`: `b1`, over `prims`); the memory-map test holds the vLLM
+# integration's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) on request Programs
+# `verity_vllm.program.predict.build` builds, whose imports reach most of
 # `verity_vllm` and, through it and the builder, PoUB's record (`Replay`, `codec`), PoUW's
-# circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
-# files of Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
-# path.
+# circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean, required by
+# path, and the base packages the harness requires (`Base.Canon` and what it imports).
 inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
           "verity/errors.py", "verity/difftest", "verity/definitions",
           "verity/hardware/record.py",
@@ -27,7 +26,6 @@ inputs = ["verity/circuits", "verity/definitions/kernels/__init__.py", "verity/d
           "verity/protocols/spot/verifier/second_stage.py", "verity/protocols/spot/verifier/schedule.py",
           "verity/commitments/windows", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
-          "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
-          "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock/Field.lean",
-          "verity/protocols/flock/verifier/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Canon.lean",
-          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
+          "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py",
+          "verity/protocols/spot/device/__init__.py", "verity/circuits/base", "verity/circuits/lean"]

@@ -160,7 +160,7 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     def prepared(*flags, environ=None):
         r = _row(tmp_path / "sweep", "--native-collect-default", str(tmp_path / "nc_default"), *flags, environ=environ)
         monkeypatch.setattr(r, "release_line", lambda fallback: (f"r16-int-3|commit=a2dabe493 tree={r.tree}", str(rel)))
-        for step in ("precheck_identity", "precheck_target", "admission", "install_signal_forwarding"):
+        for step in ("precheck_identity", "precheck_target", "install_signal_forwarding"):
             monkeypatch.setattr(r, step, lambda: None)
 
         def shape():
@@ -184,7 +184,7 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
     from tests.pipeline.test_row import _row
     r = _row(tmp_path, "--stages", "build,match")
     seen = []
-    for step in ("precheck_identity", "shape", "admission", "build", "match"):
+    for step in ("precheck_identity", "shape", "build", "match"):
         monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
     monkeypatch.setattr(r, "release_line", lambda fallback: (f"UNRELEASED|commit=unknown tree={r.tree}{fallback}", "-"))
     monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or

@@ -383,6 +383,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
 
 
 @LEAN
+@pytest.mark.slow
 def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(served):
     """The sample is the sampling design's subset:K′ over the padded population, over the key of the execution phase's sampling coin, which the
     challenger opens after the registration (its digest) and checks against its commitment; Lean's sample on that key's
@@ -512,6 +513,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
     assert "again" not in ch.regs and list(ch.manifests) == ["honest"] and ch.passes == {"honest": "coin"}
 
 
+@pytest.mark.slow
 def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
     """The record's order is each execution phase's receipt before the execution phase's sampling coin's release: once the sampling coin is open, an
     execution phase is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
@@ -705,6 +707,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
     assert sids["a"] != sids["b"] and asked == [] and len(ledger) == 0
 
 
+@pytest.mark.slow
 def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_a_signed_record_and_registered_once(
         served, tmp_path, monkeypatch, reveals):
     """What a certified execution phase of salted units runs through after `salt.unit_reason`, which no served-zk execution phase passes
@@ -1090,6 +1093,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
 
 
 @LEAN
+@pytest.mark.slow
 def test_r1_r6_of_a_window_are_leans(served):
     """One-stage's R1-R6 of a PoUW registration, honest and with each field changed, through the switch: Lean's codes are
     Python's, none for the honest record and some for each change."""
@@ -1103,9 +1107,11 @@ def test_r1_r6_of_a_window_are_leans(served):
     record = OR.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None).codes)
+        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None))
 
     assert codes(rec) == []
+    honest = record.witness[0]
+    assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
                "population": n + 1, "law": {**law, "k": law["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
@@ -1271,6 +1277,7 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
 
 
 @LEAN
+@pytest.mark.slow
 def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypatch, capsys):
     """The job's steps through `main`: register (and the refused extra item), then one challenger process's requests,
     as the job sends them a line at a time: its coin commitment, its salt coin opened after the pass's weights' root (as
