@@ -1,5 +1,7 @@
-"""The setup a steady-state spec names for this tree's Flock prover, under the launcher on a made-up tree, with stand-ins
-for the prover's build, the toolkit's script and uv. No GPU, no node, no store and no clock."""
+"""The steady-state specs of `benchmarks/specs` and the setup they name: what each spec's points are, that a row's pin and
+its stored statement are the spec's alone (another pin is planned and launched by the same code), and the setup under
+the launcher on a made-up tree, with stand-ins for the prover's build, the toolkit's script and uv. No GPU, no node, no
+store and no clock."""
 
 from __future__ import annotations
 
@@ -8,11 +10,125 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from test_steady_point import tree
+
+from verity_bench import prove_records as R
+from verity_bench import steady as S
+from verity_bench import steady_plan as P
+from verity_bench import steady_spec as SP
+from verity_bench.vllm.presets import SPEC_ROOT
 
 ROOT = Path(__file__).resolve().parents[3]
+STEADY = sorted(path.stem for path in SPEC_ROOT.glob("*.toml") if SP.is_steady(path))
+HEAD = "glm53-flock-steady-head-block-h200"
 SETUP = "benchmarks/harness/setup/flock_prover.sh"
 LAUNCHER = "benchmarks/harness/steady_point.sh"
 
+
+def test_the_specs_directory_holds_steady_state_specs():
+    assert HEAD in STEADY
+
+
+@pytest.mark.parametrize("name", STEADY)
+def test_a_steady_spec_names_a_workload_with_a_record_and_a_setup_that_names_the_prover_and_its_python(name):
+    spec = SP.load_spec(name)
+    assert spec.id == name and spec.workload in R.WORKLOADS
+    assert spec.admission.max_minutes is not None, "`run --direct` refuses a spec without a bound"
+    setup = (ROOT / spec.setup).read_text()
+    assert spec.setup.startswith("benchmarks/harness/setup/")
+    assert all(f"{exported}=" in setup for exported in ("VERITY_BENCH_STEADY_BIN", "VERITY_BENCH_STEADY_PY"))
+    if any(row.stored for row in spec.row):
+        assert "VERITY_BENCH_STEADY_SCRATCH=" in setup and "/dev/shm" not in setup, (
+            "a statement from the store is fetched onto the node's disk: the setup names a scratch there")
+
+
+def test_the_head_blocks_spec_times_both_forms_at_one_two_and_four_provers_over_whole_bursts():
+    spec = SP.load_spec(HEAD)
+    assert (spec.workload, spec.card, spec.cores, spec.setup) == ("glm53", "h200", 10, SETUP)
+    false, true = spec.row
+    assert false.type.startswith("census:SparseMlaHeadBlock_v2{") and "NVIS=64" in false.type
+    assert true.type == false.type.replace("FIRST=false", "FIRST=true") != false.type
+    assert false.pin != true.pin and (false.n, false.warm, false.period) == (true.n, true.warm, true.period)
+    assert [(point.row is false, point.provers) for point in spec.points] == [
+        (True, 1), (True, 2), (True, 4), (False, 1), (False, 2), (False, 4)]
+    for point in spec.points:
+        burst, gaps = point.row.period * point.provers, SP.window_gaps(point.sessions, point.provers)
+        assert point.sessions >= spec.sessions and gaps % (3 * burst) == 0, "the window and each third are whole bursts"
+        filings = [float(i * i) for i in range(gaps + 1)]
+        assert S.burst_parts(filings, burst) == S.thirds(filings), "`level` cuts such a window at its thirds"
+        assert len(set(S.thirds(filings))) == 3
+    assert len({point.id for point in spec.points}) == 6
+
+
+def test_the_head_blocks_statements_are_two_directories_of_one_artifact_in_the_store():
+    false, true = SP.load_spec(HEAD).row
+    (art, one), (same, other) = false.stored, true.stored
+    assert art == same and one != other
+    assert not any(row.staged.startswith("/") for row in (false, true)), "no point reads a directory another lane staged"
+
+
+def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
+    """The head block's spec and its setup, as the tree has them, in a made-up tree (`test_steady_point.tree`);
+    `changes`: text of the spec replaced."""
+
+    text = (SPEC_ROOT / f"{HEAD}.toml").read_text()
+    for old, new in changes.items():
+        assert old in text, old
+        text = text.replace(old, new)
+    path = f"benchmarks/specs/{HEAD}.toml"
+    root, _ = tree(tmp_path, files={path: text, SETUP: (ROOT / SETUP).read_text(), "benchmarks/specs/steady.toml": None})
+    return root, path
+
+
+def launches(root: Path, path: str) -> tuple[list, list[list[str]]]:
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    commands: list[list[str]] = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200",
+                      execute=lambda command, cwd: commands.append(list(command)) or 0) == 0
+    return list(plan.points), commands
+
+
+def test_each_point_of_the_head_blocks_spec_is_launched_with_the_stores_key_within_the_specs_bound(tmp_path):
+    root, path = real(tmp_path)
+    points, commands = launches(root, path)
+    assert len(commands) == len(points) == 6
+    for item, command in zip(points, commands, strict=True):
+        flags, job = command[:command.index("--")], command[command.index("--") + 1:]
+        assert "--store-read" in flags and flags[flags.index("--timeout") + 1] == "90m"
+        assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
+            "RUST_MIN_STACK=67108864", f"VERITY_BENCH_SETUP={SETUP}"]
+        assert job[-8:] == ["bash", LAUNCHER, "--spec", path, "--point", item.point.id, "--identity", item.identity]
+
+
+def test_another_pin_and_another_stored_statement_are_a_change_to_the_spec_alone(tmp_path):
+    """The pins and the artifact are fields of the spec: with others in their place the same code plans and launches the
+    rows, each point with another identity, and nothing launched names the ones the spec held before."""
+
+    spec = SP.load_spec(HEAD)
+    (art, _), pins = spec.row[0].stored, [row.pin for row in spec.row]
+    before, _ = launches(*real(tmp_path / "before"))
+    changes = {art: "art:" + "7" * 64, pins[0]: "12" * 64, pins[1]: "34" * 64}
+    after, commands = launches(*real(tmp_path / "after", **changes))
+    assert [item.point.row.pin for item in after] == ["12" * 64] * 3 + ["34" * 64] * 3
+    assert {item.point.row.stored[0] for item in after} == {"art:" + "7" * 64}
+    assert not {item.identity for item in before} & {item.identity for item in after}
+    assert [(a.point.id, a.point.sessions) for a in after] == [(b.point.id, b.point.sessions) for b in before]
+    said = " ".join(token for command in commands for token in command)
+    assert not any(old in said for old in (art, *pins))
+    harness = "".join(path.read_text() for path in sorted((ROOT / "benchmarks/harness/verity_bench").glob("*.py")))
+    assert not any(old[:16] in harness for old in (art.removeprefix("art:"), *pins)), "no pin or artifact is a constant in code"
+
+
+def test_the_setup_is_part_of_every_points_identity(tmp_path):
+    root, path = real(tmp_path / "as-is")
+    other, _ = real(tmp_path / "edited")
+    (other / SETUP).write_text((other / SETUP).read_text() + "export FLOCK_SOMETHING=1\n")
+    as_is, _ = launches(root, path)
+    edited, _ = launches(other, path)
+    assert not {item.identity for item in as_is} & {item.identity for item in edited}
+
+
+# ---- the setup under the launcher ------------------------------------------------------------------------------------------
 
 #: a stand-in for verity/protocols/flock/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
 #: which resets the sourcing shell's arguments, and exits where it can't
