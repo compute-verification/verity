@@ -215,8 +215,14 @@ def test_a_rank_with_no_index_and_an_entry_with_no_file_read_as_nothing(tmp_path
     assert ta.entry_bytes(run, 1, lost) is None and ta.entry_bytes(run, 1, {"skipped": "oversize"}) is None
 
 
+def test_an_index_of_a_log_with_no_rank_in_its_name_is_refused(tmp_path):
+    with pytest.raises(AssertionError, match="log.jsonl.gz"):
+        ta.collective_entries(tmp_path, {"log": "log.jsonl.gz", "collectives": []})
+
+
 def test_body_report_checks_each_collective_against_its_arithmetic(tmp_path):
-    doc = ta.body_report(_run(tmp_path))
+    run = _run(tmp_path)
+    doc = ta.body_report(run)
     assert doc["schema"] == "verity-capture/tp2-body/v0" and doc["ranks"] == [0, 1]
     assert doc["summary"] == {"body_ok": 2, "body_mismatch": 1, "unchecked": 1, "unmodelled": 2}
     by = {(c["op"], c["ordinal"]): c for c in doc["checked"]}
@@ -230,7 +236,9 @@ def test_body_report_checks_each_collective_against_its_arithmetic(tmp_path):
     assert bad["status"] == "ok" and bad["body_matches_rank_outs"] == {"0": True, "1": False} and not bad["out_sha_equal_across_ranks"]
     assert by[REDUCE, 2]["status"] == "no snapshot bytes (root alloc, oversize, or non-snapshot step)"
     # the index names a file that rank 1's directory does not hold: an error of that collective, and the report goes on
-    assert by[REDUCE, 3]["status"].startswith("error: ") and "body" not in by[REDUCE, 3]
+    lost = ta.load_index(run, 1)[4]["file"]
+    assert by[REDUCE, 3]["status"] == f"""error: FileNotFoundError("rank 1: the snapshot index names '{lost}', which the run does not hold")"""
+    assert "body" not in by[REDUCE, 3]
     gathered = by[GATHER, 0]
     assert gathered["status"] == "ok" and gathered["body"] == "concat(shard_0..shard_1, dim=-1)"
     assert gathered["body_matches_rank_outs"] == {"0": True, "1": True} and gathered["shape_out"] == [2, 4]
