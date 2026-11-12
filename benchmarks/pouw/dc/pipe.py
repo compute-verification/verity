@@ -8,7 +8,7 @@ TMEM stage alone, ε_tensor at L = 32 with the measured points, the fold's issue
 OUT is pipe.sh's output (rate.jsonl, gate/*/result.json and ref.json, sass/pgemm.sass). --census takes the B200 probe runs
 (run.sh sm100, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
 points added, give ε_tensor at L = 32 by TENSOR's two-stage LP (analyze.tmem_model). Without it the census lines in
-`../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
+`../../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
 
 Arms (pgemm.cu's MODE): 0 the pipeline alone (loaders hand the barrier back), 1 the TMEM stage (every word loaded, not
 folded), 2 honest (loaded and folded by duo), 3 the MMA warp waiting on its own commit (no loaders). MI 1: one MMA warp a
@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CENSUS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
+CENSUS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
 ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
 #: duo's lane instructions a word by pipe (dc.cuh): u = y ^ p ^ k (LOP3), y = u a + z (IMAD), z = rotl(u, r) + y (LEA.HI)
