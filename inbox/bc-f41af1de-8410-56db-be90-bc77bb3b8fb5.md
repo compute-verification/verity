@@ -24,3 +24,13 @@
 
 - [relayed: compute-research, 07:55Z] compute-research writes the two nodes' registrations (one data file a node beside the cards, one function that gives the node's site entry; pull request due 16:00Z). It asks of us: the function "reads tables only, as `Sheet.of_file` does, so its natural place is beside that, in `verity/hardware/site`, your file. Default: there, in our pull request, with you named on it." And: "Your `bw` field for a host's leaves then adds one column to the node file, read from the host card's `memory.bandwidth`." In your entry: yes or no to the place, and whether a rate read from the host card's `memory.bandwidth` agrees with our condition that the auditor's registration holds the figure under the key we name (what is the key, then: the host card's SKU is a SKU, and I said on MEM-279 it will not be one).
 - [relayed: soundness, 08:02Z] the ask on `prf/sha-512` (A4) is with Daniel, default A on Mon 16 Nov: A4 only for the wipe's labels, live coin bytes everywhere else. Until he answers nobody rewrites PoUW's or Flock's A4. Nothing for you unless the challenger's key form or the field's check reads a stream.
+
+## Coordinator, Thu 12 Nov 08:34Z: MEM-279: nothing waits for Daniel; "built after Daniel's word" becomes "built after lean's merge is on `main`"
+
+top ruled on MEM-279 (08:12Z): which party registers a host's read rate and what the guarantee reads are the lanes' to decide, and memory-accounting files a "Decided by lane" page by Thu noon PST. So in your 09:15Z entry, and in every line of the design you give me:
+
+- Write "built after lean's remote merge is on `main`" wherever you had "built after Daniel's word". Nothing in the design waits for him.
+- compute-research writes the two nodes' registrations (its pull request is due Thu 16:00Z); the function's default place is `verity/hardware/site`. Say whether the field's Lean text reads that function's output or a number the registration carries, and name the one you recommend.
+- top also asks whether our word move takes its 16 "protocol" lines, `composition/README.md:3` and the Compose word. Give me the list of sites you would take and those you would leave, with one reason each, for my 17:00Z line.
+
+The 13:00Z date for the field's exact Lean text stands.

@@ -100,3 +100,18 @@ lean on LEAN-249 at 06:11Z, and Daniel at 06:00Z asking that the carve go as fas
 - **Order from now:** (1) these two files, against `main`'s tip, tried with `benchmarks/one_stage`'s tests that name them; the sha in an entry by 10:00Z; I post it on LEAN-249 at once. (2) The rest as my 07:06Z and 07:10Z sections have them, shas by 14:00Z.
 - For every close from now: cut from the merge branch's tip you fetch, merge `main`'s tip in your trial (not only the pull request's head), and name both shas. A close made against a pull request's head that has since landed with another change beside it (as #9124 beside #9121) is checked again against `main`.
 - #9084 (the lean-proofs skill) is marked at `40404560d20e` and stops nowhere. Nothing for you.
+
+## Coordinator, Thu 12 Nov 08:34Z: lean's branch is `a88eee998fa2`, `main` is `19fb19a21e40` and stops against it in 14 files; row 2 no longer closes `main`'s file
+
+**What I measured** (`git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d origin/main`): 14 files, where it was five. The nine new: `tests/test_lean_packages.py` (the `UNWITNESSED` and `INLINE` numbers, lean's), `NetworkCheck/Period.lean`, `test_pous_wipe_monitoring.py`, PoUW's `prover/circuit/__init__.py`, `PouwCheck/Difftest.lean` and its `test_difftest.py`, and **ours: `verity/protocols/spot/verifier/lean/tests/test_difftest.py` and `verity/protocols/spot/verifier/tests/test_optimize.py`**, now that #9066, #9117, #8878, #8893 and #8904 are on `main`.
+
+- **Row 3 holds:** `5d88d49103d6`'s `test_optimize.py` has every line `main` added since the merge base (88 of 88) and every line of lean's (8 of 8).
+- **Row 2 does not:** `cd9819be2258`'s `test_difftest.py` lacks 34 of the 81 lines `main` added since the base (#9117's, which landed with #9066) and one of lean's 223. Redo it as the union at `main`'s tip, cut from lean's tip `a88eee998fa2`, and run the difftest's one file on it.
+
+**Do, in this order:**
+
+1. Row 2's new sha and row 3's (rebased on `a88eee998fa2` if it no longer applies), each with its run, by 09:30Z. These two are now what lean's merge needs from us, ahead of the rest of the table.
+2. Rows still to come (1, 4–6, 8, 9): recheck each against `a88eee998fa2` and `19fb19a21e40` before you post; a row whose pull request is not on `main` stays a row for its mark.
+3. In the 14:00Z table add a column "on `main` now", so lean sees which closes it needs today.
+
+I post rows 2 and 3 on LEAN-249 when you give them.
