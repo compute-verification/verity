@@ -722,7 +722,6 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if a.cmd == "family" and not a.forms and not a.kind:
         p.error("family: --kind, or --forms")
-    sys.path.insert(0, str(HERE))
     return {"loads": cmd_loads, "summary": cmd_summary, "refit": cmd_refit, "table": cmd_table,
             "family": cmd_family}[a.cmd](a)
 
