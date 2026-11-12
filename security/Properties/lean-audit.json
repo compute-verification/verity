@@ -754,51 +754,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.BandwidthAuditSound": {
-   "owner": "@memory-accounting",
-   "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.InferenceOnlySound": {
-   "owner": "@lean",
-   "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.NetworkCertifierSound": {
-   "owner": "@network-accounting",
-   "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.PousSound": {
-   "owner": "@memory-accounting",
-   "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.PouwSound": {
-   "owner": "@compute-accounting",
-   "digest": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.SpotSound": {
-   "owner": "@proofs",
-   "digest": "b7ab8cda9c268d16040b48f836d5100a26dba3e1ccf4d2126ae9b2de88d8f4ad",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Vocab.Target": {
    "owner": "@soundness",
    "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.WipeSound": {
-   "owner": "@memory-accounting",
-   "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -7661,7 +7619,7 @@
     "reads": []
    },
    "type_hash": "2d8170bf6c6627424710a8c3e095295f580bdfa1b7934c90a76e0356caa3c517",
-   "unfolded_hash": "2044344a5f3ac208990879e227d6e60f030d32c2901eab3e8b20ce515d711f1d"
+   "unfolded_hash": "2e1c208115b1dce031c88ae7a5f05a90cc5b22e5084d4d7320f380154a89ddf5"
   },
   "Properties.Site.checks_honest": {
    "owner": "@lean",
@@ -7673,8 +7631,7 @@
     "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
     "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
     "    (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "      (Properties.Site.log Properties.Site.honestLog))"
    ],
    "assumptions": [],
@@ -7684,7 +7641,7 @@
     "open": ["Verity.Site.Boundary"],
     "reads": []
    },
-   "type_hash": "adca6ff5253544af0d324781a65ce7a8b47069ab3153dd4a456faab8aaa7063c"
+   "type_hash": "f9b405002b2182617b22e4a86c56d116434c34079d82b009594984c21e332000"
   },
   "Properties.Site.checks_nontrivial": {
    "owner": "@lean",
@@ -7694,8 +7651,7 @@
     "    (Eq (Option.map Properties.Site.site (Properties.Site.acceptAllCheck Properties.Site.staleLog).toOption)",
     "      (ite",
     "        (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "          (Properties.Site.log Properties.Site.staleLog))",
     "        (Option.some (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))) Option.none))"
    ],
@@ -7706,7 +7662,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "00140ea54fda7516a0ae67c4aaf7ffc30baed54c6fb298a7ad040725592681ab"
+   "type_hash": "a832e88c427e726f7c9b0ab3b4af3834a4248b2b1ccac1eb5bd094bc229b7e7c"
   },
   "Properties.Site.entryValid": {
    "owner": "@lean",
@@ -7719,7 +7675,7 @@
     "reads": []
    },
    "type_hash": "8a89c567162cc9fa3f76cdf2e094f88fd657e778e58d1f37f25dd9b1ce78749f",
-   "unfolded_hash": "920c77dd5aa4980912adaeba7f52174d28fee623dfbcc32d668ea29b6f40feff"
+   "unfolded_hash": "aeadf3fbcd208de8840051dc26600e5a866165ac04073e4ffa27e906a98f3a86"
   },
   "Properties.Site.entryValid_honest": {
    "owner": "@lean",
@@ -7731,8 +7687,7 @@
     "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
     "      Option.none)",
     "    (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "      (Properties.Site.site Properties.Site.emptySite) \"genesis\" (Properties.Site.regEntry Properties.Site.honestEntry))"
    ],
    "assumptions": [],
@@ -7742,7 +7697,7 @@
     "open": ["Verity.Site.Boundary"],
     "reads": []
    },
-   "type_hash": "98c3c342f109d3c30375ebbd555b968ea8ce4285536799e234ff832f049d4e21"
+   "type_hash": "87cec93dc51325c68241d41b06d83a3aeba20bda7855fc5b722a36f71563a360"
   },
   "Properties.Site.entryValid_nontrivial": {
    "owner": "@lean",
@@ -7751,8 +7706,7 @@
     "  Not",
     "    (Iff (Eq (Properties.Site.acceptAllRefusal Properties.Site.staleEntry) Option.none)",
     "      (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
-    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
     "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
    ],
@@ -7763,7 +7717,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "9652f423b69623e86918b46b092a3fb8f6056c8e80e689b1e6e2b18b39c87391"
+   "type_hash": "1d19889e6011274b786cf37c12c0f3cdde0fff38e7004811227c8335eb15a3fb"
   },
   "Properties.Site.fold": {
    "owner": "@lean",
@@ -7789,7 +7743,7 @@
     "reads": []
    },
    "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c",
-   "unfolded_hash": "a81b9ed139727da45cd828f837b9c9d8a2c7ae5443b03f5a26df2c6d778d4a82"
+   "unfolded_hash": "3837f6dcf039646ac1617f41e4be3e28170500958dae812e39ae2b6fac6dd3bb"
   },
   "Properties.Site.refusedAt_honest": {
    "owner": "@lean",
@@ -7821,12 +7775,10 @@
     "  Not",
     "    (Eq",
     "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
-    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
     "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
-    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
-    "          (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "          Core.Site.Registration.Composite.remote (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
     "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
     "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
    ],
@@ -7837,7 +7789,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "9dd029e442ffefa2e290e1fb64be1e1b5235bb8678173f8dc5e00209f12ce903"
+   "type_hash": "18e9833595a8f60150b756dc0074e3dc2b587bdc66522ba3b8e93a0d92bcd62b"
   },
   "Properties.Site.refuses": {
    "owner": "@lean",
@@ -7850,7 +7802,7 @@
     "reads": []
    },
    "type_hash": "cb22f6c9f5a52ccc946173ae7376585926859abd08933bb077686088442d0087",
-   "unfolded_hash": "236bae7bdc56c52fba91a2e148be7f965a6ce73b548f39bbb193166813dadda4"
+   "unfolded_hash": "73ddd3ad0a2beb57a4542e22ce0596b5b1ad4722ea2d2edee6d4ac38e27798bf"
   },
   "Properties.Site.refuses_honest": {
    "owner": "@lean",
@@ -7863,8 +7815,7 @@
     "      Option.none)",
     "    (Eq",
     "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
-    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
     "        (Properties.Site.regEntry Properties.Site.honestEntry))",
     "      Option.none)"
@@ -7876,7 +7827,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "0cfb9aae510c0f167fc6285d189da21d5ee44ab4a164f8dbf571f7b88278ff42"
+   "type_hash": "bcb7fb6fc9edca048dc1ce8a431ac9c3a2790f7351a665a70cc2fafc82bcd22a"
   },
   "Properties.Site.refuses_nontrivial": {
    "owner": "@lean",
@@ -7885,8 +7836,7 @@
     "  Not",
     "    (Eq (Option.map Properties.Site.refusal (Properties.Site.acceptAllRefusal Properties.Site.staleEntry))",
     "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
-    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
-    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor) Core.Site.Registration.Composite.remote",
     "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
     "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
    ],
@@ -7897,7 +7847,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
+   "type_hash": "8263b94dc12fe4a55ace70430d46d6ea1c47a7ec462b25d34b5a4f2791be9d68"
   },
   "Properties.Spot.SecurityProofs.boundLnBoundSound": {
    "owner": "@proofs",
@@ -9316,7 +9266,7 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"],
+    "open": ["Verity.Vocab.Target"],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -9332,15 +9282,15 @@
     ]
    },
    "type_hash": "10dde9d4b2b9d2eaa2bca9c3a6c1f61e31838c8444eb7cd4a10e06fcc47b0686",
-   "unfolded_hash": "9d4ea836a41f27a65807b07d9f0bb405c6f008b029844e42ea50d96fb39e9e50"
+   "unfolded_hash": "2aa030b9f712c142e8b6e62e7238a8c4856754d51f0c7eb7c5c4628626636ffd"
   },
   "Verity.remote_soundness_of_subprotocols_honest": {
    "owner": "@soundness",
    "signature": [
     "Verity.remote_soundness_of_subprotocols_honest :",
-    "  And (Verity.Idle.unbounded.SpotSound Verity.Registration.Composite.remote)",
-    "    (And (Verity.Idle.unbounded.PouwSound Verity.Registration.Composite.remote)",
-    "      (Verity.Idle.unbounded.InferenceOnlySound Verity.Registration.Composite.remote))"
+    "  And (Verity.Idle.unbounded.Target Verity.Registration.Composite.remote Verity.Subprotocol.sampled)",
+    "    (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.remote Verity.Subprotocol.pouw)",
+    "      (Verity.Idle.unbounded.Target Verity.Registration.Composite.remote Verity.Subprotocol.inferenceOnly))"
    ],
    "assumptions": [],
    "premises": {
@@ -9361,7 +9311,7 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "a6edb91b22f10636a03958d8ebeabe4cf61a8bae2f95c4b325c2d3cace3fadf3"
+   "type_hash": "be6cc5e52ad5ad501673760403d450c2ba2240f1d854420081041184ca5a2372"
   },
   "Verity.remote_soundness_of_subprotocols_nontrivial": {
    "owner": "@soundness",
@@ -9567,15 +9517,7 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": [
-     "Verity.Vocab.BandwidthAuditSound",
-     "Verity.Vocab.InferenceOnlySound",
-     "Verity.Vocab.NetworkCertifierSound",
-     "Verity.Vocab.PousSound",
-     "Verity.Vocab.PouwSound",
-     "Verity.Vocab.SpotSound",
-     "Verity.Vocab.WipeSound"
-    ],
+    "open": ["Verity.Vocab.Target"],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -9591,19 +9533,19 @@
     ]
    },
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911",
-   "unfolded_hash": "51f5b9bd4d7cb19f0d9a92e68d235c5ed8175f39250886fa02e4e3c08763f36c"
+   "unfolded_hash": "dd5e43aff127de8f4c86950df6bd2be7142f32074a01203668189762a7d5b3c2"
   },
   "Verity.soundness_of_subprotocols_honest": {
    "owner": "@soundness",
    "signature": [
     "Verity.soundness_of_subprotocols_honest :",
-    "  And (Verity.Idle.unbounded.SpotSound Verity.Registration.Composite.onsite)",
-    "    (And (Verity.Idle.unbounded.PouwSound Verity.Registration.Composite.onsite)",
-    "      (And (Verity.Idle.unbounded.InferenceOnlySound Verity.Registration.Composite.onsite)",
-    "        (And (Verity.Idle.unbounded.PousSound Verity.Registration.Composite.onsite)",
-    "          (And (Verity.Idle.unbounded.BandwidthAuditSound Verity.Registration.Composite.onsite)",
-    "            (And (Verity.Idle.unbounded.NetworkCertifierSound Verity.Registration.Composite.onsite)",
-    "              (Verity.Idle.unbounded.WipeSound Verity.Registration.Composite.onsite))))))"
+    "  And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.sampled)",
+    "    (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.pouw)",
+    "      (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.inferenceOnly)",
+    "        (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.pous)",
+    "          (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.poub)",
+    "            (And (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.network)",
+    "              (Verity.Idle.unbounded.Target Verity.Registration.Composite.onsite Verity.Subprotocol.wipe))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -9624,7 +9566,7 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "634004cdfc392d2a827e940e84b03951705b58d13847fb799e630fa6da5dd384"
+   "type_hash": "47444dcf26d4c31e1e96088415b4491ffb01413f31068bd59e07f06f198bc9d3"
   },
   "Verity.soundness_of_subprotocols_nontrivial": {
    "owner": "@soundness",
@@ -12830,7 +12772,7 @@
    }
   },
   "CoreProtocol.Site": {
-   "digest": "42437a31ed27b7ff7fd4f104157b4007abe4e6fa955ac3bd9e51b3e4dda808bd",
+   "digest": "908bd6e6164575836fcdb27f9ac9bd895da4fe501e41dc1df5fa9f1792376f35",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
     "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
@@ -12855,12 +12797,12 @@
     "Core.Site.Entry.Refs": "7c6d8489361326ca43352f52313048a5eb76e315e7db98767aad2d8fe922f2b4",
     "Core.Site.Entry.Sheets": "d7f15c6abe6de207d841cd480a9a926e2bf32ac1e429271ca72904c48cc65ba5",
     "Core.Site.Entry.instDecidableCapacity": "9f4a3c621e0e242b60e7dc872ce8718ce2ab2fa339e1a50f7de9ce11ba84707e",
-    "Core.Site.Entry.instDecidableCovered": "8b8fafd7876f83e678d202d04871b8c08bb4451863daa6006a2f01a61789700a",
+    "Core.Site.Entry.instDecidableCovered": "8f24b3f29fb731d060fc4dc7dbf47dfd8c67757951941e3d53619d472003c8d3",
     "Core.Site.Entry.instDecidableFigures": "802895297500e0b72e0e151370441d3c430fffc0f647d853f03ecdb469bf7af3",
     "Core.Site.Entry.instDecidableFresh": "e22f58bf3ca4486ee0a904700b0230714bd35ade7b686133346d9f5e794df86f",
     "Core.Site.Entry.instDecidableKinds": "184d159a619a5184af1d5dcadda9b6541dc5ea0b0a4280a95f07e2017b56ed1f",
     "Core.Site.Entry.instDecidableOwners": "9936df4df556b83ad41fdbbc05516cba2002cb5f4f50ea5b7e7e077c72563822",
-    "Core.Site.Entry.instDecidableReached": "dd179242e07d34148e64ee96576e6b47aadddec258322937bdb6abd18db8290d",
+    "Core.Site.Entry.instDecidableReached": "ab0dfee2fa2a23719efe78607e690eb2522c107144f6089a0a35ae3c8d206895",
     "Core.Site.Entry.instDecidableRefs": "3d1419192d47380b4d14a78c180aca16062d3711e09b472869ffe97203d1e79d",
     "Core.Site.Entry.instDecidableSheets": "6cf1c2b4130aef86908f27fd640e21f729429af9b5bc2cdf5a5ee4af61f54eca",
     "Core.Site.Entry.links": "77a73c76b5cc4deec03fbe59aaca292491a1a6f6df0d5c91e86402476a2bb00c",
@@ -12919,12 +12861,9 @@
     "Core.Site.Registration.Auditor.key": "5a2a248a0274dc2a7851af85b94c921aaf93f9cbac5cb93266ca81772590e2ae",
     "Core.Site.Registration.Auditor.sheet": "5ecf85392272c98e7cd2b3e64d82625a8ea02aa6786108a332ff9172338026bc",
     "Core.Site.Registration.Auditor.tolerance": "912f8c3c39c023cdc58b823e80ade3e95050ce49ce78e226f7d1b9786cfa253d",
-    "Core.Site.Registration.Composite": "2e1b980aa1cd8d9ea32c8bf9e11bf6ddfa895b2afe722ea1d337f56f97699c7b",
-    "Core.Site.Registration.Composite.casesOn": "306d9c222f0c04fafee53b7e18f37f277502b2c2f1c72bb2a0bf583fd8354b2c",
-    "Core.Site.Registration.Composite.ctorIdx": "246b1561575a4b7554e221d6dfb381f550da655ec49133d179c661127cd2aa14",
-    "Core.Site.Registration.Composite.onsite": "453704984c647f9a9c46228352560528f28cbdc204381693f4ab8e0d5cdfde75",
-    "Core.Site.Registration.Composite.rec": "a4ec01098e93079812a006e03423f1228b937477f586ef23102ecc801369b7d9",
-    "Core.Site.Registration.Composite.remote": "9a14ca5183140b67e7444f1c54d48eff099dc6d25a51594773a2b5c905d0912b",
+    "Core.Site.Registration.Composite": "0c7b37ad296e9c3a9c5d6419612339b1136a099e152be7113b23011974bbef31",
+    "Core.Site.Registration.Composite.onsite": "d6a912f3c2377a00bca971e93cf149b79b7442637f9bba7b3982ef7c5b038d3a",
+    "Core.Site.Registration.Composite.remote": "528cfde005a6f281e51efc135eebc3c761e99bcb7bec27bda4e7bc5d0d27e15a",
     "Core.Site.Registration.Digests": "bb847dc0b2a027451de17008edf9687e00a47e19a2e85ac406986006a3f740f6",
     "Core.Site.Registration.Digests.entry": "8a14a5d840b54c0c3fc7616993766b21905ac806ad2a683d7056b9b83e30b226",
     "Core.Site.Registration.Digests.genesis": "694562da50da0c8b021b7ba8a37a84b534b1df9b7d4a8e01679b2dc25ba513d0",
@@ -12952,7 +12891,6 @@
     "Core.Site.Registration.Refusal.unknownRef": "adae5ee48a84260268b7e12e5be91b60988496806351de2977549f7ff2b04789",
     "Core.Site.Registration.check": "83abccc2c75db1d1420894c1ffb9d276ded050362080c2741f1810b6bc40a4a5",
     "Core.Site.Registration.check.go": "2fce0bc715f338f769d915724ebe93bc7fd316fdd4769378985a86c724a704a5",
-    "Core.Site.Registration.instDecidableEqComposite": "2942366c16fb0a63de34c5fbccf7788d869f6a6bdb5758114d6b019fcd069fcc",
     "Core.Site.Sheet": "ecb222e8e6e5298832a9b49d7d5d44df2565806b28c750ecb0341afb4a331fd8",
     "Core.Site.Sheet.bw": "111bc1727fbf8cc78af49b074b5b5f005efd63538bae4e2caac37defaa6eac0b",
     "Core.Site.Sheet.chip": "ddded7c77056855baa24060a0261a6f28f20eb3177410bd7735ea1f2f7515359",
@@ -14418,7 +14356,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "0d92b2e5bbfb5001b6f99ec253e2f5fa5d28ce6ed8baaeb8254577693d0d9a60",
+   "digest": "f8dc91a811687caff72e9b63129892c3a93f778a45033b3bcffd5055a33f7e1a",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Auditor": "625eec8c800db32cc74de43bc0c35aadce84e8c88036031c6f1ffd9e9e5b564a",
@@ -14428,12 +14366,9 @@
     "Verity.Registration.Auditor.tolerance": "82a38c02a0c96eee25c346751d33001f05e20300003819a7903aa3143b94c291",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
     "Verity.Registration.Builder.B": "4ea94ec6c82857314aba12667f0e9088a8fcc16ec4983f80cb1ef4ad53c7a54f",
-    "Verity.Registration.Composite": "b66179bc3beb62b2de49a554bd0fd4d6cbd3572983ada05f63f79cde14ef6f61",
-    "Verity.Registration.Composite.casesOn": "8c7c72863c00bdb7eae496cb1552062e6a8aa3ff88be2bec45a6906e6d82fc79",
-    "Verity.Registration.Composite.ctorIdx": "d151098dd83bcf4882c733ceb0760df5cbe513d06ea93faeadb1d8760accc749",
-    "Verity.Registration.Composite.onsite": "3a7e6bf56f4c7e7efa3a155b116410f9fb147c0d4516e8a421d4cb3a7cc14656",
-    "Verity.Registration.Composite.rec": "d51de7befd20e2119ca04658efc6fa59d92972919de3142c0dc5fda4474855e1",
-    "Verity.Registration.Composite.remote": "90abf5816d63155166f790644bba00602853bdd5a59cdb49e6a91cbdc25392a0",
+    "Verity.Registration.Composite": "e2f6823d5fa8fca82f2f9a54a9478aac12799c5dfa9badcf3990d402ef7b9363",
+    "Verity.Registration.Composite.onsite": "a3732978de6cc3c9902e6f4183bb8312cb9567d3357e48ab08a1ff647f515d03",
+    "Verity.Registration.Composite.remote": "6700896ebbe9a334cdbf12a884492d9867301055a47d7d2b16d5b03c5c2e30b1",
     "Verity.Registration.Declared": "19ec364a529867d84086e19a86d2eb55146219369a71933ddddb1c4db9868d49",
     "Verity.Registration.Declared.day": "b9672ef317ae97d32d170d8ffa6b19d1b17a279a0542557cb396fb84ccfa0e57",
     "Verity.Registration.Digests": "0a180aa1db6c1e6bbcac38796eca3c144d72bfe1cbfa2c2563a2e9b84079bdb3",
@@ -14487,7 +14422,6 @@
     "Verity.Registration.builder?": "db73d6d7ed0b9999bcdbf9fc8e0f13112d70dc47f282feae0943a265c7a216a2",
     "Verity.Registration.days": "1b15209f4049edeaa9ad491b098a9489d69cfb48c09797de6a55772bc118daea",
     "Verity.Registration.head": "299f01f74a7b069106131577c68600dbfe6d3c5045e69dc3691290be28e4da15",
-    "Verity.Registration.instDecidableEqComposite": "dcfa97f3862baf2522df1a93d51c3c8772e9adb41bca66f09245d22f95cbfb30",
     "Verity.Registration.instDecidableValid": "76d07333ee6beacd614e8801d28f0f074f3afe8f63b529eec60e79a0e8081ca7",
     "Verity.Registration.items": "d993e0f953c7ea5f4293ed172aa371168d27f7c37cf957882e986f85024de0d6",
     "Verity.Registration.theta": "7c0838a8b1b1426b2f24da6346bbe18eb4ce285ba459392fe9ab84f2c1d8cc79",
@@ -14506,12 +14440,12 @@
     "Verity.Site.Entry.Sheets": "5d68034d0c99c22f70fd9ff6a449969b1a40bfe69de74586f3d802c083c47fb6",
     "Verity.Site.Entry.Valid": "3e4b03cf62321bbaf3d34bd4a0b5269f3ad5fcc990497dd2619da74062b2be47",
     "Verity.Site.Entry.instDecidableCapacity": "bb97cce9f80d77bafdfb6543c3826d7c4499ff572f69ced1af1413d528d28a94",
-    "Verity.Site.Entry.instDecidableCovered": "969627471adf877fd00e488f0870ddc4c4bfd1a7bf132e68e8423e1624678ec0",
+    "Verity.Site.Entry.instDecidableCovered": "f3155a5095ab17adacb7566dc3eed1d8e87ed50b9a6478da02d9132d0944b84a",
     "Verity.Site.Entry.instDecidableFigures": "72d28af9f71c1f45e25691828d879c15de2402bde0a698a8d752dd097fd845ab",
     "Verity.Site.Entry.instDecidableFresh": "6fca035105cb95df7602c71f8597a0e0b4cb42c9629e84f00d3e0283108d3fa5",
     "Verity.Site.Entry.instDecidableKinds": "3ec5812ea99fe2aa1e0cee49476025d8f3527997b6c17886563f8560bd65aa7e",
     "Verity.Site.Entry.instDecidableOwners": "d7acaa2e3ff6aa48657eacb4e180a943ed0c93dba8323703c13892fdb114d557",
-    "Verity.Site.Entry.instDecidableReached": "92701cef959343a3af7d0d7032fdd7db65ac4e8b2bab915ec8487f27ca1f5871",
+    "Verity.Site.Entry.instDecidableReached": "8c5164d32342cce62ef8ae116a74428ca52d3abb6265237fc7c82a801f24207b",
     "Verity.Site.Entry.instDecidableRefs": "3e09ca9b58c745dde0ea7ac476f656b3293dd20b43a24d2516d90b3f2ad72009",
     "Verity.Site.Entry.instDecidableSheets": "27ae4be1303b550c12dc635ca19f4b0939cbd69a958fc10eca900f0b991f0131",
     "Verity.Site.Entry.instDecidableValid": "1dd228409540a554a2dac2fe77a07fce4226e63f9725232c2c1cd7f61013d71d",
@@ -21233,19 +21167,18 @@
    }
   },
   "Properties.Core.Site": {
-   "digest": "7f7d9628c628d71e57db859cbe4f77d5378dfe7f87bc3b307cd51fc7791e4caa",
+   "digest": "4de04ef0d7873a51c4ee099559e3a82dc8bcefc2804174f958f7e16522f6343b",
    "definitions": {
-    "Properties.Site.Checks": "5c85187526f36ba56b770f4afe24668dd29ba8e1be76f0a2c9805525f46e7ef1",
-    "Properties.Site.EntryValid": "1c71e5f970302b6d0e99303656e552e42c79f58cc1a20506b7c3dd32559f4828",
+    "Properties.Site.Checks": "865d94c499b9ca97f43fc9681d83a59f761a0a610384c4ae03fa5b87d313b474",
+    "Properties.Site.EntryValid": "0e3ef25549ae8d8a9f3d6d42b0e78346b10859b4d3c36ba18934865f013dc50a",
     "Properties.Site.Fold": "3ce6342cf94c0c55b7b67d3a692e2bf1e35bcd4c113d4cd95d23ed34a55ad72a",
-    "Properties.Site.RefusedAt": "b37514c9d7fa25933cc7ada2ec4ab9e0917bb35e76ed7888f72c7a3f5ad3a3d4",
-    "Properties.Site.Refuses": "557604ef82abca6cd2e034c7d741d3b7df99aae695450de191031e2510d594ec",
+    "Properties.Site.RefusedAt": "90508573cb11d6d4cf7ab923ed8297c3638be890605949901fabe89a91ec7438",
+    "Properties.Site.Refuses": "521da3a70bf02758b487c8f700d5f57dc54ac013b18192fbd93c85000a47755a",
     "Properties.Site.acceptAllCheck": "1d1da3316b1a8b84008be81f29230714002a8e6b9d2c5c5fcfb0dfba06b321c9",
     "Properties.Site.acceptAllRefusal": "375be3f8729607be48170c4dd925d03df18e1222c7f4ee60c6bd981ba431bb9f",
     "Properties.Site.auditor": "b8ea7c2e7d50896a547e333d95e7c8c804c41c9967ac2b026bb1cb875dff854c",
-    "Properties.Site.composite": "7259041160bace39a769737e30912cf820dde7a8224d8515d0bc04244e5f8911",
     "Properties.Site.deviceFigures": "88ea3c9afa057fd7a6a77d00598f0482e51f92624b1beb1a425539c394f81c70",
-    "Properties.Site.digests": "ab2c71d0b6b15170fd1e94e15f200b6b034604533e93bb0ff5420a258f0f4e8d",
+    "Properties.Site.digests": "5ff148d707ed6691633f34571c4e59b34371e47b1f48baf22b43847ef2ed8209",
     "Properties.Site.emptySite": "1178ae5b718ff1a8b8b1895932930af796635f3155f0ec938aa2dd18656224f0",
     "Properties.Site.entry": "c4fdf0117486c2b8e71fe3b61fe87d5007c6d3b497abebb1adde88fae9f812a9",
     "Properties.Site.figure": "7a6f7d232dfb4a1597ed707afded0e4ef18729802275fab9bfcc823f98718b66",
@@ -21256,7 +21189,6 @@
     "Properties.Site.link": "1d7b7f10eb735c2e42f6646e373f087ef4663e653e813754b71130bf0623b319",
     "Properties.Site.loc": "48098101d6716c94578d650d7932782e99908c736d75c1788c719230afe7373f",
     "Properties.Site.log": "c2eb2d9d5ae0850430e0ab9344d4dacf766b7a23a89473934d8eb13493262c1a",
-    "Properties.Site.ofComposite": "a4ac12415caa4b912f8048522495828a4db8adb791e972e52db936e7d9835af5",
     "Properties.Site.ofDeviceFigures": "9c5e64031cdf8dacaa2e9c47e10c1873a90181a2e25d968ab3c717b6866258b0",
     "Properties.Site.ofEntry": "333178a7d7b5191dff8f8c2b8e54eaac17f1397937bf043211fd1c8b02406edc",
     "Properties.Site.ofFigure": "a3ab982cf6532899b3a9dee3d3c3f0a0ffccbaadc9568ec96c0d83aed915b3d8",
@@ -22466,7 +22398,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "b9c7058d62aa6c53adedcf16dbe1525e238acc8c860143927358fb90cbe4f0fe",
+   "digest": "b9cbfeae1bb527aaf750bd82ad0694c45a253fc27813274155b8c1972ca3adee",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -22533,14 +22465,17 @@
     "Verity.Signer.signatures": "2cf796a4c70700cdb6a133d0801f9340f6be6e3cba7a8c6c2db1df858bbe0f2b",
     "Verity.Signer.signs": "62ff9f40c5c2677fdcc3421d64b55aadb5b8ee2cafc502e49111d3e4db6cacc9",
     "Verity.Subprotocol": "a5a35b6feeab7a779760541bdaf8a4b0b154f688e765e8a55269221e5dddbeab",
+    "Verity.Subprotocol.all": "9be230028416297a8c4139f79ec327a888ab63db1eb29bb5c31cd8330672aea4",
     "Verity.Subprotocol.casesOn": "c740765e6e3eeec200c773e394876cb9426c020efbd0cc9cadd68f0a046f4004",
     "Verity.Subprotocol.ctorIdx": "550d10825f823ee123b49c94f046eb339df5fa4d42a3d9356833d6f239f3a3a3",
+    "Verity.Subprotocol.id": "dc3530d1f78cfd26e248e9911bd28ea2c5d6e3183c7e81ade3fdab34611e8309",
     "Verity.Subprotocol.inferenceOnly": "e2d53b0be3473a85e1df07caa01184d338c9a3340251aa4a4dcac26a2159bfee",
     "Verity.Subprotocol.network": "0be1c8291d19cf3faa1d1dee20d298eeeda14628ba4015f9ad3a614807b42e3d",
     "Verity.Subprotocol.ofAudit": "5c1dfcd293d5f46c018b3e89a24351dd09db29a097c811cb1082209793537dd4",
     "Verity.Subprotocol.poub": "f39baa1de1e7b5e73c21ae5bfa75eaa62c8efb0b5e6199da54e6b3074f5d90ef",
     "Verity.Subprotocol.pous": "c631ac0f593e9df91d62e8ca2837ec81a1970e1e8c64c8da6f8ca64efd917af6",
     "Verity.Subprotocol.pouw": "80ccd495d963f37b56bfde82ac4f8bf195ae91d3208d9296dc9f228db0fcf565",
+    "Verity.Subprotocol.protocol": "e0fe7727cf682dcbe3302c40a71aa20fb794c3e1d7d4e098e3719da16c625047",
     "Verity.Subprotocol.rec": "93e91d92b8a5c8ea230e34c3719be18c64082aee7b60900da55021eacd3e5c86",
     "Verity.Subprotocol.sampled": "69d73672cf8533483ecca485114db9a5a632d33f7520a8a8d2f92d3030013496",
     "Verity.Subprotocol.wipe": "cc4050252c3fe7821a1b748b71c068867616e91d64091e6426cb946f8b8cfa3e",
@@ -22552,25 +22487,18 @@
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
     "Verity.Vocab": "326b175cc0d73eaa6baaa0c433d387e1d331ae9533489215ce5eac36b1b7da00",
-    "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
     "Verity.Vocab.FinderCR": "edaced35a3cbb1f7a3749d5c50cb3ad2a2e14f7ef6d00c633e9cbb3520429084",
     "Verity.Vocab.Holds": "4d3122b84d73fce763002a7789f07051de1e31d9c17e2739703ebb25cc8f884e",
-    "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
     "Verity.Vocab.Logged": "e17d736e0f3016e0383e66eba5b8b455bcd85f47e2d3c3dfde28546c9ad33c53",
-    "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
     "Verity.Vocab.Opens": "dc9e98de8f4dd3c8d8e67112689b4467fc5ce5da8864de1d8fef43a123d101bf",
-    "Verity.Vocab.PousSound": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
-    "Verity.Vocab.PouwSound": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
     "Verity.Vocab.Registered": "42e334619ebedd0e57f2d5b946fb9ccea7e5cf4e058a0655bb0da2595204c6b0",
     "Verity.Vocab.Seed": "b425dc76367208a8048429d13584d9413fd72d43fbc869e30b4db63bee6887c7",
     "Verity.Vocab.SoundnessAt": "5c16d6fe840a7501c8a209350b72fef7e08c1fd87eeaba7ed2e3ba2c6fe9aede",
     "Verity.Vocab.SoundnessFor": "ec85f37fa08d951e3ec64d7046fbe0bfd2c26630d76798aa421bed2c9ab68631",
-    "Verity.Vocab.SpotSound": "b7ab8cda9c268d16040b48f836d5100a26dba3e1ccf4d2126ae9b2de88d8f4ad",
     "Verity.Vocab.Spots": "3726a00bad38797134319fbf5b34cc2898457b10120af917e7b8f5818db2bd76",
     "Verity.Vocab.Target": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
     "Verity.Vocab.Unforgeable": "829ba2c9edcb766d0b28e4e8c71be2ddf0a521e01f0d3db5590f46042d2731f2",
     "Verity.Vocab.Verdict": "f92a5af0f0cede11a4233bb6da19cb08c8025c0efc96a23b5bea5e2918282b7d",
-    "Verity.Vocab.WipeSound": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
     "Verity.Vocab.boundary": "900af0bbd6d3eebb45d65ad8dbd3d88017c3933ff54ecf93af125a8837720fe0",
     "Verity.Vocab.callsAdd": "c3e8585bb7b914dcf7586f19146d8ce381e663b69f85f9bc13f55b64d8178d6c",
     "Verity.Vocab.callsMul": "626d7b3ea455cda365e793440bc647beb9738b751f8838aac23a229b96f0a26e",
@@ -22611,11 +22539,13 @@
     "Verity.Vocab.wipeRun": "4d9cd57dcc03702b6dd8ce7d2b9b13b6c71bcfd3795539bf05f61997ca6aa227",
     "Verity.Vocab.world": "8a9584fd68c502a7136bdaea15c6f176d9c083c29b4d6bfdac5f535e3e9cab89",
     "Verity.World": "d1fd27649082169fd265687cd347cc30157f7ea1968e75a2d8cfd1db27557792",
+    "Verity.allTies": "c2447175874cea7c2c71f10c7e90572bae1de2e74df35cc27ff746e405054b58",
     "Verity.bitsOfBytes": "5e0b24cf3ac712eb39b3f7da75101dbdcbba6e73221c477befaa895ed1e13423",
     "Verity.bytesOfBits": "236cbc53960d78bb47d25ee9659eedb67f233df717a9f48b19f04ba09b90c053",
     "Verity.closeThen": "9e43b6572290359c6d4e9991cfc72e29bbfedd6499f6d54648a6bca1c903bf6a",
-    "Verity.component": "7afdd94aa076686ad7a2786237cedbc650865afbb1e690965a7fa67c7950cdd1",
-    "Verity.componentsOf": "3105ab88ada7396296740344fb1bf77dda9ec3f17298a8aa3aea6c0ad688481b",
+    "Verity.component": "83e2744237e07a388143146c2c7ec43edaed5d43cb5939eedf9a1860a2f8af8b",
+    "Verity.componentsOf": "54b06d73d3e960f61dc4803f7802bcc95c6fd88cc1a1d35782ebf1a4efb2cab6",
+    "Verity.compositeId": "4487f33e928884cac3f5a71794897ec77865e9b2e8677f460f979c7a8cef27d5",
     "Verity.finderCROf": "310883a449c457aef6956b5caf2aecd14371ef9778bc20e47bbffef3bb90ab44",
     "Verity.finish": "364bf4ff976e866c5449238c01e4a2ac1c8ac6ddc947d9720641d06cf8c09a8e",
     "Verity.frames": "70c0a41d26a8677b15caced12c6d1e9e61d7259177ecc0a32ed4ff41606e2efe",
@@ -22632,8 +22562,8 @@
     "Verity.sha512Msg": "3fb17014d068a5ee9446e95057ecee922f7236ff6db8a8a8167135c2f044a07b",
     "Verity.subprotocols": "166b3e753488aa75de4e0365502275fa91b6a6ee7697a77723db7610f6bfe09b",
     "Verity.takeCoin": "5193fdb4beb57e000e16d5feab7919fb8585ac4950f6701c8eae9bd8102edc79",
-    "Verity.tied": "32c2fac95ce4d5965541eb0d094664ca823980ced97c9e105343b0d1cd7e6389",
-    "Verity.ties": "e2da476ba7446492ca78f2de5c565d890af89236511aa48d51b7ed6805036c7b",
+    "Verity.tied": "dcb547d1864d78f658b89297f01d403d0390f439d39785579e39aef809e7388f",
+    "Verity.ties": "985f34b84f1d863dcf8a30f1e851fc97a44bd8bfc9e8991963431afea2ed27ae",
     "Verity.treeCoins": "46c86749aff0a445901f2cea24792f2f832690de2e1cc01dac62d5e656337664",
     "Verity.treeHash": "815b3841dbc285821b2e638b78b5cdd63b8b1f226df010fd12e814017c70ff5e",
     "Verity.treeKey": "3ecd540d47023d77ab3e73a400dd961da07a164afc37d0ad7da59342e9076165",
@@ -22643,7 +22573,7 @@
     "Verity.treeTag": "d7c20ee1cb125f76bd905e393fd83cb7763fd6810510f05d677a5cc093aba171",
     "Verity.treeTop": "1f8c4bb5b694adfb4708a3b064568ed06b729135a7fe29a741bba349cfa4dde3",
     "Verity.treeUp": "ae8477ef00dd086b9c38bb0c7309f7b26679e00a491fffeba3d2be8e96468af9",
-    "Verity.verifier": "b7fae89e9429a2c64f9a8fa675470db7f9a0c069215ef2d650eef6087188ffda"
+    "Verity.verifier": "5b4c7ed90188f8df92961c2c26b3dcfeafd1e00d512cc762000205102168bae0"
    }
   },
   "Properties.Verity.Idle": {
@@ -22673,10 +22603,10 @@
    }
   },
   "Properties.Verity.Soundness": {
-   "digest": "18ee5f5cab5ae04e6ef9dc13c17bf187cc245a9ba7233dfcaeff48d9462b01dc",
+   "digest": "9dbab5f36e116cd89d4822a3f4b37bf187dc37df59834b64d9b29f849667b8da",
    "definitions": {
-    "Verity.RemoteSoundness": "d9d45508b013d47b813919b07749041907afaf701f39a1ec2286e227ed7e22dc",
-    "Verity.Soundness": "b81c345a1f8c793d5569d5d1e22d153cbab06af99f472af8c9b325858d421a7e",
+    "Verity.RemoteSoundness": "746e17b99dfdd607cb1def7cfe02d63fa0c371acb465b5a5eb723e666abb6c4f",
+    "Verity.Soundness": "f6b605f688a57025f337170b8cd20a257e25d8093ba36723781b27eae1855d30",
     "Verity.SoundnessOf": "3abf7fc71d4cd416ddc449573787ec1779a9ce603411ea3dfaa949b52eb6ce1a"
    }
   },
