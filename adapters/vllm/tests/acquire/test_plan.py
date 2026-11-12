@@ -210,6 +210,7 @@ def test_a_tap_family_whose_module_is_in_the_tree_has_one_site(family, op, membe
     plan, _, _ = make_plan(base_rows() + [row(family, op, member, **extra)])
     v, = (v for v in plan.values if v.family == family)
     assert plan.complete and [(s.kind, s.module, s.slot) for s in v.sites] == [site] and v.chosen == v.sites[0] and v.why == "one legal site"
+    assert v.rejected == [] or family == "scale_products"       # the scale-products rule alone runs on past its site; what it then refuses is not held here
 
 
 @pytest.mark.parametrize("family,op,member,extra,kind,slot,why", [
