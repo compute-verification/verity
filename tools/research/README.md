@@ -89,6 +89,7 @@ research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay 
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (infra/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
+research run-preserve PATH [--kind K] [--meta JSON]              # in an --on run's workload: its runner preserves one file of $OUT now (§10.1)
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
@@ -99,20 +100,21 @@ research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, le
 research tele SUBCOMMAND ...             # the harness's own surface (below)
 research jobs add|list|show|cancel|events ...   # the Job queue (below)
 research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
+research velocity [--line|--json]  # the velocity score from records, never a gate (velocity.py)
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
-research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
+research merge --mirror [SHA]  # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats [--json] [--short] [--rounds] [--until TS]  # queue_table.py; --log FILE: queue_stats.py
 research lean-times ...  # Lean tasks' p95
 research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)
-research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
+research git old2new|remap|check|build ...  # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
@@ -160,14 +162,11 @@ regression's manifest rebuilds, which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
 policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure; a failure its
-base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
-without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
+checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
-there (`research queue review`) or changes nothing drive.toml's `lowrisk_excludes` names. `ready` and `open` only warn of a
-body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes from KEY's goal label, nor `Issue:
-none: REASON`. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
+there (`research queue review`), or changes nothing drive.toml's `lowrisk_excludes` names, or is a move's PR whose move
+the loop certifies. The mark's preflight refuses a lock merge dropping an entry the merged tree's statements need
 (`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
@@ -262,7 +261,8 @@ carries the history). The machine checks the commit's tree hash, extracts
 launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
 `run.remote.source_transport`). A machine without git, or any failure of that
-path, prints one line and ships the archive stream as above; nothing is ever
+path, prints one line and ships the archive stream as above, given `.git` in
+place once a push lands; nothing is ever
 marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
@@ -300,7 +300,8 @@ what is in use (page cache excluded), minus the not-yet-used part of every live
 reservation in the fleet's `/workspace/ramlock/*.json` (machines.toml
 `ramlock = DIR` overrides it), is at least N. They count against the machine's
 outermost limited cgroup (a node's user slice), not the run's. A reservation is live unless its
-pid is gone or its run is terminal. The run then writes
+pid is gone, its run is terminal, or it names no pid and a run directory that
+is gone. The run then writes
 `research-<run id>.json` there, and the runner removes it at exit. Otherwise the
 run is refused with `MemoryNotAvailable`, and `refused.json` gives every number.
 `--mem-wait S` polls for up to S seconds instead. job.json records the

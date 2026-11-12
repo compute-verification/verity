@@ -1,33 +1,33 @@
 #!/usr/bin/env python3
-"""Depth-R same-word binding of the fold.
+"""A search of the same-word R-round fold for a change to the word that it does not see, over one family of changes.
 
-The served-GEMM scalar-only dial absorbs the SAME committed word R times through the XOR-in(13,19) fold with the SAME keys
-every round (benchmarks/pouw/edited_gemm/egemm.cu's EG_ROUNDS; receipt_folds_r9.xorin_step iterated). This closes the open
-piece: the R-round fold still binds the word with no new luck term. Binding is the trivial-kernel criterion g3-chains uses
--- on the full 2^n state space, no nonzero change to the committed word's four s32 limbs leaves the R-fold output fixed on
-every state (an "all-state collapse" is a kernel element = a break).
+egemm.cu's EG_ROUNDS absorbs the same committed word R times through the XOR-in(13,19) fold with the same keys every round
+(receipt_folds_r9.xorin_step iterated). This check builds each R-fold as a permutation of the whole 2^n state space, at a
+reduced width n with small rotations standing in for (13, 19), and looks for an all-state collapse: a changed word whose
+R-fold equals the original's on every state.
 
-The theorem, and why same-word depth-R is NOT g3-chains' open case:
-  * Runs of >= 3 are open only in the alternating shape (T, R, T, R, split), which g3-chains shows needs the per-round
-    keys/words to ALTERNATE (pairs 1 and 3 carry a key near +-1; pairs 0, 2 do not). The scalar-only dial folds the
-    IDENTICAL word with the IDENTICAL keys every round, so it cannot realize the alternation. Hence at ODD depth there is
-    no collapse at all -- confirmed here exhaustively over EVERY odd key pair, so key_ok is not even needed for odd depth.
-  * EVEN depth R = 2, 4, ... is an iterated run of two. g3-chains proved runs of two impossible under key_ok_r11 (its
-    KJ19 clause rejects keys ~ +-1 to the relevant power of two). Confirmed here: the only even-depth collapses are on
-    keys with that KJ19 defect, and there are none under key_ok_r11.
-Together: same-word depth-R binds for every R under key_ok_r11, with no new luck term. (key_ok_r11 = key_ok_r9 + KJ19;
-egemm.cu currently derives keys under key_ok_r9, so depth R >= 2 needs the KJ19 clause added -- a claim for the coordinator.)
+What it searches:
+  * The changes (`perturbations`): 5n + 2 a word. Each limb's single bit flips, a +1 on the two added limbs w1 and w3, and
+    the paired bit flip on the two XOR-in limbs w0 and w2. It is a family, not the word space.
+  * n = 8, rotations (3, 5): every odd key pair, one word, every state, R = 1..5.
+  * n = 10, rotations (5, 7), and n = 12, rotations (5, 11): 300 and 150 keys that the reduced key_ok_r11 admits (near-inverse
+    pairs and random ones), 3 and 2 random words, every state, R = 1..5.
+  * 32 bits, rotations (13, 19): a few key pairs that key_ok_r11_32 admits, 4 random words, R = 3, 4, 5, on 2^13 sampled
+    states. A sample of states can show that a change is seen, never that a change is unseen.
 
-What is verified (each R-fold built as a permutation on the whole 2^n state space, at reduced width with small rotations
-standing in for (13, 19); then a 32-bit sample on the real rotations):
-  (1) n = 8 EXHAUSTIVE over every odd key pair, every perturbation, every state, R = 1..5: zero collapse at ODD R; every
-      EVEN-R collapse sits on a KJ19-defective key; zero collapse among key_ok_r11 keys.
-  (2) n = 10, 12 over key_ok_r11 keys (dangerous near-inverse + random), full state space, R = 1..5: zero collapse.
-  (3) a KJ19 positive control: a key ~ +-1 collapses at even depth (the search sees runs of two), and key_ok_r11 rejects it.
-  (4) 32-bit over the real (13, 19) and key_ok_r11 keys, R = 3, 4, 5: zero collapse.
-  (5) the mirror is faithful: one fold round equals receipt_folds_r9.xorin_step (the pinned r9 reference).
-Positive controls: a degenerate key a0 = 0 drops limb w0, and a zero-round fold ignores the word; both collapse, and
---mutations confirms the checker catches each.
+What it reports, of this family alone:
+  * n = 8: no collapse at odd R at any odd key pair; every collapse at even R is on a key the reduced KJ19 clause rejects
+    (a key +-1 mod 2^(n-2)); none on a key the reduced key_ok_r11 admits.
+  * n = 10, 12 and 32 bits: none on the tested keys.
+  * One fold round equals receipt_folds_r9.xorin_step, the pinned fold.
+Controls: a key near +-1 collapses at even depth and key_ok_r11 rejects it; a degenerate key a0 = 0 drops limb w0 and the
+search sees it; --mutations runs that key and a zero-round fold as mutants, and each must fail.
+
+What it does not show: that a depth R >= 2 commits the word. benchmarks/pouw/theory/fold_kernel_check.py enumerates the
+whole word space at each key it is given and reports a 16-element group of changes that fixes the fold at every key and
+every R, and benchmarks/pouw/theory/fold_open_shape_check.py gives n = 8 keys that the reduced key_ok_r11 admits at which
+further changes fix the fold. EG_ROUNDS == 1 is egemm.cu's default and the fold of record; egemm.cu derives its keys under
+key_ok_r9, which has no KJ19 clause (key_ok_r11 = key_ok_r9 + KJ19).
 
   uv run --project .../exact_kit python egemm_depthr_check.py [--mutations] [--verdict PATH]
 """
@@ -38,22 +38,26 @@ import numpy as np
 from exact_kit import wrap
 from exact_kit.checks import Checks
 
+__all__ = ["key_ok_r11", "key_ok_r11_32"]
 
-def xorin_step_ref(y, d0, d1, d2, d3, a0, a1):
+
+def xorin_step_ref(y: np.ndarray, d0: np.ndarray, d1: np.ndarray, d2: np.ndarray, d3: np.ndarray, a0: np.uint32,
+                   a1: np.uint32) -> np.ndarray:
     """receipt_folds_r9.xorin_step verbatim (rotations 13, 19), inlined so this check is self-contained: one absorb of a
     word's four limbs into the 32-bit state (uint32 wrapping). The fold below iterates exactly this step."""
     y = (rf_rotl(y, 13) ^ d0) * a0 + d1
     return (rf_rotl(y, 19) ^ d2) * a1 + d3
 
 
-def rf_rotl(x, r):
+def rf_rotl(x: np.ndarray, r: int) -> np.ndarray:
+    """x's 32-bit words rotated left by r bits."""
     x = x.astype(np.uint32)
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
-def perturbations(w, n):
-    """Every nonzero change to the committed word's four limbs we test: each limb's single bit flips, a +1 on the added
-    limbs w1, w3, and the paired bit flip on the two XOR-in limbs w0, w2 (g3-chains' family shape). Returns (P, 4)."""
+def perturbations(w: tuple[int, ...], n: int) -> np.ndarray:
+    """The changes to the committed word's four limbs that the check searches: each limb's single bit flips, a +1 on the
+    added limbs w1, w3, and the paired bit flip on the two XOR-in limbs w0, w2. Returns (P, 4)."""
     m = (1 << n) - 1
     out = []
     for i in range(4):
@@ -71,7 +75,8 @@ def perturbations(w, n):
     return np.array(uniq, dtype=np.uint64)
 
 
-def collapses(keys, words, max_r, check_rounds, n, r1, r2, force_a0=None, kchunk=512):
+def collapses(keys: np.ndarray, words: list[tuple[int, ...]], max_r: int, check_rounds: list[int], n: int, r1: int, r2: int,
+              force_a0: int | None = None, kchunk: int = 512) -> list[tuple]:
     """Every all-state collapse (a0, a1, word, pert index, R) over the full 2^n state space, folding incrementally so one
     pass checks every R in check_rounds. A collapse is a perturbed word whose R-fold permutation equals the original's on
     every state. Keys run in chunks broadcast over (key, pert, state). force_a0 overrides a0 (a degenerate-key control)."""
@@ -105,14 +110,14 @@ def collapses(keys, words, max_r, check_rounds, n, r1, r2, force_a0=None, kchunk
     return hits
 
 
-def kj19_bad(a, n):
+def kj19_bad(a: int, n: int) -> bool:
     """The reduced KJ19 defect: a ~ +-1 mod 2^(n-2) (the small-rotation stand-in for 32-bit KJ19's a ~ +-1 mod 2^13)."""
     t = 1 << (n - 2)
     return (a % t) in (1, t - 1)
 
 
-def near_inverse(a0, a1, n):
-    """g3-chains' LI-style defect that key_ok_r9 rejects: a0*a1 ~ +-1 2-adically (v2(a0*a1 -+ 1) >= n-5)."""
+def near_inverse(a0: int, a1: int, n: int) -> bool:
+    """The near-inverse defect that key_ok_r9 rejects: a0*a1 ~ +-1 2-adically (v2(a0*a1 -+ 1) >= n-5)."""
     m = (1 << n) - 1
     prod = (a0 * a1) & m
     def v2(x):
@@ -120,12 +125,12 @@ def near_inverse(a0, a1, n):
     return v2((prod - 1) & m) >= n - 5 or v2((prod + 1) & m) >= n - 5
 
 
-def key_ok_r11(a0, a1, n):
+def key_ok_r11(a0: int, a1: int, n: int) -> bool | int:
     """The reduced key_ok_r11: odd keys, neither key near +-1 (KJ19), and no small near-inverse pair (key_ok_r9)."""
     return (a0 & 1) and (a1 & 1) and not kj19_bad(a0, n) and not kj19_bad(a1, n) and not near_inverse(a0, a1, n)
 
 
-def danger_keys(n, count, seed):
+def danger_keys(n: int, count: int, seed: int) -> np.ndarray:
     """key_ok_r11 keys sampled from the regions the open shape and the family lean on -- near-inverse pairs and random --
     kept to the keys key_ok_r11 admits, so a collapse here would be a real break."""
     rng = np.random.default_rng(seed)
@@ -139,7 +144,7 @@ def danger_keys(n, count, seed):
     return np.array(sorted(set(out))[:count], dtype=np.uint64)
 
 
-def key_ok_r9_32(a):
+def key_ok_r9_32(a: int) -> bool:
     """egemm.cu's xin_ok_r9 (host): odd, low-24-bit window in (256, 2^24-256), rot not +-1 mod 32, and a*b mod 2^30
     outside [-128, 128] for every b in 1..128."""
     a &= 0xFFFFFFFF
@@ -154,12 +159,13 @@ def key_ok_r9_32(a):
     return True
 
 
-def key_ok_r11_32(a):
+def key_ok_r11_32(a: int) -> bool:
     """key_ok_r9 plus KJ19: reject a ~ +-1 mod 2^13 (covers both rotations 13, 19)."""
     return key_ok_r9_32(a) and (a & 0x1FFF) not in (1, 0x1FFF)
 
 
-def r11_keys(count, seed):
+def r11_keys(count: int, seed: int) -> list[int]:
+    """``count`` random 32-bit keys that key_ok_r11_32 admits."""
     rng = np.random.default_rng(seed)
     out = []
     while len(out) < count:
@@ -169,7 +175,8 @@ def r11_keys(count, seed):
     return out
 
 
-def sample32(keys, words, rounds, nstate, seed=1):
+def sample32(keys: list[tuple[int, int]], words: list[tuple[int, ...]], rounds: list[int], nstate: int,
+             seed: int = 1) -> list[tuple]:
     """A 32-bit confirmation over the real (13, 19) rotations and key_ok_r11 keys: no perturbation collapses the R-fold on
     a random state sample. Over states, so it witnesses non-collapse rather than proving the all-state kernel."""
     rng = np.random.default_rng(seed)
@@ -197,9 +204,11 @@ def sample32(keys, words, rounds, nstate, seed=1):
 def main() -> int:
     checks = Checks()
     rng = np.random.default_rng(7)
-    rand_words = lambda n, k: [tuple(int(x) for x in rng.integers(1, 1 << n, 4)) for _ in range(k)]
 
-    # (0) the fold is faithful: one round of the proof's fold == receipt_folds_r9.xorin_step (the pinned r9 fold).
+    def rand_words(n: int, k: int) -> list[tuple[int, ...]]:
+        return [tuple(int(x) for x in rng.integers(1, 1 << n, 4)) for _ in range(k)]
+
+    # (0) the fold is faithful: one round of the check's fold == receipt_folds_r9.xorin_step (the pinned r9 fold).
     a0m, a1m = np.uint32(0x9E3779B1), np.uint32(0x85EBCA77)
     ym = np.arange(256, dtype=np.uint32) * np.uint32(2654435761)
     dm = [(np.uint32(0x1234 + i) + np.arange(256, dtype=np.uint32)) for i in range(4)]

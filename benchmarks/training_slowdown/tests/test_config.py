@@ -2,7 +2,7 @@ import pytest
 from synthetic import tiny_registry, write_config
 
 from training_slowdown import calculator, config, starts
-from training_slowdown.routes import subset
+from training_slowdown.routes import ema, subset
 
 
 @pytest.fixture(scope="module")
@@ -36,6 +36,30 @@ def test_the_digest_is_what_decides_the_run(tmp_path, reg):
     assert config.load(tmp_path / "base.toml", other).digest != base
 
 
+def test_a_later_dial_left_at_its_default_is_out_of_the_digest(tmp_path, reg):
+    """A config that sets none of its route's `LATER` dials digests the dials the route had without them, so the
+    digest it had before the route gained them; one it sets is in its digest like any other."""
+    dials = {"trainable": "blocks.0.w_*", "lr": 1e-2}
+    base = config.load(write_config(tmp_path / "base.toml", dials=dials), reg)
+    assert base.undigested == subset.LATER and all(base.dials[k] == subset.DIALS[k] for k in subset.LATER)
+    assert sorted(base.run()["dials"]) == [
+        "clip", "decay", "lr", "micro_batches", "opt", "store", "trainable", "warmup", "weight_decay"], (
+        "subset's configs digest these nine dials: a dial added to it goes in its LATER, with the step as it was for "
+        "its default, or every config's digest moves and no record names its run any more")
+    written = config.load(write_config(tmp_path / "written.toml", dials=dials | {"schedule": "linear"}), reg)
+    assert written.digest == base.digest
+    cosine = config.load(write_config(tmp_path / "cosine.toml", dials=dials | {"schedule": "cosine"}), reg)
+    assert cosine.digest != base.digest and cosine.run()["dials"] == base.run()["dials"] | {"schedule": "cosine"}
+    unfused = config.load(write_config(tmp_path / "unfused.toml", dials=dials | {"fused": False}), reg)
+    fused = config.load(write_config(tmp_path / "fused.toml", dials=dials | {"fused": True}), reg)
+    assert unfused.digest == base.digest != fused.digest, (
+        "a job continues a kept state of its own config digest alone, so one kept without `fused` is never loaded "
+        "into the groups of a job with it")
+    average = config.load(write_config(tmp_path / "average.toml", route="ema", dials=dials), reg)
+    assert sorted(set(average.run()["dials"]) - set(base.run()["dials"])) == ["ema_decay"], (
+        "ema's configs digest subset's nine dials and ema_decay: a dial added to it goes in its LATER")
+
+
 @pytest.mark.parametrize("over, why", [
     ({"steps": 3}, "no key 'steps' in the schema"),
     ({"route": "nonesuch"}, "no route 'nonesuch'"),
@@ -47,6 +71,13 @@ def test_the_digest_is_what_decides_the_run(tmp_path, reg):
     ({"dials": {"opt": "adam"}}, "bad.toml: subset: opt 'adam' is none of adamw, sgd, lion, adafactor, muon, shampoo"),
     ({"dials": {"store": "q9"}}, "store 'q9' is neither full nor q2 to q8"),
     ({"dials": {"decay": 0}}, r"decay is a share of the steps in \(0, 1\]"),
+    ({"dials": {"schedule": "step"}}, "schedule is one of linear, cosine, constant"),
+    ({"dials": {"embed": "muon"}}, "embed is adamw or opt"),
+    ({"dials": {"gain_lr": -1e-3}}, "gain_lr and embed_lr are rates, or 0 for lr"),
+    ({"route": "ema", "dials": {"ema_horizon": 2.0}}, r"ema_horizon is a share of the steps so far, in \[0, 1\]"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": 0.9}}, "dials ema_decay and ema_horizon say one thing"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.1, "ema_decay": ema.DIALS["ema_decay"]}}, "route ema reads one of them"),
+    ({"route": "ema", "dials": {"ema_horizon": 0.0, "ema_decay": 0.9}}, r"its EITHER\): write one"),
     ({"budget": {"steps": 3}}, "budget has no batch"),
     ({"budget": {"steps": 0, "batch": 2}}, "isn't positive"),
     ({"target": {"gain": 1.0}}, "a gain over the start's own compute"),
@@ -87,5 +118,6 @@ def test_every_route_passes_the_screen_and_states_the_contract():
         if p.stem.startswith("_"):
             continue
         mod = config.route(p.stem)
-        assert isinstance(mod.VERSION, int) and mod.DIALS
+        assert isinstance(mod.VERSION, int) and mod.DIALS and set(getattr(mod, "LATER", ())) <= set(mod.DIALS)
+        assert all(len(set(group)) > 1 and set(group) <= set(mod.DIALS) for group in getattr(mod, "EITHER", ())), p.stem
         assert all(callable(getattr(mod, f, None)) for f in ("build", "step", "plan")), p.stem

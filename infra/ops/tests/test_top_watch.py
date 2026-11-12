@@ -1,9 +1,12 @@
 """Top's loops on the control pod (infra/control/top_watch.py): the asks relay applies Daniel's ticks to his Asks pages and rings
 the lane and top once each, quoting only his own new reply text; the sweep rings each finding's owner once."""
 import calendar
+import gzip
 import importlib.util
 import sys
 from pathlib import Path
+
+import pytest
 
 CONTROL = Path(__file__).resolve().parents[3] / "infra" / "control"
 _spec = importlib.util.spec_from_file_location("top_watch", CONTROL / "top_watch.py")
@@ -375,7 +378,7 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
     T.linear_audit({}, Ring(), at(19, 22), lambda: FOUND, lambda: VOLUME, None)
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
-                     "kinds": {"orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
+                     "kinds": {"unheard": 0, "orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
                                "title": 0, "landed": 0, "unlinked": 0, "stray": 0, "lane": 1, "parked": 0, "unstaffed": 0,
                                "slipped": 0, "repeated": 0},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},
@@ -389,3 +392,29 @@ def test_tops_daily_line_names_the_teams_the_audit_cant_read(tmp_path):
     T.linear_audit({}, ring, at(19, 20), lambda: [], lambda: VOLUME, tmp_path / T.AUDIT_LOG, lambda: ["HASH", "TRN"])
     (to, body, _), = ring.rings
     assert to == "top" and body.endswith("; no line 24 h earlier yet; not audited, the app can't read team(s) HASH, TRN")
+
+
+def test_the_sweep_saves_the_goals_page_each_hour_and_drops_the_dumps_past_their_keep(tmp_path):
+    dump = [{"id": "top/velocity-loop", "status": "on-track", "due": "2026-10-23", "title": "Vélocité"}]
+    out = tmp_path / T.GOALS_DIR
+    T.save_goals(at(1, 9, 0), lambda: dump, out)
+    T.save_goals(at(19, 20, 0), lambda: dump, out)
+    T.save_goals(at(19, 21, 2), lambda: dump[:0], out)                      # the first dump is past KEEP_S now, and goes
+    assert sorted(p.name for p in out.iterdir()) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2102Z.json.gz"]
+    assert T.json.loads(gzip.decompress((out / "goals-20261019T2000Z.json.gz").read_bytes())) == dump
+    T.save_goals(at(19, 22, 0), lambda: dump, None)                          # a dry run reads the page and saves nothing
+    assert len(list(out.iterdir())) == 2
+
+
+def test_the_goals_page_is_read_with_the_pods_site_key_and_its_absence_says_where_it_goes(tmp_path, monkeypatch):
+    with pytest.raises(RuntimeError, match="no site key at .*goals.key: put one with events:read there"):
+        T.goals_page(tmp_path / T.GOALS_KEY)
+    (tmp_path / T.GOALS_KEY).write_text("a-dummy-site-key\n")
+    seen = []
+
+    def answer(method, url, data, headers):
+        seen.append((method, headers["Authorization"]))
+        return {"goals": [{"id": "top/velocity-loop"}]}
+
+    monkeypatch.setattr(T.goals, "http_json", answer)
+    assert T.goals_page(tmp_path / T.GOALS_KEY) == [{"id": "top/velocity-loop"}] and seen == [("GET", "Bearer a-dummy-site-key")]
