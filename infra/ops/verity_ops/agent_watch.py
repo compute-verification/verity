@@ -101,7 +101,10 @@ doorbell as a Slack ts), which infra's relay writes, since only it reads Slack; 
 watch records it at most once per agent an hour, kept in `state.json`, and with `--wake` starts a run that says so; a wake
 refused with 409 agent_busy is recorded and counts as the hour's (zombie CREATING runs kept memory-accounting busy for hours),
 except that one whose run is WAITING_FOR_BACKGROUND_WORK has that run cancelled and the wake started again: Cursor refuses
-any run on an agent waiting on background work, so otherwise every such wake is refused.
+any run on an agent waiting on background work, so otherwise every such wake is refused. The wait is cancelled only if
+the agent's runs, read then (`unblock`), show it waiting still: the sweep read it minutes before, and an agent with a run
+RUNNING since went on by itself, in a turn the cancel would cut; that one, and one whose runs the API won't read, is
+left, and the wake is the hour's refused one.
 `--wake` stays off by default.
 
 A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
@@ -299,8 +302,8 @@ RECANCEL_S = 3600
 #: run for a person
 CANCEL_OFF = "/data/agent-watch/cancel.off"
 GUARD_TIMEOUT_S = 15        # a read an action rests on, made as the watch is about to act (the agent and the run before a
-#                             cancel; the agent's runs before a relaunch and at a refused continue): the sweep's own reads
-#                             are minutes old by then
+#                             cancel; the agent's runs before a relaunch, before a wait is cancelled for a wake or a resume,
+#                             and at a refused continue): the sweep's own reads are minutes old by then
 MOVED_S = 60                # an agent's `updatedAt` this far past the last event its run's stream gave has moved since (the
 #                             write an event makes may trail it, and an event is timed as it arrives): a broken stream
 REOPENS = 2                 # a run followed afresh this often for a broken stream is recorded, for a person
@@ -1584,7 +1587,8 @@ class Watch:
 
     def wake_up(self, a: dict, handle: str, run: str, why: str, t: float, status: str | None = None) -> None:
         """Record a coordinator ready to wake, and with `wake` start a run on it; at most once per agent an hour. A wake
-        refused because its run waits on background work cancels that run and is started again (`unblock`)."""
+        refused because its run waits on background work cancels that run and is started again (`unblock`), unless the wait,
+        read then, went on by itself or can't be read: that is a refused wake."""
         if t - self.woken.get(a["id"], -RECANCEL_S) < RECANCEL_S:
             return
         self.woken[a["id"]], new, action = t, None, "recorded (--wake is off)"
@@ -1592,28 +1596,38 @@ class Watch:
         if self.wake:
             text = WAKE.format(why=why, handle=handle)
             new, err = self.cont(a["id"], text)
-            unblocked = new is None and err == "HTTP 409" and status == "WAITING_FOR_BACKGROUND_WORK"
-            if unblocked:
-                new, err = self.unblock(a["id"], run, text)
+            cut = None                              # what `unblock` did with the wait, when the wake needed it
+            if new is None and err == "HTTP 409" and status == "WAITING_FOR_BACKGROUND_WORK":
+                new, err, cut = self.unblock(a["id"], run, text)
             # 409 agent_busy otherwise counts too: zombie CREATING runs keep an agent busy for hours
-            action = (f"cancelled its background wait ({run}) and started a run" if new is not None and unblocked else
+            action = (f"cancelled its background wait ({run}) and started a run" if new is not None and cut else
                       "started a run" if new is not None else
-                      f"wake refused after cancelling its background wait: {err}" if unblocked else
+                      f"wake refused after cancelling its background wait: {err}" if cut else
+                      f"wake refused: HTTP 409 (agent busy), and {err}, so it was not cancelled; tried again in an hour"
+                      if cut == "" else
                       "wake refused: HTTP 409 (agent busy); tried again in an hour" if err == "HTTP 409" else f"wake failed: {err}")
         self.record("ready_to_wake", Run(a["id"], run, a.get("name") or ""), handle=handle, reason=why, action=action,
                     **({"new_run": new} if new else {}))
 
-    def unblock(self, agent: str, run: str, text: str) -> tuple[str | None, str]:
+    def unblock(self, agent: str, run: str, text: str) -> tuple[str | None, str, str]:
         """Cancel `run`, which waits on background work (Cursor refuses any new run on the agent meanwhile), and start `text`
-        on the agent: `cont`'s answer, or (None, why) when the cancel is refused."""
+        on the agent: `cont`'s answer and "cancelled", or (None, why, "refused") when the cancel is refused. Only a wait
+        that is one by the agent's runs read now (`going`) is cancelled: the sweep read it waiting minutes ago, and an
+        agent with a run RUNNING since went on by itself, in a turn a cancel would cut. That one, and one whose runs the
+        API won't read, is left: (None, why, "")."""
+        runs, unread = self.going(agent)
+        if runs is None:
+            return None, f"its runs could not be read afresh ({unread})", ""
+        if went := [x for x in runs if x.get("id") != run or x.get("status") != "WAITING_FOR_BACKGROUND_WORK"]:
+            return None, f"its run {went[0]['id']} reads {went[0]['status']} now", ""
         try:
             self.api.post(f"/v1/agents/{agent}/runs/{run}/cancel")
         except urllib.error.HTTPError as e:
             if e.code != 409:                       # run_not_cancellable: it ended meanwhile, so the run may start now
-                return None, f"cancel refused: HTTP {e.code}"
+                return None, f"cancel refused: HTTP {e.code}", "refused"
         except (urllib.error.URLError, OSError, ValueError) as e:
-            return None, f"cancel failed: {type(e).__name__}: {e}"
-        return self.cont(agent, text)
+            return None, f"cancel failed: {type(e).__name__}: {e}", "refused"
+        return (*self.cont(agent, text), "cancelled")
 
     def on_event(self, run_id: str, event: str, data: dict) -> None:
         with self.lock:
@@ -2745,11 +2759,16 @@ class Watch:
                 text = RESUME.format(runs=f"your research {ended_runs(runs)}", mins=mins,
                                      inbox=f", read your inbox (`research msg read --as {handle}`)" if handle else "")
                 new, err = self.cont(agent, text)
-                unblocked = new is None and err == "HTTP 409" and info.get("status") == "WAITING_FOR_BACKGROUND_WORK"
-                if unblocked:
-                    new, err = self.unblock(agent, info["id"], text)
+                cut = None                          # what `unblock` did with the wait, when the resume needed it
+                if new is None and err == "HTTP 409" and info.get("status") == "WAITING_FOR_BACKGROUND_WORK":
+                    new, err, cut = self.unblock(agent, info["id"], text)
+                    if cut == "":                   # the wait went on by itself or can't be read: the next sweep's to judge
+                        self.awaiting[agent] = e
+                        continue
+                unblocked = bool(cut)
                 if new is None:
-                    self.pending[agent] = {"text": text, "run": info["id"], "name": a.get("name") or "", "since": t}
+                    self.pending[agent] = {"text": text, "run": info["id"], "name": a.get("name") or "", "since": t,
+                                           "cancelled": cut == "cancelled"}
                 action = ((f"cancelled its background wait ({info['id']}) and " if unblocked and new is not None else "")
                           + ("resumed it with the run's result" if new is not None else
                              f"resume refused ({err}{', after cancelling its background wait' if unblocked else ''}); tried "

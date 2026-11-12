@@ -4238,6 +4238,47 @@ def test_a_coordinator_whose_held_run_the_api_wont_cancel_is_relaunched_unless_a
     assert records(tmp_path)[-1]["action"].startswith(action) and len(launched) == (0 if beside else 1)
 
 
+@pytest.mark.parametrize("by_then, why", [
+    ("resumed", "its run run-b reads RUNNING now"),
+    ("unread", "its runs could not be read afresh (TimeoutError: this sweep's reads are spent (12 min); the next sweep reads "
+               "again)")])
+def test_a_wake_refused_by_a_wait_that_went_on_by_itself_or_cant_be_read_cancels_nothing(tmp_path, by_then, why):
+    """A wake is refused as busy, and the sweep read the coordinator's run waiting on background work at its start. The
+    wait is cancelled for the wake only if it reads so then: one that went on by itself reads RUNNING, in a turn the
+    cancel would cut, and one past reading may have."""
+    run = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z", "updatedAt": "2026-10-18T19:30:00Z"}
+    bells = {"t": W.iso(T0 - 60), "inboxes": {"vllm": {"agent": NEW, "last": W.epoch("2026-10-18T19:45:00Z")}}}
+    api, clock, w = coordinators(tmp_path, [{"id": NEW, "status": "ACTIVE", "latestRunId": "run-b"}], {"run-b": run}, wake=True,
+                                 bells=bells, timers=None)
+    refused = busy(api, (lambda: run.update(status="RUNNING")) if by_then == "resumed" else (lambda: after(api, 0, spent)))
+    w.sweep(lambda r: None)
+    assert api.posts == [] and refused == [f"/v1/agents/{NEW}/runs"], "no cancel, and the wake asked once"
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["action"]) == (
+        "ready_to_wake", f"wake refused: HTTP 409 (agent busy), and {why}, so it was not cancelled; tried again in an hour")
+
+
+def test_a_background_wait_that_went_on_by_itself_is_not_cancelled_for_a_resume(tmp_path):
+    """A resume after a run's end is refused as busy because the background wait the sweep read went on by itself. Read
+    as the watch is about to cancel it, the wait is RUNNING: nothing is cancelled, nothing held to start on it and nothing
+    recorded, and the run's end stays the agent's to act on."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    api._agents[0].update(status="ACTIVE", latestRunId="run-b")
+    api._runs["run-b"] = {"status": "WAITING_FOR_BACKGROUND_WORK", "createdAt": "2026-10-18T19:00:00Z",
+                          "updatedAt": "2026-10-18T19:30:00Z"}
+    ended = run_end_for(tmp_path, roots, clock, w, CO)
+
+    def went_on():
+        api._runs["run-b"]["status"], api._agents[0]["updatedAt"] = "RUNNING", W.iso(clock.t)
+    refused = busy(api, went_on)
+    while clock.t < ended + W.RESUME_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert api.posts == [] and refused == [f"/v1/agents/{CO}/runs"], "no cancel, and the resume asked once"
+    assert CO in w.awaiting and CO not in w.pending
+    assert "idle_after_run" not in [r["kind"] for r in records(tmp_path)]
+
+
 # workers of one coordinator that stopped mid-step, each its last entry a tool call, a tool result
 # or thinking, with no assistant turn after, at seconds after the first (16:49:23Z), from their transcripts
 STOPS = [("REC1", 0), ("G2-1", 143), ("REC2", 423), ("G2-7", 632), ("ZKS10", 655), ("M18b", 655), ("G2-4", 670), ("INT7", 757),
