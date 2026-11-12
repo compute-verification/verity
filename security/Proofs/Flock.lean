@@ -107,6 +107,7 @@ public import Proofs.Flock.SpotFlock.AddressesWired
 public import Proofs.Flock.SpotFlock.AddressFacts
 public import Proofs.Flock.SpotFlock.AddressFactsGive
 public import Proofs.Flock.SpotFlock.AddressOf
+public import Proofs.Flock.SpotFlock.NeededBits
 public import Proofs.Flock.SpotFlock.ReadsDesign
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WiredKS

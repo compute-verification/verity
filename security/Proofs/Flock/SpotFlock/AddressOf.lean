@@ -92,7 +92,7 @@ def noAddress : Address := ⟨fun _ => 0, ⟨1, 0⟩, { key := .reg "", schema :
 position of the gate the wiring map sends it to; `noAddress` where either gate has no position. -/
 def addressAt (i : ℕ) : Address :=
   match bitAtGate h i, bitAtGate h (wireMap h i) with
-  | some (t, r), some (tw, rw) => ⟨fun _ => portNamed h t r.row, placeAt h tw rw, slotAt h tw rw⟩
+  | some (t, r), some (tw, rq) => ⟨fun _ => portNamed h t r.row, placeAt h tw rq, slotAt h tw rq⟩
   | _, _ => noAddress
 
 open Classical in
@@ -130,7 +130,7 @@ theorem addressOf_shares (i : ℕ) :
       cases hg : bitAtGate h (wireMap h i) with
       | none => exact ⟨rfl, rfl⟩
       | some b =>
-        obtain ⟨tw, rw⟩ := b
+        obtain ⟨tw, rq⟩ := b
         exact ⟨rfl, rfl⟩
   · have e : ∀ j, addressOf h j = noAddress := fun j => if_neg hω
     rw [e i, e (wireMap h i)]
