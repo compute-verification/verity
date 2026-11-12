@@ -265,7 +265,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
                          "on cores no check slot holds; `proofs`): the run takes a slot there and its cwd is its source, or "
                          "with --cwd clone a private clone of it, for a job that writes into the tree (a Lean check that rewrites a lock); "
-                         "its --timeout counts from taking the slot, after a wait of up to --pool-wait for one")
+                         "its --timeout counts from taking the slot, after a wait of up to --pool-wait for one. It waits by the "
+                         "machine's own slot.py, `main`'s as installed there, and by its source's only where the machine has none")
     ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
                     help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
@@ -400,9 +401,9 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
         cwd = remote.flag_value(harness_opts, "--cwd")
         why = ("is for --on, not --queue" if ns.queue
-               else "needs --on MACHINE and --source (slot.py runs from the shipped tree)" if not (ns.on and ns.source)
+               else "needs --on MACHINE and --source (the tree's slot.py runs where the machine has none)" if not (ns.on and ns.source)
                else "needs a lane: --as LANE or $RESEARCH_LANE" if not ns.lane
-               else f"runs from its source or a clone of it (slot.py's path is the tree's), not --cwd {cwd}"
+               else f"runs from its source or a clone of it (the tree's slot.py, where it runs, is named from there), not --cwd {cwd}"
                if cwd not in (None, "source", "clone") else None)
         if why:
             print(f"research run: --pool {why}", file=sys.stderr)

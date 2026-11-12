@@ -381,6 +381,21 @@ src = "tools/research/src/research/pods/nebius/slot_only.py"
 nodes = ["vy-nebius-cpu-1", "vy-nebius-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
+# ---- a machine's own slot.py (slot_only.NODE_SLOT): a run that names a pool takes its slot by this copy, so a pool's waiters are
+# held to `main`'s rules whatever tree each run ships. research.remote's launch names it where the machine has it and whatever
+# reads a run's command there knows it (the machine's slot_only.py above where it has one, which may be installed before or
+# after this file; else, on a machine that starts a run only through a check slot, the research package the run ships). On
+# both nodes and every CPU node, which keep the pools. One file below its repository path, which is how a run's command is
+# known as slot.py's; slot.py reads no other file of the repository, so one rename replaces the copy whole.
+[[file]]
+path = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
+src = "tools/verity/check/slot.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
+         "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
+owner = "infra"
+no_restart = "a run's own wait for a slot: a waiter read its copy when it started and waits on by it, and a run that holds a slot has left slot.py"
+
 # ---- what a shipped research package must do before a node runs it (research.remote's launch-request reads it fresh: nothing to restart)
 [[file]]
 path = "/usr/local/lib/vy-monitoring/tool_rules.py"

@@ -95,6 +95,13 @@
                     prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
                     machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
                     tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
+    pool line       a command that names a pool and then the shipped tree's slot.py (`research run --pool`: slot_only.in_pool) is
+                    sent with the machine's own slot.py in the tree's place (slot_only.NODE_SLOT: `main`'s, as `research deploy
+                    install` placed it) where one test over ssh finds a copy there that takes the run (`node_slot_test`) and
+                    whatever reads a run's command there knows the copy (`node_slot_unruled`), so the waiters of a pool's line
+                    are held to one copy's rules whatever tree each ships.  Else the command stays and the launch says so in a
+                    line.  remote.json's `command` is the one sent and its `slot_copy` says which (machine, tree); the run's
+                    slot.json names the copy that ran, with its commit.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -585,6 +592,52 @@ def node_tool_rules() -> Any:
     from .pods.nebius import tool_rules
 
     return tool_rules
+
+
+def node_slot_test(command: list[str]) -> str:
+    """What the launch asks a machine about its own slot.py (slot_only.NODE_SLOT) before it names it in ``command``, a run that
+    names a pool (`slot_only.node_copy`), as one shell test. It exits 1 unless the copy is there and names every option the
+    command gives slot.py, since a copy installed before an option was added exits with its usage. Else it exits 0 and says
+    in two words who reads a run's command there (`node_slot_unruled`): `marked` where the machine starts a run only through
+    a check slot (RUNS_VIA_SLOT_FILE), else `open`; and of its own rule (NODE_SLOT_ONLY_FILE) `names` where it knows the
+    copy, `lacks` where it predates it, `none` where the machine has no rule. Any other exit is the ssh's own."""
+    from .pods.nebius import slot_only
+
+    q, copy = shlex.quote, slot_only.NODE_SLOT
+    opts = dict.fromkeys(a for a in command[4:command.index("--", 4)] if a.startswith("--"))
+    knows = "".join(f" && grep -qsF -e {q(o)} {q(copy)}" for o in opts)
+    return (f"{{ test -f {q(copy)}{knows}; }} || exit 1; m=open; test -e {q(RUNS_VIA_SLOT_FILE)} && m=marked; r=none; "
+            f"test -e {q(NODE_SLOT_ONLY_FILE)} && {{ grep -qsF -e {q(copy)} {q(NODE_SLOT_ONLY_FILE)} && r=names || r=lacks; }}; "
+            f"echo $m $r")
+
+
+def node_slot_unruled(answer: str, tool_pkg: Path | None) -> str | None:
+    """Why a machine that answered `node_slot_test` with ``answer`` would not let a run wait by its own slot.py, as words that
+    follow the machine's name; None where it would. Whatever reads a run's command there must know the copy, or it takes the
+    run for one outside a check slot. The machine's own rule, which its timer stops or renices such a run by, must not
+    predate the copy. And where the machine starts a run only through a check slot, the research package that runs there
+    (``tool_pkg``, the one the run ships, else this one) refuses what its rule doesn't know: its rule is the machine's own
+    where the machine has one and the package asks it (`node_slot_only`), else the package's."""
+    from .pods.nebius import slot_only
+
+    def names(file: str, word: str) -> bool:
+        if tool_pkg is None:
+            return True
+        try:
+            return word in (tool_pkg / file).read_text()
+        except (OSError, UnicodeDecodeError):
+            return False
+
+    marked, _, rule = answer.strip().partition(" ")
+    if marked not in ("marked", "open") or rule not in ("names", "lacks", "none"):
+        return f"answered {answer.strip()[:80]!r} when asked whether its own slot.py takes this run"
+    if rule == "lacks":
+        return "has a slot_only.py that predates its own slot.py, and would take this run for one outside a check slot"
+    if marked == "marked" and not (rule == "names" and names("remote.py", "def node_slot_only")) \
+            and not names("pods/nebius/slot_only.py", slot_only.NODE_SLOT):
+        return ("starts a run only through a check slot, and the research package this run ships predates the machine's own "
+                "slot.py: it would refuse this run")
+    return None
 
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -2171,11 +2224,24 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
-        from .pods.nebius import tool_rules
+        from .pods.nebius import slot_only, tool_rules
 
         if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
             raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
+        if (own := slot_only.node_copy(command)) is not None:
+            # a run in a pool's line: by the machine's own slot.py where it has one, so the line's waiters share one copy's rules
+            asked = ssh_run(ssh, ["sh", "-c", node_slot_test(command)])
+            why = (node_slot_unruled(asked.stdout.decode(errors="replace"), tool_pkg) if asked.returncode == 0 else
+                   "has no slot.py of its own that takes this run" if asked.returncode == 1 else
+                   f"didn't say whether its own slot.py takes this run (exit {asked.returncode})")
+            if why is None:
+                command = own
+            else:
+                print(f"research: {machine_name} {why} ({slot_only.NODE_SLOT}): the run waits in its pool's line by its tree's "
+                      f"{slot_only.SLOT_PATHS[0]} (`research deploy drift --on {machine_name}` lists what the machine has)",
+                      file=sys.stderr)
+            rec.update(command=command, slot_copy="machine" if command is own else "tree")
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
         rec["tool_checked"] = knows_version_check(tool_pkg)
