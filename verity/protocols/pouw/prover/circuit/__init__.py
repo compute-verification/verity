@@ -60,8 +60,9 @@ compares an offered one's digest with its own.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 #: the schemes that have a circuit here, each with the permutation P it pins (as `ncp-v1` and `ncp-v1-shift24` do)
 SCHEMES = {"ncp-v2": "word", "ncp-v2-shift24": "shift24"}
