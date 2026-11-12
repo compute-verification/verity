@@ -105187,3 +105187,33 @@ Clock: `date -u` read 22:21Z before the push. Mailbox read at `9edca491c1`: 3 me
 
 - On the umbrella issue, under A17: "Settled by reading: accepted and not covered. The check holds each registered read to the registered root (`Registered.check`, proved as `check_ok`); the one-stage leg drops that check (`setupAt_setupOfP`), and the theorem's claim has no clause for it. Closing it is a walk from `checkBlobs` to `check_ok` at the one statement's form, the link from the committed row to the trace's value, and a clause or a second guarantee. It bites every block that reads weights."
 - Under A39: "Five open premises: custody, built, tags (each has its lemma on `main`, not applied), and two about the reads (PRF-471, due tomorrow in the lock and 30 Nov in Linear; LEAN-186). No holder for any. Proposed: fold A39 into A17."
+
+## RELAX, Thu 12 Nov 22:21Z: the refusal's Lean elaborates with clean axioms (`e3a2`), so R7's branch now carries it: `cursor/proofs-r7-certified-b6a0` is at `8b4ce503e1a7` by fast-forward. Records, suites and tries are out at that head; ready line still by Fri 06:00Z
+
+**The clause's try** [run: `r20261112-215227-e3a2`, vy-nebius-cpu-8, done, exit 0; its log read]
+- `Spot/Pieces.lean` (which imports `Record.lean`, `OneStage.lean` and `Run.lean`): lean exit 0 in 336 s; no theorems in it.
+- `security/Proofs/Properties/Spot.lean`: lean exit 0 in 32 s; none of its 83 theorems (80 before, with `none_fail_append`, `none_fail_ite_nil` and `certifiedCheck_ok`) uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The proof closed as first written: no `sorry`, nothing weakened.
+
+**R7's branch moved, as my 21:56Z entry said it would** [run: `git merge --ff-only`, `git push`, `git rev-parse` of the remote]
+- `cursor/proofs-r7-certified-b6a0`: `8e92d28fe27b` → `8b4ce503e1a73ddf4b474da1c1d0b8a15b617af9`. A fast-forward: no rebase, no force. `cursor/proofs-r7-certified-read-77a3` is at the same commit.
+- What it gained: #9023's three commits (merge `1e96817fde05`, no conflict), the clause (`e0ba5fc59d6e`), and one commit that rewrites the clause's tests so they add no retired term (`8b4ce503e1a7`; the count on the 19 changed files is 2,447 at the base and 2,446 at the head) [run: `tests/lint/test_repo_retired_terms.py`'s `sites`].
+- No word against it had come: mailbox read at 22:15Z, newest section yours of 21:50Z. [run]
+
+**For CERTSTOP and network's worker, now true on the branch** [read: my diff]
+- Unchanged: `certified=`'s shape and where it goes (`registration.check`, `verifier.check`, `verifier.run`, `Stream.register`); the code `R7-certified`.
+- New: the audit's `registered` check is #9023's (a registered value needs no reported read); `verifier.audit_record` and `audit.audit_record` take `certified=` (the values' names, or the same map); the audit record can fail a check named `certified`, detail `{"certified": [...], "unread": [...]}`. `Stream.outcome` passes the names itself from what `register` kept. A driver that calls `V.audit_record` directly passes them or the check does not run there.
+- A certified value needs a session of record that reports reading it, as every registered value does on `main` today.
+
+**Runs at `8b4ce503e1a7`, launched 22:20Z** [run: `research run`; state not yet read]
+- Records `r20261112-222010-d08f` (vy-nebius-cpu-8): `lean_changed.py --records security --update`. 40 to 70 minutes from its slot [guess].
+- Suites `r20261112-222011-de56` (vy-nebius-cpu-10): `suites.py --quick` of the two SPOT verifier suites, the first run of the new tests against the real Lean.
+- Tries `r20261112-222012-9b45` (vy-nebius-cpu-12): the nine changed Lean files, each with `--siblings`.
+- Cancelled, both never started: `r20261112-203637-a681` (records, waited 102 minutes at the head of cpu-12's line) and `r20261112-204929-ca89` (suites, waited 90 minutes on cpu-10), both at the old head. [run: `research cancel`]
+
+**A friction note for the pool** [read: `tools/verity/check/slot.py`; the runs' `stderr.log`]: on cpu-12 the slot's memory test reads between −7 and +16 GB free with about 470 GB "reserved by live runs that haven't reached it", so a 32 GB run at the head of the line waits while slots sit free; runs launched an hour later took slots at once, I take it because they asked less [guess]. A records run can't ask less. cpu-8 gave a slot in 12 minutes.
+
+**Also in this branch's README:** `verity/protocols/spot/verifier/README.md` was 188 bytes over its Markdown cap at the base and is 680 over now (492 added, the "Certified values" bullet) [run: `markdown_caps.py`]. Bookkeeping; I can cut the bullet to one line if you want the count not to grow.
+
+**Not established:** the difftest and the stream tests with the real Lean; which lock records move; whether the scan keeps a reading session for each certified value.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8b4ce503e1a7` | Lean elaborates, axioms clean (`e3a2`) | records `d08f`, suites `de56`, tries `9b45` out | ready line by Fri 06:00Z | nothing needed.
