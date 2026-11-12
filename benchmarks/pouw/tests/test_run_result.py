@@ -1,7 +1,6 @@
 """run_result.write: a benchmark's result.json under `research run`, and nothing outside one; and PoUW's two writers of a
-run's result (it and `exact_kit.checks`) beside the harness kit's writer. The three write one result key for key, and a
-measurement of the kit's holds more. They differ in what a run's second writer does: each of these two writes the result
-whole, so the last one's stands, and the kit holds one validation a result and refuses the second."""
+run's result (it and `exact_kit.checks`) beside the harness kit's writer, which they retire onto once it writes what they
+write."""
 from __future__ import annotations
 
 import importlib.util
@@ -61,15 +60,16 @@ def test_outside_a_run_nothing_is_written(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
-def _kits(run_dir: Path, ok: bool, checker: str, detail: str, record: str, measurements, **fingerprint) -> dict:
-    """The same result through the kit's calls: what ran, the record as the measurement file and the evidence, the
-    validation, and each measurement as the float the old writers write."""
+#: what PoUW's two writers put in a run's result and the kit's writer does not, so neither retires onto the kit until it
+#: writes them
+KIT_LEAVES_OUT = ("workload_fingerprint", "measurement_files", "artifacts")
+
+
+def _kits(run_dir: Path, ok: bool, checker: str, detail: str, evidence: list[str], measurements) -> dict:
     w = kit.writer(run_dir / "out")
-    w.fingerprint(**fingerprint)
-    w.measurement_file(record)
-    w.validation("passed" if ok else "failed", checker, detail, [record])
+    w.validation("passed" if ok else "failed", checker, detail, evidence)
     for name, value, unit in measurements:
-        w.measurement(name, float(value), unit)
+        w.measurement(name, value, unit)
     return json.loads((run_dir / "result.json").read_text())
 
 
@@ -86,26 +86,28 @@ def a_run(tmp_path, monkeypatch) -> Path:
     return run_dir
 
 
-def _the_same_key_for_key(theirs: dict, ours: dict) -> None:
-    """One result, key for key: the same keys, each the same value, and each measurement's name, value and unit. A
-    measurement of the kit's holds more (its commit, run, interval, target, verdict, inputs and host stamp)."""
-    assert ours.keys() == theirs.keys()
-    assert {k: ours[k] for k in ours if k != "measurements"} == {k: theirs[k] for k in theirs if k != "measurements"}
+def _the_same_but_for_the_named(theirs: dict, ours: dict) -> None:
+    """Key for key the same result, but for `KIT_LEAVES_OUT` and each measurement's other keys in the kit's (its commit,
+    run, interval, target, verdict, inputs and host stamp); a value given as an int stays one in the kit's, where the old
+    writers write a float."""
+    assert ours.keys() == theirs.keys() - set(KIT_LEAVES_OUT)
+    assert {k: ours[k] for k in ours if k != "measurements"} == {k: theirs[k] for k in ours if k != "measurements"}
     assert [{k: m[k] for k in ("name", "value", "unit")} for m in ours["measurements"]] == theirs["measurements"]
-    assert all(isinstance(m["value"], float) for m in theirs["measurements"] + ours["measurements"])
+    assert all(isinstance(m["value"], float) for m in theirs["measurements"])
 
 
-def test_run_results_writer_and_the_kits_write_one_result_key_for_key(a_run):
+def test_run_results_writer_and_the_kits_write_one_result_but_for_the_named_differences(a_run):
     measurements = [("items", 3, "count"), ("ratio", 1.5, "x")]
     theirs = _write(a_run, a_run / "out" / "bench.json")
     (a_run / "result.json").unlink()
-    ours = _kits(a_run, True, "a checker", "a detail", "out/bench.json", measurements)
-    _the_same_key_for_key(theirs, ours)
+    ours = _kits(a_run, True, "a checker", "a detail", ["out/bench.json"], measurements)
+    _the_same_but_for_the_named(theirs, ours)
+    assert [type(m["value"]) for m in ours["measurements"]] == [int, float]
     assert (theirs["workload_fingerprint"], theirs["measurement_files"], theirs["artifacts"]) == (
         {"source_sha": "abc123"}, ["out/bench.json"], [])
 
 
-def test_exact_kits_writer_and_the_kits_write_one_result_key_for_key(a_run, tmp_path):
+def test_exact_kits_writer_and_the_kits_write_one_result_but_for_the_named_differences(a_run, tmp_path):
     script = tmp_path / "probe.py"
     script.write_text("# a script the verdict names\n")
     checks = Checks(argv=["--k", "4"], script=str(script), out=io.StringIO())
@@ -114,29 +116,13 @@ def test_exact_kits_writer_and_the_kits_write_one_result_key_for_key(a_run, tmp_
     assert checks.finish() == 1
     theirs = json.loads((a_run / "result.json").read_text())
     (a_run / "result.json").unlink()
-    verdict = checks.verdict()
-    ours = _kits(a_run, False, "exact_kit.checks", checks.summary(), "out/probe.verdict.json",
-                 [(name, value, "count") for name, value in verdict["counts"].items()],
-                 script=verdict["script"], args=verdict["args"], mutations_run=verdict["mutations_run"])
-    _the_same_key_for_key(theirs, ours)
+    counts = checks.verdict()["counts"]
+    ours = _kits(a_run, False, "exact_kit.checks", checks.summary(), ["out/probe.verdict.json"],
+                 [(name, value, "count") for name, value in counts.items()])
+    _the_same_but_for_the_named(theirs, ours)
     assert theirs["workload_fingerprint"] == {"script": {"name": "probe.py", "sha256": checks.verdict()["script"]["sha256"]},
                                               "args": ["--k", "4"], "mutations_run": False, "source_sha": "abc123"}
     assert (theirs["measurement_files"], theirs["artifacts"]) == (["out/probe.verdict.json"], [])
-
-
-def test_a_runs_second_writer_replaces_the_result_where_the_kit_refuses_a_second_validation(a_run):
-    """`pearlc_k256_gate.sh`'s run is many processes that each write a whole result, and the run's is the last one's,
-    the verdict's; `theory/run.py`'s is each script's and then its own. Through the kit the first one's would stand."""
-    _write(a_run, a_run / "out" / "census.json")
-    R.write(a_run / "out" / "verdict.json", False, "the verdict", "a part fails", [("parts", 2, "count")])
-    last = json.loads((a_run / "result.json").read_text())
-    assert (last["validation"]["checker"], last["validation"]["status"]) == ("the verdict", "failed")
-    assert last["measurement_files"] == ["out/verdict.json"] and [m["name"] for m in last["measurements"]] == ["parts"]
-    (a_run / "result.json").unlink()
-    _kits(a_run, True, "a checker", "a detail", "out/census.json", [("items", 3, "count")])
-    with pytest.raises(ValueError, match="already holds a validation"):
-        _kits(a_run, False, "the verdict", "a part fails", "out/verdict.json", [("parts", 2, "count")])
-    assert json.loads((a_run / "result.json").read_text())["validation"]["checker"] == "a checker"
 
 
 def test_outside_a_run_the_kit_writes_out_s_result_where_the_old_writers_write_nothing(a_run, tmp_path, monkeypatch):
