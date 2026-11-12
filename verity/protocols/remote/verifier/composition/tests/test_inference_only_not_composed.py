@@ -1,7 +1,7 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
-composites compose it as a stated exception until v1's private form replaces it. The
+composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
 composites' subprotocols are read wherever they are listed: their Lean (`Core.Onsite.components` and
 `Core.Remote.components`, with the ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`,
 `REMOTE`), and the ids a configuration may name as subprotocols (`parties.IDS`), read from its source: importing
@@ -28,7 +28,7 @@ COMPOSITES = {"Core.Onsite": ROOT / "verity/protocols/onsite/verifier/CoreOnsite
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
 #: composite composes any more fails `test_known_only_shrinks`.
-KNOWN = {"verity/inference-only/v0": "stated exception for the demos' runs until v1's private form replaces it"}
+KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; v1's private form replaces it"}
 
 
 def v0_names() -> set[str]:

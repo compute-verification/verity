@@ -275,7 +275,7 @@
    "due": "2026-11-30"
   },
   "Accounting.Assumptions.TS.ProofSoundAt": {
-   "owner": "@soundness",
+   "owner": "@compute-accounting",
    "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
@@ -21051,8 +21051,10 @@
    }
   },
   "NciCheck.Baseline": {
-   "digest": "aa0cb1609b234041a89f04cfcc24addcf25467761f1d29653643f44fff2a1e5a",
+   "digest": "1bd0f2dbce2afd37171085b975ad2b0b2f9ea5faf4b80f72467985a9a3965809",
    "definitions": {
+    "NciCheck.Baseline.FORMAT": "db8349f01bd5c47f9184d4537291dcab05661eff5a91f153e7136dae66378470",
+    "NciCheck.Baseline.FORMAT_V2": "5ba177c582788daf6933a082bbbf2bac083829f2f2afc790e578803b567c8eac",
     "NciCheck.Baseline.Prov": "9c05bc64381f64d71a03fdb15061d7b426c73f2517c0ab79c696a23f9012ef43",
     "NciCheck.Baseline.Prov.registration": "00e1daf69a7bf77771e49e25fbe8c1f10155b37ff09ac348007478a9a6c3b0d4",
     "NciCheck.Baseline.Prov.root": "4791c64c0a20cc3ddc3b4a06c9e9dc41a2020fd19e144b1be6f11c674b76af73",
@@ -21065,7 +21067,7 @@
     "NciCheck.Baseline.Trusted.params": "b77f995d7d7a3dda732e90e70161d5a873b3e43ab94ff8054879fa68f4819afc",
     "NciCheck.Baseline.Trusted.run": "9f372e9542487655b1bf185b22167bf09342e62a462a923e891f9528359e7134",
     "NciCheck.Baseline.countsOf": "c7b574caf0ae40929c5212f2820980b0d61b12242cacd38eafc579ec726c9b0d",
-    "NciCheck.Baseline.digest": "2fb5b08693a056720c5d6c1051e0b0caae4bb7d0542c05d8a9dd1be17f28e0e8",
+    "NciCheck.Baseline.digest": "7948fa3e282c7d94b7c2a7e55a2e1de190a2edf7088aba7d16c2591ae8ce26b8",
     "NciCheck.Baseline.dims": "297a9089ae22877bc3ba94e2a8dcc36061d368b8de8d822f76a6d99cc9fc6e4f",
     "NciCheck.Baseline.entryStep": "a15f7f7d492cd46c4eb180a227ad305724fc71569a5f0576633dbdeccc0e93dc",
     "NciCheck.Baseline.evaluate": "e63dac8fe5380fdd158af8b44e5bb1e04518682bbf4e979b3aaf0e2ca5f068f5",
