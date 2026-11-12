@@ -31,6 +31,9 @@ import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 
+__all__ = ["CONFIG", "DECODE_M", "DEEPGEMM", "FADD_READINGS", "Linear", "PREFILL_M", "SCHEME", "TP", "expert_rows", "gamma",
+           "in_domain", "linears", "scheme", "table"]
+
 SCHEME = "pearl-c-h100-v1-h3"
 #: the checkpoint's config.json, the fields the linears read
 CONFIG = {"H": 6144, "NH": 64, "QL": 2048, "KVL": 512, "DN": 192, "DR": 64, "DV": 256, "IH": 32, "ID": 128, "E": 256, "K": 8,

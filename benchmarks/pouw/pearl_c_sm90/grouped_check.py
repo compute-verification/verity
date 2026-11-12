@@ -33,6 +33,8 @@ sys.path.insert(0, str(HERE))
 
 import glm53  # noqa: E402
 
+__all__ = ["COUNTS", "EXPERTS", "SCHEDULES", "SHAPES", "WARM_GRAPHS", "check_shape", "stock_arms"]
+
 EXPERTS = 8
 SHAPES = ((4096, 6144), (6144, 2048))
 #: routed rows a local expert, by pattern: a decode step's few and a prefill chunk's (blocks of 256 and a partial one, an
