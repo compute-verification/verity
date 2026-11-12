@@ -8,14 +8,15 @@ selects, read from that window's run.
 **Hardware:** a node's CPUs, no GPU, with the memory the job's header sizes: `job` at K = 4096 wants hundreds of GB
 (`H1_MEM_GB`), `live` 128 GB, `served` 16 GB.
 
-## Jobs
+## Runner
 
-Each job is a script beside this file, the command of a `research run` from the source tree (or, for PoUW's piece of a
-served window, of `benchmarks/one_stage/served_verdicts.sh`); its header has the full command, its knobs (`H1_*`) and what it writes.
+`run.sh JOB [ARGS...]` starts one job's script with the arguments and environment as given; run it from the source tree,
+as a `research run`'s command (or, for PoUW's piece of a served window, `benchmarks/one_stage/served_verdicts.sh`'s).
+Each script's header has its full command, its knobs (`H1_*`) and what it writes.
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --mem-gb G --declared-output 'out/*' \
-  --env H1_MEM_GB=G -- bash benchmarks/pouw/h1_prove/job.sh
+  --env H1_MEM_GB=G -- bash benchmarks/pouw/h1_prove/run.sh job
 ~~~
 
 | job | what it runs | writes |
@@ -25,7 +26,7 @@ research run --on MACHINE --project verity --source . --cwd source --mem-gb G --
 | `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected units, `out/program/window-program.json.gz`, a log a negative |
 | `drawn` | PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's units staged on the window's registered values, a session a statement, the statements file checked as credit does, then `served_verdicts.py pouw` | `PIECE_DIR/` (the statements file, a directory of logs a session) |
 
-`run.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), not a runner: start the jobs by their scripts.
+`run.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
 
 ## The Python modules
 
