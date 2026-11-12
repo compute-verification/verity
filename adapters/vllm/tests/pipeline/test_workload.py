@@ -28,7 +28,10 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
+from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import workload as W
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.workload import Workload
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
@@ -210,6 +213,29 @@ def test_a_shared_prefix_row_starts_every_longer_prompt_with_one_prefix_and_turn
 def test_a_shared_prefix_no_later_request_could_reuse_fails_the_check():
     assert any("arrives after the first one" in v for v in W.check_plan(_prefix_row(128, arrivals="none")))
     assert any("arrives after the first one" in v for v in W.check_plan(_prefix_row(255)))
+
+
+def test_the_check_names_a_length_or_a_cap_out_of_range_and_a_stochastic_row_short_of_distinct_seeds():
+    p = _prefix_row(0)
+    assert W.check_plan(p) == []
+    lengths, caps = [*p["input_lengths"][:-1], 257], [*p["output_caps"][:-1], 33]
+    assert f"input length outside [{p['min_input']}, 256]: {lengths}" in W.check_plan({**p, "input_lengths": lengths})
+    assert f"output cap outside [1, 32]: {caps}" in W.check_plan({**p, "output_caps": caps})
+    short = "stochastic row without B distinct per-request sampling seeds"
+    for seeds, refused in (([7] * 8, True), (list(range(7)), True), (list(range(8)), False)):
+        assert (short in W.check_plan({**p, "sampling": "topp", "sampling_seeds": seeds})) is refused
+
+
+def test_a_shared_prefix_rows_manifest_requests_state_each_warm_requests_cached_rows_and_their_producers():
+    """`verity_vllm.pipeline.global_program.manifest_requests` on a row that serves with the prefix cache: each request's cached
+    rows and the Program ids of the requests that produced them, as the prefix plan gives them; a row without it states neither."""
+    doc = W.workload_doc(_prefix_row(128), hf_repo="org/x", revision="0" * 40, case="X", tok=_CharTok())
+    rows = GP.manifest_requests(Workload.of(doc, "w.json"))
+    plan = PP.plan(doc)
+    assert [(r["cached"], r["producers"]) for r in rows] == [(p["cached"], [f"r{q}" for q in p["producers"]]) for p in plan]
+    assert any(r["cached"] for r in rows) and not all(r["cached"] for r in rows)
+    plain = W.workload_doc(_prefix_row(0), hf_repo="org/x", revision="0" * 40, case="X", tok=_CharTok())
+    assert not any("cached" in r or "producers" in r for r in GP.manifest_requests(Workload.of(plain, "w.json")))
 
 
 def test_a_tp_workload_runs_batch_invariant_only_on_a_batch_invariant_row(tmp_path):
