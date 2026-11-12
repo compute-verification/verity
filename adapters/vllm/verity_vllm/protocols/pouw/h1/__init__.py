@@ -701,9 +701,9 @@ class H1Run:
     def credit_bits(self) -> dict[int, bool]:
         """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
-        gated, tables = self.gated(), self.tables
+        gated = self.gated()
         return {c.index: c.index in gated and gated[c.index]["credit"]
-                and (t.get("z") if (t := tables.get(c.index)) else None) is not None for c in self.calls}
+                and (t.get("z") if (t := self.tables.get(c.index)) else None) is not None for c in self.calls}
 
     def credit(self) -> dict[str, Any]:
         """Gate-passed: the served rows' MACs of the calls the serving process's own credit gate passes (`gated`), only. No
