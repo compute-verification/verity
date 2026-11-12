@@ -36,13 +36,17 @@ the same circuit, so they are one `...Activation_v1` Call per pair and x word: a
 
 Each cut bit is an element of its own (`Array<1, Value<1>>`): an `Array<n, Value<1>>` is one n-bit word in the word view, and the
 word Definitions' cuts are n 1-bit words.
+So `verity.definitions.boolean.boolean_version` refuses the five words whose signature has a cut, `MarlinMoeSchedule_v1`,
+`MarlinMxfp4Coordinate(W)_v1` and `MarlinMoeExpertCoordinate(W)_v1`: it asks for `bit_type` of the word's signature, where the n
+1-bit words are one `Array<n, Value<1>>`, not the `_v2`'s n `CUT`s.  They are reached through the pair GEMMs' `_v2`, not the
+switch: each binds the schedule's `_v2` and its columns, the coordinates' bodies cut at x, itself.
 """
 from __future__ import annotations
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition, word_of
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.boolean import scalar as SC
@@ -105,12 +109,14 @@ def _step(from_zero: bool):
     """`MarlinMxfp4Step(FromZero)_v1` on bits: the group's words (`dequant`, NaNs quiet) and the two k16 steps traced as one
     circuit with `DOT`'s own builder, so that the words' constant bits fold into its products and class tests."""
     def make(S):
+        dot = S.DOT.defn.build if isinstance(S.DOT, SpecializedDefinition) else S.DOT.build  # `boolean_version` binds it
+
         def build(C, *elements):
             acc, rest = (const_bits(MM.ZERO, 32), elements) if from_zero else (elements[0], elements[1:])
             x, q, s = rest[:MM.GROUP], rest[MM.GROUP:2 * MM.GROUP], rest[2 * MM.GROUP]
             w = dequant(C, q, s, f2fp_nan=False)
             for j in range(2):
-                acc = S.DOT.build(C, acc, *x[16 * j:16 * j + 16], *w[16 * j:16 * j + 16])
+                acc = dot(C, acc, *x[16 * j:16 * j + 16], *w[16 * j:16 * j + 16])
             return acc
         return build
     return make

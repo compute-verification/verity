@@ -84,6 +84,7 @@ and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends i
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -98,7 +99,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from .gates import FINDING, OK, REFUSED, git_env, refuse
+from .gates import FINDING, OK, REFUSED, git_env, refuse, worktrees_shared
 
 PROG = "research merge"
 
@@ -108,9 +109,12 @@ class Refused(Exception):
 
 
 def _git(repo: Path, *args: str, check: bool = True, lazy: bool = True) -> subprocess.CompletedProcess:
-    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`)."""
-    r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape",
-                       env=git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1"))
+    """``git ARGS`` in ``repo``; with ``lazy`` False, a partial clone fetches no object it lacks (`GIT_NO_LAZY_FETCH`).  A
+    fetch holds the clone's worktree lock shared (`worktrees_shared`), as the queue's do: the queue's clone, where drive's
+    steps after a landing fetch, has its worktrees added beside them."""
+    env = git_env() if lazy else git_env(GIT_NO_LAZY_FETCH="1")
+    with worktrees_shared(repo, env) if args[:1] == ("fetch",) else contextlib.nullcontext():
+        r = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, errors="surrogateescape", env=env)
     if check and r.returncode:
         raise Refused(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()}")
     return r
@@ -195,9 +199,8 @@ def unlike(argv, command) -> str | None:
 SHARD_KIND = "check-shard/v1"
 
 
-def declared(repo: Path, commit: str) -> list[dict] | None:
-    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
-    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+def _ci_toml(repo: Path, commit: str) -> dict | None:
+    """``commit``'s own `tools/verity/check/ci.toml`, parsed, or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -206,12 +209,33 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = tomllib.loads(r.stdout).get("job", []) if r.returncode == 0 else None
-    except (tomllib.TOMLDecodeError, TypeError, AttributeError):
-        jobs = None
+        return tomllib.loads(r.stdout) if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError):
+        return None
+
+
+def declared(repo: Path, commit: str) -> list[dict] | None:
+    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
+    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+    jobs = doc.get("job", []) if (doc := _ci_toml(repo, commit)) is not None else None
     if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
         return None
     return jobs
+
+
+def shard_plans(repo: Path, commit: str) -> dict[int, list[list[str]]] | None:
+    """The `[[plan]]` tables of ``commit``'s own `tools/verity/check/ci.toml` by their number of shards, as check.py's
+    `--shard K/N` takes them: {N: each shard's parts}, or None when it can't be read."""
+    plans = doc.get("plan", []) if (doc := _ci_toml(repo, commit)) is not None else None
+    if not isinstance(plans, list):
+        return None
+    out = {}
+    for p in plans:
+        shards = p.get("shards") if isinstance(p, dict) else None
+        if not (isinstance(shards, list) and all(isinstance(s, list) and all(isinstance(x, str) for x in s) for s in shards)):
+            return None
+        out.setdefault(len(shards), shards)
+    return out
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
@@ -1721,15 +1745,21 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
     (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
     under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
-    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
+    volume, where each worktree add and remove takes minutes.  It is added under `queue.worktrees_locked`, as the queue adds
+    its own in that clone.  None when ``repo`` can't make one."""
     import shutil
 
+    from .queue import worktrees_locked
     from .settings import train_trees
 
+    if _git(repo, "rev-parse", "--git-common-dir", check=False).returncode:
+        return None
     if root := train_trees():
         os.makedirs(root, exist_ok=True)
     tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
-    if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
+    with worktrees_locked(repo):
+        added = _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode == 0
+    if not added:
         shutil.rmtree(tree, ignore_errors=True)
         return None
     return tree
