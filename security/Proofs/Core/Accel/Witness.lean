@@ -228,7 +228,7 @@ theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) (σ : hm.Stat
   have hlen := kernel_length n
   refine ⟨?_, fun r => ?_⟩
   · rw [hcode, hlen]
-    show _ ≤ 141 * 2 ^ 30 / 16
+    show _ ≤ 144 * 2 ^ 30 / 16
     obtain ⟨q, rfl⟩ := h256
     have hq : q ≤ 8 := by omega
     interval_cases q <;> norm_num [mmas, blocks]
@@ -749,10 +749,10 @@ theorem kernel_computes (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2
     have := Nat.mul_le_mul (Nat.mul_le_mul_left 2 hn) (show n / 4 ≤ 512 by omega)
     omega
   have hsd : hm.card.size .smem ≤ hm.card.size .dram := by
-    show 132 * 65536 ≤ 141 * 2 ^ 30 / 4
+    show 132 * 65536 ≤ 144 * 2 ^ 30 / 4
     norm_num
   have hsd' : n * n / 2 + n * n ≤ hm.card.size .dram := by
-    show _ ≤ 141 * 2 ^ 30 / 4
+    show _ ≤ 144 * 2 ^ 30 / 4
     have := Nat.mul_le_mul hn hn
     omega
   have hdd : hm.card.size .dram = card.size .dram := rfl
