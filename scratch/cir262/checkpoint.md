@@ -12,3 +12,4 @@
 2026-11-12T20:49:17Z FP8READ: evaluator over all tokens (r20261112-185922-3b8c) in its slot since 19:41Z, 496 of 1472 tokens held, 0 differ so far; final suites and the PR after it
 21:19Z lint ratchet fixed at ce254bd223 (7 catches dropped, failures []); evaluator job r20261112-185922-3b8c still in its slot; next: final job (pins pass, suites, re-comparison of the capture of record) at the new head, then the PR
 22:03Z branch at ce254bd223 (lint ratchet failures []); evaluator job r20261112-185922-3b8c at 958 of 1,472 tokens, 0 differ, ends about 23:30Z; then the final job (re-comparison of the saved capture, pins pass, suites) and the PR
+22:52Z evaluator job r20261112-185922-3b8c at 1,340 of 1,472 tokens, 0 differ, ends about 23:10Z; next the final job on the branch merged with main, then the PR
