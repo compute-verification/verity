@@ -325,6 +325,43 @@ def test_a_pass_advances_main_and_the_candidate_above_sits_on_it():
     assert decide(s) == [Advance("c1"), Drop("c1", "on main", Outcome((1,), heads(1), PASS)), Build((2, 3), "c1", 2)]
 
 
+def lands(sha: str, *members: int, base: str | None = None, inherited: tuple[Failed, ...] = ()) -> list:
+    return [Advance(sha), Drop(sha, ON_MAIN, Outcome(members, heads(*members), PASS, (), base, inherited))]
+
+
+def test_a_pass_advances_main_through_each_passed_candidate_above_it_in_the_same_tick():
+    """A candidate above the lowest that passed on the one below counts once that one is on `main`, so the tick that advances
+    to it goes on through it: an advance and a drop each, in order, and the next batch on the last."""
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, state=PASS), ready=prs(1, 2, 3))
+    assert decide(s) == [*lands("c1", 1), *lands("c2", 2), Build((3,), "c2", 2)]
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, state=PASS), cand("c3", "c2", 3, state=PASS),
+             ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s) == [*lands("c1", 1), *lands("c2", 2), *lands("c3", 3), Build((4,), "c3", 3)]
+
+
+def test_a_tick_advances_only_through_the_passed_candidates_at_the_bottom_of_the_chain():
+    """It stops at the first candidate that hasn't passed: one that passed above it waits for it; and a batch staged on the
+    last one, its records run first, is off the chain, whatever its verdict says."""
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, state=PASS), cand("c3", "c2", 3),
+             cand("c4", "c3", 4, state=PASS), ready=prs(1, 2, 3, 4, 5), depth=4)
+    assert decide(s) == [*lands("c1", 1), *lands("c2", 2), Build((5,), "c4", 2)]
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, state=PASS),
+             replace(waiting("c3", "c2", 3), verdict=Verdict(PASS)), ready=[pr(1), pr(2), lean(3)], depth=3, records=True)
+    assert decide(s) == [*lands("c1", 1), *lands("c2", 2)]
+
+
+def test_candidates_advanced_in_one_tick_ring_a_red_they_share_once():
+    """The one above inherits the lowest's red from it (at its key, or by its tests), which the lowest's outcome records."""
+    t = inherited("suite:r", "red/")
+    touched = Failed(t.task, "key:suite:r+", t.inputs, t.key, frozenset({"r::a"}), frozenset({"r::a"}))
+    for above in (t, touched):
+        s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(t,)), cand("c2", "c1", 2, state=FAIL, failed=(above,)),
+                 ready=prs(1, 2, 3))
+        acts = decide(s)
+        assert acts == [Red("c1", MAIN, acts[0].why, (t,)), *lands("c1", 1, base=MAIN, inherited=(t,)),
+                        *lands("c2", 2, base="c1", inherited=(above,)), Build((3,), "c2", 2)]
+
+
 def test_a_failure_whose_inputs_meet_one_members_files_ejects_it():
     t1, t2 = task("suite:a", "pkg2/"), task("lean:b", "elsewhere/x.lean")
     s = snap(cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(t1, t2)), cand("c2", "c1", 4), ready=prs(1, 2, 3, 4))
@@ -2006,10 +2043,13 @@ class World:
                     and by[a.sha].base in repaired], f"{where}: dropped as its records commit replaced the candidate below it"
         self.beside(s, acts, where)
         self.admits(s, acts, where)
+        main = s.main
         for a in acts:
             if isinstance(a, Advance):
                 c = by[a.sha]
-                assert c.base == s.main and reads(c.verdict) == PASS, where
+                assert c.base == main and reads(c.verdict) == PASS and not c.waits, where
+                self.seen["advanced through two candidates in a tick"] += main != s.main
+                main = a.sha
                 assert all(self.marks[m].head.startswith(h) for m, h in zip(c.members, c.heads)), where
                 assert not set(c.members) & s.pulled, f"{where}: a PR a reviewer holds lands"
                 self.seen["landed as built"] += not all(m in ready and ready[m].head == h for m, h in zip(c.members, c.heads))
@@ -2026,7 +2066,7 @@ class World:
                           if "rerun afresh" in a.why else "ejected for erring"] += 1
             elif isinstance(a, Red):
                 c = by[a.sha]
-                assert a.base == c.base == s.main and a.sha in decided and a.failed and all(map(inherits, a.failed)), where
+                assert a.base == c.base == main and a.sha in decided and a.failed and all(map(inherits, a.failed)), where
                 self.seen["a red rung"] += 1
             elif isinstance(a, Build) and a.replaces is not None:
                 c, out = by[a.replaces], {m for d in acts if isinstance(d, Drop) and d.outcome is not None
@@ -2513,8 +2553,8 @@ def ticks(w: World) -> int:
 
 
 def test_the_simulated_queue_keeps_every_invariant_and_settles():
-    """Over every seed: main advances only to a candidate on it with no new failure (each failure inherited, nothing running,
-    no infra error), at heads its members were marked at (one its owner unmarked or pushed in flight lands as built) and
+    """Over every seed: main advances only to a candidate on it, or on the one the tick advanced it to before, with no new
+    failure (each failure inherited, nothing running, no infra error), at heads its members were marked at (one its owner unmarked or pushed in flight lands as built) and
     holding none a reviewer holds, so its reds never grow; no PR is in two live candidates or reaches main twice at one head;
     with `tree_ejects`, an infra error that follows the tree (`tree`) is bisected like a fail at once, and any other
     infra or listing error is retried at every reading, rung from `rings` enqueues (2 at most), and blames nobody; without
@@ -2556,7 +2596,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "an untraced program's module read as its declared inputs", "rebuilt without a suspect",
                  "rebuilt without a leaver", "rebuilt whole above a drop", "a red's others rebuilt in its tick",
                  "a leaver's others rebuilt in its tick", "a leaver subtracted", "a fail above decided at once on main's word",
-                 "a fail above waited for the word of the one below"):
+                 "a fail above waited for the word of the one below", "advanced through two candidates in a tick"):
         assert seen[what], f"no seed exercised: {what}"
 
 
