@@ -63,12 +63,6 @@ from verity_vllm.pipeline.match_fold import (
     INSTANCES_FORM_ENV as INSTANCES_FORM_ENV,  # read through this module
 )
 from verity_vllm.pipeline.match_fold import (
-    INSTANCES_SCHEMA as INSTANCES_SCHEMA,  # read through this module
-)
-from verity_vllm.pipeline.match_fold import (
-    INSTANCES_SCHEMA_V2 as INSTANCES_SCHEMA_V2,  # read through this module
-)
-from verity_vllm.pipeline.match_fold import (
     _jsonable,
     fold_summary_result,
     persist_program,
