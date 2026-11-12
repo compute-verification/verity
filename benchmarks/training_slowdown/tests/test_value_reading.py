@@ -16,6 +16,10 @@ at every layer, which no reading of the circuit can tell (`work`'s limits). The 
   two of its inputs' negative words give one 0, so an op with a specific argument does not give a specific value by that alone.
 - `lf`: the lf model's step at its smallest size.
 
+A dense step on a batch of values (`test_a_value_batchs_rows_may_repeat`) is charged nothing from the circuit alone:
+two of its rows may be equal, as two here are, and every product of its rows by a shared weight then reads one pair
+twice.
+
 In every step the first layer's P·V reads repeated pairs, where two keys of one token hold one value row, and is left
 out. With the rope tables stated positional (`work.Layout`), the reading charges more, all of it the same invariant's.
 """
@@ -101,12 +105,13 @@ def _bits(x: torch.Tensor) -> list[int]:
     return [int(v) & ((1 << 64) - 1) for v in x.tolist()]
 
 
-def evaluated(make, n: int = 3):
-    """``make()``'s step on `BATCH` as `loop`'s scan of ``n`` iterations, and every gate's value at random weights."""
+def evaluated(make, batch: torch.Tensor = BATCH, loss=_square, n: int = 3):
+    """``make()``'s step on ``batch`` under ``loss`` as `loop`'s scan of ``n`` iterations, and every gate's value at
+    random weights."""
     opt = AdamW(lr=0.05)
     with torch.device("meta"):
         meta = make()
-    step = step_program(meta, _square, opt, torch.empty(*BATCH.shape, dtype=torch.long, device="meta"))
+    step = step_program(meta, loss, opt, torch.empty_like(batch, device="meta"))
     prog = loop(step, n)
     bufs = {"buf_" + name: b for name, b in make().named_buffers()}
     g = torch.Generator().manual_seed(0)
@@ -122,7 +127,7 @@ def evaluated(make, n: int = 3):
             key = AdamW.SCALARS[pi - 3 * P]
             ins.append(_bits(torch.tensor([opt.scalars(s + 1)[key] for s in range(n)], dtype=torch.float32)))
         elif pi == 3 * P + 3:
-            ins.append(_bits(torch.stack([BATCH] * n)))
+            ins.append(_bits(torch.stack([batch] * n)))
         else:
             ins.append(_bits(bufs[name]))
     return step, prog, materialize(prog, ins)
@@ -203,3 +208,21 @@ def test_what_the_circuit_alone_charges_reads_distinct_pairs(case):
         assert mine < theirs
         for k in theirs:
             assert len(set(rope[k][1])) >= keep * len(rope[k][1])
+
+
+@pytest.mark.slow
+def test_a_value_batchs_rows_may_repeat():
+    """A float batch whose first and third rows are equal, through two linear layers: what it catches is a reading
+    that takes a value batch's rows as distinct, so that it charges a product whose members read one pair of values
+    at the two equal rows."""
+    x = torch.randn(4, D, generator=torch.Generator().manual_seed(1))
+    x[2] = x[0]
+
+    def make():
+        return nn.Sequential(nn.Linear(D, 2 * D, bias=False), nn.SiLU(), nn.Linear(2 * D, D, bias=False))
+
+    step, prog, tab = evaluated(make, x, lambda model, b: model(b).square().sum())
+    by = pairs(prog, tab)
+    assert all(reason for reason, _ps in by.values())
+    down = first_after(step, by, r"(F32Mul|SiluRef)_v\d+", f"LinearRef_v1{{K={2 * D},N={D},")
+    assert by[down][0] == "gathered" and repeats(by[down][1])

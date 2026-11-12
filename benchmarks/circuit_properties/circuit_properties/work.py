@@ -64,11 +64,15 @@ gives a gathered value:
   constant's columns there differ and each has a finite word, since two keys of one token give columns whose ratio is
   the exponential of the constant's difference.
 * A product's output (`product_status`) is specific where its x's slices are such rows or columns, or x is specific
-  and read one to one, and w's rows differ: w specific and read one to one, a free input's, or a product's output
-  whose columns w's rows read, each another.
+  and read one to one, and w's rows differ: w specific and read one to one, a value of θ′ no gather's rows reach, or a
+  product's output whose columns w's rows read, each another.
 * A primitive's output stays specific only where it is one to one in a specific argument read one to one, at the
   constants it reads (`INJECTIVE`'s ops, a multiply's constant nonzero); an op outside it gives a gathered value, so an
-  op with a specific argument is not specific by that alone.
+  op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
+  values the Program doesn't state (a rope table, which may hold a 0).
+* A batch's members that read rows of the current inputs against an argument they share (`shared_rows`), a value
+  batch's rows by a weight, read rows that may repeat, which carry a gather's rows: two rows of a batch of values may
+  be equal as two tokens may.
 
 The rule holds on a batch in which no row starts with a run of one token, and, where no positional table reaches the
 rows, no row's prefix repeats a shorter one: such a batch makes two positions' values equal at every layer, under any
@@ -1069,6 +1073,19 @@ class Reader:
                 return base._replace(specific=True, gathered=False, keys=frozenset())
             return unspecific(base, [arg_status(a) for a in nd.args])
 
+        def shared_rows(nd, sts: list, args) -> list:
+            """The statuses ``sts`` of batch ``nd``'s arguments ``args``, where its members read rows of the current inputs
+            against an argument they share: those rows carry a gather's rows, since two of them may be equal, as a value
+            batch's may, and the members would then read one pair of values (from the circuit alone; under a `Layout`,
+            its rows are distinct)."""
+            if lay is not None or nd.form != "batch" or nd.n < 2:
+                return sts
+            mapped = [nd.axes[i] is not None for i in args]
+            if all(mapped) or not any(mapped):
+                return sts
+            return [s._replace(gathered=True) if m and s.data and not (s.specific or s.stated) else s
+                    for s, m in zip(sts, mapped)]
+
         def primitive_status(f, nd, sts: list, base: Status) -> Status:
             """A primitive's output is specific where it reads a specific word one to one, by an op that no generic value
             of that word and no constant it reads can make two of its outputs equal (`INJECTIVE`), and no other
@@ -1127,8 +1144,9 @@ class Reader:
                 dims = (1, members, K, cols) if xm and not wm else (1, 1, K, cols * members) if wm and not xm else \
                     (members, 1, K, cols)
                 (ra, bx), (rb, bw) = operand(nd.args[ix]), operand(nd.args[iw])
+                sx, sw = shared_rows(nd, [arg_status(nd.args[ix]), arg_status(nd.args[iw])], (ix, iw))
                 site = Site(p, k, members, max(_unit(tx), _unit(tw)), ret.leaves, _width(ret), K,
-                            (_width(tx), _width(tw)), arg_status(nd.args[ix]), arg_status(nd.args[iw]),
+                            (_width(tx), _width(tw)), sx, sw,
                             (tuple(x[2:] for x in self.parts(nd.args[ix].refs)),
                              tuple(x[2:] for x in self.parts(nd.args[iw].refs))), dims, (ra, rb), (bx, bw))
                 S.sites.append(site)
@@ -1165,8 +1183,9 @@ class Reader:
                 prof.append(capped(runs_of(out) or ((leaves, THETA),), rate, bits))
             elif nd.form == "batch":
                 params, _ = f.signature()
-                cctx = tuple(arg_profile(a) if ax is None else ((t.leaves, arg_status(a)),)
-                             for a, ax, (_n, t) in zip(nd.args, nd.axes, params))
+                mapped = shared_rows(nd, [arg_status(a) for a in nd.args], range(len(nd.args)))
+                cctx = tuple(arg_profile(a) if ax is None else ((t.leaves, st),)
+                             for a, ax, (_n, t), st in zip(nd.args, nd.axes, params, mapped))
                 C = self.summary(f, cctx, depth)
                 S.children.append((C, nd.n, [b for i, (a, ax) in enumerate(zip(nd.args, nd.axes))
                                              for b in bindings(i, a, ax is not None)]))

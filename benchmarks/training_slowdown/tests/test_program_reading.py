@@ -12,9 +12,9 @@ gates on both sides. The Program is read under three statements (`STATED`): noth
 the reading lists. Under each, the Program's reading is never above the trace's: every product it charges is one the
 trace's M holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F, and at its own,
 are at most what the trace's M gives under the same choice of sub-work. With the layout alone it charges nothing, and
-with nothing stated less than with the rope tables named, so the same invariant is also held on a dense step with no
-table lookup (`_dense`), whose circuit alone is charged. Where the readings differ, the Program's is below, each for
-one cause:
+with nothing stated less than with the rope tables named. A dense step with no table lookup (`_dense`) is charged
+nothing from the circuit alone, since its batch's rows may repeat. Where the readings differ, the Program's is below,
+each for one cause:
 
 - Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
   multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
@@ -332,19 +332,16 @@ def test_the_programs_bound_is_never_above_the_traces(readings):
 
 
 @pytest.mark.slow
-def test_a_dense_steps_circuit_alone_is_charged_and_never_above_its_trace():
-    """A step with no table lookup (`_dense`), read with nothing stated: its first layer's input is free and its
-    contraction long enough that a block can't make the hidden rows below their width up to k = 800000, so the products
-    downstream of it are charged from the circuit alone, each a weight's with an activation's, and from k = 8e6, where
-    the contraction is short of the 4K² branch, the activations cost nothing on both sides. Every charged group fits
-    the trace's M and its blocks are at most the trace's M's under the same choice (`never_above`), here where the
-    Program's figures are not 0."""
+def test_a_dense_steps_rows_may_repeat_so_its_circuit_alone_charges_nothing():
+    """A step with no table lookup (`_dense`), read with nothing stated: its batch is rows of values, two of which may
+    be equal, so every product of its hidden rows by a shared weight carries rows that may repeat and is left out, where
+    the trace, whose contraction a block can't make the hidden rows below their width up to k = 800000, charges them."""
     r = read(_dense, _square, torch.randn(*DENSE), {"nothing": None})
     never_above(r)
     for k in KS:
         it = r.work["nothing", k]
-        assert it.groups and all(g.weight == (False, True) for g in it.groups) and it.left_out["gathered"] == 0
-        assert (blocks(it) > 0) == (k <= 800_000) == (trace_blocks(r.fig[k]) > 0), k
+        assert it.groups == [] and it.left_out["gathered"] > 0 and it.left_out["activations"] == 0
+        assert (trace_blocks(r.fig[k]) > 0) == (k <= 800_000), k
 
 
 @pytest.mark.slow
