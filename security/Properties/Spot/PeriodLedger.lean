@@ -24,9 +24,13 @@ alone.
 
 **What neither says.** A line's signature is not held to the device's: the device's own line and the presented one
 say the same and may be signed apart. The order is the ledger's, and a line's stamp is the device's clock, of which
-nothing is taken. And the history `dev` is any: the statements say something of a device only at a history that
-holds its whole ledger under the key, from its first line, since the check reads the ledger from its first line and
-a line the history lacks is a forgery to the finder.
+nothing is taken.
+
+**The history is any.** `dev` may hold every run and every ledger line the device made under the key, those of
+earlier audits among them: at such a history an earlier line the check reads is the device's own, and no forgery.
+The statements say something of a device only at a history that holds its whole ledger under the key, from its
+first line: the check reads the ledger from its first line, and a line the history lacks is a forgery to the
+finder.
 -/
 
 @[expose] public section

@@ -35,7 +35,8 @@ session on it (`Committed`); the session can be sampled when its open's layout h
 What these do not say: that the ledger presented is the auditor's device's own and whole, which
 `Properties.Spot.PeriodLedger` states; that a session whose
 layout does not hold the sample's family was audited (it is published, and nothing is held of it); and anything of a
-window whose session sampled several registrations, which the check refuses.
+window whose session sampled several registrations, or of a registration whose public file's header names
+`shared_rows`, both of which the check refuses.
 -/
 
 @[expose] public section
@@ -97,8 +98,9 @@ under the verifier's key (`sessionNamed`); every open of the root withholds its 
 session's log shows the sample's coins released after exactly one registration, `a`'s (`sampledOn`); the evidence
 holds one case, of that registration, whose record is `record`; the parameters at the window, which the check
 composes from the verifier's own, the window's root, the case's public file's digest and `before` (`paramsAt`),
-are one-stage v2's; the case's evidence, with the period's ledger, pins log and session files for its coins
-(`evidenceAt`), is one-stage v2's; and the audit `inner` accepted them, publishing what `a` holds. -/
+are one-stage v2's; that public file's header names no `shared_rows`; the case's evidence, with the period's
+ledger, pins log and session files for its coins (`evidenceAt`), is one-stage v2's; and the audit `inner` accepted
+them, publishing what `a` holds. -/
 def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
     (w : Window) (we : WindowEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
   ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (k : Case) (cm : OneStage.Commitment)
@@ -113,6 +115,8 @@ def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) 
     (Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8) = .ok cm ∧
     Flock.hexOf cm.digest = a.registration ∧ record = cm.record ∧
     OneStageZk.paramsOfJson (paramsAt p w.root k.pub before) = .ok q ∧
+    (∃ header, (bs.get k.pub "public file" >>= FilePart.header) = .ok header ∧
+      (field? header "shared_rows").isSome = false) ∧
     (evidenceAt p c.ledger e.pins we.session k.evidence >>= Flock.canon >>=
       fun s => OneStageZk.evidenceOf s.toUTF8) = .ok ev ∧
     inner q cm ev bs = .accept a.published a.profile
@@ -132,8 +136,8 @@ def AcceptMeans : Prop :=
         pub.windows.map (·.window) = ws.windows ∧ pub.others = ws.others ∧ e.windows.size = ws.windows.size ∧
         prof = pub.windows.flatMap (fun x => x.audits.map (·.profile)) ∧
         ∃ records : Array Json, records.size = pub.windows.size ∧
-          ∀ i (h : i < pub.windows.size), ∃ we a record, e.windows[i]? = some we ∧ pub.windows[i].audits = #[a] ∧
-            records[i]? = some record ∧
+          ∀ i (h : i < pub.windows.size), ∃ we a record,
+            e.windows[i]? = some we ∧ pub.windows[i].audits = #[a] ∧ records[i]? = some record ∧
             AuditedAt inner p c e bs r pub.windows[i].window we (records.extract 0 i) record a
 
 /-- **Each committed root is audited once.** For every audit of one registration `inner`, parameters, commitment,
