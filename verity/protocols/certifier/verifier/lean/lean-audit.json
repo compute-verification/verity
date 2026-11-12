@@ -39,10 +39,16 @@
     "Flock.Public",
     "Flock.WindowRecord",
     "NciCheck.Desc",
-    "NciCheck.DefinitionDigest"
+    "NciCheck.DefinitionDigest",
+    "NetworkCheck.ScanOk"
    ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security; and the scan's ok-bit constants (a schedule's members and the roots of their ok rows), which a registration is held to"
+  },
+  "NetworkCheck.ScanOk": {
+   "imports": ["Flock.RegKnown", "Identity.Domains", "Identity.Tagged"],
+   "except": [],
+   "why": "the scan's ok-bit constants are code: C-Flock's rows at known content and their frame root (the ok rows under the public salts), and core's domain registry and tagged SHA-512 (the salts' tag and the frame domain), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
