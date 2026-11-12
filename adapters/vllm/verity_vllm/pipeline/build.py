@@ -226,17 +226,18 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
             if sw.get("sampling_seeds"):
                 pol["seeded"] = True
             return pol
-        variants = w.get("variants")   # the legacy form's named policies; None: every request's is its own fields'
+        named = w.get("variants")   # the legacy form's named policies; a workload that names none: every request's is its own fields'
+        variants: dict = named if named else {}
         top = block.get("variant") if (block := w.get("sampling")) else None
         pols = []
         for r in w.get("requests", []):
             v = r.get("variant", top)
-            p = variants.get(v) if variants and v is not None else None
+            p = variants.get(v) if v is not None else None
             if p is None:
                 p = {"temperature": 0.0} if r.get("seed") is None and v in (None, "greedy") else {"temperature": 1.0}
             pols.append(_norm(dict(p), v))
         if not pols:
-            return _norm(dict((variants.get(top) if variants else None) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
+            return _norm(dict(variants.get(top) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
         kinds = {json.dumps(p, sort_keys=True) for p in pols}
         if len(kinds) > 1:
             return {"kind": "mixed", "policies": [json.loads(k) for k in sorted(kinds)]}
