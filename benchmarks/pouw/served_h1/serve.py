@@ -411,8 +411,8 @@ def run(a: argparse.Namespace) -> dict:
     rec = Record(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
-                         "record is vllm's H1 path, adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
-                         "which holds the salt, round-0 request table, R, S and requests_root rules (#2950, PRF-132); "
+                         "record is vllm's H1 path, adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py, "
+                         "which holds the salt, round-0 request table, R, S and requests_root rules; "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
     a.coins = a.coins or ("live" if at is not None else "seeded")
@@ -1080,7 +1080,7 @@ def main(argv: list[str] | None = None) -> int:
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=settings.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
-                         "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
+                         "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

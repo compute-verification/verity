@@ -88,10 +88,10 @@ from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 NO_DRAW_GATE = (f"an off-node window's draw coin comes from its own draw session, which infra's gate reserves and opens "
-                f"withheld on the draw root once the prover's commitment is in (CMP-177); this run names no gate to "
+                f"withheld on the draw root once the prover's commitment is in; this run names no gate to "
                 f"open it at: set ${GATE_ENV} and ${PEER_ENV} (and ${SSH_KEY_ENV} for the lane's gate key)")
 DRAW_WITHHELD = ("a draw session is withheld: its challenger releases its coin commitment's root only at its close, after "
-                 "the prover's draw root (`reserve --withhold`, CMP-177)")
+                 "the prover's draw root (`reserve --withhold`)")
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
