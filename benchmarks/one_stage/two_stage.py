@@ -829,7 +829,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
     run reports, the sessions' statements: None without a draw). The audit record is a5's own of the interior, decided
     as the stream decides the interior's before round 2's check is attached to it (a5's ``drawn``), so it is not the
-    run's outcome: the report's ``record`` is that record's (whether it accepted, the checks it fails, and
+    run's outcome: the report's ``accepted`` and ``record`` are that record's (``record``: the checks it fails, and
     ``own_reads``, that it took those reads as the stream's records do), ``round_two`` is round 2's with the form
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
@@ -844,7 +844,8 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
                                            "circuits", "timing", "staging", "proof_server")},
-           "record": {"accepted": record.get("accepted") is True, "own_reads": record.get("own_reads") is True,
+           "accepted": ok,
+           "record": {"own_reads": record.get("own_reads") is True,
                       "failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok"))}}
     refusals = sorted({line.split("\t", 1)[1] for f in sorted((out / "audit" / "proof-server").glob("*.log"))
                        for line in f.read_text(errors="replace").splitlines() if line.startswith("REFUSED\t")})

@@ -255,7 +255,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     summary["as_expected"] = expected(a, s, ok, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     r2, o = summary.get("round_two"), summary.get("outcome") or {}
-    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "record", "pins", "as_expected")},
+    print("TWO " + json.dumps({**{x: summary.get(x) for x in ("sample", "accepted", "record", "pins", "as_expected")},
                                "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
