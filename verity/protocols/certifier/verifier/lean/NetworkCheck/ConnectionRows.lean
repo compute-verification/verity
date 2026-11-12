@@ -20,7 +20,8 @@ table of no row.
 
 A schedule with lengths rows is `Tabled`: the period check's schedule (`Period.Schedule`, as `Period.scheduleOf` reads
 it) beside the lengths rows' form and the content classes, which `Tabled.check` holds to what `warden.WardenParams` and
-`content_rows.classes` take. Its digest is a parameter here, as the head's `parameters`.
+`content_rows.classes` take. Its digest (`Tabled.digest`, `WardenParams.digest`) hashes the form and the classes beside
+the schedule's fields, and is the head's `parameters`.
 
 Code: it imports the period check (`NetworkCheck.Period`) and what that imports, and nothing else.
 -/
@@ -186,6 +187,15 @@ def Tabled.check (t : Tabled) : V Unit := do
         unless 0 < rows && rows ≤ strides s * K do
           throw s!"content class {i} has 1 to {strides s * K} rows, the lengths table's slots, not {rows}"
 
+/-- `WardenParams.digest` of a schedule with lengths rows: the schedule's fields (`Period.Schedule.manifest`), the
+lengths rows' form and, of a schedule with content classes, each class as `[P, O]` or, with rows of its own,
+`[P, O, rows]`. -/
+def Tabled.digest (t : Tabled) : V ByteArray :=
+  let classes := t.content.map fun cs => ("content", Json.arr (cs.map fun c =>
+    Json.arr (#[toJson c.promptIds, toJson c.ids] ++ (c.rows.map toJson).toList.toArray)))
+  Identity.identityDigestSha512 Period.scheduleTag
+    (Json.mkObj (t.schedule.manifest ++ [("lengths", toJson t.lengths)] ++ classes.toList))
+
 /-! ## The tables -/
 
 /-- A table the head lists: its name, its rows (under form 2 the most a class's table has) and a row's bytes. -/
@@ -284,14 +294,15 @@ def Tabled.layout (t : Tabled) (w k : Nat) : List (String × Nat) :=
                  ("prompt_ids", c.promptIds)]
     | none => []
 
-/-- `connection_rows.check_registration` before its certificate: the head the registration states, under the schedule
-whose digest is `sd`, with the certificate's key, digest and signature, or what fails. Under form 2 a class's rows are
+/-- `connection_rows.check_registration` before its certificate: the head the registration states under the schedule,
+with the certificate's key, digest and signature, or what fails. Under form 2 a class's rows are
 the registration's count: at most `phaseReleases`, one for a class's three tables; and a table of no row has the zero
 root. Each domain is derived at the rows the head then lists. -/
-def Tabled.read (t : Tabled) (sd session : ByteArray) (link : String) (w : Nat) (doc : Json) :
+def Tabled.read (t : Tabled) (session : ByteArray) (link : String) (w : Nat) (doc : Json) :
     V (Head × ByteArray × ByteArray × ByteArray) := do
   let ctx := "registration"
   let listed ← t.tables
+  let sd ← t.digest
   Period.exactly doc registrationKeys ctx
   unless (← Flock.J.str doc "format" ctx) == registrationFormat && (← Flock.J.str doc "link" ctx) == link &&
       (← Flock.J.nat doc "window" ctx) == w && (← Flock.J.str doc "parameters" ctx) == Flock.hexOf sd &&
@@ -337,8 +348,8 @@ def Tabled.read (t : Tabled) (sd session : ByteArray) (link : String) (w : Nat) 
 
 /-- `connection_rows.check_registration`: the head of the link's connection rows at execution phase `w`, which the
 registration states and its certificate signs under the deployment key in the session, or the refusal. -/
-def registered (p : Period.Params) (t : Tabled) (sd : ByteArray) (w : Nat) (doc : Json) : Period.Found Head := do
-  let (head, key, digest, signature) ← match t.read sd p.session p.link w doc with
+def registered (p : Period.Params) (t : Tabled) (w : Nat) (doc : Json) : Period.Found Head := do
+  let (head, key, digest, signature) ← match t.read p.session p.link w doc with
     | .ok x => pure x
     | .error e => Period.refuse e
   let .ok d := head.digest | Period.refuse "registration: the head doesn't encode"
@@ -356,14 +367,10 @@ private def toySchedule : Period.Schedule :=
   { bucketMs := 100, cellBytes := 512, delay := 5, egressCells := 9, every := 2, ingressBuckets := 3,
     ingressCells := 4, lanes := 2, queue := 2, slots := 2, window := 16 }
 
-/-- The toy schedule under form 2, and its `WardenParams.digest`. -/
+/-- The toy schedule under form 2. -/
 private def held : Tabled :=
   { schedule := toySchedule, lengths := 2,
     content := some #[⟨4, 4, none⟩, ⟨16, 4, none⟩, ⟨128, 8, none⟩, ⟨128, 8, none⟩] }
-
-private def heldDigest : String :=
-  "fe09d8179188559f4744e18efbcc9371ecdf7bbaae4e2cc1fbe26e4df92299a4\
-    a378a5a47d2b1de609f79f8c81b54362d5dbb2e19b488c143839714b5f972069"
 
 /-- The toy schedule under form 1, each class with rows of its own. -/
 private def own : Tabled :=
@@ -381,13 +388,13 @@ private def sizes : List (String × Nat) :=
    ("response.3", 36), ("end.3", 4)]
 
 private def domainHex (table : String) (rows rowBytes : Nat) : Option String := do
-  let sd ← (Flock.unhex heldDigest).toOption
+  let sd ← held.digest.toOption
   (domainId sd session "responses" 0 table rows rowBytes).toOption.map Flock.hexOf
 
 /-- A head of the form 2 schedule: classes 0 and 2 hold two rows and classes 1 and 3 none; the table at place `k` has
 the root of 64 bytes `k + 1`, or the zero root where it has no row. -/
 private def head : V Head := do
-  let sd ← Flock.unhex heldDigest
+  let sd ← held.digest
   let tables ← (← held.tables).toList.zipIdx.mapM fun (x, k) => do
     let rows := if k < 2 then x.rows else if (k - 2) / 3 % 2 == 0 then 2 else 0
     let root : ByteArray := if rows == 0 then noRowsRoot else ⟨Array.replicate digestBytes (k + 1).toUInt8⟩
@@ -428,6 +435,17 @@ private def head : V Head := do
 #guard (({ held with schedule := { toySchedule with ingressBuckets := 6 } } : Tabled).check).toOption.isNone
 #guard (({ held with schedule := { toySchedule with egressCells := 25 } } : Tabled).check).toOption.isNone
 #guard (({ held with schedule := { toySchedule with egressCells := 24 } } : Tabled).check).toOption.isSome
+-- `WardenParams.digest` of the toy schedule under each form, and without content classes: the form and the classes
+-- are in it
+#guard (own.digest.map Flock.hexOf).toOption == some
+  "515a1584b683fde5d5af88641e5e894e51168b5726d6d261bedcfd0d741f9e97\
+    c79a0fe6e593b3984b5890d1c7f49d405736444f5a71ad15fadbdc8167ab8280"
+#guard (held.digest.map Flock.hexOf).toOption == some
+  "fe09d8179188559f4744e18efbcc9371ecdf7bbaae4e2cc1fbe26e4df92299a4\
+    a378a5a47d2b1de609f79f8c81b54362d5dbb2e19b488c143839714b5f972069"
+#guard (({ held with content := none } : Tabled).digest.map Flock.hexOf).toOption == some
+  "804c6d03b6666a89155a1c4f41c31c7d02c90978cf6d5a28b6a41bbe54131d2c\
+    6ea7c345d593c1b204775de7b4bab8f1b264bfed3ec60bb9018d3bee4243335a"
 -- `connection_rows.domain(...).domain_id` of four tables of the form 2 schedule, one of no row
 #guard domainHex "lengths" 8 24 == some
   "05bf64b22374df3145110cbd2c139c6dc9eb1143199b0e038377cd4037b1f412\

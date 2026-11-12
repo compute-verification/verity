@@ -11,14 +11,14 @@ public import NetworkCheck.Difftest
 results with `NetworkCheck.ConnectionRows`' definitions, gives every one of them. The Lean audit runs it (`runs` in
 `lean-audit.json`): compiled evaluation, a test and not a proof.
 
-An instance is a schedule (`Period.scheduleOf`'s keys), its lengths rows' form and content classes, the digest Python
-gives it (`parameters`: 64 zero bytes where `WardenParams` refuses it), a session, a link and an execution phase, the
-network certifier's LMS key and parameters, and the queries. `evaluate` gives, with `null` where Python raises
-`ValueError`:
-* `tables`, `connection_rows.tables_of` as `[name, rows, row bytes]` each;
+An instance is a schedule (`Period.scheduleOf`'s keys), its lengths rows' form and content classes, a session, a link
+and an execution phase, the network certifier's LMS key and parameters, and the queries. `evaluate` gives, with `null`
+where Python raises `ValueError`:
+* `parameters`, `WardenParams.digest`, and `tables`, `connection_rows.tables_of` as `[name, rows, row bytes]` each;
 * `rooms`, each `[B, P]`'s `[content_rows.request_room, content_rows.request_bytes]`; `ids`, each O's
   `content_rows.response_bytes`;
-* `domains`, each `[table, rows, row bytes]`'s `connection_rows.domain(...).domain_id`;
+* `domains`, each `[table, rows, row bytes]`'s `connection_rows.domain(...).domain_id` under the schedule, none of a
+  schedule Python refuses;
 * `heads`, each given head's encoding and digest;
 * `registrations`, each registration's head as `connection_rows.check_registration` returns it under the key in the
   session, by its encoding and digest.
@@ -71,7 +71,6 @@ def natOr (x : Except String Nat) : Json :=
   | .error _ => .null
 
 def evaluate (j : Json) : Except String Json := do
-  let sd ← bytesOf (← j.getObjVal? "parameters")
   let session ← bytesOf (← j.getObjVal? "session")
   let link ← j.getObjValAs? String "link"
   let w ← j.getObjValAs? Nat "window"
@@ -79,6 +78,7 @@ def evaluate (j : Json) : Except String Json := do
   let l ← j.getObjVal? "lms"
   let lms ← Lms.Params.make (← l.getObjValAs? Nat "N") (← l.getObjValAs? Nat "W") (← l.getObjValAs? Nat "H") false
   let tabled := (tabledOf j).toOption
+  let sd := (tabled.bind (·.digest.toOption)).getD .empty
   let tables := match tabled.bind (·.tables.toOption) with
     | some ts => Json.arr (ts.map fun x => Json.arr #[.str x.name, toJson x.rows, toJson x.rowBytes])
     | none => .null
@@ -102,14 +102,15 @@ def evaluate (j : Json) : Except String Json := do
       let p : Period.Params :=
         { audits := #[], cells := #[], first := 0, jitter := 0, link, lms, key, session, program := "",
           form := .rows t.schedule sd ⟨0, 0, 0, 0, 0⟩, windows := 1 }
-      match registered p t sd w doc with
+      match registered p t w doc with
       | .ok h => headJson h
       | .error _ => .null
-  pure (Json.mkObj [("tables", tables), ("rooms", .arr rooms), ("ids", .arr ids), ("domains", .arr domains),
-    ("heads", .arr heads), ("registrations", .arr registrations)])
+  pure (Json.mkObj [("parameters", if tabled.isSome then hexJson sd else .null), ("tables", tables),
+    ("rooms", .arr rooms), ("ids", .arr ids), ("domains", .arr domains), ("heads", .arr heads),
+    ("registrations", .arr registrations)])
 
 /-- The results' fields, in the order they are compared. -/
-def fields : List String := ["tables", "rooms", "ids", "domains", "heads", "registrations"]
+def fields : List String := ["parameters", "tables", "rooms", "ids", "domains", "heads", "registrations"]
 
 /-- `lake env lean --run NetworkCheck/ConnectionRowsDifftestMain.lean INSTANCES PYTHON N`. -/
 def main (args : List String) : IO UInt32 :=

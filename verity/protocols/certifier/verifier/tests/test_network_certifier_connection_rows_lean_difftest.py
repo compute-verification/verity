@@ -1,7 +1,7 @@
 """The difftest of `connection_rows.py` against the Lean package `network_check`: the Python half.
 
 `verity/protocols/certifier/verifier/lean/scripts/connection_rows_vectors.py` writes random instances and this
-package's results on each (a schedule's tables, `request_room`, `request_bytes` and `response_bytes`, a table's domain,
+package's results on each (a schedule's digest and tables, `request_room`, `request_bytes` and `response_bytes`, a table's domain,
 a head's encoding and digest, and `check_registration`'s head or refusal). `check` runs the Lean half in its Lean audit
 (`runs` in that package's `lean-audit.json`): `NetworkCheck/ConnectionRowsDifftestMain.lean` computes every result with
 `NetworkCheck.ConnectionRows` and fails on any that differs. The audit checks the data against the record's SHA-256,

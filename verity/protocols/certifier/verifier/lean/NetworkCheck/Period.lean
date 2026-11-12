@@ -483,17 +483,20 @@ def scheduleOf (j : Json) : V Schedule := do
         request's max_tokens"
   pure s
 
-/-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
-tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
-before the cap was a parameter. -/
-def Schedule.digest (s : Schedule) : V ByteArray :=
-  Identity.identityDigestSha512 scheduleTag (Json.mkObj ([
-    ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
+/-- What `WardenParams.digest` hashes of the schedule: its fields, with its egress form, the cell kinds and the fail
+reasons. A schedule without a response cap has neither the cap nor `capReason` in it. -/
+def Schedule.manifest (s : Schedule) : List (String × Json) :=
+  [("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
     ("egress", toJson egressForm), ("egress_cells", toJson s.egressCells), ("every", toJson s.every),
     ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
-    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList))
+    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList
+
+/-- `WardenParams.digest`: the schedule's canonical JSON (`Schedule.manifest`), tagged. A schedule without a response
+cap has neither the cap nor `capReason` in it, so its digest is the one it had before the cap was a parameter. -/
+def Schedule.digest (s : Schedule) : V ByteArray :=
+  Identity.identityDigestSha512 scheduleTag (Json.mkObj s.manifest)
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),

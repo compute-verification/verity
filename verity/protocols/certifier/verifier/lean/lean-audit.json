@@ -10,11 +10,11 @@
  },
  "runs": {
   "NetworkCheck.ConnectionRowsDifftestMain": {
-   "why": "240 random instances on which NetworkCheck.ConnectionRows gives what verity/protocols/certifier/verifier/connection_rows.py and content_rows.py give: tables_of of a schedule with lengths rows of either form and content classes, or the refusal of one WardenParams or content_rows.classes refuses; request_room, request_bytes and response_bytes; a table's domain id; a head's encoding and digest; and check_registration's head under an LMS key in the session, on honest registrations (under form 2 at counts from none to the most) and on ones changed in one place, those that change what the head lists signed again (a count past an execution phase's releases, a class's tables of two counts, a table of no row with a root), with each ValueError a refusal",
+   "why": "240 random instances on which NetworkCheck.ConnectionRows gives what verity/protocols/certifier/verifier/connection_rows.py and content_rows.py give: WardenParams.digest and tables_of of a schedule with lengths rows of either form and content classes, or the refusal of one WardenParams or content_rows.classes refuses; request_room, request_bytes and response_bytes; a table's domain id; a head's encoding and digest; and check_registration's head under an LMS key in the session, on honest registrations (under form 2 at counts from none to the most) and on ones changed in one place, those that change what the head lists signed again (a count past an execution phase's releases, a class's tables of two counts, a table of no row with a root), with each ValueError a refusal",
    "args": ["{connection-rows/instances.jsonl}", "{connection-rows/python.jsonl}", "240"],
    "data": {
-    "connection-rows/instances.jsonl": "79f1cf917f96602132c341612aaf8b2ee36d690016f2d19908e6dd42a69a42d1",
-    "connection-rows/python.jsonl": "1340cc2b757a952173ad1af8073184665c42b6b31755b60f23ad0bfa40cb6a01"
+    "connection-rows/instances.jsonl": "12cae20d8fec3b510955a1d6e8ded3dc56ec40ddd6e3069133f172fa9230a843",
+    "connection-rows/python.jsonl": "ca250f3bd45c67d072b61a2b42d2ac26e965ca2242e4e89ad5488bb6cc8bd243"
    },
    "generate": ["python3", "scripts/connection_rows_vectors.py", "{repo}", "--out", "{out}"]
   },

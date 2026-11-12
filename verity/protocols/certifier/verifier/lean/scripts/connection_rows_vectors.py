@@ -15,16 +15,16 @@ An instance has a schedule with lengths rows of either form, with content classe
 one way `WardenParams` or `content_rows.classes` refuses (a cell an id request's first prompt field doesn't fit,
 `ingress_buckets` past the delay, a connection that outlives a window, a window that isn't whole strides, a row of too
 many slots, a response cap that is no cap, a form that is none, a class of the other form, a size that is no power of
-two, ids past a response row's, rows that are none or past the lengths table's slots). Its queries: `request_room` and
-`request_bytes` at cells an id request does and doesn't fit, `response_bytes`, domains of the schedule's tables and of
-others at any count, heads built field by field (a table listed twice or none, a digest of another length, a count or an
-execution phase past its field), and registrations of the schedule's tables signed by an LMS key of the instance: the
-honest one, with every count from none to the most under form 2, and ones changed in one place. A change to what the
-head lists is signed again, so the registration is refused for what it states and not for its certificate: a class's
-count past an execution phase's releases, a class's three tables of two counts, a table of no row with a root, a table
-of the schedule's rows with another count. The others leave the certificate as it was, or change it: a field, a key, a
-table's entry or layout of another value, missing or extra; a certificate of another digest, key id, session, link or
-execution phase, or with a signature that doesn't decode or verify.
+two, ids past a response row's, rows that are none or past the lengths table's slots). Its queries: the schedule's
+digest and tables, `request_room` and `request_bytes` at cells an id request does and doesn't fit, `response_bytes`,
+domains of the schedule's tables and of others at any count, heads built field by field (a table listed twice or none, a
+digest of another length, a count or an execution phase past its field), and registrations of the schedule's tables
+signed by an LMS key of the instance: the honest one, with every count from none to the most under form 2, and ones
+changed in one place. A change to what the head lists is signed again, so the registration is refused for what it states
+and not for its certificate: a class's count past an execution phase's releases, a class's three tables of two counts, a
+table of no row with a root, a table of the schedule's rows with another count. The others leave the certificate as it
+was, or change it: a field, a key, a table's entry or layout of another value, missing or extra; a certificate of
+another digest, key id, session, link or execution phase, or with a signature that doesn't decode or verify.
 
 Every registration has the values' types `connection_rows.registration` writes: hex in lower case, integers written as
 integers, a certificate of three keys. Where `check_registration` reads more than that (`bytes.fromhex`'s upper case
@@ -335,12 +335,12 @@ def instance(seed: int) -> tuple[dict, dict]:
             domains.append(rng.choice([[name, rows, size], [name, 0, size], [name, rng.randint(0, 1 << 20), size],
                                        [rng.choice(NAMES), rng.randint(0, 1 << 20), rng.randint(1, 5000)]]))
         docs = registrations(rng, params, session, link, window, signing)
-    inst = {"schedule": s, "lengths": lengths, "content": content,
-            "parameters": (made[0].digest if made else bytes(64)).hex(), "session": session.hex(), "link": link,
+    inst = {"schedule": s, "lengths": lengths, "content": content, "session": session.hex(), "link": link,
             "window": window, "key": lms.public_key(signing.key).hex(), "lms": {"N": LMS.N, "W": LMS.W, "H": LMS.H},
             "rooms": rooms, "ids": ids, "domains": domains, "heads": heads, "registrations": docs}
     public = LmsKey(LMS, lms.public_key(signing.key))
     results = {
+        "parameters": made[0].digest.hex() if made else None,
         "tables": [list(t) for t in made[1]] if made else None,
         "rooms": [_maybe(lambda B, P: [CT.request_room(B, P), CT.request_bytes(B, P)], B, P) for B, P in rooms],
         "ids": [_maybe(CT.response_bytes, O) for O in ids],
