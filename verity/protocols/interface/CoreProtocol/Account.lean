@@ -18,7 +18,8 @@ A protocol's check (`Core.Protocol`) publishes its amounts under its own keys an
 value beside a protocol, never a field of it: for each amount the protocol publishes (`Account.Amount`) it states
 
 * the part of the registered hardware the amount is about (`Part`: the devices' compute, the memory of some tiers, the
-  read rate of some tiers' memory, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's
+  read rate of some tiers' memory, a link's egress), whose capacity is a function of the Site (`Part.capacity`), so a
+  row's
   capacity is read from the registration and never copied from an answer;
 * the form the amount is published in: its key, its unit, which side of the capacity it bounds (`Side`: the verified
   amount from below, or the free amount from above), a moment or the keys of its span (`Time`), the key of its
@@ -74,12 +75,13 @@ def Key.read (k : Key) (a : Answer) : Option Json :=
   | .profile key => a.profile.bind fun j => (j.getObjVal? key).toOption
 
 /-- A part of the registered hardware an amount is about: the devices' compute, in tensor-core MACs; the memory of some
-tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a link, in bits sent over it. -/
+tiers, in bits held; the read rate of some tiers' memory, in bits read from it; a boundary link's egress, in bits sent
+over it out of the Site, whose capacity is the link's `β`, which is each way. -/
 inductive Part where
   | compute
   | memory (tiers : List Tier)
   | read (tiers : List Tier)
-  | link
+  | egress
   deriving DecidableEq, Repr
 
 namespace Part
@@ -98,18 +100,18 @@ def name : Part → String
   | .compute => "compute"
   | .memory ts => "memory/" ++ "+".intercalate (ts.map fun t => t.name)
   | .read ts => "read/" ++ "+".intercalate (ts.map fun t => t.name)
-  | .link => "link"
+  | .egress => "egress"
 
 /-- Every part a site can hold, tier by tier. -/
 def all : List Part :=
-  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .link]
+  [.compute, .memory [.hbm], .memory [.dram], .memory [.disk], .read [.hbm], .read [.dram], .read [.disk], .egress]
 
-/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link. -/
+/-- Two parts are of one resource: both compute, both memory, both a read rate, or both a link's egress. -/
 def same : Part → Part → Bool
   | .compute, .compute => true
   | .memory _, .memory _ => true
   | .read _, .read _ => true
-  | .link, .link => true
+  | .egress, .egress => true
   | _, _ => false
 
 /-- The tiers a part names, where it names tiers. -/
@@ -129,14 +131,14 @@ def leaves (p : Part) (S : Site) : List String :=
   | .compute => S.units
   | .memory ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
   | .read ts => (S.locs.filter fun x => x.kind = .memory ∧ x.tier ∈ ts.map some).map (·.id)
-  | .link => (S.boundary none).map (·.id)
+  | .egress => (S.boundary none).map (·.id)
 
 /-- The part's leaves at `place`: all of them when an answer names no place, a link by its id, and otherwise the leaves
 at or under the location. -/
 def leavesAt (p : Part) (S : Site) (place : Option String) : List String :=
   match place, p with
   | none, _ => p.leaves S
-  | some i, .link => (p.leaves S).filter (· == i)
+  | some i, .egress => (p.leaves S).filter (· == i)
   | some i, _ => (p.leaves S).filter fun x => (S.loc? x).any (S.within i (S.locs.length + 1))
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
@@ -163,7 +165,7 @@ def capacity (p : Part) (S : Site) (digest : Sheet → String) (A : Site.Registr
     let rates : Option (List Nat) := parents.bind fun ds =>
       ds.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
     (rates.map fun ns => ("registered", ns.sum)).toList
-  | .link => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
+  | .egress => [("registered", (xs.filterMap fun i => (S.links.find? (·.id == i)).map fun k => k.β).sum)]
 
 end Part
 
@@ -611,7 +613,7 @@ private def wiped : Account :=
 
 private def sent : Account :=
   { protocol := "toy/sent", head := some (.published "registration_head")
-    amounts := [{ metric := "sent", part := .link, place := some (.profile "link"), key := .published "K",
+    amounts := [{ metric := "sent", part := .egress, place := some (.profile "link"), key := .published "K",
                   unit := bits, side := .free,
                   time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
@@ -785,7 +787,7 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
   [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
    ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
-  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
+  ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"egress\"," ++
    "\"place\":\"up0\",\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
 
