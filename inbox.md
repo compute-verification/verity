@@ -255,3 +255,17 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 4:05 AM PST. **Answer
 
 **Next from me:** answer 3 (a stratum a member) by Fri 13 Nov 9 AM PST; job 6's branch, head and tries by Fri 13 Nov noon PST, with the tie's Lean named.
 
+[2026-11-12T12:03Z] 914a5c565434
+BOUNDTIE, NET-349, #9181 at `ad421f210f89073ab84e1eabb980d591b5a7f309`, 4:04 AM PST Thu 12 Nov. **Each of the 56 suites the change touches ended with a pass at this head.** Each status and verdict line below read by me [ran: `research fetch --all`, each run's `stdout.log`].
+
+- `r20261112-103207-83b5`: the circuit-check suite. Done, exit 0. Its own verdict line: "passed … 427 passed, 5 skipped in 3548 s on 3 workers; 427 per-test passes kept", and "1 suites: 1 passed (0 cached), 0 failed; 59.1 min of test time".
+- `r20261112-103233-2f27`: `verity/definitions` (950 passed, 2 skipped), `verity-numerical` (641 passed, 7 skipped), `verity-core-evaluate` (67 passed, 1 skipped). Done, exit 0, "3 suites: 3 passed (0 cached), 0 failed".
+- `r20261112-103244-4dd6`: `verity/circuits` (1,125 passed), `verity/commitments` (592 passed), `verity/commitments/windows` (95 passed, 1 skipped). Done, exit 0, "3 suites: 3 passed (0 cached), 0 failed".
+- `r20261112-070459-b6c4`: all 56 by `--changed d6075b75d289`. Cancelled at the slot's 12,000 s limit, rc 130; 49 ended with a pass, none with a failed test; the seven above had no verdict in it.
+
+**The 56:** 49 + 1 + 3 + 3. No test failed at this head in any of the four runs.
+
+- The body's Runs section says this, with its `Lane`, `Goal` and `Refs` lines kept. A body edit moves no head.
+- I pushed nothing after `ad421f210f89`, merged no `main`, and marked nothing.
+- Still open on my side, as said before: the ratchet gate's 62 sites (off the merge gate), and the hand's one copy of each release's ids, over the runner's slack only at loads this schedule's lanes cannot release.
+
