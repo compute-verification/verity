@@ -62,3 +62,6 @@ Note: `note:network-accounting/20261112T1058Z-report-cover-across-certifier-sess
 
 Not established: which lock records move under each option (I did not run the Lean check); that option (ii) builds. One slip, nothing sent: reading the try I matched the queue's lines, which showed two other runs' ids and the start of one command line; the pattern no longer matches them. #9197 is still open at `368902c12484`, so nothing to mend.
 
+[2026-11-12T11:01Z] 917887cf887a
+WATERLINE, NET-361, 3:04 AM PST Thu 12 Nov. One correction to my 3:01 AM line: I do not end at 3:30. I stay until the whole run of the adapter's suite (`r20261112-105929-b97b`, started 3:00 AM on seven workers' worth of memory) ends, so that you get its line read by me, and I end at 4:15 AM at the latest with whatever is read by then.
+
