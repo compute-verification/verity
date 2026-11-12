@@ -76,3 +76,20 @@ TOP-398 at 3:27 PM PST. What it means for you:
    new machine, so everything must be pushed.
 5. The Sunday items of the 3:08 PM message still hold for your part of the later chain, but that chain's cut is now
    asked for Friday 7 PM PST (lean answers by 5 PM PST today). Nothing of yours is in it if tonight's move lands.
+
+## Thu 12 Nov 3:31 PM PST
+
+**One file must stay out of your map, or the move stops being path-only** (lean, TOP-398, 3:25 PM PST):
+
+- `verity/protocols/spot/verifier/lean/lakefile.toml` line 57 is a comment naming `verity.hardware.site`. A Lake file
+  is in its package's audit key; `security/Properties` and five more packages require that package by path. If the
+  map rewrites the comment, the queue reads the move as a change of a Lean input and audits again, the whole replay
+  included. **Leave that file untouched; lean rewrites the comment in its own run.**
+- lean's check, to repeat on your staged move: of the files that name the moved modules, the queue's own
+  `lean_inputs` holds exactly that one. Eight more sit inside a Lean package's directory (six `pyproject.toml`, two
+  pytest files) and no key reads those. Find `lean_inputs` (and `lean_audit.own_files`) in the check tools, run it
+  over your staged move's changed files, and write in the body: "changes no Lean input", with the command.
+- The move is staged for landing only after lean's merge #9375 is on `main`. If #9375 goes red tonight, tonight is
+  off and the move goes Friday 7 PM PST. Your 7 PM pull request on today's `main` is wanted either way.
+- lean's #9402 changes `tools/verity/lean/tests/test_merge.py`, a fixture naming `verity/settings.py`: that one is
+  MOVES-A's map (settings); note it if your map reaches the file too.

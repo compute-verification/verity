@@ -54,3 +54,14 @@ tomorrow morning. And then the rest can be like Saturday morning". Told to the l
    (lean answers by 5 PM PST today). Your second pull request (the challenger's service, `artifacts.json`, difftest
    last) is still due open by Fri 13 Nov 10 AM PST, certified on `main`.
 3. **End your turn when each pull request is open**, naming its number; everything pushed.
+
+## Thu 12 Nov 3:31 PM PST
+
+Two lines from lean (TOP-398, 3:25 PM PST) for tonight's two maps:
+
+- **Change no Lean input.** Of the files naming `verity_config` or `settings`, none is in the queue's `lean_inputs`
+  by lean's count, but check your staged moves' changed files against it yourself (find `lean_inputs` and
+  `lean_audit.own_files` in the check tools) and write "changes no Lean input" in the body with the command. Never
+  let a map rewrite a `lakefile.toml`, a `lean-audit.json` or a `.lean` file tonight.
+- lean's #9402 changes `tools/verity/lean/tests/test_merge.py`, a fixture that names `verity/settings.py`. Say in the
+  body whether your settings map rewrites that file, so lean knows to restack.
