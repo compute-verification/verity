@@ -158,6 +158,61 @@ def test_a_fail_above_the_lowest_candidate_bisects_its_suspects_reruns_a_lone_on
     assert decide(s) == [Build((4,), "c2", 1)]
 
 
+def by_main(name: str, tests: set[str], main_tests: set[str] | None, *inputs: str, base_tests: set[str] | None = None
+            ) -> Failed:
+    """A failure of a candidate above another, with ``tests`` failing where `main` fails ``main_tests`` of it and its base
+    ``base_tests`` (None: not said yet)."""
+    return replace(by_tests(name, tests, base_tests, *inputs), main_tests=None if main_tests is None else frozenset(main_tests))
+
+
+def test_a_fail_above_the_lowest_on_tests_main_fails_too_is_inherited_on_main_s_word():
+    """Only its own member meets the failure, and `main` fails the same tests: its base, which leaves them as `main` has
+    them, fails them too, so it fails nothing of its own and the next batch goes on it."""
+    t = by_main("step pytest", {"pkg::t"}, {"pkg::t"}, "pkg2/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(t,), ended=False), ready=prs(1, 2, 3), depth=3)
+    assert decide(s) == [Build((3,), "c2", 1)]
+
+
+def test_a_fail_above_the_lowest_decided_on_main_s_word_suspects_only_its_own_failures():
+    """Two failures meet only its own members, one `main` passes and one `main` fails too: only the first suspects anyone,
+    so #2 is ejected and #3 built again at once on the candidate below; a lone member whose own failure (its base passed it)
+    meets none of its files is rerun, the one `main` fails too set aside."""
+    a, b = by_main("step a", {"a::x"}, set(), "pkg2/"), by_main("step b", {"b::y"}, {"b::y"}, "pkg3/")
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, 3, state=FAIL, failed=(a, b)), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s) == [Eject(2, "h2", "step a failed, and its changed files meet their inputs, no other member's",
+                               (replace(a, base_tests=frozenset()),)),
+                         Drop("c2", "failed: step a, step b", Outcome((2, 3), heads(2, 3), FAIL, (2,), "c1")),
+                         Build((3,), "c1", 2, replaces="c2"), Build((4,), "c2", 1)]
+    lone = by_main("step a", {"a::x"}, None, "elsewhere/", base_tests=set())
+    s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(lone, replace(b, inputs=frozenset({"pkg2/"})))),
+             ready=prs(1, 2, 3), depth=3)
+    assert decide(s) == [Rerun("c2", (lone.key,)), Build((3,), "c2", 1)]
+
+
+def test_a_rebuild_whose_records_run_goes_first_is_the_last_built_again():
+    """A Lean member's candidate rebuilt on a new base runs its records again, and nothing is built on a candidate whose check
+    waits: the members above it go into the batches after it."""
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(task("suite:1", "pkg1/"),)), cand("c2", "c1", 2), cand("c3", "c2", 3),
+             ready=[pr(1), lean(2), pr(3), pr(4)], depth=3, records=True)
+    assert decide(s)[-4:] == [Drop("c1", "failed: suite:1", Outcome((1,), heads(1), FAIL, (1,), MAIN)),
+                              Drop("c2", "its base failed"), Drop("c3", "its base failed"),
+                              Build((2,), MAIN, 3, records=True, replaces="c2")]
+    s = snap(waiting("c1", MAIN, 1, records=RecordsRun(PENDING, "r1 runs")), cand("c2", "c1", 2, 5), ready=[lean(1), pr(5)],
+             records=True, left=((2, "h2", "held by top (no reason)"),), pulled=frozenset({2}))
+    assert not [a for a in decide(s) if isinstance(a, Build)]
+
+
+def test_a_rebuild_leaves_out_a_member_on_main_or_in_a_candidate_below():
+    """Built again, a candidate holding a member that landed below it, or one a rebuild below it holds, leaves it out."""
+    s = snap(cand("c1", MAIN, 1, state=PASS), cand("c2", "c1", 2, 1, heads=heads(2, 1)), ready=prs(1, 2, 3))
+    assert decide(s) == [Drop("c2", "#1 is in a candidate below it too"), Advance("c1"),
+                         Drop("c1", "on main", Outcome((1,), heads(1), PASS)), Build((2,), "c1", 2, replaces="c2"),
+                         Build((3,), "c2", 1)]
+    s = snap(cand("c1", MAIN, 1, state=FAIL, failed=(task("suite:1", "pkg1/"),)), cand("c2", "c1", 2),
+             cand("c3", "c2", 3, 2, heads=heads(3, 2)), ready=prs(1, 2, 3, 4), depth=3)
+    assert decide(s)[-3:] == [Build((2,), MAIN, 3, replaces="c2"), Build((3,), "c2", 2, replaces="c3"), Build((4,), "c3", 1)]
+
+
 def test_a_candidate_off_the_chain_is_dropped_with_every_candidate_above_it():
     s = snap(cand("y", "x", 3), cand("c1", MAIN, 1), cand("x", "gone", 2, state=PASS), ready=prs(1, 2, 3), depth=3)
     assert decide(s) == [Drop("x", "not on main's chain: its base gone is neither main nor a chain member"),

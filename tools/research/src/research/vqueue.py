@@ -713,7 +713,7 @@ def _restack(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], rest:
         members, heads = tuple(m for m, _ in keep), tuple(h for _, h in keep)
         records = s.records and any(ready[m].lean for m in members)
         acts.append(Build(members, base, s.depth - len(chain), records, c.sha))
-        chain.append(Candidate(c.sha, base, members, heads, waits=records))
+        chain.append(Candidate(c.sha, base, members, heads))
         if records:
             return True
         below.update(members)
