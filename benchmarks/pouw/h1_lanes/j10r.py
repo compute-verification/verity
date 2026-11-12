@@ -1,4 +1,4 @@
-"""j10r.py prepare|summarize: `run.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
+"""j10r.py prepare|summarize: `leaf.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
 `PouwH1Tile_v5` (16 × 16 by default, ``H1L_RC``) proved as its statements as `pouw.leaf_lanes`' J10-R leaf stages them
 (``j10r``): each lane in `weights.chunks`(K) chunks (`PouwH1LaneZyChunk_v2`, the whole lane `PouwH1LaneZy_v2` at
 n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row into the leaf's one ok. Each statement is
@@ -6,7 +6,7 @@ n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row int
 the verifier's own `--registered` file (`leaf_lanes.registered_file` at `leaf_lanes.verifier_entries` of every
 after-sample value, `leaf_lanes.produced_values`).
 
-* **The registered values**, as `run.py`'s: ``a`` and ``b`` (each row its `h1zy.chunk_leaves`: n leaves a row, row i's
+* **The registered values**, as `leaf.py`'s: ``a`` and ``b`` (each row its `h1zy.chunk_leaves`: n leaves a row, row i's
   chunk c at n i + c), ``zy`` and ``receipt`` (`h1zy.reference` over v5 at the unit's ``call`` and ``blocks``,
   `h1window.j10r_inputs`, which is the lanes' partials' XOR).
 * **The after-sample values** (`one_stage.produced`, under the registration's digest): ``partials`` (row l lane l's
@@ -41,8 +41,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import run as RN  # noqa: E402
-from run import U  # noqa: E402
+import leaf as RN  # noqa: E402
+from leaf import U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.pouw.verifier import leaf_lanes as LL  # noqa: E402

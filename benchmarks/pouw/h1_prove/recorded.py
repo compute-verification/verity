@@ -1,7 +1,7 @@
-"""run.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
+"""recorded.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
 
-    python run.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
-    python run.py summarize --work W --out OUT
+    python recorded.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
+    python recorded.py summarize --work W --out OUT
 
 ``prepare`` runs one execution phase of the execution phase and plans its proofs, the prover's steps by `window.py` (a subprocess: the
 challenger and the verifier never hold a row, a salt or a served value):
