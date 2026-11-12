@@ -3303,6 +3303,25 @@ def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tm
     assert not m.waiters()
 
 
+def test_n1_lease_lock_holders_lists_each_held_flocks_pid_under_its_inode_number(monkeypatch, tmp_path):
+    """`lock_holders` over a text in /proc/locks' form: the pid of each flock held, in the text's order, under the inode
+    number its `MAJ:MIN:INODE` ends in.  A POSIX or OFD lock, a request waiting behind a lock (`->`) and a line cut short
+    are nobody's flock.  With no path it reads the kernel's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    text = tmp_path / "locks"
+    text.write_text("1: FLOCK  ADVISORY  WRITE 4242 fe:20:604607 0 EOF\n"
+                    "2: POSIX  ADVISORY  WRITE 4243 fe:20:604607 0 EOF\n"
+                    "3: FLOCK  ADVISORY  READ  4244 00:2e:77 0 EOF\n"
+                    "4: OFDLCK ADVISORY  WRITE -1 fe:20:78 0 EOF\n"
+                    "5: FLOCK  ADVISORY  READ  4245 00:2e:77 0 EOF\n"
+                    "6: FLOCK  ADVISORY  WRITE 4246 103:05:9 0 EOF\n"
+                    "6: -> FLOCK  ADVISORY  WRITE 4247 103:05:9 0 EOF\n"
+                    "7: FLOCK  ADVISORY  WRITE 4248\n"
+                    "\n")
+    assert m.lock_holders(text) == {604607: [4242], 77: [4244, 4245], 9: [4246]}
+    assert m.lock_holders.__defaults__ == (Path("/proc/locks"),)
+
+
 @needs_flock
 def test_n1_lease_logs_a_limits_file_it_cant_write_and_goes_on(monkeypatch, tmp_path, reap):
     m, calls, fd, _, keys = _policy_lease(monkeypatch, tmp_path, 1)
