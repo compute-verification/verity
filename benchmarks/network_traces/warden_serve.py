@@ -732,7 +732,7 @@ class PublisherProcess:
                 if ended is not None:
                     ended()
 
-        self._reader = threading.Thread(target=read, name="warden-heads", daemon=True)
+        self._reader = threading.Thread(target=read, name="lines-back", daemon=True)
         self._reader.start()
 
     def lengths(self, window: int, strides) -> None:
