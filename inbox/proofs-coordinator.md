@@ -107787,3 +107787,106 @@ No file yet.
 
 ### Not established
 Everything: no file is written, no shape is checked, nothing is compiled.
+
+## COINMAP, Thu 12 Nov 23:03Z: the coin map, `Reading.dev` and the law's statements are pushed, with a try in line; the second clause still fails at an opening the trees can't match, and the merged form fixes it; the two-session device history roughly doubles my piece, so I propose it go to a new worker
+
+**In plain words.** The definitions are written and pushed:
+- `Frame.place` writes a run's coins into the period's tape where the device releases them.
+- `Reading.dev` reads, from a log, the coin the device released for a round.
+- The law and its pieces are stated.
+
+None of it is compiled yet. The try is waiting for a slot. TWOLEG's change at `27b59966ad` fixes two of my three counterexamples, the empty log and a release shorter than a coin. One is left. When an opening's tree has no round whose first `n` coins are the run's coin's elements, the device releases the tree's own round. Its bits are not the run's, and nothing in the log shows that. So the second clause cannot hold at every tape. It holds on all but a small fraction of tapes, and that fraction belongs in `hide`. I propose the smallest change below: read the agreement inside the first clause's event. The two-session device history the coordinator gave me at 22:56Z is about as large again as the coin map, so I propose it go to a new worker. I give its size and the shape I would give it.
+
+Clock: `date -u` read 23:02Z. Branch `cursor/proofs-coinmap-8b0c` at `4ff653f494`, which merges TWOLEG at `9d61e66bd4`. I am at the base's composite, before #9375. The mailbox file does not exist yet. I have read the hook's 22:56Z message and TWOLEG's 22:49Z sections 1 to 5.
+
+### 1. What is pushed (`security/Proofs/Properties/Verity/SampledTwo/CoinMap.lean`, a lakefile root on its own line)
+
+[read: the file as pushed; nothing here is compiled]
+
+- **The locator** `Locate := List Release → Frame → ByteArray → Option ℕ`. It names, from the log before a frame, the frame and the bytes the prover sent with it, the run's round whose coin the frame's release continues.
+  - Widths: a fresh coin continues its round by 4 elements of GF(2^128), its 512 bits. An opening of `n` coins continues it by `n`; the device refuses `n` above a block (`OpenTree.next`), so its release is exactly `128 n` bits. A `Hello` continues none.
+  - Each round's releases continue its coin in log order, from element 0 (`usedOf`).
+  - The coin map is generic in the locator. D and E pick the form's locator: round 0 is the first stage's family after the boundary digest, rounds 1 to `stage` the second stage's, and a session's round is its openings.
+- **`Frame.place`** is `place V θ F c σ L r`, built from `placeK` along `relK`, with `game_eq : V.game θ F c = .send ByteArray fun a => relK … (finish …)`. At a located fresh coin that fits in the coin's 65536 elements, the node's 512 bits become the round coin's next 4 elements. At a located opening that fits, the node's round becomes `pickIn` of the class whose first `n` coins are the coin's next `n` elements, or the node's own round when that class is empty. Every other node keeps its value. `frame V A x θ F c σ L P := ⟨place … L, P⟩`.
+- **`Reading.dev` for D and E**, exactly:
+  ```lean
+  def dev (L : Locate) (log : List Verity.Release) (i : ℕ) : Option FlockDeploy.Coin :=
+    if usedOf L i [] log = 0 ∨ 65536 < usedOf L i [] log then none
+    else some fun j => elemOfBits fun b => (devBits L i [] log).getD (128 * j.val + b) false
+  ```
+  - `devBits L i [] log` is the bits of the releases the locator puts on round `i`, in log order.
+  - `elemOfBits` is the element whose bit `b < 128` is `g b`, in `F128.bit`'s order: `lo`'s bits, then `hi`'s.
+  - So element `j` is the bits `128 j` to `128 j + 127`, padded with zeros. It is none where no release is located on the round, or where the releases exceed a coin.
+  - ASSEMBLY's `formReading … dev` takes `dev L` at the form's locator.
+- **The hiding term** `gapOf V θ F c σ L K`: the expected sum, along the frame's play, of three terms at each written opening:
+  - the class's shortfall below uniform (`shortfall` of `openW`, the one-stage `openGap` at one node);
+  - the chance the class at the run's uniform `n` elements is empty;
+  - the term after the written round.
+
+  Fresh coins add 0.
+- **Statements**:
+  - `LawAt` is `CoinMapLaw`'s first clause at the frame of `L`, with `hide = gapOf`.
+  - `ElemAgrees L A x reads o r`: for each read round, the coin `dev L` gives has the run's coin's elements below `usedOf`.
+  - `CoinMapLawB … Fr Ag hide`: `prob E ≤ ofReal Pr[E (Fr.out ω r) ∧ Ag (Fr.out ω r) r] + hide`.
+  - `CoinMapHolds`: `CoinMapLawB` at `frame … L P`, `ElemAgrees L`, `gapOf`.
+  - `AgreeCovers L Rd Q`: on plays `Q`, `Rd.agree o i c c'` holds wherever `c` and `c'` agree below `usedOf L i [] o.log`.
+  - `agrees_of_elem` (its four-line proof is written, not compiled): `Rd.dev = dev L`, `AgreeCovers L Rd Q` and `Q o` turn `ElemAgrees` into the base's `Agrees`, which is `CoinMapLaw`'s second clause at one play.
+- Probes: `placeK_zero`, `placeK_close` (both `rfl`) and `dev_nil` (`simp`).
+
+### 2. The stopping order (my brief's question)
+
+[derived] The release positions are always a stopping order. The locator reads only the log before a release and the bytes the prover sent with the frame. The tape is a tree, so every coin node's place in the play is fixed by the values before it, and the write at a node depends only on the run's coins and that node's past. So `hide` is not zero only because of the openings. It is their shortfall below uniform (the coin trees' hiding) plus their empty classes. Fresh coins cost nothing: their 512 bits are 4 elements one for one, and each round's elements are written once, in disjoint places, so the writes along a play are independent. The one-stage numbers apply at each written opening: `OpenGap.openGap_avg_le_round` gives `2δ₁ + 2^{-128 m}` averaged over the sample, and `TreeGap` gives `δ₁ ≤ 2^{-257}` averaged over the key. The numeric bound on `gapOf` from them is my stretch.
+
+### 3. NEEDS (TWOLEG): `CoinMapLaw`'s second clause cannot hold at every tape. Read the agreement in the first clause's event
+
+[derived] **The counterexample.** Take a play that opens a round on read round `i`, and a run coin `r i` whose next `n` elements are bits `e`. Suppose no round of the tree in the fiber of the committed leaf has first `n` coins equal to `e`. For most samples the fiber is small, since the leaf is a SHA-512 of the round. Then the frame's play releases the node's own round, whose bits are not `e`. `dev` reads that release, so `Rd.dev log i = some c` with `c`'s elements `≠ r i`'s, and `agree` fails. No coin map avoids this. Whatever the frame writes, the released bits are some round of the fiber, and the log carries no trace of the run's coins. The fraction of tapes where it happens is the empty-class term, already in `gapOf`.
+
+**The smallest change.**
+- Change: `CoinMapLaw V A x θ F c σ Fr Rd Ag hide := ∀ E, prob E ≤ ofReal Pr[E (Fr.out ω r) ∧ Ag (Fr.out ω r) r] + hide`, which drops the pointwise clause. `Ag` is an agreement the law carries, at the coin map's `ElemAgrees L`.
+- New piece, owed by the parse, D or E: `∀ o, Acc o → Good o → ∀ r, Ag o r → (∀ i, Rd.reads i → ∀ c, Rd.dev o.log i = some c → Rd.agree o i c (r i))`. At my `Ag` this is `AgreeCovers L Rd (Acc ∧ Good)` with `agrees_of_elem`.
+- **Why the parse owes it, and why it holds only on `Acc ∧ Good`.** `formReading`'s `agree` is `prefixAgree` on the bytes the evidence carries. The coin map knows only the elements the device released. On a play where the evidence claims more bytes than the device released, `dev`'s coin is zeros past them, so `prefixAgree` fails there whatever the coin map does. On `Acc ∧ Good`, `CoinsRead` makes the coin read equal `dev`'s, so the bytes it reads are the released ones, and the step goes through.
+- **The assembly still closes** [derived]. Take `E := Verdict ∧ Good`. The law puts `Ag` inside the probability. On the frame's plays where `Acc` and `Good` hold (the verdict gives `Acc` by the wiring), the new piece gives `AcceptsRun`'s coin premise, unchanged from `27b59966ad`.
+
+Until TWOLEG rules, I prove `CoinMapHolds` as stated and keep the base's `CoinMapLaw` as the target the bridge feeds.
+
+### 4. The two-session device history (the coordinator's 22:56Z point 2): size and shape
+
+[read: `Sampled/Device.lean` and CUT's `Cut.lean` at `origin/cursor/proofs-cut-9323`; derived: the plan]
+
+- **Size.** The one-stage history and its proofs are `Sampled/Device.lean`, 1218 lines, about 70 declarations: `dev`, `printsLog_dev`, `holds_dev`, `binds_dev`, `signer` and the deployment.
+  - The two-session file can reuse most of it at `{o with log := logᵢ}` for each session. I estimate a new `SampledTwo/Device.lean` of 400 to 700 lines and 15 to 25 theorems: the history, `PrintsTwo` at it, `SignsPlay` at it, and the split of the log.
+  - The coin map's remaining proof is about the same size: the induction over `relK` with the independence lemma, `CoinMapHolds`, and the bound on `gapOf`.
+  - Together they are about twice my piece. Both are owed by Sat 02:00Z, and I can't promise both. **Proposal: a new worker takes the history.** I keep the coin map. We share one parameter: which releases are the first session's.
+- **Shape.**
+  - The history `dev₂ S₁ S₂ split o` holds the first session's run, printed from `log₁ := (split o).1` under `S₁ o`'s key on window `w₁`, and the interior's from `log₂` under `S₂ o` on `w₂`.
+  - Its ledger opens each run's id on its own window only, so the two run ids must differ.
+  - On one window it is the one-stage `dev` at the whole log.
+- **The step forced back to one play** [derived]. `PrintsOn dev w log` requires every run the ledger opens on `w` to print this play's `log`. So a history may hold earlier runs and ledger lines only on other windows. On the play's own two windows it holds exactly this play's runs. This is the step soundness replaces on Tue 17 Nov.
+- **Two problems with `PrintsTwo` for CUT** [read: `Device.lean:468-475`, where `dev`'s `runs` is `[]` when `printLog` fails].
+  - `PrintsOn` is a statement about every run opened on the window. A history whose runs are empty meets it vacuously. Since the one-stage `dev` drops the run where `printLog` fails, `PrintsTwo` at a history says nothing unless the history holds the runs. CUT's `BindsOfPrints` must not be read as more than it says.
+  - Printing the interior's releases alone from `PrintState.init` fails when they open a tree whose `Hello` is in the first session's releases. The tree indices would be off. So the split must put each tree's `Hello` and its openings in one session. If the form's sessions do not meet that, the second run must print from the state after `log₁`, which is a change to `printLog`'s use [guess, not checked against the form's sessions].
+
+### Runs
+
+- `r20261112-225359-8a48` and `r20261112-225918-8c99`: cancelled while still waiting for a slot, each superseded by a newer commit of the same file. Neither started.
+- `r20261112-230147-3c0b`: `verity lean try` of `CoinMap.lean` at `4ff653f494` on vy-nebius-cpu-10, `--mem-gb 24`. Waiting for a slot. ETA 23:25Z to 00:30Z.
+
+### STOP RULE
+
+Nothing. No listed guarantee, lock, accept switch or Sampled.lean wiring is touched.
+
+### NEEDS
+
+1. TWOLEG: section 3, the merged `CoinMapLaw` and the parse's agreement piece.
+2. Coordinator: section 4, whether the history goes to a new worker. Until you answer I write only its definition's signature, and spend my time on the coin map's proof.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing in `CoinMap.lean` is compiled. The try is in line, and the file may have elaboration errors: dependent `match` along `relK`, the `optGame`/`ite` unifications, and `subst` in `along`/`alongVal`.
+- `LawAt` and `CoinMapHolds` are unproved. Owed in a run by 03:00Z for the definitions and the first clause.
+- The numeric bound on `gapOf` is unproved.
+- The earlier-period signature hole (`Sampled/Device.lean:468-475`, soundness's finding) stands. I do not work around it.
