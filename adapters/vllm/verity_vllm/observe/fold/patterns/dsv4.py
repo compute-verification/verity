@@ -419,7 +419,7 @@ class InvRopeQuant:
             return unsupported(node, "the op launched other than its one per-head kernel", children=[c.op for c in node.children])
         kid = node.children[0]
         if not isinstance(kid.enter, TritonLaunch) or kid.enter.src_sha != INV_ROPE_SRC_SHA or kid.enter.num_warps != 1:
-            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=kid.enter.src_sha, num_warps=kid.enter.num_warps)
+            return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=kid.triton.src_sha, num_warps=kid.triton.num_warps)
         a, ka, outs = bound_args(node), bound_args(kid), node.output_views()
         sizes = ("heads_per_group", "quant_group_size", "chunks_per_head", "rope_start", "half_rope", "num_tokens", "n_groups", "d",
                  "scale_inner", "tma_aligned_T")

@@ -608,10 +608,10 @@ class LogitsGather:
                 return unsupported(node, "aten.index with an index pattern other than one leading index tensor", indices=_fmt(idxs))
             idx = tensors[0]
         else:
-            dim = a.get("dim", a.get("arg1"))
-            idx = a.get("index", a.get("arg2"))
-            if dim not in (0,) or not isinstance(idx, ViewDesc):
+            dim, index = a.get("dim", a.get("arg1")), a.get("index", a.get("arg2"))
+            if dim not in (0,) or not isinstance(index, ViewDesc):
                 return unsupported(node, "index_select not along the leading axis", dim=dim)
+            idx = index
         outs = node.output_views()
         if not outs or not is_int(idx) or idx.rank != 1:
             return unsupported(node, "gather index is not an integer [R] view", index=repr(idx))
