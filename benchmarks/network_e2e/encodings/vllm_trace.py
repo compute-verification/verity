@@ -89,7 +89,9 @@ class StepTime:
         return self.base + self.per_token * tokens + self.per_row * rows
 
 
-def make_scheduler(engine: Engine, model: str) -> Any:
+def make_scheduler(engine: Engine, model: str, runner_v2: bool | None = None) -> Any:
+    """vLLM's scheduler for `engine`. `runner_v2`: whether it takes its Model Runner V2 branches, set on the scheduler
+    alone; None: as vLLM's environment says (`VLLM_USE_V2_MODEL_RUNNER`, which vLLM refuses on a node without Triton)."""
     os.environ.setdefault("VLLM_ALLOW_LONG_MAX_MODEL_LEN", "1")   # the executor is a fake: the model's own limit is moot
     import torch
     import vllm.envs as envs
@@ -128,7 +130,7 @@ def make_scheduler(engine: Engine, model: str) -> Any:
     cls = AsyncScheduler if engine.async_scheduling else Scheduler
     sched = cls(vllm_config=vllm_config, kv_cache_config=kv_cache_config, block_size=engine.block_size, log_stats=False,
                 structured_output_manager=StructuredOutputManager(vllm_config))
-    sched.use_v2_model_runner = bool(envs.VLLM_USE_V2_MODEL_RUNNER)
+    sched.use_v2_model_runner = bool(envs.VLLM_USE_V2_MODEL_RUNNER) if runner_v2 is None else runner_v2
     return sched
 
 
@@ -163,9 +165,9 @@ def kept_drafts(seed: int, request: str, j: int, d: int, accept: float) -> int:
 
 
 def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = StepTime(), accept: float = 0.7,
-        seed: int = 0) -> list[dict[str, Any]]:
-    """The step trace of `jobs` (sorted by arrival) through vLLM's scheduler; with a draft, each draft is kept with
-    probability `accept` (`kept_drafts`, from `seed`)."""
+        seed: int = 0, runner_v2: bool | None = None) -> list[dict[str, Any]]:
+    """The step trace of `jobs` (sorted by arrival) through vLLM's scheduler (`make_scheduler`, with its `runner_v2`);
+    with a draft, each draft is kept with probability `accept` (`kept_drafts`, from `seed`)."""
     from vllm.sampling_params import SamplingParams
     from vllm.utils.hashing import sha256
     from vllm.v1.core.kv_cache_utils import get_request_block_hasher, init_none_hash
@@ -174,7 +176,7 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
 
     if any(jobs[k].arrival > jobs[k + 1].arrival for k in range(len(jobs) - 1)):
         raise ValueError("jobs must be sorted by arrival")
-    sched = make_scheduler(engine, model)
+    sched = make_scheduler(engine, model, runner_v2)
     init_none_hash(sha256)
     hasher = get_request_block_hasher(engine.block_size, sha256)
     recs: list[dict[str, Any]] = [header(sched, engine)]
@@ -452,6 +454,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--requests", type=int, help="override each case's request count")
     ap.add_argument("--accept", type=float, default=0.7, help="with a draft, the probability each draft is kept")
+    ap.add_argument("--runner-v2", action="store_true", help="the scheduler's Model Runner V2 branches: a resumed request "
+                    "is handed over as a new one, so a step's `resumed` is empty")
     ap.add_argument("--check", action="store_true", help="replay each trace (`check`) into OUT/check.json; exit 1 unless "
                     "every replay's steps are its trace's")
     a = ap.parse_args(argv)
@@ -460,7 +464,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     for name in a.case or sorted(n for n in CASES if not a.draft or CASES[n][0].num_speculative_tokens):
         engine, kw = CASES[name]
         jobs = workload(seed=a.seed, **(kw | ({"n": a.requests} if a.requests else {})))
-        recs = run(engine, jobs, model=a.model, accept=a.accept, seed=a.seed)
+        recs = run(engine, jobs, model=a.model, accept=a.accept, seed=a.seed, runner_v2=a.runner_v2 or None)
         (a.out / f"{name}.jsonl").write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs))
         toks = tokens_of(jobs, recs) if engine.enable_prefix_caching else None
         if toks is not None:
