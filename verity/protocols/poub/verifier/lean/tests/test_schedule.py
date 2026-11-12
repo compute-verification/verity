@@ -37,7 +37,8 @@ HONEST = {"blocks": 8, "cap": 256, "schedule": {"registered": [[2, 1, 1]],
           "passes": [[0, [[0, 8]]], [1, [[0, 12]]], [2, [[0, 2], [3, 6], [10, 2]]], [3, [[0, 2], [3, 6], [10, 4]]],
                      [4, [[0, 2], [3, 6], [10, 4]]]],
           "appends": [[8, 4], [12, 2]]}
-"""`tests/test_appends.py`'s honest session: its cap (`CAP`), its schedule, its passes' plans and its appends."""
+"""`tests/test_appends.py`'s honest session: its cap (`SCHEDULE_CAP`), its schedule, its passes' plans and its
+appends."""
 
 
 @st.composite
