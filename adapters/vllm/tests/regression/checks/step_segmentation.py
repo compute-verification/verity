@@ -105,7 +105,7 @@ def recompute(desc: dict) -> dict:
 
 
 def _consistent(reqs: dict, ends: dict[str, bool]) -> dict:
-    return {rid: {"steps_eq_cap": r["steps"] == r["cap"], "steps_eq_sampling_events": r["steps"] == r.get("sampling_events"),
+    return {rid: {"steps_eq_declared": r["steps"] == r["cap"], "steps_eq_sampling_events": r["steps"] == r.get("sampling_events"),
                   **({"segments_end_at_sampling_event": ends[r["component"]]} if r["component"] in ends else {})} for rid, r in reqs.items()}
 
 
