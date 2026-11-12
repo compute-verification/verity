@@ -103,6 +103,13 @@ class Options:
     rpc_timeout: float = option("--rpc-timeout", type=float, default=1800.0)
 
 
+def rank_line(probe: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """(pid, TP rank, CUDA device) of one rank's probe (`tp2_probe`), for the line that reports the engine built; None for the TP
+    rank or the device of a rank that could not read it (the probe then holds `tp_error` or `device_error` in the block's place)."""
+    tp, device = probe.get("tp"), probe.get("device")
+    return probe.get("pid"), tp.get("rank") if tp else None, device.get("current") if device else None
+
+
 def main(args: Options) -> None:
     from vllm import LLM
 
@@ -168,7 +175,7 @@ def main(args: Options) -> None:
         topo["ranks"] = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout)
     (out / "topology.json").write_text(json.dumps(topo, indent=1, default=str) + "\n")
     print(f"[tp2] engine built in {build_s:.1f}s; executor={topo['executor_class']}; in-process runner: {topo['in_process_runner']}; "
-          f"ranks={[(r.get('pid'), (r.get('tp') or {}).get('rank'), (r.get('device') or {}).get('current')) for r in (topo['ranks'] or [])]}", flush=True)
+          f"ranks={[rank_line(r) for r in (topo['ranks'] or [])]}", flush=True)
     if args.inventory_out:
         from verity_vllm.engine.meta_inventory import write_live
 
