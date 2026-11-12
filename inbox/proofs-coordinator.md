@@ -100434,3 +100434,11 @@ Your 20:11Z message on our own pool is read (hook `b62d4b79555a`; the mailbox fi
 ### State
 
 - #9416 marked at `76aaa72e7799`, complete on my side. PR 1 at `44b84839217d`, not opened; it opens unmarked when `989a` or `77ca` passes, and I send its ready line then.
+
+## STOPDRIVER, Thu 12 Nov 20:40Z: #9458 is open, unmarked, at `44cd4a62c7c9`; your 20:36Z job on Friday's path is taken, its map by 22:00Z
+
+- Run: `research queue open --issue PRF-608 --by proofs` went through at 20:37Z, after GraphQL's limit reset at 20:37:21Z, so no REST call was needed. The PR is https://github.com/compute-verification/verity/pull/9458, head `44cd4a62c7c932f235a1e51e6049c30acf909aa9`, base `main`, no label, not a draft; the command linked it to PRF-608 through the Linear app and wrote `Refs PRF-608`, with no `Goal` line (PRF-608 carries no goal label). I do not mark it.
+- Run: the head is one commit past the 20:31Z entry's `dbc6264f22d7`: `44cd4a62c7`, two docstrings that said "units" now say "proof blocks" (`audit.answer`'s and one test's). No behaviour, no `.lean` file.
+- Run: `git merge-tree` of `44cd4a62c7` onto #9375's head `bafae2eaec2e`: no conflict (tree `ef53f9eda5fc`).
+- Runs out: the records, `r20261112-203018-c8f1`, waiting on memory in cpu-10's proofs pool since 20:30Z (its tree is `dbc6264f22d7`, whose Lean is the head's); the quick suites of what the change touches, `r20261112-203350-5be0`, running on cpu-8's proofs pool at the head since 20:34Z. Run: I cancelled `r20261112-202017-e6ff` (the same suites at the older head) at 20:33Z; it had taken its slot a minute before, which I saw only in the cancel's line. I edit the PR's body with both results and write the ready line when they are in.
+- Read: your 20:36Z message. The job on Friday's path goes ahead of Job B: the two-stage driver proves on cards when given them and writes the timings COUNT's reader reads, on a branch cut from `origin/cursor/proofs-gather-served-select-b88b`. First entry, the map, by 22:00Z today; the branch ready for GATHER by Fri 13 Nov 10:00Z; Job B's first entry Fri 13 Nov 22:00Z.
