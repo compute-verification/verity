@@ -25,6 +25,8 @@ import pytest
 
 from tests.lint.vllm_surface import SURFACE
 
+__all__ = ["FakeVllm", "Module", "Unset", "install"]
+
 LIST = "tests/lint/vllm_surface.py"
 
 
@@ -58,6 +60,14 @@ class Unset:
         self._refuse("the type of an issubclass")
 
 
+class Module(types.ModuleType):
+    """A module of the stand-in.  A test sets on it what the library reads from the module; declaring ``__setattr__`` is what
+    lets a typed test write ``fake["vllm.envs"].NAME = value``, which mypy refuses on a plain `types.ModuleType`."""
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+
+
 def split(key: str) -> tuple[str, str]:
     """An entry's module and name (``""`` for a module imported whole)."""
     module, _, name = key.partition(":")
@@ -78,7 +88,7 @@ class FakeVllm:
         outside = sorted(k for k in self.keys if split(k)[0].split(".")[0] != "vllm")
         assert not outside, f"not vLLM's: {outside}"
         names = sorted({p for k in self.keys for p in packages(split(k)[0])})
-        self.modules = {n: types.ModuleType(n) for n in names}
+        self.modules = {n: Module(n) for n in names}
         for n, m in self.modules.items():
             is_package = any(other.startswith(n + ".") for other in names)
             m.__spec__ = ModuleSpec(n, None, is_package=is_package)
@@ -92,7 +102,7 @@ class FakeVllm:
             if name and f"{module}.{name}" not in self.modules:
                 setattr(self.modules[module], name, Unset(k))
 
-    def __getitem__(self, module: str) -> types.ModuleType:
+    def __getitem__(self, module: str) -> Module:
         assert module in self.modules, f"{module} is no module of vLLM's surface ({LIST}): the library does not import it"
         return self.modules[module]
 
@@ -104,7 +114,9 @@ class FakeVllm:
 
 
 def install(monkeypatch: pytest.MonkeyPatch, *, extra: Iterable[str] = ()) -> FakeVllm:
-    """Make the stand-in the only vLLM in ``sys.modules`` until ``monkeypatch`` undoes it."""
+    """Make a new stand-in the only vLLM in ``sys.modules`` until ``monkeypatch`` undoes it.  Each call starts over, an
+    earlier stand-in's modules among what it takes out: a helper takes the stand-in its test installed, and an install under
+    ``monkeypatch.context()`` gives way to the outer one at the context's end."""
     fake = FakeVllm([*SURFACE, *extra])
     for name in [n for n in sys.modules if n.split(".")[0] == "vllm"]:
         monkeypatch.delitem(sys.modules, name)

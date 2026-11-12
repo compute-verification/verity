@@ -439,7 +439,7 @@ class TPPartialSource:
                     res["tap_mismatch"].append((step, member, len(ref)))
                 if member in self.ref_in.get(step, {}):
                     name, x = self.ref_in[step][member]
-                    mod = mods.get(name)
+                    mod: Any = mods.get(name)
                     try:
                         with torch.inference_mode():
                             bias = None if (int(getattr(mod, "tp_rank", 0)) > 0 or getattr(mod, "skip_bias_add", False)) else getattr(mod, "bias", None)
@@ -553,7 +553,7 @@ class TPPartialSource:
             # an all-reduce + norm site's partial is `<norm>/part_rank<r>` while the recorder names the collective's enclosing module (a
             # GLM decoder layer runs two: input_layernorm's and post_attention_layernorm's): such a module's records pair, in call order,
             # with the norm-site partials whose nearest recorded ancestor it is, in commit order, when the two counts agree
-            mods = [x.get("module") for x in xs]
+            mods: list[Any] = [x.get("module") for x in xs]
             under = self._norm_partials_under(self.c._layouts.get(step, []), set(mods))
             dups = sorted({m for m in mods if mods.count(m) > 1 and mods.count(m) != mid_counts.get(m)
                            and len(under.get(m, ())) != mods.count(m)})
@@ -563,7 +563,7 @@ class TPPartialSource:
             seen: set[str] = set()
             occ_of: dict[str, int] = {}
             for k, x in enumerate(xs):
-                mod = x.get("module")
+                mod: Any = x.get("module")
                 j = occ_of.get(mod, 0)
                 occ_of[mod] = j + 1
                 fused = x["kind"] == FN.KIND                   # its recorded part is stack([partial, residual])
@@ -599,8 +599,8 @@ class TPPartialSource:
                 res["committed_not_in_oracle"].append((step, n))
             self._pair_witnesses(step, by_name, recorded.pop(step, {}), reader, res)
             res["steps_compared"] += 1
-        for step, mods in sorted(recorded.items()):
-            res["witnesses"]["unpaired"] += [{"step": step, "module": m, "in_commit": False, "in_capture": True} for m in sorted(mods)]
+        for step, left in sorted(recorded.items()):
+            res["witnesses"]["unpaired"] += [{"step": step, "module": m, "in_commit": False, "in_capture": True} for m in sorted(left)]
         wit = res["witnesses"]
         res["missing_n"], res["not_in_oracle_n"] = len(res["missing_in_commit"]), len(res["committed_not_in_oracle"])
         res["not_verified_n"], wit["unpaired_n"] = len(res["not_verified"]), len(wit["unpaired"])
@@ -664,7 +664,15 @@ class TPPartialSource:
                               f"on the shard); kinds seen {self.stats['kinds']}; shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["TPPartialSource", "SITES", "COVERS_FAMILIES"]
+__all__ = ["TPPartialSource", "late_read_check", "SITES", "COVERS_FAMILIES"]
+
+
+def _layer_of(member: str) -> int:
+    """The decoder layer a committed member's module is in (`...layers.<L>....`); a member of no layer is refused by name."""
+    at = re.search(r"layers\.(\d+)\.", member)
+    if at is None:
+        raise ValueError(f"{member}: a fused-MoE received output of no decoder layer (no 'layers.<L>.' in its name)")
+    return int(at.group(1))
 
 
 def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
@@ -681,7 +689,7 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
     steps = 0
     for step in sorted(layouts):
         metas = {m.name: m for m in layouts[step]}
-        outs = sorted((int(re.search(r"layers\.(\d+)\.", n).group(1)), n) for n in metas if n.endswith(".mlp.experts/out"))
+        outs = sorted((_layer_of(n), n) for n in metas if n.endswith(".mlp.experts/out"))
         if not outs:
             continue
         steps += 1

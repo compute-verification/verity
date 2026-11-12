@@ -23,13 +23,16 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import option
+
+__all__ = ["COMMANDS", "Timeline", "main"]
 
 SCHEMA = "verity-sweep/timeline/v1"
 
@@ -64,7 +67,7 @@ class Timeline:
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def from_env(cls, proc: str, **defaults: Any) -> "Timeline":
+    def from_env(cls, proc: str, **defaults: Any) -> Timeline:
         return cls(settings.VERITY_TIMELINE, proc=proc, **defaults)
 
     @property
@@ -156,12 +159,10 @@ def last_attempt(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], in
     return events[starts[-1]:], len(starts)
 
 
-def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, Any]:
+def report(events: list[dict[str, Any]]) -> dict[str, Any]:
     """Pair start/end events per (proc, pid, stage) into spans; fold into the stage categories; count engine starts/reuses.
-    `attempt="last"` (default) reports the last row attempt in an append-only file; `"all"` folds every attempt together."""
-    attempts_seen = 1
-    if attempt == "last":
-        events, attempts_seen = last_attempt(events)
+    The report is of the last row attempt in an append-only file (`last_attempt`)."""
+    events, attempts_seen = last_attempt(events)
     open_: dict[tuple, dict[str, Any]] = {}
     spans: list[dict[str, Any]] = []
     for e in events:
@@ -208,10 +209,10 @@ def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, 
     hot = sorted({bool(e.get("hot")) for e in events if "hot" in e}, key=str)
     procs = sorted({(s["proc"], s["pid"]) for s in spans}, key=str)
     return {"schema": SCHEMA + "/report", "events": len(events), "spans": len(spans), "unclosed": unclosed,
-            "attempt": attempt, "attempts_in_file": attempts_seen,
+            "attempt": "last", "attempts_in_file": attempts_seen,
             "t_first_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_first)) if t_first else None,
             "t_last_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t_last)) if t_last else None,
-            "elapsed_s": round(t_last - t_first, 3) if ts else None,
+            "elapsed_s": round(t_last - t_first, 3) if t_first is not None and t_last is not None else None,
             "envelope": [{"stage": s["stage"], "s": s["s"], "proc": s["proc"]} for s in envelope],
             "categories": {k: cats[k] for k in ("startup", "preparation", "workload", "validation", "closure", "other") if k in cats},
             "engine": {"starts": len(starts), "reuses": len(reuses), "restart_reasons": reasons,
@@ -247,8 +248,6 @@ class ReportOptions:
     json: str | None = option("--json", default=None)
     md: str | None = option("--md", default=None)
     title: str = option("--title", default="")
-    all: bool = option("--all", default=False, action="store_true",
-                       help="fold every attempt in the (append-only) file together; default: the last row attempt")
     cmd: str = field(default="report", init=False)
 
 
@@ -256,7 +255,7 @@ COMMANDS = {"report": ReportOptions}
 
 
 def main(a: ReportOptions) -> int:
-    rep = report(read(a.path), attempt="all" if a.all else "last")
+    rep = report(read(a.path))
     if a.json:
         Path(a.json).write_text(json.dumps(rep, indent=1, default=str) + "\n")
     md = report_md(rep, a.title)
