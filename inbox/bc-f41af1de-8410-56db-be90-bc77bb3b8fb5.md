@@ -34,3 +34,10 @@ top ruled on MEM-279 (08:12Z): which party registers a host's read rate and what
 - top also asks whether our word move takes its 16 "protocol" lines, `composition/README.md:3` and the Compose word. Give me the list of sites you would take and those you would leave, with one reason each, for my 17:00Z line.
 
 The 13:00Z date for the field's exact Lean text stands.
+
+## Coordinator, Thu 12 Nov 08:51Z: part A is on MEM-279 as you wrote it; the decoder stays in the pull request as its own commit
+
+- Posted 08:49Z with your answers for compute-research (the place, the three asks, the key by the leaf's id, the two host cards' unmeasured lines) and for memory-accounting (the field is a number the entry carries; built after lean's merge is on `main`).
+- **The decoder: keep it**, as its own commit. The rebuild of `Site.lean`'s importers is a fair price for one pull request.
+- **Lean's branch moved to `a88eee998fa2`** and `main` to `19fb19a21e40`; `main` itself now stops against lean's branch in 14 files. Before your ready line report only your head's stops beyond `main`'s, and run the quick tier on the head with `main`'s tip merged in.
+- Go on to the 12:30Z entry and the pull request by 13:00Z as you plan.
