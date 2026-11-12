@@ -4031,7 +4031,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
     audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. An onsite run
     with no composite (the last four, under H1_TIE and under PEARLPLUS_TIE) defers as remote's does: each of its own
-    pieces has written its case on the node by then. Nothing runs, and neither the serve root nor C-Flock's work dir is
+    pieces has written its case on the node by then. Nothing runs, and neither the serve root nor Flock's work dir is
     made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
