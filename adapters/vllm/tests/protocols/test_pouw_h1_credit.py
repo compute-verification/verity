@@ -4,17 +4,24 @@ steps accept the honest window, and refuse each prover-side negative by name."""
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1window as HW  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.verifier import credit as CR
 
-from tests.protocols import pouw_h1_credit as PC  # noqa: E402
+from tests.protocols import pouw_h1_credit as PC
+from verity_vllm.engine import int8_ops as OPS
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 SALT = hashlib.sha512(b"salt").digest()
 
@@ -24,9 +31,6 @@ def _window(j10r: bool = False):
     `h1tile.reference`'s (with ``j10r``, a window over `h1tile.PouwH1Tile5` and `h1tile.j10r_reference`'s) over its
     padded codes and weight, seeded from the run's salt, its units' positions and its registered roots. The run, each
     call's operands by index and each call's receipt words by index."""
-    from verity_vllm.engine import int8_ops as OPS
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import served as SV
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
     served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest(),
                        unit=(lambda k: HW.tile_unit(k, (32, 32), HT.PouwH1Tile5)) if j10r else None)

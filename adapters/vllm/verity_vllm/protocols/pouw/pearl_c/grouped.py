@@ -47,12 +47,15 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _put, _zeros
 from verity_vllm.protocols.pouw.pearl_c.kernel import _load
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into, screen_into
+
+__all__ = ["ROTATED", "gemm_grouped", "group", "module"]
 
 #: the call buffers' least rows
 MIN_ROWS = 1024
@@ -86,7 +89,6 @@ class _Call:
     ev_tree: Any
 
     def __init__(self, run: Any, g: _Group, us: list, split: bool, side: frozenset[str], b: dict[str, Any]):
-        import numpy as np
         import torch
         G, R, nb, k, n = g.G, run.kernel.run, run.nb, g.k, g.n
         count, real, rows = len(us), sum(u.m for u in us), sum(u.seg for u in us)
@@ -264,7 +266,6 @@ class _Group:
         """The call's table in the next pinned host slot, once its last upload is done: `c`'s template with each unit's keys
         (none without hashing), its tile leaves from address `leaves` and the call's offsets (its first unit's position
         `pos` in the pass, its first flag row).  Returns the slot and the table's bytes."""
-        import numpy as np
         G, i = self.G, self.host_turn % HOST_SLOTS
         self.host_turn += 1
         if self.host_ev[i] is not None:

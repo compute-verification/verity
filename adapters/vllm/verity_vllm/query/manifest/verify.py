@@ -15,6 +15,8 @@ from typing import Any
 
 from verity_vllm.query.manifest.format import manifest_digest
 
+__all__ = ["verify"]
+
 SCHEMA = "verity-sweep/manifest-verify/v1"
 ENGINE = "v2-query"
 

@@ -24,7 +24,10 @@ from verity_vllm.acquire.router_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.router_tap_src.build_ext import TAP_VERSION
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity_vllm.query import router_softmax as RS
+
+logger = init_logger(__name__)
 
 
 def _file_sha256(path: str) -> str:
@@ -160,13 +163,13 @@ def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, require
         return required_classes, None
     layers = RS.manifest_layers(manifest)
     if not layers:
-        print("[delta] REFUSE: --router-tap-so but the required-value manifest names no router_softmax identity (manifest build --router-softmax)",
-              flush=True)
+        logger.error("[delta] REFUSE: --router-tap-so but the required-value manifest names no router_softmax identity (manifest build "
+                     "--router-softmax)")
         raise SystemExit(3)
     src = RouterSoftmaxSource(com, model if model is not None else getattr(com, "model", None), layers, so)
     com.attach_source(src)
-    print(f"[delta] router-softmax source attached: {len(layers)} MoE layers, {src.words_per_token} words per token, tap {so} -> committer "
-          f"{com.name}", flush=True)
+    logger.info("[delta] router-softmax source attached: %d MoE layers, %d words per token, tap %s -> committer %s", len(layers),
+                src.words_per_token, so, com.name)
     if not explicit_classes and RS.FAMILY not in required_classes:
         return (*required_classes, RS.FAMILY), src
     return required_classes, src

@@ -33,6 +33,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.commit.committer.flush_points import (
+    GATHER_FLUSH_LEAVES,
+    PRE_FLUSH_LEAVES,
+)
 from verity_vllm.correspondence.reader_for_acquire import (
     RUNNER_PATH,
     AcquireCorrespondence,
@@ -244,7 +248,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
     prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    rows = manifest["identities"]
     padded = {_identity_key(p) for p in padding_identities}
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
@@ -451,10 +455,6 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _lifetime_tables() -> dict[str, Any]:
-    from verity_vllm.commit.committer.flush_points import (
-        GATHER_FLUSH_LEAVES,
-        PRE_FLUSH_LEAVES,
-    )
     from verity_vllm.commit.committer.native_host import NativeHostCommitter
     return {"HAZARD_LEAVES": set(NativeHostCommitter.HAZARD_LEAVES), "GATHER_FLUSH_LEAVES": set(GATHER_FLUSH_LEAVES), "PRE_FLUSH_LEAVES": set(PRE_FLUSH_LEAVES)}
 
@@ -482,9 +482,9 @@ def residuals_of(values: list[ValuePlan], rt: RuntimeTree, tables: Mapping[str, 
             out.append(Residual(table, "*", "*", f"the gather collector flushes staged bytes at these module boundaries ({table}); the flush points are lifetime facts "
                                 "the structure does not carry yet", values=[v.value_id for v in hits]))
     for b in sorted(rt.buffers):
-        table = analytic_table_of_buffer(b)
-        if table is not None and b not in weights:
-            out.append(Residual("ANALYTIC_TABLES", b, table, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
+        analytic = analytic_table_of_buffer(b)
+        if analytic is not None and b not in weights:
+            out.append(Residual("ANALYTIC_TABLES", b, analytic, "the Match stage dumps this buffer by name and checks it analytically (root_policy.ANALYTIC_TABLES); "
                                 "the manifest names no weight Value for it"))
     return out
 
@@ -549,4 +549,7 @@ def load_plan(path: str | Path) -> dict[str, Any]:
 
 
 def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    return [(h["module"], h["kind"], h["slot"]) for h in doc.get("hooks") or []]
+    return [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]]
+
+
+__all__ = ["HOOK_KINDS", "AcquisitionPlan", "AcquisitionSite", "acquisition_plan", "analytic_table_of_buffer", "hooks_of_doc"]
