@@ -30,23 +30,29 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from derive import BN, NCT, U_TAG, WM, mix32, tile_receipts
-
 __all__ = ["tile_receipts", "xin13_receipts", "xin_keys"]
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
-fref = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(fref)
+
+
+def _load(name: str, path: Path):
+    """The script at path, from its file under a name no other directory's script has: nothing goes on `sys.path`."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_derive = _load("floored_gemm_derive", HERE.parent / "floored_gemm" / "derive.py")
+BN, NCT, U_TAG, WM = _derive.BN, _derive.NCT, _derive.U_TAG, _derive.WM
+mix32, tile_receipts = _derive.mix32, _derive.tile_receipts
+fref = _load("fgemm_ref", HERE.parent / "floored_gemm" / "ref.py")
 
 RF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"   # the r9 reference's sha256
 _rf_path = HERE / "receipt_folds_r9.py"
 if hashlib.sha256(_rf_path.read_bytes()).hexdigest() != RF_SHA256:
     sys.exit(f"{_rf_path} is not the pinned r9 reference (sha256 {RF_SHA256}): restore it from git, don't edit it")
-_spec = importlib.util.spec_from_file_location("receipt_folds_r9", _rf_path)
-rf = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(rf)
+rf = _load("receipt_folds_r9", _rf_path)
 
 DITHER_TAG = 7
 T = 128
