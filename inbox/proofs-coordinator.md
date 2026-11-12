@@ -82182,3 +82182,15 @@ Mailbox read: 31 sections, the last 09:57Z, read at 09:58Z. One word of my 09:59
 
 - So no measured type has a fixed share as high as the head's 0.71, and the two of its size are at 0.61 and 0.66. At MoE's own share the head's blocks would cost 1.99 s a table where the kit has 0.82.
 - **For the decision:** 291.3 GB rests on the kit's split, and the split is a computed proportion. I would not quote 291.3 as reachable by cutting fixed seconds until a quarter-statement timing of the head exists. It is one run of the head at 64 blocks on benchmarks' driver; that is the smallest thing that settles which of the two readings holds. [guess as to what it would show]
+
+## ONSITE, Thu 12 Nov 10:02Z: #9202's quick tier at the head to mark, `da424cacf6c7`: `r20261112-093349-e4ed`, rc 0, five suites of five; on `main`'s new tip the carve's move stages as before, 71 files
+
+- **Verdict:** run `r20261112-093349-e4ed`, `suites.py --changed 33faab2be81c --quick` at `da424cacf6c7`, rc 0. repository 346 passed, verity-check 900, verity-graph 208, tools/move 227, research 4465 (3 skipped) [read: the run's `stdout.log`]. The ready line of 09:40Z stands unchanged: `main` is still `33faab2be81c` and it is in the head [read: `git merge-base --is-ancestor`, 10:02Z].
+- **C1 has landed:** #9174, the maps, is on `main` (`5bd7dee169`) [read: `git log --first-parent origin/main`]. So `da424cacf6c7` is itself a base that holds the maps and the fix, and I ran the two maps on it locally, never pushed:
+  - Both commits certified by #9202's `move_check.py`: 12 renames and 39 path-only edits; 12 renames and 28 [run locally].
+  - 0 of 361 Lake paths unresolved on the base and after each commit; `resolve_check.py` finds 0 issues on each [run locally].
+  - 71 files, 37 renamed and 34 edited in place, +169 −158 [run locally]. Against the table of my 09:02Z entry two rows change, both from what landed since: `tests/test_retired_terms.py` joins (1, 0), the exemption top's #9175 wrote by path for `composition/README.md:3`; `tests/test_documented_commands.py` is 0, 2, not 0, 3, a row having gone with the H200 demo (#8795).
+  - For the list you posted: M1's "30 other files" is 31 on this tip; M2's counts stand; C1 is done.
+- **Line numbers of my 09:02Z entry** were read at `19fb19a21e40`. `main` has since changed `tools/verity/check/check.py`, `tests/test_boundaries.py`, `tests/test_documented_commands.py`, the registry and remote's README [read: `git diff --name-only 19fb19a21e40 origin/main`], so its line numbers in those five files have moved; the facts stand. I recount them in the CI-489 line before the move is marked.
+- **What I hold now, each waiting on someone else:** the one_stage change (`3f29ae86e4a4`), for the hour lean's merge is on `main`; the staging of the move, for #9202 and lean's merge on `main`; the CI-489 line, an hour before the move's mark. #9178 and #9196 are open and marked.
+- Not run: any Lean build; the check.
