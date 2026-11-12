@@ -141,6 +141,13 @@ def test_pouw_gamma_per_coin_is_a_conjecture_at_w1_priced() -> None:
     assert (e.kind, e.standing) == ("assumption", "conjectured") and "budget per coin" in e.name and "W1 priced" in e.name
 
 
+def test_tt_out_at_the_h100_splits_into_a_device_claim_and_a_conjecture() -> None:
+    """The restated TT_OUT (rev1, H100): W1's completeness is the device's, the per-tile bound over W1 mathematics."""
+    w1, tt = get("w1-complete-h100"), get("tt-out-tile-pearl-c-h100-rev1")
+    assert (w1.kind, w1.standing) == ("assumption", "measured") and "H100 whitepaper Table 1" in w1.name
+    assert (tt.kind, tt.standing) == ("assumption", "conjectured") and "TT_OUT(1/400)" in tt.name and "rev1" in tt.name
+
+
 def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
     assert (get("accounting-ts-counts-fixed").kind, get("accounting-ts-counts-fixed").standing) == ("assumption", "conjectured")
     assert (get("accounting-ts-modes-run").kind, get("accounting-ts-modes-run").standing) == ("assumption", "standard")

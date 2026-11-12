@@ -324,6 +324,21 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the two halves of Pearl-C's TT_OUT at the H100 record, rev1 (security/Definitions/Assumptions/PearlC.lean), which
+    # Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192 and SampledH100Rev1S8Llama32_1b read: `W1CompleteH100` and
+    # `TTOutTilePearlCH100Rev1S8`; benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py is the conjecture's falsification
+    # test
+    Entry("w1-complete-h100", "assumption",
+          "W1 is complete for the H100: every program of the cost model is simulated by a W1 program on the H100 (or "
+          "the H200) with INT8, at the data sheets' per-MAC tensor-core ratios (H100 whitepaper Table 1, H200 data "
+          "sheet) and SHA-512 compressions and first fetches free, with the same outputs and no more cost or oracle "
+          "calls; refuted by an H100 instruction, or a sequence of them, that does a tile's work for less than W1 "
+          "charges", "W1 complete (H100)", "measured"),
+    Entry("tt-out-tile-pearl-c-h100-rev1", "assumption",
+          "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record, rev1, over W1 on the H100 with INT8 at its best "
+          "case for the adversary: no W1 program outputs a good tile's words, before the salt is drawn, at a cost "
+          "below (1 − g₀) of the tile's credit except with probability δ; refuted by such a program for a tile in the "
+          "domain", "TT_OUT tile (H100, rev1)", "conjectured"),
     # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
