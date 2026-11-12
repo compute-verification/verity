@@ -127,7 +127,7 @@ the vector fails its check or doesn't reproduce a published number.
 - `model`: reading a data directory: `model() -> Model`, `rows()`, `census(m, epoch) -> Census`, `measured_cost(c)`,
   `vector(name) -> Vector`, `vectors()`, `attacks(m, epoch)`, `floors()`, and `device(name)` / `devices()` for the
   device directories.
-- `lp`: the price LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ): `solve(...) -> Solution`, `price`, `cost`.
+- `lp`: the price LP (Charnes–Cooper; the first solve U/F_low, the second τ): `solve(...) -> Solution`, `price`, `cost`.
 - `attacks`: `x_of` (an attack's X, its price over its tensor time), `cheapest`, `margin`, `check` (every price at or
   below measured cost, ρ, every credit, every attack at X ≥ x_min), `under_floor` and `priced` (the claims).
 - `resolve`: `resolve(name) -> Resolved`, a named vector re-solved: `tau`, `uf_low`, `margin`, the cheapest attacks,
@@ -157,7 +157,7 @@ An *epoch* is a state of the census and the attacks, named after the vector that
 attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector
 re-solves on the data it was published on while new measurements land beside it. An epoch's census lines are a file of
 their own, so the census grows by a file an epoch, and the tests keep every file under a quarter of the repository's 256
-KiB cap. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
+KiB limit. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
 vector's rows is refused, and the check fails on it.
 
 A *row* is a ceiling of the card: one class's rate, a port, or a joint frontier (a facet) of two or more classes. Π is a
