@@ -572,8 +572,10 @@ def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json �
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
 
-/-- **The verifier holds its own program**: a session verified without it (`--program`) is refused (`NO_PROGRAM`),
-whatever else it passes. -/
+/-- **The verifier was handed a program**: a session verified without one (`--program`) is refused (`NO_PROGRAM`),
+whatever else it passes. It compares nothing. A handed program is held to the circuit when its digest is META's
+`program_sha512`: `programP` refuses any other under `--plain-tables`, `programZ` under `--zk` where META binds a
+`verity/partition/v1` partition, and a verdict says whether it was held (`programFields`). -/
 def programHeld (program : Option ByteArray) : Except String Unit :=
   if program.isSome then .ok () else .error NO_PROGRAM
 
@@ -582,6 +584,104 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   split at h
   · assumption
   · cases h
+
+/-- The rule of META's partition binding (`HmRow.PARTITION_V1`, or the provisional `HmRow.PARTITION_PROVISIONAL`); empty
+when META binds no partition. -/
+def metaRule (c : Circuit) : String :=
+  ((c.metaJ.getObjVal? "partition").toOption.bind fun p => (p.getObjValAs? String "rule").toOption).getD ""
+
+/-- What `--zk` refuses of the verifier's own program against the circuit, in `programWhyP`'s words: where META binds a
+`program_sha512` under `verity/partition/v1`, bytes that are not a JSON descriptor and a program whose digest is not
+META's. The setup holds the program only to the partition object's, and only for a query it evaluates
+(`HmRow.qwordFinding`); this holds it for every query. Under the provisional unit cover it refuses nothing, and the
+verdict says whether the program was held (`programFields`). A session without the program is `programHeld`'s. -/
+def programWhyZ (c : Circuit) (program : Option ByteArray) : Option String :=
+  if program.isSome && metaRule c == HmRow.PARTITION_V1 && (metaProgram c).isSome then programWhyP c program else none
+
+/-- **The verifier's own program is the circuit's** (`--zk`, where META binds a `verity/partition/v1` partition):
+`programWhyZ` on the circuit `verify` parsed. -/
+def programZ (parsed : V Circuit) (program : Option ByteArray) : Except String Unit :=
+  match parsed with
+  | .error e => .error (refusal s!"a circuit that does not parse ({e})")
+  | .ok c => match programWhyZ c program with
+    | some why => .error why
+    | none => .ok ()
+
+/-- **An accepted `programZ` holds a handed program to META's under `verity/partition/v1`**: the circuit parsed, and
+where its META binds a `program_sha512` under that rule, the handed bytes' digest is it. -/
+theorem programZ_ok {parsed : V Circuit} {b : ByteArray} (h : programZ parsed (some b) = .ok ()) :
+    ∃ c, parsed = .ok c ∧
+      (metaRule c = HmRow.PARTITION_V1 → (metaProgram c).isSome = true → programDigest b = metaProgram c) := by
+  cases parsed with
+  | error e => simp [programZ] at h
+  | ok c =>
+    refine ⟨c, rfl, fun hr hm => ?_⟩
+    have hz : programWhyZ c (some b) = none := by
+      cases hw : programWhyZ c (some b) with
+      | none => rfl
+      | some w => simp [programZ, hw] at h
+    have hp : programWhyP c (some b) = none := by simpa [programWhyZ, hr, hm] using hz
+    obtain ⟨b', hb, _, hd⟩ := programWhyP_none hp
+    cases hb
+    exact hd
+
+/-- What a verdict says of a handed program whose digest is not META's `program_sha512`, before its reason. -/
+def NOT_HELD : String := "the Program was handed and not held to the circuit"
+
+/-- What a verdict says of the registered reads when the program was not held: `Registered.checkProgram` and
+`Registered.checkCover` found the handed program's registered inputs, which need not be the circuit's. -/
+def HANDED_ONLY : String :=
+  "the registered-read refusals (Registered.checkProgram, Registered.checkCover) read the handed Program only"
+
+/-- Why a handed program of digest `handed` (none: bytes that are not a JSON descriptor) is not held to the circuit;
+none when it is, the circuit parsed and `handed` META's `program_sha512`. -/
+def notHeldWhy (parsed : V Circuit) : Option String → Option String
+  | none => some "the handed bytes (--program) are not a JSON descriptor"
+  | some h => match parsed with
+    | .error _ => some "the circuit does not parse"
+    | .ok c => match metaProgram c with
+      | none => some "the circuit's META names no Program digest"
+      | some m => if h = m then none
+        else some (if metaRule c == HmRow.PARTITION_PROVISIONAL then
+          "the provisional unit cover binds no Program descriptor, and the handed Program's digest is not the one META names"
+          else "the handed Program's digest is not the one META names")
+
+/-- **What a verdict says of the verifier's own program** (`--program`), nothing without one. `program_sha512`, its
+digest, only when the program is held to the circuit (its digest is META's `program_sha512`), so a reader of that
+field never reads the digest of a program no check compared with the circuit. Otherwise the digest is under
+`program_handed_sha512`, and `program_note` says that the program was not held (`NOT_HELD`), why (`notHeldWhy`), and
+that the registered-read refusals read the handed program only (`HANDED_ONLY`). -/
+def programFields (parsed : V Circuit) (program : Option ByteArray) : List (String × Lean.Json) :=
+  match program with
+  | none => []
+  | some b =>
+    let handed := programDigest b
+    match notHeldWhy parsed handed with
+    | none => handed.toList.map fun h => ("program_sha512", Lean.Json.str h)
+    | some why => (handed.toList.map fun h => ("program_handed_sha512", Lean.Json.str h)) ++
+        [("program_note", Lean.Json.str s!"{NOT_HELD}: {why}; {HANDED_ONLY}")]
+
+/-- **A verdict's `program_sha512` is the circuit's**: `programFields` gives that field only the digest of the handed
+program, and only when the circuit parsed and its META's `program_sha512` is that digest. -/
+theorem programFields_held {parsed : V Circuit} {program : Option ByteArray} {j : Lean.Json}
+    (h : ("program_sha512", j) ∈ programFields parsed program) :
+    ∃ c b d, parsed = .ok c ∧ program = some b ∧ programDigest b = some d ∧ metaProgram c = some d ∧
+      j = Lean.Json.str d := by
+  cases program with
+  | none => simp [programFields] at h
+  | some b =>
+    cases hd : programDigest b with
+    | none => simp [programFields, hd, notHeldWhy] at h
+    | some d =>
+      cases parsed with
+      | error e => simp [programFields, hd, notHeldWhy] at h
+      | ok c =>
+        cases hm : metaProgram c with
+        | none => simp [programFields, hd, notHeldWhy, hm] at h
+        | some m =>
+          by_cases he : d = m
+          · exact ⟨c, b, m, rfl, rfl, by rw [hd, he], hm, by simpa [programFields, hd, notHeldWhy, hm, he] using h⟩
+          · simp [programFields, hd, notHeldWhy, hm, he] at h
 
 /-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, and the templated
 statement (`Tags.tmplName`; building `Tags.circuitTmpl` would hash its identity's key), which `check` passes only in the

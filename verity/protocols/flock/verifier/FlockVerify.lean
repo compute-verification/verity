@@ -875,7 +875,10 @@ as the session's does with `--program`.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each sampled session at its own
 sample; one verdict line per session, in order,
-naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
+naming with `--program` the digest of the verifier's own program (`ProvedScope.programFields`): as `program_sha512` only
+when the program is held to the circuit, its digest META's `program_sha512`; else as `program_handed_sha512`, with a
+`program_note` that says the program was handed and not held to the circuit, why, and that the registered-read refusals
+(`Registered.checkProgram`, `Registered.checkCover`) read the handed program only,
 the digest of its public file's header (`public_header_sha512`, `publicHeader`), with `--registered F` the digest of that
 file (`registered_sha512`, `sha512Of`), a sampled session's sample (`unit_draw`), the number of tables it set the
 session up as (`session_tables`, `--session-tables J`, else 1),
@@ -901,8 +904,11 @@ session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner`
 over an inner session whose record (`--rec-inner-session`) holds no sample (`RecSetup.innerDrawn`), and a session at a
 holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
 a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
-verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
+verified without a `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
+cannot know what it verifies; the check is that a program was handed, and compares nothing), and under `--zk`, where
+META binds a `program_sha512` under `verity/partition/v1`, a session whose `--program` has another digest
+(`ProvedScope.programZ`; under the provisional unit cover nothing is compared, the session is not refused for it, and
+its verdict says the program was not held), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
@@ -1110,7 +1116,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind ProvedScope.programDigest
+  let programFields := ProvedScope.programFields parsed program
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
@@ -1158,7 +1164,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
     -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
     -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
-    -- the program,
+    -- the program, then under --zk one whose program is not the one META binds under verity/partition/v1,
     -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
     -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
     -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
@@ -1173,6 +1179,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
+      if zk then ProvedScope.programZ parsed program
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
@@ -1183,7 +1190,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     let (part, opened) := match st with | .ok (_, _, p, o) => (p, o) | .error _ => (Lean.Json.null, Lean.Json.null)
     let ok ← emit dir (checked.map refusals) (
       (if part.isNull then [] else [("partition", part)]) ++
-      (match programSha with | some h => [("program_sha512", Lean.Json.str h)] | none => []) ++
+      programFields ++
       -- the public file's header and the registered reads it checked the session against, by their digests, the
       -- sample it drew the session's statement at and the tables it split it into, which a caller holds a statement of
       -- the session to

@@ -46,7 +46,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`) |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programZ`) |
 | the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
@@ -103,7 +103,10 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   and agreement tools.
 - `--program`, `--partition` and `--registered` are the verifier's own copies of the program, the partition object and
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
-  what it verifies.
+  what it verifies. That check (`programHeld`) is that a Program was handed, and compares nothing. A handed Program is
+  held to the circuit when its digest is META's `program_sha512`: any other is refused under `--plain-tables`
+  (`programP`) and, under `--zk`, where META binds a `verity/partition/v1` partition (`programZ`). Under the
+  provisional unit cover a `--zk` session is not refused for it, and its verdict says the Program was not held.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
@@ -119,7 +122,10 @@ are accepted. A verdict names the public file it checked the session against by 
 `--registered` file by the SHA-512 of its canonical JSON (`registered_sha512`), a sampled session's sample (`unit_draw`,
 its record's) and the number of tables it set the session up as (`session_tables`: `--session-tables J`, else 1), so a
 caller holds a statement of the session to the files, sample and tables that were checked, never to ones the prover
-names.
+names. With `--program` a verdict names the Program's digest as `program_sha512` only when the Program is held to the
+circuit, so that field alone is the circuit's Program. Otherwise the digest is `program_handed_sha512`, and
+`program_note` says the Program was handed and not held to the circuit, why, and that the registered-read refusals
+(`Registered.checkProgram`, `Registered.checkCover`) read the handed Program only (`ProvedScope.programFields`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
