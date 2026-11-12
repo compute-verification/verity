@@ -102498,3 +102498,31 @@ def CertifiedRead (v : Registration.Verifier) (opened : Array (String × Json)) 
 **Not established:** whether in the scan each certified value has one reading member (then the clause is exact there); I did not read NET-335's driver. No Lean ran for the probe: the Lean lines are read, and `checks` is Python's twin by its difftest.
 
 For the table: soundness's case: not refused by R7; refused today by the strict check when the renamed port is the value's only reader, accepted by #9023's; clause `CertifiedRead` written, building on `cursor/proofs-r7-certified-read-77a3` at `1e96817fde05`; recommend R7 first, then #9023 with the clause; R7 Fri 5 PM PST stands.
+
+## TABLEEXT, Thu 12 Nov 21:24Z: the lint keeping the caps of Flock's claims by place is two pull requests, both open and unmarked: #9492 (the lint and its test) and #9494 (the list, after #9492 lands); three lines for top below
+
+**For top, three lines.**
+1. #9492 adds four path prefixes to the retired-terms lint's `OWN_CAPS`: `security/Definitions/Claims/`, `security/Proofs/Flock/Claims/KS/`, `security/Proofs/Flock/Claims/Numbers*.lean` and `security/Proofs/Flock/SamplingGeneric/`. There the bound on an extractor's reruns (`Deploy.cap`, `Arg.cap`, `Numbers.cap`, which listed statements read) and the Merkle cap are kept as PoUS's and PoUB's caps are in their directories; Pearl's `CAP`, `capOK`, `Device.cap`, "cap check" and "over-cap" still count there, and a new test holds both.
+2. It frees 5,171 sites in 189 files, each spelled "cap" or "caps", in places where no file says Pearl, inert, debit or tile; the 15,734 bare caps in the rest of Flock's Lean still count. The list is untouched in it, so the ratchet gate passes: "1 change(s), 0 failed".
+3. #9494 starts from #9492's head and lowers the list by 4,920 sites (90 entries lowered, 80 dropped, none raised) by #9093's rule. It is marked only once #9492 is on `main`, because the two as one change fail the gate, as #9093 and #9131 did.
+
+**#9492,** branch `cursor/proofs-flock-caps-lint-c41a`, head `63088686777b`, `Lane proofs`, unmarked, one file, no Lean. [run]
+- **What it changes:** `tests/lint/test_repo_retired_terms.py` only: four entries of `OWN_CAPS` with their reasons, one line of the module's docstring, one test. [run]
+- **The numbers** are the lint's own `scan` on `main` at `5f0c008aa040`, before and after: 108,753 sites to 103,582. [run] By place: `KS/` 4,681 in 149 files, `SamplingGeneric/` 337 in 26, `security/Definitions/Claims/` 117 in 11, `Numbers*.lean` 36 in 3. [run]
+- **The lint's tests** on my VM: 14 passed, with `main`'s overage as the one bookkeeping warning. [run] The new test fails with any one prefix removed, with `security/Proofs/Flock/`, `security/Definitions/` or `security/` added, and with the `CAP` exception off. [run]
+- **Ratchet gate** against `main`: "1 change(s), 0 failed". [run]
+- **What still counts in Flock's Lean:** 13,800 bare caps in the rest of `security/Proofs/Flock/`, 1,834 in `verity/protocols/flock/` and 100 in `security/Definitions/Flock/`, 15,734 in all. [run]
+- **Why the scope stops at four places:** in the rest of `security/Proofs/Flock/` 25 files say Pearl, inert, debit or tile, and in `verity/protocols/flock/` 39 do. [run] Keeping those by place needs a look at each file, so I left them counted. [derived]
+- **Pre-mark run:** `r20261112-212119-fe2d` on vy-nebius-cpu-12, proofs pool, 40 GB, `suites.py --changed 5f0c008aa040 --quick` at the head. [run] Launched 21:21Z, waiting for a slot at 21:23Z. [run] The lint is an input of the vLLM adapter's suite, so it reruns that suite and should take about 40 minutes once it starts. [guess]
+
+**#9494,** branch `cursor/proofs-flock-caps-list-9d27`, head `ebc94575d675`, `Lane proofs`, unmarked, one file on top of #9492's commit. [run]
+- **What it changes:** `tests/lint/allowlists/repo_retired_terms.json`: 5,544 entries and 106,815 sites to 5,464 and 101,895. [run]
+- **The rule** is #9093's: an entry drops by the sites the lint stopped counting in its file, never below what the file holds now. [read] 251 freed sites stay on the list, in files over their entry or with none. [run] No file is newly over or more over. [run]
+- **Ratchet gate:** against #9492's head "1 change(s), 0 failed"; against `main`, both commits as one change, "1 change(s), 1 failed ... 5968 violation(s)". [run] So its mark waits for #9492 on `main`. [derived] #9131's body says the gate goes red on a change that narrows this lint and lowers its entries together, and that it counted 2,172 lines on #9093. [read]
+- **No pre-mark run yet, on purpose.** The list moves on `main` with most landings, so I rebuild this head on the `main` that has #9492 and run it then. [derived]
+
+**Stops, at 21:19Z** (`git merge-tree --write-tree`, the allowlists' merge driver registered): both heads are clean against `main` `5f0c008aa040`, #9375's head `bafae2eaec2e`, #9224, #9438 and #9459. [run]
+
+**#9438's three entries and these do not meet:** #9438 lowers entries under `benchmarks/one_stage/`. [run]
+
+**Next:** the third test's faster form, if it keeps every assert. [relayed] I read the run above when it ends and put its verdict in #9492's body; the ready line for #9492 follows top's yes through you. [derived]
