@@ -49,8 +49,8 @@ NAME = "repo_retired_terms"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 GLOSSARY = "GLOSSARY.md"
-#: the archive isn't developed
-LEFT_OUT = ("archive/",)
+#: path prefixes this lint leaves to others (the ratchet gate reads it): none
+LEFT_OUT = ()
 #: what isn't read, by path prefix (or a whole path), each with its reason
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
@@ -573,7 +573,7 @@ def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
-    assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
+    assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []
 

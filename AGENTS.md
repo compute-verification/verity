@@ -56,9 +56,10 @@ what the layout's design has and the tree does not.
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
-  its reader). `tests/`: invariants of the whole tree. `archive/`: code kept and not developed, in no suite. The archived
-  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
-  archive` restores them.
+  its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
+  deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
+  deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
+  layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor

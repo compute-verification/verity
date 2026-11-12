@@ -10,14 +10,14 @@ ratchet is a shrink-only allowlist under ``adapters/vllm/tests`` or ``tests/lint
 ``**/*allowlist*.json`` holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json``
 and ``size.json`` are both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own
 count and is not compared.  ``tests/lint`` is the repository's: ``test_repo_ruff.py`` holds every tracked file outside the
-integration's ruff lint (and ``archive/``) to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
+integration's ruff lint to ``allowlists/repo_ruff.json`` under the root ``ruff.toml``, which
 ``adapters/vllm/ruff.toml`` extends, a count per (file, rule) whose kind is its ``rule``, and its counted lints (``COUNTED``)
-hold every tracked ``*.py`` file outside ``adapters/vllm/`` (which has its own rules) and ``archive/`` to a count per
+hold every tracked ``*.py`` file outside ``adapters/vllm/`` (which has its own rules) to a count per
 file, all one kind: ``test_repo_env_reads.py`` its direct environment reads (``allowlists/repo_env_reads.json``, beside the
 settings registries it marks, ``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
-(comments, docstrings, Lean comments and Markdown, the integration's too, outside ``archive/``) to a count per file of its
+(comments, docstrings, Lean comments and Markdown, the integration's too) to a count per file of its
 lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
 per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
@@ -81,7 +81,7 @@ no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
 The top change's Python is linted too, when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the
-change adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
+change adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its

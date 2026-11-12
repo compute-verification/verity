@@ -78,7 +78,7 @@ firewall = [
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds
-vllm = ["adapters/vllm", "archive/integrations/vllm/tools/train_step_census.py", "verity/protocols/certifier/verifier/advice.py"]
+vllm = ["adapters/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -255,7 +255,6 @@ pod_records = [
 team = [
     "infra",
     "tools/{research,agent-guard}",
-    "archive/AGENTS.md",
     "benchmarks/census",
     ".agents",
     ".cursor",
@@ -362,7 +361,6 @@ paths = [
     "security/*/Pouw",
     "security/Proofs/Properties/Pouw",
     "adapters/vllm",
-    "archive/integrations/vllm/tools/train_step_census.py",
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"
