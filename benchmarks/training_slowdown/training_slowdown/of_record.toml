@@ -15,6 +15,9 @@
 # prints them, the `count` and `macs` the record's step has of it over the config's (all of the line where the config
 # has none of it), and `why` the route does not compute it. The command prints such a line as named and counts the
 # entry equal; a line named here that the record's step does not have over the config's as named is a difference.
+#
+# `step`, where an entry has it, is the step of the config's that is compared, `counted`, where its trained weights
+# leave θ after the second step, and `why`.
 
 [held."s-t20-1.1x-ref-optim-fullmuon-758"]
 run = "r20261103-151852-c62c"
@@ -508,3 +511,11 @@ shapes = [[]]
 count = 1
 macs = 1
 why = "the program's running average of the loss, which it prints: the average so far times its weight"
+
+[held."m-t20-2x-hybrid-grow-depth"]
+run = "r20261104-060904-d64c"
+art = "art:e18fcf3a8e2e2b43afdb8ee7a2d11dbfa83961bfe7dee51096b93387c2448e54"
+path = "out/run/run.json"
+sha256 = "42d025b69edda49f0b7a4073db0f7828fce35004179cb3cc6ac42e8c331e6326"
+partial = "none"
+step = { counted = 3, why = "the gains of each repeated copy sit behind its zeroed output projections, so they get no gradient at the first step and undecayed AdamW leaves them θ′'s: they leave it at the second step, and the third is the first a later step's structure has" }
