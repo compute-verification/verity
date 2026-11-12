@@ -2,8 +2,8 @@
 
 Each read here is of a document a file brings: a checkpoint's config.json, the Build's roles and its result.json, a
 replay's record, a verdict document, the checkpoints manifest's entry, a shard pin another process took, the required
-manifest's rows, the facts of the Programs of record, the binding map.  The field may be absent, null or empty, and
-each means the same thing."""
+manifest's rows, the facts of the Programs of record, the binding map, a run directory's manifest and its artifacts.
+The field may be absent, null or empty, and each means the same thing."""
 from __future__ import annotations
 
 import json
@@ -21,6 +21,7 @@ from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import cublas_route_pin, fp8_moe_scales
 from verity_vllm.check import fp8_ue8m0 as U
+from verity_vllm.check import gates as G
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import producers as PR
 from verity_vllm.check import verdict as V
@@ -35,6 +36,7 @@ ENTRY = {"repo": "test/absent", "revision": "abc"}
 ROW = {"family": "instance_outputs", "op_path": "model", "output_member": "out", "spec": "X_v1{N=4}"}
 NO_ENTRIES: list[dict[str, Any]] = [{}, {"entries": None}, {"entries": []}]
 NO_IDENTITY: list[dict[str, Any]] = [{"name": "x"}, {"identity": None, "name": "x"}, {"identity": {}, "name": "x"}, {"identity": {"request_id": "r0"}, "name": "x"}]
+HOST_UNSTATED = {"cpu": None, "nproc": None, "cpu_quota": None, "clocksource": None, "clock_read_us": None}
 FOREIGN = {"requests": [{"request_id": "cccccccc-2222-2222-2222-222222222222", "index": 0, "prompt_len": 5, "max_tokens": 1}]}
 
 
@@ -229,3 +231,104 @@ def test_the_invocations_bound_under_a_name_are_counted_per_step():
     entries = [{"identity": {"step": 0}, "name": "a"}, {"identity": {"step": 0, "invocation": 1}, "name": "a"}, {"identity": {"step": 0, "invocation": None}, "name": "a"},
                {"identity": {"step": 1}, "name": None}, {"identity": {"step": 1}}, {"identity": {"step": 2, "invocation": 3}, "name": "b"}]
     assert OC.same_name_invocations({"entries": entries}) == {(0, "a"): 2, (2, "b"): 1}
+
+
+def run_of(tmp_path, manifest: dict[str, Any] | None = None, **artifacts: Any) -> G.RunArtifacts:
+    """A run directory that holds `artifacts` (each by its key of `gates.ARTIFACTS`) under the run manifest `manifest`."""
+    for key, doc in artifacts.items():
+        path = tmp_path / G.ARTIFACTS[key]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(doc))
+    return G.RunArtifacts(tmp_path, manifest={} if manifest is None else manifest)
+
+
+@pytest.mark.parametrize("stated", [{}, {"evidence": None, "detail": None}, {"evidence": [], "detail": {}}])
+def test_a_gate_result_read_without_evidence_or_detail_has_none(stated):
+    result = G.GateResult.from_json({"id": G.OBSERVATION, "status": "pass", **stated})
+    assert (result.evidence, result.detail, result.reason, result.name) == ([], {}, None, G.GATE_NAMES[G.OBSERVATION])
+    evidence, detail = ["capture/tokens.json"], {"steps": 2}
+    read = G.GateResult.from_json({"id": G.OBSERVATION, "status": "pass", "evidence": evidence, "detail": detail})
+    assert read.evidence == evidence and read.evidence is not evidence and read.detail == detail and read.detail is not detail
+
+
+@pytest.mark.parametrize("manifest", [{}, {"artifacts": None}, {"artifacts": {}}, {"artifacts": {"tokens": None}}, {"artifacts": {"tokens": ""}}])
+def test_an_artifact_the_manifest_does_not_place_is_at_its_default_path(tmp_path, manifest):
+    assert G.RunArtifacts(tmp_path, manifest=manifest).path("tokens") == tmp_path / G.ARTIFACTS["tokens"]
+    placed = G.RunArtifacts(tmp_path, manifest={"artifacts": {"tokens": "x/t.json", "stats": "/elsewhere/s.json"}})
+    assert (placed.rel("tokens"), placed.rel("stats"), placed.rel("log")) == ("x/t.json", "/elsewhere/s.json", G.ARTIFACTS["log"])
+
+
+@pytest.mark.parametrize("manifest", [{}, {"workload": None}, {"workload": {}}, {"workload": {"requests": None}}, {"workload": {"requests": []}}])
+def test_a_manifest_that_states_no_request_takes_them_from_the_tokens(tmp_path, manifest):
+    requests = [{"request_id": "a", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}, {"request_id": "b"},
+                {"request_id": "c", "prompt_token_ids": None}, {"request_id": "d", "prompt_token_ids": [], "max_tokens": 5}]
+    assert G.RunArtifacts(tmp_path, manifest=manifest).workload_requests() == []
+    assert run_of(tmp_path, manifest, control_tokens={"requests": requests}).workload_requests() == [
+        {"request_id": "a", "prompt_len": 3, "max_tokens": 4}, {"request_id": "b", "prompt_len": 0, "max_tokens": None},
+        {"request_id": "c", "prompt_len": 0, "max_tokens": None}, {"request_id": "d", "prompt_len": 0, "max_tokens": 5}]
+    stated = {"workload": {"requests": [{"request_id": "z", "max_tokens": 2}]}}
+    assert G.RunArtifacts(tmp_path, manifest=stated).workload_requests() == stated["workload"]["requests"]
+
+
+@pytest.mark.parametrize("timing", [{}, {"timing": None}, {"timing": {}}, {"timing": {"engine_steps": None}}])
+def test_a_control_run_that_states_no_engine_steps_expects_the_largest_cap(tmp_path, timing):
+    requests = [{"request_id": "a", "max_tokens": 4}, {"request_id": "b"}, {"request_id": "c", "max_tokens": 5}]
+    assert run_of(tmp_path, control_tokens={"requests": requests, **timing}).expected_steps() == 5
+    assert G.RunArtifacts(tmp_path / "empty", manifest={}).expected_steps() is None
+
+
+@pytest.mark.parametrize("steps", [0, 3])
+def test_a_control_run_that_states_its_engine_steps_expects_them(tmp_path, steps):
+    control = {"requests": [{"request_id": "a", "max_tokens": 4}], "timing": {"engine_steps": steps}}
+    assert run_of(tmp_path, control_tokens=control).expected_steps() == steps
+
+
+def test_a_control_request_that_states_no_generated_id_generated_none(tmp_path):
+    requests = [{"request_id": "a", "generated_token_ids": [7, 8]}, {"request_id": "b"}, {"request_id": "c", "generated_token_ids": None},
+                {"request_id": "d", "generated_token_ids": []}]
+    assert run_of(tmp_path, control_tokens={"requests": requests}).control_tokens() == ({"a": [7, 8], "b": [], "c": [], "d": []}, "control/tokens.json")
+
+
+@pytest.mark.parametrize("report", [{}, {"tokens": None}, {"tokens": {}}, {"tokens": {"c_bare": None}}, {"tokens": {"c_bare": {}}}, []])
+def test_a_run_without_control_tokens_or_a_bare_variant_has_no_control(tmp_path, report):
+    assert run_of(tmp_path, noninterference=report).control_tokens() == (None, "none")
+    assert G.RunArtifacts(tmp_path / "empty", manifest={}).control_tokens() == (None, "none")
+
+
+def test_the_bare_variant_stands_in_for_the_control_tokens(tmp_path):
+    assert run_of(tmp_path, noninterference={"tokens": {"c_bare": {"a": [1, 2]}}}).control_tokens() == ({"a": [1, 2]}, "noninterference c_bare")
+
+
+@pytest.mark.parametrize("histogram", [{}, {"spec_histogram": None}, {"spec_histogram": {}}])
+def test_a_decode_step_that_states_no_histogram_has_an_empty_one(histogram):
+    decode = {"phase": "decode", "n_instances": 3, **histogram}
+    read = G.diag_structure({"per_step": [{"phase": "prefill", "step": 0, "n_instances": 2}, {**decode, "step": 1}, {**decode, "step": 2}]})
+    assert (read["status"], read["decode_multiset_mod_T"], read["histograms_equal_mod_T"], read["histogram_diffs"]) == ("ok", {}, True, [])
+    differs = G.diag_structure({"per_step": [{**decode, "step": 1}, {"phase": "decode", "step": 2, "n_instances": 3, "spec_histogram": {"A{T=2}": 1}}]})
+    assert differs["histograms_equal_mod_T"] is False and differs["histogram_diffs"] == [{"step": 2, "differs": {"A{}": [0, 1]}}]
+
+
+@pytest.mark.parametrize("classes", [{}, {"classes": None}, {"classes": {}}])
+def test_a_structure_report_that_states_no_class_has_none(classes):
+    read = G.diag_family_match({"structure": {"status": "ok", **classes}})
+    assert (read["classes"], read["unclassified"], read["unclassified_classes"]) == ({}, 0, [])
+    stated = G.diag_family_match({"structure": {"status": "ok", "classes": {"unclassified:x": {"count": 2}, "a": 1}}})
+    assert (stated["classes"], stated["unclassified"], stated["unclassified_classes"]) == ({"unclassified:x": 2, "a": 1}, 1, ["unclassified:x"])
+
+
+@pytest.mark.parametrize("versions, recorded", [(None, {}), (None, {"versions": None}), (None, {"versions": {}}), (None, {"versions": {"host": None}}),
+                                                ({}, {"versions": {"host": {}}}), ({"host": None}, {})])
+@pytest.mark.parametrize("reps", [{}, {"reps": None}, {"reps": []}])
+def test_an_overhead_record_that_states_no_host_and_no_repetition_has_no_rung(versions, recorded, reps):
+    read = G.diag_overhead({"results": {"r0": {"label": "x", **reps}}, "baseline_step_wall_s": 1.0, **recorded}, versions)
+    assert (read["status"], read["host"], read["rungs"]) == ("ok", HOST_UNSTATED, {})
+
+
+def test_the_overhead_ladder_reads_the_host_from_the_capture_and_else_from_its_own_record():
+    m0 = {"results": {"r0": {"label": "x", "reps": [{"step_wall_mean_s": 2.0, "recorded_calls": 4, "observed_steps": 2}, "junk", {"step_wall_mean_s": None}]}},
+          "baseline_step_wall_s": 1.0, "versions": {"host": {"cpu": "recorded", "clock_read_us": 0.5}}}
+    assert G.diag_overhead(m0, {"host": {"cpu": "captured"}})["host"] == {**HOST_UNSTATED, "cpu": "captured"}
+    own = G.diag_overhead(m0, None)
+    assert own["host"] == {**HOST_UNSTATED, "cpu": "recorded", "clock_read_us": 0.5}
+    assert own["rungs"] == {"r0": {"label": "x", "step_wall_ms": 2000.0, "x_baseline": 2.0, "events_per_step": 2.0, "overhead_per_event_us": 500000.0,
+                                   "overhead_per_event_us_minus_clock": 499998.0}}
