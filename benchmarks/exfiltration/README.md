@@ -22,11 +22,15 @@ verity bench exfiltration --help          every parameter and its default
 - **The compute audit's part** is the break-even planner's bound (`benchmarks/spot_figures/breakeven/`): what the
   wrong blocks of a sampled audit can carry at δ. The planner prices one case of its plan over one scope at a pinned
   audit budget β: the share of total compute it costs (serving with its wait, proving, the replay, the pool, the edge
-  and compiling) and the bound in bits. The command takes the row for the registered and served cut with every
+  and compiling) and the bound in bits. The command takes row `(ii) honest`, the plan of record's row, with every
   modeled lever at its measured value, at the step that prices the verifier as measured, and reads it at the β
   where its total is the share: the total is a line in β fitted over the pinned budgets, and ln(bound) is linear in ln β
   between the two that bracket it. The row plans for the weights / λ, and its part is λ times its bound. `--row` and
   `--step` take another case of the plan.
+  - **Row `(i) honest`** prices its proving at the planner's assumed prices. Beside the figure it is read over the
+    world's year at the same share and printed only under the label "at the planner's assumed prices", never as the
+    figure; the document holds it as `at_assumed_prices`. Read with `--row "(i) honest"`, the figure itself carries
+    the label.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
@@ -89,8 +93,10 @@ certifier's part counts, or if the two aren't shares of the same weights.
 ## The records it reads
 
 The planner's rows are a labelled record of the store, never named in code. The command reads every run that carries
-`run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`, and in each the file `out/rows.jsonl` of its
-run files: one JSON object a line, a row of the plan at one scope (`world year`, `datacenter week`, ...) and one
+`run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`, and in each the files `out/rows.jsonl` and
+`out/three/rows.jsonl` of its run files (the planner's driver's default command's rows, and its rows over the world's
+year alone), a case's rows over a scope from the first file that holds them: where the second holds other rows of
+that case and scope, the run is left out. Each file is one JSON object a line, a row of the plan at one scope (`world year`, `datacenter week`, ...) and one
 pinned budget, with its `world`, `row`, `step`, `scope`, `b10` (the budget), `total` and its parts, `bound_bits`,
 `weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds`, `q` and `replay_sample`, and its `split`: each block
 family's share of proving and how it is priced (`split.families`, `share` and `priced`). A run holds one variant of a
@@ -112,6 +118,13 @@ name is priced in no stated way). The command finds the plan in one of two place
 A `split` that doesn't say whose plan it is, is not one: it is written before the row's levers multiply its blocks,
 and its shares are not read. With no plan in either place the command says so and marks no proving measured.
 
+What prices a row's proving is read from the row's own plan too: the share each source prices (a block type's own
+steady-state row, its Definition's family row, the planner's price), as `split.sources` records it, else by
+`split.basis` (`steady` an own row, `family` a family row, the copy stratum its own, every other key the planner's
+price), and the share at the planner's assumed default (`split.basis`'s `reprice.DEFAULT`). The command prints it
+beside the figure and beside row `(i) honest`, and "not recorded" for each where the row's plan records neither or a
+plan of record is read.
+
 ```text
 research data label RUN run_of_record exfiltration-glm53-compute-audit --by LANE     a run that holds the rows, or a plan
 research data label RUN superseded_by NEWER --by LANE                                a run a newer one replaces
@@ -125,7 +138,8 @@ plan of the case, is left out and listed under "Refused".
 ## What it prints
 
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
-  request and the requests it is priced over, how its proving time is priced by the row's plan, then the network
+  request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
+  source, row `(i) honest` under its label at the planner's assumed prices, then the network
   certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
   network certifier's label for what rests on the set-time card, then the output count. The network certifier's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.

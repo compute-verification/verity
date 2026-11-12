@@ -1,7 +1,10 @@
 """The figure of record's driver (`breakeven/headline.py`): a row counts every sparse-MLA head, carries its own plan's
 request count and split, and leaves the planner as it found it; the figure reads the 10% point off pinned rows."""
+import hashlib
 import json
+from dataclasses import astuple
 from math import isclose
+from pathlib import Path
 
 import cards
 import pytest
@@ -290,6 +293,70 @@ def test_a_row_s_split_gives_each_basis_s_share():
     assert got["priced"] == {"steady": 0.75, "measured": 0.5, "modeled": 0.25}
     assert got["basis"] == {"steady": 0.75, "reprice.CACHE": 0.5, H.COPY_BASIS: 0.25}
     assert H.plan_split(plan(), CALLS, STRATA)["basis"] == {H.NO_BASIS: 1.0}
+
+
+def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_price():
+    """At `verity bench prove`'s table, a block whose row is a steady-state one, its own or its family's, costs the
+    row's seconds a block: its price without the verifier (the row's scale in it) times one factor, the verifier's
+    seconds a statement on top. A block whose row is from a single session or the k_log model, or that has no row,
+    keeps the planner's price as the row scales it. A table's row for no block of the line is refused by name."""
+    scale, core = {"SparseMlaCombine_v1{": {"marg": 4.0, "fixed_x": 1.0}, "Gemm_v2{": 2.0}, 2.0
+    gemm = LINE[1] | {"block": "Gemm_v2{M=1}"}
+    line = LINE + [gemm]
+    plain = H.pricing(planner_price, scale, core, [])(line, verify=1.0)
+    table = {COMBINE: {"source": "family", "seconds": 3.0, "record": "art:combine"},
+             QUANT: {"source": "single", "seconds": 9.0, "record": None}}
+    calls = []
+    got = H.pricing(planner_price, scale, core, calls, table=table)(line, verify=1.0)
+    assert got[0] == plain[0] and got[2] == plain[2] and plain[2]["seconds_per_block"] == 2.0 * (1.0 + H.V_OTHER[1] / core)
+    assert got[1]["seconds_per_block"] == 0.5 * 4.0 and isclose(got[1]["fixed_seconds"], 4.0 + 2.0 * H.V_OTHER[0])
+    assert isclose(got[1]["seconds_per_block"] + (got[1]["fixed_seconds"] - 2.0 * H.V_OTHER[0]) / 4, 3.0)
+    assert (got[1]["priced"], got[1]["table"], got[1]["basis"]) == ("measured", "family", "family: art:combine")
+    assert [x["table"] for x in calls[-1][1]] == [None, "family", None]
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, core, [], table=table | {"Gone_v1{N=1}": table[COMBINE]})(line)
+    assert str(refused.value) == ("1 rows of the table price no block of this line: `Gone_v1{N=1}`. It is another "
+                                  "cut's table, or the line names those blocks otherwise (`FUSED`)")
+    doc = {"cores": 10, "rows": [{"block": W13, "source": "steady", "seconds": 1.0}]}
+    assert list(H.prices(doc)["cells"]) == [H.fused_block(W13)] and H.prices(doc)["cores"] == 10
+    with pytest.raises(ValueError, match="steady-state rows or at a table, not both"):
+        H.spec_of("(ii) honest", "world year", 0.4, steady={"rows": {}}, prices=H.prices(doc))
+
+
+CONTROL = Path(__file__).parent / "fixtures" / "control"
+#: the control: `verity bench prove`'s table it prices row (ii) at, and the planner's inputs of the plan it must give
+CONTROL_SHA256 = {"bench_prices.json": "f2badd5ecdf36530b918b34782fec63466b8586cd6df55e46c43af442af9604c",
+                  "plan_inputs.json": "cb8f1733d189228657f96342c359a8b230078c8760066b443559862bd44d0c80"}
+#: the control's plan's budget
+PLAN_BETA = 0.05544106123672309
+
+
+def test_row_ii_at_the_control_s_table_is_the_plan_s():
+    """Row (ii) at the control's table and the plan's budget (about 3 s): its bound is the plan's to 1e-12, its 193
+    blocks are the plan's in order, every planner input within 1e-9 of the plan's, and its plan's proving is the
+    table's own rows', its family rows' and the planner's price's in their shares. Catches a change to the pricing
+    rule, the planner or the card that moves the figure, which the stand-in pricing above can't."""
+    for name, digest in CONTROL_SHA256.items():
+        assert hashlib.sha256((CONTROL / name).read_bytes()).hexdigest() == digest, f"fixtures/control/{name}"
+    want = json.loads((CONTROL / "plan_inputs.json").read_text())
+    P = H.planner()
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA,
+                     prices=H.prices(json.loads((CONTROL / "bench_prices.json").read_text())))
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    assert isclose(got["bound_bits"] / 8e9, 2635.9320571029266, rel_tol=1e-12)
+    assert len(p["cells"]) + len(p["left_out"]) == 193
+    assert [x["block"] for x in reads["strata"]] == [x["block"] for x in want["strata"]]
+    cells = [astuple(c) for c in reads["design"]["cells"]]
+    assert len(cells) == len(want["cells"]) == 193
+    off = [(want["strata"][i]["block"], f, u, v) for i, (a, b) in enumerate(zip(want["cells"], cells))
+           for f, u, v in zip(want["cell_fields"], a, b) if not isclose(u, v, rel_tol=1e-9)]
+    assert off == []
+    assert got["prices"] == {"read": None, "cores": None, "rows": 192, "above_cores": {}}
+    sources = got["split"]["sources"]
+    assert list(sources) == ["own row", "family row", H.PLANNER, H.COPY_BASIS]
+    assert [round(v, 6) for v in sources.values()] == [0.995394, 0.004465, 0.00014, 1e-06]
 
 
 @pytest.mark.slow
