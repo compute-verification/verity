@@ -13,15 +13,17 @@ and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the l
 """
 from __future__ import annotations
 
+import ast
 import re
 import shlex
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import cli, research_tools
 from verity_vllm.pipeline.research_tools import STAGES, row_config
 from verity_vllm.pipeline.research_tools import parse as tool_parse
 
@@ -204,3 +206,12 @@ def test_a_row_id_is_read_into_its_ten_fields_and_any_other_id_keeps_its_first_t
     for other, tag in (("llama32-1b__bf16", "llama32-1b"), ("llama32-1b_bf16", "llama32-1b_bf16"), ("", "")):
         fields = row_config(other)
         assert fields.pop("model_tag") == tag and list(fields.values()) == [None] * 9
+
+
+def test_the_run_stores_tools_load_where_the_adapters_package_is_not_importable():
+    """research's own process loads this file by its path, with no `verity_vllm` to import (`research_tools._research`), so the
+    module's top imports the standard library alone; what it reads of the adapter, it imports where it reads it."""
+    top = ast.parse(Path(research_tools.__file__).read_text()).body
+    froms = {n.module or "" for n in top if isinstance(n, ast.ImportFrom)}
+    plain = {a.name for n in top if isinstance(n, ast.Import) for a in n.names}
+    assert {name.split(".")[0] for name in froms | plain} <= sys.stdlib_module_names
