@@ -21,9 +21,7 @@ import sys
 from contextlib import contextmanager, nullcontext
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
-from verity_vllm.program.frontend import seed_rule
 
 engine_env.pin(engine_env.EXPORT)
 
@@ -517,6 +515,7 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
             ids = torch.empty((M,), dtype=torch.int32, device="meta")
             return StochasticEngineStep(model, pos0, M, temp, p, S=S), (ids, seed_in)
         if kind == "request":
+            from verity_vllm.program.frontend import seed_rule
             prompt, rule = torch.empty((LP,), dtype=torch.int32, device="meta"), seed_rule.inputs(s)
             return StochasticRequest(model, LP, T, temp, p, S=S), (prompt, seed_in, *rule)
         raise ValueError(f"wrapper {kind!r} has no stochastic form (padded is greedy-only)")
@@ -542,6 +541,7 @@ def consulted_facts(vllm_config) -> dict:
     `env_consulted` = variables the builder sets AND the pinned vLLM's `envs` module defines (so vLLM reads them);
     `env_ignored`   = variables set in the process that this vLLM pin does NOT define (e.g. `VLLM_ATTENTION_BACKEND`, dead in d9105ea80)
     — never reported as declared facts. The target facts themselves (capability, SM count, BI switch) live in `target.declared/applied`."""
+    from verity_vllm import settings
     facts: dict = {}
     try:
         import vllm.envs as envs
