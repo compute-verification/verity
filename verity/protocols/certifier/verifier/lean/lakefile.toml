@@ -25,6 +25,12 @@ path = "../../../interface"
 name = "certifier_program"
 path = "../../device/program/lean"
 
+# The period's check holds each answer's bound to one-stage's own bound of the registration's sample (`Spot.Bound`,
+# `Spot.Record.profileDraw`): the sampled-proofs verifier's definition, and no second one here.
+[[require]]
+name = "core_spot"
+path = "../../../spot/verifier/lean"
+
 [[require]]
 name = "lms"
 path = "../../../../commitments/lms/lean"
