@@ -23,7 +23,7 @@ config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power
 law, nvidia-smi's ``power.draw``, ``AUDIT_CAP``), by the code around it (hypothesis's ``draw``) and by the file's place
-(``OWN_CAPS``: PoUS's and PoUB's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
+(``OWN_CAPS``: PoUS's, PoUB's and Flock's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
 ``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
 (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
 leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
@@ -88,10 +88,16 @@ OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|
                           r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
                           r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])"
                           r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap)(?!\w)")
-#: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
+#: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there.
+#: Flock's are two, in the Lean that states and proves its knowledge soundness and sampling over it: the bound on the reruns
+#: one wait of the extractor makes, and a commitment's Merkle cap
 OWN_CAPS = {
     "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
     "verity/protocols/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "security/Definitions/Claims/": "the bound on an extractor's reruns that Flock's claims state (`Deploy.cap`, `Arg.cap`)",
+    "security/Proofs/Flock/Claims/KS/": "that bound and the Merkle cap (`Model.Cap`), in Flock's knowledge soundness",
+    "security/Proofs/Flock/Claims/Numbers": "that bound at the deployed numbers (`Numbers.cap`): each `Numbers*.lean`",
+    "security/Proofs/Flock/SamplingGeneric/": "that bound, of the proof system sampling is proved over (`Arg.cap`)",
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
@@ -528,6 +534,25 @@ def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -
         assert said(theirs + pearls, path) == pearl
     assert said(theirs + pearls, "verity/protocols/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
     assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/poub/verifier/audit.py")] == [o for _, o in pearl]
+
+
+def test_a_cap_of_flock_s_claims_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
+    """The bound on an extractor's reruns and a commitment's Merkle cap: any "cap" where Lean states Flock's claims and
+    proves its knowledge soundness and sampling over it. Pearl's spellings count there too, against the real table as
+    well, and so does every "cap" in the rest of Flock's Lean, beside a kept directory and in PoUW's proofs."""
+    theirs = "the cap: `D.cap`, `Numbers.cap`, cap₀, `Model.Cap D`, `IsCapTauZ`, recursiveCaps, capOfRoot, cap_pos; its caps"
+    pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
+    pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
+    for path in ("security/Definitions/Claims/SamplingTable.lean", "security/Proofs/Flock/Claims/KS/KSTable.lean",
+                 "security/Proofs/Flock/Claims/Numbers.lean", "security/Proofs/Flock/Claims/NumbersDeploy.lean",
+                 "security/Proofs/Flock/SamplingGeneric/KSTable.lean"):
+        assert said(theirs + pearls, path) == pearl, path
+        assert [w.split("'")[1] for _, w in sites(pearls, path)] == [o for _, o in pearl], path
+    counted = [(1, o) for o in ("cap", "cap", "cap", "cap", "Cap", "Cap", "Caps", "cap", "cap", "caps")]
+    for path in ("security/Definitions/Flock/Compiled.lean", "security/Definitions/ClaimsOf.lean",
+                 "security/Proofs/Flock/Claims/Aggregate.lean", "security/Proofs/Flock/Masked.lean",
+                 "security/Proofs/Pouw/Claims/KS/Bound.lean", "verity/protocols/flock/verifier/Flock/Merkle.lean"):
+        assert said(theirs + pearls, path) == counted + pearl, path
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
