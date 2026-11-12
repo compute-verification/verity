@@ -5,7 +5,9 @@ runs on a pod (`/workspace/venv-cu129/bin/python -m pytest tests/engine/test_exe
 refusal is exercised WITHOUT a GPU: the mismatch is raised before LLM() (monkeypatched to fail loudly if reached).
 """
 from __future__ import annotations
+
 import json
+
 import pytest
 
 pytest.importorskip("verity_vllm.pipeline.match")
@@ -72,13 +74,14 @@ def test_load_workload_carries_row_id_and_execution(tmp_path):
 def _no_llm(monkeypatch):
     """LLM() must never be reached by the refusal paths: make the vllm import site explode if it is."""
     _va()
-    import types, sys
+    import sys
+    import types
     fake = types.ModuleType("vllm")
 
     class LLM:
         def __init__(self, **kw):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
-    fake.LLM = LLM
+    fake.__dict__.update(LLM=LLM)
     monkeypatch.setitem(sys.modules, "vllm", fake)
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")             # build_engine applies the label's; the test's process gets its own back
     from verity_vllm.engine import engine_profile as prof

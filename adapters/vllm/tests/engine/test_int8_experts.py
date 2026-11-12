@@ -6,16 +6,20 @@ definitions written out in NumPy (`int8_experts.reference`, one token at a time)
 forward in the static order, an expert no token routed to on zero rows, and each call's rows are its tokens, ascending."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.engine import int8_checkpoint as I  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
-from verity_vllm.engine import int8_experts as X  # noqa: E402
-
-from tests.engine import ppl_oracle as O  # noqa: E402
+from tests.engine import ppl_oracle as O
+from verity_vllm.engine import int8_checkpoint as I
+from verity_vllm.engine import int8_exact as E
+from verity_vllm.engine import int8_experts as X
 
 H, INTER, EXPERTS = 64, 32, 6
 
