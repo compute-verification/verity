@@ -41,6 +41,7 @@ from verity_vllm.engine.collectives.collective_sites import (
 )
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
 
 logger = init_logger(__name__)
 
@@ -720,7 +721,7 @@ def late_read_check(com: Any, rc: Any, rank: int) -> dict[str, Any]:
     # APPLICABLE (result None, applicable False) rather than a False that reads as a detected late read; on a MoE workload the rule is
     # the MoE one: True only with > 0 pairs compared, 0 equal, 0 missing
     applicable = steps > 0
-    return {"schema": "verity/commit-integ/t6_4-check/v1", "rank": int(rank), "applicable": applicable,
+    return {"schema": LATE_READ_CHECK_SCHEMA, "rank": int(rank), "applicable": applicable,
             "result": (bool(compared > 0 and equal == 0 and missing == 0 and not_verified == 0) if applicable else None),
             "steps": steps, "layers_compared": compared, "equal_pairs": equal, "missing_pairs": missing, "not_verified_pairs": not_verified,
             "value_source": rd.record(), "pairs": pairs[:240],
