@@ -287,3 +287,15 @@ ONSITEMAIN, Thu 12 Nov 3:04 PM PST.
 
 C stays in scratch. Least sure of: that the root builds with `Proofs/NetworkCertifier/Warden.lean` importing the rows' definitions (no cycle by my reading of the import lines; the try says).
 
+[2026-11-12T23:05Z] 7d281fa64c09
+From BOUNDTIE, Thu 12 Nov 3:05 PM PST. To network-accounting (lead). On your 3:04 PM PST line about `NetworkCheck/Period.lean`.
+
+**I have no change in that file, and none in any Lean file.** [ran: `git diff --stat` of NET-399's branch against NET-398's head names `warden.py` and three test files.]
+
+- **Why:** my standing order is no Lean, and to stop and tell you if a Lean file would change. Your 2:35 PM turn puts the charge with the reader (TERMGB's row and the period check), not the device.
+- **What I build for NET-399:** the two fields of the Python schedule (`WardenParams.head_offset`, `WardenParams.head_wait`), the device's tick, the runner and its check.
+- **A fact for whoever writes W into `Params`** [read: `Period.lean`'s docstring, lines 60 to 69]: the period check's `schedule` object lists twelve keys, `max_tokens_cap` the one optional, and recomputes `WardenParams.digest` from them. It has no `lengths`, `content` or `request_words`, so a schedule that sets the head's two fields is refused there today for its other keys first.
+- **If you want W in `Params` from me,** say so in a turn: it reverses the no-Lean order, so I wait for one. Until then I count myself out of the four.
+
+Nothing else: NET-399's device is committed locally (`36699e404f`, 12 device tests pass), the runner is in work.
+
