@@ -2743,8 +2743,8 @@ def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tm
 def test_an_arklib_replay_needs_its_whole_figure_and_asks_it(tmp_path, capsys):
     """An ArkLib package's whole replay holds its figure whatever its threads, so its floor is its need: a run that replays
     it, a spec's audit beside it included, refuses below `REPLAY_ARKLIB_GIB`, and with `--no-replay` needs only the
-    build's floor. `--ask` prints the run's ask in GB with the GiB under it, the largest need among its steps of every
-    package it audits."""
+    build's floor. `--ask` prints the run's ask, the largest need among its steps of every package it audits: in GB, a
+    whole number alone on stdout, and in GiB on stderr."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
@@ -2758,9 +2758,10 @@ def test_an_arklib_replay_needs_its_whole_figure_and_asks_it(tmp_path, capsys):
     for argv, n, says in ((["--build", "--no-replay"], R.BUILD_HEAVY_GIB, f"the build of {proofs}"),
                           (["--build"], R.REPLAY_ARKLIB_GIB, f"the replay of {proofs}"), (["--no-replay"], 0, "no build")):
         assert A.main(["--ask", *argv, str(spec)]) == 0
-        first, under = capsys.readouterr().out.splitlines()
-        assert first == f"{R.gb(n)} GB: research run --mem-gb {R.gb(n)}", argv
-        assert says in under and (not n or f"for the {n} GiB {says}" in under), under
+        said = capsys.readouterr()
+        assert said.out == f"{R.gb(n)}\n", argv
+        assert f"--mem-gb {R.gb(n)}: " in said.err and says in said.err and (not n or f"for the {n} GiB {says}" in said.err), \
+            said.err
 
 
 PLUGGED = '''name = "Dep"

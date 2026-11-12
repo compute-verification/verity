@@ -354,6 +354,13 @@ def ask_lines(pins_of: dict[str, frozenset[str]], steps=STEPS) -> tuple[int, str
                 f"{r.where(name)}), the most any step of the run needs")
 
 
+def print_ask(gb: int, line: str) -> None:
+    """`--ask`'s output, both tools': one line on stdout, the ask in GB as a whole number, which the records gate reads
+    (`research queue`), and nothing else there; the line in GiB goes to stderr."""
+    print(gb, flush=True)
+    print(f"research run --mem-gb {gb}: {line}", file=sys.stderr, flush=True)
+
+
 def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.environ, steps=STEPS,
                    run: str | None = None) -> str | None:
     """Why a run taking ``steps`` (of `STEPS`) of ``pkgs``, every package it audits (those proving another's guarantees
@@ -6187,9 +6194,10 @@ def main(argv: list[str]) -> int:
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
-    ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, and under "
-                    "it the GiB that holds and the step that needs it, then exit: the largest need (`reserve.py`) among the "
-                    "steps it takes (the build with --build, the replay without --no-replay) of every package it audits")
+    ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, a whole "
+                    "number alone on stdout, and on stderr the GiB that holds and the step that needs it, then exit: the "
+                    "largest need (`reserve.py`) among the steps it takes (the build with --build, the replay without "
+                    "--no-replay) of every package it audits")
     ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
                     "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
                     "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
@@ -6289,8 +6297,7 @@ def main(argv: list[str]) -> int:
                      f"entries: put the cache outside every audited package's .lake and its path dependencies'")
     steps = (*(["build"] if a.build else []), *(["replay"] if not a.no_replay and a.facts_only is None else []))
     if a.ask:
-        gb, line = ask_lines({rel(p): pins(p) for p in pkgs}, steps)
-        print(f"{gb} GB: research run --mem-gb {gb}\n  {line}", flush=True)
+        print_ask(*ask_lines({rel(p): pins(p) for p in pkgs}, steps))
         return 0
     args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
                               ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
