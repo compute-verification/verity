@@ -12,6 +12,8 @@ elementwise arithmetic pass; the checker also measures it (counterexample.py) an
 - `SparseMask(values)`: the base with the entries that differ replaced, the indices as a bitmask or int32 list
   (whichever is smaller), the values encoded by `values` against the base's (default `Identity`).
 - `QuantDelta(bits)`: base + codebook[index], a 2**bits-entry fp32 codebook and `bits`-bit indices.
+- `ScaledQuant(bits, group)`: base + codebook[code] * scale, `bits`-bit codes rounded to nearest into a symmetric f16
+  codebook, an f16 scale for every `group` consecutive entries, the whole xz-coded.
 - `SeedReplay`: base + sum_j coeff_j * z_j, z_j ~ N(0, 1) from seed_j (MeZO-style); the log of (seed, coeff) pairs.
 - `Compose(parts)`: each part applied to the previous part's output, starting from the base.
 
@@ -22,6 +24,8 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import lzma
+import math
 
 import torch
 
@@ -190,6 +194,55 @@ class QuantDelta(Codec):
         return base.numel()
 
 
+class ScaledQuant(Codec):
+    """The delta from the base in `bits`-bit codes (2 to 8): entry i is codebook[code_i] * scale[i // g], g the
+    largest divisor of the tensor's size that divides `group`. The codebook is 2**bits levels, zero one of them and
+    2**(bits-1) - 1 a side across a group's largest magnitude, which is its scale, so a code is the entry rounded to
+    the nearest level of its group; the tensor's largest magnitude is split between codebook and scales so neither
+    underflows f16. The encoding is xz's (preset 1) of the codebook, the scales and the codes."""
+
+    kind = "scaledquant"
+    XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 1}
+
+    def __init__(self, bits: int, group: int = 128):
+        if not 2 <= bits <= 8 or group < 1:
+            raise ValueError("scaledquant: 2 to 8 bits, in groups of at least 1")
+        self.bits, self.group = int(bits), int(group)
+
+    def spec(self):
+        return {"kind": self.kind, "bits": self.bits, "group": self.group}
+
+    @staticmethod
+    def apply(base: torch.Tensor, codebook: torch.Tensor, scales: torch.Tensor, codes: torch.Tensor) -> torch.Tensor:
+        q = codebook.float()[codes.long()].view(scales.numel(), -1) * scales.float()[:, None]
+        return (base.float() + q.view(base.shape)).to(base.dtype)
+
+    def encode(self, target, base):
+        d = (target.detach().float() - base.float()).reshape(-1).cpu()
+        if not d.numel():
+            raise Unencodable("scaledquant takes a tensor with an entry")
+        g = math.gcd(d.numel(), self.group)
+        mid, half = 2 ** (self.bits - 1), 2 ** (self.bits - 1) - 1
+        top = d.abs().max()
+        c = torch.where(top > 0, top.sqrt(), 1.0)
+        scales = (d.view(-1, g).abs().amax(1) / c).half()
+        codebook = ((torch.arange(2 ** self.bits) - mid) / half * c).half()
+        step = scales.float() * (c / half)
+        codes = (d.view(-1, g) / torch.where(step > 0, step, 1.0)[:, None]).round().add(mid).clamp(0, 2 ** self.bits - 1)
+        return lzma.compress(pack({"n": d.numel()}, [codebook, scales, pack_bits(codes, self.bits)]), **self.XZ)
+
+    def decode(self, enc, base):
+        h, (codebook, scales, packed) = unpack(lzma.decompress(enc, format=lzma.FORMAT_XZ))
+        if h["n"] != base.numel() or codebook.numel() != 2 ** self.bits or h["n"] % max(1, scales.numel()):
+            raise ValueError(f"scaledquant: codes for {h['n']} entries in {scales.numel()} groups, for a weight of "
+                             f"{base.numel()}")
+        codes = unpack_bits(packed, self.bits, h["n"])
+        return self.apply(base, codebook.to(base.device), scales.to(base.device), codes.to(base.device))
+
+    def cost_macs(self, enc, base):
+        return 2 * base.numel()
+
+
 def derive_seed(seed: int, key: str) -> int:
     """A per-weight seed from a step's seed and the weight's key, so each weight's noise is independent of the order weights
     are visited in."""
@@ -269,6 +322,8 @@ def from_spec(spec: dict) -> Codec:
         return SparseMask(from_spec(spec["values"]) if "values" in spec else None)
     if kind == "quant":
         return QuantDelta(spec["bits"])
+    if kind == "scaledquant":
+        return ScaledQuant(spec["bits"], spec.get("group", 128))
     if kind == "seed":
         return SeedReplay()
     if kind == "compose":

@@ -165,6 +165,23 @@ def test_sign_update_with_error_feedback_is_one_bit_per_value():
     assert g.beta == 1 + 32 / (D_IN * D_OUT)
 
 
+def momentum_through_a_copy(m, batch, _opts, lr=1e-3):
+    """Heavy-ball momentum kept in `err`, which the step writes through a copy of itself (an fp32 buffer's ``float()``
+    is the buffer); the update reads the buffer alone."""
+    x, y = batch
+    F.mse_loss(m.fc(x), y).backward()
+    with torch.no_grad():
+        buf = m.err.copy_(m.err.float().mul_(0.9).add_(m.fc.weight.grad))
+        m.fc.weight.sub_(buf, alpha=lr)
+
+
+def test_an_update_through_a_buffer_copied_onto_itself_reads_the_gradient():
+    g = capture_fn(momentum_through_a_copy, EF(), ef_batch(), token_dims=[(0,), (0,)])
+    assert g.dependent == ["err", "fc.weight"] and g.sinks == ["fc.weight"]
+    # the copy's source is the buffer, so the gradient reaches the new weight through it, at its 32 bits an element
+    assert g.cut_bits == 32 * D_IN * D_OUT
+
+
 @pytest.mark.parametrize("autocast", [False, True])
 def test_dense_update_is_p_bits_per_value(autocast):
     m = EF()

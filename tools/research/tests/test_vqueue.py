@@ -11,8 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
-                             Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, decide, meets)
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit, Drop, Eject,
+                             Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait,
+                             decide, meets)
 
 MAIN = "m0"
 
@@ -48,8 +49,8 @@ def by_tests(name: str, tests: set[str], base_tests: set[str] | None, *inputs: s
                   None if base_tests is None else frozenset(base_tests))
 
 
-def snap(*cands: Candidate, ready=(), history=(), main: str = MAIN, wide=(), **kw) -> Snapshot:
-    return Snapshot(main, tuple(ready), cands, tuple(history), wide=frozenset(wide), **kw)
+def snap(*cands: Candidate, ready=(), history=(), main: str = MAIN, wide=(), pinned=(), **kw) -> Snapshot:
+    return Snapshot(main, tuple(ready), cands, tuple(history), wide=frozenset(wide), pinned=frozenset(pinned), **kw)
 
 
 def heads(*ns: int) -> tuple[str, ...]:
@@ -639,11 +640,13 @@ def waiting(sha: str, base: str, *members: int, records: RecordsRun | None = RUN
 
 def test_a_batch_with_a_lean_member_is_built_with_its_records_run_first_and_any_other_is_not():
     """`Build.records`: a member that changes Lean, a lock or a spec (`Ready.lean`) has the batch's records regenerated before
-    its check.  A batch with none, or with the step off (`Snapshot.records`), starts its check at once."""
-    assert decide(snap(ready=[pr(1), lean(2), pr(3)], records=True)) == [Build((1, 2, 3), MAIN, 2, records=True)]
-    assert decide(snap(cand("c1", MAIN, 1), ready=[pr(1), lean(2)], records=True)) == [Build((2,), "c1", 1, records=True)]
-    assert decide(snap(ready=prs(1, 3), records=True)) == [Build((1, 3), MAIN, 2)]
-    assert decide(snap(ready=[pr(1), lean(2), pr(3)])) == [Build((1, 2, 3), MAIN, 2)]
+    its check.  A batch with none, as the PRs with no Lean change make on their own, or with the step off
+    (`Snapshot.records`), starts its check at once."""
+    assert decide(snap(ready=[pr(1), lean(2), pr(3)], records=True)) == [Build((1, 3), MAIN, 2)]
+    assert decide(snap(cand("c1", MAIN, 1, 3), ready=[pr(1), lean(2), pr(3)], records=True)) == [
+        Build((2,), "c1", 1, records=True)]
+    assert decide(snap(ready=[lean(2), lean(4)], records=True, lean=2)) == [Build((2, 4), MAIN, 2, records=True)]
+    assert decide(snap(ready=[lean(2), lean(4)], lean=2)) == [Build((2, 4), MAIN, 2)]
 
 
 def test_a_candidate_whose_check_waits_reads_no_verdict_and_nothing_is_built_on_it():
@@ -673,7 +676,7 @@ def test_a_records_run_is_launched_once_more_after_infra_and_its_pending_rings_i
 def test_a_passed_records_run_starts_its_candidates_check_and_a_commit_held_past_pending_s_drops_it():
     """`Commit` (on it as built, or on its records commit: the loop's to tell), each tick while it is held, `pending_s` from
     the first hold; then it is dropped, no outcome, and its members are built again."""
-    s = snap(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS)), ready=[lean(1), pr(2)], records=True, now=9000.0)
+    s = snap(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS)), ready=[lean(1), lean(2)], records=True, lean=2, now=9000.0)
     assert decide(s) == [Commit("c1")]
     held = replace(s, candidates=(waiting("c1", MAIN, 1, 2, records=RecordsRun(PASS), held=1000.0),))
     assert decide(replace(held, now=1000.0 + 4 * 3600)) == [Commit("c1")]
@@ -773,22 +776,45 @@ def test_the_pool_leaves_out_chain_members_conflicts_and_the_ejected():
 
 
 @pytest.mark.parametrize("wide", [frozenset(), frozenset({3, 5, 99})])
-@pytest.mark.parametrize(("lean", "first", "then"), [(1, (1, 3, 5), (2,)), (3, (1, 2, 3, 4, 5), (6,))])
-def test_a_batch_holds_at_most_lean_lean_prs_and_the_next_waits_for_a_later_batch(lean, first, then, wide):
-    """With no wide PR (`Snapshot.wide` empty, as a missing or empty `--wide-file` reads, or naming only PRs the cap doesn't
-    count or that aren't ready) the cap alone makes every batch."""
+@pytest.mark.parametrize(("lean", "first", "then"), [(1, (1,), (2,)), (3, (1, 2, 4), (6,))])
+def test_prs_with_no_lean_change_go_in_a_batch_of_their_own_then_one_holds_at_most_lean_lean_prs(lean, first, then, wide):
+    """While a PR with no Lean change waits, a batch takes no Lean PR; then, with no wide PR (`Snapshot.wide` empty, as a
+    missing or empty `--wide-file` reads, or naming only PRs the cap doesn't count or that aren't ready), the cap alone makes
+    every batch."""
     ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6, lean=True)]
-    assert decide(snap(ready=ready, lean=lean, batch=5, wide=wide)) == [Build(first, MAIN, 2)]
-    assert decide(snap(cand("q1", MAIN, *first), ready=ready, lean=lean, batch=5, wide=wide)) == [Build(then, "q1", 1)]
+    assert decide(snap(ready=ready, lean=lean, batch=5, wide=wide)) == [Build((3, 5), MAIN, 2)]
+    on = (cand("q1", MAIN, 3, 5),)
+    assert decide(snap(*on, ready=ready, lean=lean, batch=5, depth=3, wide=wide)) == [Build(first, "q1", 2)]
+    on += (cand("q2", "q1", *first),)
+    assert decide(snap(*on, ready=ready, lean=lean, batch=5, depth=3, wide=wide)) == [Build(then, "q2", 1)]
 
 
-def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr_and_prs_with_no_lean_change_still_go_with_it():
+def test_a_pr_with_no_lean_change_keeps_lean_prs_out_of_a_batch_unless_it_is_set_aside_or_on_main():
+    """A PR with no Lean change that a batch may take keeps every Lean PR out of it, whatever its cap: a suspect of a failed
+    outcome goes in a batch of its own.  One set aside (`infra`), which goes after every other, alone, or on `main` at its head
+    (`pass`) keeps none out."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True)]
+    fail = Outcome((2, 4), heads(2, 4), FAIL, (2, 4), MAIN)
+    assert decide(snap(ready=ready, lean=3, history=[fail])) == [Build((2,), MAIN, 2)]
+    for state in (INFRA, PASS):
+        held = Outcome((2,), heads(2), state, (2,) if state == INFRA else (), MAIN)
+        assert decide(snap(ready=ready, lean=3, history=[held])) == [Build((1, 3), MAIN, 2)]
+    assert decide(snap(ready=[pr(1, lean=True), pr(2, "h2b"), pr(3, lean=True)], lean=3, history=[held])) == [
+        Build((2,), MAIN, 2)]
+
+
+def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr():
     """A: a wide PR (`Snapshot.wide`, one the `lean` cap counts) fills that cap.  A batch taking it takes no other PR the cap
-    counts, and one that took such a PR first leaves the wide one for a later batch; PRs with no Lean change go either way."""
+    counts, and one that took such a PR first leaves the wide one for a later batch.  PRs with no Lean change went first,
+    in a batch of their own."""
     ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4), pr(5, lean=True)]
-    assert decide(snap(ready=ready, lean=3, batch=5, wide={1})) == [Build((1, 2, 4), MAIN, 2)]
-    assert decide(snap(ready=ready, lean=3, batch=5, wide={3})) == [Build((1, 2, 4, 5), MAIN, 2)]
-    assert decide(snap(cand("q1", MAIN, 1, 2, 4, 5), ready=ready, lean=3, batch=5, wide={3})) == [Build((3,), "q1", 1)]
+    for wide in ({1}, {3}):
+        assert decide(snap(ready=ready, lean=3, batch=5, wide=wide)) == [Build((2, 4), MAIN, 2)]
+    on = (cand("q1", MAIN, 2, 4),)
+    assert decide(snap(*on, ready=ready, lean=3, batch=5, depth=3, wide={1})) == [Build((1,), "q1", 2)]
+    assert decide(snap(*on, ready=ready, lean=3, batch=5, depth=3, wide={3})) == [Build((1, 5), "q1", 2)]
+    on += (cand("q2", "q1", 1, 5),)
+    assert decide(snap(*on, ready=ready, lean=3, batch=5, depth=3, wide={3})) == [Build((3,), "q2", 1)]
 
 
 def test_a_batch_on_a_candidate_holding_a_wide_pr_takes_no_lean_pr_and_prs_with_no_lean_change_still_go():
@@ -800,7 +826,9 @@ def test_a_batch_on_a_candidate_holding_a_wide_pr_takes_no_lean_pr_and_prs_with_
     assert decide(snap(cand("q1", MAIN, 1), cand("q2", "q1", 3), ready=ready, lean=3, depth=3, wide={1})) == [
         Build((5, 6), "q2", 1)]
     assert decide(snap(cand("q1", MAIN, 1, 3, 5, 6), ready=ready, lean=3, wide={1})) == []
-    assert decide(snap(cand("q1", MAIN, 2), ready=ready, lean=3, depth=3, wide={1})) == [Build((1, 3, 5, 6), "q1", 2)]
+    assert decide(snap(cand("q1", MAIN, 2), ready=ready, lean=3, depth=3, wide={1})) == [Build((3, 5, 6), "q1", 2)]
+    assert decide(snap(cand("q1", MAIN, 2), cand("q2", "q1", 3, 5, 6), ready=ready, lean=3, depth=3, wide={1})) == [
+        Build((1,), "q2", 1)]
 
 
 def test_once_the_wide_pr_is_on_main_a_batch_takes_lean_prs_again():
@@ -820,6 +848,77 @@ def test_a_lean_pr_b_keeps_out_still_waits_behind_the_wide_pr_so_a_wide_lone_mem
     acts = decide(snap(cand("q1", MAIN, 1, state=INFRA, infra=err, tries=2), ready=[pr(1, lean=True), pr(2, lean=True)],
                        lean=3, wide={1}))
     assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA and acts[3] == Build((2,), MAIN, 2)
+
+
+def test_a_lean_pr_ranked_first_opens_no_batch_unless_pinned_and_a_pinned_one_takes_no_pr_with_no_lean_change():
+    """Rank is drive's priority file, then mark time, so a stale or empty file ranks a Lean PR marked long ago first: unpinned,
+    it waits behind every PR with no Lean change, as any Lean PR does; pinned (`Snapshot.pinned`), it opens a batch of pinned
+    Lean PRs only, and the PRs with no Lean change go in a later build."""
+    ready = [pr(10, rank=0), pr(20, rank=1, lean=True), pr(30, rank=2)]
+    assert decide(snap(cand("q1", MAIN, 10), ready=ready, lean=3)) == [Build((30,), "q1", 1)]
+    assert decide(snap(cand("q1", MAIN, 10), ready=ready, lean=3, pinned={20})) == [Build((20,), "q1", 1)]
+    first = [pr(20, rank=0, lean=True), pr(30, rank=1), pr(40, rank=2, lean=True)]
+    assert decide(snap(ready=first, lean=3)) == [Build((30,), MAIN, 2)]
+    assert decide(snap(ready=first, lean=3, pinned={20})) == [Build((20,), MAIN, 2)]
+
+
+def test_a_pinned_lean_batch_takes_only_pinned_lean_prs_in_rank_order_up_to_batch_under_no_lean_cap():
+    """A batch of pinned Lean PRs takes no unpinned Lean PR and no PR with no Lean change, pinned or not, so its Lean failure
+    drops none of them; the `lean` cap doesn't count its members, at 0 either, and `batch` bounds it."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4, lean=True), pr(5, lean=True), pr(6, lean=True)]
+    for lean in (0, 1, 3):
+        assert decide(snap(ready=ready, lean=lean, batch=6, pinned={1, 2, 4, 5, 6})) == [Build((1, 4, 5, 6), MAIN, 2)]
+    assert decide(snap(ready=ready, lean=1, batch=3, pinned={1, 2, 4, 5, 6})) == [Build((1, 4, 5), MAIN, 2)]
+
+
+def test_a_pinned_lean_batch_goes_on_main_or_on_a_top_candidate_holding_no_lean_change_so_at_most_every_second_build():
+    """On a top candidate holding a Lean change, pinned or not, the batch is the ordinary one, which takes no Lean PR while a
+    pinned one waits; on one holding none, or on `main` (the chain empty, or advanced to this tick), it is the pinned one."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5)]
+    assert decide(snap(cand("q1", MAIN, 4), ready=ready, lean=3, depth=3, pinned={1, 2})) == [Build((3, 5), "q1", 2)]
+    on = (cand("q1", MAIN, 4), cand("q2", "q1", 3, 5))
+    assert decide(snap(*on, ready=ready, lean=3, depth=3, pinned={1, 2})) == [Build((1, 2), "q2", 1)]
+    assert decide(snap(ready=ready, lean=3, pinned={1, 2})) == [Build((1, 2), MAIN, 2)]
+    assert decide(snap(cand("q1", MAIN, 4, state=PASS), ready=ready, lean=3, pinned={1, 2})) == [
+        Advance("q1"), Drop("q1", ON_MAIN, Outcome((4,), heads(4), PASS)), Build((1, 2), "q1", 2)]
+
+
+def test_with_a_pinned_lean_pr_waiting_for_a_top_with_no_lean_change_and_nothing_else_to_take_nothing_is_built_and_wait_says_why():
+    """No unpinned Lean PR goes meanwhile, under any cap: the tick builds nothing, and `Wait` says why.  With nothing pinned,
+    nothing waits for a top, and the unpinned one goes under the cap."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(6, lean=True)]
+    assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3, pinned={1, 2})) == [
+        Wait("nothing built: pinned with a Lean change, #2 waits while the newest candidate, q1, holds #1's Lean change, and "
+             "no PR with no Lean change is ready to take")]
+    assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3)) == [Build((2, 6), "q1", 1)]
+
+
+def test_a_pinned_wide_pr_goes_alone_and_a_chain_holding_a_wide_pr_opens_no_pinned_batch():
+    """A: a pinned wide PR fills its batch alone, and one ranked behind a pinned Lean PR waits for a later batch.  B: on a
+    chain holding a wide PR, even on a top holding no Lean change, the batch is the ordinary one, and with nothing to take,
+    nothing is built."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4), pr(9, lean=True)]
+    assert decide(snap(ready=ready, lean=3, pinned={1, 2}, wide={1})) == [Build((1,), MAIN, 2)]
+    assert decide(snap(ready=ready, lean=3, pinned={1, 2}, wide={2})) == [Build((1,), MAIN, 2)]
+    on = (cand("q1", MAIN, 9), cand("q2", "q1", 4))
+    assert decide(snap(*on, ready=ready, lean=3, depth=3, pinned={1, 2}, wide={9})) == [Build((3,), "q2", 1)]
+    assert decide(snap(*on, ready=[r for r in ready if r.number != 3], lean=3, depth=3, pinned={1, 2}, wide={9})) == [
+        Wait("nothing built: pinned with a Lean change, #1, #2 wait while the chain holds #9's wide Lean change, and no PR "
+             "with no Lean change is ready to take")]
+
+
+def test_a_pinned_lean_pr_set_aside_or_on_main_at_its_head_opens_no_batch_and_a_suspect_keeps_its_cap():
+    """Only a pinned Lean PR that a batch may take opens one, as `_batch` reads PRs with no Lean change: one set aside (`infra`)
+    or on `main` (`pass`) at its head doesn't, and at a new head it does.  A suspect's cap bounds a pinned batch it heads."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True)]
+    for state in (INFRA, PASS):
+        held = Outcome((1,), heads(1), state, (1,) if state == INFRA else (), MAIN)
+        assert decide(snap(ready=ready, lean=3, history=[held], pinned={1})) == [Build((2,), MAIN, 2)]
+        assert decide(snap(ready=[pr(1, "h1b", lean=True), *ready[1:]], lean=3, history=[held], pinned={1})) == [
+            Build((1,), MAIN, 2)]
+    fail = Outcome((1, 3), heads(1, 3), FAIL, (1, 3), MAIN)
+    assert decide(snap(ready=ready, lean=3, history=[fail], pinned={1, 3})) == [Build((1,), MAIN, 2)]
+    assert decide(snap(ready=ready, lean=3, pinned={1, 3})) == [Build((1, 3), MAIN, 2)]
 
 
 def test_a_failed_batch_of_six_with_no_culprit_comes_back_as_threes_then_ones():
@@ -974,13 +1073,14 @@ class Play:
 def test_two_lean_prs_whose_records_go_stale_only_together_land_together_with_their_records_commit():
     """Each carries its own records, and merged they leave a lock's records stale, as two Lean PRs meeting do: their
     candidate's records are regenerated on its tree before its check and committed on top of it, and that records commit,
-    checked in its place, lands all three, nobody ejected or bisected, one batch built."""
+    checked in its place, lands them on #3, which has no Lean change and goes first in a batch of its own: all three land,
+    nobody ejected or bisected, two batches built."""
     def oracle(tree, c):
         return Verdict(FAIL, (stale(),), ended=True) if {1, 2} <= tree and RECORDS not in tree else Verdict(PASS)
 
     p = Play([lean(1), lean(2), pr(3)], oracle, {"records": True, "lean": 2}, records=lambda tree, c: RecordsRun(PASS),
              regenerates=lambda tree, c: {1, 2} <= tree).run(12)
-    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c1r" and p.built == 1
+    assert sorted(p.landed) == [1, 2, 3] and not p.ejected and p.main == "c2r" and p.built == 2
     assert p.count(Commit) == 1 and p.count(Regenerate) == 0 and not any(o.state == FAIL for o in p.history)
 
 
@@ -1192,7 +1292,7 @@ class World:
     on the way."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
-                 policy: Callable[[Snapshot], list] = decide, wide: bool = False):
+                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False):
         self.seed, self.policy, self.tree_ejects = seed, policy, seed % 2 == 0
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
@@ -1220,6 +1320,8 @@ class World:
                       for m in numbers}
         # the wide file: about half the Lean PRs, and now and then a PR with no Lean change, which isn't wide
         self.wide = frozenset(m for m in numbers if rng.random() < (0.5 if self.marks[m].lean else 0.05)) if wide else frozenset()
+        # the pins file: about half the Lean PRs, and now and then a PR with no Lean change, which goes as any other
+        self.pinned = frozenset(m for m in numbers if rng.random() < (0.5 if self.marks[m].lean else 0.1)) if pinned else frozenset()
         self.arrive = {m: rng.randint(0, 6) for m in numbers}
         self.lag = rng.choice((0, 1, None))           # ticks a merged PR stays marked; None: for good
         self.pushes: dict[int, list[int]] = {}
@@ -1261,8 +1363,8 @@ class World:
         at = {(r.number, r.head) for r in ready}
         flying = {(m, h): replace(self.marks[m], head=h) for c in cands for m, h in zip(c.members, c.heads) if (m, h) not in at}
         return Snapshot(self.main, ready, tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
-                        self.tick * TICK_S, PENDING_S, self.tree_ejects, wide=self.wide, pulled=frozenset(self.held),
-                        flying=tuple(flying.values()))
+                        self.tick * TICK_S, PENDING_S, self.tree_ejects, wide=self.wide, pinned=self.pinned,
+                        pulled=frozenset(self.held), flying=tuple(flying.values()))
 
     def done(self) -> bool:
         if self.tree_ejects:
@@ -1382,7 +1484,8 @@ class World:
         assert len(live) == len(set(live)), f"seed {self.seed} tick {self.tick}: a PR in two live candidates: {self.cands}"
         again = self.policy(self.snapshot())
         dropped = {a.sha for a in acts[:n] if isinstance(a, Drop)}
-        repeated = [a for a in set(again) & set(acts[:n]) if not isinstance(a, Ring) and not (isinstance(a, Red) and a.sha not in dropped)]
+        repeated = [a for a in set(again) & set(acts[:n]) if not isinstance(a, (Ring, Wait))
+                    and not (isinstance(a, Red) and a.sha not in dropped)]
         assert not repeated, f"seed {self.seed} tick {self.tick}: a restart repeats {repeated}"
 
     def check(self, s: Snapshot, acts: list, moved: str | None) -> None:
@@ -1413,17 +1516,33 @@ class World:
                 assert a.base == c.base == s.main and a.sha in decided and a.failed and all(map(inherits, a.failed)), where
                 self.seen["a red rung"] += 1
             elif isinstance(a, Build):
-                assert 1 <= len(a.members) <= s.batch and sum(ready[m].lean for m in a.members) <= s.lean, where
+                waiting = {r.number: r.lean for r in self.pool(s, acts)}
+                pins = [m for m in a.members if ready[m].lean and m in s.pinned and m in waiting]
+                assert 1 <= len(a.members) <= s.batch and (pins or sum(ready[m].lean for m in a.members) <= s.lean), where
                 assert not any(ready[m].conflict for m in a.members), where
                 leans, below = [m for m in a.members if ready[m].lean], self.below(s, acts, a.base)
                 wide = [m for m in leans if m in s.wide]
                 assert not wide or len(leans) == 1, f"{where}: a wide PR built with another Lean PR"
                 assert not leans or not [m for m in below if built[m].lean and m in s.wide], (
                     f"{where}: a Lean PR built on a wide PR in flight")
+                assert not leans or len(leans) == len(a.members), f"{where}: a batch mixes Lean PRs and PRs with no Lean"
+                assert not leans or pins or not [m for m, lean in waiting.items() if not lean], (
+                    f"{where}: a Lean PR built while a PR with no Lean change waited")
+                pinned_waiting = [m for m, lean in waiting.items() if lean and m in s.pinned]
+                assert not leans or pins or not pinned_waiting, f"{where}: a Lean PR built while a pinned Lean PR waited"
+                assert not pins or set(a.members) <= s.pinned, f"{where}: a pinned Lean batch built with an unpinned PR"
+                top = self.top(s, acts, a.base)
+                assert not pins or not [m for m in top if built[m].lean], (
+                    f"{where}: a pinned Lean batch built on a candidate holding a Lean change")
+                self.seen["a pinned Lean batch built"] += bool(pins)
+                self.seen["a pinned Lean batch built on a candidate"] += bool(pins and top)
+                self.seen["a pinned Lean PR waited for a top with no Lean change"] += bool(pinned_waiting and not pins)
+                self.seen["a pinned PR with no Lean change built"] += any(m in s.pinned and not ready[m].lean for m in a.members)
+                self.seen["an unpinned Lean PR built beside pins"] += bool(s.pinned and leans and not pins)
+                self.seen["a Lean PR waited for PRs with no Lean change"] += any(waiting.values()) and not leans
                 self.seen["a lean PR built"] += any(ready[m].lean for m in a.members)
                 self.seen["two lean PRs built together"] += sum(ready[m].lean for m in a.members) > 1
                 self.seen["a wide PR built"] += bool(wide)
-                self.seen["a wide PR built with a PR with no Lean change"] += bool(wide) and len(a.members) > 1
                 self.seen["built on a wide PR in flight"] += any(built[m].lean and m in s.wide for m in below)
                 self.seen["a PR the wide file names with no Lean change built"] += any(
                     m in s.wide and not ready[m].lean for m in a.members)
@@ -1462,6 +1581,15 @@ class World:
             elif isinstance(a, Drop) and a.outcome is None and "isn't taken now" in a.why:
                 assert set(by[a.sha].members) & s.pulled, where
                 self.seen["dropped for a reviewer's hold"] += 1
+            elif isinstance(a, Wait):
+                waiting, on = self.pool(s, acts), self.chain_top(s, acts)
+                assert not any(isinstance(b, Build) for b in acts), where
+                assert any(r.lean and r.number in s.pinned for r in waiting), f"{where}: a wait with no pinned Lean PR waiting"
+                assert all(r.lean for r in waiting), f"{where}: nothing built while a PR with no Lean change waited"
+                assert [m for m in self.top(s, acts, on) if built[m].lean] or [
+                    m for m in self.below(s, acts, on) if built[m].lean and m in s.wide], (
+                    f"{where}: a pinned Lean PR waited on a top holding no Lean change")
+                self.seen["nothing built while a pinned Lean PR waited"] += 1
         for c in by.values():
             stale = any(isinstance(a, Drop) and a.sha == c.sha and a.outcome is None for a in acts)
             if c.base != s.main or set(c.members) & s.pulled or stale:
@@ -1494,6 +1622,17 @@ class World:
             pool = [r for r in s.ready if not r.conflict and r.number not in self.merged]
             assert [a.base for a in acts if isinstance(a, Build)] == ([moved] if pool else []), where
 
+    def pool(self, s: Snapshot, acts: list) -> list[Ready]:
+        """The ready PRs a build in ``acts`` may take: in no candidate left on main's chain or on `main`, not ejected, not
+        conflicting, and neither on `main` nor set aside at its head (a pass or infra outcome, this tick's among them)."""
+        dropped = {a.sha: a.why for a in acts if isinstance(a, Drop)}
+        busy = {m for c in s.candidates if c.sha not in dropped or dropped[c.sha] == ON_MAIN for m in c.members}
+        busy |= {a.number for a in acts if isinstance(a, Eject)}
+        now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
+        newest = {(m, h): o.state for o in [*s.history, *now] for m, h in zip(o.members, o.heads)}
+        return [r for r in s.ready if not r.conflict and r.number not in busy and newest.get((r.number, r.head)) not in (
+            PASS, INFRA)]
+
     def below(self, s: Snapshot, acts: list, sha: str) -> set[int]:
         """The members of the candidates a build on ``sha`` sits on that aren't on `main`: down main's chain to `main`, or to
         the candidate ``acts`` advances it to."""
@@ -1502,6 +1641,21 @@ class World:
             out |= set(by[sha].members)
             sha = by[sha].base
         return out
+
+    def top(self, s: Snapshot, acts: list, sha: str) -> tuple[int, ...]:
+        """The members of candidate ``sha``, which a build on it sits on directly: none when ``sha`` is `main` or the candidate
+        ``acts`` advances it to."""
+        c = next((c for c in s.candidates if c.sha == sha), None)
+        return () if c is None or sha == s.main or Advance(sha) in acts else c.members
+
+    def chain_top(self, s: Snapshot, acts: list) -> str:
+        """What a build in ``acts`` would sit on: the top of main's chain once ``acts`` drops and advances what it does."""
+        dropped = {a.sha for a in acts if isinstance(a, Drop)}
+        on = {c.base: c.sha for c in s.candidates if c.sha not in dropped}
+        sha = next((a.sha for a in reversed(acts) if isinstance(a, Advance)), s.main)
+        while sha in on:
+            sha = on[sha]
+        return sha
 
     def apply(self, a) -> None:
         where = f"seed {self.seed} tick {self.tick}: {a}"
@@ -1544,7 +1698,7 @@ class World:
             assert not pairs & (self.rung - self.again), f"{where}: a red rung twice"
             self.rung |= pairs
             self.again -= pairs
-        else:
+        elif not isinstance(a, Wait):
             assert isinstance(a, Ring), where
             c = self.cands.get(a.sha)
             if c is not None and a.pr is not None:
@@ -1576,7 +1730,8 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
     pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
-    before it is ejected; a batch holds at most `lean` Lean PRs; a move of main by someone else drops the stale candidates
+    before it is ejected; a batch holds at most `lean` Lean PRs, and none beside a PR with no Lean change or while one it may
+    take waits; a move of main by someone else drops the stale candidates
     and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
     a red whose drop it didn't apply; and every good PR reaches main and every bad one is ejected within `ticks`, every
     erring one too with `tree_ejects`, and without it only erring PRs stay live, each with its owner rung.  Each situation
@@ -1599,7 +1754,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
                  "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
-                 "dropped for a reviewer's hold"):
+                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1637,8 +1792,8 @@ def test_the_simulated_queue_with_wide_prs_builds_none_beside_or_above_another_l
     seen: Counter[str] = Counter()
     for seed in SEEDS:
         seen.update(_settle(World(seed, wide=True)).seen)
-    for what in ("a wide PR built", "a wide PR built with a PR with no Lean change", "built on a wide PR in flight",
-                 "a PR the wide file names with no Lean change built", "two lean PRs built together"):
+    for what in ("a wide PR built", "built on a wide PR in flight", "a PR the wide file names with no Lean change built",
+                 "two lean PRs built together"):
         assert seen[what], f"no seed exercised: {what}"
 
 
@@ -1648,6 +1803,32 @@ def test_decide_reading_no_wide_prs_builds_a_lean_pr_beside_or_above_a_wide_one_
     with pytest.raises(AssertionError, match="a wide PR built with another Lean PR|a Lean PR built on a wide PR in flight"):
         for seed in SEEDS:
             _settle(World(seed, wide=True, policy=lambda s: decide(replace(s, wide=frozenset()))))
+
+
+def test_the_simulated_queue_with_pins_builds_pinned_lean_batches_alone_at_most_every_second_build_and_settles():
+    """With about half the Lean PRs pinned (`Snapshot.pinned`), the pins file naming a PR with no Lean change now and then, and
+    wide PRs in every third seed: every invariant holds, among them that a batch holding a pinned Lean PR it may take holds
+    only pinned Lean PRs, under no `lean` cap, on `main` or on a top candidate holding no Lean change; that no other Lean PR is
+    built while a pinned one or one with no Lean change waits; and that a tick builds nothing, saying why (`Wait`), only
+    while a pinned one waits for such a top with nothing else to take.  Every scenario settles within `ticks`."""
+    seen: Counter[str] = Counter()
+    for seed in SEEDS:
+        seen.update(_settle(World(seed, wide=seed % 3 == 0, pinned=True)).seen)
+    for what in ("a pinned Lean batch built", "a pinned Lean batch built on a candidate",
+                 "a pinned Lean PR waited for a top with no Lean change", "nothing built while a pinned Lean PR waited",
+                 "a pinned PR with no Lean change built", "an unpinned Lean PR built beside pins", "a wide PR built",
+                 "two lean PRs built together"):
+        assert seen[what], f"no seed exercised: {what}"
+
+
+@pytest.mark.parametrize(("misread", "pinned"), [("no pins", lambda s: frozenset()),
+                                                 ("every PR pinned", lambda s: frozenset(r.number for r in s.ready))])
+def test_decide_misreading_the_pins_breaks_an_invariant_of_the_simulated_queue(misread, pinned):
+    """The pins invariants hold `decide` to `Snapshot.pinned`: handed snapshots pinning nothing, or every PR, it builds a Lean
+    PR the pins keep out, or a pinned one where they keep it out, in some seed."""
+    with pytest.raises(AssertionError, match="a Lean PR built while|a pinned Lean batch built"):
+        for seed in SEEDS:
+            _settle(World(seed, wide=seed % 3 == 0, pinned=True, policy=lambda s: decide(replace(s, pinned=pinned(s)))))
 
 
 def _candidates(s: Snapshot, f: Callable[[Candidate], Candidate]) -> Snapshot:
@@ -1678,6 +1859,7 @@ MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
         s, lambda f: f if f.base_tests is None else replace(f, base_tests=f.base_tests | f.tests)),
     "no history": lambda s: replace(s, history=()),
     "no Lean cap": lambda s: replace(s, lean=s.batch),
+    "every change as Lean": lambda s: replace(s, ready=tuple(replace(r, lean=True) for r in s.ready)),
     "nothing pulled": lambda s: replace(s, pulled=frozenset()),
     "no files as built": lambda s: replace(s, flying=()),
 }
