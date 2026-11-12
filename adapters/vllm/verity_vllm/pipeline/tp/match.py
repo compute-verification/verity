@@ -35,8 +35,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import option, workload_arg
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.collectives import fused_norm as FN
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
 
@@ -154,9 +155,9 @@ def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tupl
         sig_sites = [ln.get("module") for ln in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
         sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
-            raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
+            raise Refused(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
         if any(len(ln["peers"]) != world - 1 for ln in links["links"]):
-            raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
+            raise Refused(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
         per_step: dict[Any, dict[str, Any]] = {}
         bad = []
         bad_sites = []
@@ -408,12 +409,12 @@ def _build_dirs(args) -> list[str]:
     """The rank Build dirs in rank order: `--build-rank DIR` repeated (world = count), or the two-rank `--build-rank0/--build-rank1`."""
     if getattr(args, "build_rank", None):
         if args.build_rank0 or args.build_rank1:
-            raise SystemExit("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+            raise UsageError("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
         if len(args.build_rank) < 2:
-            raise SystemExit(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
+            raise UsageError(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
         return list(args.build_rank)
     if not (args.build_rank0 and args.build_rank1):
-        raise SystemExit("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+        raise UsageError("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
     return [args.build_rank0, args.build_rank1]
 
 
@@ -438,10 +439,10 @@ def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tup
     for q in json.loads(mp.read_text())["requests"]:
         lg = request_ids.get(str(q["request_id"]))
         if lg is None:
-            raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
+            raise Refused(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
         tokens[lg] = [int(t) for t in q["generated_token_ids"]]
     if set(tokens) != set(request_ids.values()):
-        raise SystemExit(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
+        raise Refused(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
     verdict = Path(match_dir) / "tp2_match.json"
     return tokens, {"path": str(mp), "requests": len(tokens), "generated_total": sum(len(v) for v in tokens.values()),
                     "tp2_match_verdict": json.loads(verdict.read_text()).get("pass") if verdict.exists() else None,

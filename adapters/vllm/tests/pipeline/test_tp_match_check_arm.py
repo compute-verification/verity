@@ -1,15 +1,20 @@
 """`verity_vllm.pipeline.tp.match`'s check arm where its other tests do not go: the tokens part against a control arm, a recorder
 file that is missing, a rank Build of another rank or world or with a link that names the wrong number of peers, a step whose
-collectives are not the Build's signature, and stored tensors that the recorder's rows do not count or key."""
+collectives are not the Build's signature, stored tensors that the recorder's rows do not count or key, and a command line
+that does not give two rank Builds in one spelling. Then the Match record a TP Commit reads from the run (`match_record`)."""
 from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
 import torch
 
+from verity_vllm.config import UsageError
+from verity_vllm.errors import Refused
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import match as M
 
 SITES = [("model.embed_tokens", "all_reduce", 8), ("model.layers.0.self_attn.o_proj", "all_reduce", 8), ("logits_processor", "all_gather", 4)]
@@ -95,7 +100,7 @@ def test_a_missing_recorder_file_fails_by_name_before_any_part_is_checked(tmp_pa
 @pytest.mark.parametrize("edit, said", [({"rank": 1}, "rank 1 world 2 != rank 0 of world 2"), ({"world": 4}, "rank 0 world 4 != rank 0 of world 2")])
 def test_a_build_of_another_rank_or_world_is_refused(tmp_path, edit, said):
     run = _capture(tmp_path / "run", links=lambda r, doc: {**doc, **edit} if r == 0 else doc)
-    with pytest.raises(SystemExit, match=said):
+    with pytest.raises(Refused, match=said):
         _check(run)
     assert not (run / "tp2_match.json").exists()
 
@@ -108,7 +113,7 @@ def test_a_link_that_does_not_name_one_peer_per_other_rank_is_refused(tmp_path, 
         return doc
 
     run = _capture(tmp_path / "run", links=edit)
-    with pytest.raises(SystemExit, match="tp_links of rank 1: a link does not name exactly world-1 = 1 peers"):
+    with pytest.raises(Refused, match="tp_links of rank 1: a link does not name exactly world-1 = 1 peers"):
         _check(run)
 
 
@@ -146,3 +151,40 @@ def test_a_recorder_row_keyed_at_another_position_fails_by_name(tmp_path):
     assert p["digest_mismatches"] == [{"rank": 0, "step": 0, "k": 1, "tensor": "key", "why": "recorder row keyed (step 0, k 5) at position 1 of step 0"}]
     assert p["n_digest_mismatches"] == 1 and p["collectives_checked"] == 6 and p["n_mismatches"] == 0
     assert p["pass"] is False and rc == 1 and doc["pass"] is False
+
+
+@pytest.mark.parametrize("builds, said", [
+    ({"build_rank": ["b0", "b1"], "build_rank0": "b0"}, "give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both"),
+    ({"build_rank": ["b0"]}, "--build-rank: 1 rank Build(s); a tensor-parallel world needs at least 2"),
+    ({"build_rank0": "b0"}, "check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")])
+def test_a_check_not_given_two_rank_builds_in_one_spelling_is_a_usage_error(tmp_path, builds, said):
+    with pytest.raises(UsageError, match=re.escape(said)):
+        M.main(M.Options(arm="check", out=str(tmp_path), **builds))
+    assert not (tmp_path / "tp2_match.json").exists()
+
+
+def test_the_command_line_ends_a_usage_error_with_exit_2_and_the_reason(tmp_path, capsys):
+    with pytest.raises(SystemExit) as end:
+        cli.main(["tp-match", "--arm", "check", "--out", str(tmp_path), "--build-rank", "b0"])
+    assert end.value.code == 2
+    assert "error: --build-rank: 1 rank Build(s); a tensor-parallel world needs at least 2" in capsys.readouterr().err
+
+
+def test_the_match_record_is_the_captures_tokens_by_the_workloads_request_and_the_checks_verdict(tmp_path):
+    run = _capture(tmp_path / "run")
+    tokens, record = M.match_record(str(run), {"r0": "r3"}, 2)
+    assert tokens == {"r3": GENERATED}
+    assert record == {"path": str(run / "capture" / "tokens.json"), "requests": 1, "generated_total": 2, "tp2_match_verdict": None,
+                      "capture_dir": str(run / "capture"), "stored_steps_per_rank": {0: 2, 1: 2}}
+    assert _check(run)[0] == 0
+    assert M.match_record(str(run), {"r0": "r3"}, 2)[1] == {**record, "tp2_match_verdict": True}
+
+
+def test_a_match_record_with_a_request_the_workload_does_not_declare_is_refused(tmp_path):
+    with pytest.raises(Refused, match="fail-closed: Match record request r0 is not a request of this workload"):
+        M.match_record(str(_capture(tmp_path / "run")), {"other": "r0"}, 2)
+
+
+def test_a_match_record_without_a_request_the_workload_declares_is_refused(tmp_path):
+    with pytest.raises(Refused, match=re.escape("fail-closed: Match record covers ['r0'] but the workload declares ['r0', 'r1']")):
+        M.match_record(str(_capture(tmp_path / "run")), {"r0": "r0", "second": "r1"}, 2)
