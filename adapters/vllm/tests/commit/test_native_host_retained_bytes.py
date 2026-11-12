@@ -1,7 +1,8 @@
 """The bytes a run retains on the host, as `verity_vllm.commit.committer.native_host.NativeHostCommitter.finalize` reports them
 (`host_retained_bytes`): every level a step keeps on the host, and each step's retained copy at what the copy says it retains, or
 at its size where it says nothing.  A copy that says zero counts zero; a released copy, one on the device and one a device pool
-holds count nothing.  Offline (no CUDA)."""
+holds count nothing.  A block of `verity_vllm.commit.committer.host_retention` (`_HostWindows`, `_HostRanges`) is a device
+pool's only once it is marked `on_device`: neither class has the attribute, nor a block its constructor built.  Offline (no CUDA)."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -11,7 +12,10 @@ import pytest
 
 pytest.importorskip("torch")
 
+import torch
+
 from tests.commit import test_openings_after_release as OR
+from verity_vllm.commit.committer import host_retention as HR
 
 
 def _copy(**fields: Any) -> SimpleNamespace:
@@ -55,3 +59,25 @@ def test_a_retained_copy_counts_what_it_says_it_retains(copy: Any, counted: int)
     OR._run(com, steps=2)
     com._gpu_blocks[1] = (copy, 0)
     assert com.finalize().extra["host_retained_bytes"] == _levels(com) + counted
+
+
+def _windows() -> Any:
+    return HR._HostWindows([(0, torch.zeros(256, dtype=torch.uint8), 256)], 256, 256)
+
+
+def _ranges() -> Any:
+    return HR._HostRanges([(0, 256, torch.zeros(256, dtype=torch.uint8))], 256)
+
+
+@pytest.mark.parametrize("make", [_windows, _ranges], ids=["windows", "ranges"])
+def test_a_retained_block_is_a_device_pool_s_only_once_it_is_marked(make: Any) -> None:
+    block = make()
+    assert not hasattr(type(block), "on_device") and not hasattr(block, "on_device") and "on_device" not in vars(block)
+    assert block.retained_bytes == 256
+    com = OR._committer("none")
+    OR._run(com, steps=2)
+    com._gpu_blocks[1] = (block, 0)
+    assert com.finalize().extra["host_retained_bytes"] == _levels(com) + 256
+    block.on_device = True
+    assert vars(block)["on_device"] is True and not hasattr(type(block), "on_device")
+    assert com.finalize().extra["host_retained_bytes"] == _levels(com)
