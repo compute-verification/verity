@@ -65,10 +65,12 @@ exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most 
 whole 64-wide tiles (a narrower edge tile's words can be guessed whole), and rows in whole 16 x 16 ticket subtiles, so
 the last row tile may be partial (decode's 32 x 64 tile): `PearlC.check`.
 
-**Why -h3 seeds each row of A.**  A seed that doesn't read A's rows (h0's seed_A, over the unit's roots and index) tells
-the prover each row's noise before it chooses the row, so it can form every row onto a few shared A′ rows, compute their
-C̃ once per weight and copy it, while every row passes every rule.  Keyed on its own digest, each candidate row costs an
-oracle query again, and forming waits on that row's digest alone.  -h3 also bounds each credited row's inert work at ρ times
+**Why -h3 seeds each row of A.**  A seed over the coins and the unit's index alone tells the prover each row's noise
+before it chooses the row, so it can form every row onto a few shared A′ rows, compute their C̃ once per weight and copy
+it, while every row passes every rule.  h0's seed_A reads A's root as well (`unit_seed_a`), which commits every row of
+the unit first and closes that attack, but forming then waits on the whole unit's tree.  Keyed on its own digest, each
+candidate row costs an oracle query, and forming waits on that row's digest alone.
+-h3 also bounds each credited row's inert work at ρ times
 its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
 `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate bound
 doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
