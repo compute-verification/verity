@@ -159,13 +159,13 @@ CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "Spar
           "SparseMlaSplit_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaHeadScores_v1", "SparseMlaHeadValues_v1",
                                 "SparseMlaSplitEndCols_v1", "SparseMlaCombine_v1", "SparseMlaSplitEnd_v1")}
 #: a ``CHAINS`` unit's role by its index in its row family's entry
-CHAIN_ROLES = ("block", "end", "scores", "values", "cols", "combine", "split", "keys", "queries")
+CHAIN_ROLES = ("block", "end", "scores", "values", "cols", "combine", "split", "keys", "queries", "writer")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
 #: a key block's keys and a head's query with one writer (`chain_rows.wire_keys`): the scores unit with its keys in column
 #: blocks, each block's port wired to that block's writer, the writer of a column block of a key block's keys, and the
 #: writer of a head's query
 CHAIN_OF |= {"SparseMlaHeadScoresCols_v1": "scores", "SparseMlaHeadKeys_v1": "keys", "SparseMlaHeadKeysWire_v1": "keys",
-             "SparseMlaHeadQuery_v1": "queries"}
+             "SparseMlaHeadQuery_v1": "queries", "SparseMlaHeadScoresKeys_v1": "writer"}
 #: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, each carrying
 #: what the stage after it reads.  A stochastic top-p select's are every split count's top-p pipeline (stats blocks and their
 #: parts, probabilities, each round's step blocks and combines) and the select's chunks (`topp_stages`); a greedy select's are

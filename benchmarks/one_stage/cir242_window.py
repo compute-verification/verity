@@ -73,6 +73,45 @@ def keys(nvis: int, S: dict, boolean: bool = False, wire: bool = False) -> str:
     return descriptor_id(bind(BM.SparseMlaHeadKeysV2 if boolean else M.SparseMlaHeadKeys, NVIS=nvis, W=S["DR"]))
 
 
+def writer(nvis: int | None, S: dict) -> str:
+    """Form (b2)'s writer: the scores unit that also returns the keys it read, in column blocks of DR (`SparseMlaHeadScoresKeys_v1`)."""
+    st = {x: S[x] for x in ("DR", "DV", "BN", "SCALE")}
+    at = {"NVIS": S["BN"], "FIRST": False} if nvis is None else {"NVIS": nvis, "FIRST": True}
+    return descriptor_id(bind(M.SparseMlaHeadScoresKeys, **at, **st, G=S["DR"], DOT=TS.FA3["DOT"]))
+
+
+def layout_b2(S: dict, each: bool = False) -> tuple[dict[str, str], dict[str, int]]:
+    """Form (b2)'s templates by role and caps: per (row, key block) head `chain_rows.KEYS_HEAD`'s scores unit the writer
+    (each head's with ``each``), the other heads' `SparseMlaHeadScoresCols_v1`, the values units in column blocks of DR and
+    the ends; a later writer member holds every later block of its head, every other member one unit (an end, its head's
+    column blocks)."""
+    T, BN, DR, DV = (int(S[x]) for x in ("T", "BN", "DR", "DV"))
+    first, nc, later = T - (T - 1) // BN * BN, DV // DR, (T - 1) // BN
+    tm = {"writer first": writer(first, S), "writer": writer(None, S)}
+    if not each:
+        tm |= {"scores first": scores(first, S), "scores": scores(None, S)}
+    tm |= {"values first": TS.values(first, S, G=DR), "values": TS.values(None, S, G=DR),
+           "end": descriptor_id(bind(M.SparseMlaHeadEnd, DV=DR, INV=TS.FA3["INV"]))}
+    caps = {t: {"writer": later, "end": nc}.get(r, 1) for r, t in tm.items()}
+    return tm, caps
+
+
+def computed_b2(S: dict, each: bool = False) -> dict[str, int]:
+    """The rows form (b2) commits for the row, from the Definitions' signatures alone: per key block the writer's q_nope,
+    q_rope, kv, carried m_prev and l_prev past the first (its own trees), m, l, pb, rescale past the first, and its returned
+    keys' DV / DR + 1 column blocks; each other head's scores unit's q_nope, q_rope, m, l, pb and rescale (its keys and carried
+    state held); each values unit's o; per (head, column block) the end's l, o and output."""
+    T, NH, DR, DV, BN = (int(S[x]) for x in ("T", "NH", "DR", "DV", "BN"))
+    nc, blocks = DV // DR, [min(T, (b + 1) * BN) - b * BN for b in range(-(-T // BN) - 1, -1, -1)]
+    nw = NH if each else 1
+    rows: list[int] = []
+    for k, nvis in enumerate(blocks):
+        w = [2 * DV, 2 * DR, 2 * nvis * (DV + DR)] + (k > 0) * [4, 16] + [4, 16, 2 * nvis] + (k > 0) * [4] + (nc + 1) * [2 * nvis * DR]
+        rows += nw * w + (NH - nw) * ([2 * DV, 2 * DR, 4, 16, 2 * nvis] + (k > 0) * [4]) + NH * nc * [4 * DR]
+    rows += NH * nc * [16, 4 * DR, 2 * DR]
+    return {"rows": len(rows), "bytes": sum(rows), "bytes_whole_blocks": sum(-(-b // 128) * 128 for b in rows)}
+
+
 def layout(S: dict, per: str, queries: bool = False, wire: bool = False) -> tuple[dict[str, str], dict[str, int]]:
     """The row's templates by role, and each one's chunk cap (`serving_rows.members`); with ``queries`` a head's query one
     writer too, the row's heads one member."""
@@ -93,7 +132,7 @@ def layout(S: dict, per: str, queries: bool = False, wire: bool = False) -> tupl
 
 def window(s: TS.Served, ts: list[str], caps: dict[str, int], rewire=None) -> CS.Binding:
     rows = [s.rows] * len(ts)
-    ms = CH.wire_keys(CH.wire(SRW.members(ts, rows, None, caps), ts, rows), ts, rows)
+    ms = (CH.wire_keys if CH.KEYS_HEAD is None else CH.wire_writer)(CH.wire(SRW.members(ts, rows, None, caps), ts, rows), ts, rows)
     ms = rewire(ms) if rewire else ms
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in ts]
     return CS.Binding(*CS.population_program(defs, several=True), D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
@@ -205,15 +244,26 @@ def attack_a(w: CS.Binding, k_val: int, data, publics, port_: str = "in1", what:
 
 def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], role: dict[str, str], got, data, c, rec) -> None:
     publics, mine = publics_of(c), w.members
-    want = CS.expected_ports(w)
-    k_val = next(k for k, m in enumerate(mine) if role[m.template] == "values")
-    k_sc = next(k for k, m in enumerate(mine) if role[m.template] == "scores")
-    k_key = next(k for k, m in enumerate(mine) if role[m.template] == "keys")
-    attack_a(w, k_val, data, publics)
+    vals = [k for k, m in enumerate(mine) if role[m.template] == "values"]
+    k_val = next((k for k in vals if dict(mine[k].tables).get(port(mine[k].template, "kv"), 1) > 1), vals[0])
+    k_sc = next((k for k, m in enumerate(mine) if role[m.template] == "scores"), None)
+    attack_a(w, k_val, data, publics, port(mine[k_val].template, "kv"))
     if "queries" in role.values():
         attack_a(w, k_sc, data, publics, port(mine[k_sc].template, "q_nope"),
                  "q: a scores unit's q_nope ref names another head's row of its writer's table")
 
+    if k_sc is None:
+        emit(attack="b, c", note="no head reads another's keys: every scores unit is its own head's writer (--each)")
+    else:
+        attack_bc(s, w, ts, caps, got, data, rec, publics, k_sc)
+    if "keys" in role.values():
+        attack_d(w, got, data, mine, next(k for k, m in enumerate(mine) if role[m.template] == "keys"))
+    if "writer" in role.values():
+        attack_d2(w, got, mine, next(k for k, m in enumerate(mine) if role[m.template] == "writer"))
+
+
+def attack_bc(s, w, ts, caps, got, data, rec, publics, k_sc) -> None:
+    mine, want = w.members, CS.expected_ports(w)
     # (b) a reader given key rows of its own (wired_trees True) that differ from its writer's
     t_sc = mine[k_sc].template
     nc = int(S_of(t_sc)["DV"]) // int(S_of(t_sc)["G"])
@@ -238,21 +288,22 @@ def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], ro
          verifier_registration=R.check(rec3, w.program, w.query, w.law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(p3)).to_json(),
          verifier_wires_on_own_trees=WI.check(w2.members, p3))
 
-    # (c) a scores unit's kv3 wired to column block 4's writer
+    # (c) a scores unit's kv3 wired to column block 4's writer (its writer and return)
     m = mine[k_sc]
     ws = {p: x for p, _o, x in m.wired}
+    os_ = {p: o for p, o, _x in m.wired}
     kv3, kv4 = port(t_sc, "kv3"), port(t_sc, "kv4")
 
     def rewire(ms):
-        return [replace(x, wired=tuple((p, o, ws[kv4] if p == kv3 else y) for p, o, y in x.wired)) if j == k_sc else x
-                for j, x in enumerate(ms)]
+        return [replace(x, wired=tuple((p, os_[kv4], ws[kv4]) if p == kv3 else (p, o, y) for p, o, y in x.wired)) if j == k_sc
+                else x for j, x in enumerate(ms)]
     w4 = window(s, ts, caps, rewire)
     c4 = CS.commit(w4, CH.held_rows(w4, [g for g, _e in got]), salt_key=bytes(32))
     p4 = publics_of(c4)
     fv = c4.frame_entry(k_sc)
     roots = {r["port"]: r for r in rec["roots"]}
     emit(attack=f"c: a scores unit's kv3 ({kv3}) wired to column block 4's writer ({kv4}'s)", member=m.key,
-         honest_writers=ws[kv3], forged_writers=ws[kv4], verifier_check=WI.check(mine, p4),
+         honest_writers=[os_[kv3], ws[kv3]], forged_writers=[os_[kv4], ws[kv4]], verifier_check=WI.check(mine, p4),
          check_drawn_unit_drawn=WI.check_drawn(mine, p4, [m.base]),
          a5_root_check={"held": w.held(m, kv3), "forged_held": w4.held(w4.members[k_sc], kv3),
                         "published_root_is_registered": fv["roots"][kv3] == roots[w.held(m, kv3)]["root"]})
@@ -268,10 +319,13 @@ def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], ro
              forged_ref=int(data[k_sc]["refs"][0, j]), committer=refusal(lambda: CS.commit(w, bad, salt_key=bytes(32))),
              verifier_check=WI.check(mine, {**publics, m.key: bytes(body)}))
     else:
-        emit(attack="c by ref", table=dict(m.tables)[kv3], kv4_ref=int(data[k_sc]["refs"][0, j]),
-             note="kv3's table is its own column block's writer member, which holds no row of column block 4")
+        emit(attack="c by ref", table=dict(m.tables)[kv3], kv4_ref=int(data[k_sc]["refs"][0, j]), kv3_holds=w.held(m, kv3),
+             kv4_holds=w.held(m, kv4), note="kv3's table is the rows of the tree it holds, which holds no row of column block 4")
 
-    # (d) a writer's output differing from its input
+
+
+def attack_d(w, got, data, mine, k_key) -> None:
+    """(d) a keys writer's output differing from its input."""
     m = mine[k_key]
     g5 = [dict(g, rows=dict(g["rows"])) for g, _e in got]
     x = g5[k_key]["rows"]["in0"].copy()
@@ -287,6 +341,22 @@ def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], ro
          writer_definition=refusal(lambda: TS.stager(m.template).reference_check(g5[k_key]["rows"], g5[k_key]["outs"])))
 
 
+def attack_d2(w, got, mine, k_w) -> None:
+    """(d2) form (b2)'s writer returning a column block that differs from the keys its own scores were computed from: its
+    return c flipped, every reader holding it."""
+    m = mine[k_w]
+    o = f"o{3 if S_of(m.template)['FIRST'] is True else 4}"
+    g = [dict(x, rows=dict(x["rows"]), outs=dict(x["outs"])) for x, _e in got]
+    x = g[k_w]["outs"][o].copy()
+    x[0, 0] ^= np.uint16(1)
+    g[k_w]["outs"][o] = x
+    c = CS.commit(w, CH.held_rows(w, g), salt_key=bytes(32))
+    p = publics_of(c)
+    emit(attack=f"d2: the writer's returned column block 0 ({o}) not the keys its scores read", member=m.key,
+         committer=None, verifier_check=WI.check(mine, p), check_drawn_all=WI.check_drawn(mine, p, list(range(sum(q.n for q in mine)))),
+         writer_definition=refusal(lambda: TS.stager(m.template).reference_check(g[k_w]["rows"], g[k_w]["outs"])))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--per", choices=("column", "block"), default="column")
@@ -297,6 +367,9 @@ def main() -> int:
                     "set it aside for that template alone (`probe_gateless`) and run the rest")
     ap.add_argument("--queries", action="store_true", help="each head's query one writer too (`SparseMlaHeadQuery_v1`), every "
                     "scores unit's q_nope and q_rope wired to it")
+    ap.add_argument("--form", choices=("b", "b2"), default="b", help="b2: per key block one head's scores unit the writer "
+                    "of its keys (`SparseMlaHeadScoresKeys_v1`), the other heads' scores units and every values unit reading its returns")
+    ap.add_argument("--each", action="store_true", help="with --form b2: each head's scores unit the writer for its own values units")
     ap.add_argument("--wire", action="store_true", help="form (b3): the keys writer through wires "
                     "(`SparseMlaHeadKeysWire_v1`, gates at 0 ANDs), not the gate-free copy")
     ap.add_argument("--lean", action="store_true", help="the verifier of record's registration check (Python and Lean, "
@@ -304,11 +377,15 @@ def main() -> int:
     a = ap.parse_args()
     t0 = time.perf_counter()
     S = {**GLM, "T": a.glm} if a.glm else TOY
-    tm, caps = layout(S, a.per, a.queries, a.wire)
+    if a.form == "b2":
+        CH.KEYS_HEAD = -1 if a.each else 0
+        tm, caps = layout_b2(S, a.each)
+    else:
+        tm, caps = layout(S, a.per, a.queries, a.wire)
     role = {t: r for r, t in tm.items()}
     ts = list(tm.values())
     s = TS.Served(TS.row(S), n=1)
-    emit(fact="statics", S=S, per=a.per, wire=a.wire, templates=tm, caps={role[t]: c for t, c in caps.items()})
+    emit(fact="statics", S=S, form=a.form, each=a.each, keys_head=CH.KEYS_HEAD, per=a.per, wire=a.wire, templates=tm, caps={role[t]: c for t, c in caps.items()})
     try:
         w = window(s, ts, caps)
     except ValueError as e:
@@ -335,7 +412,7 @@ def main() -> int:
          public_bc=sum(len(c.bc[p]) for p in c.roots), public_refs=refs, salts=sum(len(c.salts[p]) for p in c.roots),
          public_bodies=sum(map(len, publics.values())), window_bytes=CS.window_bytes(w.members),
          expected_ports=len(CS.expected_ports(w)), expected_rows=sum(v["leaves"] for v in CS.expected_ports(w).values()),
-         computed=computed(S, a.queries))
+         computed=computed_b2(S, a.each) if a.form == "b2" else computed(S, a.queries))
     emit(fact="frame-v3 domain ids shared within a member (Flock dupId)",
          members={m.key: d for k, m in enumerate(w.members) if (d := frame_dups(c, k))})
     emit(fact="verifier wiring check (wiring.check, every unit)", refused=WI.check(w.members, publics))

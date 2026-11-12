@@ -220,8 +220,8 @@ def _key(tp: Template, DV: int) -> tuple:
 
     if (hit := _KEYS.get((tp.id, DV))) is None:
         S, k = spec_statics(tp.word), kind(tp)
-        if k in ("first", "block", "scores"):
-            hit = ("scores" if k == "scores" else "block", int(S["NVIS"]), S["FIRST"] is True)
+        if k in ("first", "block", "scores", "writer"):
+            hit = ("scores" if k in ("scores", "writer") else "block", int(S["NVIS"]), S["FIRST"] is True)
         elif k == "values":
             hit = ("values", int(S["NVIS"]), S["FIRST"] is True, int(S["G"]))
         elif k == "keys":
@@ -259,10 +259,27 @@ def positions(tp: Template, statics: dict[str, Any]) -> list[int]:
     return out
 
 
+#: form (b2), CIR-242 scratch: the head whose scores unit writes its key block's keys (`SparseMlaHeadScoresKeys_v1`, role
+#: ``writer``) for every head's readers, the other heads' scores units `SparseMlaHeadScoresCols_v1` reading them; -1 every
+#: head's scores unit the writer for its own values units; None no such writer
+KEYS_HEAD: int | None = None
+
+
+def heads(tp: Template, statics: dict[str, Any]) -> list[int]:
+    """The heads whose units of template ``tp`` a row holds: a keys template's one (its units are the row's, `key_places`);
+    with `KEYS_HEAD` a head, the writer's that head and a scores template's the others; else every head."""
+    k, NH = kind(tp), int(statics["NH"])
+    if k == "keys":
+        return [0]
+    if KEYS_HEAD is not None and KEYS_HEAD >= 0 and k in ("writer", "scores"):
+        return [KEYS_HEAD] if k == "writer" else [h for h in range(NH) if h != KEYS_HEAD]
+    return list(range(NH))
+
+
 def units(tp: Template, statics: dict[str, Any]) -> int:
-    """A row's units of template ``tp``: NH heads times its places in each head's chain; a keys template's, its places in the
-    row (`key_places`), which the heads share."""
-    return (1 if kind(tp) == "keys" else int(statics["NH"])) * len(positions(tp, statics))
+    """A row's units of template ``tp``: its heads (`heads`) times its places in each head's chain; a keys template's, its
+    places in the row (`key_places`), which the heads share."""
+    return len(heads(tp, statics)) * len(positions(tp, statics))
 
 
 def cuts(tp: Template) -> dict[str, int] | None:
@@ -351,7 +368,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         elif k == "queries":
             at = [(h, Place(("queries", DV, DR))) for h in range(NH)]
         else:
-            at = [(h, pl[j]) for h in range(NH) for j in positions(tp, S)]
+            at = [(h, pl[j]) for h in heads(tp, S) for j in positions(tp, S)]
 
         def own(nm: str) -> np.ndarray | None:
             if k == "keys":
@@ -362,7 +379,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
                 G = int(spec_statics(tp.word)["G"])
                 cols = slice(DV, DV + DR) if nm == "k_pe" else slice(int(nm[2:]) * G, (int(nm[2:]) + 1) * G)
                 return np.stack([kv[p.keys[0]:p.keys[1], cols] for _h, p in at])
-            if k not in ("first", "block", "scores", "queries") or nm not in ("q_nope", "q_rope", "kv"):
+            if k not in ("first", "block", "scores", "queries", "writer") or nm not in ("q_nope", "q_rope", "kv"):
                 return None
             return np.stack([qn[h] if nm == "q_nope" else qr[h] if nm == "q_rope" else kv[p.keys[0]:p.keys[1]] for h, p in at])
 
@@ -373,7 +390,13 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
             for i, (q, _s, o, _to) in enumerate(at[0][1].reads):
                 if q == nm:
                     got.append(np.stack([returned(pl[w if isinstance(w := p.reads[i][3], int) else w[0]], h)[int(o[1:])] for h, p in at]))
-        got += [np.stack([returned(p, h)[x] for h, p in at]) for x in range(len(m.outs))]
+        if k == "writer":
+            G = int(spec_statics(tp.word)["G"])
+            cols = [slice(c * G, (c + 1) * G) for c in range(DV // G)] + [slice(DV, DV + DR)]
+            mine = [[*returned(p, h), *(kv[p.keys[0]:p.keys[1], c] for c in cols)] for h, p in at]
+            got += [np.stack([u[x] for u in mine]) for x in range(len(m.outs))]
+        else:
+            got += [np.stack([returned(p, h)[x] for h, p in at]) for x in range(len(m.outs))]
         n = units(tp, S)
         if lo + n > m.n:
             raise ValueError(f"{m.key}: its rows hold more than its {m.n} units (a unit is read with its template's others, `read_all`)")
@@ -446,7 +469,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
             continue
         u = base[t]
         for rid, _pi, r, d in rs:
-            for h in range(int(d["statics"]["NH"])):
+            for h in heads(template(t), d["statics"]):
                 for j in positions(template(t), d["statics"]):
                     unit[(rid, int(r["i"]), h, j)], u = u, u + 1
     writers: dict[str, list[tuple[str, str, np.ndarray]]] = {}
@@ -458,7 +481,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
         w: dict[tuple[str, str], list[int]] = {}
         for rid, _pi, r, d in rs:
             pl = places(d["statics"])
-            for h in range(int(d["statics"]["NH"])):
+            for h in heads(tp, d["statics"]):
                 for j in positions(tp, d["statics"]):
                     for nm, s, o, at in pl[j].reads:
                         hit = [a for a in ((at,) if isinstance(at, int) else at) if (rid, int(r["i"]), h, a) in unit]
@@ -539,6 +562,71 @@ def wire_keys(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list
             lo = m.base - base[m.template]
             m = replace(m, wired=m.wired + tuple((p, o, tuple(x[lo:lo + m.n])) for (p, o), x in wires[m.template].items()),
                         wired_trees=False)
+        out.append(m)
+    at = WI.bases(out)
+    for k, m in enumerate(out):
+        if not m.wired_trees:
+            n = {p: got[0][0].n for p, _o, ws in m.wired if len(got := WI._writers(out, ws, at)) == 1}
+            out[k] = replace(m, tables=tuple((p, n.get(p, m.n)) for p, _w in m.rows))
+    return out
+
+
+def wire_writer(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]]) -> list[CS.Member]:
+    """``ms`` (`wire`'s) with each key block's keys read from its writer's returns (form (b2), `KEYS_HEAD`): the writer is the
+    scores unit `SparseMlaHeadScoresKeys_v1` of head `KEYS_HEAD` (of each head, at -1), which returns the keys it read in
+    column blocks after its scores' returns (``o<b + c>``, b = 3 for a first block and 4 for a later one, k_pe ``o<b + DV /
+    G>``); every values unit's ``kv`` of column block c is wired to that writer's return c, every other head's scores unit's
+    ``kv<c>`` and ``k_pe`` to its returns c and DV / G, and every such reader is a member with no trees of its own for its
+    wired ports, each a table of its writer member's rows. Refused when a member's units read different returns, or the
+    partition names no writer for a block."""
+    from verity.commitments.windows import wiring as WI
+    from verity_vllm.query.program_view import spec_statics
+
+    of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "chain"}
+    base = {t: min(m.base for m in ms if m.template == t) for t in of}
+    writer: dict[tuple, tuple[int, int]] = {}
+    for t, rs in of.items():
+        tp = template(t)
+        if kind(tp) == "writer":
+            u, b = base[t], 3 if spec_statics(tp.word)["FIRST"] is True else 4
+            for rid, _pi, r, d in rs:
+                pl = places(d["statics"])
+                for h in heads(tp, d["statics"]):
+                    for j in positions(tp, d["statics"]):
+                        writer[(rid, int(r["i"]), pl[j].split, pl[j].block, h)], u = (u, b), u + 1
+    per: dict[str, list[list[tuple[str, str, int]]]] = {}
+    for t, rs in of.items():
+        tp = template(t)
+        g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
+        if kind(tp) == "values":
+            reads: list[tuple[str, int | None]] = [("kv", None)]
+        elif kind(tp) == "scores" and "k_pe" in g:
+            n = int(spec_statics(tp.word)["DV"]) // int(spec_statics(tp.word)["G"])
+            reads = [(f"kv{c}", c) for c in range(n)] + [("k_pe", n)]
+        else:
+            continue
+        per[t] = []
+        for rid, _pi, r, d in rs:
+            S, pl = d["statics"], places(d["statics"])
+            for h in heads(tp, S):
+                for j in positions(tp, S):
+                    p, wh = pl[j], h if KEYS_HEAD is None or KEYS_HEAD < 0 else KEYS_HEAD
+                    if (hit := writer.get((rid, int(r["i"]), p.split, p.block, wh))) is None:
+                        raise ValueError(f"{t}: row {r['i']}'s block {p.block} (visit order) has no writer of head {wh} in "
+                                         "the partition")
+                    per[t].append([(f"in{g[nm]}", f"o{hit[1] + (p.col if c is None else c)}", hit[0]) for nm, c in reads])
+    out = []
+    for m in ms:
+        if m.template in per:
+            lo = m.base - base[m.template]
+            mine = per[m.template][lo:lo + m.n]
+            wired = []
+            for k, (port, o, _w) in enumerate(mine[0]):
+                if {u[k][1] for u in mine} != {o}:
+                    raise ValueError(f"{m.key}: its units' {port} read the writer's returns {sorted({u[k][1] for u in mine})}, "
+                                     "and a member's port reads one")
+                wired.append((port, o, tuple(u[k][2] for u in mine)))
+            m = replace(m, wired=m.wired + tuple(wired), wired_trees=False)
         out.append(m)
     at = WI.bases(out)
     for k, m in enumerate(out):
