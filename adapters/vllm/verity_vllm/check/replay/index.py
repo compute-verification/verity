@@ -15,13 +15,19 @@ import numpy as np
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check.replay import cached_prefix as CP
+from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.compact import (
     expanded_file_args,
     p_item_indices,
     runs_from_file_items,
 )
+from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import population
+
+__all__ = ["DEFAULT_QUERY", "SAMPLER_OP", "SEED_PARAM", "ProgramIndex", "const_word", "index_of", "parse_struct", "row_args"]
 
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
@@ -89,8 +95,8 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
         if rest.startswith("Value<"):
             bits = int(rest[len("Value<"):].rstrip(">").rstrip(">"))
         count = 1
-        for n in shape:
-            count *= n
+        for dim in shape:
+            count *= dim
         out.append((name.strip(), count, shape, bits))
     return out
 
@@ -122,6 +128,15 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     """`ProgramIndex`'s arguments as the index reads them: its TP context and the effective query."""
     t = _tp_of(tp)
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
+
+
+def described(pi: ProgramIndex, r: dict) -> dict:
+    """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
+    only modelled rows."""
+    d = pi.describe(r)
+    if d is None:
+        raise TypeError(f"row {r.get('i')} ({RM.spec_family(r['spec'])}) is unmodelled")
+    return d
 
 
 def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
@@ -157,15 +172,12 @@ class ProgramIndex:
         self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
-        from verity_vllm.correspondence.reader_for_query import Correspondence
-        from verity_vllm.query import norm_scales as NS
-        from verity_vllm.query.program_view import from_instances
-        from verity_vllm.query.required import population
         # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
-        population = NS.population if norm_scales else population
+        of = NS.population if norm_scales else population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
-        pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
+        q = query or DEFAULT_QUERY
+        pop = of(P, corr, tp=self.tp, query=q) if q else of(P, corr, tp=self.tp)
         for cid in pop.producers():
             mem = pop.members_of(cid)
             if mem:
@@ -229,7 +241,7 @@ class ProgramIndex:
                 first = ((r.get("args") or [[]])[0] or [None])[0]
                 src = self.by_i.get(int(first[1])) if first and first[0] == "n" else None
                 prod = RM.split_name(src.get("name") or "")[0] if src else None
-                kind = "act_quant" if prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
+                kind = "act_quant" if src and prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
             elif kind == "act_quant":
                 self._moe_fused.add(int(r["i"]))
             if kind is not None:

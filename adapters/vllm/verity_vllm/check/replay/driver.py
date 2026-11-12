@@ -51,44 +51,64 @@ names in `__all__` are its interface.
 from __future__ import annotations
 
 import ctypes
+import gc
 import multiprocessing
 import os
 import re
 import sys
 import time
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
-
 from verity.commitments.randomness import Key
+from verity.definitions.numerics import prims_twins
+from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay import replay_record as RR
-from verity_vllm.check.replay.checks import checks_of, fold as fold_checks
+from verity_vllm.check.replay.checks import checks_of
+from verity_vllm.check.replay.checks import fold as fold_checks
+from verity_vllm.check.replay.coverage import (
+    _uncovered_mechanisms,
+    controller_rows_of,
+    query_population,
+)
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
 from verity_vllm.check.replay.fork import WorkerDied
-from verity_vllm.check.replay.replay_codes import NOT_YET, WHY_CLASSES_BY_NAME, WHY_CLASSES_FAULT
-from verity_vllm.commit.opened import opened_in_children
-from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 from verity_vllm.check.replay.index import V2_QUERY, ProgramIndex, node_runs
+from verity_vllm.check.replay.linkage import (
+    arrivals_of_record,
+    boundary_linkage,
+    linkage_horizon,
+)
+from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
+from verity_vllm.check.replay.population import (
+    executed_prefix_of_record,
+    moe_plane_alias_check,
+    phase_anchor,
+    population,
+    split_not_executed,
+)
+from verity_vllm.check.replay.replay_codes import (
+    NOT_YET,
+    WHY_CLASSES_BY_NAME,
+    WHY_CLASSES_FAULT,
+)
+from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
+from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
-from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH, ROW_EVALUATORS, plan_vu
-from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_plane_alias_check, phase_anchor, population,
-                                                split_not_executed)
-from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
-from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
+from verity_vllm.query.required import QUERIES
 
-
-__all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
+__all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "default_workers", "engine_facts_of_record",
+           "executed_prefix_of_record", "keep_population", "linkage_horizon", "manifest_query", "model_weights_provider", "populate",
+           "PoolDoesNotFit", "ProgramIndex", "sampled_replay", "SCHEMA", "take_population", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -137,18 +157,19 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
         wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
         for group in r.get("args") or []:
-            for it in group if wp is not None else ():
-                span = p_item_weight_span(it, wp)                                  # a "P" progression's span, never its runs
-                ws = pi.weight_slice(*span) if span is not None else None
-                if ws is not None and ws[0] not in seen:
-                    seen.add(ws[0])
-                    weights(ws[0], ws[1], ws[2])
+            if wp is not None:
+                for it in group:
+                    span = p_item_weight_span(it, wp)                              # a "P" progression's span, never its runs
+                    ws = pi.weight_slice(*span) if span is not None else None
+                    if ws is not None and ws[0] not in seen:
+                        seen.add(ws[0])
+                        weights(ws[0], ws[1], ws[2])
             for sl in node_runs(group) if depth < INTERIOR_DEPTH else ():
                 a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
                 if pi.member_at(a, lo, hi) is None:
                     pr = pi.by_i.get(a)
                     pd = pi.describe(pr) if pr is not None else None
-                    if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
+                    if pr is not None and pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
                         walk(pi, pr, depth + 1)                                    # the interior producer's weights are the VU's too
 
     for vu in picked:
@@ -181,7 +202,6 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity.definitions.numerics import prims_twins
             rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
@@ -189,7 +209,6 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity.definitions.numerics import prims_twins
             _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
@@ -281,7 +300,6 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
     Semantics-free: gc.freeze changes WHEN unreachable cycles are reclaimed, never a value; the parent unfreezes right after the pool
     joins.  The record carries what was frozen (`evaluator.fork`)."""
     global _FORK_FN, _FORK_VUS
-    import gc
     _FORK_FN, _FORK_VUS = fn, picked
     _FORK_STATS.clear()
     _FORK_STATS.update({"gc_freeze": bool(FORK_GC_FREEZE), "workers": int(workers), "picked": len(picked)})
@@ -370,16 +388,17 @@ def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
     `bf16_gemm_check.ROUTE_CONDITIONS`), with the cuBLASLt version and the library's path beside them."""
     out: dict[str, Any] = {}
     try:
-        import torch                                                                 # type: ignore
+        import torch  # type: ignore
     except Exception as e:                                                          # noqa: BLE001
         return {"torch": _unavailable(e)} | cublas_versions() | {"env": env}
     m = torch.backends.cuda.matmul
-    reads = {"device": torch.cuda.get_device_name, "compute_capability": lambda: list(torch.cuda.get_device_capability()),
-             "multiprocessors": lambda: int(torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count),
-             "torch": lambda: str(torch.__version__),
-             "allow_fp16_reduced_precision_reduction": lambda: repr(m.allow_fp16_reduced_precision_reduction),
-             "allow_bf16_reduced_precision_reduction": lambda: repr(m.allow_bf16_reduced_precision_reduction),
-             "preferred_blas_library": lambda: str(torch.backends.cuda.preferred_blas_library())}
+    reads: dict[str, Callable[[], Any]] = {
+        "device": torch.cuda.get_device_name, "compute_capability": lambda: list(torch.cuda.get_device_capability()),
+        "multiprocessors": lambda: int(torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count),
+        "torch": lambda: str(torch.__version__),
+        "allow_fp16_reduced_precision_reduction": lambda: repr(m.allow_fp16_reduced_precision_reduction),
+        "allow_bf16_reduced_precision_reduction": lambda: repr(m.allow_bf16_reduced_precision_reduction),
+        "preferred_blas_library": lambda: str(torch.backends.cuda.preferred_blas_library())}
     for k, read in reads.items():
         try:
             out[k] = read()
@@ -393,12 +412,12 @@ def engine_facts_of_record() -> dict[str, Any]:
     `cublas`, what the route pin's routes were conditioned on (`_cublas_facts`)."""
     facts: dict[str, Any] = {k: settings.raw(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
     try:
-        from vllm.model_executor.determinism import batch_invariant as bi          # type: ignore
+        from vllm.model_executor.determinism import batch_invariant as bi  # type: ignore
         facts["vllm_batch_invariant_mode"] = bool(bi.vllm_is_batch_invariant()) if hasattr(bi, "vllm_is_batch_invariant") else "unavailable: no vllm_is_batch_invariant()"
     except Exception as e:                                                          # noqa: BLE001 -- named, never guessed
         facts["vllm_batch_invariant_mode"] = f"unavailable: {type(e).__name__}"
     try:
-        import torch                                                                 # type: ignore
+        import torch  # type: ignore
         bf16 = torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction   # (allow, allow for split-K) once set as a pair
         facts["torch_allow_bf16_reduced_precision_reduction"] = bool(bf16[0] if isinstance(bf16, tuple) else bf16)
         try:
@@ -475,7 +494,6 @@ def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dic
 
 def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     """The query the manifest was built under, when it is one the population knows (`required.QUERIES`); else None (the query of record)."""
-    from verity_vllm.query.required import QUERIES
     q = ((manifest or {}).get("query") or {}).get("query_id")
     return q if q in QUERIES else None
 
@@ -506,7 +524,11 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
     Program with a cached prefix of C reads it from what its producers committed; a Program without one recomputes it
     (`recomputed_prefix`: its prefix rows leave the population, and its replay computes them from the prompt)."""
     memo = {} if memo is None else memo
-    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
+    all_vus: list[dict] = []
+    not_ev: Counter[str] = Counter()
+    not_ev_fam: Counter[str] = Counter()
+    indices: dict[int | str, ProgramIndex] = {}                                   # by request label, and by its Program's `id`
+    codes: dict[str, dict] = {}                                                   # not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # per request: the step `last` is anchored to, named
     addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
@@ -539,12 +561,13 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
         indices[rid] = pi
     for rid, pc in (cached_prefixes or {}).items():
         pi = indices.get(rid)
-        if pi is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
-            continue
-        if int(pi.kv_prefix["C"]) != int(pc["cached"]):
+        kv = pi.kv_prefix if pi is not None else None
+        if pi is None or kv is None or not int(pc.get("cached") or 0) or rid in pi.recomputed:
+            continue                                                              # no hit, or one its Program recomputes (`RP.adopt`, above)
+        if int(kv["C"]) != int(pc["cached"]):
             raise ValueError(f"{rid} is served {pc['cached']} cached prompt rows but its Program of record takes a cached prefix of "
-                             f"{pi.kv_prefix['C']}")
-        pi.cached_prefix[rid] = CP.CachedPrefix(pi.kv_prefix, [str(q) for q in pc["producers"]], indices, arrivals)
+                             f"{kv['C']}")
+        pi.cached_prefix[rid] = CP.CachedPrefix(kv, [str(q) for q in pc["producers"]], indices, arrivals)
     return all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec
 
 
@@ -571,10 +594,10 @@ def _evaluated(one: Callable[[dict], tuple[dict, dict, float]], picked: list[dic
             note, workers = f"parallel evaluator unavailable ({type(e).__name__}: {str(e)[:120]}); serial fallback", 1
     if workers > 1 and len(picked) > 1 and worker_peak is not None:
         fitted, memory = fit_pool(workers, picked, int(worker_peak))
-        if memory is not None:
+        if memory is not None:                                                    # None: no cgroup limit, and every worker asked for
             print(f"[replay] WORKERS: {memory['note']}", flush=True)
-        if fitted < workers:
-            note, workers = memory["note"], fitted
+            if fitted < workers:
+                note, workers = memory["note"], fitted
     if workers > 1 and len(picked) > 1:
         try:
             return _parallel_replay(one, picked, workers), workers, note, prewarmed, memory

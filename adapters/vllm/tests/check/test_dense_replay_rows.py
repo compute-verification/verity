@@ -2,7 +2,10 @@
 unit of the replay population, and each dense row's words are the IR reference's (edge words included)."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
+import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.call_scope import specialization
@@ -12,6 +15,7 @@ from verity.definitions.registry import dense
 
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
 from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import evaluate as E
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
@@ -45,7 +49,8 @@ def test_each_dense_row_is_the_ir_reference():
     doc = b.doc(LP)
     fields = _fields(np.random.default_rng(5))
     weights = [int(w) for n, *_ in DENSE for w in fields[n]]
-    vals, seen = {}, set()
+    vals: dict[int, list[int]] = {}
+    seen: set[str] = set()
     for r in doc["rows"]:
         args = [[v for kind, a, lo, hi in g for v in (PROMPT[lo:hi] if kind == "p" and a == 0 else weights[lo:hi] if kind == "p" else vals[a][lo:hi])]
                 for g in r["args"]]
@@ -67,7 +72,6 @@ def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     got = ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu])
     assert list(got) == ["0", "out"] and got["out"].dtype == np.uint16
     assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=width), gu.tolist()))
-    import pytest
     with pytest.raises(ir_rows.Declined, match="arg words"):
         ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu[:-1]])
     with pytest.raises(ir_rows.Declined, match="past"):
@@ -103,11 +107,7 @@ def test_a_norm_scale_manifest_addresses_every_rsqrt_row_where_it_is_committed(t
 def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_spells_it(monkeypatch):
     """The ATen norm's rsqrt is `<norm module>/norm_scale` and its residual narrow `<norm module>/1`: the relation's one output is compared
     under that member, equal and unequal alike; a row requiring two members of a one-output relation is not evaluated, by name."""
-    from types import SimpleNamespace
-
-    from verity_vllm.check.replay import evaluate as E
-
-    words = np.arange(4, dtype=np.uint32)
+    words: np.ndarray = np.arange(4, dtype=np.uint32)
     monkeypatch.setattr(E, "_evaluate_row", lambda *a, **k: ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)]))
     rsqrt4 = ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)])["out"]
 
