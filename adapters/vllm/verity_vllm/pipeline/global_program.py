@@ -132,7 +132,7 @@ def component_declared_target(d: str) -> dict | None:
     try:
         with open(p) as f:
             t = json.load(f).get("target")
-    except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return t.get("declared") if isinstance(t, dict) and isinstance(t.get("declared"), dict) else None
 
@@ -197,7 +197,7 @@ def component_spec_histogram(d: str) -> dict | None:
     try:
         with open(p) as f:
             h = json.load(f).get("spec_histogram")
-    except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: it carries none
+    except (OSError, ValueError, RecursionError, AttributeError):   # unreadable, not JSON, nested past the parser, or no object: it carries none
         return None
     return h if isinstance(h, dict) else None
 
