@@ -68,14 +68,14 @@ LANE_NOMUL = {
     "IADD": "integer add", "IADD3": "three-input integer add", "IADD32I": "integer add immediate",
     "IABS": "integer abs", "ISCADD": "shift-then-add (scale by a power-of-2 constant, not a free product)",
     "ISCADD32I": "shift-then-add immediate", "LEA": "load effective address (a<<n + b: a constant shift-add)",
-    "LOP": "bitwise", "LOP3": "3-input bitwise truth table", "LOP32I": "bitwise immediate", "LOP32I": "bitwise immediate",
+    "LOP": "bitwise", "LOP3": "3-input bitwise truth table", "LOP32I": "bitwise immediate",
     "SHF": "funnel shift", "SHL": "shift left", "SHR": "shift right", "BMSK": "bit-field mask", "BREV": "bit reverse",
-    "FLO": "find leading one", "POPC": "population count", "SGXT": "sign/zero extend", "PRMT": "byte permute/select",
+    "FLO": "find leading one", "POPC": "population count", "SGXT": "sign extend", "PRMT": "byte permute/select",
     "SEL": "select", "IMNMX": "integer min/max", "ISETP": "integer set predicate", "FSETP": "FP set predicate",
     "FSET": "FP set", "FSEL": "FP select", "FADD": "FP32 add", "FADD32I": "FP32 add immediate", "FADD2": "two FP32 adds",
     "FHADD": "FP32 add (half rate)", "FHADD2": "two FP32 adds (half rate)", "HADD2": "packed FP16x2 add",
     "FMNMX": "FP32 min/max", "FMNMX3": "FP32 3-input min/max", "HMNMX2": "packed FP16 min/max",
-    "HSET2": "packed FP16 set", "DADD": "FP64 add", "FRND": "FP round", "SGXT": "sign extend",
+    "HSET2": "packed FP16 set", "DADD": "FP64 add", "FRND": "FP round",
     "F2F": "float-to-float convert", "F2I": "float-to-int convert", "I2F": "int-to-float convert",
     "I2I": "int-to-int convert", "F2IP": "float-to-int pack", "I2FP": "int-to-float pack", "F2FP": "float-to-float pack",
     "I2IP": "int-to-int pack", "UF2F": "uniform float convert", "UF2I": "uniform float-to-int", "UI2F": "uniform int-to-float",
@@ -122,7 +122,7 @@ MOVERS = {
     "UTCCP": "tcgen05 copy into tensor memory", "UTCSHIFT": "tcgen05 shift within tensor memory", "UTCATOMSWS": "tcgen05 atom swizzle",
     "UBLKCP": "TMA bulk copy", "UBLKPF": "TMA bulk prefetch", "UTMALDG": "TMA load", "UTMASTG": "TMA store", "UTMAPF": "TMA prefetch",
     "UMEMSETS": "shared memset (writes a constant)", "USTGR": "uniform global store", "SPARSIFY": "compress to 2:4 sparse (data reshape)",
-    "DECOMPRESS": "expand a 2:4 sparse operand (data reshape)", "LDCU": "uniform constant load",
+    "DECOMPRESS": "expand a 2:4 sparse operand (data reshape)",
 }
 # Texture / surface sampling: a convex low-precision weighted sum over a fixed basis, format-converted and rounded;
 # priced at the pi32 floor (LOW-PRECISION / sidefloor). No free exact s32.

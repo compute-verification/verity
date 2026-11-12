@@ -298,10 +298,13 @@ def render(summary: dict) -> str:
     lines = ["| form | SASS | slots | alone SMSP-cycles a MMA | words/SM/clk | a (issue-cycles a MMA) | a: IADD3+FFMA / "
              "IADD3 | a a slot | vs IMMA s8 k32 | worst JI3e_0 / _1 / _2 load |",
              "|---|---|---|---|---|---|---|---|---|---|"]
+
+    def f(v: float | None, d: int = 3) -> str:
+        return "–" if v is None else f"{v:.{d}f}"
+
     for form, s in summary.items():
         if form == "lane_op_alone":
             continue
-        f = lambda v, d=3: "–" if v is None else f"{v:.{d}f}"
         lines.append(f"| {form} | {', '.join(s['mma_ops'])} | {s['slots']:.0f} | {f(s['alone_smsp_cycles_per_mma'], 2)} | "
                      f"{f(s.get('words_per_sm_clk'), 2)} | {f(s['a'])} | "
                      + " / ".join(f(v) for v in s.get("a_by_lane", {}).values()) + " | "
