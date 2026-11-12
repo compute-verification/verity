@@ -191,7 +191,7 @@ def test_path_rows_are_the_map_rows_whose_old_and_new_words_are_paths_words_in_i
             '"x/" = "y"\n\n[[words_in]]\nglob = "**/*.md"\n[words_in.words]\n"docs/a.md" = "docs/b.md"\n'
             '"verity/old/" = "verity/new/"\n')
     assert path_rows(text) == [("verity/old/", "verity/new/"), ("a/b.py", "c/b.py"), ("docs/a.md", "docs/b.md")]
-    assert path_rows('[words]\nx = 1\n"a/b" = 1\n') == [] and path_rows("[rewrite]\nexclude = []\n") == []
+    assert path_rows('[words]\nx = 1\n"a/b" = 1\n"c/d" = ["e/f"]\n') == [] and path_rows('words = "a/b"\n') == [] and path_rows("[rewrite]\nexclude = []\n") == []
     assert path_rows("[words\n") == []
     assert path_rows('words_in = ["x"]\n[words]\n"p/q" = "r/s"\n') == [("p/q", "r/s")]
 
@@ -221,7 +221,7 @@ for f in sorted(p for p in root.rglob("*") if p.is_file() and ".git" not in p.pa
 '''
 
 #: `move_check.py --json`: each call's arguments appended to LOG; while REFUSE exists, a refusal, or as it says, no report
-#: (`garbage`) or a report certifying the move with a refusal's exit (`exit`)
+#: (`garbage`), a report certifying the move with a refusal's exit (`exit`) or one not certifying it with exit 0 (`zero`)
 CHECK = """import json, pathlib, sys
 log, refuse = pathlib.Path(LOG), pathlib.Path(REFUSE)
 with log.open("a") as f:
@@ -231,6 +231,9 @@ if mode == "garbage":
     print("Traceback: boom")
     sys.exit(2)
 no = mode is not None and mode != "exit"
+if mode == "zero":
+    print(json.dumps({"certified": False, "refusals": []}))
+    sys.exit(0)
 print(json.dumps({"certified": not no, "base": sys.argv[1], "head": sys.argv[2], "renames": [], "edits": [], "words": {},
                   "rules": {}, "refusals": [{"path": "new/a.txt", "reason": "an edit no row explains"}] if no else []}))
 print("move-check: refused" if no else "move-check: certified", file=sys.stderr)
@@ -446,7 +449,8 @@ def test_nothing_is_built_above_a_move_in_flight_marked_or_not(env, unmark):
 @pytest.mark.parametrize("unmark", [False, True])
 def test_a_move_isnt_built_above_a_pr_in_flight_that_changes_the_move_scripts_marked_or_not(env, unmark):
     """A PR in flight changing `tools/move/`'s scripts, read from the ready PRs or from the PRs in flight, holds back a move:
-    another PR is built above it and the move isn't."""
+    another PR is built above it, and the move isn't taken into that batch at all (the build's own guard, `World._move`, never
+    sees it)."""
     m = Moved(env)
     two = env.put(2, {Q.RENAME: RENAME + "# changed\n"})
     loop = env.loop(decide)
@@ -455,20 +459,21 @@ def test_a_move_isnt_built_above_a_pr_in_flight_that_changes_the_move_scripts_ma
         env.o.gh.ready.discard((2, two))
     m.move(1, verdict=True)
     env.put(3, {"b.txt": "3\n"})
-    assert [b["members"] for b in _builds(loop.tick())] == [[3]]
+    recs = loop.tick()
+    assert [b["members"] for b in _builds(recs)] == [[3]] and not [r for r in recs if r["action"] == "skip"], recs
 
 
-@pytest.mark.parametrize("mode", ["garbage", "exit"])
+@pytest.mark.parametrize("mode", ["garbage", "exit", "zero"])
 def test_a_move_check_that_gives_no_report_or_exits_as_refusing_doesnt_certify(env, mode):
-    """`move_check.py` certifies only with its report saying so and its exit 0: no report, or a report it exits 1 on, is a
-    refusal, and the move on its mark alone is left out."""
+    """`move_check.py` certifies only with its report saying so and its exit 0: no report, a report it exits 1 on or one not
+    saying so, is a refusal, and the move on its mark alone is left out."""
     m = Moved(env)
     m.refuse.write_text(mode)
     m.move(1, verdict=False)
     recs = env.loop(policy).tick()
     (skip,) = [r for r in recs if r["action"] == "skip"]
     assert not _builds(recs) and ("couldn't judge" if mode == "garbage" else "isn't certified") in skip["why"], skip
-    assert ("Traceback: boom" if mode == "garbage" else "exit 1)") in skip["why"], skip
+    assert {"garbage": "Traceback: boom", "exit": "exit 1)", "zero": "exit 0)"}[mode] in skip["why"], skip
 
 
 def test_a_move_runs_main_s_move_check_whatever_a_member_below_it_does_to_that(env):
@@ -499,11 +504,25 @@ def test_a_build_carries_no_certificate_of_an_earlier_build(env):
     head = m.move(1, verdict=True)
     w = env.loop(policy).world
     w.ready(m.main)
-    w.build([env.o.gh.prs[1]], m.main, m.main)
-    assert set(w.certified) == {1}
+    tip, merged, _ = w.build([env.o.gh.prs[1]], m.main, m.main)
+    assert [(x.pr, x.head, x.commit) for x in merged] == [(1, head, tip)] and w.certified[1]["commit"] == tip
+    assert _git(w.repo, "rev-parse", f"{tip}^") == m.main and Q.move_of(w.repo, tip) == MAP
     later = _main_to(env, {"later.txt": "later\n"})
     m.refuse.touch()
     assert w.fetch() == later
     w.ready(later)
     _, merged, _ = w.build([env.o.gh.prs[1]], later, later)
     assert [(x.pr, x.head) for x in merged] == [(1, head)] and w.certified == {}
+
+
+def test_a_regeneration_on_a_tip_whose_members_change_the_move_scripts_is_refused(env):
+    """`Queue._regenerated` itself refuses a tip whose members change `tools/move/`'s scripts, as drive's path calls it
+    without the loop's guard."""
+    m = Moved(env)
+    m.move(1, verdict=True)
+    tip = env.put(2, {Q.RENAME: RENAME + "# changed\n"})
+    w = env.loop(policy).world
+    w.ready(m.main)
+    commit, why, report = w.q._regenerated(tip, env.o.gh.prs[1], m.main)
+    assert (commit, report) == (None, None) and why.startswith(f"the members below it change {Q.RENAME} from `main`"), why
+    assert m.calls() == []
