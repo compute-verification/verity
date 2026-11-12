@@ -41,8 +41,6 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
-    "verity_vllm.engine.forward_pass": "I2: the model runner's one seam around each forward pass (ForwardSeam): observers "
-                                       "that see each pass begin and end, with its runner state, output or error",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
     "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
@@ -50,14 +48,8 @@ PUBLIC = {
     "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
                                                 "rule: its session Definition, gates by the gate table, fresh bits at the "
                                                 "verifier's pins, and a day's public judgment against n, no count (block-counts)",
-    "verity_vllm.engine.collectives.all_reduce": "I2: the CUDA communicator's one seam for its all-reduce (AllReduceSeam): "
-                                                 "one replacement of the routes vLLM picks, which reaches them for the rest",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
-    "verity_vllm.engine.plugins": "I1: the distribution's vLLM general plugins (PLUGINS), which pyproject.toml declares, and "
-                                  "the environment that loads exactly the ones a run names (env)",
-    "verity_vllm.engine.pin_op": "I1: one name a vLLM module or op namespace is called through, replaced once before anything "
-                                 "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
@@ -68,12 +60,8 @@ PUBLIC = {
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
-    "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "
-                                   "step's scheduler and model outputs once the scheduler has taken them",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
-    "verity_vllm.engine.stock_kernels": "I1: vLLM's own kernels at the pin, each called as vLLM's serving path calls it: the "
-                                        "baselines kernels and compute accounting time against",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
@@ -104,11 +92,16 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
-    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment at serve: each finished request's "
-                                          "b.ingress and b.egress rows by size class, committed as the engine core serves "
-                                          "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
-                                          "layout, record and files (Layout, record, reopen), which "
-                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment: each finished request's b.ingress "
+                                          "and b.egress rows by size class, a class's layout, record and files (Layout, "
+                                          "record, reopen), which benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_stop": "I1: a serve's stop rule on its boundary commitment (Stop), the stop block that "
+                                          "computes where a response ends, and a stop class's stop record "
+                                          "(stop_registration, stop_record), which benchmarks/one_stage/two_stage.py "
+                                          "registers under the verifier's own rule",
+    "verity_vllm.pipeline.boundary_windows": "I1: the boundary commitment as the engine core serves: the hook on the "
+                                             "scheduler that commits each window's finished requests by class "
+                                             "(BoundaryWindows), which benchmarks/serve_tax's plugin installs",
     "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
                                             "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
                                             "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
