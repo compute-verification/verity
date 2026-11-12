@@ -198,7 +198,7 @@ MIRRORS: tuple[Mirror, ...] = (
         points=(
             Point("one table, StrictBirthday", "κ ≤ 2^-202.98 and γ ≤ 2^51 at one table (the deployed record's)",
                   {"kappa": 2.0 ** -202.98, "gamma": 2.0 ** 51, "finder": "StrictBirthday"}),
-            Point("64 tables, StrictBirthday", "κ ≤ 2^-196.98 at the 64-table cap; γ = 2^62.1, no Lean bound",
+            Point("64 tables, StrictBirthday", "κ ≤ 2^-196.98 at 64 tables; γ = 2^62.1, no Lean bound",
                   {"kappa": 2.0 ** -196.98, "gamma": 2.0 ** 62.1, "finder": "StrictBirthday"}),
             Point("one table, ExpectedCR", "κ ≤ 2^-202.98 and γ ≤ 2^51 at one table, Pr[B] read under ExpectedCR",
                   {"kappa": 2.0 ** -202.98, "gamma": 2.0 ** 51, "finder": "ExpectedCR"}),
