@@ -113,19 +113,30 @@ def consts (T : Nat) : V (Array Const) :=
 ends `/o0`. -/
 def okPort (port : String) : Bool := ("/" ++ PORT).toList.isSuffixOf port.toList
 
+/-- A registration's `roots` entries, none when it names none. -/
+def rootsOf (reg : Json) : Array Json := match reg.getObjValD "roots" with | .arr xs => xs | _ => #[]
+
+/-- Whether a `roots` entry's field `k` is the text `n`. -/
+def named (k n : String) (e : Json) : Bool := match e.getObjValD k with | .str x => x == n | _ => false
+
+/-- Whether a `roots` entry's `leaves` is the count `n`. -/
+def counted (n : Nat) (e : Json) : Bool := match (e.getObjValD "leaves").getNat? with
+  | .ok l => l == n
+  | .error _ => false
+
+/-- Whether a `roots` entry is no ok bits' or is at a constant of `cs`: an entry whose port ends `/o0` (`okPort`) is
+at that port's constant, in leaves, domain and root. -/
+def entryHeld (cs : Array Const) (e : Json) : Bool := match e.getObjValD "port" with
+  | .str q => !okPort q || cs.any fun c =>
+      c.port == q && counted c.leaves e && named "domain" c.domain e && named "root" c.root e
+  | _ => true
+
 /-- `scan_ok.held`: a scan's registration names its ok bits at the constants `cs`: every constant's port is in its
-`roots`, and every `roots` entry whose port ends `/o0` is at its port's constant, in leaves, domain and root. It
-compares and hashes nothing. -/
+`roots` (`rootsOf`, `named`), and every `roots` entry whose port ends `/o0` is at its port's constant, in leaves,
+domain and root (`entryHeld`). It compares and hashes nothing. -/
 def held (cs : Array Const) (reg : Json) : Bool :=
-  let roots := match reg.getObjValD "roots" with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  let leaves := fun (n : Nat) (e : Json) => match (e.getObjValD "leaves").getNat? with
-    | .ok l => l == n
-    | .error _ => false
-  cs.all (fun c => roots.any (named "port" c.port)) && roots.all fun e => match e.getObjValD "port" with
-    | .str q => !okPort q || cs.any fun c =>
-        c.port == q && leaves c.leaves e && named "domain" c.domain e && named "root" c.root e
-    | _ => true
+  let roots := rootsOf reg
+  cs.all (fun c => roots.any (named "port" c.port)) && roots.all (entryHeld cs)
 
 /-- SHA-512 calls of `root` at `n` rows: each row's salt (`HmRow.SALT_BYTES / 64`), row digest, salt digest, hm96
 leaf and frame leaf, then the frame's pads and nodes. -/

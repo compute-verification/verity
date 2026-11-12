@@ -31,6 +31,8 @@ GUARD = re.compile(r"^#guard.*?(?=^\S)", re.S | re.M)
 IDENTIFIER = re.compile(r"[A-Za-z_][\w.']*")
 #: a name of something that hashes, wherever it is defined
 HASHES = re.compile(r"(?i)sha|hash|digest|fv3|hm96|registered|known")
+#: `ScanOk.held` and the definitions of `ScanOk` it reaches: what compares a registration with the constants
+COMPARES = {"held", "entryHeld", "rootsOf", "named", "counted", "okPort", "PORT"}
 
 
 def code(defines: str) -> str:
@@ -139,15 +141,23 @@ def test_lean_applies_the_constants_once_outside_the_execution_phases():
 
 def test_lean_holds_an_execution_phase_by_comparison_alone():
     """What runs once an execution phase names nothing that hashes: `okChecksAt` and `okCheck` read the constants as a
-    value and call `ScanOk.held`, which reads its own lets, `okPort` and `PORT`, and no definition of `ScanOk` that
-    hashes (`salt`, `known`, `domain`, `root`, `consts`)."""
+    value and call `ScanOk.held`, and every definition of `ScanOk` that `held` reaches (`COMPARES`) names, of
+    `ScanOk`'s own, only another of them, and no definition that hashes (`salt`, `known`, `domain`, `root`,
+    `consts`)."""
     period, ok = code("okChecks"), code("held")
     own = set(re.findall(r"^def ([\w']+)", ok, re.M))
-    assert {"salt", "known", "domain", "root", "consts", "held", "okPort", "members"} <= own
-    for name in ("held", "okPort"):
+    assert {"salt", "known", "domain", "root", "consts", "members"} | COMPARES <= own
+    reached, todo = set(), ["held"]
+    while todo:
+        name = todo.pop()
+        if name in reached:
+            continue
+        reached.add(name)
         body = names(definition(ok, name))
-        assert body & own <= {"held", "okPort", "PORT"}, (name, body & own)
+        assert body & own <= COMPARES, (name, body & own)
         assert not [n for n in body if HASHES.search(n)], (name, body)
+        todo += sorted(body & own)
+    assert reached == COMPARES, reached ^ COMPARES
     for name in ("okChecksAt", "okCheck"):
         body = names(definition(period, name))
         assert {n for n in body if n.startswith("ScanOk.")} <= {"ScanOk.held", "ScanOk.Const"}, (name, body)
