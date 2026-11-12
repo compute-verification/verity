@@ -4,7 +4,7 @@
 bit; the merge, the pick and the valid bits have the traced one's ANDs count for count, the ties and the positions no more
 from a few dozen keys on, and the pass a few more past a chunk of keys; the pieces are the steps they name; at the served
 statics a description is a few rows of Calls and the unit fits a Flock block; and the pieces lower by their builders to the
-circuit their gates lower to."""
+circuit their gates lower to, a count sum's with the rows more that commit its sum."""
 from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
@@ -139,6 +139,30 @@ def _lowered(unit) -> tuple[list, list[str]]:
         IL._lower_activation = activation
     bits = [(k, (tuple(d[0].s), d[0].c, tuple(d[1].s), d[1].c) if k == "and" else d) for k, d in zip(C.kind, C.data)]
     return [bits, [(tuple(x.s), x.c) for x in out]], built
+
+
+def _commits_read(circuit: list) -> tuple[list, int]:
+    """``circuit`` (`_lowered`'s) with each commit (`forms.Circuit.commit`'s row, A a form and B the constant one) dropped and
+    its bit read as that form wherever a form holds it: the bits that remain renumbered in order, each form's bits sorted;
+    and how many commits it had.  The row holds the bit to the form, so the two circuits compute the same."""
+    bits, out = circuit
+    forms: list[tuple[frozenset, int]] = []
+    kept: list = []
+
+    def read(s, c) -> tuple[tuple, int]:
+        acc: frozenset = frozenset()
+        for v in s:
+            acc, c = acc ^ forms[v][0], c ^ forms[v][1]
+        return tuple(sorted(acc)), c
+
+    for kind, d in bits:
+        if kind == "and" and d[2:] == ((), 1):
+            f, c = read(*d[:2])
+            forms.append((frozenset(f), c))
+            continue
+        forms.append((frozenset((len(kept),)), 0))
+        kept.append((kind, (*read(*d[:2]), *read(*d[2:])) if kind == "and" else d))
+    return [kept, [read(*x) for x in out]], len(bits) - len(kept)
 
 
 def test_the_merges_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -370,8 +394,11 @@ def test_the_selects_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPat
 
 def test_the_ties_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each piece of the ties carries a builder, as the merge's do: the circuit Flock's flat lowering makes of the ties over
-    13 keys, and of a mask unit over them, is the one their gates lower to, AND for AND."""
-    units = [bind(BM.DsaRadixTiesV2, N=13, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=13, AT=16, TOPK=4)]
+    13 keys, of a mask unit over them, and of a pass whose count sums two chunks' and a rest's, is the one their gates
+    lower to, AND for AND, and the rows that commit each count sum (`boolean_dsa_topk_mask._committed`): with each
+    committed bit read as the form its row holds it to, the two are one circuit."""
+    units = [bind(BM.DsaRadixTiesV2, N=13, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=13, AT=16, TOPK=4),
+             bind(BM.DsaRadixPassV2, N=2 * BM.PASS_CHUNK + 88, TOPK=16)]
     names = {p.name for p in TIES_PIECES}
     with_builders = [_lowered(u) for u in units]
     assert all(names & set(built) for _, built in with_builders)
@@ -379,7 +406,8 @@ def test_the_ties_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch)
         monkeypatch.delattr(piece, "build")
     for unit, (circuit, _) in zip(units, with_builders, strict=True):
         by_gates, built = _lowered(unit)
-        assert not names & set(built) and by_gates == circuit, unit.id
+        read, commits = _commits_read(circuit)
+        assert not names & set(built) and commits and (read, 0) == _commits_read(by_gates), unit.id
 
 
 def _flat(out, rows: int) -> np.ndarray:
@@ -565,7 +593,8 @@ def test_the_mask_positions_as_calls_stay_small_at_the_served_statics(N: int, AT
 
 def test_the_positions_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each piece of the positions carries a builder: the circuit Flock's flat lowering makes of a block of 13 keys off a
-    multiple of its length is the one its gates lower to, AND for AND.  `DsaBitAppend_v1` has no gate, so the lowering
+    multiple of its length is the one its gates lower to, AND for AND, and the rows that commit each count sum, each
+    committed bit read as the form its row holds it to (`_commits_read`).  `DsaBitAppend_v1` has no gate, so the lowering
     meets no activation of it: its output is its operands' wires."""
     unit = bind(R.DsaMaskPositionsV2, N=13, AT=6, K=4)
     names = {p.name for p in POSITION_PIECES}
@@ -574,4 +603,5 @@ def test_the_positions_builders_lower_to_their_gates(monkeypatch: pytest.MonkeyP
     for piece in POSITION_PIECES:
         monkeypatch.delattr(piece, "build")
     by_gates, built = _lowered(unit)
-    assert not names & set(built) and by_gates == circuit
+    read, commits = _commits_read(circuit)
+    assert not names & set(built) and commits and (read, 0) == _commits_read(by_gates)
