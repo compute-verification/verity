@@ -1,1 +1,1 @@
-2026-11-12 13:46Z DRAFTKERNELS: eh norm read from CPU PTX/SASS (r20261112-134044-8a1d) as TritonBlockRMSNorm_v1{6144,8192,4,1e-5} twice, pos==0 a select to +0; indexer at next_n 6 flattens to next_n 1 on sm_90; next: module + sidecar, capture scripts.
+2026-11-12 14:10Z DRAFTKERNELS: PR branch at 0fbd2a35cb: MtpEhNorm_v1 + sidecar + tests, and three card captures (eh norm with pinned PTX/SASS, eh_proj route scan 1..8192, indexer logits flattened at six rows a request), each dry-run on CPU; next: remote suites and circuit-check, then the card at Fri 03:00Z.
