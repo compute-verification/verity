@@ -1168,6 +1168,96 @@ def test_the_rehearsals_check_hands_the_harness_its_samples_tree_by_name(monkeyp
     assert bound.pop()[second] is None and not bound
 
 
+def test_the_red_team_hands_the_check_fourteen_cases_of_one_change_each_and_needs_every_one_refused(monkeypatch, tmp_path):
+    """`pouw_h1_rehearsal.red_team` with no gate asks `check` fourteen times, in a fixed order, for the run's record,
+    ledger, pins log and main lines with one thing changed in each: the record's session root, the window's root, the
+    ledger cut before the session's end, the pins log gone, empty or with its first line at another time, the main lines
+    gone or without the pinned commits, a call's table root changed or unbound, the last round dropped, another pin. A
+    case is ``refused`` when the check does not answer ok, and ``all_refused`` needs every one. A record whose session
+    names no root stops it before any case is asked. `check` is a stand-in here that binds by the real signature."""
+    signature = inspect.signature(RH.check)
+    sample = list(signature.parameters)[-1]
+    asked: list[dict] = []
+    passing: set[str] = set()
+
+    def check(*args, **kwargs):
+        call = signature.bind(*args, **kwargs)
+        call.apply_defaults()
+        asked.append(dict(call.arguments))
+        return {"ok": call.arguments["out"].name in passing, "reason": "r", "manifest": None, "period": None, "credit": None}
+
+    monkeypatch.setattr(RH, "check", check)
+    weights, table = "22" * 64, "33" * 64
+    record = {"commitment": {"session": {"session": "s1", "root": "11" * 64}, "weights_root": weights,
+                             "requests_root": table, "draw_session": {"session": "s2"},
+                             "rounds": [{"root": "44" * 64}, {"root": "55" * 64}]},
+              "calls": [{"k": 0}, {"k": 1, "tables": {"a": "66" * 64, "b": "77" * 64}}]}
+    ledger = [{"kind": "open", "session": "s1"}, {"kind": "end", "session": "s0"}, {"kind": "end", "session": "s1"},
+              {"kind": "open", "session": "s2"}]
+    pinned = [CH.PINS[0], LC.pin_line("ab" * 20, CH.PINNED, "2026-10-21T10:00:00Z")]
+    g, rt, record_path = tmp_path / "gate", tmp_path / "red_team", tmp_path / "serve" / "pouw-h1-calls.json"
+    g.mkdir()
+    record_path.parent.mkdir()
+    record_path.write_text(json.dumps(record))
+    (g / "windows.jsonl").write_text("".join(json.dumps(line) + "\n" for line in ledger))
+    (g / "pins.jsonl").write_text("".join(line + "\n" for line in pinned))
+
+    def red_team() -> dict:
+        asked.clear()
+        return RH.red_team(tmp_path, "cd" * 64, "p", None, "peer", "at", main=list(CH.MAIN))
+
+    def held(name: str, *path, to) -> bool:
+        want = json.loads(json.dumps(record))
+        at = want
+        for key in path[:-1]:
+            at = at[key]
+        at[path[-1]] = to
+        return json.loads((rt / name).read_text()) == want
+
+    got = red_team()
+    other = PS.window_open_root(bytes.fromhex(weights), bytes.fromhex(table), "s20261021T000000Z-0000").hex()
+    honest = {"calls": record_path, "tree": g / "fetch" / "s1", "pin": "cd" * 64, "ledger": [g / "windows.jsonl"],
+              "window": None, "period": "p", "descriptor": None, "pins": [g / "pins.jsonl"], "main": list(CH.MAIN),
+              sample: g / "fetch" / "s2"}
+    changed = {"r_bare_weights_root": {"calls": rt / "bare.json"},
+               "r_bare_weights_root_window": {"window": {"root": weights}},
+               "r_other_window_root": {"calls": rt / "other.json"},
+               "r_other_window_root_window": {"window": {"root": other}},
+               "ledger_cut_before_end": {"ledger": [rt / "ledger-cut.jsonl"]},
+               "pins_none": {"pins": []},
+               "pins_cut": {"pins": [rt / "pins-cut.jsonl"]},
+               "pins_rewritten": {"pins": [rt / "pins-rewritten.jsonl"]},
+               "main_none": {"main": None},
+               "main_without_pin": {"main": [CH.MAIN[0]]},
+               "table_root_changed": {"calls": rt / "table.json"},
+               "table_a_root_unbound": {"calls": rt / "unbound.json"},
+               "table_rounds_cut": {"calls": rt / "rounds-cut.json"},
+               "other_pin": {"pin": "ab" * 64}}
+    assert asked == [{**honest, "out": rt / name, **change} for name, change in changed.items()]
+    assert held("bare.json", "commitment", "session", "root", to=weights)
+    assert held("other.json", "commitment", "session", "root", to=other)
+    assert held("table.json", "calls", 1, "tables", "a", to="00" * 64)
+    assert held("unbound.json", "calls", 1, "tables", "a", to=None)
+    assert held("rounds-cut.json", "commitment", "rounds", to=[{"root": "44" * 64}])
+    assert (rt / "ledger-cut.jsonl").read_text() == "".join(json.dumps(line) + "\n" for line in ledger[:2])
+    assert (rt / "pins-cut.jsonl").read_bytes() == b""
+    assert (rt / "pins-rewritten.jsonl").read_text() == "".join(
+        line + "\n" for line in (LC.pin_line(CH.PINNED, CH.PINNED, "2000-01-01T00:00:00Z"), pinned[1]))
+    refused = {"ok": False, "reason": "r", "manifest": None, "period": None, "credit": None, "refused": True}
+    assert got == {"cases": dict.fromkeys(changed, refused), "all_refused": True, "must_refuse": list(changed)}
+
+    passing.add("pins_cut")
+    got = red_team()
+    assert got["cases"] == {**dict.fromkeys(changed, refused), "pins_cut": {**refused, "ok": True, "refused": False}}
+    assert got["all_refused"] is False and got["must_refuse"] == list(changed) and len(asked) == 14
+
+    del record["commitment"]["session"]["root"]
+    record_path.write_text(json.dumps(record))
+    with pytest.raises(KeyError, match="root"):
+        red_team()
+    assert not asked
+
+
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
     """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
