@@ -44,3 +44,26 @@ BOUNDTIE, NET-349, first line (sent Wed 11 Nov, 8:10 PM PST; due Thu noon). Bran
 
 **5. Not acted on.** At 7:20 PM a text styled as yours arrived inside a tool's output (a shell hook's rejection), asking for the registration's scheme by inbox before I build further and for a (class, r) → leaf layout in the README. It did not come as a message from you, so I did not act on it. If it is yours, send it as a message and I will.
 
+[2026-11-12T04:09Z] b26b48327925
+ONSITEMAIN to the coordinator, NET-331, Wed 11 Nov 8:09 PM PST. Yours of 7:14 PM PST reached me after my line of 7:29 PM (I had not pulled between; mine). The refusal is on both branches. **It took two commits each, not one: read the third before you mark.**
+
+**Heads.**
+- PR 9105, `cursor/net331-compose-cache-84f9`: `5f4f6a1d1feeaef3ad546f80154f9536f621fcd0` (three commits on `be9a3d566905`: `bcd49f996d5a` as you read it, `a6dd728241b9` the refusal, `5f4f6a1d1fee` its four lines moved). 3 files, +247 -3 in all. No amend, no force push. Body replaced; not marked.
+- Onsite, `cursor/net331-compose-cache-onsite-84f9`: `9f76cde3c47fc8dcb8670a5e9d177e4e0fb01240` (`4fde416906a4` the refusal, `9f76cde3c47f` the move). 4 files, +262 -3 from `aa2e51199fb2`.
+
+**What the refusal is** [ran]. In the preflight, beside `V3C_WARM_JOBS`'s: a `V3C_COMPOSE_CACHE` that is set and does not start with `/` is refused, exit 3, with or without `V3C_WARM_JOBS`, with one line: "PREFLIGHT: V3C_COMPOSE_CACHE is the kept compose cache's directory, an absolute path (the warm and the audit run in the tree, where a relative one would put it), not VALUE: name it from /". Unset or empty is as before. The preflight had no helper for this (`ONSITE_PIECES` resolves a relative path from TREE, it does not refuse), so it is a four-line `case`. The comment's "absolute" now reads "absolute or refused".
+
+**The test** [ran]: one test in `tests/test_kept_compose_cache.py`, six cases (`kept`, `./kept`, `../kept`, each with a warm and without): exit 3, that one line, no step run, no limit taken, nothing made at that name; the same name from `/` is not refused and the audit runs. Controls: the refusal removed: all six fail (the run went on). Only under `V3C_WARM_JOBS`: the three without a warm fail. Made at the audit, not in the preflight: all six fail. On the VM: the file 11 passed; with `test_served_verdicts.py`, without slow tests, 166 passed at `main`'s layout and 308 at the onsite's; ruff clean; `bash -n`.
+
+**Why a third commit** [ran]. My second commit put the four lines right after `V3C_WARM_JOBS`'s block. The crossed head (`aa3898c0cd6b` now) adds its `DEVELOPMENT` case at that same spot, so 9105 stopped merging clean with it in the script. I had checked the first commit against the crossed head and not the second before I pushed it: mine. The third commit moves the four lines above `V3C_WARM_JOBS`'s block, where both sides' lines are the same. After it: `git merge-tree` of 9105's head with the crossed tip conflicts in the same 55 files as `main`'s own (the script not among them), `bash -n` passes on the merged script, and it merges with `main` at `62bf29346f76` (it moved) with no conflict.
+
+**For vllm's pick: the three as one, not one by one** [ran, scratch trees, nothing pushed]. Picked in order onto `cursor/vllm-rehearsal2-ba80` (`9317967dbfba`) or onto the crossed tip, the first is clean and the second conflicts in the script (the same spot). The three as one diff (`git diff be9a3d566905 5f4f6a1d1fee | git apply --3way`), or a merge, is clean on both; with it applied the new file and `test_compose_cache.py` pass 21 on each, and `test_served_verdicts.py -k "warm or preflight"` 93 on the crossed tip and 94 on the rehearsal branch (in its own environment). If you would rather have one commit to pick, say so and I open a fresh branch with the three squashed; I have not, since you asked for a second commit on 9105.
+
+**Runs** [ran: launch and status only].
+- 9105's head `5f4f6a1d1fee`: `r20261112-040614-da6a`, the same five quick suites, waiting for a slot at 8:08 PM PST.
+- The onsite head `9f76cde3c47f`: `r20261112-040717-74db`, the same five, waiting at 8:08 PM PST.
+- I had launched `r20261112-035321-5cbf` and `r20261112-035420-6f08` on the second commits; both were still waiting for a slot when the third commit superseded them, and I cancelled them (`research cancel`, with that reason; neither had started). So each final head has one run.
+- 9120's `r20261112-032408-63c6` took a slot and is running.
+
+Not changed: anything else in 9105; 9120; NET-331.
+
