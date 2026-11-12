@@ -22,7 +22,8 @@ openings fix before the phase's sample.
 So the probability that every phase is accepted, at a statement registered as the period's (`PhaseRegistered`) and
 with a complete record (`RecordComplete`), outside the period's good event (`PooledGood` at `WregR`) is at most
 `(1 - q)^Fmax + Σ_i e_i`. That an accepted phase is so registered and its record complete is in the event, not among
-the premises: the statement says nothing of a phase accepted otherwise.
+the premises: a period in which an accepted phase is not registered as the period's, or has an incomplete record, is
+outside the bound.
 
 What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
 at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
@@ -69,7 +70,8 @@ for every secret, the probability that every phase is accepted, its statement re
 `Pw i` and the openings holding `ρ i` at the registered inputs (`PhaseRegistered`) and its record complete
 (`RecordComplete`), while the period's good event fails (`PooledGood` at the incorrect sets `WregR`: they hold under
 `Fmax` proof blocks in total, and every phase's record meets its leak relation at its own) is at most
-`(1 - q)^Fmax + Σ_i e i`. -/
+`(1 - q)^Fmax + Σ_i e i`. A period in which an accepted phase is not registered as the period's, or has an incomplete
+record, is outside the bound. -/
 def PooledLeakRegistered : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
     (D : Claims.Msg → Compiled Coin A) (hA : A.KS H) (hb : ∀ y, (D y).commit.Binds H) (hS : ∀ y, (D y).Sessions H)

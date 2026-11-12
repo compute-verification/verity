@@ -15,9 +15,10 @@ monitoring period of one execution phase, audited by the compiled verifier of tw
 `twoA`, at SHA-512) against the prover that sends nothing, which it accepts. The program is two inputs sampled whole,
 so the rate is `1` (`rateAt_all`); the layout has no egress link and the input gate `0` as its ingress (`twoLay`), the
 registered input is the gate `1`, and the registered openings open both at `true` (`certOps`), as the one step's record
-does (`twoObs`). The phase's error is the instance's own. There the phase is registered as the period's and its record
-is complete (`twoPhase_registered`, `twoPhase_record`), so an `example` reads the guarantee as a bound on the phase
-accepted outside its good event.
+does (`twoObs`). The phase's error is the instance's own. Its last conjunct is the guarantee's event there, which is
+not empty: at every history the phase is accepted, registered as the period's and its record complete
+(`twoPhase_registered`, `twoPhase_record`). So an `example` reads the guarantee as a bound on the phase accepted
+outside its good event.
 
 Its nontrivial lemma (`PooledLeakRegistered_nontrivial`): the bound fails at a verifier that always accepts
 (`leakL`), at `q = 1`, `Fmax = 1` and no error, where the phase is registered as the period's with a complete record
@@ -99,7 +100,8 @@ the prover that sends nothing, at the rate `1` of a program sampled whole, the r
 registered openings `certOps`, the record `twoObs` at the layout `twoLay`, and the phase's own error. The proof
 system's knowledge soundness, the commitment's binding and the sessions' contract hold there (`twoSessions_meets`);
 the verifier has two rounds; nothing reads a coin; the registered openings pass and open the registered input; the
-layout fits; and the network certifier registers the record. -/
+layout fits; the network certifier registers the record; and at every history the phase is accepted, registered as
+the period's and its record complete, which is the guarantee's event. -/
 theorem PooledLeakRegistered_honest :
     (twoA Bool).KS shaD ∧ (twoL Bool).commit.Binds shaD ∧ (twoL Bool).Sessions shaD ∧ PhaseRounds D₂ 2 x₂ ∧
       PhasesAdaptive x₂ P₂ ops₂ ∧
@@ -107,11 +109,16 @@ theorem PooledLeakRegistered_honest :
       (∀ s Pt, (twoL Bool).parse [] = some s → (twoL Bool).partition s = some Pt → RateAt s Pt 1) ∧
       PhaseErrors shaD D₂ Set.univ x₂ P₂ ops₂ e₂ ∧ (twoLay).Fits twoStmt.prog 1 ∧
       (∀ s, (twoL Bool).parse [] = some s →
-        CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) := by
-  obtain ⟨hA, hb, hS, -⟩ := twoSessions_meets (Coin := Bool) shaD
+        CertifierRegisters shaD (twoL Bool).commit twoLay 1 (fun _ _ => [true]) s certOps [twoObs]) ∧
+      ∀ (ω : Ω₂) (i : Fin 1), phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i) ∧
+        PhaseRegistered D₂ (fun _ => twoLay) (fun _ => 1) (fun _ => {1}) (fun _ => twoStmt) (fun _ => twoPart)
+          (fun _ _ => true) x₂ ops₂ () ω i ∧
+        RecordComplete (fun _ => 1) 1 (fun _ => twoStmt) obs₂ () ω i := by
+  obtain ⟨hA, hb, hS, -, hacc⟩ := twoSessions_meets (Coin := Bool) shaD
   refine ⟨hA, hb, hS, fun _ _ _ => le_rfl, ⟨fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl, fun _ _ _ _ _ => rfl⟩,
     fun s hs => ⟨fun o ho => ?_, fun g hg => ⟨⟨1, true, []⟩, by simp [certOps], (Finset.mem_singleton.1 hg).symm⟩⟩,
-    fun s Pt hs hPt => ?_, fun _ _ _ _ => le_rfl, twoLay_fits, fun s hs => ?_⟩
+    fun s Pt hs hPt => ?_, fun _ _ _ _ => le_rfl, twoLay_fits, fun s hs => ?_,
+    fun ω i => ⟨(hacc _).2, twoPhase_registered ω i, twoPhase_record ω i⟩⟩
   · simp only [certOps, List.mem_cons, List.not_mem_nil, or_false] at ho
     rcases ho with rfl | rfl <;> rfl
   · obtain rfl := twoL_parse hs
@@ -120,21 +127,21 @@ theorem PooledLeakRegistered_honest :
   · obtain rfl := twoL_parse hs
     exact twoLay_registers
 
-/-- At that instance the guarantee's hypotheses are those premises, and the phase is registered as the period's with
-a complete record, so its bound reads there: at `q = 1` and `Fmax = 1`, the phase is accepted outside its good event
-with probability at most its own error. -/
+/-- At that instance the guarantee's hypotheses are those premises and its event is every phase accepted, so its
+bound reads there: at `q = 1` and `Fmax = 1`, the phase is accepted outside its good event with probability at most
+its own error. -/
 example (h : Guarantees.PooledLeakRegistered) :
     Pr (fun ω : Ω₂ => (∀ i, phaseAcc shaD D₂ x₂ P₂ (fun _ _ _ => le_rfl) () i ω (ω i)) ∧
         ¬PooledGood (fun _ => twoLay) (fun _ => 1) (fun _ => {1}) 1 (fun _ => twoStmt) (fun _ => twoPart)
           (fun _ _ => true) (fun _ _ _ _ => [true]) 1 (WregR shaD D₂ x₂ P₂ ops₂ () ω) (obs₂ () ω)) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ i, e₂ i := by
-  obtain ⟨hA, hb, hS, -, had, hops, hrate, he, hfit, hcert⟩ := PooledLeakRegistered_honest
+  obtain ⟨hA, hb, hS, -, had, hops, hrate, he, hfit, hcert, hev⟩ := PooledLeakRegistered_honest
   refine le_trans (Claims.Pr_mono fun ω hω => ?_)
     (h shaD D₂ hA (fun _ => hb) (fun _ => hS) (fun _ => twoLay) (fun _ => 1) (fun _ => {1}) 1 (fun _ => twoStmt)
       (fun _ => twoPart) (fun _ _ => true) (fun _ _ _ _ => [true]) Set.univ x₂ P₂ (fun _ _ _ => le_rfl) ops₂ obs₂ had
       (fun _ _ _ _ s hs => hops s hs) 1 zero_le_one le_rfl (fun _ _ _ _ s Pt hs hPt => hrate s Pt hs hPt) e₂ he
       (fun _ => hfit) (fun _ _ _ _ s hs _ => hcert s hs) 1 () (Set.mem_univ _))
-  exact ⟨fun i => ⟨hω.1 i, twoPhase_registered ω i, twoPhase_record ω i⟩, hω.2⟩
+  exact ⟨fun i => ⟨hω.1 i, (hev ω i).2⟩, hω.2⟩
 
 /-! The instance the bound fails at: one step's record over one egress link that holds no frame, jitter class `0`,
 every status complete (`obs₁`). -/
