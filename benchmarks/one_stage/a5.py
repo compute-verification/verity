@@ -502,7 +502,14 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     m = members[k]
     names = [q for q, _ in m.all_rows]
     body = bytearray(publics[m.key])
-    body[names.index(p) * WI.BC_BYTES] ^= 1
+    j = names.index(p)
+    if m.tables:
+        # a shared-row member's body is its ports' tables, then each unit's refs (`wiring.strings`): unit 0's string of
+        # port p is the row of p's table its ref names, not the body's j-th string
+        counts = [dict(m.tables).get(q, m.n) for q in names]
+        refs = WI.BC_BYTES * sum(counts) + 4 * j
+        j = sum(counts[:j]) + int.from_bytes(body[refs:refs + 4], "little")
+    body[j * WI.BC_BYTES] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {
         "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
