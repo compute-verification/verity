@@ -123,9 +123,9 @@ def staged():
 
 @pytest.fixture(scope="module")
 def operands():
-    """The module's one stream over the four parameters the replay gives, its boundary registered and its first stage drawn.
-    A stream takes one interior registration a draw, and this one's is the operand-port test's: a test that registers another
-    interior of these links builds a stream of its own."""
+    """The module's one stream over the four parameters the replay gives, its boundary registered and its first stage sampled.
+    A stream takes one interior registration a first-stage sample, and this one's is the operand-port test's: a test that
+    registers another interior of these links builds a stream of its own."""
     return _first(OPERANDS)
 
 

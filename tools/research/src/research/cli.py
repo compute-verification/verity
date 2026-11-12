@@ -109,7 +109,8 @@ to the telemetry harness (timeout, sampler, cancel evidence, classifier, tee'd l
 with --on; `--cwd source` (or `source/SUB`, a relative SUB) runs it in the source root (the invoking directory; with --on, the shipped
 tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a private `git clone --shared` of the source root at its HEAD,
 outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
-run.cwd_basis record it.  It exits with the workload's status; with
+run.cwd_basis record it.  A `--cwd source` workload that builds Lean waits for the tree's lock (research/treelock.py, job.json
+run.lean_tree_lock), so two Lean builds never share a `.lake` at once.  It exits with the workload's status; with
 --require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
 (exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
@@ -140,7 +141,7 @@ from pathlib import Path
 
 from . import clone
 from . import compare as C
-from . import record, remote, result
+from . import record, remote, result, treelock
 from . import runs as R
 from . import waitcap
 from .timefmt import both
@@ -539,6 +540,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # the workload runs in its own run dir, locally and on a machine (a relative `> result.json` used to land in the checkout, and
         # on a machine in <root>/src/<sha>/, which every run of that commit shares: concurrent runs raced on it)
         a.cwd = str(run_dir)
+    source_root = Path.cwd()
+    tree_lock = treelock.lock_path(root, source_root) if cwd_basis == "source" and treelock.builds_lean(command) else None
     run_dir.mkdir(parents=True, exist_ok=ns.claimed)
     _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
@@ -555,6 +558,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             job["run"]["job_namespaces"] = list(ns.job_namespaces)
     if clone_rec:
         job["run"]["cwd_clone"] = clone_rec
+    if tree_lock:
+        job["run"]["lean_tree_lock"] = str(tree_lock)
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
         from .binprov import snapshot
 
@@ -593,6 +598,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
         spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id),
                                                    list({**clone_env, **env_map, **dict.fromkeys(key_env)}), ns.job_namespaces)]
+    if tree_lock:
+        spawn = [*treelock.wrap(tree_lock, source_root), *spawn]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         if ns.job_user:
