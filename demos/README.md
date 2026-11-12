@@ -2,7 +2,7 @@
 
 One directory per demo. A demo holds what is its own: the workload it serves, its placement (where each party
 runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the integration's
-(`adapters/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from `demos/`
+(`adapters/`), and the protocols it runs stay in `verity/protocols/`. `verity` imports nothing from `demos/`
 (`tests/test_boundaries.py`), and `verity demo NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
 or `run.sh`.
 
@@ -15,8 +15,8 @@ verifier establishes with no hardware of its own at the developer's site. It com
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, drawn by work
-  weight on a live coin, are recomputed, and the run's commitment names the one record the policy and sampled proofs
+- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
+  weight on a live coin, are recomputed, and the run's commitment names the one record the policy and SPOT
   committed to (`Core.Remote.V1.run`). H1's development executable, `verity/remote/v0` (`Core.Remote.protocol`),
   which no configuration names, has PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
@@ -103,7 +103,3 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
-- `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
-  full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt, which is no longer PoUW's plan
-  (the lead, `verity/pouw/v2`, is). It has no runner and no run of record, so `verity demo dither_full_util` runs
-  nothing yet, and it is not a remote run.
