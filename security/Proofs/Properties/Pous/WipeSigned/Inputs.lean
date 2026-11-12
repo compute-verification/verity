@@ -130,12 +130,12 @@ theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.
     exact ⟨vs, rfl, h.symm⟩
 
 theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
-    {batches : Array StreamedWipe.Batch} {eg : Int} {rec : ByteArray}
-    (h : StreamedWipe.message c e sm fs fe batches eg = .ok rec) :
+    {batches : Array StreamedWipe.Batch} {rec : ByteArray}
+    (h : StreamedWipe.message c e sm fs fe batches = .ok rec) :
     ∃ root, StreamedWipe.recordsRoot c.session batches = .ok root ∧
       rec = Sha512.hash (StreamedWipe.SESSION_TAG ++
-        be64 (StreamedWipe.header c e sm fs fe batches.size eg).toUTF8.size.toUInt64 ++
-        (StreamedWipe.header c e sm fs fe batches.size eg).toUTF8 ++ root) := by
+        be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
+        (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root) := by
   unfold StreamedWipe.message at h
   cases hr : StreamedWipe.recordsRoot c.session batches with
   | error _ => simp [hr, bind, Except.bind] at h
