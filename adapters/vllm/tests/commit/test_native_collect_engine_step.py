@@ -22,11 +22,14 @@ import numpy as np
 import pytest
 import torch
 
-from verity_vllm.commit.committer import native_collect as NC
-from verity_vllm.commit.served_record import SAMPLED, SAMPLER_INPUTS, SamplerInputsSource
-from verity_vllm.engine import hooks, runner_step
-
 from tests.commit import test_native_collect_plan_cache as PC
+from verity_vllm.commit.committer import native_collect as NC
+from verity_vllm.commit.served_record import (
+    SAMPLED,
+    SAMPLER_INPUTS,
+    SamplerInputsSource,
+)
+from verity_vllm.engine import hooks, runner_step
 
 SEED, POSITION = SAMPLER_INPUTS
 #: the sampler's seed of each request state slot, and the state slot of each row of the batch
