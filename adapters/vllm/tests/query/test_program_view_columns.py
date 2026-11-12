@@ -220,7 +220,7 @@ def test_the_columnar_boundary_without_literals_is_boundarys(monkeypatch, step, 
             assert a.read_by._d is None
             assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.values == b.values
             assert [(u.id, u.calls) for u in a.units] == [(u.id, u.calls) for u in b.units] and a.owner == b.owner
-            assert dict(a.read_by) == b.read_by and a.read_by == b.read_by
+            assert dict(a.read_by) == b.read_by and a.read_by == b.read_by and len(a.read_by) == len(b.read_by)
     assert lit and any(v.call in lit for v in boundary(P0, QUERIES["word"]).values), "the rows give the literal filter something to drop"
 
 
