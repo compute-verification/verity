@@ -3,14 +3,14 @@ Stdlib only: it runs on the node after the lease and in the pouw suite's CPU tes
 the driver's rows (`dscore.cu`) and the gates' outputs into SCORE, the per-entry minimum, the gates and the secondary
 metrics.
 
-The suite (CAP's mixes, Llama-3.1-8B on one RTX PRO 6000; `SUITE`): decode at B 1/32/128/256 over 2K–32K contexts (the
-longest dcap holds, B·L ≤ 786K), chat 1K/256 at B 32 and 256, RAG 8K/256 at B 144, code/agents 24K/512 at B 48,
+The suite (share.py's mixes, Llama-3.1-8B on one RTX PRO 6000; `SUITE`): decode at B 1/32/128/256 over 2K–32K contexts
+(the longest dcap holds, B·L ≤ 786K), chat 1K/256 at B 32 and 256, RAG 8K/256 at B 144, code/agents 24K/512 at B 48,
 reasoning 1K/8K at B 132, and an 8,192-token prefill step. A mix's decode is measured at its mean context P + D/2,
 rounded down to 512 and capped at 786K/B (RAG reads 5K, code 16K, chat 1K). `ROBUST` points are reported, not scored.
 
 Each entry is one unit of serving-alone wall time. Per entry, with the arm:
-- served decode step: dcap's step + the non-GEMM kernels, max(1.09 ms, 4.684 µs × B) (CAP's convention), those stretched
-  by the step's own slowdown;
+- served decode step: dcap's step + the non-GEMM kernels, max(1.09 ms, 4.684 µs × B) (share.py's convention), those
+  stretched by the step's own slowdown;
 - prefill step: dcap's 32 layers of linears at M = 8192 (measured) + FA2 attention (73.11 ms causal 8,192) + non-GEMM
   (38.37 ms), the unmeasured two stretched by the linears' slowdown; a mix's prefill of P tokens is that step's time
   scaled by P/8192 (linears and non-GEMM) and causal(P)/causal(8192) (attention);
@@ -32,14 +32,35 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import math
 import re
 import statistics
 import sys
+from collections.abc import Callable, Collection, Iterable
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
+import arms as A  # where an arm places its filler at a point (`placed`)
+import share  # the capacity model's constants: MACs a token, non-GEMM times, FA2, the int8 peak
+
+log = logging.getLogger(__name__)
+
+#: what the scorer, the arms' runners, the readers and the tests read
+__all__ = [
+    "CERTIFIED", "CONTROL_BYTES", "CONTROL_RANGE", "DEFER_1GPU", "DEFER_FIT", "DEFER_FIT_TP", "DEFER_T", "DEFER_TP",
+    "DEFER_TP_R6", "DEFER_TP_RUNS", "DRAM_LIMIT", "FILLER_ENTRIES", "FILLER_KERNELS", "FOLDS", "FOLD_UNCHECKED",
+    "LIMIT", "PER_SM", "PREFILL_COINS", "PREFILL_M", "RANGE_LOG2", "RECEIPT_TAGS", "ROBUST", "SCORER",
+    "SELECT_LEMMA", "TOO_GOOD", "TP_FILLER", "TP_NCU_KERNEL", "TP_SUITE", "UNCHECKED", "UNCHECKED_V4", "UNDER_CH",
+    "V2", "V3", "V4", "V5", "capacity", "certified", "certified_v5", "cheat_s", "clock_gate", "coverage",
+    "credit_fixed", "declared_fold", "decode_entry", "defer_at", "defer_fit", "defer_measured", "defer_pass",
+    "defer_rates", "defer_shown_1gpu", "dram_gate", "dseed", "fill_parts", "filler_entry", "filler_entry_v4",
+    "filler_entry_v5", "fold_facts", "fold_reading", "fold_words", "gates", "honesty", "isfinite", "kernel_facts",
+    "margins", "mix_context", "mix_entry", "ncu_metric", "other_ms", "parse_nvdisasm", "parse_smi", "paths_gate",
+    "point_stats", "points", "prefill_entry", "program_facts", "replay_gate", "score", "score_v5", "secondary",
+    "served_model", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
+]
 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
@@ -88,8 +109,8 @@ FILLER_ENTRIES = {
         "source": "Theorem E, c/m = ¼ (c = ½, m_max = 2) at φ = 0.9, heads priced at 8 int8 slots: fresh i.i.d. ±1 "
                   "operands for every MMA, every MMA's sum committed; 0.225 an int8 slot for the s8 tile (L = 32) and the "
                   "e2m1 tile (L = 64, m = 2) alike (note:20261015T1845Z-draft-rs-d1e-edited-floor)",
-        "unchecked": ("an e2m1 tile's block scales' values (the OMMA's UE4M3 operands), held to the host reference by "
-                      "the receipts gate",)},
+        "unchecked": (("an e2m1 tile's block scales' values (the OMMA's UE4M3 operands), held to the host reference by "
+                       "the receipts gate"),)},
     "chained": {
         "fraction": 0.0, "status": "proved", "active": True,
         "source": "a chained filler's proved floor: operands or accumulators that are earlier MMAs' outputs are heads "
@@ -241,7 +262,7 @@ def point_stats(row: dict) -> dict:
     }
 
 
-def cap(mhz: float) -> float:
+def capacity(mhz: float) -> float:
     return PER_SM * SMS * mhz * 1e6
 
 
@@ -298,7 +319,7 @@ def mix_entry(pre: dict, dec: dict, p: int, d: int, b: int, l: int) -> dict:
 
 
 def coverage(e: dict, certified: dict = CERTIFIED) -> dict:
-    c = cap(e["mhz"]) * e["t1_ms"] * 1e-3
+    c = capacity(e["mhz"]) * e["t1_ms"] * 1e-3
     cs, cf = certified["serving"]["fraction"], certified["filler"]["fraction"]
     cert = cs * e["serving_macs"] + cf * e["filler_macs"]
     return {**e, "capacity_macs": c, "certified_macs": cert, "coverage": cert / c,
@@ -411,11 +432,11 @@ def _kind_l(mma: dict, acc: int) -> tuple[str | None, int | None]:
 #: what `filler_entry` does not check when a theorem's entry applies, stated with the decision (each entry's own
 #: ``unchecked`` adds to it); a floor of 0 needs nothing
 UNCHECKED = (
-    "the operand bytes' values and freshness: the alphabet, and that no MMA's operands are earlier words, are the arm's "
-    "declaration (filler.noise), auditable in the variant's sources, whose host reference the receipts gate holds the "
-    "device to",
-    "that no word is scaled by a shift or merged with another word before the receipt: the receipt's own rotations and "
-    "folds are the same integer ops")
+    ("the operand bytes' values and freshness: the alphabet, and that no MMA's operands are earlier words, are the arm's "
+     "declaration (filler.noise), auditable in the variant's sources, whose host reference the receipts gate holds the "
+     "device to"),
+    ("that no word is scaled by a shift or merged with another word before the receipt: the receipt's own rotations and "
+     "folds are the same integer ops"))
 
 
 def _theorem_checks(e: dict, noise: str | None, facts: dict | None, fixed_work: bool) -> tuple[dict, list[str]]:
@@ -438,7 +459,8 @@ def _theorem_checks(e: dict, noise: str | None, facts: dict | None, fixed_work: 
 
 
 def filler_entry(noise: str | None, facts: dict | None, *, fixed_work: bool = False,
-                 entries: dict = FILLER_ENTRIES, check=None) -> dict:
+                 entries: dict = FILLER_ENTRIES,
+                 check: Callable[[dict], tuple[dict, list[str]]] | None = None) -> dict:
     """Which certified-fraction entry the filler is read at (filler-scorer/v3), from its declared operand noise and the
     kernel facts of the scorer's own build (`kernel_facts`), never the declaration alone. A theorem's entry (Theorem K's,
     then Theorem E's) applies when every check holds:
@@ -725,25 +747,25 @@ def program_facts(listings: dict[str, str], names: tuple = FILLER_KERNELS) -> di
 
 #: what filler-scorer/v4 does not check, beside `UNCHECKED`, when a theorem's entry applies
 UNCHECKED_V4 = (
-    "that every receipt is written by the filler: v4 sees what code can store on the filler warps' paths, not what "
-    "address another path's store hits, so in a binary that calls dfill_k (without one, its fixed work isn't "
-    "credited) a serving warp, or filler warps inlined into another kernel instead of calling it (FILL r3's form), "
-    "could write one; the receipts gate holds every sampled receipt to the host reference whoever wrote it",
-    "that a filler warp only calls dfill_k: a path from the warp-role branch that never reaches the CALL looks like the "
-    "serving warps' path, so its MMAs read as serving",
-    "the filler function's inputs (only the coins, the public tile id and the step, besides its stop flag): the "
-    "INTERFACE's, with the receipts gate holding its outputs to the host reference's function of (coins, tile, steps); "
-    "a dfill_k function that writes memory is held to stores of its arguments (`_put_bad`), but the values the filler "
-    "warps pass it are computed on their path, where integer ops aren't refused",
-    "the fixed work's MACs: the driver's count over its receipts (the device's step counts, each sampled one held to "
-    "the host reference by its receipt and the steps - 8 control) times the driver's MACs a step",
-    "the filler warps' DRAM traffic: the scorer's dram gate measures the split filler's kernels; the fused runner's "
-    "own gate (fused_score.py fused_dram) measures the serving kernels with and without their filler warps",
-    "that a driver binary that ran is the scorer's compile: an arm's runner may rebuild it from the same source and "
-    "flags into the scorer's build directory (fused_score.py does)")
+    ("that every receipt is written by the filler: v4 sees what code can store on the filler warps' paths, not what "
+     "address another path's store hits, so in a binary that calls dfill_k (without one, its fixed work isn't "
+     "credited) a serving warp, or filler warps inlined into another kernel instead of calling it (FILL r3's form), "
+     "could write one; the receipts gate holds every sampled receipt to the host reference whoever wrote it"),
+    ("that a filler warp only calls dfill_k: a path from the warp-role branch that never reaches the CALL looks like the "
+     "serving warps' path, so its MMAs read as serving"),
+    ("the filler function's inputs (only the coins, the public tile id and the step, besides its stop flag): the "
+     "INTERFACE's, with the receipts gate holding its outputs to the host reference's function of (coins, tile, steps); "
+     "a dfill_k function that writes memory is held to stores of its arguments (`_put_bad`), but the values the filler "
+     "warps pass it are computed on their path, where integer ops aren't refused"),
+    ("the fixed work's MACs: the driver's count over its receipts (the device's step counts, each sampled one held to "
+     "the host reference by its receipt and the steps - 8 control) times the driver's MACs a step"),
+    ("the filler warps' DRAM traffic: the scorer's dram gate measures the split filler's kernels; the fused runner's "
+     "own gate (fused_score.py fused_dram) measures the serving kernels with and without their filler warps"),
+    ("that a driver binary that ran is the scorer's compile: an arm's runner may rebuild it from the same source and "
+     "flags into the scorer's build directory (fused_score.py does)"))
 
 
-def _theorem_checks_v4(e: dict, noise: str | None, pf: dict | None, unread) -> tuple[dict, list[str]]:
+def _theorem_checks_v4(e: dict, noise: str | None, pf: dict | None, unread: Collection[str]) -> tuple[dict, list[str]]:
     f = (pf or {}).get("filler") or {}
     kind, L, kinds = f.get("kind"), f.get("L"), e["kinds"]
     checks = {"noise": noise in e["noise"], "program facts read": pf is not None, "kind": kind in kinds,
@@ -762,7 +784,8 @@ def _theorem_checks_v4(e: dict, noise: str | None, pf: dict | None, unread) -> t
     return checks, [why[c] for c, ok in checks.items() if not ok]
 
 
-def filler_entry_v4(noise: str | None, pf: dict | None, *, unread=(), entries: dict = FILLER_ENTRIES) -> dict:
+def filler_entry_v4(noise: str | None, pf: dict | None, *, unread: Collection[str] = (),
+                    entries: dict = FILLER_ENTRIES) -> dict:
     """The entry the filler is read at under filler-scorer/v4: `filler_entry`'s order and floors, its theorem checks on
     `program_facts` (the filler's code wherever it's called from, kernels and in-kernel functions alike), with
     ``confined`` (no violation on the filler warps' paths) and ``drivers read`` (every row's binary is one the scorer
@@ -891,18 +914,18 @@ FOLDS = {
 RECEIPT_TAGS = {"ram": "ram", "duo": "duo", "xin": "xor-in", "xin13": "xor-in-13", "li": "lop3-imad"}
 #: what `fold_reading` can't confirm from the SASS, stated with every reading
 FOLD_UNCHECKED = (
-    "the fold's keys and rotations (odd, screened multipliers; the rotation amounts): the receipts gate holds the "
-    "device to the host reference's fold of the declared NC and build flags",
-    "that an XOR's other inputs carry no other word of the tile: the trace reads each word's first reader (through "
-    "moves) in listing order, not along control flow, so a word combined with another before that reader (two words "
-    "XORed first, a (δ, δ) kernel) shows only where both are an MMA's outputs at the same instruction",
-    "XOR-in's binding: its complement elements flip three words' low bits jointly, P2-FF's open question "
-    "(note:20261016T1013Z-draft-pfill-fold §2.2); decision 43 reads it in full",
-    "the r9 folds' premises (note:20261016T1117Z-draft-fullfloor-s-r9): key_ok_r9 on a0 and a1 (the receipts gate's "
-    "host reference draws the keys), (HO) for LOP3+IMAD (the filler's rows are SHA-512 output), DP_M ≈ 0 over Λ8 "
-    "(measured, pairwise); the SASS shows the rotations, not the keys",
-    "which instantiation ran: a templated dfill_k<NC> or dfill_p<NC> is read at the arm's declared NC, the one its "
-    "driver selects; a filler function no NC selects (a fused or TP filler's) is read in every clone")
+    ("the fold's keys and rotations (odd, screened multipliers; the rotation amounts): the receipts gate holds the "
+     "device to the host reference's fold of the declared NC and build flags"),
+    ("that an XOR's other inputs carry no other word of the tile: the trace reads each word's first reader (through "
+     "moves) in listing order, not along control flow, so a word combined with another before that reader (two words "
+     "XORed first, a (δ, δ) kernel) shows only where both are an MMA's outputs at the same instruction"),
+    ("XOR-in's binding: its complement elements flip three words' low bits jointly, P2-FF's open question "
+     "(note:20261016T1013Z-draft-pfill-fold §2.2); decision 43 reads it in full"),
+    ("the r9 folds' premises (note:20261016T1117Z-draft-fullfloor-s-r9): key_ok_r9 on a0 and a1 (the receipts gate's "
+     "host reference draws the keys), (HO) for LOP3+IMAD (the filler's rows are SHA-512 output), DP_M ≈ 0 over Λ8 "
+     "(measured, pairwise); the SASS shows the rotations, not the keys"),
+    ("which instantiation ran: a templated dfill_k<NC> or dfill_p<NC> is read at the arm's declared NC, the one its "
+     "driver selects; a filler function no NC selects (a fused or TP filler's) is read in every clone"))
 _NC_ARG = re.compile(r"(?:^|\$)_Z\d+dfill_[kp]ILi(?P<nc>\d+)E")
 _RREG = re.compile(r"^[-~!|]*(?P<u>U?)R(?P<i>\d+)\b")
 _PRED = re.compile(r"^!?U?P(?:T|\d+)$")
@@ -1158,7 +1181,7 @@ def _fold_problems(fold: str, nc: int | None, flags: str | None, ff: dict) -> li
     return out
 
 
-def filler_entry_v5(noise: str | None, pf: dict | None, fold: dict, *, unread=(),
+def filler_entry_v5(noise: str | None, pf: dict | None, fold: dict, *, unread: Collection[str] = (),
                     entries: dict = FILLER_ENTRIES) -> dict:
     """filler-scorer/v5's entry: v4's (`filler_entry_v4`), with the fold (`fold_reading`) as one more theorem check,
     ``fold``, that fails where no fold applies; a theorem entry's fraction is then its fraction times the fold's
@@ -1303,7 +1326,7 @@ def defer_measured(p: dict) -> dict:
     ``lost_macs``, the filler MACs it gave up against the phase arm (r2's, or the point's own set); s = added ÷ plain,
     u = lost ÷ C × the hidden ms (plain − added), and d = lost ÷ C × the whole pass's ms (u(1 − s), but defined where
     s ≈ 1, where u isn't)."""
-    c = cap(p["mhz"])
+    c = capacity(p["mhz"])
     plain = p["served_macs"] / (DEFER_OF_PEAK * c) * 1e3
     added = p["defer_ms"] - p["base_ms"] * p["phase_slowdown"]
     lost = p["phase_fill_macs"] - p["defer_fill_macs"]
@@ -1349,7 +1372,7 @@ def defer_fit(T: int = DEFER_T, points: list[dict] | None = None, form: str = "u
     for p, m, r in zip(pts, meas, rows):
         fit = {q: math.exp(sum(c * x for c, x in zip([math.log(out[q]["intercept"][t]) for t in tps]
                                                     + [out[q]["batch"], out[q]["context"]], r))) for q in qs}
-        c, s = cap(p["mhz"]) * 1e-3, min(1.0, fit["s"])
+        c, s = capacity(p["mhz"]) * 1e-3, min(1.0, fit["s"])
         disp = (fit["u"] * (1 - s) if form == "u" else fit["d"]) * m["plain_ms"] * c
         t1 = p["base_ms"] * p["phase_slowdown"] + s * m["plain_ms"]
         share_fit = max(0.0, p["phase_fill_macs"] - disp) / (c * t1)
@@ -1451,9 +1474,9 @@ def defer_pass(macs: float, mhz: float, tp: int = 1, B: int | None = None, L: in
     """Decode's deferred noised pass over `macs` served products a GPU at (TP, B, L): its time (EGEMM × the model's
     unit), the ms of wall time it adds (s of it) and the filler MACs it displaces (d·C a ms of the pass)."""
     r = defer_rates(tp, B, L)
-    pass_ms = EGEMM * macs / (DEFER_OF_PEAK * cap(mhz)) * 1e3
+    pass_ms = EGEMM * macs / (DEFER_OF_PEAK * capacity(mhz)) * 1e3
     return {"pass_ms": pass_ms, "s": r["s"], "d": r["d"], "added_ms": r["s"] * pass_ms,
-            "displaces": r["d"] * pass_ms * cap(mhz) * 1e-3}
+            "displaces": r["d"] * pass_ms * capacity(mhz) * 1e-3}
 
 
 def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
@@ -1463,16 +1486,16 @@ def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
     if e["kind"] == "decode":
         st = stats[("decode", e["B"], e["L"])]
         r = decode_entry(st, e["B"], e["L"])
-        n_pre, f_pre, gemm, n_dec, f_dec = 0.0, 0.0, 0.0, r["serving_macs"], r["filler_macs"]
+        f_pre, gemm, n_dec, f_dec = 0.0, 0.0, r["serving_macs"], r["filler_macs"]
     elif e["kind"] == "prefill":
         st = stats[("prefill", PREFILL_M, 0)]
         r = prefill_entry(st)
-        n_pre, f_pre, gemm, n_dec, f_dec = r["serving_macs"], r["filler_macs"], st["alone_ms"] + share.FA2_MS_8192, 0.0, 0.0
+        f_pre, gemm, n_dec, f_dec = r["filler_macs"], st["alone_ms"] + share.FA2_MS_8192, 0.0, 0.0
     else:
         pre, dec = stats[("prefill", PREFILL_M, 0)], stats[("decode", e["B"], e["L"])]
         r = mix_entry(pre, dec, e["P"], e["D"], e["B"], e["L"])
         m = mix_parts(pre, dec, e["P"], e["D"], e["B"], e["L"])
-        n_pre, f_pre, gemm, n_dec, f_dec = m["n_pre"], m["f_pre"], m["gemm_pre_ms"], m["n_dec"], m["f_dec"]
+        f_pre, gemm, n_dec, f_dec = m["f_pre"], m["gemm_pre_ms"], m["n_dec"], m["f_dec"]
     dp = defer_pass(n_dec, r["mhz"], 1, e.get("B"), e.get("L")) if n_dec else \
         {"pass_ms": 0.0, "added_ms": 0.0, "displaces": 0.0, "s": None, "d": None}
     pre_ms = (EGEMM - 1 + coins) * gemm
@@ -1486,7 +1509,7 @@ def coverage_v5(e: dict, filler_fraction: float) -> dict:
     """An `entry_v5` entry's coverage in its two parts, each over C × its v5 wall time: the measured filler part
     (``filler_part``, its MACs at the folded fraction) and the modelled served part (``served_part_modelled``, every served MAC
     at `SERVED_V5`'s 0.9)."""
-    c = cap(e["mhz"]) * e["t1_ms"] * 1e-3
+    c = capacity(e["mhz"]) * e["t1_ms"] * 1e-3
     fp, sp = filler_fraction * e["filler_macs"] / c, SERVED_V5["fraction"] * e["serving_macs"] / c
     return {**e, "capacity_macs": c, "filler_part": fp, "served_part_modelled": sp, "coverage": fp + sp,
             "filler_share": e["filler_macs"] / c, "time": e["t1_ms"] / e["t0_ms"]}
@@ -1572,7 +1595,7 @@ def tp_entry(by_arm: dict, key: tuple[int, int, int], filler_fraction: float) ->
     f = statistics.mean(r["fill_macs_rep"] for r in recs)
     dp = defer_pass(n, mhz, tp, key[1], key[2])
     t1, fv5 = phase + dp["added_ms"], max(0.0, f - dp["displaces"])
-    c4, c5 = cap(mhz) * phase * 1e-3, cap(mhz) * t1 * 1e-3
+    c4, c5 = capacity(mhz) * phase * 1e-3, capacity(mhz) * t1 * 1e-3
     return {"entry": f"TP {tp} B {key[1]} L {key[2] // 1024}K", "tp": tp, "B": key[1], "L": key[2], "t0_ms": base,
             "t1_measured_ms": phase, "t1_ms": t1, "slowdown": phase / base, "mhz": mhz,
             "serving_macs": n, "filler_measured_macs": f, "filler_macs": fv5,
@@ -1812,7 +1835,8 @@ def _too_good(v: dict) -> bool:
     return bool(v.get("beside_over_alone")) and v["beside_over_alone"] > v["too_good_limit"]
 
 
-def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has_filler: bool = False,
+def honesty(arm: Any, stats: dict, phases_points: Iterable[tuple[str, int, int]], *, control: dict | None = None,
+            has_filler: bool = False,
             whole: dict | None = None) -> dict:
     """The arm's placement is a pure function of the point (asked twice, the same answer); no filler ran faster beside
     serving than alone on the same SMs (its split's chunks beside ÷ the median of the round-interleaved standalone
@@ -1822,8 +1846,6 @@ def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread. filler-scorer/v4 passes `whole`, each point's
     `whole_of_peak` (the kernel's serving and filler MACs together over its SMs' peak), and refuses any above 1."""
-    import arms as A  # noqa: PLC0415
-
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
     fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f} > {v['too_good_limit']:.3f}" for k, v in stats.items()
             if _too_good(v)]
@@ -1861,7 +1883,7 @@ def clock_gate(stats: dict, smi: list[dict]) -> dict:
 def parse_smi(text: str) -> list[dict]:
     """nvidia-smi --query-gpu=clocks.sm,clocks.max.sm,power.draw,power.limit,clocks.applications.graphics,
     clocks.default_applications.graphics,clocks_event_reasons.active --format=csv,noheader,nounits rows."""
-    out = []
+    out, unread = [], []
     for ln in text.splitlines():
         f = [x.strip() for x in ln.split(",")]
         if len(f) < 7:
@@ -1871,7 +1893,10 @@ def parse_smi(text: str) -> list[dict]:
                         "app_mhz": None if f[4] in ("[N/A]", "N/A") else float(f[4]),
                         "default_app_mhz": None if f[5] in ("[N/A]", "N/A") else float(f[5]), "reasons": f[6]})
         except ValueError:
-            continue
+            unread.append(ln)
+    if unread:
+        log.warning("parse_smi: %d row(s) with a field that is no number are left out, the first %r", len(unread),
+                    unread[0])
     return out
 
 
@@ -1918,5 +1943,5 @@ def margins(stats: dict) -> dict:
             "no_margin": [name for name, m in pts.items() if m["scored"] and m["rounds"] and m["rounds"][0] <= 0]}
 
 
-def isfinite(x) -> bool:
+def isfinite(x: object) -> bool:
     return isinstance(x, (int, float)) and math.isfinite(x)

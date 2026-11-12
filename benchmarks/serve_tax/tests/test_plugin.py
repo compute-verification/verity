@@ -250,6 +250,32 @@ def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     assert seen[0] == bytes([5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0, 0])
 
 
+def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_path, monkeypatch):
+    class Serving(Scheduler):
+        def update_from_output(self, so, mro):
+            return {0: NS(outputs=mro)}
+
+    got: list = []
+    monkeypatch.setattr(P, "_lines_behind", lambda path: (got.append(path.name), got.append)[1])
+    sched = Serving()
+    done = P.install(sched, {"out": str(tmp_path), "ids": True})
+    assert got == [f"ids.{P.os.getpid()}.jsonl"] and not list(tmp_path.iterdir())
+    a, b, c = eid("agentic@2-r1-u0", 0), eid("agentic@2-r1-u1", 0), eid("agentic@2-r1-u1", 1)
+    for rid, prompt in ((a, [5, 6, 7]), (b, [8]), (c, [9, 9])):
+        sched.add_request(Request(rid, prompt))
+    out = lambda rid, ids, reason=None: NS(request_id=rid, new_token_ids=ids, finish_reason=reason)   # noqa: E731
+    sched.update_from_output(None, [out(a, [1, 2]), out(b, [3])])                # a step's tokens, drafts kept among them
+    sched.update_from_output(None, [out(b, [], 1), out(a, [4]), out("other", [0], 1)])
+    assert got[1:] == [{"id": b, "prompt_ids": [8], "output_ids": [3]}]
+    assert sched.finish_requests([c], "aborted") and c not in done[0].open       # an aborted request leaves no line
+    sched.update_from_output(None, [out(a, [5, 6], 0)])
+    assert got[2:] == [{"id": a, "prompt_ids": [5, 6, 7], "output_ids": [1, 2, 4, 5, 6]}] and not done[0].open
+    assert list(got[2]) == ["id", "prompt_ids", "output_ids"]                    # a line opens with its request's id
+    done[-1].uninstall()
+    sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
+    assert not done[0].open
+
+
 def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():
     ticks, capturing = [], [False]
 

@@ -130,7 +130,9 @@ def test_an_arm_behind_the_certifier_is_served_by_its_two_sides_and_by_vllms_cli
             ([*run, "--c4", "c4", "--rates", "light=1"], "sent by vLLM's client, through the network certifier"),
             (bench, "served by two commands: --side server on the node"),
             ([*bench, "--side", "client"], "--certifier-windows N"),
+            ([*bench, "--side", "client", "--sampled"], "is served greedy"),
             ([*run, "--client", "vllm-bench", "--loads", "long", "--side", "client"], "not long"),
+            ([*run, "--client", "vllm-bench", "--loads", "agentic", "--side", "client"], "not agentic"),
             ([*bench, "--side", "server", "--cells", "queue=8", "--tick-ms", "220,220"], "a queue of 8 under the rung 96")):
         with pytest.raises(SystemExit, match=why):
             S.main(argv)
@@ -147,8 +149,8 @@ def test_a_job_of_the_nodes_side_serves_stock_whole_first_and_has_no_cost(tmp_pa
     arm one command serves takes no notice of it, and the job computes no cost, the arm's passes being in the other
     side's directory."""
     sh = (S.HERE / "run.sh").read_text()
-    assert '${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} --out "$OUT/$arm"' in sh
-    assert '[ "${ARMS##* }" != published ] \\\n    && [ "${SIDE:-}" != server ]; then' in sh
+    assert '${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} \\\n' in sh
+    assert '&& [ "${ARMS##* }" != prod ] && [ "${SIDE:-}" != server ]; then' in sh
     served = []
     monkeypatch.setattr(S, "serve", lambda a, private: served.append((a.arm, a.side)) or 0)
     S.main(["run", "--arm", "compiled", "--model-id", "glm53", "--client", "vllm-bench", "--loads", "chat=96", "--side",
@@ -228,7 +230,8 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint="/ck", client="vllm-bench", side="server", loads="chat=96", cells=None,
         front=18750, tick_from=None, tick_ms="220,220", stop_at="1970-01-01T01:25:00Z" if ends == "stop-at" else None,
-        num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, out=str(out))
+        num_gpu_blocks=None, max_model_len=None, window_s=30.0, kv_window_s=30.0, startup_s=1800.0, lifetime=None,
+        out=str(out))
     rc = S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # --stop-at is 100 s off, and the side stops `STOP_S` before it
@@ -322,7 +325,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     a = argparse.Namespace(
         arm=ARM, model_id="glm53", checkpoint=str(tmp_path / "ck"), client=S.BENCH, loads="chat=2", dataset=None,
         pass_prompts="chat=3", reps=3, seed=0, warm_s=20.0, front=18746, cells="window=40", certifier_windows=windows,
-        out=str(out), side=S.CLIENT)
+        lifetime=None, leave_out=0, out=str(out), side=S.CLIENT)
     rc = S.certified_client(a, run=run, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # the certifier runs windows of 10 s from its origin, and a pass takes 300 s: of 130 windows the warm-up and two

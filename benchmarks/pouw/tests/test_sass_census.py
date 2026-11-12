@@ -3,13 +3,14 @@
 On a synthetic two-architecture listing (`fixtures/sass_census_sample.sass`, sm_90a and sm_100a): `sass_count` parses
 the `cuobjdump -sass` text, counts each dotted opcode and folds the minor versions into one device family; `sass_semantics`
 classifies each base opcode (can it head a product, does it write a word, which menu route prices it); and `diff_menu`
-buckets the family's census against the menu, so the red-team gaps are the GAP-* and UNDERPRICED buckets. It also pins the
-NVIDIA Instruction Set Reference tables and the PTX index the diff reads for the opcodes the corpus never used.
+buckets the family's census against the menu, so the menu's gaps are the GAP-* and UNDERPRICED buckets. It also pins the
+NVIDIA Instruction Set Reference tables the diff reads for the opcodes the corpus never used.
 """
 from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -136,6 +137,27 @@ def test_diff_flags_the_lane_classifiers_uniform_mis_map():
     assert all(x["class_of"] == "UNI" for x in d["disagreements"])
 
 
+def test_report_heads_a_family_and_lists_only_the_buckets_that_need_reading():
+    """`report`: the family's head line, its bucket counts, the classifier's disagreements, then each bucket that is a gap
+    or unknown, most counted first, with its escape or its note; a priced or harmless bucket is counted and not listed."""
+    row = {"mul": True, "route": "tensor", "class_of": "MMA", "in_corpus": True, "note": "n", "escape": None}
+    d = {"family": "sm_x", "isa_table": "T", "ds_tensor_types": ["f16", "s8"], "priced_tensor_tokens": ["A", "B"],
+         "counts": {"GAP-TENSOR": 2, "HARMLESS": 1}, "disagreements": [{"op": "UTCX", "class_of": "UNI"}],
+         "rows": [{**row, "op": "DMMA.8", "bucket": "GAP-TENSOR", "count": 1200, "escape": "e"},
+                  {**row, "op": "ZMMA", "bucket": "GAP-TENSOR", "count": 0, "in_corpus": False},
+                  {**row, "op": "NOP", "bucket": "HARMLESS", "count": 5}]}
+    assert diff_menu.report(d).split("\n") == [
+        "== sm_x (ISA table: T; DS_tensor types: f16, s8; census tensor rows: A, B)",
+        "buckets: GAP-TENSOR 2, HARMLESS 1",
+        "class_of disagreements (the lane classifier's UNIFORM regex mis-maps these): UTCX->UNI",
+        "",
+        "-- GAP-TENSOR (2)",
+        "  DMMA.8                              x1,200  mul=True route=tensor class_of=MMA",
+        "       escape: e",
+        "  ZMMA                              (unused)  mul=True route=tensor class_of=MMA",
+        "       n"]
+
+
 def test_ds_tensor_types_read_each_devices_sheet():
     """A3 prices a tensor form by its operand type's `DS_tensor` peak, read from each device's own rows file: no device
     lists f64, sm_90/sm_100 list no e2m1 (fp4), sm_120 does; sm_90's "no b1 figure" (after the `;`) doesn't count b1."""
@@ -187,6 +209,14 @@ def test_the_isa_reference_tables_are_whole():
     assert diff_menu.isa_vocab("sm_90") is t["hopper"] or diff_menu.ISA_TABLE["sm_90"] == "hopper"
 
 
-def test_the_ptx_index_is_whole():
-    p = json.loads((SC / "data" / "ptx_index.json").read_text())
-    assert len(p["instructions"]) == 156
+# ---- the runner --------------------------------------------------------------------------------------------------------
+
+
+def test_run_sh_names_every_job_of_the_directory_and_the_readme_lists_them():
+    """`run.sh` starts a job by its name: its case holds each job script beside it and no other, and the README's table
+    has a row a job."""
+    jobs = {p.stem for p in SC.glob("*.sh")} - {"run"}
+    case = re.search(r'^case "\$job" in ([\w|]+)\)$', (SC / "run.sh").read_text(), re.M)
+    assert case and set(case.group(1).split("|")) == jobs
+    readme = (SC / "README.md").read_text()
+    assert all(f"| `{job}.sh" in readme for job in jobs)

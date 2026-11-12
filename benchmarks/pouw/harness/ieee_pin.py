@@ -54,7 +54,6 @@ def nvcc_args(arch: str) -> list[str]:
     return ["-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", "--no-compress"]
 
 
-NVCC_ARGS = nvcc_args("sm_120a")
 PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}

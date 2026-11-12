@@ -45,7 +45,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
-                     "label_auth", "label_delegation", "nightly_check")
+                     "ready_verdict", "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
                  "circuits")
@@ -172,6 +172,23 @@ def test_label_refuses_what_the_vocabulary_cannot_place_unless_off_vocab(env, ca
     for key, value in (("replay_set", "warden/re-verify"), ("replay_set", "pouw/re-run"), ("replay_expect", "blocked: V3")):
         assert main(["label", ART, key, value, "--by", "lane-x", "--ref", "run:x"]) == 0, (key, value)
     capsys.readouterr()
+
+
+def test_the_executors_verdict_on_a_commits_ready_check_is_a_label_the_store_takes(env, capsys):
+    """The executor's serve writes its verdict on `ready:<sha>` as `research data label commit:<sha> ready_verdict <json>
+    --value-json --by executor`. A key the vocabulary doesn't hold is refused, so the label was never written and the
+    queue's loop, which reads it when it can't ask the executor, read none. The store takes it, a JSON object, as given."""
+    sha = "c" * 40
+    verdict = {"check": f"ready:{sha}", "state": "fail", "why": None, "tasks": 3, "passed": 2, "pending": 0,
+               "failed": [{"task": "t", "key": "k" * 128, "why": "exit 1", "tests": ["tests/test_a.py::test_b"], "tests_total": 1}],
+               "infra": [{"task": "e", "key": None, "why": "its run left no result", "nodes": ["n"], "tree": "f" * 40}],
+               "flaky": [{"task": "k", "key": "j" * 128}]}
+    assert vocab.key(vocab.READY_VERDICT).group == vocab.GROUP_VERIFICATION and vocab.check(vocab.READY_VERDICT, verdict) is None
+    assert main(["label", f"commit:{sha}", "ready_verdict", json.dumps(verdict), "--value-json", "--by", "executor"]) == 0
+    out, err = capsys.readouterr()
+    assert Path(out.strip()).is_file() and "refused" not in err and "warning" not in err
+    label, = LocalStore().labels(f"commit:{sha}", key=vocab.READY_VERDICT)
+    assert (label.value, label.by) == (verdict, "executor")
 
 
 def test_lane_shorthand_folds_into_one_spelling(env, capsys):
