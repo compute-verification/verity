@@ -130,8 +130,9 @@ def _launched(**engine_kwargs: Any) -> dict:
 def test_a_launch_that_names_another_kv_cache_format_is_refused_by_its_setting(cache):
     """φ carries no KV cache format, so such a launch would compile to the Programs of a launch at the default, which it did
     not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
-    why = (f"engine kv_cache_dtype={cache!r}: a request Program states the KV cache of a launch at kv_cache_dtype auto or bfloat16, "
-           "so the compile of this launch would be Programs it did not run (VLLM-393).")
+    why = (f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype auto or bfloat16 "
+           "and no other format (an FP8 KV cache is not modelled), so the compile of this launch would be Programs it did not run. "
+           "Serve with kv_cache_dtype at vLLM's default to compile it")
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.engine_of(_launched(kv_cache_dtype=cache), 0)
     with pytest.raises(ValueError, match=re.escape(why)):
@@ -148,8 +149,8 @@ def test_a_launch_that_decodes_speculatively_is_refused_by_its_setting(setting):
     did not run: the registration refuses it by the setting, in the config's form or vLLM's short ones. A launch that
     leaves them out, or at None, compiles as before."""
     (name, value), = setting.items()
-    why = (f"engine {name}={value!r}: a request Program states no draft tokens (speculative decoding), its decode row is one "
-           "token, so the compile of this launch would be Programs it did not run (VLLM-393).")
+    why = (f"engine {name}={value!r}: a request Program models no draft tokens (speculative decoding), its decode row is one "
+           "token, so the compile of this launch would be Programs it did not run. Serve with speculative decoding off to compile it")
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.engine_of(_launched(**setting), 0)
     with pytest.raises(ValueError, match=re.escape(why)):

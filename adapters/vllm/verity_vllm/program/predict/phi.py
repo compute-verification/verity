@@ -121,14 +121,14 @@ def _refuse_unstated(kw: Mapping[str, Any]) -> None:
     a launch would be the Programs of a launch without them, which it did not run."""
     cache = kw.get("kv_cache_dtype")
     if cache is not None and cache not in STATED_KV_CACHE:
-        raise ValueError(f"engine kv_cache_dtype={cache!r}: a request Program states the KV cache of a launch at kv_cache_dtype "
-                         f"{' or '.join(STATED_KV_CACHE)}, so the compile of this launch would be Programs it did not run "
-                         "(VLLM-393). Serve with kv_cache_dtype at vLLM's default to compile it")
+        raise ValueError(f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype "
+                         f"{' or '.join(STATED_KV_CACHE)} and no other format (an FP8 KV cache is not modelled), so the compile of "
+                         "this launch would be Programs it did not run. Serve with kv_cache_dtype at vLLM's default to compile it")
     for k in SPECULATIVE:
         if kw.get(k) is not None:
-            raise ValueError(f"engine {k}={kw[k]!r}: a request Program states no draft tokens (speculative decoding), its decode "
-                             "row is one token, so the compile of this launch would be Programs it did not run (VLLM-393). "
-                             "Serve with speculative decoding off to compile it")
+            raise ValueError(f"engine {k}={kw[k]!r}: a request Program models no draft tokens (speculative decoding), its decode "
+                             "row is one token, so the compile of this launch would be Programs it did not run. Serve with "
+                             "speculative decoding off to compile it")
 
 
 def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
