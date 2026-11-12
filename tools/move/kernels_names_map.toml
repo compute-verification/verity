@@ -35,11 +35,13 @@ files = [
 words = { "windowK" = "executionPhaseK", "windowK_le" = "executionPhaseK_le" }
 
 [[words_in]]
+# The lock is where `--moves` reads a guarantee's rename.
 files = [
     "security/Definitions/Pouw/Window.lean",
     "security/Proofs/Flock/Soundness/Audit/README.md",
     "security/Proofs/Flock/Soundness/Audit/Window.lean",
     "security/Proofs/Flock/Soundness/KeyedDraw.lean",
+    "security/lean-audit.json",
     "verity/protocols/pouw/prover/circuit/__init__.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
     "verity/protocols/pouw/verifier/tests/test_circuit_plan.py",
