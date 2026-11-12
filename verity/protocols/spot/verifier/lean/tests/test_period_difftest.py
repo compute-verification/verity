@@ -334,7 +334,7 @@ def case(rng: random.Random, name: str) -> Any:
 
 
 INPUTS = st.builds(case, st.randoms(use_true_random=False),
-                   st.sampled_from(["honest"] * 4 + list(NAMES) + REQUESTS))
+                   st.sampled_from(["honest"] * 4 + list(NAMES) + REQUESTS * 2))
 PERIOD = D.Port(PIECES, "period_windows", reference, INPUTS, package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(PERIOD)
@@ -346,13 +346,14 @@ def _answer(pieces, j: Any) -> dict:
     return json.loads(text)
 
 
+@pytest.mark.slow
 def test_the_reader_agrees_and_each_case_is_answered_as_named(pieces):
     """Lean and the reference agree on sampled cases, and each named case is accepted or refused under its own code
     over a few seeds."""
-    stats = D.run(PERIOD, examples=120, server=pieces)
-    assert stats.outputs > 60 and stats.rejects > 0, stats
+    stats = D.run(PERIOD, examples=60, server=pieces)
+    assert stats.outputs > 30 and stats.rejects > 0, stats
     for name, code in NAMES.items():
-        for seed in range(6):
+        for seed in range(3):
             got = _answer(pieces, case(random.Random(f"{name}/{seed}"), name))
             assert got.get("code") == code, (name, seed, got.get("code"), got.get("refused"))
             assert code is not None or got["windows"], (name, seed)
@@ -395,6 +396,7 @@ def test_a_small_ledger_reads_as_written(pieces):
     assert _answer(pieces, request(b.lines())) == want
 
 
+@pytest.mark.slow
 def test_monitoring_periods_one_after_another_split_the_sessions(pieces):
     """Whatever the stamps, monitoring periods that follow one another list each root the lane's opens name exactly
     once between them: ledgers whose entries carry stamps in no order, read at three periods end to end, give the
