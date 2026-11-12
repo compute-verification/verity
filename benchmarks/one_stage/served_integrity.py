@@ -2,34 +2,39 @@
 (`benchmarks/prove_path/records_audit.py`) that ran on it.
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
-commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
-are the ones `Spot.OneStage.check` makes public (the sampled and proved units, the bound on incorrect proof blocks at δ, each
-template's under a stratified or work sampling design; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
+commitment is the registration's digest, the verdict the audit record's, and on acceptance the profile is
+`audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the four `Spot.OneStage.check` makes
+public (``drawn`` and ``proved``, the sampled and proved units; ``bound``, the bound on incorrect proof blocks at δ;
+``per_template``, each template's under a stratified or work sampling design) and a fifth the Lean's answer doesn't
+have, ``coins``. A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is an error (RuntimeError), not a verdict.
 
-An accepted audit record is an accept only with two things the audit left beside it, and is undecided without either,
-by name:
+``public.coins`` says whose coins the sample is on: ``{key_sha512, session}``, the SHA-512 of the challenger key the
+coins' evidence verified under, in lowercase hex, and the id of the one session the auditor's ledger opens on the
+window's root under that key. Both are what a check verified, never what a flag or a printed line says: the audit
+record's ``coins.verified`` (`a5.coins_outcome`), which the audit writes only where `coins.coins_reason` took the
+evidence (the ledger's, the pins' and the segment's signatures under the key, and the ledger's one open on the window's
+root), the stream's Lean run having read the same evidence at its select. They are not the parameters of the compiled
+check's case: `Spot.OneStageZk` reads the challenger from its parameters, and a case that names it is where the two
+values are to come from once an audit writes one. Until then a case that does name its challenger
+(``window/case-v2.json``'s ``params.challenger``) is held to the audit record: the key's digest must be the recorded one.
 
-* whose coins the sample is on, as a check verified it and never as a flag or a printed line says it: the audit record's
-  ``coins.verified`` (`a5.coins_outcome`), the SHA-512 of the challenger key `coins.coins_reason` verified the coins'
-  evidence under and the id of the one session the auditor's ledger opens on the window's root under that key. The
-  answer's public outputs carry both (``public.coins``: ``{key_sha512, session}``), beside the ones the Lean makes
-  public, so a reader that holds the deployment's key record compares the digest with it; nothing here holds a key
-  record, so nothing here tells a development session's key from the auditor's.
-* the case for the compiled check, `Spot.OneStageZk` (``window/case-v2.json``, `a5.write_case`), which the audit
-  record says it wrote (``case_v2``, `a5.case_written`): where the audit wrote none (the record says why, in the audit's
-  words: sessions that aren't `--zk`, a sample of several members), no verifier of record can be run on the window,
-  and the Python audit's acceptance alone is not sampled proofs' accept.
+An accepted audit record is undecided, not an accept, where it names no such key and session (an audit record written
+without them), or where the window's case names a challenger whose key is another, or isn't read. A reader that holds
+the deployment's key record compares the digest with it; nothing here holds a key record, so nothing here tells a
+development session's key from the auditor's.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
+from verity.protocols.spot.device.challenger import ChallengerKey
 from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
@@ -54,14 +59,26 @@ def whose_coins(rec: Mapping[str, Any]) -> dict[str, str] | None:
     return {"key_sha512": key, "session": session}
 
 
-def no_case(rec: Mapping[str, Any]) -> str | None:
-    """Why the audit record ``rec``'s audit left no case for the compiled check (``case_v2``, `a5.case_written`), in the
-    audit's words; None where the record says it wrote the case."""
-    case = rec.get("case_v2")
-    if isinstance(case, Mapping) and case.get("written") is True:
+def case_key(out: Path) -> str | None:
+    """The SHA-512 of the challenger key the case for the compiled check under ``out`` names (``window/case-v2.json``'s
+    ``params.challenger.key``, `Spot.OneStageZk`'s parameters), in lowercase hex; None where the audit left no such case
+    or its parameters name no challenger. ValueError for a case that isn't read or a key in another form."""
+    case = out / "window" / "case-v2.json"
+    if not case.is_file():
         return None
-    why = case.get("why") if isinstance(case, Mapping) else None
-    return why if type(why) is str and why else "the audit record doesn't say it wrote one (case_v2)"
+    try:
+        doc = json.loads(case.read_text())
+        params = doc["params"] if isinstance(doc, Mapping) else None
+        if not isinstance(params, Mapping):
+            raise ValueError("it holds no parameters")
+        named = params.get("challenger")
+        if named is None:
+            return None
+        if not isinstance(named, Mapping):
+            raise ValueError("its challenger is not an object")
+        return hashlib.sha512(ChallengerKey.from_json(named.get("key")).public).hexdigest()
+    except (OSError, KeyError, ValueError) as e:
+        raise ValueError(f"{type(e).__name__}: {e}") from None
 
 
 def _codes(checks: Mapping[str, Any]) -> list[str]:
@@ -98,8 +115,8 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ, and its public ``coins`` whose coins the sample is on
-    (`whose_coins`). An accepted audit record that names no such coins, or whose audit wrote no case for the compiled
-    check (`no_case`), is undecided (module docstring)."""
+    (`whose_coins`). An accepted audit record that names no such coins, or beside a case for the compiled check that
+    names another challenger key (`case_key`), is undecided (module docstring)."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
@@ -134,10 +151,15 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         return _refusal("the audit record names no challenger key and session a check verified its coins under "
                         "(coins.verified): its acceptance says nothing of whose coins the sample is on", R.digest(reg),
                         "undecided")
-    why = no_case(rec)
-    if why is not None:
-        return _refusal(f"no case for the compiled check (Spot.OneStageZk, window/case-v2.json): {why}", R.digest(reg),
-                        "undecided")
+    try:
+        named = case_key(out)
+    except ValueError as e:
+        return _refusal(f"the case for the compiled check (window/case-v2.json) isn't read for the challenger it names: {e}",
+                        R.digest(reg), "undecided")
+    if named is not None and named != coins["key_sha512"]:
+        return _refusal(f"the case for the compiled check (window/case-v2.json) names a challenger key with SHA-512 {named}, "
+                        f"and the audit's coins verified under the key with SHA-512 {coins['key_sha512']} (coins.verified)",
+                        R.digest(reg), "undecided")
     delta = Fraction(wrong["delta"]).limit_denominator(10**12)
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
     profile["delta"] = str(delta)
@@ -148,4 +170,4 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
             "verdict": "accept"}
 
 
-__all__ = ["PROTOCOL", "answer", "no_case", "whose_coins"]
+__all__ = ["PROTOCOL", "answer", "case_key", "whose_coins"]

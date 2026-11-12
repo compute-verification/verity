@@ -753,8 +753,8 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
     """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
     summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks
-    on coins its check verified, which says its audit wrote the case for the compiled check (`served_integrity.answer`
-    accepts with no less); or, not ``accepted``, a check before the sample that failed."""
+    on coins its check verified (`served_integrity.answer` accepts with no less); or, not ``accepted``, a check before
+    the sample that failed."""
     mine, _doc, _sets = RA.verifier_window(window, D.parse_design(LAW), None)
     rec = registration or json.loads((window / "registration.json").read_text())
     (out / "window").mkdir(parents=True)
@@ -766,7 +766,7 @@ def _audited(window: Path, out: Path, registration: dict | None = None, accepted
                                                   "fixed_before_draw": {"ok": True}}))
     (out / "window" / "audit.json").write_text(json.dumps({
         "accepted": True, "registration": rec, "proved_units": [1, 5], "checks": {"draw": {"ok": True}},
-        "coins": {"verified": {"key_sha512": "c5" * 64, "session": "local-ab12"}}, "case_v2": {"written": True},
+        "coins": {"verified": {"key_sha512": "c5" * 64, "session": "local-ab12"}},
         "draw": {"law": "subset", "k": 2, "population": rec["population"], "units": [1, 5]},
         "wrong_units": {"delta": 0.5, "bound": 3}}))
     return out

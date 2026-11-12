@@ -127,7 +127,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
     design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins. The audit record
     names whose coins those are, the key and the session the challenger's ledger opens on the run's root, and sampled
-    proofs' answer on the audit is undecided: it accepted, and wrote no case for the compiled check."""
+    proofs' answer on the audit accepts with them in its public outputs."""
     window = _window(tmp_path / "window")
     assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
@@ -143,7 +143,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
     # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
-    # as the coins' check verified them; and sampled proofs' answer, with no case for the compiled check, is undecided
+    # as the coins' check verified them; sampled proofs' answer carries them (two members: no case names a challenger)
     opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
                if e["kind"] == "open")
     whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
@@ -151,10 +151,8 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert row["coins"]["verified"] == whose
     record = json.loads((out / "window" / "audit.json").read_text())
     assert record["coins"]["verified"] == whose
-    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
     answer = _answer(out)
-    assert (answer["verdict"], answer["public"]) == ("undecided", None), answer
-    assert answer["reason"].startswith("no case for the compiled check") and "this audit drew 2 members" in answer["reason"]
+    assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
     assert row["fixed_before_draw"]["ok"] is True
     for k in range(len(TEMPLATES)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))

@@ -5,9 +5,12 @@
   decoder; the report's ε is that bound over the window's units;
 * that accept names whose coins its sample is on, as the audit's coins' check verified it (the audit record's
   ``coins.verified``): the challenger key's SHA-512 and the session's id, in ``public.coins``. An accepted audit record
-  that names none in that form, or whose audit wrote no case for the compiled check (the record's ``case_v2``), is
-  undecided by name, with the audit's own reason for the missing case, and makes nothing public; the driver's own
-  account of the session (the summary's ``coins_session``) gives it no accept;
+  that names none in that form is undecided by name and makes nothing public; the driver's own account of the session
+  (the summary's ``coins_session``) gives it no accept;
+* where the window holds a case for the compiled check that names its challenger (``window/case-v2.json``'s
+  ``params.challenger``), the accept stands only on that key: another key, or a case that isn't read, is undecided. No
+  audit writes such a case here, so these cases are built by hand; an audit with no case, or a case that names no
+  challenger, accepts as before;
 * a refusal of the records, a check before the sample that failed, an audit record that doesn't accept and advice fixed
   after the sample each reject by name, with no public outputs or profile;
 * an audit that left nothing behind is an error, not a verdict;
@@ -15,6 +18,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -22,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parent
@@ -34,11 +39,10 @@ REG = {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": "aa" * 64, "partit
 DRAW = {"law": "subset", "k": 2, "population": 1024, "units": [700, 5]}
 
 
+#: a challenger key in the form a case's parameters name it (`challenger.ChallengerKey.to_json`), and another
+KEY, OTHER = ({"H": 5, "W": 8, "public": c * Ch.PUBLIC_BYTES} for c in ("c5", "5c"))
 #: whose coins an audit's coins' check verified: the challenger key's SHA-512 and the session's id (`a5.coins_outcome`)
-WHOSE = {"key_sha512": "c5" * 64, "session": "local-ab12"}
-#: why a5 writes no case for the compiled check on a sample of two members, and on plain sessions (`a5.v2_proof`)
-TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"
-PLAIN = "ValueError: v2 verifies --zk sessions; this audit's are plain"
+WHOSE = {"key_sha512": hashlib.sha512(bytes.fromhex(KEY["public"])).hexdigest(), "session": "local-ab12"}
 
 
 def write(out: Path, summary: dict, record: dict | None = None) -> Path:
@@ -51,11 +55,10 @@ def write(out: Path, summary: dict, record: dict | None = None) -> Path:
 
 
 def record(accepted: bool, **checks) -> dict:
-    """An audit record on coins its check verified, whose audit wrote the case for the compiled check."""
+    """An audit record on coins its check verified."""
     return {"accepted": accepted, "registration": REG, "draw": DRAW, "proved_units": [700, 5],
             "checks": {"draw": {"ok": True}, **{k: {"ok": v} for k, v in checks.items()}},
             "coins": {"source": "challenger", "outcome": {"accepted": accepted}, "verified": dict(WHOSE)},
-            "case_v2": {"written": True},
             "wrong_units": {"delta": 0.5, "of": 1024, "bound": 3} if accepted else None}
 
 
@@ -103,9 +106,9 @@ SUMMARY = {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"
     {"source": "challenger", "verified": {**WHOSE, "session": 7}},
 ])
 def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, coins):
-    """The audit record accepts and the case for the compiled check is there, but the record's coins name no challenger
-    key and session a check verified, or name them in another form: undecided, by name, with nothing public. What the
-    driver says of its own session elsewhere (the summary's ``coins_session``, ``coins``) is not read."""
+    """The audit record accepts, but its coins name no challenger key and session a check verified, or name them in
+    another form: undecided, by name, with nothing public. What the driver says of its own session elsewhere (the
+    summary's ``coins_session``, ``coins``) is not read."""
     rec = {**record(True), "coins": coins}
     if coins is None:
         del rec["coins"]
@@ -118,36 +121,63 @@ def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, 
     assert a["commitment"] == R.digest(REG)
 
 
-@pytest.mark.parametrize("case,why", [
-    ({"written": False, "why": TWO_MEMBERS}, TWO_MEMBERS),
-    ({"written": False, "why": PLAIN}, PLAIN),
-    ({"written": False}, "the audit record doesn't say it wrote one (case_v2)"),
-    ({"written": "yes"}, "the audit record doesn't say it wrote one (case_v2)"),
-    (True, "the audit record doesn't say it wrote one (case_v2)"),
-    (None, "the audit record doesn't say it wrote one (case_v2)"),
-])
-def test_an_accepted_audit_with_no_case_for_the_compiled_check_is_undecided(tmp_path, case, why):
-    """The audit record accepts on coins a check verified, and its audit wrote no case for the compiled check, or the
-    record doesn't say it wrote one: undecided, saying why in the audit's own words where it left them, with nothing
-    public. The same record saying the case was written accepts."""
-    rec = {**record(True), "case_v2": case}
-    if case is None:
-        del rec["case_v2"]
-    a = I.answer(write(tmp_path / "a", SUMMARY, rec), REG)
+def case(out: Path, params) -> Path:
+    """A hand-built case for the compiled check beside the audit record under ``out``, with parameters ``params``."""
+    (out / "window" / "case-v2.json").write_text(json.dumps({"blobs": [], "commitment": "ab", "evidence": "", "params": params}))
+    return out
+
+
+@pytest.mark.parametrize("params", [{}, {"challenger": {"key": KEY, "label": "one-stage"}}])
+def test_an_accept_beside_a_case_naming_no_challenger_or_the_verified_key_stands(tmp_path, params):
+    """A case for the compiled check that names no challenger, as an audit writes it, changes nothing; one that names the
+    key the audit's coins verified under leaves the accept, with the same public outputs."""
+    a = I.answer(case(write(tmp_path / "a", SUMMARY, record(True)), params), REG)
+    assert check_answer(a) == a
+    assert a["verdict"] == "accept" and a["public"]["coins"] == WHOSE
+
+
+def test_an_accept_beside_a_case_naming_another_challenger_key_is_undecided(tmp_path):
+    """The audit's coins verified under one key and the case the compiled check would run names another: the accept
+    says nothing of the coins that check reads, so it is undecided, naming both digests."""
+    a = I.answer(case(write(tmp_path / "a", SUMMARY, record(True)), {"challenger": {"key": OTHER, "label": "one-stage"}}), REG)
     assert check_answer(a) == a
     assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
-    assert a["reason"] == f"no case for the compiled check (Spot.OneStageZk, window/case-v2.json): {why}"
+    other = hashlib.sha512(bytes.fromhex(OTHER["public"])).hexdigest()
+    assert a["reason"] == (f"the case for the compiled check (window/case-v2.json) names a challenger key with SHA-512 "
+                           f"{other}, and the audit's coins verified under the key with SHA-512 {WHOSE['key_sha512']} "
+                           "(coins.verified)")
     assert a["commitment"] == R.digest(REG)
-    assert I.answer(write(tmp_path / "b", SUMMARY, record(True)), REG)["verdict"] == "accept"
+
+
+@pytest.mark.parametrize("params,why", [
+    ({"challenger": "local"}, "ValueError: its challenger is not an object"),
+    ({"challenger": {"label": "one-stage"}}, f"CoinError: {Ch.KEY_FORM}"),
+    ({"challenger": {"key": {**KEY, "public": "c5"}, "label": "one-stage"}}, f"CoinError: {Ch.KEY_FORM}"),
+    ({"challenger": {"key": WHOSE["key_sha512"], "label": "one-stage"}}, f"CoinError: {Ch.KEY_FORM}"),
+    (None, "ValueError: it holds no parameters"),
+])
+def test_an_accept_beside_a_case_whose_challenger_is_not_read_is_undecided(tmp_path, params, why):
+    a = I.answer(case(write(tmp_path / "a", SUMMARY, record(True)), params), REG)
+    assert check_answer(a) == a
+    assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
+    assert a["reason"] == f"the case for the compiled check (window/case-v2.json) isn't read for the challenger it names: {why}"
+
+
+def test_a_case_that_is_not_json_leaves_the_accept_undecided(tmp_path):
+    out = write(tmp_path / "a", SUMMARY, record(True))
+    (out / "window" / "case-v2.json").write_text("{")
+    a = I.answer(out, REG)
+    assert a["verdict"] == "undecided" and a["reason"].startswith(
+        "the case for the compiled check (window/case-v2.json) isn't read for the challenger it names: JSONDecodeError: ")
 
 
 def test_a_rejected_audit_rejects_whatever_its_record_says_of_its_coins_and_its_case(tmp_path):
     """A refusal is a refusal first: an audit record that doesn't accept rejects by its failed checks, with or without
-    verified coins or a case for the compiled check."""
-    none = {"written": False, "why": TWO_MEMBERS}
-    for name, rec in (("a", record(False, proved=False)), ("b", {**record(False, proved=False), "case_v2": none}),
-                      ("c", {**record(False, coins=False), "coins": {"verified": None}, "case_v2": none})):
-        a = I.answer(write(tmp_path / name, SUMMARY, rec), REG)
+    verified coins, and beside a case that names another key."""
+    for name, rec in (("a", record(False, proved=False)),
+                      ("b", {**record(False, coins=False), "coins": {"verified": None}})):
+        out = case(write(tmp_path / name, SUMMARY, rec), {"challenger": {"key": OTHER, "label": "one-stage"}})
+        a = I.answer(out, REG)
         assert a["verdict"] == "reject" and a["reason"].startswith("audit record: "), a
 
 
