@@ -238,7 +238,8 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
   samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
-  ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
+  ANDs, table reads and assertions from its leaves lowered once (table reads counted apart, so not comparable with a
+  statement's `ands` with its reads inline: `m1_families.py`'s docstring), against 2^26, and
   the log2 of Flock's circuit prover's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use, with
   each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
