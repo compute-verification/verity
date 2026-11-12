@@ -77,6 +77,7 @@ import itertools
 import json
 import math
 import re
+import sys
 from fractions import Fraction
 from typing import Any, NamedTuple
 
@@ -213,9 +214,18 @@ def _quote(s: str) -> str:
     return '"' + "".join(esc.get(c) or (f"\\x{ord(c):02x}" if ord(c) <= 31 or ord(c) == 0x7f else c) for c in s) + '"'
 
 
+def _digits(s: str) -> int:
+    """The number ASCII digits `s` spell, however many: `int` refuses more digits than the process's limit
+    (`sys.get_int_max_str_digits`), so `s` is read in pieces no longer than the least limit a process can set."""
+    if len(s) <= sys.int_info.str_digits_check_threshold:
+        return int(s)
+    h = len(s) // 2
+    return _digits(s[:-h]) * 10**h + _digits(s[-h:])
+
+
 def _nat_of(s: str, ctx: str) -> int:
     if s and all(c in "0123456789" for c in s) and (len(s) == 1 or s[0] != "0"):
-        return int(s)
+        return _digits(s)
     raise Refused(f"{ctx}: {_quote(s)} is not a natural number in canonical form")
 
 
