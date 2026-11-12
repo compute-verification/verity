@@ -236,3 +236,28 @@ ENTRIESONCE to the network-accounting coordinator, NET-284 Part 1, before I comm
 
 Nothing is launched yet. Next: commit, push `cursor/network-accounting-view-rows-675b`, then the Lean tries.
 
+[2026-11-12T18:40Z] f6043fdbd2e8
+TERMGB to the network-accounting coordinator, Thu 12 Nov 10:41 AM PST. **One more meeting of #9329 with lean's branch, not a file stop: lean's weights-tie arm asks `--forged` of a window that holds no forged unit, and #9329's rule refuses to pass it [argued, not run: the run of that arm still waits for a slot]. I stop on it and ask before I choose. Your 10:36 AM order (NET-394) is read; one line on it at the end.**
+
+**What meets**
+- lean's branch brings `PP_WEIGHTS_TIE=1 bash benchmarks/prove_path/run.sh`: one honest tie and two refused ones, both audited with `records_audit.py audit --forged` behind the ZK server [read: `run.sh`, the `tie` function].
+- lean's own rule for `--forged` was: every check before the sample passed, the record rejects, and some Lean verdict is false [read: its `records_audit.py`].
+- #9329's rule behind the ZK server is: no proof of the false member leaves the prover, and the prover's record gives the ZK server's refusal as why [read: `forged_outcome`].
+- **`weights-tie-forged`** (the last units' digests forged to X's): those units are not their Definition's, the ZK server stops them, and #9329's rule passes it [argued, the same path as the stand-in's forged arm].
+- **`weights-tie-other`** (checkpoint Y's words served as X's): every unit is its Definition's. What fails is a read: each last unit's digest opens no root the verifier supplied [read: the arm's test, `test_weights_tie.py`]. The ZK server is set up on the statement, the partition and the program, not on the verifier's registered reads [read: `a0.firewall_env`], so a true proof leaves it and Lean refuses the session on the read. Under #9329's rule that arm then fails: `no_proof_released` is false [argued].
+- No check runs this arm, so nothing red would show on `main`; the arm itself would exit 1.
+
+**The choice, yours**
+- **A (what I would do):** the audit says which refusal it expects. `--forged` stays #9329's, word for word. One more mode, `--refused-read`: the window holds no forged unit, a read of it opens no root the verifier holds, and it passes when every check before the sample passed, the record rejects, and Lean refused a proof it read (#9329's `lean_refused`, not for want of the session's files). `run.sh` gives it to `weights-tie-other` alone. About ten lines in `records_audit.py`, one in `run.sh`, one test; a commit of its own on #9329's scratch, after the merge.
+- **B:** leave it. The arm exits 1 on that tie after #9329 until its owner (lean's worker for the weights tie) changes it. I name it in #9329's body.
+- **C:** `--forged` passes on either check behind the ZK server. I advise against: a false unit whose proof left the ZK server and was refused by Lean would pass, which is what #9329 closes.
+- Until you answer I change nothing there. The run `r20261112-181836-593d` shows which it is when it gets a slot; I send its verdict with the 1:30 PM report.
+
+**Runs at 10:38 AM PST** [read: each status]: `r20261112-181454-3f14` (the two-member module) running; `r20261112-181342-dd6c` (suites) and `r20261112-181836-593d` (the weights-tie arm) waiting for a slot.
+
+**On NET-394, one thing I read that does not agree with the order** [read: NET-390's comments]. soundness's comment of 10:35 AM PST says the figure of record "stays the two-schedule one", with the simulated card's rows printed beside it. Your order and NET-394 make D_j = 1 the term of record and print the two-schedule figure beside it as "without the card". I build what the order says unless you tell me otherwise before I start, which is after the 1:30 PM report.
+
+Least sure of: whether the ZK server releases the proof in `weights-tie-other`. I read its setup, not a run of it.
+
+TIMER: none
+
