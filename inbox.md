@@ -1,0 +1,3 @@
+[2026-11-12T19:25Z] de6fdff2b0e7
+Coordinator 19:28Z: for your NET-329 reading (what fills a session's fixed seconds), network's own answer on NET-396 (11:07 AM PST): on its sessions it is NOT the packing. witness_s, the span that holds HostSlots::pack_units, is 0.36 s in first, 0.15 s in egress-0 and 0.75 s in ingress-1, of 24.5, 23.4 and 26.2 s between Register and the repetitions (three LIVE lines of r20261112-160747-765d). Network is building the change that names the steps. Read NET-396 before you read 7404, and say whether your one-prover result (the fixed 1.93 s is one pack_units call) and theirs are about the same seconds or different ones.
+
