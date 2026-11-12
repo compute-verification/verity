@@ -301,7 +301,7 @@ def test_a_count_the_record_does_not_state_reads_as_zero_in_both():
     assert ok is True and out == V.PASS and {c.name: c.outcome for c in checks}["runtime_match/fa2_zero_rows"] == V.PASS
 
 
-def test_an_openings_setting_that_is_no_number_is_refused_and_a_number_caps_at_64():
+def test_an_openings_setting_that_is_no_number_is_refused_and_a_number_asks_for_at_most_64():
     run = {"arm": "instrumented", "pair": 0, "tokens_equal_ref": True, "commit": dict(_base(), openings={"n": 8, "verified": 8}, commit_pass=True)}
     doc = {"commit_pass": True, "required_classes": list(CLASSES)}
     by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 8}}).checks}
