@@ -155,7 +155,8 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
         assert all(circuit[x] == trace[x] for x in ("count", "N", "token_dims")), r
         if r in excepted:
             (passed,) = trace["widths"]
-            assert r["op"] == "bmm" and circuit["widths"] == [(32, 32)] and set(passed) <= {16, 32} > {min(passed)} == {16}, r
+            assert r["op"] == "bmm" and circuit["widths"] == [(32, 32)], r
+            assert set(passed) <= {16, 32} and min(passed) == 16, r
             assert circuit["O"] == 2 * trace["O"] == 32 * (trace["O"] // 16) > 0, r
         else:
             assert (circuit["O"], circuit["widths"]) == (trace["O"], trace["widths"]), r
