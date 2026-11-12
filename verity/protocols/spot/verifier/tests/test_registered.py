@@ -915,7 +915,8 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
     registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
-    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`."""
+    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`. For
+    an accepted registration `registration.resolved` gives the same bytes without a second pass over the table."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -928,6 +929,9 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     assert got.ok and got.codes == ()
     domain = HT.domain("p", "k_hist", 64, 16).domain_id.hex()
     assert HT.resolve(HT.roots_of(leaf, hist), {"v": [[{"history": "k_hist/domain"}]]}) == {"v": [[{"bytes": domain}]]}
+    both = {**sup, "v": [[{"history": "k_hist/domain"}]]}
+    assert R.resolved(both, hist) == HT.resolve(HT.roots_of(leaf, hist), both)
+    assert R.resolved(both, None) == both and R.resolved(None, hist) is None
 
     def lean(**change) -> dict:
         args = {**check, "supplied": sup, "history": hist, **change}

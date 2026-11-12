@@ -163,16 +163,19 @@ def test_a_serve_under_another_nonce_commits_under_another_run(tmp_path, served)
     assert pub["run"] == BR.run_root("another", 0) != served["pub"]["run"] == BR.run_root(SM.SERVE, 0)
 
 
-def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_port_for(run):
+def test_round_2_takes_the_hand_over_but_for_the_logits_the_prover_registers_and_the_return_read(run):
     """What `two_stage.prove` hands over, held to round 2 (`two_stage.round_two`, the form allowed): the verifier's
     window (`Design.window`, public items alone) is the one the interior was committed under; the verifier's reads
     (`verifier_reads`) put the ``logits`` port at the value the interior registers, each unit at its own row, and the
     ``o0`` port at the interior's own; the development params (`references`) name the circuit the sessions' public
     files name; and the public files the served path writes for the written window (`flock_input_files`, as a5 stages
-    the sessions), each named by a stand-in verdict of record, pass every check of round 2 but ``second-read``. The
-    one read it refuses is the return's: round 1's record commits no port for the block's return, and the interior may
-    not register it, so with the return link left out of the design round 2 accepts. Slow (about 15 s): it lowers the
-    template for the references and the sessions' files."""
+    the sessions), each named by a stand-in verdict of record, pass every check of round 2 but two. ``second-inputs``:
+    the ``logits`` the token select reads are a value the prover registers after the first stage's sample, which no
+    record of round 1 commits and the verifier doesn't fill, so the block's audit is not one of the model's.
+    ``second-read``: round 1's record commits no port for the block's return, and the interior may not register it.
+    With the return link left out of the design only the first is left, and were ``logits`` a value the verifier
+    filled round 2 would accept: the code stops no other check. Slow (about 15 s): it lowers the template for the
+    references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.draw.units], list(r.draw.units)
     mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
@@ -202,8 +205,12 @@ def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_
     parts = SS.parts(Q, P.strata(mine.program, mine.query))
     assert TS.pins(proofs, stmts) == {TID: True}
     layout = again.layout
-    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs)
-    assert got == {"ok": False, "codes": ["second-read"], "detail": {"second-read": {"statement": 0, "template": TID}}}
+    assert r.tie.get("supplied") is None and "pinned" not in r.tie and "outputs" not in r.tie
+    got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs,
+                       r.tie)
+    inputs = {"value": "logits", "why": SS.INPUTS_WHY}
+    assert got == {"ok": False, "codes": [TS.INPUTS_REFUSED, "second-read"], "detail": {
+        TS.INPUTS_REFUSED: inputs, "second-read": {"statement": 0, "template": TID}}}
 
     links = SS.replay_links(layout.program, d.key, brec)
     assert [(x.port, x.value) for x in links] == [("logits", "logits"), ("o0", "o0")]
@@ -212,7 +219,40 @@ def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
                  wires=SS.replay_wires(layout.program, d.key), rows=SS.replay_rows(layout.program, d.key))
-    assert SS.check(True, own, stmts).to_json() == {"ok": True, "codes": [], "detail": {}}
+    assert SS.check(True, own, stmts).to_json() == {"ok": False, "codes": [TS.INPUTS_REFUSED],
+                                                    "detail": {TS.INPUTS_REFUSED: inputs}}
+    filled = replace(own, supplied=SS.supplied_of({"logits": [[{"bytes": "00000000"}]]}))
+    assert SS.check(True, filled, stmts).to_json() == {"ok": True, "codes": [], "detail": {}}
+
+
+def test_a_second_stage_whose_interior_gives_a_replay_block_an_input_never_held():
+    """`two_stage.held` on a run's summary: a second stage whose every check passed and whose outcome round 2 refuses
+    by its form alone held; the same run with ``second-inputs`` among round 2's codes, or among the outcome's, did
+    not, whatever else it reports."""
+    s = {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
+         "audit": {"complete": True, "registered_reads": True, "verdicts": {"m0": True}}}
+    files, r2 = {TID: True}, {"ok": True, "codes": []}
+    o = {"accepted": False, "interior": ["statements"], "statements": [TS.FORM_REFUSED], "replay_sample": []}
+    assert TS.held(s, r2, o, files)
+    assert not TS.held(s, {"ok": False, "codes": [TS.INPUTS_REFUSED]}, o, files)
+    assert not TS.held(s, r2, {**o, "statements": [TS.INPUTS_REFUSED]}, files)
+    assert not TS.held(s, {"ok": True, "codes": [TS.INPUTS_REFUSED]}, {**o, "accepted": True, "statements": []}, files)
+
+
+def test_the_small_rehearsal_expects_the_inputs_code_of_a_linked_run_and_not_of_an_unlinked_one():
+    """`two_stage_small.expect`: a linked run's round 2 refuses by ``second-inputs``, then the return's read, and by
+    neither alone; an unlinked run links no parameter, registers no value, and is refused by its wires alone."""
+    def summary(codes: list[str]) -> dict:
+        return {"audit": {"checks_before_draw": {"registered": True}, "negatives": {"wrong-root": True},
+                          "audit": {"verdicts": {"m0": True}}},
+                "pins": {TID: True}, "round_two": {"ok": False, "codes": codes},
+                "outcome": {"accepted": False, "interior": ["statements"], "statements": codes, "replay_sample": []}}
+    assert all(SM.expect(summary([SM.INPUTS, SM.UNHELD])).values())
+    for codes in ([SM.UNHELD], [SM.INPUTS], [SM.UNHELD, SM.INPUTS]):
+        assert SM.expect(summary(codes)) == {"before_draw": True, "pins": True, "lean_verdicts": True, "negatives": True,
+                                             "round_two": False, "outcome": False}
+    assert all(SM.expect(summary([SM.UNWIRED]), SM.UNWIRED).values())
+    assert not SM.expect(summary([SM.INPUTS, SM.UNWIRED]), SM.UNWIRED)["round_two"]
 
 
 @pytest.mark.slow
