@@ -81178,3 +81178,23 @@ No ready line yet. Mailbox read to the 09:16Z section.
 - **I departed from `--on auto` for two launches**: `e724` and `9e4c` went to named nodes of the same pool (`--on vy-nebius-cpu-9|8 --pool research --as proofs --project verity`), since `auto` kept choosing cpu-7. Say if that is not mine to do.
 
 **What I need:** nothing to decide unless a fix above is wrong. Resume me when `e724` is back (about 11:00Z); the ready line for #9199 follows if it is green.
+
+## GATHER, Thu 12 Nov 09:30Z: the difftest's file passed at `2cac0a17e724` (`r20261112-091318-89d5`, rc 0: 109 passed, 2 skipped); #9075 still waits on `r20261112-091244-b449` (suites), which has no slot yet; not ready to mark
+
+Adds to my 09:26Z entry; nothing in it changes.
+
+- `r20261112-091318-89d5`, at `2cac0a17e724`, rc 0, ended 09:26Z [read: `research inspect`: `tree_sha=2cac0a17e724…`, `exited done rc=0`, slot r6 taken 09:23Z]. Its log: "passed  verity-core-sampled-proofs   109 passed, 2 skipped in 199 s" and "1 suites: 1 passed (0 cached), 0 failed" [read: its `out/difftest-file.log`]. The suite ran rather than came from a cache: "ran because: input verity/protocols/spot/verifier/lean changed", naming `Spot.lean`, `Spot/Pieces.lean` and others [read: the same log]. Its tests ran against Lean: the file skips whole where there is no `lake`, and 109 passed [read: the file's `pytestmark`; the log's count].
+- What the 109 are. `-k test_difftest` in that suite selects 111 of its 260 tests, all 111 in `tests/test_difftest.py` [run by me 09:28Z on my VM: `pytest tests -k test_difftest --collect-only -q` in the suite's directory]. Among the 111 are `test_a_piece_agrees[replay_returned]`, my design-check test and `main`'s returned-bits test [run: the same collection]. The 2 skipped are, by the collection and the file's one `skipif`, the two opt-in cases `test_the_unit_gates_by_range_are_the_walks_on_real_templates[147]` and `[1001]`, which need `VERITY_SPOT_REAL_TEMPLATES` [derived: the run's log gives counts, not names]. So the three tests the merge bears on passed, Lean against the Python [derived from 109 + 2 = 111].
+- What that says of my three replay blocks under `main`'s new piece: the piece ran its 300 inputs, drawn from `REPLAY_PROGRAMS`' 31 programs, mine three of them, three draws in four taking a program [read: `PIECE_RUNS`' `(REPLAY_RETURNED, 300)`, the port's strategy, `replay_link_inputs`]. No test names my three for that piece one by one; that each was drawn at least once is likely and not something the log shows [guess].
+- `r20261112-091244-b449` (suites, at `2cac0a17e724`): still waiting at 09:29Z, every check slot on vy-nebius-cpu-8 taken [run by me: `research fetch`, `research inspect`]. Once it has a slot, about an hour [guess, from `e00e`'s 56 minutes].
+- At 09:29Z `main` was still `19fb19a21e40` and lean's branch still `f3837f57d113`, so 3 of my 09:26Z entry stands as written [run by me: `git fetch`, `git rev-parse`].
+- #9075's body has `89d5`'s result in its Runs table and in the section on the merge [run by me 09:29Z: `research queue edit 9075 --body-file`, 34,413 bytes; `gh pr view` shows the head `2cac0a17e724`, `MERGEABLE`].
+
+**The ready line, as far as it stands** (not yet one; `b449` is missing):
+
+- Head `2cac0a17e724`; against `main` 16 files [run, 09:26Z entry].
+- Runs at the head: `89d5` the difftest's file, rc 0 [read]; `b449` suites, waiting [run].
+- Runs at `7b4513ce8842`, the head less this merge: `e00e` suites 64 of 64, `9361` circuit-check 33 targets and no failure [read, 09:26Z entry].
+- Lean's merge: no stop beyond `main`'s own; none owed [run, 09:26Z entry].
+
+**What I do next.** I end my turn now on `r20261112-091244-b449`. When it ends rc 0 I read its output, put it in the body, run both merge-tree checks again and write the ready line; you mark. Mailbox read at 09:29Z: 153 lines, nothing new [run by me].
