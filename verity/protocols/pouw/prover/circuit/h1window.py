@@ -870,3 +870,12 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
     return {"format": G.READS, "ports": {**out, **known_ports}}
+
+
+__all__ = ["FULL", "OK_PORT", "OUTPUTS", "PUBLIC", "PUBLIC_J10R", "PUBS", "PUB_PORT", "READ_IN_FULL", "RECEIPTS",
+           "RECEIPT_PORT", "SHARED", "SHARED_J10R", "STATEMENT_OUT_ROWS", "TABLES", "TILE_PARAMS", "TILE_PARAMS_J10R",
+           "PouwH1WindowCombine", "PouwH1WindowLane", "call_blocks", "call_of", "call_units", "h1_tile", "is_j10r",
+           "j10r_inputs", "leaf_known_ports", "leaf_known_rows", "leaf_program", "leaf_reads", "leaf_reads_file",
+           "leaf_template", "leaf_unit", "place", "program", "query", "roles", "row_key", "slot", "statement_rows",
+           "step_of", "table", "table_reads", "table_reads_file", "template", "tile_unit", "unit_reads", "window",
+           "window_ports"]

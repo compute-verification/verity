@@ -882,6 +882,10 @@ def scheme_v3(tile: tuple[int, int] = (32, 32), name: str = SCHEME_V3) -> C.Sche
 C.register(scheme())
 C.register(scheme_v3())
 
-__all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwH1Tile5", "PouwH1Tile6", "PouwU129", "PouwU129Word",
-           "SALT_BYTES", "SCHEME", "fold", "fold_keys", "j10r_blocks", "j10r_compressions", "j10r_noise", "j10r_reference",
-           "j10r_unit_blocks", "lane_partials", "live_salt", "noise", "reference", "scheme", "u129", "unit_compressions"]
+__all__ = ["FOLD", "H1_ROWS", "I8", "KEY_BITS", "KINDS", "Layout", "M32", "ONE_STREAM", "PouwH1Tile", "PouwH1Tile3",
+           "PouwH1Tile4", "PouwH1Tile5", "PouwH1Tile6", "PouwMask32", "PouwOneStream2", "PouwOneStream3", "PouwOrBit",
+           "PouwPeelSeg", "PouwU129", "PouwU129Word", "PouwWrapBits", "PouwWrapSeg", "PouwXWrap", "SALT_BYTES",
+           "SCHEME", "SCHEME_V3", "STREAM", "U32", "U_BITS", "col_wrap", "fold", "fold_keys", "j10r_blocks",
+           "j10r_compressions", "j10r_noise", "j10r_reference", "j10r_unit_blocks", "lane_partials", "lane_sets",
+           "live_salt", "noise", "one_stream", "peel_seg", "reference", "row_wrap", "scheme", "stream_cell", "u129",
+           "unit_compressions", "wrap_bits", "wrap_seg"]

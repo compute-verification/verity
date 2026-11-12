@@ -647,6 +647,7 @@ def unit_cut(fn: SpecializedDefinition):
     return pc4.unit_cut(fn, _role_of())
 
 
-__all__ = ["ATOMS", "BASIS", "DERIVATIONS", "DIGESTS", "GRAM", "LINE", "PEELS", "PORTS", "P_ROW", "ROLES", "SEEDS",
-           "SIDE_PORTS", "TILE", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g", "line_ea", "line_eb", "query",
-           "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]
+__all__ = ["ATOMS", "BASIS", "CODES", "DERIVATIONS", "DIGESTS", "E4M3", "F32", "GRAM", "LINE", "MINUS_ONE", "OK",
+           "PEEL", "PEELS", "PORTS", "P_ROW", "R", "ROLES", "SEEDS", "SIDE_PORTS", "SLICE", "TILE", "Pc8TileHiddenDef",
+           "Pc8TileHiddenH3Def", "Pc8TileSideDef", "Shape", "basis_fa", "basis_fb", "call", "check", "gram_g",
+           "line_ea", "line_eb", "query", "side_tile", "templates", "tile_templates", "unit_cut", "units", "weight"]

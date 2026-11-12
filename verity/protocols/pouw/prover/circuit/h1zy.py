@@ -1175,8 +1175,8 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
                and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], got["z"], sa, sw))
 
 
-__all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE", "LEAST_K",
-           "OK_WORD", "PUBLIC", "PUBLIC_J10R", "S32", "S8",
+__all__ = ["BF16", "BIT", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE",
+           "LEAST_K", "M32", "OK_WORD", "PUBLIC", "PUBLIC_J10R", "S32", "S8",
            "PouwAndBit", "PouwH1Combine", "PouwH1Combine2", "PouwH1LaneZy", "PouwH1LaneZy2", "PouwH1LaneZyChunk",
            "PouwH1LaneZyChunk2", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwH1TileZyChunks2", "PouwMuxBit",
            "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",

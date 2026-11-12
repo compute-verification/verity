@@ -381,5 +381,6 @@ def stream_bits(B, seed_j: Coll, n_bits: int) -> Coll:
 __all__ = ["BLOCK_BITS", "CALL_SEED_TAG", "DIGEST", "DIGEST_BITS", "NOISE_TAG", "POS", "POS_BITS", "PouwAdd64",
            "PouwAdd64Bits", "PouwCallSeeds", "PouwCallSeedsBits", "PouwNoiseBlock", "PouwNoiseBlockBits", "PouwSeed",
            "PouwSeedBits", "PouwUnitSeeds", "PouwUnitSeedsBits", "RECEIPT_TAG", "SEEDS", "SEED_PAIR", "SEED_TAG",
-           "call_seed", "call_seeds_call", "halves", "is_seed", "leaves", "noise_block", "noise_blocks", "noise_blocks_at",
-           "position_leaves", "receipt_seed", "seed", "seed_call", "stream", "stream_bits", "unit_seeds_call"]
+           "call_seed", "call_seeds_call", "halves", "is_seed", "leaves", "noise_block", "noise_blocks",
+           "noise_blocks_at", "position_leaves", "receipt_seed", "seed", "seed_call", "stream", "stream_bits", "types",
+           "unit_seeds_call"]
