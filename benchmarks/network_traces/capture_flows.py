@@ -10,9 +10,9 @@ gives no protocol's verdict.
 
 **The capture** is a file as `tcpdump -w` writes one (pcap: either byte order, microseconds or nanoseconds), of link
 type Ethernet (VLAN tags skipped), Linux cooked (v1, v2) or raw IP, holding IPv4 or IPv6. Lengths are read from the
-IP and TCP headers, never from how much of a packet was kept, so a capture cut to its headers (`-s`) sums the same.
-Several files are one capture: an optical splitter's two directions, or a rotated capture's parts in order. A flow is
-the two addresses, the two ports and the protocol, and each direction of it has
+IP and TCP headers, never from how much of a packet was kept, so a capture that keeps only each packet's first bytes
+(`-s`) sums the same. Several files are one capture: an optical splitter's two directions, or a rotated capture's
+parts in order. A flow is the two addresses, the two ports and the protocol, and each direction of it has
 - `packets` and `wire_bytes`: every frame, as long as it was on the wire (headers, ACKs, retransmissions; no preamble
   or checksum trailer);
 - `payload_bytes`: the bytes above the transport header, a retransmitted segment's each time it was sent;
@@ -105,7 +105,8 @@ TUNNEL_PROTOCOLS = {4: "IP in IP", 41: "IPv6 in IP", 47: "GRE", 50: "ESP", 51: "
                     137: "MPLS in IP"}
 TUNNEL_PORTS = {4789: "VXLAN", 8472: "VXLAN", 6081: "Geneve", 2152: "GTP-U"}
 #: the least a capture keeps of each packet for every header here to be whole: Ethernet with two VLAN tags, IPv6 with
-#: a fragment header, TCP with every option
+#: a fragment header, TCP with every option. A packet whose headers are shorter keeps the first bytes of its content
+#: in the rest
 SNAPSHOT = 14 + 8 + 40 + 8 + 60
 
 

@@ -4,8 +4,9 @@ it writes the file beside it:
     python benchmarks/network_traces/tests/fixtures/capture_flows.py
 
 Every address is a documentation address, every hardware address is zero and a packet's time stamp is its index, so
-the file is the same wherever it is written. It is cut to its headers (`KEPT` bytes a packet), as a capture taken for
-the reader is, and holds, their packets interleaved:
+the file is the same wherever it is written. It keeps at most each packet's first `KEPT` bytes, as a capture taken
+for the reader does: every header and, where the headers are shorter, the first bytes of its content. It holds, their
+packets interleaved:
 - two connections from the certifier to the server: on the first the request's second segment is sent twice and the
   response's last two segments arrive out of order; on the second the request's first segment is sent again together
   with the bytes after it;

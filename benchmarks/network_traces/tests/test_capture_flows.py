@@ -229,8 +229,9 @@ def test_a_stream_is_counted_across_the_sequence_numbers_wrap(tmp_path):
 
 
 def test_a_stream_longer_than_the_sequence_numbers_is_counted_whole(tmp_path):
-    """66,100 segments of 65,000 bytes, cut to their headers: more than 2^32 bytes on one connection, whose sequence
-    numbers so pass every value once. The stream is their sum, with no hole and its FIN where the bytes end."""
+    """66,100 segments of 65,000 bytes, the first 130 bytes of each kept: more than 2^32 bytes on one connection, whose
+    sequence numbers so pass every value once. The stream is their sum, with no hole and its FIN where the bytes
+    end."""
     n, size = 66_100, 65_000
     assert n * size > 2 ** 32
     (src, sport), (dst, dport) = CERTIFIER, SERVER
@@ -397,8 +398,8 @@ def _wider(flows: list, more: int) -> list:
 
 
 def test_every_capture_format_is_read_to_the_same_sums(tmp_path):
-    """Either byte order, microseconds or nanoseconds, cut to its headers or whole, under VLAN tags, a Linux cooked
-    capture and raw IP: the same flows, each packet's bytes on the wire those of its own link header."""
+    """Either byte order, microseconds or nanoseconds, cut to each packet's first 130 bytes or whole, under VLAN tags,
+    a Linux cooked capture and raw IP: the same flows, each packet's bytes on the wire those of its own link header."""
     packets = fx.interleaved(fx.first(), fx.second())
     assert _between(tmp_path, packets) == [FIRST, SECOND]
     for how in ({"order": ">"}, {"nanos": True}, {"order": ">", "nanos": True}, {"snapshot": cf.SNAPSHOT}):

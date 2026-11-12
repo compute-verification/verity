@@ -11,7 +11,8 @@
 #    temporary directory, which is deleted.
 # 2. The run: the rehearsal, with its offline check; its run directory is $OUT/run.
 # 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
-#    relay's (`deployment.json`), each cut to its headers.
+#    relay's (`deployment.json`), at most each one's first 130 bytes: every header and, where the headers are
+#    shorter, the first bytes of its content.
 # 4. The reader: `capture_flows.py` on $OUT/run.pcap and $OUT/run. The front and the relay share the loopback's address,
 #    so the front's is given with its port; the load's connections to the relay are among the other flows. Its result
 #    is $OUT/capture_flows.json and its table $OUT/capture_flows.txt, also printed.

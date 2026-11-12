@@ -213,7 +213,10 @@ protocol's verdict.
   never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one), and `vlan and (…)` on
   a link whose frames carry a VLAN tag. The reader refuses a file that still holds a flow between two addresses it
   wasn't given; `--skip-foreign` counts and skips them.
-- `-s 130` keeps each packet's headers and none of its content: every length is read from the headers.
+- `-s 130` keeps at most each packet's first 130 bytes: every header and, where the headers are shorter (a common
+  packet's are 54 to 66 bytes), the first bytes of its content, so the file holds the start of each segment. The
+  reader needs the 130 for the longest headers it reads, and reads every length from the headers, never from how
+  much was kept.
 - Start it before the run's first connection and stop it after its last has closed: a flow without its SYN or its FIN
   is only a floor. `tcpdump` gets its packets a little after they pass, so stop it only once the file has stopped
   growing (`-U` writes each packet as it comes), or its last packets are lost.
