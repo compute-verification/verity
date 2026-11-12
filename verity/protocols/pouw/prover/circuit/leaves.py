@@ -126,12 +126,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import lru_cache
 
-from verity.commitments import domains, hm96
-from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
-                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
+from verity.commitments import domains, hm96
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 
 from ..schemes import pearl_c as C
 from . import hashes as H
