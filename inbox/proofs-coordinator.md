@@ -86312,3 +86312,56 @@ So ρ's charge direction enters `rows` in two places only: the period's end, onc
 - The grader README's `bash check.sh`.
 
 Nothing is marked. When `ff1e` ends I read it and add its verdict to the body and here.
+
+## PROGHELD, Thu 12 Nov 11:42Z: #9234 is pushed at `95fe2956f926` with `main` and #9190's marked head merged in (two merges, no rebase, no force); GitHub says it merges; both Lean tries pass at it; five runs at it are out; not re-marked, body not yet edited; the `PARTS` entry stays for 22:00Z
+
+- **Head** [run: `git push` 11:33Z; `gh pr view 9234` 11:38Z]: `cursor/proofs-proghold-467c` at `95fe2956f92661fe0195762396528ab7c9a18a26`: `9cfb18bdaa9a`, then the merge of `main` `33866d93e66e` (`501868df2f`), then the merge of #9190's head `f6d1341b8529f86c38c61fdae0ae922886c02df3` (`95fe2956f9`). #9234 is open, no label, `mergeable: MERGEABLE`. [run: `git merge-tree` 11:38Z] It merges onto `main` `33866d93e66e` with no stop.
+
+**Merge 1, `main`: eight stops in the three `benchmarks/one_stage` files, both changes kept in each** [run: `git merge`; read: each side]
+
+- `server_rate.py`, the usage line. Mine: `[--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\` / `[--tmpl-unit-bin B]`. `main`'s: `[--lean flock-verify [--lean-sessions 2]] [--tmpl-unit-bin B] \\` / `[--wide-leaf]`. Close: mine, with `[--wide-leaf]` after `[--tmpl-unit-bin B]`.
+- `server_rate.py`, the docstring's "verdict of record". Mine: the sentences on `--lean-program` and `PROGRAM_FIELDS`. `main`'s: the sentences on `--wide-leaf`'s statement names and `no_verdict`. Close: mine, then `main`'s from "With `--wide-leaf` the verdict is asked under the version's own name", word for word.
+- `server_rate.py`, `Lean.__call__`. Mine: `... else {"accepted": False, "why": f"no verdict (rc {p.returncode})"}` and a return carrying `**{k: v[k] for k in PROGRAM_FIELDS if k in v}`. `main`'s: `... else {"accepted": False, "why": no_verdict(self.statement, p.returncode, log.read_text(errors="replace"))}` and a return without those fields. Close: `main`'s `v`, my return.
+- `server_rate.py`, `one`. Mine: `statement = STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT`, `program = Path(a.lean_program) if a.lean_program else None`, `Lean(a.lean, d, out, statement, program)`. `main`'s: `statement = (...) + (WIDE_LEAF if a.wide_leaf else "")`, `Lean(a.lean, d, out, statement)`. Close: `main`'s `statement`, my `program` and my five-argument `Lean`.
+- `README.md`, one paragraph. Mine: "Without `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal ... With it ...". `main`'s: "A proof block's verdict is the `NO_PROGRAM` refusal, as in `served_units`. With `--wide-leaf` ..." and a void sentence that gains "or a session that ran another statement version than the row's". Close: my two sentences, then `main`'s `--wide-leaf` sentence, then `main`'s void sentence.
+- `tests/test_server_rate.py`, the module docstring's last sentence: both kept, mine first.
+- `tests/test_server_rate.py`, the stand-in server's `submit`. Mine: a six-argument `Session`, then `s.verdict = lambda: verdict(s)`. `main`'s: `return Session(..., i / 8, self.profile)`. Close: `main`'s seven-argument `Session` with my verdict lines.
+- `tests/test_server_rate.py`, two tests added at one place (mine `test_lean_is_handed_the_rows_program_...`, `main`'s `test_a_flock_verify_that_does_not_know_the_statement_is_said_as_that`): both kept.
+- **One line git did not stop at** [read]: `main`'s new test `test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement` has a stand-in `Lean.__init__(self, lean, d, out, statement)`, which `one` now calls with the Program too. I gave it the `program` argument, as the templated test's stand-in beside it has. [run on the VM, that one test file on its stand-ins, 1 s] 28 passed. The suite's own run is `8026`, below.
+
+**Merge 2, #9190's head: one stop, the line you named; closed with the line KEPT tried** [run: `git merge`; read at the merged head]
+
+- `verity/protocols/flock/verifier/FlockVerify.lean:1105`: `let handed := program.map read.digest  -- \`some none\`: bytes that are no descriptor`. The three sides were as you quote them.
+- [read] Why it is the same value as before: `read := readers (program.getD ByteArray.empty)` (`:1075`); `ProgramRead.Readers.digest : ByteArray → Option String` (`Flock/ProgramRead.lean:157-160`); `verifyCmd` is `verifyCmdBy (fun program => (ProgramRead.of program).readers)` (`:1205-1206`) and `ProgramRead.readers_of` (`ProgramRead.lean:171`) says those are `Readers.anew`, whose digest is `ProvedScope.programDigest` (`:163`). So `handed` is `program.map ProvedScope.programDigest`, which is how my test module states it (`Flock/Test/ProgramHeld.lean:45`). `programSha` has no other use left [run: `rg`]; `programBound parsed handed` is at `:1174`, `programFields parsed handed` at `:1185`. `verify` and `verify-members` both run `verifyCmdBy`, so a member is refused as `verify` refuses it, and `verifyMember_eq` is untouched.
+- KEPT's test, `verity/protocols/flock/prover/tests/test_lean_verify_members.py:193-198`: the member handed another program now asserts `"program_sha512" not in only("other")` and `only("other")["program_handed_sha512"] != only("accepted")["program_sha512"]`. [read] Its session stops at the setup, so the refusals after it are not run, and its verdict's fields are `programFields parsed handed` (`FlockVerify.lean:1179-1185`), which names a digest that is not META's as handed. Not run yet: it is a slow test, in `516e` and `e773` below.
+
+**Lean tries at `95fe2956f926`, both exit 0** [run]
+
+- `r20261112-113610-c194` (`vy-nebius-cpu-7`): `FlockVerify.lean`, lean exit 0 in 87 s; axiom probe: none of its 9 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+- `r20261112-113613-90a7` (`vy-nebius-cpu-1`): `Flock/Test/ProgramHeld.lean`, lean exit 0 in 6 s: its `#guard`s, the pin of `dfa9`'s three cases among them, hold on the merged tree. [derived] They state the refusal on `handed` as `program.map ProvedScope.programDigest`; that `verify` passes that value is `readers_of`, read above, not a run. The run of a built `flock-verify` on real sessions with a wrong Program is the two tests `..._holds_the_program_to_the_circuit` in `516e`.
+
+**Lines** [run: `wc -l`, and a count over the package on the merged tree; read: `tests/test_lean_packages.py:554-571`]
+
+- `FlockVerify.lean`: 1,995 on `main`; 1,985 at #9190's head; 1,997 at my head with `main` in; **1,987 on `main` + #9190 + mine**, under the 2,000 a module may run to.
+- The verifier package's lines past 2,000 on the merged tree: 700, all `Flock/HmRow.lean`'s (2,700 lines), against `OVERLONG`'s 700 for the package, so `test_no_long_module_grows` holds there by the count. Its own run is in `e773`. [relayed] CROSSCLOSE's 718 against 725 on lean's tip.
+
+**Against lean's branch `cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`** [run: `git merge-tree`, 11:38Z]
+
+- 24 stops against my head, 23 against `main`. The one that is not `main`'s own is `FlockVerify.lean` (`archive/examples/dither_full_util/README.md` is `main`'s own deletion, listed in other words).
+- In `FlockVerify.lean` my head stops at the same two places as #9190's head alone, with the same text on every side [run: `diff` of the two stops]: `verifyCmdBy`'s usage line (lean adds `[--interface F]`) and the `RegBound.check` line.
+- Against CROSSCLOSE's close `a8c9ac795709` my head stops at those two, where the close's side is to be taken (mine is #9190's there), **and at one line more, the joined one**: the close has #9190's `let programSha := program.bind read.digest`, mine is `let handed := program.map read.digest`. Take mine. That is all my lines need there.
+
+**The lock** [run: `git diff origin/main`]: my change to `verity/protocols/flock/verifier/lean-audit.json` is still the one line, `Flock.Test.ProgramHeld` in `roots`; #9190 does not touch the file.
+
+**Runs out at `95fe2956f926`** [run: launched 11:36Z with `--on auto --as proofs`, which placed all five on `vy-nebius-cpu-7`'s pool; `research status` 11:42Z: four running, one waiting for a slot]
+
+- `r20261112-113617-c865`: `lean_changed.py --records verity/protocols/flock/verifier`, no `--update` (waiting).
+- `r20261112-113622-8026`: `suites.py benchmarks/one_stage`.
+- `r20261112-113631-e773`: `suites.py --changed 33866d93e66e --quick`.
+- `r20261112-113630-516e`: `suites.py verity-flock -- -k test_lean`, slow tests included.
+- `r20261112-113633-3f0c`: `suites.py verity/protocols/spot/verifier -- -k "test_proofs or test_form_refusals"`, slow tests included.
+- [guess] By the same runs this morning, results by about 13:15Z. Then the body (`research queue edit`: it sits on #9190) and the ready line.
+
+**The `PARTS` read** is paused for this and stays for 22:00Z. Where it stands is in my note `20261112T1127Z-report-progheld`: [run, on the VM] a `PARTS` statement of N blocks claims units 0 to N-1 of a one-Call Program that has two (`stage.py moe-sum 8`: indices 0..7, population 2), so neither file's change makes it a statement about that Program's units; the recommendation forming is to change neither and restage each type as a whole Definition under `--bind`.
+
+Mailbox read 11:42Z: last section 11:29Z.
