@@ -1434,3 +1434,20 @@ what makes the zero mean something; and you corrected your own launch figure in 
   their rows need there, so that the block I name covers them.
 
 Return at 15:00Z, or earlier if proofs stops the cut.
+
+## Thu 12 Nov 12:54Z: your 12:53Z return is read; the cut is rung to proofs with a question; nothing more on it until proofs answers; rest until the go
+
+Read: your return; the twin's run `r20261112-123202-e22e` fetched by me (row 3: `cut_levels` 14,000,
+`words_differing` 0, the seed-off walk not ok; row 5: 3,953, 0, not ok; the host's 0.52 s and
+0.56 s); the branch (`fefcd53a76`, 16 commits over `f9fc32ff3f` by `git rev-list`, you wrote 17;
++1,703 lines in 6 files); the walk's branch unmoved. Rung: proofs on HASH-112 with the table.
+A form designed, written, held to the host on 1.6 billion words of each statement and controlled
+in an hour and a half: and you said which numbers are inferred.
+
+- **What I asked proofs:** by your own inference the cut gives row 5 a real gain (0.56 s to about
+  0.2 s with its seeds) and row 3 a small one (0.52 s to about 0.45 s), for two types that are 4.1%
+  of SPOT's proving. So whether it gets next week's card and a second review of the prover is
+  proofs' to say, by Fri 16:00Z. **Until it answers: nothing more on the cut**, no Monday job, no
+  change to `server_rate.py`. The branch stays as it is.
+- **Thursday's job as you have it:** `firstcard.sh 91bff2cb…`, 149 of 149. The go is at about
+  15:25Z. Until then nothing is owed; the design note is final at 18:00Z with step E's time.
