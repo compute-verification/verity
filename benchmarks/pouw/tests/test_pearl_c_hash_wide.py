@@ -44,7 +44,7 @@ HH = load("pearl_c_hash_host_test", HERE / "test_pearl_c_hash_host.py")
 host = HH.host
 SOURCE = (POUW / "pearl_c" / "hash_wide.cuh").read_text()
 POISON = 0xA5
-#: both sides of s512_rows' bound (128), an odd and an even count past it, the width of a row of 128,256 words, and the cap
+#: both sides of s512_rows' bound (128), an odd and an even count past it, the width of a row of 128,256 words, and the widest
 SEGS = (1, 128, 129, 130, 501, 1024)
 
 
@@ -114,7 +114,7 @@ def test_wide_row_digests_are_row_seg_v1(host, segs, form):
 
 @pytest.mark.parametrize("sha", ["fast", "ref"])
 @pytest.mark.parametrize("segs", SEGS)
-def test_row_digests_take_every_width_to_the_cap(host, segs, sha):
+def test_row_digests_take_every_width_to_the_widest(host, segs, sha):
     """run.py's `row_digests` on the host: up to RS_MAX_SEGS segments today's launches (s512_rows, or s512_row_segs and
     s512_folds from hash_fast.cuh's tables), past them hash_wide.cuh's two, from the pipeline's states (sha "fast") or from
     none ("ref"): the same bytes on both sides of 128, `pearl_c.row_digest`'s."""
@@ -137,13 +137,13 @@ def test_row_digests_take_every_width_to_the_cap(host, segs, sha):
 @pytest.mark.parametrize("k", [0, -256, 255, 1000, 33000, 262400, 1 << 30])
 def test_a_wide_launch_traps_on_a_width_it_cant_take(host, name, slot, k):
     """Each kernel traps, before it reads or writes, unless k is a positive multiple of 256 of at most RS_WIDE_MAX_SEGS
-    segments: no whole segments, a negative k, part of a segment, and one segment and many past the cap.  At the cap the
-    same launch runs."""
-    cap = 256 * R.RS_WIDE_MAX_SEGS
+    segments: no whole segments, a negative k, part of a segment, and one segment and many past the widest.  At the widest
+    the same launch runs."""
+    widest = 256 * R.RS_WIDE_MAX_SEGS
     room = 64 * (R.RS_WIDE_MAX_SEGS + 1)
-    src, out = host.alloc(max(4 * cap, room)), poisoned(host, room)
+    src, out = host.alloc(max(4 * widest, room)), poisoned(host, room)
     p = (out,) if name == "s512_heads_w" else (src, out, 0)              # no states: the kernel's own headers
-    for width, rc in ((k, 2), (cap, 0)):
+    for width, rc in ((k, 2), (widest, 0)):
         a = args(p=p, i=(width,) if slot == 0 else (1, width))
         assert host.lib.launch(name.encode(), 1, 128, ctypes.byref(a)) == rc
         assert (host.read(out, room) == bytes([POISON]) * room) == (rc == 2)

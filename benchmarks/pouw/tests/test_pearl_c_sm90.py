@@ -766,7 +766,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name in ("s512_row_segs", "s512_tile_segs"):
             assert ev["block"] == RUN.RS_FAST_NT and i[1] % (256 if name == "s512_row_segs" else 64) == 0
             assert name == "s512_tile_segs" or i[1] <= 256 * RUN.RS_MAX_SEGS
-        if name in WIDE:                                    # only rows the kernels above can't take, and none past the cap
+        if name in WIDE:                                    # only rows the kernels above can't take, none past the widest
             k = i[0] if name == "s512_heads_w" else i[1]
             assert ev["block"] == WIDE[name] and k % 256 == 0 and RUN.RS_MAX_SEGS < k // 256 <= RUN.RS_WIDE_MAX_SEGS, ev
         if name == "s512_folds":
