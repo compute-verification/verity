@@ -255,8 +255,8 @@ def test_reader_lookups_owning_module_return_slot_arg_slot():
     assert isinstance(table, RuntimeCorrespondence)
     assert table.modules() == ["layers.0.o_proj", "layers.0.self_attn", "layers.0.self_attn.qkv_proj"]
     assert table.calls_of_module("layers.0.self_attn.qkv_proj") == [0, 1, 2]
-    assert table.calls_under("layers.0.self_attn") == [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    assert table.calls_under("") == list(range(15))
+    assert table.calls_of_module("layers.0.self_attn") == [3, 4, 5, 6, 7, 8]
+    assert len(table) == 15
     # Call 1 = row 1 of the qkv projection: owning module, its return slot inside the fx node's output, its arguments
     assert table.owning_module(1) == "layers.0.self_attn.qkv_proj"
     r = table.return_slot(1, 0)

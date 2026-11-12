@@ -11,9 +11,6 @@
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except AttributeError: pass"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "request_legs", "detail": "except OSError: pass"},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "silent-except", "symbol": "MatchOracle._view_bytes_range", "detail": "except (KeyError, TypeError, ValueError): return None"},
-    {"file": "verity_vllm/check/replay/driver.py", "kind": "silent-except", "symbol": "_cgroup_memory", "detail": "except OSError: return None"},
-    {"file": "verity_vllm/check/replay/fork.py", "kind": "silent-except", "symbol": "oom_kills", "detail": "except (OSError, StopIteration, ValueError, IndexError): return None"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "silent-except", "symbol": "_stratum_spec", "detail": "except (TypeError, ValueError): return spec"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "silent-except", "symbol": "_cpu_quota", "detail": "except (OSError, ValueError): pass"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/check/weights_of_record.py", "kind": "silent-except", "symbol": "record_shard_pin", "detail": "except (OSError, ValueError): return None"},
@@ -27,9 +24,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "step_bound_bytes", "detail": "except StopIteration: isz = 2"},
     {"file": "verity_vllm/commit/committer/native_jit.py", "kind": "silent-except", "symbol": "staged_sources", "detail": "except FileNotFoundError: same = False"},
     {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "silent-except", "symbol": "PinnedPool.__del__", "detail": "except Exception: pass"},
-    {"file": "verity_vllm/commit/committer/topp_splits.py", "kind": "silent-except", "symbol": "_SplitKernelProxy.__getitem__.run", "detail": "except (TypeError, ValueError, IndexError): g0 = None"},
-    {"file": "verity_vllm/commit/committer/topp_splits.py", "kind": "silent-except", "symbol": "install_split_kernel_proxies", "detail": "except Exception: return {}"},
-    {"file": "verity_vllm/commit/executed_prefix.py", "kind": "silent-except", "symbol": "facts_accepted_by", "detail": "except (TypeError, ValueError): return facts"},
     {"file": "verity_vllm/commit/opened.py", "kind": "silent-except", "symbol": "OpenedReader.or_none", "detail": "except OpeningNotVerified: return None"}
   ]
 }
