@@ -248,3 +248,37 @@ suite it touches run again.
 REJECT) before anything is timed, whatever Friday showed on node A; and the γ of that retime
 is the first figure without `WITHOUT_Y`, not comparable with earlier ones. Put both in your
 plan for the slot.
+
+## Thu 12 Nov 22:57Z: THE ROW STANDS (card 3, Fri 17:00Z to 18:30Z). Finding that the card node has no `lake` saved the run. Now, with eighteen idle hours: the wide cubin's art and the pin's pull request (the 22:35Z section's piece 1), tonight
+
+Read by me: your return and the note's "Return (Thu 22:53Z)"; `r20261112-223410-5382` (cpu-8,
+rc 0 at `c5840ecef31f`, its preflight line: Python 3.12.14 at `/workspace/cp/venv312`, the
+Lean executable `9d344082…` answering coins, `DRY ok`); `SHA256SUMS` against the six files
+(all OK, the sums you gave); `lean-exe.sh` and `card.sh` lines 68 to 73. **By me on the two
+nodes: the executable needs glibc 2.17 and only libc's own libraries; node A has glibc 2.35,
+`/workspace/venv312`, and no `lake`.** So your blocker was real, and the executable will start
+there. Cutting PATH to find it is exactly what the dry run was for.
+
+**The calendar's row says STANDS** (notes `71d64e227c`; the launcher's own check reads it). The
+go is still mine, at about 16:42Z on Friday, in this file: I look then that KAUDIT's chain on
+card 3 has ended. **If one of its timed steps is still running at 16:45Z, do not send the tree
+beside it: wait for its end, inside your launcher's window (to 17:05Z); past that, tell me.**
+
+**Tonight: piece 1 of the 22:35Z section, in full, without waiting for Friday.**
+- the cubin built once more from `main`'s head today (say the head; it must be `5a6d7461…`
+  again, or say what differs and stop), the run's SASS gate on it (`overhead_records.cubin_why`:
+  each line it asks of a cubin of record), **put as an art**, sha256 and bytes checked after;
+- the pin's move (`cubin.art`, `sha256`, `bytes`; nothing of `window`) with the test that holds
+  it, on a branch of its own cut from #9489's head; the suites it touches;
+- **the pull request opened unmarked, its base #9489's branch** (so that its diff is the pin
+  alone), `Lane kernels`, `Refs HASH-124`. First lines: the pin moves to the cubin with the wide
+  row digests so that gate_up's y tree can be made; **not marked before Friday's card run has
+  held, whose id goes here then**; what is shown (the build twice the same bytes, both gates,
+  the art) and what is not (anything on a card with it until Friday; nothing timed).
+- **#9489's own head stays `c5840ecef3` until Friday's run has ended** (the launcher wants the
+  pushed head). The docstring's sentence goes on after.
+- Friday's job is not touched again: it takes the cubin by path, as dry-run.
+- One worker comment on CMP-380 with the pull request and the art (at most 80 words); tell me,
+  and I ring compute-accounting.
+
+Return by Fri 13 Nov 06:00Z.
