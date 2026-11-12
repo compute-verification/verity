@@ -550,7 +550,7 @@ class Capture:
                 tables: dict[str, list[int]] = {rid: [] for rid in req_ids}
                 key = f"block_tables_g{g}"
                 if max(nb_g, default=0) and key in self._pin_cache:
-                    host = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()
+                    host: Any = self._pin_cache[key][: n * max(nb_g)].view(n, max(nb_g)).tolist()   # a list here, a tensor for the sampled ids
                     for i in range(n):
                         tables[req_ids[i]] = [int(b) for b in host[i][: nb_g[i]]]
                 skey = f"slots_g{g}"
@@ -603,8 +603,8 @@ class Capture:
         self._write(start)
         for r in roots:
             self._write(r)
-        for l in links:
-            self._write(l)
+        for link in links:
+            self._write(link)
         for ev in st.events:
             self._write(ev)
         for e in pending:
@@ -675,13 +675,13 @@ class Capture:
                 blocks = self._blocks_in_use()
                 lead = [()] if bdim == 0 else [(k,) for k in range(int(t.shape[0]))] if bdim == 1 else None
                 if lead is not None and blocks:
-                    for l in lead:
+                    for leading in lead:
                         for b in blocks:
                             v = t
-                            for k in l:
+                            for k in leading:
                                 v = v.select(0, k)
                             v = v.select(0, b)
-                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(l) + [b]}, cap=cap)
+                            self._snap_tensor(eid, path, v, sub={"dim": bdim, "index": list(leading) + [b]}, cap=cap)
                     return
             why = f"spanned bytes {nbytes} > snapshot_max_bytes {cap}"
             if cap != full:
