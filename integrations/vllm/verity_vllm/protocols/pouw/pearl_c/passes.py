@@ -104,8 +104,10 @@ def step_ends(run: Any, limit: int | None = None):
     ``Scheduler.update_from_output`` would close one pass over two forwards.  The wrappers made from one call share a depth,
     so a call inside another (a dummy run's, a subclass's runner wrapping its base's) ends the pass once.  A forward that
     raises leaves its pass open.  With ``limit``, a step whose scheduler output schedules more tokens is refused
-    (``RuntimeError``) before its forward runs."""
+    (``RuntimeError``) before its forward runs.  A run that times its passes is told when the forward begins
+    (``begin_step``, `PassEnds.begin_step`)."""
     depth = [0]
+    began = getattr(run, "begin_step", None)
 
     def make(orig):
         def execute_model(runner: Any, *a: Any, **kw: Any) -> Any:
@@ -113,6 +115,8 @@ def step_ends(run: Any, limit: int | None = None):
             if not depth[0] and limit is not None and isinstance(tokens, int) and tokens > limit:
                 raise RuntimeError(f"{run.entry}: a step of {tokens} tokens is over one pass ({limit} tokens a step, "
                                    f"`pouw_pass.step_tokens`); serve with max_num_batched_tokens at most {limit}")
+            if not depth[0] and began is not None:
+                began()
             depth[0] += 1
             try:
                 out = orig(runner, *a, **kw)

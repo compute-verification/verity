@@ -394,7 +394,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
-            "hashing": hashing, "passes": [], "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
+            "hashing": hashing, "passes": [], "seconds": [],
+            "excluded_b": {str(w): len(x.excluded) for w, x in self.weights.items()},
             "host": {"keys": "native sha512", "screen": "fused (Triton)" if self.fused_screen else "torch"},
             "schedule": None,
             "graphs": (f"calls of at most {GRAPH_ROWS} rows: the serial schedule's one graph a call, a side lane's schedule's "
@@ -596,12 +597,18 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         """One call, under inference mode as vLLM runs it: a call's buffers may be inference tensors made during a forward,
-        which torch writes only there, and a caller outside a forward (the e2e's gate) runs the same code."""
+        which torch writes only there, and a caller outside a forward (the e2e's gate) runs the same code.  Its seconds
+        are its pass's parts from ``stage`` on (`parts.Parts`), out of the part it was called in."""
         import torch
-        if torch.is_inference_mode_enabled():            # a vLLM forward: entering the mode again costs a call's microseconds
-            return self._gemm(w, x, weight, bias)
-        with torch.inference_mode():
-            return self._gemm(w, x, weight, bias)
+        parts = self.cur.parts
+        was = parts.switch("stage")
+        try:
+            if torch.is_inference_mode_enabled():        # a vLLM forward: entering the mode again costs a call's microseconds
+                return self._gemm(w, x, weight, bias)
+            with torch.inference_mode():
+                return self._gemm(w, x, weight, bias)
+        finally:
+            parts.switch(was)
 
     def _gemm(self, w: int, x: Any, weight: Any, bias: Any) -> Any:
         import torch
@@ -621,6 +628,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         pipe, steps, side = self._pipe(w, sh)
         raw = self.stream()
         caller = self.torch_stream(raw) if self.device.type == "cuda" else None
+        cur.parts.switch("launch")
         if self._graphed(m16):
             sh.j, sh.rot = 0, ()
             y, screened = self._graph_call(w, sh, pipe, raw, tiles, m, index, caller)
@@ -640,6 +648,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
         """A call's records after its steps: its matmul, A's root, the screen (unless a graph `screened` it), the retained
         files, and y.  The screen reads `rows` (the call's BF16 x, whose widening to A's FP32 words is exact) when given, at
         half the bytes of A's words.  A graph that `scattered` wrote A's root, the leaves and (when it screened) the flags."""
+        cur.parts.switch("screen")
         cur.matmuls.append(Matmul(index, Shape(m16, k, wt.n), w))
         if self.hashing:
             size = pipe.size["tree_a"]

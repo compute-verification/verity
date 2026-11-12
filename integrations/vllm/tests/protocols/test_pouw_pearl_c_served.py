@@ -173,6 +173,34 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     assert "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
 
 
+def test_a_step_tells_a_run_that_times_its_passes_when_its_forward_begins(monkeypatch):
+    """A run with ``begin_step`` is told once a step, before the forward and whatever a committer's patch does on the
+    step, and its pass ends after both; a step that runs the runner's wrapper and the class's tells it once; a step
+    refused for its size tells it nothing."""
+    monkeypatch.setattr(PP, "model_runners", lambda: (Stepping,))
+    runner, order = Stepping(), []
+    run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]),
+                          begin_step=lambda: order.append("begin"), end_pass=lambda step=False: order.append("end"))
+    first, h = _committed(runner, order), hooks.Hooks(ENTRY)
+    PP.hook_steps(h, run, 1, None, runner)
+    assert [runner.execute_model(s) for s in (1, 2)] == [1, 2] and order == ["begin", 1, "end", "begin", 2, "end"]
+    h.uninstall()
+    first.uninstall()
+
+    del order[:]
+    PP.hook_steps(h := hooks.Hooks(ENTRY), run, 1, None, runner)       # the runner's wrapper over the class's
+    assert runner.execute_model(3) == 3 and order == ["begin", "end"]
+    h.uninstall()
+
+    del order[:]
+    limited = PP.step_ends(run, limit=8)(lambda runner, scheduler_output: order.append("forward"))
+    with pytest.raises(RuntimeError, match="over one pass"):
+        limited(runner, SimpleNamespace(total_num_scheduled_tokens=9))
+    assert order == []
+    limited(runner, SimpleNamespace(total_num_scheduled_tokens=8))
+    assert order == ["begin", "forward", "end"]
+
+
 def _host(tmp_path, monkeypatch, seed=1, challenger=None):
     """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its challenge phase `SID` reserved on its
     ledger and reached at `AUDITOR`."""

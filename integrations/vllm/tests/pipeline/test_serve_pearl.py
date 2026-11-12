@@ -16,6 +16,7 @@ its open makes it, and the open then only hooks the model.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import random
@@ -44,6 +45,7 @@ from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
 from verity_vllm.protocols.pouw.pearl_c.manifest import SESSION_KEYS
+from verity_vllm.protocols.pouw.pearl_c.parts import Parts
 
 from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
@@ -55,6 +57,9 @@ HIDDEN, INTER = 256, 1024
 #: each linear's (n, k), in Pearl-C's domain on the H100 kernels
 SHAPES = ((2 * HIDDEN, HIDDEN), (HIDDEN, HIDDEN), (2 * INTER, HIDDEN), (HIDDEN, INTER))
 CONFIG = {"pouw": {"device": "cuda", "kernel": "k"}}
+#: a step's pass's seconds on the stand-in under the fixture's clock, a tick a reading: its forward, to the end's one
+#: switch, and the next pass's begin
+STEP_PARTS = {"forward": 1.0, "next": 1.0}
 PROMPTS = ([(7 * i + 3) % 500 for i in range(CLASS.prompt)], [(5 * i + 11) % 500 for i in range(CLASS.prompt)])
 RUNS: list = []
 
@@ -131,7 +136,8 @@ class Run(PP.EpochCalls, PassEnds):
         self.weights = {str(w): {"n": t.shape[0], "k": t.shape[1], "root": roots[w].hex()} for w, t in weights.items()}
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
-        self.details, self.retain_dir, self.retained, self.cur, self.finished = {"passes": []}, None, 0, None, False
+        self.details, self.retain_dir, self.retained, self.cur = {"passes": [], "seconds": []}, None, 0, None
+        self.finished = False
         RUNS.append(self)
         self.begin()
 
@@ -164,6 +170,9 @@ class Run(PP.EpochCalls, PassEnds):
                 {"entry": self.entry, "scheme": self.scheme.name, "salt": self.salt.hex(),
                  "hm96_salt_key": self.salt_key.hex(), "weights": self.weights, "matmuls": cur.records}))
             out["manifest"] = str(path)
+        cur.parts.switch(None)
+        if cur.matmuls:
+            self.details["seconds"].append(cur.parts.seconds)
         self.details["passes"].append(out)
         return out
 
@@ -185,6 +194,8 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
     monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))
+    ticks = itertools.count()
+    monkeypatch.setattr(Parts, "clock", staticmethod(lambda: float(next(ticks))))
     RUNS.clear()
 
 
@@ -209,7 +220,8 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
     """Two requests of the toy's class, one a window: each window's epoch has its own salt and hm96 key, its passes are
     its steps, each with every linear's call at the toy's index, m₁₆ and real rows, and its W's entries are the roots of the
     x each linear was handed and the y it served, then each linear's weight's B root, once; its line's ``pouw_pearl`` is
-    its outcome, and every hook is off after.  The weights' rows are kept once, when the arm is made ready, in
+    its outcome, its seconds with where its passes' went (the first pass's parts, the later ones' summed), and every hook
+    is off after.  The weights' rows are kept once, when the arm is made ready, in
     ``pearl/rows/``, and each window's run is given them.  The coins are in-process, so each window's epoch is made
     ahead: window 0's when the arm is made ready, with no hook on the model, and the next window's at each close, the
     last of which no window takes and the drain closes."""
@@ -265,8 +277,9 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
             "salt": RUNS[k].salt.hex(), "weights_root": weights_root(roots).hex(), "coin_source": "in-process",
             "served": f"{SPL.DIR}/w{k}/served.json", "seconds": None}
         seconds = line["pouw_pearl"]["seconds"]
-        assert sorted(seconds) == ["ahead", "epoch", "hooks", "install", "next", "record", "release", "unhook"]
+        assert sorted(seconds) == ["ahead", "epoch", "hooks", "install", "next", "passes", "record", "release", "unhook"]
         assert sorted(seconds["epoch"]) == ["coins", "run", "salt", "weights"]
+        assert seconds["passes"] == {"count": CLASS.outputs, "first": STEP_PARTS, "later": STEP_PARTS}
         assert d.stat().st_mode & 0o777 == 0o700 and RUNS[k].finished
     assert salts[0][0] != salts[1][0] and salts[0][1] != salts[1][1]
     assert srv.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [],
@@ -291,7 +304,7 @@ def test_a_window_short_of_a_linears_call_is_its_visible_failure(tmp_path):
     assert s.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 1, "passes": 2, "calls": 8, "failed": [0],
                                                  "closing": []}
     assert s.windows.arm.describe()["coins"] == "given" and not s.windows.arm.ahead and len(RUNS) == 2
-    assert all(sorted(w["pouw_pearl"]["seconds"]) == ["epoch", "hooks", "install", "record", "release", "unhook"]
+    assert all(sorted(w["pouw_pearl"]["seconds"]) == ["epoch", "hooks", "install", "passes", "record", "release", "unhook"]
                for w in lines)
 
 

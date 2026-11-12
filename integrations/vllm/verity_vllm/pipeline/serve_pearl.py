@@ -390,7 +390,11 @@ class PearlWindows:
     def close(self, window: int) -> dict[str, Any] | None:
         """Window ``window``'s epoch closed, on the loop: its hooks off, its option closed, its ``coins.json`` and
         ``served.json`` written (`record`); its outcome, with ``error`` when any of it failed. None when no epoch is open.
-        Under ``ahead`` the next window's epoch is then made (`make_ahead`), its seconds the outcome's ``next``."""
+        Under ``ahead`` the next window's epoch is then made (`make_ahead`), its seconds the outcome's ``next``. The
+        outcome's ``seconds`` are the open's (`open`), the close's parts and where its passes' went (``passes``,
+        `pearl_c.parts.summary`: the first pass's parts and the later ones' summed)."""
+        from verity_vllm.protocols.pouw.pearl_c import parts as PPA
+
         if self.comp is None:
             return None
         comp, reserved, seconds = self.comp, self.reserved, dict(self.opened)
@@ -411,12 +415,13 @@ class PearlWindows:
             out = self.record(window, opt, steps, reserved, error)
         except (KeyError, OSError, ValueError) as e:
             out = {"entry": ENTRY, "window": window, "steps": steps, "error": f"record: {type(e).__name__}: {e}"[:500]}
+        passes = PPA.summary(opt.details.get("seconds", ()))
         del comp, opt
         gc.collect()                       # the epoch's device buffers (B̃, the pass buffers) freed before the next is made
         t3 = self.clock()
         after = {"next": self.make_ahead(window + 1)} if self.ahead else {}
         out["seconds"] = {**seconds, "unhook": round(t1 - t0, 4), "release": round(t2 - t1, 4), "record": round(t3 - t2, 4),
-                          **after}
+                          "passes": passes, **after}
         self.outcomes.append(out)
         return out
 
