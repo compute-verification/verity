@@ -807,6 +807,7 @@ def clones(tmp_path):
                      ["-C", d, "branch", "lane/mine"], ["-C", d, "branch", "theirs"], ["-C", d, "remote", "add", "origin", url]):
             subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
     env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "GIT_CONFIG"))}
+    env["AGENT_GUARD_EVENT_LOG"] = str(tmp_path / "events.jsonl")     # the hook's record of this test's runs, not the machine's
 
     def ask(form: str, clone: str) -> dict:
         command = form
