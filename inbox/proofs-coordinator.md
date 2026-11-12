@@ -93028,3 +93028,32 @@ Next entry by 17:05Z.
 - [derived] At lean's order I read every close against the `main` it names (one command, ready) and cut a joined file wherever that `main` holds more than one of our heads on a file.
 
 Branches: `cursor/proofs-landing-closes-99d1` at `2f6a899ce9cb8ec77e2a00988203f805ce5edbf6`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none. Running: `cc58` (#9075), `8a97` (#9080's Lean), `7cf7` (lean's line with `main` `06728b3b7c66`; 60 passed, 2 failed of 71 so far, both known).
+
+## REFUSE, Thu 12 Nov 16:13Z: READY LINE for #9348 at `8fe73485fcad6dc28563e39aaa8c12a661771473` (`cursor/proofs-lean-refused-7c3e`): open on `main`, not a draft, not marked; no file it changes moved on `main`
+
+- [run] Opened at 16:12Z with `research queue open --head cursor/proofs-lean-refused-7c3e --sha
+  8fe73485fcad6dc28563e39aaa8c12a661771473 --issue NET-369 --by proofs`: https://github.com/compute-verification/verity/pull/9348,
+  linked to NET-369 through the Linear app.
+- [read] (`gh pr view 9348`, 16:12Z) OPEN, base `main`, not a draft, head `8fe73485fcad6dc28563e39aaa8c12a661771473`,
+  MERGEABLE, no label. The body is the file I sent, `Lane proofs` first, with two lines `open` wrote at its end:
+  `Refs NET-369` and `Goal network/slice-clean` (the goal NET-369's label names; network's, not one of ours).
+- [read] (the body) It says what changes; what the other bare reads get; what it does not do (A11's negative still
+  shows the honest prover stops; `records_audit.py` 776 is not edited and has no test here; `lean_verdicts.py`'s copy
+  of the prefix stays, and #9329 brings a third); that either order with #9329 lands; the checks; what was not run.
+- [run] `r20261112-154726-e6a8` (vy-nebius-cpu-1, `suites.py --changed 99f1b414a647 --quick` at this head): rc 0, 5
+  suites passed, 0 failed: `benchmarks/one_stage` 590, `benchmarks/prove_path` 155, `repository` 350,
+  `verity-network-traces` 609, `verity-graph` 220. Read whole last turn; not run again.
+- [run] (16:11Z, drivers registered, `main` at `87fec6c6491b`) `git merge-tree`: this head with `main` (tree
+  `1553f4aac1eb`), with #9329's head `c77b01b8b79a` and with #9237's head `9d4aec0111fb`: no stop in any. With lean's
+  landing branch at `f3837f57d113`: 31 stops, each one of `main`'s own 31.
+- [run] (16:10Z) **What moved on `main` under it**, `99f1b414a647` to `87fec6c6491b`, 7 landings, 39 files. None of
+  its three files (`a0.py`, `a11.py`, the new test), and nothing else under `benchmarks/one_stage` or
+  `benchmarks/prove_path`. Inputs of suites it reaches did move: 20 files of `adapters/vllm` (#9180, #9288, #9306),
+  which `benchmarks/one_stage`, `benchmarks/prove_path` and `verity-network-traces` each list among their inputs,
+  and six of `benchmarks/network_traces` (#9314: a new module `capture_flows.py`, its script, fixtures and test,
+  which read neither `a0` nor `lean_refused`). `repository` and `verity-graph` read the whole tree. By your rule,
+  no second quick run: no file it changes moved. `main` was still `87fec6c6491b` at 16:13Z.
+- **Not established:** the five suites on `main` after `99f1b414a647` merged with this head; any A0, A11 or
+  `prove_bundle` run on real sessions at this head; the whole check.
+- [read] Mailbox re-read at 16:13Z (your 16:07Z section is the newest). The neighbour on PRF-603: I change nothing
+  for it. Nothing marked, nothing posted, nothing pushed to #9329's branch.
