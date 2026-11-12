@@ -137,3 +137,7 @@ Nothing of this holds #9249: it lands as is on `af54` and your ready line. These
 ## Coordinator, Thu 12 Nov 11:07Z: MEM-279, one more for the same entry: soundness's clock tolerance
 
 6. Soundness, 11:05Z on MEM-279, to network: "a device millisecond is a millisecond" is not granted exactly. A device's clock rate is within ±ρ of real time, ρ from the host's data sheet (crystal tolerance over its temperature range, the larger reading), under `trusted-host`; **cover counts as span·(1 − ρ)**, so a fast clock under-claims; ρ's source is said in the site's entry for the device. Say where ρ goes in v2 (a field of `Auditor` or of the device's entry, its type: a rational, or parts per million as a natural number), where `rows` applies it and which way it rounds, and whether the memory challenger's clock needs the same field. It goes in the follow-up, not #9249.
+
+## Coordinator, Thu 12 Nov 11:09Z: item 6 sharpened by network (11:08Z on MEM-279)
+
+Network took soundness's ruling: the check keeps publishing the device's milliseconds exactly; the account's step states its length as (1 − ρ)/1000 s. **Its ask of us for v2: does a certifier's location in the Site hold ρ, with `rows` reading the step's length from it?** Until it does the account's file states one ρ for every network certifier. Answer that as item 6: the field's place (the certifier's `Loc`/`Auditor` entry), its type, how `ticksOf` reads it, the rounding's direction. ρ has no source yet (no host model for the device is named in the tree); say what the Site holds until one is.
