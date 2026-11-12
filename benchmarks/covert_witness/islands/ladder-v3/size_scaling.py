@@ -439,12 +439,17 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                "unmeasured": {f"{r}@{s}": w for (r, s), w in why.items()}}
 
 
+#: rho's and S's least and greatest ratio, at 32-bit attention's products over 16-bit, over the panel's rows: the as-if
+#: re-pricing's build/out/asif/ss/{control,asif-steps}/size-scaling/size-scaling.json
+ATTENTION_32 = "0.43 to 0.62"
+
+
 def note() -> str:
-    return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the least S = "
-            "p*rho over reached attacks, never partial, stub or unmeasured; if only untraced runs reached, the least p, "
-            "rho null. Headline: grown, the size's own 4,096-in 1,024-out session at k 65,536 (rho at its packed "
-            "k_bits is at least this). Sensitivities: console (45M), serving (k 1.6e6, its own 100,000-in session). "
-            "1B: reference size, no start.")
+    return (f"Per size, gain, policy ({UNIT}): standard training (full-size trace, p = 1) and least S = p*rho of "
+            "reached attacks, never partial, stub or unmeasured; untraced alone: least p, rho null. Grown, own 4,096-in "
+            "1,024-out session, k 65,536 (at packed k_bits, rho is no less). Console (45M), serving (k 1.6e6, own "
+            "100,000-in). 1B: no start. Attention's products are priced at 16 bits, as the card computes them; at 32 "
+            f"bits rho and S are {ATTENTION_32} of this.")
 
 
 def main(argv=None) -> int:
