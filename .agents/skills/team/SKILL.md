@@ -49,16 +49,16 @@ has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs read
 it, and fast-forwards `main` only to a candidate with no new failure, each gating task passed or failing on its base too:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
-  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
-  linked through the Linear app, since Linear's GitHub integration is off here; a failed link prints its retry, `research
-  queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
-  page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
-  body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
-  refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
-  its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
-  `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark's preflight refuses a
-  head that conflicts or that drive.toml's `landing_gates` refuse; a Markdown file over its cap only warns (trim it in
-  your next PR), as does the vLLM integration's ratchet gate on the merge, which can read a moved line as a new violation. A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
+  --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY`
+  and linked by the Linear app, as Linear's GitHub integration is off; a failed link prints its retry, `research queue
+  link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals page),
+  which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A body
+  with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a refusal
+  (`research queue edit N --body-file F` fixes it). A new head needs a new mark and review unless its own diff,
+  whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`. `research queue status` says what
+  each PR waits for and lists the PRs naming no issue. The mark's preflight refuses a head that conflicts or that
+  drive.toml's `landing_gates` refuse; a Markdown file over its cap (trim it in your next PR) and the vLLM ratchet gate
+  only warn. A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
   team's Apps and Daniel, is refused at its mark and at admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
   pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
