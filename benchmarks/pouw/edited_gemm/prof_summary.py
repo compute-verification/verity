@@ -27,7 +27,10 @@ def main(out):
         print("| arm | ms | / plain | MHz |\n|---|---|---|---|")
         for k, v in arms.items():
             print(f"| {k} | {v:.4f} | {v / p:.3f} | {mhz[k]:.0f} |")
-        g = lambda k: arms.get(k, float("nan"))
+
+        def g(k: str) -> float:
+            return arms.get(k, float("nan"))
+
         parts = [
             ("custom mainloop, no receipts, against cuBLASLt (cplain - plain)", g("cplain") - p),
             ("duo receipts at L = 32 in the mainloop (cduo - cplain)", g("cduo") - g("cplain")),

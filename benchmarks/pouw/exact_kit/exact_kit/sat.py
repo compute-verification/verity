@@ -1,9 +1,9 @@
-"""A CNF builder over named variables, with Tseitin gates, k-bit words and cardinality constraints, solved by pysat.
+"""A CNF builder over named variables, with Tseitin gates and k-bit words, solved by pysat.
 
     cnf = Cnf()
     x, y = cnf.word("x", 4), cnf.word("y", 4)
-    cnf.equal(cnf.add_words(x, y), cnf.const(4, 5))     # x + y = 5 mod 16
-    cnf.models(over=x + y)                               # every projection onto those variables, as {name: bool}
+    cnf.parity([cnf.and_(a, b) for a, b in zip(x, y)], odd=True)     # <x, y> = 1 over F_2
+    cnf.models(over=x + y)                               # every projection onto those variables, as {variable: bool}
 
 A literal is a nonzero int (pysat's DIMACS form; -v is not v). Words are lists of literals, least significant bit first.
 """
@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from pysat.card import CardEnc, EncType
 from pysat.solvers import Solver
 
 SOLVER = "cadical153"
@@ -51,9 +50,6 @@ class Cnf:
             self.add([self._true])
         return self._true
 
-    def const(self, k: int, value: int) -> list[int]:
-        return [self.true if value >> i & 1 else -self.true for i in range(k)]
-
     def and_(self, a: int, b: int) -> int:
         z = self.var()
         self.add([-z, a])
@@ -85,54 +81,6 @@ class Cnf:
         z = self.xor_all(lits)
         self.add([z if odd else -z])
 
-    def maj(self, a: int, b: int, c: int) -> int:
-        return self.or_(self.or_(self.and_(a, b), self.and_(a, c)), self.and_(b, c))
-
-    def add_words(self, x: Sequence[int], y: Sequence[int], carry_in: int | None = None) -> list[int]:
-        """x + y mod 2^k (ripple carry)."""
-        if len(x) != len(y):
-            raise ValueError("words of different widths")
-        c = -self.true if carry_in is None else carry_in
-        out = []
-        for a, b in zip(x, y):
-            out.append(self.xor(self.xor(a, b), c))
-            c = self.maj(a, b, c)
-        return out
-
-    def xor_words(self, x: Sequence[int], y: Sequence[int]) -> list[int]:
-        return [self.xor(a, b) for a, b in zip(x, y, strict=True)]
-
-    def mul_const(self, x: Sequence[int], a: int) -> list[int]:
-        """a * x mod 2^k for a constant a (shift and add)."""
-        k = len(x)
-        acc = self.const(k, 0)
-        for i in range(k):
-            if a >> i & 1:
-                acc = self.add_words(acc, self.const(i, 0) + list(x[:k - i]))
-        return acc
-
-    def equal(self, x: Sequence[int], y: Sequence[int]) -> None:
-        for a, b in zip(x, y, strict=True):
-            self.add([-a, b])
-            self.add([a, -b])
-
-    def differ(self, x: Sequence[int], y: Sequence[int]) -> None:
-        self.add([self.xor(a, b) for a, b in zip(x, y, strict=True)])
-
-    def at_most(self, lits: Sequence[int], k: int) -> None:
-        self._card(CardEnc.atmost(lits=list(lits), bound=k, top_id=self.top, encoding=EncType.seqcounter))
-
-    def at_least(self, lits: Sequence[int], k: int) -> None:
-        self._card(CardEnc.atleast(lits=list(lits), bound=k, top_id=self.top, encoding=EncType.seqcounter))
-
-    def exactly(self, lits: Sequence[int], k: int) -> None:
-        self.at_most(lits, k)
-        self.at_least(lits, k)
-
-    def _card(self, enc) -> None:
-        self.top = max(self.top, enc.nv)
-        self.clauses.extend(enc.clauses)
-
     def solve(self, assumptions: Sequence[int] = ()) -> dict[int, bool] | None:
         """A model ({variable: value}) or None when unsatisfiable."""
         with Solver(name=SOLVER, bootstrap_with=self.clauses) as s:
@@ -154,9 +102,6 @@ class Cnf:
                 found.append(proj)
                 s.add_clause([-v if proj[v] else v for v in over])
         return found
-
-    def count(self, over: Sequence[int]) -> int:
-        return len(self.models(over))
 
     def value(self, model: dict[int, bool], word: Sequence[int]) -> int:
         """A word's value in a model."""

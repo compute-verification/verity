@@ -12,7 +12,7 @@ rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and th
   a second stream, each warp paced to the target ratio of the alone arm's rate, and the arm reports the ratio it
   achieved. Where the hash can't keep up beside the whole tensor, the tensor is paced down to leave it room. cuBLASLt
   runs alone only, because the hash's resident CTAs crowd out its GEMM's.
-- `wgmma_i8.cuh`: the wgmma wrappers, which `gen_wgmma.py` writes.
+- `wgmma_i8.cuh`: the wgmma wrappers, which `gen_wgmma.py` writes (a test holds the file to it).
 - `run.sh`: one card. It builds, takes one gpu-lease, locks the clock, runs every round, class, kernel and encoding,
   and resets the clock at exit.
 - `summarize.py`: the reading over one or more runs' `out/` directories. It is the maximum over every attempt and
@@ -26,5 +26,7 @@ python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.res
 ~~~
 
 `run.sh`'s header lists its knobs: classes, encodings, kernels, ratios, seconds an arm, rounds and clock. Nothing here
-is a proof, and there are no tests: a run's rates are its record. Nothing imports this directory: `summarize.py` is a
-command over runs' outputs, on the standard library alone.
+is a proof: a run's rates are its record. The directory is its own suite (`tests/`), which runs on a CPU: it holds
+`summarize.py`'s reading to made-up arms (which arm counts, the maximum per class and ratio, what the command prints
+and writes) and `wgmma_i8.cuh` to its generator. Nothing imports this directory: `summarize.py` is a command over runs'
+outputs, on the standard library alone.
