@@ -235,16 +235,23 @@ def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : E
         served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
         circuits := p.circuits } }
 
-/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output. -/
-def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
-    V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
+/-- Check steps 1 to 3: the interior audit's commitment and the bytes its sample read, its sessions' run, every
+session accepting, and the run of record's input over the stamped verdicts. -/
+def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    V (OneStage.Commitment × ByteArray × OneStageZk.Run × Spot.Run.Input) := do
   let c₂ ← OneStage.commitmentOf (← Flock.canon e.record).toUTF8
   let ξ₂ ← OneStageZk.coinsOf p.audit c₂ e.interior
   let r ← OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs
   if !r.all then throw "proofs: a session's verifier did not accept"
   let vs ← stamped p e bs r.out
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
-  let run ← Spot.Run.run (inputOf p c ξ ξ₂ e received₂ vs)
+  pure (c₂, ξ₂, r, inputOf p c ξ ξ₂ e received₂ vs)
+
+/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output. -/
+def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
+  let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
+  let run ← Spot.Run.run i
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
