@@ -398,7 +398,7 @@ def device_hash(words: Any, key: bytes, nonce: int, row_salts: bytes | None, dom
     held = isinstance(words, torch.Tensor) and words.is_cuda
     if held and (words.device != dev or words.dtype != torch.uint16 or words.dim() != 2):
         raise ValueError(f"words {tuple(words.shape)} of {words.dtype} on {words.device}: not (n, W) u16 on {dev}")
-    rows: Any = words.contiguous().view(torch.uint8) if held else _rows(words)
+    rows = words.contiguous().view(torch.uint8) if held else _rows(words)
     n, rb = (int(v) for v in rows.shape)
     t = table(n, rb, key, nonce, row_salts is not None or public is not None, domain_id)
     per = max(1, CHUNK_BYTES // rb)
