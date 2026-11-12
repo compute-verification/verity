@@ -255,7 +255,8 @@ def run_shapes(o: Path, names: set[str]) -> dict[str, tuple[int, int, int]]:
     return out
 
 
-def f(x, d=3):
+def f(x: float | None, d: int = 3) -> str:
+    """x to d decimals; empty for a missing value or a NaN."""
     return "" if x is None or x != x else f"{x:.{d}f}"
 
 

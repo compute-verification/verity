@@ -39,19 +39,21 @@ from exact_kit import wrap
 from exact_kit.checks import Checks
 
 
-def xorin_step_ref(y, d0, d1, d2, d3, a0, a1):
+def xorin_step_ref(y: np.ndarray, d0: np.ndarray, d1: np.ndarray, d2: np.ndarray, d3: np.ndarray, a0: np.uint32,
+                   a1: np.uint32) -> np.ndarray:
     """receipt_folds_r9.xorin_step verbatim (rotations 13, 19), inlined so this check is self-contained: one absorb of a
     word's four limbs into the 32-bit state (uint32 wrapping). The fold below iterates exactly this step."""
     y = (rf_rotl(y, 13) ^ d0) * a0 + d1
     return (rf_rotl(y, 19) ^ d2) * a1 + d3
 
 
-def rf_rotl(x, r):
+def rf_rotl(x: np.ndarray, r: int) -> np.ndarray:
+    """x's 32-bit words rotated left by r bits."""
     x = x.astype(np.uint32)
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
-def perturbations(w, n):
+def perturbations(w: tuple[int, ...], n: int) -> np.ndarray:
     """The changes to the committed word's four limbs that the check searches: each limb's single bit flips, a +1 on the
     added limbs w1, w3, and the paired bit flip on the two XOR-in limbs w0, w2. Returns (P, 4)."""
     m = (1 << n) - 1
@@ -71,7 +73,8 @@ def perturbations(w, n):
     return np.array(uniq, dtype=np.uint64)
 
 
-def collapses(keys, words, max_r, check_rounds, n, r1, r2, force_a0=None, kchunk=512):
+def collapses(keys: np.ndarray, words: list[tuple[int, ...]], max_r: int, check_rounds: list[int], n: int, r1: int, r2: int,
+              force_a0: int | None = None, kchunk: int = 512) -> list[tuple]:
     """Every all-state collapse (a0, a1, word, pert index, R) over the full 2^n state space, folding incrementally so one
     pass checks every R in check_rounds. A collapse is a perturbed word whose R-fold permutation equals the original's on
     every state. Keys run in chunks broadcast over (key, pert, state). force_a0 overrides a0 (a degenerate-key control)."""
@@ -105,13 +108,13 @@ def collapses(keys, words, max_r, check_rounds, n, r1, r2, force_a0=None, kchunk
     return hits
 
 
-def kj19_bad(a, n):
+def kj19_bad(a: int, n: int) -> bool:
     """The reduced KJ19 defect: a ~ +-1 mod 2^(n-2) (the small-rotation stand-in for 32-bit KJ19's a ~ +-1 mod 2^13)."""
     t = 1 << (n - 2)
     return (a % t) in (1, t - 1)
 
 
-def near_inverse(a0, a1, n):
+def near_inverse(a0: int, a1: int, n: int) -> bool:
     """The near-inverse defect that key_ok_r9 rejects: a0*a1 ~ +-1 2-adically (v2(a0*a1 -+ 1) >= n-5)."""
     m = (1 << n) - 1
     prod = (a0 * a1) & m
@@ -120,12 +123,12 @@ def near_inverse(a0, a1, n):
     return v2((prod - 1) & m) >= n - 5 or v2((prod + 1) & m) >= n - 5
 
 
-def key_ok_r11(a0, a1, n):
+def key_ok_r11(a0: int, a1: int, n: int) -> bool | int:
     """The reduced key_ok_r11: odd keys, neither key near +-1 (KJ19), and no small near-inverse pair (key_ok_r9)."""
     return (a0 & 1) and (a1 & 1) and not kj19_bad(a0, n) and not kj19_bad(a1, n) and not near_inverse(a0, a1, n)
 
 
-def danger_keys(n, count, seed):
+def danger_keys(n: int, count: int, seed: int) -> np.ndarray:
     """key_ok_r11 keys sampled from the regions the open shape and the family lean on -- near-inverse pairs and random --
     kept to the keys key_ok_r11 admits, so a collapse here would be a real break."""
     rng = np.random.default_rng(seed)
@@ -139,7 +142,7 @@ def danger_keys(n, count, seed):
     return np.array(sorted(set(out))[:count], dtype=np.uint64)
 
 
-def key_ok_r9_32(a):
+def key_ok_r9_32(a: int) -> bool:
     """egemm.cu's xin_ok_r9 (host): odd, low-24-bit window in (256, 2^24-256), rot not +-1 mod 32, and a*b mod 2^30
     outside [-128, 128] for every b in 1..128."""
     a &= 0xFFFFFFFF
@@ -154,12 +157,13 @@ def key_ok_r9_32(a):
     return True
 
 
-def key_ok_r11_32(a):
+def key_ok_r11_32(a: int) -> bool:
     """key_ok_r9 plus KJ19: reject a ~ +-1 mod 2^13 (covers both rotations 13, 19)."""
     return key_ok_r9_32(a) and (a & 0x1FFF) not in (1, 0x1FFF)
 
 
-def r11_keys(count, seed):
+def r11_keys(count: int, seed: int) -> list[int]:
+    """``count`` random 32-bit keys that key_ok_r11_32 admits."""
     rng = np.random.default_rng(seed)
     out = []
     while len(out) < count:
@@ -169,7 +173,8 @@ def r11_keys(count, seed):
     return out
 
 
-def sample32(keys, words, rounds, nstate, seed=1):
+def sample32(keys: list[tuple[int, int]], words: list[tuple[int, ...]], rounds: list[int], nstate: int,
+             seed: int = 1) -> list[tuple]:
     """A 32-bit confirmation over the real (13, 19) rotations and key_ok_r11 keys: no perturbation collapses the R-fold on
     a random state sample. Over states, so it witnesses non-collapse rather than proving the all-state kernel."""
     rng = np.random.default_rng(seed)
