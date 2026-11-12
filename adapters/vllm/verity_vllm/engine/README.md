@@ -10,7 +10,8 @@ what it holds.
   engine specs (`spec`), a built engine's vLLM objects (`handle`), a stock engine at the pin (`stock`), a served
   request's seed (`served_seed`), the engine core's seam between steps (`core_gate`), the step trace
   (`step_trace`), the sampler's capture (`sampler_capture`), the carried pool's row (`pool_row`) and the MoE
-  alignment (`moe_align`). To the integration's other packages also: the engine's profile and run facts
+  alignment (`moe_align`). To the integration's other packages also: the engine's build and what the built engine
+  executes (`build`), vLLM's own switches in the process environment (`env`), the engine's profile and run facts
   (`engine_profile`, `run_facts`), its served switches (`served`), a request's own id through the engine
   (`engine_driver`), the one owner of runtime patches (`hooks`), the int8 kernels and the exact-int8 parts of every
   process that builds the model (`int8_exact`, `int8_ops`, `int8_attention`, `int8_experts`, `int8_ranks`), sparse
@@ -24,8 +25,8 @@ what it holds.
   models, cards and transports (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`,
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
   `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
-  benchmarks and the command line read from it. Five more modules that other packages or the benchmarks read
-  state no `__all__` yet: `build`, `env`, `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `step_trace`'s
+  benchmarks and the command line read from it. Three more modules that other packages or the benchmarks read
+  state no `__all__` yet: `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `step_trace`'s
   does not yet list `SERVED` and `scheduler_config`, which other packages read; and
   `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
   `profiles.dense_generic._sha256`.

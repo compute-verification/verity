@@ -14,6 +14,9 @@ import tempfile
 from collections.abc import Mapping
 from typing import Any
 
+__all__ = ["ENGINE", "EXPORT", "INDUCTOR_DIR_MARK", "apply_compile_fresh", "apply_engine", "apply_target", "compile_dirs",
+           "hide_devices", "own_compile_dirs", "pin", "require_inductor", "served_defaults", "snapshot", "step_timeout"]
+
 #: The engine's execution profile, shared by production and replay: vLLM's defaults but for these, each
 #: with its reason in `REASONS`.  Batch invariance is the workload's execution label's (`engine.served.EXECUTIONS`), not the profile's.
 ENGINE = {

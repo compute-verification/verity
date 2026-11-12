@@ -22,6 +22,9 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import handle, served
 from verity_vllm.log import init_logger
 
+__all__ = ["Engine", "build_engine", "flash_attn_versions", "register_int8_parts", "resolved_async_scheduling",
+           "target_mismatches"]
+
 logger = init_logger(__name__)
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
