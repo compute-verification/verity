@@ -20,8 +20,9 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from typing import Any
 
 __all__ = ["Spans"]
 
@@ -82,3 +83,40 @@ class Spans:
                 "per_step": {int(s): {c: v for c, v in d.items()} for s, d in sorted(self.per_step.items())},
                 "throughput": throughput,
             }
+
+
+COMMIT_S = {"serving": ("acquisition", "movement", "wait"), "worker": ("hashing", "worker_idle", "root_finalisation", "device_pool_wait")}
+
+
+def commit_s_of(rc: Any) -> dict[str, dict[str, float]] | None:
+    """A window's Commit time by thread, summed over its steps (the committer's per-step spans). The serving thread's
+    ``movement`` is the copies' native issue, ``acquisition`` the step ends and the sources' takes (their waits included), and
+    ``wait`` its waits for a free slot of the staging ring, the worker behind. The worker's ``hashing`` holds ``worker_idle``, its
+    waits for the serving thread's windows. The finalize's wait for the worker has no step and isn't counted."""
+    spans = getattr(rc, "spans", None)
+    per_step = spans.get("per_step") if spans else None             # None: the committer recorded no per-step spans
+    if not per_step:
+        return None
+    per = per_step.values()
+    return {side: {c: round(sum(float(d.get(c, 0.0)) for d in per), 4) for c in cs} for side, cs in COMMIT_S.items()}
+
+
+def gc_of(rc: Any) -> dict[str, Any] | None:
+    """A window's Python collections (the committer's `GcPauses` record, while it was installed): how many, their total and
+    longest, and each of 50 ms or more as (generation, start on `time.perf_counter`, seconds, thread)."""
+    g = (getattr(rc, "extra", None) or {}).get("gc")
+    if not g:
+        return None
+    p = list(g.get("pauses") or [])
+    return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
+            "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
+
+
+def phases_of(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
+    """A close's phases, each one's seconds by its name: the time between two laps (`end_lap` marks them)."""
+    return {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
+
+
+def end_lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -> None:
+    """The end of a close's phase ``name``, marked in ``laps`` (`phases_of` reads them)."""
+    laps.append((name, clock()))
