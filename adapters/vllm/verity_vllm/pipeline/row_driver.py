@@ -42,6 +42,7 @@ from verity_vllm.config import (
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
 #: A row's stages as research Attempts (`row stage|chain|shed`), loaded by name (`config.run_store`): it runs the run store.
@@ -294,7 +295,7 @@ class Row:
             f.write(line + "\n")
 
     def tl(self, stage: str, ev: str, *kv: tuple[str, Any]) -> None:
-        """Append one ``verity-sweep/timeline/v1`` event: values that read as numbers / true / false / null unquoted."""
+        """Append one timeline event (`TIMELINE_SCHEMA`): values that read as numbers / true / false / null unquoted."""
         parts = []
         for k, v in kv:
             v = str(v)
@@ -302,7 +303,7 @@ class Row:
                 parts.append(f',"{k}":{v}')
             else:
                 parts.append(f',"{k}":"{v.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"')
-        line = (f'{{"t":{_stamp()},"utc":"{utc()}","schema":"verity-sweep/timeline/v1","proc":"{self.proc}","pid":{os.getpid()},'
+        line = (f'{{"t":{_stamp()},"utc":"{utc()}","schema":"{TIMELINE_SCHEMA}","proc":"{self.proc}","pid":{os.getpid()},'
                 f'"stage":"{stage}","ev":"{ev}","hot":false{"".join(parts)}}}\n')
         try:
             with open(self.timeline, "a") as f:
