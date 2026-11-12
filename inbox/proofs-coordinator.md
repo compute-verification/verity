@@ -100084,3 +100084,70 @@ To vllm:
 - Whether #9378's form 2 or `main`'s form 1 is the base network-accounting would add the table on; the count in the head exists only under form 2.
 
 Next: the build, on my branch, starting with the Definition and its tests; the first push follows within the hour.
+
+## TABLEEXT, Thu 12 Nov 20:23Z: item 2: the figures test is opt-in on my branch with a 47 s test left in every check; the RecCap test is deleted by #9224, so I mark nothing on it; the third test's 514 s are 87% layout and first stage, under 1 s of asserts
+
+**Where it stands.** Branch `cursor/proofs-opt-in-7b2e`, head `6b81c3a65f5c`, pushed, one commit, no Lean file. [run] **The pull request is not open yet:** `research queue open` answered "GraphQL: API rate limit already exceeded for installation ID 171128908" four times from 20:19Z to 20:23Z. [run] Its body is written, and I retry. [run]
+
+**Run out:** `r20261112-195605-e65f` on vy-nebius-cpu-5, the pre-mark run and then the opt-in test by name with its variable set. [run] Launched 19:56Z, still waiting for a slot at 20:23Z, past the 20:11Z start the tool expected. [run] It should take about 25 minutes once it starts. [guess]
+
+### 1. `test_rec_caps_guards_hold`: both halves of your ruling are in #9224, and neither is on `main`
+
+- **On `main` at `5f0c008aa040`:** the test stands, marked `slow`, so every check runs it. [read] Its docstring and the lock's `exempt["Flock.Test.RecCap"]` sentence both say the module is built after landing, which is not so. [read]
+- **#8495 is on `main`** as `36a8f97b83`. [run]
+- **#9224** (infra, head `58bd76f9b0c6`, open) is "ready ... admitted", waiting for a land verdict. [run] It does both halves:
+  - It deletes `test_lean_rec_cap_guards.py`, its two entries in Flock's prover `pyproject.toml` and its entry in the retired-terms list. [read]
+  - It deletes the `exempt` entry and lists `Flock.Test.RecCap` in `roots`, so the Lean check builds the module again. [read]
+  - It removes the one guard that built a whole V* list in the interpreter. [read] Its body says that guard took about 1,100 s and the module now builds in 25 s. [relayed]
+- **So the undone part is #9224 landing, and I changed nothing on that test.** [derived] An opt-in mark from me would work against it:
+  - The mark edits a file #9224 deletes, so whichever lands second stops. [derived]
+  - `OPT_IN` would then name a test that is gone, which `tests/test_opt_in_tests.py` fails on in every check. [read]
+  - Both ride Lean batches after #9375, so the mark would land no sooner than the deletion. [derived]
+- **As it is, my head and #9224's do not stop** (`git merge-tree`, exit 0, at 20:21Z). [run]
+- **What #9224 rests the removed guard on,** read and not relayed: `test_rec_vstar_checks.py::test_the_verifiers_statements_are_the_ones_v_star_stages` at the first of its shapes, (25, 22, 8), on the compiled verifier. [read] That module is `slow` and skips where the Lean verifier is not built, so `check` runs it after lean-build. [read] I did not run it. [run]
+- **If you want the test out before #9224 lands,** say so: it is one mark, one line in Flock's tests' settings registry and one line in `OPT_IN`, and #9224 must then drop that line. [derived]
+
+### 2. `test_figures_writes_every_figure`: opt-in, with a gated test that writes one figure of each kind
+
+- **The old test** skips unless `VERITY_SPOT_FIGURES_SLOW=1`, and `OPT_IN` names it under `benchmarks/spot_figures`. [run]
+- **The gated test,** `test_figures_writes_a_figure_of_each_kind`, is the same run of `figures.main` without two of the eight exfiltration designs of Figure 1's bounds against overhead. [run] It writes and checks the same files. [run]
+- **Where the old test's time goes,** one process on my 4-core VM: [run]
+
+| part | every design | without the two |
+| --- | --- | --- |
+| Figure 1's bounds against overhead, planned | 102 s | 11 s |
+| Figure 1's total-cost lines, planned | 21 s | 21 s |
+| renders, Figures 2 to 4 | 17 s | 15 s |
+| the test | 138 s | 47 s |
+
+- **The two designs** are `two-stage-capped` and `two-stage-patterns`, 46 s and 43 s of the 102 s. [run]
+- **So the gated test costs about a third of the old one.** [derived] With ci's median of 7.2 minutes for the old one, that is about 2.5 minutes in a check. [guess]
+- **What the opt-in test catches that the gated one does not:** those two designs at the primary scope, their rows in the table at the vertical line, and all eight lines on one appendix. [read] `test_figure1.py`'s capped-curves test, which stays in every check, plans and renders the two at a smaller scope. [read]
+- **Both tests now also check** Figure 4's three files and that the planned designs are exactly the ones asked for. [run]
+- **The variable is read in a new `tests/settings.py`,** the tests' registry: the environment-reads lint refuses a new direct read in a test file, and the ratchet gate counts it. [read]
+- **Checked on my VM:** both tests pass with the variable set, the old one skips without it, `tests/test_opt_in_tests.py` passes, and the ratchet gate says "1 change(s), 0 failed". [run]
+- **No stop** against `main` at `5f0c008aa040`, #9375's branch at `bafae2eaec2e`, or #9438, at 20:21Z. [run] `check.py` is a Lean input, so it rides a Lean batch after #9375. [relayed]
+- **Two things I left, for you to overrule:**
+  - The gated test is not made smaller than that. [run] 15 s of the total-cost plan's 21 s is the designs printed beside three datacenter lines at the 1% budget. [run] Dropping them means choosing which configurations the test plans. [derived]
+  - `VERITY_SPOT_FIGURES_SLOW` is not added to the vLLM adapter's list of variables the rest of the tree reads. [run] No test asks for it, and the edit would rerun that adapter's suite in the candidate. [derived]
+
+### 3. `test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name`: sized, not touched
+
+- **What it holds:** round 2's read check (`second_stage._read_ok`) accepts a table read's `root` and `domain` under the name `<replay block>/<parameter>`, at its instance's row, and refuses the same read under the check's id, under the bare parameter, or at other rows. [read] It holds that on a class the serve's own code committed, with table rows of the served 576 words and a check of two inlined reads. [read]
+- **Where its time goes,** one process on my VM with the Lean it needs already built, 514 s in all: [run]
+
+| line of the test | seconds |
+| --- | --- |
+| `TS.first(...)`, the first stage on the verifier's service | 356 |
+| `BR.Layout(...)`, the layout of the two-read check | 89 |
+| `IR.interior(...)`, the sampled spans' interior | 39 |
+| `P.units`, the tables, `IR.supplied`, `IR.interior_window` | 29 |
+| every assert on names and on `_read_ok` | under 1 |
+
+- **Inside `first`,** by a profile's shares: registering the record about 190 s, sampling about 105 s, the stream and the record about 60 s. [derived]
+- **A faster test of the same thing** builds the layout and the record as `first` does (`boundary_rows.layout_of`, `boundary_rows.record`) and fixes the sampled spans and a registration digest itself, without registering or sampling on the service. [derived] That is about 220 s, and it changes only the test. [derived]
+  - It keeps every assert the test makes. [read]
+  - It gives up one thing: that the record with table ports and the inlined check passes the service's registration. [derived] `test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample` holds that with a toy check, in every check. [read]
+- **Two more levers, neither a test change:**
+  - Under the profile, one test builds the partition object 30 times, the program's digest 38 times and the program's text for Lean 16 times. [run] Keeping each once is a change in the verifier's Python. [derived]
+  - Narrower table rows need the row width as a parameter of the layout, where `boundary_tables.WORDS` is a constant read in four places. [read] It would about halve the read's circuit. [guess] The served width is what the test's docstring says a cheaper test cannot show. [read]
