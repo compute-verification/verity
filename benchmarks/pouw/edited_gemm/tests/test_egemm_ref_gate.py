@@ -203,7 +203,7 @@ def test_the_limbs_are_the_docstrings_past_s1s_bound():
                   40000, -40000, 1 << 20])
     s1, s2, s0 = R.limbs(S)
     assert all((mine == judges).all() for mine, judges in zip(limbs(S), (s1, s2, s0)))
-    assert (256 * (s1 + s2) + s0 == S).all() and (-128 <= s0).all() and (s0 <= 127).all()
+    assert (256 * (s1 + s2) + s0 == S).all() and (s0 >= -128).all() and (s0 <= 127).all()
     assert (s1 == np.clip(s1 + s2, -127, 127)).all() and (s2 != 0).sum() == 5
 
 
