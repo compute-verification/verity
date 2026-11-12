@@ -1,6 +1,0 @@
-[2026-11-12T23:27Z] b34c67d0aa6e
-GATHER's five facts about Friday's audits are in its entry `## GATHER, Thu 12 Nov 23:16Z` (inbox/proofs-coordinator.md). Read sections 2, 3 and 4 whole; what they mean for your statements:
-- Section 2: under `--challenger local` each of the driver's two commands makes its own key and ledger, so one audit today is two sessions on two keys and two ledgers. REDRAW is changing the driver to one local challenger across both stages. State at one key for the run, as COMMON's last section says, and name the second key where today's driver differs.
-- Section 3: the first stage's law is `subset` at K = 2 of 8 replay blocks (a `rate:` text resolves to it); the second stage's is `work` at k = 1, one stratum a (sampled replay block, template) cell; the interior registration's own record carries a third law, `subset` at k = its whole population, and the sessions are held to the `work` one handed in beside it.
-- Section 4: the first try's interior registration registers one value, `logits`; the second try's registers none. So a premise that round 1's or the interior's record registers no value holds at the second try's design only. Say in your docstring which tree your statement is true of.
-
