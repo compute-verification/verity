@@ -162,13 +162,15 @@ Records (`lean_changed.py --records security/Properties --update`, the fast path
 | `r20261112-102444-bf1e` | `7c5571d97e` | 1 | `verity/protocols/spot/verifier/lean` **pass** (5629 declarations in 50 modules); its requirers failed on the lock (next rows) |
 | `r20261112-102444-788a` | `7c5571d97e` | 1 | `security/Proofs` **pass** (197575 declarations in 3930 modules). `security/Properties` fail: `layers` (Game imports WindowFiles, WindowFiles imports `Definitions.Core.Compiler`). `security` fail: `reads` (WindowFiles outside `meaning`) and record differences |
 | `r20261112-111216-22a7` | `503ea26f8a` (the lock's layer and meaning) | 0 | `security/Proofs` pass; `security/Properties` pass, record regenerated; `security` record regenerated (every failure a record difference). Committed in `ae16d2211c` |
+| `r20261112-120421-3642` | `349f7d16b3` (no `--update`) | 0 | `security/Properties`, `security` and `security/Proofs` pass on the committed records |
 
-Suites (`suites.py --changed BASE --quick`), at `7c5571d97e`:
+Suites (`suites.py --changed BASE --quick`), at `7c5571d97e`; the last row at `349f7d16b3`:
 
 | Run | Base | Verdict |
 |---|---|---|
 | `r20261112-102450-4e71` | `1a3eadc9c5` (the merge base with main) | 73 suites: 73 passed, 0 failed |
 | `r20261112-103631-4015` | `e67c8c956f` (the branch before this work) | 68 suites: 68 passed, 0 failed |
+| `r20261112-120426-2e1e` | `7c5571d97e` (the lock's commits after it) | 9 suites: 9 passed, 0 failed |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
