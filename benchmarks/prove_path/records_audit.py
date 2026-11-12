@@ -644,7 +644,12 @@ def after_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], held: Mapping
 def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[str, Any]]:
     """A template's circuit from its Definition and its statement in the circuit record (Flock's `UnitStager` on the record's
     ``in_rows``, ``out_rows`` and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``), bound to the
-    window's partition and program: a5's composer for its members."""
+    window's partition and program: a5's composer for its members. a5's compose cache keys it by its ``inputs``
+    (`a5.compose_key`; a composer without them is never cached): the stager's label, the statement and, for a table read, the
+    executable whose template its unit is (`read_tmpl.digest`), as `compose_circuit.template_inputs` keys a ``--template``
+    compose, so a circuit kept under another build of the verifier's read is not taken."""
+    from verity_flock import read_tmpl as RT
+
     form = {"layout": st["layout"], "structural": bool(st["structural"])} if st.get("layout") else {"reads": st["reads"]}
 
     def compose(out: Path, partition: str, program: str) -> dict[str, Any]:
@@ -657,7 +662,7 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
         if form.get("reads") == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
-    compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it
+    compose.inputs = ["unit/window", st, *([RT.digest()] if RT.is_read(fn) else [])]
     return compose
 
 

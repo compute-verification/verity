@@ -10,17 +10,19 @@ from types import SimpleNamespace
 import pytest
 import torch
 import torch.nn.functional as F
-from synthetic import run_job, tiny_data, tiny_registry, tiny_start, write_config
+from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import VERSION, config, formalism, policy, run, starts
+from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
 from training_slowdown.capture import products
-from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, derive_seed
+from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
+from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
-from training_slowdown.traced import TRACED_STEPS, trace_step
+from training_slowdown.opnames import gemm_like
+from training_slowdown.traced import TRACED_STEPS, trace_step, traced_step
 
 V, D = 32, 16
 
@@ -214,6 +216,60 @@ def test_each_checkpoint_carries_its_e_and_its_output_is_what_e_rebuilds(tmp_pat
     rec = counted(tmp_path / "none", theta, one_step(Plan([("emb", Identity())])))
     assert rec["checkpoints"][0]["e_bytes"] is None
     assert any("has no E of its output" in p for p in rec["invalid"])
+
+
+def test_a_weight_handed_over_as_its_trained_parts_is_what_the_plans_codec_rebuilds_from_them(tmp_path, theta):
+    """An output may give a weight of θ's as the parts the run trained of it. E is the plan's codec's packing of
+    those parts, and the output model's weight is what that codec decodes from E on θ: here codes the run's own
+    weight was never made from, so the model scored is E's, not the one the run holds. The checkpoint says how many
+    weights came as parts, and its `trained_sha256` is the digest of the model the run trains, which took no step
+    here and is θ. Parts with no E leave no model to score, and the run is invalid: parts of a weight θ lacks, parts
+    that are not of the weight's size, and parts with no plan."""
+    codes = SparseTernary.round(torch.randn(D, D, generator=torch.Generator().manual_seed(3)), 0.25)
+    scored, ternary = [], Plan([("w1.*", SparseTernary(0.25))])
+
+    def handing(parts, plan=ternary):
+        def train(te):
+            m = te.load(Small())
+            if plan:
+                te.encode_with(plan)
+            te.output(lambda: m.state_dict() | parts)
+            te.plan(1)
+            with te.step():
+                loss_of(m, batch(0)).backward()
+        return train
+
+    def run_one(name, *a):
+        te = run.Harness(theta, tmp_path / name, clock=lambda: 0.0, keep_weights=True,
+                         evaluator=lambda state, sha: scored.append((sha, dict(state))) or {"bpb": 1.0})
+        with te.counter:
+            handing(*a)(te)
+        return te.finish({})
+
+    rec = run_one("parts", {"w1.weight": codes})
+    (cp,) = rec["checkpoints"]
+    assert rec["invalid"] == [] and cp["trained_sha256"] == run.theta_sha256(theta) != cp["output_sha256"]
+    assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 1, 1, 2 * D * D)
+    (sha, output), = scored
+    want = SparseTernary.apply(theta["w1.weight"], *codes)
+    assert torch.equal(output["w1.weight"], want) and not torch.equal(want, theta["w1.weight"])
+    assert torch.equal(output["emb"], theta["emb"]) and set(output) == set(theta)
+    assert sha == cp["output_sha256"] == run.theta_sha256(theta | {"w1.weight": want})
+    enc = (tmp_path / "parts" / cp["e_path"]).read_bytes()
+    assert len(enc) == cp["e_bytes"] and hashlib.sha256(enc).hexdigest() == cp["e_sha256"]
+    assert torch.equal(ternary.decode(enc, theta)["w1.weight"], want)
+    assert run.theta_sha256(torch.load(tmp_path / "parts" / cp["path"], weights_only=True)) == sha
+
+    small = SparseTernary.round(torch.ones(D), 0.25)
+    for name, a, why in (("lacks", ({"w2.weight": codes},), "which θ lacks"),
+                         ("size", ({"w1.weight": small},), f"for a weight of {D * D}"),
+                         ("whole", ({"w1.weight": codes}, Plan([("w1.*", Identity())])), "packs no trained parts"),
+                         ("planless", ({"w1.weight": codes}, None), "no plan to pack them")):
+        rec = run_one(name, *a)
+        (cp,) = rec["checkpoints"]
+        assert any(why in p for p in rec["invalid"]), (name, rec["invalid"])
+        assert cp["output_sha256"] is None and cp["bpb"] is None and "path" not in cp and "e_path" not in cp
+    assert len(scored) == 1
 
 
 def test_a_route_reaching_past_the_codecs_and_the_model_is_refused(tmp_path, monkeypatch):
@@ -419,6 +475,101 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
     tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
     assert read and all(w == [32, width] for w in read)
+
+
+COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
+
+
+def counted_and_traced(root: Path, steps: int, **over):
+    """A job's steps as it runs them (`job_counted`), and then its trace as the job takes it: the counter's record, the
+    trace, the capture's graph the trace was read from, and the model."""
+    rec, (cfg, route, model, optimizers) = job_counted(root, steps, **over)
+    return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
+    """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
+    what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
+    MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
+    GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
+    (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
+    only step, which reads none: there the trained embedding is θ's and its lookup counts nothing, and from the next
+    step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
+    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
+
+    As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
+    attention by (`flops.Counter._attention`), the ones the trace holds.
+
+    The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
+    cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
+    rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
+    assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
+    step = rec["steps"][tr["step"]]
+    assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    rows = work.priced(tr)["rows"]
+    assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
+    log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
+    forward = sum(r["count"] * r["macs"] for r in rows if r["phase"] == "forward" and r["token_dims"])
+    assert sum(r[5] for r in log if gemm_like(r[2])) == forward > 0
+    lookup = gather_macs("embedding", tuple(model.embed.shape), None, step["tokens"] * model.embed.shape[1])
+    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if job == "whole" and tr["step"] else [])
+    assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
+        r[5] for r in log if not gemm_like(r[2]))
+    assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
+
+
+@pytest.mark.parametrize("job", JOBS)
+def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
+    """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
+    its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
+    and the tail's too. The fused kernel does run: the model's attention reaches the counter as one op."""
+    seen = []
+    inner = flops.Counter._attention
+
+    def spy(self, func, *rest):
+        seen.append(str(func.overloadpacket))
+        return inner(self, func, *rest)
+
+    def steps_of(rec):
+        keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "shapes", "device_macs")
+        return [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
+                for s in (rec["setup"], *rec["steps"], rec["tail"])]
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", spy)
+        fused = steps_of(job_counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        kernels, seen[:] = set(seen), []
+        math = steps_of(job_counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
+    assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
+                       "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
+    assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+
+
+def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):
+    """The one place the two differ. A route's `output` (LoRA's: each adapted matrix with its
+    B·A merged in) is traced as the end of the measured step and counted where the harness calls it, after the
+    step's checkpoint: in the step after it, or in the tail after the last. So a run of one step traces the merge in
+    its step and counts it in its tail, and the step's counts differ by exactly the tail's; a longer run's traced
+    step holds the merge of the checkpoint before it, and the two agree (the test above)."""
+    rec, _, g, _ = counted_and_traced(tmp_path, 1, **JOBS["lora"])
+    step, tail = rec["steps"][0], rec["tail"]
+    assert tail["matmul_macs"] > 0 and tail["elementwise_macs"] > 0
+    assert [a - step[k] for a, k in zip((g.tokens, g.macs, g.elementwise_macs, g.c_macs), COUNTS)] == [
+        tail[k] for k in COUNTS]
+
+
+def test_a_trace_at_another_rank_is_not_of_the_jobs_program(tmp_path):
+    """`formalism.other_program` on a job's op log and a trace the job didn't take: LoRA at rank 3 runs shapes the
+    rank-2 job never ran (each adapter's factors and their gradients), so the grade doesn't price its rows as that
+    job's, where the job's own trace it does (the test above)."""
+    rec, *_ = counted_and_traced(tmp_path, 3, **JOBS["lora"])
+    cfg = config.load(write_config(tmp_path / "b.toml", budget={"steps": 3, "batch": 4}, route="lora",
+                                   dials=LORA | {"rank": 3}), starts.registry(tmp_path / "reg" / "starts.toml"))
+    route = config.route(cfg.route)
+    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    o = formalism.other_program(work.priced(tr)["rows"], grade.macs_log(rec, None))
+    assert o is not None and o["unmatched"] > 0 and all(3 in s for s in o["largest"]), o
 
 
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
