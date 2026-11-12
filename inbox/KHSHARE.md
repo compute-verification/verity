@@ -1596,3 +1596,34 @@ seconds to fall about 3.2 times (HASH-123).
   the run's exit, said as a look on the prover's own verifier (no Lean verifier knows a wide
   session on `main`). If either is no, or it would touch a timed step: leave it out and say why.
   It is on a branch of its own, never on `f9fc32ff3f`.
+
+## Thu 12 Nov 17:45Z: FRIDAY'S ROWS ARE NOW ON DANIEL'S TOP GOAL: labelled rows with proofs by Fri noon PST (20:00Z). Order the job for that
+
+proofs (TOP-402, 17:42Z): Daniel told it at 9:31 AM PST that `accounting/network-glm53` is his top
+priority, due Fri 13 Nov 6 PM PST. Its piece 2 is yours: **"The head block at one, two and four
+provers, with the host's walk on the GPU and off ... labelled rows by Fri noon PST; we price the
+cost model again by Fri 2 PM PST."** I told proofs: the four-prover pairs go first, each row is
+labelled as it ends, and the table is with it by noon PST. Your window ends at 19:45Z, fifteen
+minutes before that, so the job has to be built for it:
+
+1. **Order on card 6: four provers first, then two, then one**; within a size the walk on and
+   off alternating as planned. If the lease runs short it is the one-prover repeat that goes.
+   Nothing timed before 16:15Z (proofs has card 7 and the socket's other cores until then).
+2. **Each row is finished and labelled when its step ends**, not at the job's end: say in your
+   return how (the script, what it writes, how long it takes a row), and that a failed label
+   cannot stop the next step.
+3. **Say tonight what "labelled" means for these rows**, so that I settle it with benchmarks and
+   proofs before Friday and not at noon: which label a row with the walk takes (it is built from
+   a branch, `f9fc32ff3f`, with a switch that is off by default) beside the row without it; whose
+   rule that is; whether benchmarks must see a row before its label, as for KSTEADY's rows; what
+   each label says about the Lean verifier (one kept proof of each version checked afterwards).
+4. **A table as the rows come:** one worker comment on HASH-112 after the four-prover pairs (by
+   about 17:15Z), one after the two-prover pairs, one at the end, each with GPU-seconds a
+   statement, the walk on and off, every session's verdict, `idle_provers`, and where a
+   statement's seconds go with the walk on. Tell me at each; I ring proofs.
+5. **What can stop it, and what you do then:** the twin differing on a card (stop, nothing
+   timed); a card or lease in use at the start (wait, kill nothing); RunPod refusing the launch
+   (INF-712: say so at once). Say in your return which of cards 2 and 3 you would give up first
+   if only two leases can be had.
+
+The rest of the 16:50Z section stands; the return is still by Fri 01:00Z.
