@@ -418,8 +418,14 @@ def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_th
     value at its root, and the check finds nothing. A file naming another root for a member's network certifier port
     (a statement committing other rows, which a session holds against that root) is refused naming the value: the
     egress member's ``o1``, and one ingress member's ``row`` while the others read the registration's, the value then
-    reported under two roots. A registration listing no certified rows holds none of it: the check has nothing to
-    compare such a read with."""
+    reported under two roots. A file naming that port under a value the registration doesn't list, at the
+    registration's root or another, is refused too. A registration listing no certified rows holds none of it: the
+    check has nothing to compare such a read with.
+
+    What the check does not hold, the open premise that the ``--registered`` file agrees with the record: a file naming
+    an ingress member's ``row`` under the egress value at the egress root reports nothing the check refuses, since the
+    check reads which values were opened at which roots and not which port opened them; nor does a verdict report the
+    leaves a proof block read (a port's ``reads``; its ``registered`` is ``{port: {"value", "root"}}``)."""
     run = published(tmp_path / "run", sz.TEST, windows=1)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST)
     honest = h.rounds["honest"]
@@ -462,6 +468,16 @@ def test_a_registered_file_naming_another_root_than_the_records_is_refused_by_th
     ing = [m for m in honest if m.template != "egress"]
     assert len(ing) > 1 and check(tampered(ing[0], "row"), rec) == refusal(ingress)
     assert sz.AU.session_registered(_reported(tampered(ing[0], "row")), rec)[ingress] is None
+
+    def named(member, port: str, **entry) -> dict[str, dict]:
+        f = files[member.name]
+        return {**files, member.name: {**f, "ports": {**f["ports"], port: {**f["ports"][port], **entry}}}}
+
+    for root in (certified[egress]["root"], "dd" * 64):
+        unlisted = check(named(eg, "o1", value=egress + "/x", root=root), rec)
+        assert unlisted is not None and (unlisted["ok"], unlisted["codes"]) == (False, ["registered"]), unlisted
+    swapped = named(ing[0], "row", value=egress, root=certified[egress]["root"])
+    assert check(swapped, rec) is None
     bare = record([])
     assert bare["format"] == R.FORMAT and all(check(f, bare) is None for f in (files, tampered(eg, "o1")))
 

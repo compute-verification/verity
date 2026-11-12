@@ -1424,7 +1424,16 @@ def certified_rows(members) -> dict[str, dict]:
     The registration lists each as a registered value (`registered_of`), R7 holds the record's entry to this one, its
     root too (``R7-certified``), and the audit's record check holds each read a session opened under the value to the
     record's root (`audit.session_registered`). A period check (`NetworkCheck.Period`'s rows form) holds an execution
-    phase's answer to its rows by the record's entries."""
+    phase's answer to its rows by the record's entries.
+
+    An open premise: the ``--registered`` file agrees with the record: the driver's, not the Lean verifier's. Lean
+    opens a port at the leaves its file names (a port's ``reads``) against the root its file names, and reports the
+    read under the value its file names (`registered_file`, which this driver fills from the same registrations and
+    the Program's wiring); no Lean derives the file from the record and the Program. The record check refuses a file
+    naming a certified port at another root under the record's value, and one naming it under a value the record
+    doesn't list. The premise covers the rest: which of the record's values each port reads (a file naming an ingress
+    port under the egress value at the egress root reports nothing the record check refuses) and which leaves each
+    proof block reads."""
     out = {}
     for m in members:
         for doc in m["warden"].values():

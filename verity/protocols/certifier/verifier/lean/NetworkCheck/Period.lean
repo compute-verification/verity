@@ -245,7 +245,10 @@ the clock form's link-window registration's domain; in the rows form, the record
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier checks inside the
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
-`egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
+`egress_cells`); that each scan session's `--registered` file agrees with the scan's registration (an open premise:
+the `--registered` file agrees with the record: the driver's, not the Lean verifier's; one-stage's record check holds
+each read a session reports to a registered value of the registration at its root, and nothing holds which of those
+values a port reads, or the leaves a proof block reads, to the registration and the Program); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.

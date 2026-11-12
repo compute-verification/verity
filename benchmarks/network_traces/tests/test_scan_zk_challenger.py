@@ -46,7 +46,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     record's entries to them, and each member's registered read of the network certifier's rows is the record's entry
     of its value. On those files' reads, reported as Lean reports a held member's, both verifiers' record check
     (`verifier.audit_record`) accepts the round's sample; with the egress member's file naming another root for the
-    network certifier's rows, both refuse it at ``registered``, naming the value. The evidence for another window,
+    network certifier's rows, both refuse it at ``registered``, naming the value, and so they do with that file naming
+    the port under a value the registration doesn't list, at its root or another. The evidence for another window,
     replayed on a stream handed the same certified entries, is refused at its select's coins, not at its
     registration. The round names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each
     read, tied, so R8 lets them through and both verifiers' registration verdict publishes them
@@ -146,11 +147,20 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     assert held["accepted"] and held["verifiers"]["lean"] == {"accepted": True, "failed": []}, held["checks"]
     eg = next(m for m in members if "o1" in m["warden"])
     mine = files[eg["name"]]
-    refused = record({**files, eg["name"]: {**mine, "ports": {**mine["ports"],
-                                                               "o1": {**mine["ports"]["o1"], "root": "dd" * 64}}}})
+
+    def named(**entry) -> dict[str, dict]:
+        return {**files, eg["name"]: {**mine, "ports": {**mine["ports"], "o1": {**mine["ports"]["o1"], **entry}}}}
+
+    its = eg["warden"]["o1"]["value"]
+    refused = record(named(root="dd" * 64))
     assert not refused["accepted"]
     assert refused["verifiers"]["lean"] == refused["verifiers"]["python"] == {"accepted": False,
                                                                               "failed": ["registered"]}
     assert refused["checks"]["registered"]["detail"] == {
-        "registered": sorted(certified), "opened": sorted(certified), "wrong": [eg["warden"]["o1"]["value"]]}
+        "registered": sorted(certified), "opened": sorted(certified), "wrong": [its]}
+    for root in (mine["ports"]["o1"]["root"], "dd" * 64):
+        unlisted = record(named(value=its + "/x", root=root))
+        assert not unlisted["accepted"]
+        assert unlisted["verifiers"]["lean"] == unlisted["verifiers"]["python"] == {"accepted": False,
+                                                                                    "failed": ["registered"]}
     assert res["coin_negatives"] == {"coins-for-another-window": True}, json.loads((out / "coins.json").read_text())

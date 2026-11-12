@@ -445,6 +445,11 @@ K also rests on these conditions:
   That reading is a claim, not yet a locked guarantee.
 - Each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and
   `NetworkCheck.Period` doesn't check.
+- The `--registered` file agrees with the record: the driver's, not the Lean verifier's. The scan's registration
+  lists each certified row registration as a registered value, and the record check refuses a session's file that
+  names a certified port at another root, or under a value the registration doesn't list. Which of the registration's
+  values each port reads, and which leaves each proof block reads, are the file's alone: an open premise, since no
+  Lean derives the file from the record and the Program.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
 - The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
