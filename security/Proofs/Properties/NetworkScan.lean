@@ -156,11 +156,11 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
     {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
     {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
-    ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => 1) x := by
+    ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => oneSlot.window) x := by
   rintro ⟨-, st', hx', hF⟩
   obtain rfl := Option.some.inj (hx.symm.trans hx')
   unfold layOf at hF
   rw [hP, hC] at hF
-  exact not_fits_of_no_outs _ [] Nat.zero_lt_one 0 ⟨0, by decide⟩ hF
+  exact not_fits_of_no_outs _ [] (by decide) 0 ⟨0, by decide⟩ hF
 
 end Properties.NetworkScan
