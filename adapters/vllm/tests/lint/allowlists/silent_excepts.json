@@ -11,7 +11,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: continue"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"},
-    {"file": "verity_vllm/commit/committer/staging_bounds.py", "kind": "silent-except", "symbol": "step_bound_bytes", "detail": "except StopIteration: isz = 2"},
     {"file": "verity_vllm/commit/opened.py", "kind": "silent-except", "symbol": "OpenedReader.or_none", "detail": "except OpeningNotVerified: return None"}
   ]
 }

@@ -385,14 +385,14 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
     phases = {"run": phase_run, "c2_sampled_replay": phase_c2, "openings_after_release": phase_replay}
     if int(pairs or 1) >= 2:
         phases["later_pair_replay"] = phase_replay + carry          # pairs >= 1: the residual is already in phase_replay; + the carried pool pages
-    peak_phase = max(phases, key=phases.get)
+    peak_phase = max(phases, key=phases.__getitem__)
     bound = phases[peak_phase] + int(slack_bytes) + pairs_extra
     # the DOMINANT CONTRIBUTOR, so a refusal names a term and a location, never merely "predicted OOM":
     # the largest host term, and -- separately -- the largest single materialization of the stream (the whole-step plane the bound keeps
     # OFF the host under retain-exclude, opened by replay), with its step / tokens / bytes from the declared schedule
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,
               "c2_programs": c2, "pool_rounding": pool_rounding, "fork_children": forkc, "c2_residual": c2res, "pool_carry": carry}
-    _dom = max(_terms, key=_terms.get)
+    _dom = max(_terms, key=_terms.__getitem__)
     _big = ssb.get("largest_step")        # None under a schedule of no request: the record then names no step
     if not _big:
         _big = {}
@@ -1442,7 +1442,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                                     "staging": self.staging, "fast_copy": self.cudart_path, "gpu_tree": self.gpu_tree, "gpu_tree_ms": dict(self._gpu_t),
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
                                     "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
-                                    + sum(int(getattr(b, "retained_bytes", None) if getattr(b, "retained_bytes", None) is not None else b.numel())
+                                    + sum(int(held if (held := getattr(b, "retained_bytes", None)) is not None else b.numel())
                                           for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda
                                           and not getattr(b, "on_device", False)),
                                     "retain": self.retain, "released_device_bytes": self.released_bytes,

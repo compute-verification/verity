@@ -138,13 +138,11 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     # short (76,800 B/token on Llama-3.2-1B, 1-3 % of a prefill step).
     n_rope = sum(1 for _n, _m in modules if LC.ROTARY in _mro_names(_m))
     rope_mult = max(1, -(-layers // n_rope)) if n_rope else 1
+    no_parameter: Any = object()            # a module with no parameter counts two bytes an element
     for name, m in modules:
         names = _mro_names(m)
-        try:
-            p = next(m.parameters())
-            isz = p.element_size()
-        except StopIteration:
-            isz = 2
+        p = next(m.parameters(), no_parameter)
+        isz = 2 if p is no_parameter else p.element_size()
         w = 0
         if LC.LOGITS in names:
             per_seq += vocab * 4
