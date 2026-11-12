@@ -116,6 +116,7 @@ import numpy as np
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
+from verity.protocols.spot.verifier.one_stage import registration as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
@@ -712,7 +713,8 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
     (`second_stage.replay_rows`), the reads the audit record's verdicts of record report, what they name of each
     session they accepted (`second_stage.verified_of`), each template's reference header and registered reads the
     params ``proofs`` give, and, of the challenger's copies the interior registration was held to (``tie``), the values
-    it fills itself (``supplied``) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
+    it fills itself (``supplied``, a history table's root and domain id as the bytes its ``history`` registers:
+    `registration.resolved`) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
     stream hands them: every other value the interior registers is the prover's, which round 2 takes only as a read's
     opened row (`INPUTS_REFUSED`)."""
     verdicts, tie = record.get("verdicts") or {}, tie or {}
@@ -722,7 +724,7 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
                  wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
-                 supplied=SS.supplied_of(tie.get("supplied")),
+                 supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
                  fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())))
     return SS.check(True, own, stmts).to_json()
 

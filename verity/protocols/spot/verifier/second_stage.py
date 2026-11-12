@@ -69,16 +69,17 @@ in the block (a wire), a value the verifier holds without the prover, or the ope
 1 committed: the interior registration, made after the first stage's sample, registers nothing else
 (``second-inputs``, `inputs_failure`). A value it registers passes where the verifier pinned it, holds it to an earlier
 record, or fills it from its own bytes (`Own.fixed`, `Own.supplied`). Any other is the prover's, and passes only as a
-read's row, salt or path, where the verifier fills the read's root and domain from one table round 1's record registers
-(`_one_table`), the read's key is a port of round 1's record or a value the verifier holds, and the read's verdict port
-reads a value the verifier fills with 1 (`_opened_row`): the row is then the table's at that key, short of a SHA-512
+read's row, salt or path, where the verifier fills the read's root and domain with the root and the domain id round 1's
+record registers for one table (`_one_table`, by their bytes: `Own.supplied` holds what the verifier computed for a
+table in place of its name, as the interior registration's check read it), the read's key is a port of round 1's
+record or a value the verifier holds, and the read's verdict port reads a value the verifier fills with 1
+(`_opened_row`): the row is then the table's at that key, short of a SHA-512
 collision. A key the block computes, a wire, is refused, with a reason of its own (`KEY_WHY`): no statement covers it.
 A read is a template of the read's Definition (`OPENING`), by its id; that the circuit a session proves under that id
-is the read's is the template check's (`Flock.ReadNet.check`), not round 2's. Which table a read opens is the one the
-verifier names for its root and domain, and which row its key. Not held here: that the table has as many leaves as the
-read's template has rows, and that round 1's record registers the root the verifier resolves the name to (the
-interior registration's own check of its ``history``). A design whose key is the prover's after the sample, or whose
-root the verifier does not fill by a table's name, is refused here. The code is reported beside the others, in every
+is the read's is the template check's (`Flock.ReadNet.check`), not round 2's. Which table a read opens is the one whose
+root and domain id the verifier fills, and which row its key. Not held here: that the table has as many leaves as the
+read's template has rows. A design whose key is the prover's after the sample, or whose root and domain are not one
+table's of round 1's record, is refused here. The code is reported beside the others, in every
 branch of `check`, so a run that has it still reaches its other stops.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
@@ -129,17 +130,15 @@ KEY_WHY = ("the interior registration registers the opened row of a read at a ke
 OPENING = "EmbeddingRead_v1{"
 OPENING_KEY, OPENING_TABLE, OPENING_ROW, OPENING_VERDICT = "tok", ("root", "domain"), ("row", "salt", "path"), "o1"
 OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
-#: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, and the
-#: root or domain id of a table round 1's record registers, which it resolves to its own bytes
-#: (`SecondStage.OWN_SOURCES`). A ``port`` or a ``value`` source reads a root of the interior record, the prover's
-#: after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
-OWN_SOURCES = ("bytes", "history")
+#: The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, among
+#: them the root and the domain id it computed for a table, which `Own.supplied` holds in place of the table's name
+#: (`history.resolve`; `SecondStage.OWN_SOURCES`). A ``port`` or a ``value`` source reads a root of the interior record,
+#: the prover's after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
+#: A ``history`` source left unresolved is none of the verifier's bytes.
+OWN_SOURCES = ("bytes",)
 #: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
 #: (`SecondStage.VERDICT_ONE`).
 VERDICT_ONE = (("bytes", "00000001"),)
-#: The source of a row that names a table round 1's record registers: ``{"history": "H/root"}`` its root,
-#: ``{"history": "H/domain"}`` its domain id (`SecondStage.TABLE_SOURCE`).
-TABLE_SOURCE = "history"
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64
@@ -1209,31 +1208,35 @@ def _own_values(own: Own) -> dict[str, tuple[tuple[tuple[str, str], ...], ...]]:
     return {v: rows for v, rows in own.supplied if all(k in OWN_SOURCES for r in rows for k, _n in r)}
 
 
-def _table_of(field: str, row: Sequence[tuple[str, str]]) -> str | None:
-    """`SecondStage.tableOf`: the table row `row` names as its `field`: ``H`` where the row is the one source
-    ``{"history": "H/<field>"}`` (`TABLE_SOURCE`), None for any other row."""
-    if len(row) == 1 and row[0][0] == TABLE_SOURCE and row[0][1].endswith("/" + field):
-        return row[0][1][:-len(field) - 1]
-    return None
+def _bytes_of(row: Sequence[tuple[str, str]]) -> str | None:
+    """`SecondStage.bytesOf`: the bytes a row is, in hex: ``h`` where the row is the one source ``{"bytes": h}``, None
+    for any other row."""
+    return row[0][1] if len(row) == 1 and row[0][0] == "bytes" else None
 
 
 def _one_table(own: Own, mine: Mapping[str, Any], t: str, root: str, domain: str) -> bool:
-    """`SecondStage.oneTable`: values `root` and `domain`, which template `t`'s root and domain ports read, name one
-    table of round 1's record at every unit. Each has at least one row, row ``i`` of `root` the one source
-    ``{"history": "H/root"}`` and row ``i`` of `domain` ``{"history": "H/domain"}`` of the same ``H`` (`_table_of`),
-    and the two ports' rows place each unit alike (``own.rows``: one ``per`` and the same runs), so a unit reads the
-    root and the domain id of one table."""
-    a = [_table_of(OPENING_ROOT, r) for r in mine[root]]
-    b = [_table_of(OPENING_DOMAIN, r) for r in mine[domain]]
+    """`SecondStage.oneTable`: values `root` and `domain`, which template `t`'s root and domain ports read, are one
+    table's of round 1's record at every unit. Each has at least one row and as many as the other; row ``i`` of each is
+    one ``bytes`` source (`_bytes_of`), and some port of round 1's record (`_by_port`) registers row ``i`` of `root` as
+    its root under row ``i`` of `domain` as its domain id; and the two ports' rows place each unit alike (``own.rows``:
+    one ``per`` and the same runs). So a unit reads the root and the domain id of one table that round 1's record
+    registers."""
+    a, b = ([_bytes_of(r) for r in mine[v]] for v in (root, domain))
+    ports = list(_by_port(own.boundary).values())
     at = [None if (r := _rows_of(own, t, p)) is None else (r.per, r.runs) for p in OPENING_TABLE]
-    return bool(a) and None not in a and a == b and at[0] is not None and at[0] == at[1]
+    return (bool(a) and len(a) == len(b)
+            and all(r is not None and d is not None
+                    and any(type(_get(e, "root")) is str and type(_get(e, "domain")) is str
+                            and _get(e, "root") == r and _get(e, "domain") == d for e in ports)
+                    for r, d in zip(a, b))
+            and at[0] is not None and at[0] == at[1])
 
 
 def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link) -> bool:
     """`SecondStage.openedRow`: link `x` names the opened row of a read against a root round 1 committed. Its template
     is a read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
-    (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which name one table of
-    round 1's record at every unit (`_one_table`); its key (`OPENING_KEY`) is no wire, and is linked at values the
+    (`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
+    of round 1's record at every unit (`_one_table`); its key (`OPENING_KEY`) is no wire, and is linked at values the
     interior registration doesn't register (`registered`: a port of round 1's record then, by ``second-links``) or
     the verifier holds (``own.fixed``, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
     statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each

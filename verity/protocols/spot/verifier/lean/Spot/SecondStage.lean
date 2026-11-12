@@ -102,16 +102,17 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   output in the block (a wire), a value the verifier holds without the prover, or the opened row of a read against a
   root round 1 committed. So a value the interior registration registers passes where the verifier pinned it, holds it
   to an earlier record (`Own.fixed`), or fills it from its own bytes (`ownValues`); any other is the prover's, and
-  passes only as a read's row, salt or path, where the verifier fills the read's root and domain from one table
-  round 1's record registers (`oneTable`), the read's key is a port of round 1's record or a value the verifier holds,
+  passes only as a read's row, salt or path, where the verifier fills the read's root and domain with the root and
+  the domain id round 1's record registers for one table (`oneTable`, by their bytes: the interior registration's
+  params hold what the verifier computed for a table in place of its name), the read's key is a port of round 1's
+  record or a value the verifier holds,
   and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
   that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
   (`KEY_WHY`): no statement covers it. A read is a template of the read's Definition (`OPENING`), by its id; that the
   circuit a session proves under that id is the read's is the template check's (`Flock.ReadNet.check`), not round 2's.
-  Not held here either: that the table has as many leaves as the read's template has rows, and that round 1's record
-  registers the root the verifier resolves the table's name to (the interior registration's own check of its
-  `history`). It is checked with the interior record's order, and reported beside the other codes, so a run that has
-  it still reaches its other stops (`check_ok_inputs`: a passing check has none).
+  Not held here either: that the table has as many leaves as the read's template has rows. It is checked with the
+  interior record's order, and reported beside the other codes, so a run that has it still reaches its other stops
+  (`check_ok_inputs`: a passing check has none).
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
@@ -220,18 +221,14 @@ def OPENING_ROW : List String := ["row", "salt", "path"]
 /-- A read's verdict port. -/
 def OPENING_VERDICT : String := "o1"
 
-/-- The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes, and
-the root or domain id of a table round 1's record registers, which it resolves to its own bytes
-(`HistoryTable.resolve`). A `port` or a `value` source reads a root of the interior record, the prover's after the
-sample, and a `position` or a `window` source the interior record's population or window. -/
-def OWN_SOURCES : List String := ["bytes", "history"]
+/-- The sources of a value the verifier fills from what it holds before the first stage's sample: its own bytes,
+among them the root and the domain id it computed for a table, which the interior registration's params hold in
+place of the table's name (`HistoryTable.resolve`). A `port` or a `value` source reads a root of the interior record,
+the prover's after the sample, and a `position` or a `window` source the interior record's population or window. -/
+def OWN_SOURCES : List String := ["bytes"]
 
 /-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
 def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
-
-/-- The source of a row that names a table round 1's record registers: `{"history": "H/root"}` its root,
-`{"history": "H/domain"}` its domain id. -/
-def TABLE_SOURCE : String := "history"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -1143,29 +1140,33 @@ def ownRows (mine : Array (String × Array (Array (String × String)))) (v : Str
     Option (Array (Array (String × String))) :=
   (mine.toList.reverse.find? (·.1 == v)).map (·.2)
 
-/-- The table row `row` names as its `field`, as its name's characters: `H` where the row is the one source
-`{"history": "H/<field>"}` (`TABLE_SOURCE`), none for any other row. -/
-def tableOf (field : String) (row : Array (String × String)) : Option (List Char) :=
+/-- The bytes a row is, in hex: `h` where the row is the one source `{"bytes": h}`, none for any other row. -/
+def bytesOf (row : Array (String × String)) : Option String :=
   let x := row.getD 0 ("", "")
-  let name := x.2.toList
-  let tail := ("/" ++ field).toList
-  if row.size == 1 && x.1 == TABLE_SOURCE && tail.isSuffixOf name then some (name.take (name.length - tail.length))
-  else none
+  if row.size == 1 && x.1 == "bytes" then some x.2 else none
 
-/-- Values `root` and `domain`, which template `t`'s root and domain ports read, name one table of round 1's record
-at every unit. Each has at least one row, row `i` of `root` the one source `{"history": "H/root"}` and row `i` of
-`domain` `{"history": "H/domain"}` of the same `H` (`tableOf`), and the two ports' rows place each unit alike
-(`Own.rows`: one `per` and the same runs), so a unit reads the root and the domain id of one table. -/
+/-- Values `root` and `domain`, which template `t`'s root and domain ports read, are one table's of round 1's record
+at every unit. Each has at least one row and as many as the other; row `i` of each is one `bytes` source (`bytesOf`),
+and some port of round 1's record (`Record.byPort`) registers row `i` of `root` as its root under row `i` of `domain`
+as its domain id; and the two ports' rows place each unit alike (`Own.rows`: one `per` and the same runs). So a unit
+reads the root and the domain id of one table that round 1's record registers. -/
 def oneTable (own : Own) (mine : Array (String × Array (Array (String × String)))) (t root domain : String) : Bool :=
-  let a := ((ownRows mine root).getD #[]).map (tableOf OPENING_ROOT)
-  let b := ((ownRows mine domain).getD #[]).map (tableOf OPENING_DOMAIN)
+  let a := ((ownRows mine root).getD #[]).map bytesOf
+  let b := ((ownRows mine domain).getD #[]).map bytesOf
+  let ports := Record.byPort own.boundary
   let place := fun (p : String) => (rowsOf own t p).map fun r => (r.per, r.runs)
-  !a.isEmpty && a.all (·.isSome) && a == b && (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
+  !a.isEmpty && a.size == b.size &&
+    (a.zip b).all (fun (r, d) => match r, d with
+      | some r, some d => ports.any fun (_, e) => (match getD e "root", getD e "domain" with
+        | .str x, .str y => x == r && y == d
+        | _, _ => false)
+      | _, _ => false) &&
+    (place OPENING_ROOT).isSome && place OPENING_ROOT == place OPENING_DOMAIN
 
 /-- **An opened row**: link `x` names the opened row of a read against a root round 1 committed. Its template is a
 read (`OPENING`) and its port the row, its salt or its path (`OPENING_ROW`); the read's root and domain
-(`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which name one table of
-round 1's record at every unit (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked at values the interior
+(`OPENING_TABLE`) are each linked, at values the verifier fills from its own bytes (`mine`), which are one table's
+of round 1's record at every unit (`oneTable`); its key (`OPENING_KEY`) is no wire, and is linked at values the interior
 registration doesn't register (`registered`: a port of round 1's record then, by `second-links`) or the verifier holds
 (`own.fixed`, `mine`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads
 (`Own.refReads`, the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. A key

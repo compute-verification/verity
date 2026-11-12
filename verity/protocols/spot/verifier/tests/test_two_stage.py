@@ -671,23 +671,28 @@ def test_round_two_refuses_a_value_the_prover_registers_after_the_first_stages_s
 #: A read's template, as round 2 knows one by its id, and its ports' links, each at a value of its own name.
 READ_T = "EmbeddingRead_v1{V=8,H=2}"
 READ_LINKS = tuple(SS.Link(READ_T, p, p) for p in ("tok", "root", "domain", "row", "salt", "path"))
-#: What the verifier fills of a read: its table's root and domain, its key, and the 1 its verdict port reads.
-READ_FILLED = {"root": [[{"history": "t/root"}]], "domain": [[{"history": "t/domain"}]], "tok": [[{"bytes": "00000002"}]],
+#: The roots and domain ids of tables ``t`` and ``u``, and round 1's record registering both.
+T_ROOT, T_DOMAIN, U_ROOT, U_DOMAIN = ("a1" * 64, "a2" * 64, "b1" * 64, "b2" * 64)
+READ_RECORD = {"roots": [{"port": "t", "root": T_ROOT, "domain": T_DOMAIN, "leaves": 8},
+                         {"port": "u", "root": U_ROOT, "domain": U_DOMAIN, "leaves": 8}]}
+#: What the verifier fills of a read: its table's root and domain id, as the bytes it computed for the table, its key,
+#: and the 1 its verdict port reads.
+READ_FILLED = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "tok": [[{"bytes": "00000002"}]],
                "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
 #: The rows of the read's root and domain ports: one row a block, which every unit reads.
 READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
 #: `READ_FILLED` with the root and the domain of two rows each, of tables ``t`` and ``u``.
-TWO_TABLES = {**READ_FILLED, "root": [[{"history": "t/root"}], [{"history": "u/root"}]],
-              "domain": [[{"history": "t/domain"}], [{"history": "u/domain"}]]}
+TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
+              "domain": [[{"bytes": T_DOMAIN}], [{"bytes": U_DOMAIN}]]}
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS) -> SS.Own:
+             rows=READ_ROWS, boundary=READ_RECORD) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
-    design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, and the reference
-    reads."""
-    return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, {"roots": []}, (), tuple(links),
+    design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
+    reads, and round 1's record `boundary`."""
+    return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
                   fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows))
 
@@ -705,10 +710,15 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "tok"}), "tok"),
     (_holding(READ_VALUES[1:], [*READ_LINKS[1:], SS.Link(READ_T, "tok", "b.ingress")]), None),
     (_holding(READ_VALUES[1:], READ_LINKS[1:]), "row"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"history": "u/domain"}]]}), "row"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"history": "t/root"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"bytes": U_DOMAIN}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "domain": [[{"bytes": T_ROOT}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"bytes": "00"}]]}), "row"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"history": "t/root"}, {"history": "t/root"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"bytes": T_ROOT}, {"bytes": T_ROOT}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [[{"history": "t/root"}]]}), "root"),
+    (_holding(READ_VALUES, boundary={"roots": []}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": READ_RECORD["roots"][1:]}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": [{**READ_RECORD["roots"][0], "domain": U_DOMAIN}]}), "row"),
+    (_holding(READ_VALUES, boundary={"roots": [{"port": "t", "root": T_ROOT}, {"port": "v", "domain": T_DOMAIN}]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "root": TWO_TABLES["root"]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "root": [], "domain": []}), "row"),
     (_holding(READ_VALUES, supplied=TWO_TABLES), None),
@@ -735,14 +745,17 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     """`second_stage.inputs_failure`, the first value of the interior registration that a replay block's input may not
     read. Held without the prover, and passing: a value the verifier fills from its own bytes, or pinned or holds to an
     earlier record. Refused: one the prover registers, or one filled from a root of the interior record. A read's row,
-    salt and path pass where the verifier fills its root and domain from one table of round 1's record, its key is
-    filled or a port of round 1's record, and its verdict port reads a value filled with 1 at every row; and are
+    salt and path pass where the verifier fills its root and domain with the root and the domain id round 1's record
+    registers for one table, its key is filled or a port of round 1's record, and its verdict port reads a value
+    filled with 1 at every row; and are
     refused, the row named, where the key is unlinked, the verdict's value has a row that is not 1, no row, is pinned
     and not filled, is the interior's own port or is not named, where another template reads the row too, or the
-    template is no read. The root and the domain name one table: refused where the domain's row names another table or
-    a root, where the root's row is the verifier's bytes or two sources, where the two have other counts of rows or
-    none, and where the two ports' rows are missing or place a unit differently; two tables named alike row by row
-    pass. A key or a root the prover registers is refused by its own name, and so is a value no link names. A row, a
+    template is no read. The root and the domain are one table's of round 1's record, by their bytes: refused where the
+    domain's row is another table's or a root, where the root's row is bytes round 1's record registers nowhere or two
+    sources, where the two have other counts of rows or none, where round 1's record registers no table, another one,
+    the root under another domain, or the root and the domain at two ports, and where the two ports' rows are missing
+    or place a unit differently; two tables filled alike row by row pass. A root left as a table's name, which the
+    verifier resolved to no bytes, is none of its values, and is refused by its own name. A key or a root the prover registers is refused by its own name, and so is a value no link names. A row, a
     salt or a path that a reference statement reads at a port no link names it at is refused too: only its opening may
     read it; a reference reading it at its link's port, or reading a value the verifier fills anywhere, changes
     nothing."""

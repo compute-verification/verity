@@ -732,9 +732,13 @@ private def exRead : String := "EmbeddingRead_v1{V=8,H=2}"
 private def exReadLinks : Array Link :=
   (#["tok", "root", "domain", "row", "salt", "path"] : Array String).map fun p => (⟨exRead, p, p⟩ : Link)
 
-/-- What the verifier fills of the read: its table's root and domain, its key, and the 1 its verdict port reads. -/
+/-- Round 1's record registering tables `t` and `u` beside its port `bx`. -/
+private def exReadRec : Json := exRec 4 [("bx", 5, 6), ("t", 7, 8), ("u", 9, 3)]
+
+/-- What the verifier fills of the read: its table's root and domain id, as the bytes it computed for table `t`, its
+key, and the 1 its verdict port reads. -/
 private def exFilled : Array (String × Array (Array (String × String))) :=
-  #[("root", #[#[("history", "t/root")]]), ("domain", #[#[("history", "t/domain")]]),
+  #[("root", #[#[("bytes", exRoot 7)]]), ("domain", #[#[("bytes", exRoot 8)]]),
     ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE, VERDICT_ONE])]
 
 /-- `exFilled` with the second row of the verdict's value a 0. -/
@@ -750,9 +754,10 @@ private def exTableRows : Array Rows :=
   #[⟨exRead, "root", 1, #[⟨0, 1, 0, 0⟩]⟩, ⟨exRead, "domain", 1, #[⟨0, 1, 0, 0⟩]⟩]
 
 /-- An interior registration registering the read's parameters and the verdict's value, the read's reference
-statement reading its verdict port at that value. -/
+statement reading its verdict port at that value, after a round 1 whose record registers the read's table. -/
 private def exOpening : Own :=
   { exHolding #["tok", "root", "domain", "row", "salt", "path", "one"] with
+    boundary := exReadRec,
     links := some exReadLinks,
     supplied := exFilled,
     rows := exTableRows,
@@ -780,8 +785,8 @@ private def exRefilled (v : String) (rows : Array (Array (String × String)))
 
 /-- `exFilled` with the root and the domain of two rows each, of tables `t` and `u`. -/
 private def exTwoTables : Array (String × Array (Array (String × String))) :=
-  exRefilled "domain" #[#[("history", "t/domain")], #[("history", "u/domain")]]
-    (exRefilled "root" #[#[("history", "t/root")], #[("history", "u/root")]])
+  exRefilled "domain" #[#[("bytes", exRoot 8)], #[("bytes", exRoot 3)]]
+    (exRefilled "root" #[#[("bytes", exRoot 7)], #[("bytes", exRoot 9)]])
 
 /-- The read's root's rows placed as `exTableRows` places them, its domain's `per` rows a block. -/
 private def exRowsPer (per : Nat) : Array Rows :=
@@ -802,16 +807,23 @@ private def exRowsPer (per : Nat) : Array Rows :=
 -- a key the block computes, a wire, is refused, and the reason says so
 #guard inputsFailure exOpeningWired == some "row"
 #guard inputsWhy exOpeningWired "row" == KEY_WHY && inputsWhy exOpeningUnkeyed "row" == INPUTS_WHY
--- the root and the domain name one table, row by row, and their ports place each unit alike
-#guard tableOf "root" #[("history", "a/b/root")] == some "a/b".toList
-#guard tableOf "root" #[("history", "t/domain")] == none && tableOf "root" #[("bytes", "t/root")] == none
-#guard tableOf "root" #[("history", "t/root"), ("history", "t/root")] == none && tableOf "root" #[] == none
-#guard inputsFailure { exOpening with supplied := exRefilled "domain" #[#[("history", "u/domain")]] } == some "row"
-#guard inputsFailure { exOpening with supplied := exRefilled "domain" #[#[("history", "t/root")]] } == some "row"
+-- the root and the domain are one table's of round 1's record, row by row and by their bytes
+#guard bytesOf #[("bytes", "0a")] == some "0a" && bytesOf #[("port", "0a")] == none
+#guard bytesOf #[("bytes", "0a"), ("bytes", "0a")] == none && bytesOf #[] == none
+#guard inputsFailure { exOpening with supplied := exRefilled "domain" #[#[("bytes", exRoot 3)]] } == some "row"
+#guard inputsFailure { exOpening with supplied := exRefilled "domain" #[#[("bytes", exRoot 7)]] } == some "row"
 #guard inputsFailure { exOpening with supplied := exRefilled "root" #[#[("bytes", "00")]] } == some "row"
 #guard inputsFailure { exOpening with supplied := exRefilled "root" #[] (exRefilled "domain" #[]) } == some "row"
 #guard inputsFailure { exOpening with supplied := exRefilled "root" (exTwoTables.getD 0 default).2 } == some "row"
 #guard inputsFailure { exOpening with supplied := exTwoTables } == none
+-- which round 1's record registers: not another table, not the root under another domain, not the two at two ports
+#guard inputsFailure { exOpening with boundary := exOwn.boundary } == some "row"
+#guard inputsFailure { exOpening with boundary := exRec 4 [("u", 9, 3)] } == some "row"
+#guard inputsFailure { exOpening with boundary := exRec 4 [("t", 7, 3)] } == some "row"
+#guard inputsFailure { exOpening with boundary := exRec 4 [("t", 7, 3), ("v", 9, 8)] } == some "row"
+-- a root left as a table's name is none of the verifier's bytes
+#guard inputsFailure { exOpening with supplied := exRefilled "root" #[#[("history", "t/root")]] } == some "root"
+-- and their ports place each unit alike
 #guard inputsFailure { exOpening with rows := #[] } == some "row"
 #guard inputsFailure { exOpening with rows := exRowsPer 1 } == none
 #guard inputsFailure { exOpening with rows := exRowsPer 2 } == some "row"

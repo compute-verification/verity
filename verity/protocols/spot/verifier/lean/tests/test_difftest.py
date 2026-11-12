@@ -4682,9 +4682,9 @@ def _shadowing(c: dict, x: int) -> dict:
 def _verifier_held(c: dict, x: int) -> dict:
     """`c` with what its verifier holds of its interior registration's values changed (`second-inputs`): by `x`, it
     fills none; it pinned each one it filled, or holds it to an earlier record (`fixed`), and fills none; it fills each
-    from a root of the interior record, the prover's (a `port` source), from a `value`, a `position` or the `window`,
-    or from a table of round 1's record (`history`); it fills each with no row; or it holds the first value the
-    interior registers alone, as `fixed`."""
+    from a root of the interior record, the prover's (a `port` source), from a `value`, a `position` or the `window`;
+    it fills every other one with no row, and the rest from a table's name left unresolved (`history`), which is none
+    of its bytes; or it holds the first value the interior registers alone, as `fixed`."""
     rec = c.get("interior")
     names = [e["value"] for e in (rec.get("registered") if isinstance(rec, dict) else None) or []
              if isinstance(e, dict) and isinstance(e.get("value"), str)]
@@ -4708,34 +4708,42 @@ OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 
 #: How many cases `_read_opening` has.
-OPENINGS = 29
+OPENINGS = 32
+#: The roots and domain ids of the two tables `_read_opening` has round 1's record register.
+OPENING_TABLES = {"t": ("a1" * 64, "a2" * 64), "u": ("b1" * 64, "b2" * 64)}
 
 
 def _read_opening(c: dict, x: int) -> dict:
     """`c` with its interior registering a read's parameters, each linked at its port of the read's template
     (`OPENING`, no part's, so `second-links` refuses the design whatever `second-inputs` says), its verifier filling
-    the read's root and domain from one table of round 1's record, their ports' rows placing each unit alike, and
-    filling its key and the value `one` its verdict port reads in its reference statement's reads, each row the bytes
+    the read's root and domain with the root and the domain id round 1's record registers for one table
+    (`OPENING_TABLES`, two ports more of that record), their ports' rows placing each unit alike, and filling its key and the value `one` its verdict port reads in its reference statement's reads, each row the bytes
     of 1: the opened row, its salt and its path are then inputs a replay block may read (`second-inputs`). By `x`, the
     read is so; its key is the prover's, a port of round 1's record, wired, pinned, or unlinked; its root is the
     prover's, filled from a root of the interior record, or unlinked; its verdict reads a value with a row that is
     not 1, with no row, one the verifier doesn't fill, one it pinned, none, or its reference reads are another
     template's; its row is read by another template too, or by a port of the read that is no opened row's; the
     interior registers a value no link names; a reference statement, the read's or another template's, reads the row
-    or its salt at a port no link names it at; its domain's row names another table or a root; its root is the
-    verifier's bytes, or of another count of rows; the two ports' rows are missing, or place a unit differently; or
-    its root and domain are of two tables, named alike row by row."""
+    or its salt at a port no link names it at; its domain's row is another table's or a root; its root is bytes
+    round 1's record registers nowhere, or of another count of rows; the two ports' rows are missing, or place a unit
+    differently; its root and domain are of two tables, filled alike row by row; round 1's record registers neither
+    table; its root is left as a table's name, which is none of the verifier's bytes; or round 1's record registers
+    the root under another domain."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
+    b = c.get("boundary")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list) and isinstance(rows, list)
-            and (refs is None or isinstance(refs, dict))):
+            and (refs is None or isinstance(refs, dict)) and isinstance(b, dict) and isinstance(b.get("roots"), list)):
         return c
     held = rec.get("registered") if isinstance(rec.get("registered"), list) else []
     names = {p: f"{OPENING}/{p}" for p in OPENING_PORTS}
     one, kind = f"{OPENING}/one", x % OPENINGS
     placed = [{"template": OPENING, "port": p, "per": 1, "runs": [[0, 1, 0, 0]]} for p in ("root", "domain")]
     registered = [*names.values(), one]
-    mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"history": "t/root"}]],
-            names["domain"]: [[{"history": "t/domain"}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+    (t_root, t_domain), (u_root, u_domain) = OPENING_TABLES["t"], OPENING_TABLES["u"]
+    like = b["roots"][0] if b["roots"] and isinstance(b["roots"][0], dict) else {"leaves": 8}
+    tables = [{**like, "port": f"{OPENING}/table-{n}", "root": r, "domain": d} for n, (r, d) in OPENING_TABLES.items()]
+    mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"bytes": t_root}]],
+            names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
     wired, fixed = list(wires), list(c["fixed"]) if isinstance(c.get("fixed"), list) else []
     ref: dict | None = {"ports": {"o1": {"value": one}}}
@@ -4793,23 +4801,30 @@ def _read_opening(c: dict, x: int) -> dict:
     elif kind == 21:
         more = {"other": {"ports": {"w": {"value": names["salt"]}}}}
     elif kind == 22:
-        mine[names["domain"]] = [[{"history": "u/domain"}]]
+        mine[names["domain"]] = [[{"bytes": u_domain}]]
     elif kind == 23:
-        mine[names["domain"]] = [[{"history": "t/root"}]]
+        mine[names["domain"]] = [[{"bytes": t_root}]]
     elif kind == 24:
         mine[names["root"]] = [[{"bytes": "00000000"}]]
     elif kind == 25:
-        mine[names["root"]] = [[{"history": "t/root"}], [{"history": "t/root"}]]
+        mine[names["root"]] = [[{"bytes": t_root}], [{"bytes": t_root}]]
     elif kind == 26:
         placed = placed[:1]
     elif kind == 27:
         placed[1] = {**placed[1], "runs": [[0, 1, 0, 1]]}
     elif kind == 28:
-        mine[names["root"]] = [[{"history": "t/root"}], [{"history": "u/root"}]]
-        mine[names["domain"]] = [[{"history": "t/domain"}], [{"history": "u/domain"}]]
+        mine[names["root"]] = [[{"bytes": t_root}], [{"bytes": u_root}]]
+        mine[names["domain"]] = [[{"bytes": t_domain}], [{"bytes": u_domain}]]
+    elif kind == 29:
+        tables = []
+    elif kind == 30:
+        mine[names["root"]] = [[{"history": "t/root"}]]
+    elif kind == 31:
+        tables = [{**tables[0], "domain": u_domain}]
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
+            "boundary": {**b, "roots": [*b["roots"], *tables]},
             "rows": [*rows, *placed], "supplied": {**supplied, **mine}, "fixed": fixed,
             "ref_reads": {**(refs or {}), **more, at: ref}}
 
@@ -6948,14 +6963,14 @@ def test_round_two_takes_a_value_of_the_interior_registration_only_as_the_verifi
     """Every input of a replay block the prover gives is committed before the first stage's sample, but for the opened
     row of a read (`second-inputs`, `inputsFailure`), Lean's the Python's whole. Over the two-template interior after a
     replay sample of two, its interior registering `h` and `opened` (`_read_interior`): filled by the verifier from
-    its own bytes or a table of round 1's record, or pinned or held to an earlier record, both pass; filled by
-    nothing, or from a root of the interior record, another value, a position or the window, the first is refused by
-    name, and with `h` alone held, `opened` is (`_verifier_held`). The code is reported beside the others: the honest
+    its own bytes, or pinned or held to an earlier record, both pass; filled by nothing, or from a root of the
+    interior record, another value, a position or the window, the first is refused by name, and with `h` alone held,
+    or `opened` filled from a table's name left unresolved, `opened` is (`_verifier_held`). The code is reported beside the others: the honest
     run's other checks still pass."""
     honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
     filled = _read_interior(honest, 0)
     assert sorted(filled["supplied"]) == ["h", "opened"]
-    for x, want in ((0, "h"), (1, None), (2, "h"), (3, "h"), (4, "h"), (5, "h"), (6, None), (7, "opened")):
+    for x, want in ((0, "h"), (1, None), (2, "h"), (3, "h"), (4, "h"), (5, "h"), (6, "opened"), (7, "opened")):
         case = _verifier_held(filled, x)
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
@@ -6965,18 +6980,19 @@ def test_round_two_takes_a_value_of_the_interior_registration_only_as_the_verifi
 
 def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_the_verifier_holds(pieces):
     """The one input of a replay block the interior registration may give (`second-inputs`, `openedRow`), Lean's the
-    Python's whole: a read's row, its salt and its path, where the verifier fills the read's root and domain from one
-    table of round 1's record, the read's key is a value the verifier holds or a port of round 1's record, and the
+    Python's whole: a read's row, its salt and its path, where the verifier fills the read's root and domain with the
+    root and the domain id round 1's record registers for one table, the read's key is a value the verifier holds or a port of round 1's record, and the
     read's verdict port reads, in its reference statement's reads, a value the verifier fills with 1 at every row
     (`_read_opening`). The row is refused by name where the key is unlinked, the root is unlinked, the verdict reads a
     value with a row that is not 1, with no row, one the verifier pinned or doesn't fill, or none, where another
     template or another port of the read reads the row too, by a link or, with none, by its reference statement's
-    reads; where the root and the domain don't name one table row by row, or their ports' rows are missing or place a
-    unit differently; the key or the root is, where the prover registers it; a value no link names is; and the salt is,
+    reads; where the root and the domain are not one table's of round 1's record row by row, or their ports' rows are
+    missing or place a unit differently; the key or the root is, where the prover registers it or the root is left
+    as a table's name; a value no link names is; and the salt is,
     where another template's reference reads it. A key the block computes, a wire, is refused with its own reason
     (`KEY_WHY`). The read's template is no part's here, so every case is refused as a design too (`second-links`)."""
     honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
-    others = {1: "tok", 6: "root", 7: "root", 17: "unread", 21: "salt"}
+    others = {1: "tok", 6: "root", 7: "root", 17: "unread", 21: "salt", 30: "root"}
     for x in range(OPENINGS):
         case = _read_opening(honest, x)
         got = second_statements(copy.deepcopy(case))
