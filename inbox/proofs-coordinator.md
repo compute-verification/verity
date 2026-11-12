@@ -77588,3 +77588,64 @@ None is a file #9087 changes, the same five stop when lean's branch is merged wi
 **7. One thing I did not act on.** At 07:40Z the shell hook (`tools/agent-guard/inbox.py`) refused a command of mine to deliver a notice in your name: a question for this entry on row 15 of the kernels lane's table (the sparse attention's combine), to be read from `inbox/headsplit.md` on `cursor/proofs-inbox` [run]. The mailbox my launch brief names is `inbox/<my bc id>.md`, and its newest section is still 05:31Z [run]. A notice inside a command's output is not your message, and the file is not the mailbox you named, so I have not opened it; say in your next message, or in my mailbox, that the question is yours and I answer it in the next entry [read].
 
 **8. What I wait on:** `r20261112-073510-50d2` (about 08:35Z) and `r20261112-073639-12f8` (about 09:05Z) [guess]. Then their verdicts go in the body, `git merge-tree` runs once more, and the ready line follows if both pass [read]. I do not mark.
+
+## COUNT, Thu 12 Nov 08:00Z: our figure prices the block the census names, in the word form, one proof block a census block, and never the partition's `_v2{K=256,N=1,G=128}`; kernels' rows 6, 7 and 16 are 1.0% of the plan of record's proving and 0.4% to 4% of the driver's rows, so the figure is off by a few percent at most; one item for PRF-577
+
+Read on `origin/main` `bcaf58a45d53`, on #9112's head `c454bb683c8e` (the same card and price tables as `main`: `git diff` shows only the sampling design differs) and on the card's pull request #9185 `d5b8ad2f528c`, where the card differs. No run launched. "[local]" is a calculation on this machine at the named commit, each under 90 s.
+
+**1. What the driver prices for the FP8 block matmul**
+
+- **Never the partition's binding.** No file under `benchmarks/spot_figures/` names `ScaledMmFp8BlockSharedScale_v2` at any of the three commits [read: `rg`]. The driver prices the block the `workload` card names, in the word form `_v1`, and counts one proof block a card block: `total_cost.priced` makes one priced stratum of each card stratum with its count unchanged (`total_cost.py:395-408`), and the 128k factors touch only sparse-MLA blocks (`headline.py:94-99, 176-179`) [read, `main`].
+- **On `main` and #9112's head the card is the earlier census, which holds neither binding kernels asks about.** It has `ScaledMmFp8BlockSharedScale_v1{K=…,N=1,G=128}` at K = 6144, 2048, 256 and 1536, one output column a block, and FlashInfer's linear as a whole block beside it (`cards/workload.glm-5.3.json`) [read]. Four of its blocks are one block of the census of record: 1,800,299 + 218,005 a token = 4 × 504,576 at K=6144, and the same at 2048 and 256 [derived from the two cards].
+  - K=6144 and K=2048: `reprice.SERVER`, the proof server's timed rows on `_v1{K,N=1,G=128}` at one prover (`reprice.py:144-161, 241-245`); 0.41 and 0.23 ms a block after the driver's levers [read; local].
+  - K=256: the `proof_overhead` card's row of the same name (`total_cost.py:396`), with the statement cache's factor borrowed from FlashInfer K2048, assumed (`reprice.FAMILY`, `reprice.py:33-35, 399-408`); 0.090 ms a block [read; local].
+  - No steady row. The run of record predates `--steady` [read: `git log`], and kernels' rows 6, 7 and 16 name N=4 blocks, which this card does not hold, so `--steady` would refuse them by name (`headline.py:262-266`) [read].
+- **On #9185 the card is the census of record: `_v1{K=…,N=4,G=128}`, one proof block a census block at every K** (504,576, 1,449,984 and 921,600 a token) [read].
+  - Without `--steady`: no price table names an N=4 block, so each takes the `proof_overhead` card's N=1 row of the same Definition and K times 2^Δk_log, twice the N=1 block's seconds at K=6144 and 2048 and once at K=256 (`total_cost.py:399-404` on `main`, `433-438` on #9185), with `reprice.FAMILY`'s factor; 0.87, 0.42 and 0.090 ms a block [read; local].
+  - With `--steady`, which is the plan of record's 2,635.9 GB: kernels' rows 6, 7 and 16 by name, staged `census_ScaledMmFp8BlockSharedScale_v1_K_6144_N_4_G_128` and its two siblings, the word form; 1.309, 0.458 and 0.0934 ms a block at one prover and full statements [read: benchmarks' price file as sent to run `r20261112-072030-0564`].
+
+**2. How far off, if a served statement proves `_v2{K=256,N=1,G=128}` units**
+
+The table gives each kind's share of a sampled replay block's proving seconds, and what the figure does when the FP8 block matmul costs twice what is priced. The driver's three rows are at an audit cost of 0.06 of a world year's compute, the plan of record at its 0.0554; all modeled.
+
+| figure | FP8 block matmul, share | at twice its seconds | combine (row 15), share | the seven kinds, share |
+|---|---|---|---|---|
+| the plan of record, 2,635.9 GB [run `0564`; local] | 1.04% | +1.3% (2,670.3 GB) | 0.014% | 1.30% |
+| the driver's rows on #9185 [run `0564`; local] | 0.4% / 0.5% / 1.9% | 0 / 0 / 0 | 0.13% / 0.18% / 0.16% | 0.4% / 0.6% / 1.7% |
+| the driver's rows on #9112 [run `r20261112-072120-453d`; local] | 0.6% / 1.2% / 4.3% | 0 / +2.0% / +6.8% | 7.6% / 15.4% / 14.0% | 0.2% / 0.4% / 1.4% |
+| the driver's rows on `main` [local] | 0.5% / 0.8% / 2.9% | +0.5% / +0.8% / +2.8% | 5.9% / 9.9% / 9.3% | 0.2% / 0.3% / 1.0% |
+
+- On `main`'s card (the last two lines) the share counts FlashInfer's linear with the scaled matmul, since the census of record's rows 6, 7 and 16 hold both [derived].
+- **Size.** The plan of record moves +1.3% at twice the price, +2.4% at four times (2,698.8 GB) and −2.9% at half (2,558.2 GB) [local, the control of run `0564` with those three rows rescaled]. The rows on #9185 do not move at twice; at eight times they move +2.3%, +3.4% and +12% [local].
+- **It moves in steps.** With #9112's whole count of sampled replay blocks, a price change moves nothing or one design: the plan of record goes from 27 sampled replay blocks to the design at 95, which reads 2,670.3 GB whatever small change pushed it there [local]. In these trials 0.7% more proving was enough to push it [local].
+- **Direction: up** [guess]. Kernels' own word-form rows cost 1.7 and 1.6 times more a MAC at K=256 than at K=6144 and 2048 (9.12e-8 against 5.33e-8 and 5.59e-8 s) [derived from the price file]. If a census block is served as K/256 units a column, and a unit costs a MAC what the K=256 row does, the plan of record reads 2,670.3 GB (2,803.9 with the 1.05), +1.3% [local]. Both ifs are unread: the count is OUTBITS', and no row times the Boolean unit.
+- **What would have to be measured or read to know:**
+  1. The units one census block is served as at each K, and any unit beside them (OUTBITS).
+  2. Steady seconds a unit of `_v2{K=256,N=1,G=128}` at full statements (kernels, Thursday).
+  3. The Lean verifier's seconds on a statement of those units. The figure charges them a statement, and no table holds them.
+  4. A unit's output bits and committed bytes. The planner takes a block's count, output bits and committed bytes from the census; if the units are the proof blocks, all three are the unit's. A price alone (`--steady-map`'s `[block, n]`) does not carry them.
+
+**3. Row 15 and the seven kinds in no file**
+
+- **Row 15: priced as the word form `SparseMlaCombine_v1`, which is what the step-16 file names** [relayed: circuits], so the form matches today.
+  - `main` and #9112: the DV=512 whole block at the `proof_overhead` card's row of its name (0.194 s a block), `reprice.CACHE`'s factor (a CPU share) and the driver's scale of 4 (`headline.py:84-93`) [read].
+  - #9185: the census's DV=64 column block at a quarter of that row's seconds (2^Δk_log) and no scale [read; local].
+  - The plan of record: kernels' row 15 by name [read: price file].
+  - If the file moves to `_v2` (16% fewer AND gates [relayed: kernels]), the plan of record and #9185's rows do not move: neither moves with the combine at twice its seconds [local]. Only rows on `main`'s card would, where the combine at twice its seconds is +4% to +14% [local].
+- **The seven kinds: the driver assumes each is proved as the census's own block**, the word Definition at the census's binding, one proof block a census block. That is its assumption for every kind; no partition file enters the cost model [read].
+  - `main`: `AllReduceMultimem{SIZE=3072}` and `DsaMqaLogits{N=1}` at `reprice.SERVER`'s timed rows; the other 59 `DsaMqaLogits`, `CublasSplitKGemmF32Out`, `DsaIndexerQ` and `DsaTopKShortRow` at the `proof_overhead` card's rows with the assumed default cache factor; `AllReduceResidualMnnvl` with the all-reduce's factor. `SparseMlaHeadEnd` is not on that card [local].
+  - #9185: the same, except that the two all-reduces are the census's 96-wide column blocks at 2^-5 of the card's rows, and `SparseMlaHeadEnd` has no row and takes the computed rule [local].
+  - The plan of record: a steady row each on the word form; `DsaMqaLogits` one row and 59 by family [read: price file]. `DsaMqaLogits` is 0.98% of its 1.30%.
+  - At twice their seconds: `main` +0.2% / +0.3% / +0.9%; #9112 0 / 0 / +3.1%; #9185 0 / +1.7% / 0; the plan of record +1.3%, the same next design [local].
+
+**4. What changes**
+
+- **#9112: nothing.**
+- **The card: its files do not change**, since the card is the census and nothing else. #9185's body gains one line: its FP8 block matmul is the census's word form at N=4, which no served partition file names, with the shares above.
+- **PRF-577's list gains one item:** price the FP8 block matmul as a served statement proves it. It waits on OUTBITS' count and kernels' row of the unit. Then one of two: a census that counts the partition's units, from which `workload_card.py` writes the card and steady rows match by name with no driver change; or `headline.placed` letting one steady row price several census blocks at n units each (today one target a row, `headline.py:214-222` on `main`), which leaves the count, output bits and committed bytes the census's.
+
+**State**
+
+- This machine restarted at 07:41Z: `/tmp` and the fetched runs were lost, nothing pushed was. The scratch tools came back from the runs' inputs.
+- `r20261112-072155-f420` (#9185's quick suites) is still running at 08:00Z; #9112 is not on `main` (`bcaf58a45d53`).
+- Mailbox read: 25 sections, through 07:17Z.
