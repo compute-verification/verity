@@ -28,12 +28,16 @@ def commit_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: int
 def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, declaration: dict | None,
                 required_classes: tuple[str, ...] | list[str] | None) -> tuple[bool, str] | None:
     """Reference integrity, identity coverage, collector errors, required classes, bounded staging, openings, tokens."""
-    ex = commit.get("extra") or {}
+    ex, ops = commit.get("extra"), commit.get("openings")
+    if not ex:
+        ex = {}    # a record without the collector's block states no counter, and fails on that below
+    if not ops:
+        ops = {}   # a record without openings checked none
     n_exp, n_com = ex.get("expected_tensors"), ex.get("committed_tensors")
+    errors = ex.get("errors")   # what the collector recorded: its length is the count where the record states none
     errs_n = ex.get("errors_n")
     if errs_n is None:
-        errs_n = len(ex.get("errors") or [])
-    ops = commit.get("openings") or {}
+        errs_n = len(errors) if errors else 0
     n_open, n_ok = int(ops.get("n") or 0), int(ops.get("verified") or 0)
     if ex.get("collector_failure"):                        # a step the worker abandoned: the counts and the root below follow from it
         return False, f"collector failed: {str(ex['collector_failure'])[:200]}"
@@ -52,7 +56,7 @@ def _c1_verdict(commit: dict, tokens_equal: bool | None, min_openings: int, decl
             return False, why
     cov = ex.get("coverage") or commit.get("coverage")
     if cov is not None and not cov.get("ok", False):     # Identities REQUIRED by the Program/query manifest, not the collector's own attempts
-        fam = cov.get("families_missing_entirely") or []
+        fam = cov.get("families_missing_entirely")   # named in the reason where a family of the manifest is missing whole
         first = (cov.get("missing") or [{}])[0]
         if cov.get("error") and not cov.get("missing_n"):   # a named coverage error with nothing uncovered (prefix, reconciliation): the name IS the reason
             return False, f"manifest coverage: {cov['error']}"
@@ -99,11 +103,14 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
         # a relabel / same-name byte swap / late read that C1 (coverage) and C3 (openings) cannot see.  Named, fail closed.
         # name the FAILING component's own cause: the oracle's `why` only when the ORACLE failed (a partial-coverage note
         # on a None oracle result is not the cause of a root-compare failure); else the composite's `why` (root_compare / replay), else generic.
-        oc = vc.get("oracle_compare") or {}
+        oc, comps = vc.get("oracle_compare"), vc.get("components")
+        if not oc:
+            oc = {}      # no compare against the Match oracle under the composite: no cause of its own to name
+        if not comps:
+            comps = {}   # a composite that names no component has none failing
         oc_top = commit.get("oracle_compare")
         if not isinstance(oc_top, dict):
             oc_top = {}
-        comps = vc.get("components") or {}
         failing = [(k, c) for k, c in comps.items() if isinstance(c, dict) and c.get("result") is False]
         if oc.get("result") is False and oc.get("why"):
             return False, oc["why"]
@@ -129,7 +136,7 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
     # a producer that assembles its C2 under value_correspondence.components (compiled S3's kernel replay) is graded by the
     # SAME gate: the components are read where the top level is absent, and only when the component says it IS a sampled exact replay
     # (method / schema); a component of another method never stands in for the replay of record.
-    _comps = (commit.get("value_correspondence") or {}).get("components") if isinstance(commit.get("value_correspondence"), dict) else None
+    _comps = vc.get("components") if isinstance(vc, dict) else None
     if not isinstance(sr, dict) and isinstance(_comps, dict) and isinstance(_comps.get("sampled_replay"), dict):
         _c = _comps["sampled_replay"]
         if "sampled-exact-replay" in str(_c.get("method") or _c.get("schema") or _c.get("reference") or ""):
@@ -224,7 +231,9 @@ def _c2_verdict(commit: dict, c2_notes: list[str]) -> tuple[bool, str] | None:
 
 def _after_release_verdict(commit: dict, min_openings: int) -> tuple[bool, str] | None:
     """Openings after the raw device staging was released, and every pick deferred to replay."""
-    ops = commit.get("openings") or {}
+    ops = commit.get("openings")
+    if not ops:
+        ops = {}   # a record without openings deferred no pick of the challenge's
     oar = commit.get("openings_after_release")
     bnd = commit.get("binding")
     if oar is not None:                      # Openings after the raw device staging was released must verify against the ORIGINAL roots
@@ -241,14 +250,13 @@ def _after_release_verdict(commit: dict, min_openings: int) -> tuple[bool, str] 
             return False, f"raw/level bytes still on the device after release: {oar.get('retained_device_after')}"
         # the challenge / population picks the in-run stages could not open from host (excluded families) were handed to
         # this stage: every one of them must have been opened here by replay, and verified (ok_a == n_a above covers the verification)
-        _po = (bnd or {}).get("openings_population") or {}
+        _po = _population_openings(bnd)
         _def_a, _def_b = int(ops.get("deferred_replay_n") or 0), int(_po.get("deferred_replay_n") or 0)
         if _def_a or _def_b:
             # by POSITION when the record carries them: the union of both stages' deferred (step, leaf) sets must be a subset
             # of the after-release stage's received set; count-only records (older) fall back to received >= max(a, b)
-            _pa = [tuple(p) for p in (ops.get("deferred_positions") or [])]
-            _pb = [tuple(p) for p in (_po.get("deferred_positions") or [])]
-            _got = {tuple(p) for p in (oar.get("deferred_received_positions") or [])}
+            _pa, _pb = CR.deferred_positions(ops), CR.deferred_positions(_po)
+            _got = set(CR.deferred_positions(oar, "deferred_received_positions"))
             # the count-only branch is for records written BEFORE positions existed: a writer that knows positions always
             # writes the keys (empty lists included), so their presence gates the branch -- it cannot be reached by omitting the lists
             _positional_writer = any(k in d for d, k in ((ops, "deferred_positions"), (_po, "deferred_positions"), (oar, "deferred_received_positions")))
@@ -263,6 +271,12 @@ def _after_release_verdict(commit: dict, min_openings: int) -> tuple[bool, str] 
             elif int(oar.get("deferred_received_n") or 0) < max(_def_a, _def_b):
                 return False, (f"{_def_a} challenge + {_def_b} population pick(s) deferred to replay, openings after release received "
                                f"{oar.get('deferred_received_n')} (every deferred pick must be opened by replay)")
-    elif int(ops.get("deferred_replay_n") or 0) or int(((bnd or {}).get("openings_population") or {}).get("deferred_replay_n") or 0):
+    elif int(ops.get("deferred_replay_n") or 0) or int(_population_openings(bnd).get("deferred_replay_n") or 0):
         return False, "picks deferred to replay (excluded families) and no openings-after-release record"
     return None
+
+
+def _population_openings(bnd: dict | None) -> dict:
+    """The binding's record of the openings sampled from the population: empty with no binding, or one that records none."""
+    stated = bnd.get("openings_population") if bnd else None
+    return stated if stated else {}

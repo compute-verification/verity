@@ -21,8 +21,9 @@ values that it hands on from `commit.opened`; `value_check` the value check of t
 and the `weights-of-record` command; `checkpoint_index` the shards of a checkpoint of record; `derived_weights` and
 `fp8_ue8m0` the weights vLLM makes or rewrites at load; `fp8_moe_scales` and `tp_shards` what a TP rank holds of a
 tensor; `component_programs` a row's component Programs on disk. The Match's side: `gates` gives the gates, their ids
-and the gates document; `batch` the batch invariance of a template; `program_ops` the operations the Match's checks
-run on Programs; `codes` the verdict codes. `oracle_compare` and `weights_of_record` hand on names whose code is in
+and the gates document; `verdict_names` gives the ids alone, each by what its gate checks, and imports nothing, for a
+reader of a gates document that must not load the gates; `batch` the batch invariance of a template; `program_ops`
+the operations the Match's checks run on Programs; `codes` the verdict codes. `oracle_compare` and `weights_of_record` hand on names whose code is in
 `match_oracle`, `producers`, `composed_weights` and `engine_constants`; other code reads them through the first two.
 Six names with a leading underscore are read by `pipeline` and `program.predict` and are not declared:
 `verdict._c1_verdict` and `_after_release_verdict`, `c2_rules._query_population_scope` and
