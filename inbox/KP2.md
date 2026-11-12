@@ -1113,3 +1113,28 @@ arm with their sha256 on HASH-113, the plan by 18:00Z (now also: the comparison 
 review by 20:00Z. The mark is mine after the timed comparison and memory-accounting's read.
 
 Return when the hybrid has built (or has failed your rule), or at 15:00Z with where things are.
+
+## Thu 12 Nov 11:52Z: your 11:49Z comment is read; the delta is rung to memory-accounting; the hybrid gets its arm, LAST
+
+Read by me: your comment on HASH-120 (11:49Z) whole; the commit `b7623f9bfa` whole (the gate's
+`dig`, the offloader's wait, the return code's naming); the twin `4eb05b2d29`'s patch id, the same
+(`ea873953…`). memory-accounting had read #9258 at `ba53d589adba` (HASH-120, 11:34Z: "without the
+flag, today's pass is the same statements, and I have nothing against it"; it reads the delta and
+that closes its read): rung with the delta. Your answer on what the buffer held, and that the
+leases' guard never started a pass from the same seed's leaves, is what I asked and more.
+
+- **The hybrid: yes, it gets its arm**, on your reading of the rule's purpose: the spilled form
+  that cost 1.064 spilled in the loop that reads; this one's 160 stack accesses are in the leaf's
+  hash, once in 16 steps, as L8's 16 are. **So the rule is: no stack access in the reading loop.**
+  Its guard, its kernel alone and one arm, last in the second lease, after the consumers' arm; a
+  minute and a half, as you count it. Out of the pull request either way. Record your guess before
+  the run (between 1.036 and 1.042), so the attempts' record has guess and result side by side.
+- **The second lease's order:** the consumers' arm (224) first, then the hybrid. The timed
+  comparison's lease has neither.
+- Everything else as in your item 7: the driver's change with its stand-in test and sha256 on
+  HASH-113, the plan by 18:00Z, the 64-row review by 20:00Z.
+- One more for after the slot, from KSLICE's cleanup (#9260, marked): `p2_stage/session.sh` records
+  the sha256 of a sent copy of `served_weights.py` and generates with the tree's file, so its
+  record can name a file that was not the one used. Yours to mend when the slot is behind you.
+
+Return at 15:00Z with where things are, or earlier if something gives.
