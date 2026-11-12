@@ -208,7 +208,7 @@ class Int8AttentionScope:
             return unsupported(node, "the record does not carry this layer's K scales (RunHeader.profile.backends.int8_k_scales)", layer=layer)
         kbits = tuple(int(b) & 0xFFFFFFFF for b in ks_all[layer])
         copies = {id(w): [c for c in find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "copy_")
-                          if _src_of(c) is not None and _out0(w) is not None and _src_of(c).alloc == _out0(w).alloc] for w in wrs}
+                          if (csrc := _src_of(c)) is not None and (wout := _out0(w)) is not None and csrc.alloc == wout.alloc] for w in wrs}
         rcs = find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "reshape_and_cache_flash")
         keep = {w.id for w in kvs + wrs + cws + css} | {c.id for cs in copies.values() for c in cs} | {n.id for n in rcs}
         kvn, w = kvs[0], wrs[0]
@@ -219,6 +219,8 @@ class Int8AttentionScope:
                                qsl=a.get("qsl"), lens=a.get("lens"), kv_lens=ka.get("lens"))
         if any((qsl[r + 1] > qsl[r]) != (s > 0) or not 0 <= qsl[r + 1] - qsl[r] <= s for r, s in enumerate(lens)):
             return unsupported(node, "a request's rows are not its window's last rows, or a window has no rows", qsl=qsl, lens=lens)
+        kc: ViewDesc | None
+        vc: ViewDesc | None
         if _is_op(kvn, "kv_quant_window_batch"):
             credited = _credited_window(node, cws)
             if isinstance(credited, Unsupported):
