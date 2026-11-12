@@ -135,8 +135,8 @@
   },
   "Properties.Spot.RequestsCover": {
    "owner": "@proofs",
-   "digest": "e20735f9c7c79581fb75505594e7260b7d61d0de7ffff787643bd340bcd963bf",
-   "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
+   "digest": "ab8ecb8ac05884cb194260d54cac5aac201a3afa154ee009249abb6dd3f486c3",
+   "why": "The requests the patterns' point describes: disjoint, and in each replay block as many and as wide as its class says."
   },
   "Properties.Spot.ServedCover": {
    "owner": "@proofs",
@@ -25045,11 +25045,11 @@
    }
   },
   "Properties.Spot.TwoStageCheck": {
-   "digest": "eaac374477385b0965fe7c43e1cc3a28b256249c7e25537e3f64a633ec65f3e0",
+   "digest": "77a7e5a769329d1a15ceb87201661b218f49180f2a02572a8112a1719510e62b",
    "definitions": {
     "Properties.Spot.ClassesCover": "a626c0050b97025f8ee1dcdc0e4f0e81e36d77e3e5cf55a2a2d43325a95dd547",
     "Properties.Spot.FirstStageAt": "7e9807db6be85f5b5c565d1a263e0cce46c1495326db1b96b33065aad79bdee5",
-    "Properties.Spot.RequestsCover": "e20735f9c7c79581fb75505594e7260b7d61d0de7ffff787643bd340bcd963bf",
+    "Properties.Spot.RequestsCover": "ab8ecb8ac05884cb194260d54cac5aac201a3afa154ee009249abb6dd3f486c3",
     "Properties.Spot.ServedCover": "989296ea620a9031aaee6272fced0dac71d6df4f44d1ca6a5b0e3af490f80dcd",
     "Properties.Spot.TwoStageCheckPatternsSound": "bc2953c1c0034810ce3f8155f3075dc70ad47f010d41af53d3f23c3231113ccf",
     "Properties.Spot.TwoStageCheckServedSound": "3c2e8babf77097390d538abdf7cbfadbcd58ad0e3db292ea3230524c4dba4607",
