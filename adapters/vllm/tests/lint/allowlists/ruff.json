@@ -73,8 +73,6 @@
     {"file": "verity_vllm/program/frontend/schemas.py", "kind": "S307", "symbol": "_eval_dim", "detail": "Use of possibly insecure function; consider using `ast.literal_eval`"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "BLE001", "symbol": "parse_target_arg", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "S102", "symbol": "export_report", "detail": "Use of `exec` detected"},
-    {"file": "verity_vllm/properties/noninterference.py", "kind": "F401", "symbol": "<module>", "detail": "`collections.OrderedDict` imported but unused"},
-    {"file": "verity_vllm/properties/noninterference.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Any` imported but unused"},
     {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "F841", "symbol": "lint_file", "detail": "Local variable `module_names` is assigned to but never used"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.definitions.registry.b1.B1_CONFIG` imported but unused"},
     {"file": "tests/program/fixtures_query.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.definitions.registry.prims.BF16` imported but unused"},

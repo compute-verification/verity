@@ -103,3 +103,6 @@ class RunInputs:
         return {"param": self.param, "name": "run",
                 "fields": [{"name": f["name"], "type": repr(f["type"]), "offset": f["offset"], "leaves": f["type"].leaves}
                            for f in self.fields]}
+
+
+__all__ = ["RegisteredInputs", "RunInputs"]
