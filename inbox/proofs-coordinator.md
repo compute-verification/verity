@@ -101519,3 +101519,44 @@ For each: what an accept says, what it does not, and what it needs. **Fully prov
 - `r20261112-203359-2a2d` (a changed id in the boundary record, an honest replay): `second` refused before any session, "request r0: the replay selected 4 ids and serving emitted 4, 4 of them different: it didn't reproduce the span", exit 1 [run]. The check is the driver's `spans_of` (`two_stage.py:562-584`): the prover's own, not the verifier's. The run that shows which of the verifier's checks refuses a prover who claims the changed ids is `r20261112-210326-5f85`, launched again at 21:03Z; `r20261112-210311-fbbf` is the one more `max_tokens`. I report both in one entry when they end.
 - `r20261112-190229-73f1`: ended as expected for its tree (20:43Z entry). `86b4` (154,880, 2 outputs) is still in `second` [run, 20:55Z]. `df04`'s `rc` file is still not written though its outputs are complete.
 - Neither is a run of record: made-up logits, no engine, local challenger sessions, the switch off.
+
+## ACCOUNTS, Thu 12 Nov 21:06Z: STOP RULE, before you go to Daniel: one listed statement's text must change (`RefusedAt`), and more than thirteen records will move. I was wrong at 20:46Z that no text changes
+
+I wrote at 20:46Z "no listed statement's text changes". Writing the spec's Site shows that is false for one of the five agreement statements. Not written; the before and after are below. Everything that does not depend on it (the spec's types and each entry's clauses) I write now.
+
+**1. `Properties.Site.RefusedAt` cannot keep its text.** [read `security/Properties/Core/Site.lean` lines 206–216 at `e0167418c1`; derived]
+
+- Before: "when the check refuses a log at index `i` with refusal `r`, `i` is an entry's index (`i < l.length`), the log's first `i` entries are valid, and the spec refuses entry `i` against them with `r`."
+- Why it fails in v2: the code refuses `inventory` at the log's end, at index `l.length`, where there is no entry `i` [read `CoreProtocol/Site.lean`, `check.go`: `| i, S, _, [] => if Complete D A S then .ok S else .error (i, .inventory)`]. And once a valid log must be complete at its end (your ruling), "the first `i` entries are valid" asks completeness of a prefix, which the code never holds a prefix to.
+- After, as I would write it:
+
+```lean
+def RefusedAt : Prop :=
+  ∀ D A c l i r, Core.Site.Registration.check D A c l = .error (i, r) →
+    Verity.Registration.Chained (digests D) (auditor A) (composite c) (log (l.take i)) ∧
+      ((∃ hi : i < l.length, Verity.Registration.Entry.refusal … (regEntry l[i]) = some (refusal r)) ∨
+       (i = l.length ∧ r = .inventory ∧
+         ¬Verity.Registration.Complete (digests D) (auditor A) (Verity.Site.ofLog (log l))))
+```
+
+  In words: the log's first `i` entries each pass every entry's check; and either `i` is an entry's index and the spec refuses that entry with `r`, or `i` is the log's length, `r` is `inventory`, and the Site the log folds to is not complete against the auditor's figures.
+- `Chained` is a new name in the spec for what `Verity.Registration.Valid` says today: each entry valid against the prefix before it, each item and day once. It is closed under prefixes; the whole-log `Valid` with completeness is not.
+
+**2. The shape of `Valid`: two ways, yours to choose.** Both need item 1.
+
+| | A1: `Valid` gains completeness (your 21:02Z wording) | A2: `Valid` stays entry by entry; completeness is beside it |
+|---|---|---|
+| The spec | `Valid := Chained ∧ Complete (ofLog log)`; `Chained` is today's `Valid` | `Valid` unchanged in form; new `Complete` |
+| `Checks`' text | unchanged | changes: "accepts exactly when the log is valid **and its Site complete**" |
+| `RefusedAt`'s text | changes (item 1) | changes (item 1, with `Valid` where A1 says `Chained`) |
+| `Refuses`, `EntryValid`, `Fold` | text unchanged | text unchanged |
+| The spec's own lemmas (`security/Proofs/Core/Site.lean`: `Valid.of_prefix`, `valid_append_singleton`, `Valid.days_nodup`, `Valid.ids_nodup`, `Valid.parents`) | restated over `Chained`; a valid log is no longer one whose every prefix is valid | unchanged |
+| Texts of listed statements that change | 1 | 2 |
+
+[read] `Verity.Registration.Valid` and those lemmas are read only by the Site's four files (`rg` over `security/` and `verity/` at `e0167418c1`: `Definitions/Core/Site.lean`, `Proofs/Core/Site.lean`, `Properties/Core/Site.lean`, `Proofs/Properties/Core/Site.lean`), so either way stays inside them. I go on with A1 as you ruled unless you say A2; the entry clauses are the same in both.
+
+**3. More than thirteen records move.** [read `security/lean-audit.json` at `e0167418c1`, `reads` → `Definitions.Core.Site`] The main lock's guarantees read, from the spec's Site: `Site.Kind`, `Site.Loc`, `Site.Link`, `Site.Entry`, `Site.Sheet`, `Site.Tier`, `Site.Owner`, `Registration`, `Registration.Entry`, `Registration.Item`, `Registration.Builder`, `Registration.Declared`, `Registration.Composite` and the θ and builder readers. They reach them through the type of a registration (the soundness game and the registered circuit take one). v2's spec changes `Site.Kind` (a constructor), `Site.Loc` (fields) and `Site.Link` (the optional rate, the reason), so every record whose statement mentions a registration moves with them, without any change to what it says.
+- Not established: how many. The lock lists what is read by all its guarantees together, not by each; only the records run counts them. The four in the main lock whose signature names the registration are `Verity.Sampled.remote_soundness_deployedReady` with its two witnesses and `Verity.SecurityProofs.RegisteredStreamLeakage_honest`; the count through definitions is larger [guess].
+- So the notice to Daniel is two lists: the thirteen, whose meaning changes (one of them in its text), and the records that only take the Site's types, which move and say what they said. I give the second list from the records run, not before.
+
+**What I do meanwhile.** The spec's types (`Kind`, `Loc`, `Link`, `Auditor`, `Refusal`), each entry's clauses (`Kinds`, `Rates`, `Timed`, `Chips`, `Owners`, `Covered`) and `Complete`, with the three additions, then the notice. I do not write `RefusedAt` until you say.
