@@ -112,7 +112,9 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check).  Nothing runs it before a PR lands: it is the check's ``ratchet-gate`` step
+and BASE's move_check).  The ready mark's preflight runs it on the PR's merge, as BASE has it, and only warns
+(``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new violation; what
+judges a PR is the check's ``ratchet-gate`` step
 (``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
 drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
 change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge

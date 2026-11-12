@@ -16,11 +16,17 @@ of 946 GB under a cgroup memory.max of 256 GB, beside 300 GB of hand-written res
                reservation's holder shares; the run's own scope holds none of them)
 
 A reservation is stale (listed, not counted) when its pid is gone or its run_dir is terminal (status.json done/failed/cancelled, or
-refused.json).  An unreadable file is listed and not counted (its size is unknown).
+refused.json), or when it names no pid and a run_dir that isn't there: nothing holds that one, and its line gives its size, its
+age and the `rm` that removes it.  An unreadable file is listed and not counted (its size is unknown).
 
 admit() holds an flock on <ramlock>/.admission.lock from the reading through writing research-<run id>.json (same schema, plus
 run_id / run_dir), so two launches cannot both take the last N GB.  Short of N it raises MemoryNotAvailable (refused.json names
-it), or with wait_s polls until then.  The runner removes its file at exit, any status ($RESEARCH_MEM_RESERVATION, research.cli);
+it), or with wait_s polls until then.  It writes the file with no pid, and the launch names the runner's (set_pid) as soon as it
+has started it: between the two the reservation counts whole, by its run_dir alone, which the launch made before it asked for
+memory and which nothing of a launch removes.  So admit() refuses a run_dir that isn't there, and a reservation with no pid is
+stale only once its directory is gone, never while its run is starting.  One that names no pid and no run_dir (the fleet's
+hand-written kind) counts whole until its owner removes it.  The runner removes its file at exit, any status
+($RESEARCH_MEM_RESERVATION, research.cli);
 a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine,
 and the waiters in line.  A reservation caps nothing; on the shared nodes pods/nebius/oom_order.py sets each live run's
 oom_score_adj from its use against it, so the kernel's OOM killer takes a run over its reservation, or without one, first.
@@ -41,6 +47,7 @@ import fcntl
 import json
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -153,6 +160,28 @@ def _terminal(run_dir: str) -> bool:
         return False
 
 
+def _gone(run_dir: str) -> bool:
+    """Whether the directory a reservation names isn't there.  One that can't be read (another user's, a mount that hides it) is
+    there, and so is a path that isn't absolute (nothing says what it was relative to): only its absence says its run was removed."""
+    if not os.path.isabs(run_dir):
+        return False
+    try:
+        os.stat(run_dir)
+    except (OSError, ValueError) as e:
+        return isinstance(e, (FileNotFoundError, NotADirectoryError))
+    return False
+
+
+def _ago(started: Any) -> str:
+    """How long ago a reservation says it began (its `started`, as admit() writes it): minutes up to two hours, hours up to two
+    days, then days."""
+    try:
+        m = (time.time() - datetime.fromisoformat(str(started)).timestamp()) / 60
+    except (ValueError, OverflowError, OSError):
+        return f"at a time its record doesn't give (started {started!r})"
+    return f"{m:.0f} min ago" if m < 120 else f"{m / 60:.0f} h ago" if m < 2880 else f"{m / 1440:.0f} d ago"
+
+
 def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
     out = []
     for f in sorted(Path(ramlock_dir).glob("*.json")):
@@ -169,6 +198,10 @@ def reservations(ramlock_dir: Path) -> list[dict[str, Any]]:
             row.update(live=False, why=f"run {doc.get('run_id')} ended", outstanding=0)
         elif pid is not None and not _alive(pid):
             row.update(live=False, why=f"pid {pid} gone", outstanding=0)
+        elif pid is None and doc.get("run_dir") and _gone(str(doc["run_dir"])):
+            row.update(live=False, outstanding=0,
+                       why=f"stale: {gb:g} GB reserved {_ago(doc.get('started'))} for run {doc.get('run_id')}, which names no pid and "
+                           f"whose directory {doc['run_dir']} is gone, so nothing holds it; `rm {f}` removes it")
         else:
             used = _rss_tree(pid) if pid is not None else None
             row.update(live=True, why=f"pid {pid} holds {used / GB:.1f} GB" if used is not None else ("no pid" if pid is None else f"pid {pid}"),
@@ -277,7 +310,12 @@ def _locked(ramlock_dir: Path) -> Iterator[None]:
 
 
 def admit(gb: float, *, ramlock_dir: Path, run_id: str, run_dir: Path, wait_s: float = 0.0, poll_s: float = 5.0, note: str = "") -> dict[str, Any]:
-    """Reserve `gb` or raise MemoryNotAvailable, in line behind older waiters (module doc).  -> the record for job.json run.remote.mem."""
+    """Reserve `gb` or raise MemoryNotAvailable, in line behind older waiters (module doc).  -> the record for job.json run.remote.mem.
+    `run_dir` is there already (ValueError otherwise): until the launch names the runner's pid, the reservation counts by it."""
+    if not Path(run_dir).is_dir():
+        raise ValueError(f"research.mem.admit: the run directory {run_dir} isn't there. A reservation is written with no pid, and one "
+                         f"with no pid whose directory is gone counts for nothing (`reservations`), so two runs could take the same "
+                         f"memory: make the directory before asking for its memory, as a launch does (remote.launch_request's claim)")
     ramlock_dir = Path(ramlock_dir)
     ramlock_dir.mkdir(parents=True, exist_ok=True)
     path = ramlock_dir / f"research-{run_id}.json"
