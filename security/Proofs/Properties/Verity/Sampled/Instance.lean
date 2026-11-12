@@ -10,9 +10,9 @@ public import Proofs.Flock.Recursive.TopFinder
 /-!
 # SPOT's vocabulary as deployed
 
-The vocabulary the leg reads (`Deployed`, `Covers`) built from the other subprotocols' names over the deployed device
-(`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_targets` apply to it with every field
-of `Deployed` and `Covers` either proved or one of the named `Prop`s below.
+The vocabulary SPOT's target reads (`Deployed`, `Covers`) built from the other subprotocols' names over the deployed
+device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_targets` apply to it with every field of
+`Deployed` and `Covers` either proved or one of the named `Prop`s below.
 
 * **The base** (`Instance`): a vocabulary whose signer is the deployed device's (`Device.Deployment.signer`) and whose
   shared names are v2's (its reading of the committed files is `readOf`, its digests `programDigestOf` and
@@ -491,9 +491,9 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Liv
   · rw [hs]
     exact List.mem_append_right _ (by simp)
 
-/-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings, at constructions whose read
-finder and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`): the leg's per-finder premises
-are `error`'s condition at this strategy (`strictSpecs`, `premisesOf`, `fileSpecs`). -/
+/-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings, at constructions whose read finder
+and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`): SPOT's per-finder premises are
+`error`'s condition at this strategy (`strictSpecs`, `premisesOf`, `fileSpecs`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) :
     Deployed (I.vocab K) (I.lift K) I.sessions where

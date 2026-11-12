@@ -87,7 +87,7 @@ def test_inputs_open_at_their_producer_and_outputs_at_their_own_unit(bundle) -> 
 
 
 def test_every_opened_domain_is_64_bytes(bundle) -> None:
-    """Every row a sampled unit opens is opened under a published frame-v3 domain id of 64 bytes: its member's
+    """Every row a sampled proof block opens is opened under a published frame-v3 domain id of 64 bytes: its member's
     `frame_v3.domain_ids` entry for the row's port, which is its window port's root's domain, and for a registered row
     its value's. The verifier reads the port's domain off the public file's header and refuses one that is not 64 bytes
     or that two ports of a member share (Lean's `Flock.PortRoots.idsSized` and `dupId`); a bundle whose domain were the
