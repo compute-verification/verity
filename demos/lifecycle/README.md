@@ -1,6 +1,6 @@
 # Lifecycle: the onsite and remote composites, stepped through
 
-A minimal worked example of the two composite protocols, `verity/onsite/v0` and `verity/remote/v0`, run through the
+A minimal worked example of the two configurations, `verity/onsite/v0` and `verity/remote/v0`, run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest
 version of it in `lifecycle.py`, and nothing under `verity/` or `security/` changes.

@@ -38,6 +38,9 @@ own and changes with it.
   `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`.
 - **`verity_machine_model.commands.eps`**, the same computation as the command prints it:
   `record(d, pi, q, data, operands, credit)`, what `eps --json` prints for one design.
+- **`verity_machine_model.skip`**, ε_skip as made: `design_skip(d, rates, data, vector)`, the number a design's
+  `[skip]` records and the Lean headline exporters read, with what it is made of: `summary`, `parts`, `products`,
+  `floor_skip`, `floor_eps`, `prices`, `pv_ts`, the models' shapes (`MODELS`, `Shape`) and the rates (`RATES`).
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -153,6 +156,9 @@ one exception: `adopt` rewrites, in the data directory it is given, the census f
   program could still add beside the pooled verified load n̄: `parse(spec) -> Work`, `hidden`, `pool`.
 - `counts`: n(H)(m, n, k), an honest kernel's instruction counts from its closed form, the model bound it certifies at
   any shape, its fit and its check: `load(name) -> Counts`, `fit`, `names()`.
+- `skip`: ε_skip as made, a design's skippable share of honest work as served: `design_skip(design) -> Summary`, the
+  most over the models, contexts and phases of `floor_eps` (Corollary D3's, `floor_skip` over ♭'s bound at `prices`),
+  and `summary`, `parts` and `products`, the share by int8 products and by honest seconds with γ.
 - `headline`: the per-family headline: `row(family, reading)`, `rows(reading)`, `record()`, `text()`.
 - `redteam`: from a device's census alone, how much room an adversary has to beat a row: `audit`, `margin_audit`,
   `least_filler`, `uniform_gap`.
@@ -303,12 +309,12 @@ Beside its names, a design file has these keys:
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`. `[skip.served]` is the number `../eps_budget.py` gives the design's `[noise]` and `sums`
-  (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
+  `[baseline]` and `[routes]`. `[skip.served]` is the number `skip.design_skip` gives the design's `[noise]` and `sums`
+  (the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
   and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse an alias
-that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `eps_budget.py`'s number
+that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `design_skip`'s number
 for the design's noise, an arm that isn't a spec, and a filler off lanes.
 
 ## ε in the tensor–scalar model
