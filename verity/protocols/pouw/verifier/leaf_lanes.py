@@ -43,7 +43,7 @@ index's ``pub`` among them) or an output row, is not one of its ``--registered``
   caller's. Read least significant bit first, as `Accounting.TS.Lanes.decLane` reads a field, the salt is its 16
   big-endian 32-bit halves with half 0 the least significant, and the position its low half above its high one. Lean's
   is proofs' `PouwWindow.knownRows`, the rows `LeafLanesSound` takes, whose difftest reads this through h1_lanes'
-  `known_rows` (`benchmarks/pouw/h1_lanes/run.py`), a wrapper over it.
+  `known_rows` (`benchmarks/pouw/h1_lanes/leaf.py`), a wrapper over it.
 
 **A J10-R leaf** (``j10r``, the leaf's K: a unit over `PouwH1Tile_v5`) is proved as `h1zy`'s v2 statements, each lane in
 n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10-R K is past `CHUNK_MAX`, so n >= 2), then

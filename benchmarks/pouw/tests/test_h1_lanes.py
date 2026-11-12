@@ -1,4 +1,4 @@
-"""h1_lanes' known rows (`h1_lanes/run.py`'s `known_rows`, now `pouw.leaf_lanes.known_rows`'): on a few leaves every
+"""h1_lanes' known rows (`h1_lanes/leaf.py`'s `known_rows`, now `pouw.leaf_lanes.known_rows`'): on a few leaves every
 statement's are the rows the harness built itself before core produced them, and lane l's ``pub`` is h1_prove's tile row
 (`h1unit.pub_words`) with l as its 101st word."""
 from __future__ import annotations
@@ -7,15 +7,13 @@ import dataclasses
 import random
 from pathlib import Path
 
+import leaf as RN
 import numpy as np
 import pytest
-from conftest import load
 
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 
-#: by `load`: h1_prove holds a ``run.py`` too, and its scripts put their own directory first on the path
-RN = load("h1_lanes/run.py")
 U = RN.U
 
 
@@ -25,7 +23,7 @@ def _old_bits_words(bits: list[int]) -> list[int]:
 
 
 def _old_known_rows(ctx, w, kind: str, ln: int | None, index: int) -> dict:
-    """run.py's `known_rows` (with its `pub_words` and `bits_words`) as it was before it called `leaf_lanes.known_rows`."""
+    """`leaf.py`'s `known_rows` (with its `pub_words` and `bits_words`) as it was before it called `leaf_lanes.known_rows`."""
     vals = LL.known(*RN.RC, kind, ln)
     out = {LL.OK: (vals[LL.OK], [int(x) for x in U.OK], U.ok_salt(f"{ctx.name}#{index}", ctx.position))}
     if kind == LL.LANE:

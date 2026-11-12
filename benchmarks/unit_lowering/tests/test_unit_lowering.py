@@ -1,9 +1,10 @@
 """run.py's reading of a circuit file (its SHA-512, bytes and each section's AND rows, against `ir_lower`'s own layout of a
-small circuit) and the guard at the smallest shape the H1 tile takes."""
+small circuit), the file `lanes.py` takes a tree's leaf module from, and the guard at the smallest shape the H1 tile takes."""
 from __future__ import annotations
 
 import hashlib
 
+import lanes
 import pytest
 import run
 from verity_flock import ir_lower as IL
@@ -44,6 +45,15 @@ def test_scan_refuses_a_section_whose_line_count_is_not_its_rows(tmp_path):
     path.write_bytes(b'flock-circuit short\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
     with pytest.raises(ValueError, match="whose first line counts"):
         run.scan(path)
+
+
+def test_lanes_takes_a_trees_leaf_py_and_the_run_py_of_a_tree_that_has_none(tmp_path):
+    h1 = tmp_path / "benchmarks" / "pouw" / "h1_lanes"
+    h1.mkdir(parents=True)
+    (h1 / "run.py").touch()
+    assert lanes.leaf_file(tmp_path) == h1 / "run.py"
+    (h1 / "leaf.py").touch()
+    assert lanes.leaf_file(tmp_path) == h1 / "leaf.py"
 
 
 @pytest.mark.slow

@@ -1,4 +1,4 @@
-"""The committer and prover of one H1 window (`run.py` drives it; the challenger and the verifier never import this file).
+"""The committer and prover of one H1 window (`recorded.py` drives it; the challenger and the verifier never import this file).
 
     python window.py commit LAYER.npz WINDOW PRIV OUT.json [--k K] [--cols N] [--calls q_proj,...] [--program-sha512 HEX]
         each call's tables, as a served round commits them before its coin: its A table a/<K>@<c>, the window's A rows
