@@ -142,10 +142,13 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/spec.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/served_seed.py",
           "adapters/vllm/verity_vllm/llm.py", "adapters/vllm/verity_vllm/pipeline/program_graph.py",
-          # boundary_rows defines TemplateInlined_v1, which its sidecar binds; it imports boundary_tables, and its
-          # template lookup imports serving_templates when a named target builds
+          # boundary_rows defines TemplateInlined_v1 and boundary_stop EgressStop_v1, which their sidecars bind;
+          # boundary_rows imports boundary_tables, and its template lookup imports serving_templates when a named
+          # target builds
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
           # long_row defines DsaTopKReadRowsCut_v1, which its sidecar binds and pins
@@ -179,6 +182,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.json",
           "verity/protocols/certifier/prover/lengths_row.py", "verity/protocols/certifier/prover/lengths_row.circuit-check.py",
           "verity/protocols/certifier/prover/lengths_row.circuit-check.json",
+          "verity/protocols/certifier/prover/response_tie.py", "verity/protocols/certifier/prover/response_tie.circuit-check.py",
+          "verity/protocols/certifier/prover/response_tie.circuit-check.json",
+          "verity/protocols/certifier/verifier/content_rows.py",
           "verity/protocols/certifier/verifier/connection_rows.py", "verity/protocols/certifier/verifier/warden_rows.py",
           "verity/protocols/certifier/verifier/served_rows.py", "verity/protocols/certifier/verifier/warden.py",
           "verity/protocols/certifier/verifier/release.py",
@@ -239,6 +245,8 @@ paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.circuit-check.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_stop.py",
     "adapters/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.py",
     "adapters/vllm/verity_vllm/program/frontend/seed_rule.py",
     "adapters/vllm/verity_vllm/records/boundary_commit.py",
