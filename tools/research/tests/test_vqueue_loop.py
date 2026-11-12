@@ -4314,6 +4314,24 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
 
 
+def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_and_the_check_alone_judges(env, monkeypatch):
+    """--no-graph2-shadow: the check gates as before, and no tick reads graph2's verdict of a candidate or of a followed
+    drop (`World.verdict`, `World._verdict_of`), each of which lists every task of a check and pulls each pending task's
+    results; no compare line comes of it."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, graph2_shadow=False)
+
+    def read(*_a, **_k):
+        raise AssertionError("graph2's verdict was read in shadow")
+
+    monkeypatch.setattr(loop.world, "verdict", read)
+    monkeypatch.setattr(loop.world, "_verdict_of", read)
+    runs.end(main)
+    runs.end(sha)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim"] and logged[1]["record"]["verdict"]["state"] == PASS
+    assert loop.tick() == [] and not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
+
+
 @pytest.mark.parametrize("base", ["passed", "failed"])
 def test_under_gate_check_a_ratchet_gate_naming_no_merge_it_fails_rings_its_owner_unless_its_base_failed_it_so(
         env, monkeypatch, base):
