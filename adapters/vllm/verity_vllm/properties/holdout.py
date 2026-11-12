@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.gates import HOLDOUT_GATES
-from verity_vllm.commit import challenge as CH
 from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
 from verity_vllm.properties.record import REGISTRY, seal
 
@@ -37,6 +36,9 @@ DECODE_POOL = (5, 9, 16, 24)
 def make_workload(*, case: str, model: str, vocab: int, seed: int, n_requests: int = 1, lengths: list[int] | None = None,
                   max_tokens: list[int] | None = None, tokenizer_revision: str | None = None, sampling: dict | None = None,
                   reserve_low: int = 100, reserve_high: int = 100) -> dict[str, Any]:
+    # inside the function: the challenge module loads numpy, and importing this one must not
+    from verity_vllm.commit import challenge as CH
+
     rng = CH.stream(seed)
     lo, hi = reserve_low, max(reserve_low + 1, vocab - reserve_high)     # keep away from special / added tokens
     reqs: list[dict[str, Any]] = []
@@ -58,6 +60,9 @@ def make_workload(*, case: str, model: str, vocab: int, seed: int, n_requests: i
 
 def generate(out_dir: Path, *, case: str, model: str, vocab: int, n: int, seed: int, n_requests: int = 1,
              tokenizer_revision: str | None = None) -> list[Path]:
+    # inside the function: the challenge module loads numpy, and importing this one must not
+    from verity_vllm.commit import challenge as CH
+
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     rng = CH.stream(seed ^ 0x5EED)
