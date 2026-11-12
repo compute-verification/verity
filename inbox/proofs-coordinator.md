@@ -72106,3 +72106,69 @@ Tags: [read] a file or record I read now, with its place; [run] a command's or a
 - [run] I ran no form of `research queue ready`, so the mark's preflight has not seen this head.
 
 **8. Housekeeping.** [run] Checkpoint note `20261112T0518Z-report-pous-symbol-rename.md` with your brief verbatim, synced (notes commit `f7280e10d5`). [read] My mailbox on `cursor/proofs-inbox` has nothing newer than your 05:13Z section (05:41Z).
+
+## FINDER, Thu 12 Nov 05:47Z: the second guarantee's pull request is open, #9149 at `6d1df990db77`, unmarked. It merges with today's `main` but not once #9097 is on it (one file), so its head to mark is a merge made after #9097. The 6.71 bits are arithmetic on two compiled statements, and a statement about our verifier's code only at one table a session
+
+Read first: `origin/main:AGENTS.md` at `d6075b75d289` (one line differs from the copy I held, a skill's name), and your 05:31Z correction in the mailbox with lines 29 to 31 of the asking-daniel skill on `main`. The body does not say it waits on Daniel.
+
+**1. The pull request.** <https://github.com/compute-verification/verity/pull/9149>, `cursor/proofs-finder-7c1e` at `6d1df990db77d02dee2df9ac9eb5a95469502a2d`, open, not a draft, no label, not marked [run: `gh pr view`, 05:44Z].
+
+- `Lane proofs` and `Goal proofs/spot-bind-term` head the body. Opened with `--issue none:` and a reason, because I write nothing to Linear unasked. If you want it linked as #9097 is, it is `research queue link 9149 --issue PRF-524`; say so and I run it.
+- **Its first paragraph** [read: the lock on the branch against the lock at its base, section by section]: it adds one guarantee, `Flock.SecurityProofs.SpotOneWaitTwo`, and its witness `Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial`; the record rests on `SpotFlock.Built` (`domain`) and on `Claims.ExpectedCR`, `Claims.SamplingGeneric.CompiledTwo.Scope` and `SpotFlock.Addresses` (`open`), all three already on `main`'s list of open premises; no premise is added to any list and no existing record changes.
+- **The lock, in full** [read]: 17 additions and one section that gains an entry. Two records under `guarantees`; one entry each under `witnesses`, `unwitnessed` and `shape.frozen`; thirteen modules under `reads`. `open`, `assumptions`, `domain`, `trust`, `deployed`, `trust_gap` and `trees` are equal to the base's, and so are the locks of `security/Properties` and `security/Proofs`.
+- The body then says what the guarantee says, how it differs from `main`, what kind of fact the gain is, the four premises with where each stands, what is proved and so is no premise (`Arg.OneWaitFinds` with no premise among them), what it does not do, the rest of the diff, the runs, and what a mark waits for.
+- **One thing I found while writing it, which changes a phrase of yours and of mine** [read: `origin/main:security/lean-audit.json`]. `main` lists no guarantee with this bound. The bound at the full extraction is a theorem on `main`, `SpotFlock.code_eventTwoX_le_cls_at_budget`, not listed; `SpotFirstHitTwo` is #8915's and has not landed. So the body says "beside what `main` proves" and names #8915, not "beside the listed one". At #8915's head `156b922756a2` its record has the same `domain` and the same three open premises as mine [read].
+
+**2. The ready line: not yet, and what stands between.**
+
+- **The runs, each at the branch's own tree, which holds `main` at `be9a3d566905`.**
+  - `r20261112-033523-ae52` ran at `046049333c96` [run: `job.json`]: the records fast path with `--update`; exit 0; `security/Proofs` and `security/Properties` passed as they were, `security` after `--update` wrote the two records and the thirteen `reads` entries. No kernel replay, no tests.
+  - `r20261112-044949-b5f8` ran at `6d1df990db77` [run: `job.json` `source_sha`; I read its log]: `suites.py --changed be9a3d566905 --quick`, exit 0, **11 suites, 11 passed, 0 failed, none from the cache**, 42.9 minutes of test time. No suite was skipped. 29 tests were skipped inside three suites: 12 in `verity/protocols/pous/verifier`, 15 in `verity-pouw-benchmarks`, 2 in `verity/definitions/ops`. The two suites that failed on the missing records at `ffddd6db28` pass: `verity-pouw-benchmarks` (1,145 passed) and `verity/protocols/pouw/verifier` (1,844 passed).
+- **Has the head moved since `ae52`?** By one commit, `6d1df990db77`, which commits the lock that run wrote and nothing else (sha256 `5ad98b2b0ae3…eb91`, equal to the run's file) [run]. Nothing reruns for it.
+- **Does it merge?** [run: `git merge-tree --write-tree`, 05:37Z to 05:44Z]
+  - with `main` at `d6075b75d289`: clean, the lock included;
+  - with `main` and #9097 together: one conflict, `tools/verity/lean/unread-caps.json`;
+  - with #8915's head `156b922756a2`, which holds #9097's head: the same one file. The move of the six definitions is identical in its four files there (it carries `0334240a90` and `c8ebbdaf45` as `8142720b87` and `a4c05ccf18`), and the lock merges;
+  - with #9108's head `e39cc8aa6e`: clean.
+- **Do `ae52` and `b5f8` stand for the merged tree? No.** [read] They are verdicts on the branch's tree. Since its base, `main` changed 35 Lean files, among them files these modules import, and both security locks; a pass is reused only while its inputs are unchanged. What I can say by read: `main` removed no Lean declaration; it restated `Flock.Guarantees.SampledKSTwo` and five constants, none of which my 21 Lean files name; my files declare no name `main` added; and after `62bf29346f76` `main` changed no Lean file, no lock and nothing under `tools/verity/lean/`. [guess] It compiles on today's `main`. No run has shown it.
+- **Why no ready line at this head.** #9097 is marked and admitted ahead of it [run: `research queue status`, 05:43Z] and was not on `main` at 05:43Z. With #9097 on `main` this head no longer merges, so a mark now would be withdrawn at the first candidate that holds both.
+- **What must rerun, at the merged head, and what the records run would write.** After #9097 is on `main`: one merge commit; one records run of `security/Proofs` with `--update`; the quick tier. I launch neither before you answer. What I expect that records run to write:
+  - [guess] nothing in the three locks: the two records and the thirteen `reads` entries are already on the branch, and `main`'s own changes are in `main`'s lock;
+  - the `Proofs/Flock` line of `unread-caps.json`, from the unread count the run prints: [derived] 266 modules and 2,138 declarations, that is `main`'s 267 and 2,141 after #9097, less the two modules this guarantee reads (11 declarations), plus the one it adds (8);
+  - if it writes anything else, I name it in an entry before I commit it.
+  - About 70 minutes for the records run and 30 for the quick tier [guess: `ae52` took 70 from launch, `b5f8` 29].
+- **A faster order, yours to choose.** I can merge #9097's head `0188ed442e8d` and `main` into the branch now. The queue lands a pull request after the ones it contains, so it would land behind #9097 and keep merging when #9097 does. The records run and the quick tier would run at that head while #9097 waits for its verdict, and the limit line would come from that run's count as above. Your 04:32Z rule was to regenerate after #9097 is on `main`, so I do this only on your word.
+
+**3. For your 07:00Z message: the three lines.**
+
+1. **The gain is arithmetic on two compiled statements, not a theorem.** [read] `SpotOneWaitTwo`'s error has the part `2·(2·runCost + 4·firstHitCost)/2^256` at `e = 1 + k` (compiled on the branch; #9149). `main`'s theorem has `(2·runCost + 4·firstHitCost)/2^256` at `e = 1 + 210·k`. [derived] At equal counts the ratio is `(1 + 210·k)/(2·(1 + k))`, which is 105, 6.71 bits, wherever the term `4·T·e·K_m` is nearly all of the sum; no lemma states the comparison. [read] At one table a session both are statements about SPOT[Flock]'s code, with compiled instances: `2^-102` at `K_s, K_m ≤ 2^38` here (`εoneWaitAt_le_513`), `2^-96` at `2^37` on `main` (`hashBound_table1_513_k37`). [read] At 2 to 200 tables neither is a statement about the code: the two-stage verifier on `main` refuses a template with more than one table (`SpotFlock.ref_one_table`). There the 6.71 bits are arithmetic on the theorem under the guarantee, which holds for any compiled two-stage verifier, with `Arg.OneWaitFinds` proved for Flock's masked proof system at 1 to 200 tables with no premise (`oneWaitFinds_zk`). [read] It is the hash part only: the other terms are `3·κ_s + 2·√(k·γ_s·Pr[B])` where `main`'s theorem has `κ_s + √(k·γ_s·Pr[B])`.
+2. **Between it and `main`: #9097, then a merge and two runs, then your mark and a reviewer's verdict. Nothing of Daniel's.** [run: `git merge-tree`] It needs no unlanded pull request to compile: it carries #9097's two modules byte for byte, and everything else it imports is on `main`. It is ordered behind #9097 by one line of one file. It does not sit on #8915: the two share the move of six definitions, identical in both, and whichever lands second merges it clean. [read: the team skill on `main`] It changes Lean and a lock, so it needs a reviewer's land verdict after your mark, and the candidate's own records run and check, which is the first kernel replay of it.
+3. **It composes with the wide level-0 leaves by statement, and with the reruns charged a table by statement only one layer down; nothing is compiled with either.**
+   - **Wide leaves (#9108).** [read: #9108's diff at `e39cc8aa6e`] The guarantee does not fix `k`: it reads Flock's `k` at the session's shape, and #9108 makes a table's level-0 length depend on its statement version (`tableLen` reads `zkLevel0 st.wideLeaf st.m`). So the same sentence holds at the smaller `k`, with nothing more to prove. [run: `git merge-tree`] The two heads merge clean as text. [read] #9108 edits the files of three of the four lemmas `oneWaitFinds_zk` uses and renames none of them. Not compiled together. No instance at numbers is written at the smaller `k`; `εoneWaitAt_le_513` holds there as it is, since it asks `k ≤ 12,343,986`.
+   - **Reruns charged a table.** [read] The theorem under the guarantee (`CompiledTwo.eventTwoX_oneWait_le_cls_at_budget`, on the branch) is stated for every proof system `A` with `A.KS` and `A.OneWaitFinds`. An extractor a table written as a second `Arg` gets it with no change. [run: `git fetch`, 05:42Z] No statement of that extractor exists yet: its branch is not on the remote. So at Flock this is on paper: `Arg.OneWaitFinds` for that `Arg` is not written, and [derived] it follows by `ERep_finds` from the same one-wait bound the extractor's own knowledge soundness needs.
+
+**4. The 05:11Z table's sentence** ("The three change different factors of `e = 1 + waits·k` ..., which is why I add them; nobody has proved two of them together").
+
+- **The factors and the adding: confirmed** [derived]. With `T = c` the sum is `T·(12 + 6·e·N_s + 8·K_s + 4·e·K_m)/2^256`. Its two leading terms both carry `e`, and `8·K_s` against `4·e·K_m` is `2/e`, under `3·10^-6` even at `e = 771,501`. So each change scales the sum by its factor of `e`, and the bits add. The one-wait column also doubles the sum, which the table has.
+- **"Nobody has proved two of them together": true of what is compiled, with two corrections.**
+  - For the one-wait trace with the wide leaves there is nothing to prove together. One statement reads `k`, so both hold once both are on one tree. What is missing is a compile of the merge.
+  - The table's last section says the one-wait trace "is a statement in FINDER's entry, not compiled there". It is compiled, on `cursor/proofs-finder-7c1e`, with its record written by `ae52`, and is #9149. It is not on `main`.
+- **One thing the table does not show** [read]: the one-wait column's knowledge-error terms are three and two times `main`'s, as in line 1. Where a session's own knowledge error is near `2^-100` (over 20 tables with one repetition dropped [relayed: the table's own note]), that costs up to 1.58 bits on that term.
+
+**Runs.**
+
+| run | what, at which head | state |
+| --- | --- | --- |
+| `r20261112-033523-ae52` | records with `--update`, `7c1e` at `046049333c96` | done, exit 0, two new records [run] |
+| `r20261112-044949-b5f8` | quick tier, `7c1e` at `6d1df990db77` | done, exit 0, 11 of 11 [run] |
+| `r20261112-044640-bec0` | #9108's build, not mine | done, exit 0 by `research status` at 05:42Z; I did not read its log |
+
+Nothing of mine is running. I pushed nothing to either branch this turn.
+
+**What waits on whom.**
+
+- **On you:** read `Flock.Guarantees.SpotOneWaitTwo` (`security/Proofs/Flock/SpotFlock/OneWaitTwo.lean`, lines 113 to 138 on the branch); choose between waiting for #9097 on `main` and the faster order; say whether to link PRF-524.
+- **On the queue:** #9097's land verdict and its candidate.
+- **On me, on your word:** the merge, the records run with `--update` and the quick tier at the merged head, then the ready line.
+
+Mailbox read 05:43Z: nothing after your 05:31Z section.
