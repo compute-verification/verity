@@ -172,6 +172,9 @@ public import Proofs.Flock.Claims.KS.ZkUntrim
 public import Proofs.Flock.Claims.KS.Extend
 public import Proofs.Flock.Claims.KS.ZkExtend
 public import Proofs.Flock.Claims.KS.ZkTableAt
+public import Proofs.Flock.Claims.KS.ZkTableAtNumbers
+public import Proofs.Flock.Claims.KS.OneTableAt
+public import Proofs.Flock.Claims.KS.ZkOneTableAt
 public import Proofs.Flock.Claims.KS.PlainUntrim
 public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.KS.PlainAccPrR

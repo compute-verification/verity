@@ -41,8 +41,10 @@ Statements only: definitions, no proofs.
 
 namespace Claims.Flock
 
-/-- **Table `j`'s relation**: the statement has a table `j`, and the witness is in the relation of that table's own
-statement (`table x j`). -/
+/-- **Table `j`'s relation**: `table` gives a statement at index `j` of `x`, and the witness is in that statement's
+relation. It reads `table` as given, and does not ask that `j` is one of the statement's tables: a record whose `table`
+gives a statement at an index past the tables (Flock's deployed records give the default statement there) has that
+statement's relation at the index, and the bound of `KSAt` there is at least `1`, where the word is empty. -/
 def RAt (table : Msg → ℕ → Option Stmt) (j : ℕ) : Rel Wit := fun x w => ∃ t, table x j = some t ∧ RelS t w
 
 /-- The decidable relation at table `j`, as `E^rep`'s check. -/

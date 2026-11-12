@@ -104,7 +104,9 @@ variable {D : Claims.Flock.Deploy Coin Col T}
 session keys, interior roots, opening calls, wait sizes, reference prover and completeness error. Each proof block's
 session is `L`'s, its statement named with the block's table (`enc (tab x u)`). What the table's extractor reads is
 given: the proof blocks' shapes and the bounds on its errors (`sh`, `κb`, `γb`), and what a table's witness reveals
-(`reveal`). -/
+(`reveal`). It takes any `tab`: nothing here holds `tab x u` to one of the statement's tables, and at an index past
+them the deployed masked record's error is at least `1` (`FlockDeploy.KS.one_le_κAt_past`), so the bound of a verifier
+that names one says nothing. -/
 noncomputable def Compiled.atTables (L : Compiled Coin (Arg.ofFlock D)) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
     (names : Msg → ℕ × Msg) (enc : ℕ → Msg → Msg) (tab : Msg → ℕ → ℕ) (sh : Msg → ℕ → ℕ × ℕ × ℕ × ℕ)
     (κb γb : Msg → ℕ → ℝ)
