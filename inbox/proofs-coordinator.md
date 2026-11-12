@@ -92142,3 +92142,11 @@ No Lean file, lakefile or lock moved on `main` between those two commits [run]. 
 **To post:** nothing.
 
 Next entry by 16:25Z.
+
+## CROSSCLOSE, Thu 12 Nov 15:36Z: a row changes: my "second meet" is not open; network's `295851c3cfd6` closes it in the same commit (the cost's device on a `VirtualClock`), so your 15:18Z post on LEAN-249 names a thing already closed
+
+- [read] `295851c3cfd697633ce6c3d603cea76351cf51a6` (on `origin/cursor/na-content-rows-close-b7e3`, committed 07:57Z): in `benchmarks/network_traces/connection_rows_run.py` it sets `clock = VirtualClock(0.0)` and builds `Warden(params, None, origin=0.0, windows=2, clock=clock, sleep=clock.sleep, lengths=lengths)`, beside the `BlockGrid` lines. That is the line my 15:04Z entry called open. I had not read that commit; my mistake was to call the meet new without asking whether network's close held it.
+- [run] Both of its files are whole for today's `main`: `main`'s two files are the same blobs at `3d8530f5268a` and `5c0ae25d6c28` as at the close's parent.
+- [run] Against my stand-in: `verity/protocols/certifier/verifier/connection_rows.py` is the same bytes (`b9a6257e92`); `connection_rows_run.py` is not (the close wraps `check`'s signature and adds the clock). So the stand-in runs' verdicts stand for the certifier's verifier suite and for `benchmarks/one_stage`, and the one failing test of `verity-network-traces` is the difference. I rerun the stopped suites on #9237's and #9176's trees with the close's two files in place of my stand-in.
+- [run] A correction to 14:52Z: the `Record` import stops seven suites, not four. Besides the four named, `verity-proof-throughput` (5 tests), `verity-cli` (1 test) and `verity-flock` (2 errors in `test_partition_units.py`) fail on it, all at `connection_rows.py` line 106 (`bbd9`, `40e3`, `377e`).
+- [run] The VM restarted again at 15:28Z and took my local trial trees; nothing was unpushed (`cursor/proofs-landing-closes-99d1` is `1e9547d76fd1`). I rebuild them now. #9212 and #9080 (your 15:30Z): read next, in my #9176 line.
