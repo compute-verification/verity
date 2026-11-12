@@ -216,3 +216,123 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
         hooks.uninstall()
     with pytest.raises(ValueError, match="prefix caching off"):
         BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
+
+
+#: three drained windows, each request (name, prompt ids, ids served): classes (4, 4) of two spans and (16, 2) of one,
+#: twice; then (4, 4) of three spans and (16, 4), another class of (4, 4)'s four instances a replay block, of two
+WINDOWS = ([("a", 3, 4), ("b", 9, 2), ("c", 4, 4)], [("a", 3, 4), ("b", 9, 2), ("c", 4, 4)],
+           [("a", 3, 4), ("b", 4, 3), ("c", 3, 3), ("d", 9, 4), ("e", 12, 3)])
+BUILDERS = ("population", "inlined", "population_program", "template_instance_query", "partition")
+
+
+def _salts(layout: BR.Layout, window: int) -> dict[str, bytes]:
+    """Each leaf's salt and the index's as a function of the window, the class and the value, for a commitment a test
+    makes twice."""
+    def fill(tag: str, n: int) -> bytes:
+        return (f"{window}/{layout.prompt}-{layout.outputs}/{tag}/".encode() * n)[:n]
+    return {**{p: fill(p, CS.SALT_BYTES * layout.spans) for p in BR.PORTS}, "index": fill("index", CS.SALT_BYTES)}
+
+
+def _served(monkeypatch, out, check, inline: bool) -> list[tuple[dict, dict[str, int]]]:
+    """`WINDOWS` served on the stand-in scheduler under the hook, each window drained by one step; every commitment
+    with `_salts` and a clock that stands still. Each class's sink line, with how often each of `BUILDERS` had been
+    called by then."""
+    calls, lines, commit = dict.fromkeys(BUILDERS, 0), [], BR.commit
+
+    def counted(name: str, real):
+        def call(*a, **kw):
+            calls[name] += 1
+            return real(*a, **kw)
+        return call
+    for name in BUILDERS:
+        mod = BR if name in ("population", "inlined") else P
+        monkeypatch.setattr(mod, name, counted(name, getattr(mod, name)))
+
+    def salted(spans, layout, window, **kw):
+        y = _salts(layout, window)
+        return commit(spans, layout, window, salts={p: y[p] for p in BR.PORTS}, index_salt=y["index"], clock=lambda: 0.0,
+                      **kw)
+    monkeypatch.setattr(BR, "commit", salted)
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-kept")
+    bw = BR.BoundaryWindows(out, check, 0, 1, 10.0, inline=inline, sink=lambda x: lines.append((x, dict(calls))),
+                            clock=lambda: 0.0, serve="s").install(sched, hooks)
+    try:
+        for w, requests in enumerate(WINDOWS):
+            for name, prompt, _n in requests:
+                sched.add_request(Request(f"{name}{w}", [1 + w] * prompt))
+            _step(sched, {f"{name}{w}": ([2 + w] * n, "length") for name, _prompt, n in requests})
+            assert bw.window == w + 1
+    finally:
+        bw.stop()
+        hooks.uninstall()
+    assert [x.get("error") for x, _ in lines] == [None] * 6
+    assert [(x["window"], x["prompt"], x["outputs"], x["spans"]) for x, _ in lines] == [
+        (0, 4, 4, 2), (0, 16, 2, 1), (1, 4, 4, 2), (1, 16, 2, 1), (2, 4, 4, 3), (2, 16, 4, 2)]
+    return lines
+
+
+@pytest.mark.parametrize("check, inline", [(PAIR, False), (CHAIN, True)], ids=["population", "inlined"])
+def test_a_later_window_builds_no_part_of_a_class_that_an_earlier_one_built(monkeypatch, tmp_path, check, inline):
+    """The first window builds each class's replay block, program, grain and partition once. The second, of the same
+    classes at the same counts of spans, calls no builder. In the third, another count of spans of a class builds its
+    program, grain and partition and not its replay block, and a class new to the serve whose replay block holds the
+    instances of one served before, at a count of spans that one had, calls none."""
+    lines = _served(monkeypatch, tmp_path, check, inline)
+    replays = [1, 2, 2, 2, 2, 2]
+    assert [tuple(n[k] for k in BUILDERS) for _, n in lines] == [
+        (0, r, *rest) if inline else (r, 0, *rest)
+        for r, rest in zip(replays, [(1, 1, 1), (2, 2, 2), (2, 2, 2), (2, 2, 2), (3, 3, 3), (3, 3, 3)])]
+
+
+@pytest.mark.parametrize("check, inline", [(PAIR, False), (CHAIN, True)], ids=["population", "inlined"])
+def test_a_class_commits_byte_for_byte_what_a_layout_built_for_its_window_alone_commits(monkeypatch, tmp_path, check, inline):
+    """Every file of every class of three windows (``commit.json`` with each value's root and domain id and the
+    program's and the partition's digests; the index, its salt and the leaves' salts) and every sink line are what a
+    `Layout` made for that window and class alone, with nothing kept, commits and writes under the same salts: two
+    classes in two windows each, one of them again at another count of spans, and a third class. No two of them share
+    a domain: the run is each window's own."""
+    lines = _served(monkeypatch, tmp_path / "served", check, inline)
+    spans: dict[tuple[int, int, int], list[BR.Span]] = {}
+    for w, requests in enumerate(WINDOWS):
+        for name, p, o in requests:
+            s = BR.Span(f"{name}{w}", (1 + w,) * p, BR.sampling_of(Request("", []).sampling_params), (2 + w,) * o, "length")
+            spans.setdefault((w, *s.shape), []).append(s)
+    assert [(x["window"], x["prompt"], x["outputs"]) for x, _ in lines] == list(spans)
+    for (line, _), ((w, p, o), mine) in zip(lines, spans.items()):
+        alone = BR.Layout(check, 0, 1, p, o, len(mine), BR.run_root("s", w), inline)
+        ref = BR.write(BR.commit(mine, alone, w), tmp_path / "alone" / f"w{w}" / f"p{p}-o{o}")
+        got = tmp_path / "served" / f"w{w}" / f"p{p}-o{o}"
+        assert sorted(f.name for f in got.iterdir()) == sorted([BR.COMMIT, BR.INDEX, BR.SALTS, CS.INDEX_SALT])
+        for f in ref.iterdir():
+            assert (got / f.name).read_bytes() == f.read_bytes(), (w, p, o, f.name)
+        pub = json.loads((ref / BR.COMMIT).read_text())
+        assert {k: line[k] for k in pub} == pub
+        assert (pub["program"], pub["partition"]) == (alone.partition["program"], P.digest(alone.partition))
+        assert {v: pub["values"][v]["domain"] for v in BR.PORTS} == {v: x["domain"] for v, x in alone.ports().items()}
+    for v in BR.PORTS:
+        assert len({x["values"][v]["domain"] for x, _ in lines}) == len({x["values"][v]["root"] for x, _ in lines}) == 6
+
+
+def test_what_a_serve_keeps_built_is_bounded_and_the_least_recently_used_leaves_first(monkeypatch):
+    """`_built` keeps replay blocks of `KEEP` instances at most in all, the least recently used leaving first, and for
+    each its programs at the `COUNTS` counts of spans used last; a replay block past `KEEP` is built for its layout alone
+    and moves nothing; and a part it hands over is the one a layout of its own builds."""
+    monkeypatch.setattr(BR, "KEEP", 12)
+    monkeypatch.setattr(BR, "COUNTS", 2)
+    kept: dict = {}
+
+    def at(outputs: int, spans: int = 1) -> BR.Layout:
+        return BR._built(BR.Layout(PAIR, 0, 1, 4, outputs, spans, "a" * 128), kept)
+
+    four, eight = at(4), at(8)
+    assert list(kept) == [4, 8] and at(4).program is four.program and list(kept) == [8, 4]
+    two = at(2)
+    assert list(kept) == [4, 2] and sum(kept) <= BR.KEEP and at(2).replay is two.replay
+    assert at(8).replay is not eight.replay and list(kept) == [2, 8]
+    wide = at(16)
+    assert list(kept) == [2, 8] and wide.partition == BR.Layout(PAIR, 0, 1, 4, 16, 1, "a" * 128).partition
+    for n in (1, 2, 3):
+        mine, alone = at(2, n), BR.Layout(PAIR, 0, 1, 4, 2, n, "a" * 128)
+        assert mine.replay is two.replay and P.template_id(mine.replay) == P.template_id(alone.replay)
+        assert (mine.partition, mine.grain, mine.ports()) == (alone.partition, alone.grain, alone.ports())
+    assert list(kept[2][1]) == [2, 3] and at(2, 2).program is kept[2][1][2][0] and at(2, 1).program is not two.program

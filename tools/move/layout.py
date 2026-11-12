@@ -7,8 +7,16 @@
     python3 tools/move/layout.py --resolve M  the name module M has after the move (for readers of recorded data)
 
 It is idempotent and reruns on any later main: a file still at an old path moves, a reference to an old path or module is
-rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it fails when a tracked file under a
-retired directory has no destination, so a file that lands on main later gets a row in the map rather than a guess.
+rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it stops, with an exit of its own
+(`NO_ROW`) and each file's name, when a tracked file under a path the map retires ([retired]) has no row, so the file gets
+a row rather than a guess: in the map when it is main's, and when an open branch adds it, in the branch's rows file.
+
+The rows file of `NAME.toml` is `NAME.rows.toml` beside it, a file the branch commits, with [paths] alone. It is read
+after the map: a row there moves its file, or every file under its directory, and rewrites each reference to it, as a row
+of the map does, and the module renames it implies are derived, not declared. The script deletes the rows file once it has
+read it, so the moved tree holds none, and leaves its rows out of `moves.json`, which records the move's own. It refuses
+(exit 1) a rows file that would change what the map says: a row for a path the map sends elsewhere or deletes, a directory
+row over a path the map names, a module the map renames another way; and a row no tracked file is at or under.
 
 A text file is one with no NUL in its first 8 KiB. One of more than `TEXT_LIMIT` bytes is not read, and the move stops and
 names it rather than leave its lines as they were, until the map excludes it; a Lean lock is read whatever its size.
@@ -55,8 +63,8 @@ It fails on a rewritten reference to a directory the map splits across destinati
 larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
-(`"old file: old directory" = { to = "verity/core/service/flock", why = "..." }`), and the file's references to the
-directory go there.
+(`"old file: old directory" = { to = "verity/protocols/flock/agreement", why = "..." }`), and the file's references to
+the directory go there.
 """
 from __future__ import annotations
 
@@ -88,6 +96,11 @@ RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/dire
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
            "backends/numerical/", "backends/README.md", "backends/AGENTS.md", "benchmarks/dot_product/",
            "benchmarks/ir_call/")
+#: the exit when a tracked file under a retired path has no row: stderr then holds the fix in its first line and each
+#: file on a line of its own, indented by two spaces (`restack.py` reads both)
+NO_ROW = 3
+#: what a map's rows file is named by, beside the map: `NAME.rows.toml` for `NAME.toml`
+ROWS_SUFFIX = ".rows.toml"
 #: a dotted name ending in one of these is a file name (`verity_pouw.json`), not a module
 MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [paths], for reading a tool from an older tree
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
@@ -174,6 +187,15 @@ def git(root: Path, *args: str, check: bool = True) -> str:
     if check and r.returncode:
         raise SystemExit(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
+
+
+class NoRow(SystemExit):
+    """Tracked files under a path the map retires that no row moves (`files`, every one; the message a caller that lets
+    it through exits with names the first of them)."""
+
+    def __init__(self, files: list[str]):
+        super().__init__("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(files[:50]))
+        self.files = files
 
 
 # ---------------------------------------------------------------------------------------------------------------- the map
@@ -513,7 +535,7 @@ class Run:
                 continue
             moves.append((p, new))
         if left:
-            raise SystemExit("tracked files under a retired path with no row in the map:\n  " + "\n  ".join(left[:50]))
+            raise NoRow(left)
         clash = Counter(n for _, n in moves)
         dup = [n for n, c in clash.items() if c > 1] + [n for _, n in moves if n in self.tracked_old and self.L.file(n) is None]
         if dup:
@@ -1662,8 +1684,10 @@ class Run:
             if old.endswith("/"):
                 return any(p.startswith(old) for p in self.tracked_old) or any(p.startswith(new) for p in self.new_files)
             return old in self.tracked_old or new in self.new_files
-        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands
-        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if here(o, n)}}
+        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands; a row
+        # of a branch's rows file is no row of the move: an entry that differed by branch would conflict where two land
+        own = self.L.data.get("rows", ())
+        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if o not in own and here(o, n)}}
         if entry not in doc["moves"]:
             doc["moves"].append(entry)
             self.texts[path] = json.dumps(doc, indent=2) + "\n"
@@ -1923,6 +1947,66 @@ def load(path: Path) -> Layout:
     return Layout(tomllib.loads(path.read_text()))
 
 
+def rows_path(map_path: Path) -> Path:
+    """The rows file of the map at `map_path`: beside it, `NAME.rows.toml` for `NAME.toml`."""
+    return map_path.with_name(map_path.name.removesuffix(".toml") + ROWS_SUFFIX)
+
+
+def with_rows(data: dict, rows_file: Path, root: Path) -> dict:
+    """The map `data` with the rows of `rows_file`, a tracked file of the checkout at `root`, read after it: [paths] gains
+    each row the map lacks ([rows] names them), [modules] is what the paths now imply, and [drop] gains the rows file itself,
+    which is spent once read. It refuses a rows file that is not the checkout's own, that holds more than [paths], or a row
+    of which changes what the map alone says or moves nothing."""
+    tracked = {p for p in git(root, "ls-files", "-z").split("\0") if p}
+    here = rows_file.resolve()
+    rel = here.relative_to(root).as_posix() if here.is_relative_to(root) else None
+    if rel not in tracked:
+        raise SystemExit(f"{rows_file}: a rows file is its branch's own, committed beside the map in the checkout that moves")
+    try:
+        doc = tomllib.loads(rows_file.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(f"{rows_file}: {e}") from e
+    rows = doc.get("paths", {})
+    if set(doc) - {"paths"} or not isinstance(rows, dict):
+        raise SystemExit(f"{rows_file}: a rows file holds [paths] alone, not {sorted(set(doc) - {'paths'}) or 'a key named paths'}: "
+                         "what else a move needs is its map's")
+    lay = Layout(data)
+    named = [k.rstrip("/") for k in (*data["paths"], *data.get("tokens", {}), *lay.drop)]
+    bad = []
+    for old, new in rows.items():
+        o, is_dir = old.rstrip("/"), old.endswith("/")
+        if not isinstance(new, str) or not o or not new.strip("/") or is_dir != new.endswith("/"):
+            bad.append(f'{old!r} = {new!r}: a file to a file, or a directory to a directory, each ending in "/"')
+            continue
+        if data["paths"].get(old) == new:           # the map's own row, said again
+            continue
+        if not (any(p.startswith(old) for p in tracked) if is_dir else old in tracked):
+            bad.append(f"{old!r}: no tracked file is {'under' if is_dir else 'at'} it")
+            continue
+        if is_dir:                                  # where the map alone sends it ("": it deletes it), and what it names there
+            to = next((f"{n}{o[len(k):]}/" for k, n in lay.dirs if o == k or o.startswith(k + "/")), None)
+            under = sorted(k for k in named if k == o or k.startswith(o + "/"))
+        else:
+            to, under = "" if old in lay.drop else lay.file(old), []
+        if to == "":
+            bad.append(f"{old!r}: the map deletes it")
+        elif to is not None and to != new:
+            bad.append(f"{old!r} = {new!r}: the map sends it to {to!r}")
+        elif to is None and under:
+            bad.append(f"{old!r}: the map names {len(under)} path{'s' * (len(under) != 1)} at or under it ({under[0]}"
+                       f"{', ...' * (len(under) > 1)}), so it speaks for that directory: give each file a row of its own")
+    own = {o: n for o, n in rows.items() if data["paths"].get(o) != n}
+    merged = {**data, "paths": {**data["paths"], **own}, "rows": sorted(own),
+              "drop": {"paths": sorted(lay.drop | {rel})}}
+    if not bad:
+        modules = derived_modules(Layout(merged))
+        bad = [f"module {k}: the map renames it {v}, and these rows {modules.get(k) or 'not at all'}"
+               for k, v in sorted(data.get("modules", {}).items()) if modules.get(k) != v]
+    if bad:
+        raise SystemExit(f"{rows_file}: rows that change what the map says, or move nothing:\n  " + "\n  ".join(bad))
+    return {**merged, "modules": modules}
+
+
 def unpinned_uv(root: Path) -> str | None:
     """Why `uv lock` here wouldn't be the pinned uv's (`tools/check/pod_setup.sh`), or None.  Another uv writes another lock
     header, so the move would differ from a rerun of the script with the pinned one, which `restack.py` refuses."""
@@ -1972,8 +2056,17 @@ def main(argv: list[str] | None = None) -> int:
     if not a.dry_run and not a.no_lock and (why := unpinned_uv(root)):
         raise SystemExit(f"{why}: put the pinned uv first on the PATH, or pass --no-lock")
     base = git(root, "rev-parse", "HEAD").strip()
+    if (rows := rows_path(a.map)).is_file():
+        layout = Layout(with_rows(layout.data, rows, root))
     run = Run(root, layout, a.dry_run)
-    moves = run.plan()
+    try:
+        moves = run.plan()
+    except NoRow as e:
+        print(f"no row for {len(e.files)} tracked file{'s' * (len(e.files) != 1)} under a path the map retires: give each a "
+              f"row, in the map when main tracks the file, else in {rows} on the branch that adds it ([paths], \"old path\" = "
+              f"\"new path\", a directory ending in \"/\"; committed, it is read after the map), or delete the file\n  "
+              + "\n  ".join(e.files), file=sys.stderr)
+        return NO_ROW
     run.index(moves)
     for old, new in moves:
         if old.endswith(".py") and (mo := module_name(old, layout.old_roots)) and (mn := module_name(new, layout.new_roots)):
@@ -1997,6 +2090,8 @@ def main(argv: list[str] | None = None) -> int:
     renamed_modules = sum(1 for o, n in moves if o.endswith(".py") and (mo := module_name(o, layout.old_roots))
                           and mo != module_name(n, layout.new_roots))
     run.changes["modules renamed"] = renamed_modules
+    if "rows" in layout.data:
+        run.changes[f"rows read from {rows}"] = len(layout.data["rows"])
     if not a.dry_run:
         git(root, "add", "-A")
         if moves:

@@ -71,7 +71,6 @@ untraced = [
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/pipeline/test_boundary_plan.py",
-    "tests/pipeline/test_commit_group.py",
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
     "tests/pipeline/test_gpu_lease.py",
@@ -96,7 +95,7 @@ untraced = [
     "tests/tools/test_suite_parts.py",
 ]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
-# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
+# which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
 # fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
@@ -281,7 +280,6 @@ paths = ["adapters/vllm/verity_vllm", "verity"]
 [[tool.verity.tests.reads]]
 tests = [
     "tests/pipeline/test_serve_remote.py",
-    "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
 paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]

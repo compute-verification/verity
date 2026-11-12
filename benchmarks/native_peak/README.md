@@ -28,3 +28,10 @@ machine it also keeps the SASS capture. DIR defaults to `$RESEARCH_RUN_DIR`, els
 
 Status: current. `tests/` holds the data-sheet table to every census line and checks the result document and the store
 declaration (`tool.py`) without a GPU; one test measures a small GEMM where CUDA is present.
+
+## Interface
+
+- **Provides:** `measure.py`, run on a GPU, with its FP4 kernel (`mma_peak_fp4.cu`), and the store declaration
+  (`tool.py`).
+- **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name. Nothing else.
+- **Loads:** `verity_config`, torch, and `research` in `tool.py`.

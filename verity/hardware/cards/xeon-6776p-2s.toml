@@ -14,6 +14,8 @@ nodes = "an RTX PRO 6000 node, carrying eight rtx-pro-6000-server cards: its VM 
 sockets = { value = 2, unit = "socket", mark = "ceiling", source = "the 6776P is a 2S part (Intel ARK 243691, Scalability 2S); lscpu on an RTX PRO 6000 node's VM shows 2 (art:1f22137354a4)" }
 cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores); the VM sees 48 a socket" }
 priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
+# What a node's VM gives each GPU it carries: a measurement of our nodes, not a number of the server.
+vm_cores = { value = 12, unit = "core/GPU", mark = "measurement", source = "the cores a GPU the RTX PRO 6000 node's VM gives, not the server's: lscpu shows 2 sockets x 48 cores x 2 threads, and the VM carries eight cards, 96 / 8 (art:1f22137354a4); the server has cpu.sockets x cpu.cores, 128" }
 
 [clock]
 turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
@@ -21,6 +23,7 @@ priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel 
 
 [rate]
 amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
+sha512 = { value = 0.007722, unit = "compression/cycle/core", mark = "placeholder", source = "not measured on this host and in no Intel document. A count, neither a measurement nor a ceiling: eight compressions in 1,036 cycles, 2,072 512-bit operations (80 rounds of 17, 64 schedule words of 11, 8 feed-forward adds) on two ports for 512-bit vector work (Intel ARK 243691: '# of AVX-512 FMA Units 2'; no document read gives Redwood Cove's ports). The 8468 host's measured 0.007522 is 97% of the same count. Open until an AVX-512 SHA-512 kernel runs on an RTX PRO 6000 node's host" }
 ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
 
 # The host's DRAM: R's host tier (verity/protocols/poub/verifier/timing.py's HOST_ figures).

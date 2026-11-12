@@ -444,8 +444,8 @@ window run by one identity, its certificate right (`wrong` empty) at capacity `C
 certified (`W_cert = 100`), no incorrect proof block, unmonitored compute `U = 100` at `MFU₀ = 1/2`, `κ = 2`, and one
 declared day, the toy `Nci.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
 day's bound is `X = 2 (2 + 1) + √4 = 8`, its two MACs the run's counted multiplications; at `p = 3 · 2⁻⁴⁰`,
-`ε' = 2p/10⁻⁶`, `q = 1` and `K = 0`. Then `δ = 1/(2 · 10⁶)`, and the overhead bound on the hardware multiple is
-`1/(1/2 + ε' + 2/25)`, in `(1, 2]`, the run's own multiple being 50. -/
+`ε' = 2p/10⁻⁶`, `q = 1`, `K = 0` and `ks = 0`. Then `δ = 1/(2 · 10⁶)`, as at any other `p > 0`, and the overhead bound
+on the hardware multiple is `1/(1/2 + ε' + 2/25)`, in `(1, 2]`, the run's own multiple being 50. -/
 theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := by
   refine ⟨1, fun _ => Bool, inferInstance, inferInstance, fun _ => 100, fun _ _ => False, 3 / 2 ^ 40,
     2 * (3 / 2 ^ 40) * 10 ^ 6, Empty, Unit, inferInstance, fun _ => ∅, fun _ => ∅, fun _ => ∅, fun b => b.elim,

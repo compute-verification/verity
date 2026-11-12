@@ -7,7 +7,7 @@ registered Definitions (`program.registry.int8_exact`, `ml.circuits.ops.gemm`), 
         -> Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ one verity_int8::kv_quant_batch(key_cache, value_cache,
             block_table, lens, k_scales) -> (kq, vq, sv, v0), then one verity_int8::window_rows_batch(query, kq, vq, sv, v0, k_scales,
-            qsl, lens, scale), copied into output; or, under a credited read (`engine.int8_window`), the layer's
+            qsl, lens, scale), copied into output; or, under a credited read, the layer's
             verity_int8::credited_window(kv_cache, .., k!, v!) and verity_int8::kv_quant_window_batch(k, v, starts, lens, k_scales)
             in kv_quant_batch's place, starts[r] the earlier windows' rows
         -> per request r with a window (s = lens[r], its rows qsl[r] .. qsl[r+1] - 1), per KV head g

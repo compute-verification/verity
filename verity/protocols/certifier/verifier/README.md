@@ -162,6 +162,12 @@ A spec-level reference for network accounting's timing channel:
   network certifier's egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the network
   certifier's. It has the reference (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout
   (`Shape`'s offsets), which the scan's ingress step writes;
+- the lengths row's proof block (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
+  execution phase and slot stride, which reads the compute side's committed request row and the network certifier's
+  fails row (`connection_rows`), a registered read, and computes the lengths row from them with no witness: its
+  outputs are a verdict, the row's failures and the row, committed as a registered read of the network certifier's
+  lengths row (`connection_rows.port`), which opens only if the computed row is the signed one. It has the reference
+  (`request_bytes`, `refusals`, `outputs`) and the prover's side (`blocks`, `reads`);
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -189,7 +195,8 @@ A spec-level reference for network accounting's timing channel:
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the advice decoder's block pool,
+  `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
@@ -226,7 +233,7 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
   `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
   ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
-  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`), and
+  length tail. vLLM's served windows name it (`serve_commit.SERVED_SLICE`), except under `--admit tick`, and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
@@ -300,6 +307,11 @@ A spec-level reference for network accounting's timing channel:
   input, and the verifier places each read, the (connection, cell) the Program's proof blocks' wiring pins (`Units`,
   whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`, "The network certifier's
   cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
+  (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
+  committed as the cells' rows are and listed under one head the network certifier signs once; the registration the
+  verifier reads (`check_registration`) and its `--registered` port of the proof blocks that read a table, one a row
+  (`port`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -347,7 +359,9 @@ A spec-level reference for network accounting's timing channel:
   audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
+  policy's layout check, which is withheld. Programs start at
   fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
@@ -401,7 +415,7 @@ A spec-level reference for network accounting's timing channel:
 The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 

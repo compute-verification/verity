@@ -21,6 +21,8 @@ sessions.
   subsets the server reads (`serve --draw-file`), every instance at k = c, and Lean verifies the newest session of each
   point and arm against the type's own partition and no Program, which it refuses for `NO_PROGRAM` once `Zk.verify` and
   every check before the Program have passed: the record's `zk_verify_passed`, never its `accepted`.
+  A type staged as a templated statement (a table read: its stage's ``unit.tmpl``) is proved, served and verified at
+  `TMPL_STATEMENT` on its unit rows, placed once by ``--tmpl-unit-bin`` (`flock-tmpl-unit`).
 * **Samples.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
   program and partition, on a development challenger's coins opened after the statement's partition digest and pin
   (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
@@ -76,6 +78,9 @@ import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
 from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+
+#: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
+TMPL_STATEMENT = "verity/flock-circuit/tmpl"
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
@@ -319,6 +324,23 @@ def stage(a) -> int:
 
 # ---- prove ----------------------------------------------------------------------------------------------------------------
 
+def placed_unit(a, d: Path) -> list[str]:
+    """A templated stage's prover and server arguments: its unit rows placed at their positions (``d/unit.placed``, once,
+    by ``--tmpl-unit-bin`` from the stage's template and layout mode) and its tables; none for a flat stage."""
+    if not (d / "unit.tmpl").exists():
+        return []
+    placed = d / "unit.placed"
+    if not placed.exists():
+        if not a.tmpl_unit_bin:
+            raise SystemExit(f"{d} stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
+        p = a0.run([a.tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", (d / "unit.layout").read_text().strip(),
+                    "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    (d / "tables").mkdir(exist_ok=True)
+    return ["--tmpl-unit", str(placed)]
+
+
 def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     """One prover process against its own `serve --zk`, proving ``warm + runs`` sessions of the point's sample."""
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
@@ -328,8 +350,10 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     port = free_port()
     if "unit" in pt:
         inst, pub = pt["inst"], pt["pub"]
+        tmpl = placed_unit(a, d)
         tables = ["--tables", str(d / "tables")] if (d / "tables").is_dir() else []
-        fw_files = {"partition_file": pt["partition"]}
+        tables += tmpl
+        fw_files = {"partition_file": pt["partition"], **({"statement": TMPL_STATEMENT} if tmpl else {})}
     else:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
@@ -472,11 +496,13 @@ def verify_unit(a, r: dict, plan: dict) -> dict:
     """Lean on the newest session of a served type's warm process: its own partition, no Program. Its record keeps Lean's
     `accepted` and `why` and adds `zk_verify_passed`."""
     pt = plan[(r["tag"], r["c"], r["k"])]
-    s = r["sessions"][-1]
+    s, d = r["sessions"][-1], Path(pt["stage_dir"])
+    tmpl = (d / "unit.tmpl").exists()
     log = Path(r["dir"]) / f"lean-verify-{Path(s).name}"
     with open(f"{log}.log", "w") as fo, open(f"{log}.err", "w") as fe:
-        rc, usage, lines = timed([a.lean, "verify", "--zk", "--statement", a0.STATEMENT_ID, "--circuit",
-                                  str(Path(pt["stage_dir"]) / "circuit.txt"), "--public", pt["pub"],
+        rc, usage, lines = timed([a.lean, "verify", "--zk", "--statement", TMPL_STATEMENT if tmpl else a0.STATEMENT_ID,
+                                  "--circuit", str(d / "circuit.txt"), "--public", pt["pub"],
+                                  *(["--tables", str(d / "tables")] if tmpl else []),
                                   *(["--partition", pt["partition"]] if pt["partition"] else []), "--session", s], fo, fe)
     line = next((x for _, x in lines if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {rc})"}
@@ -803,6 +829,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--bin")
     ap.add_argument("--lean")
+    ap.add_argument("--tmpl-unit-bin", help="prove: flock-tmpl-unit, which places a templated stage's unit rows")
     ap.add_argument("--ks", default="4096,14336")
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")

@@ -17,7 +17,7 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 
 `RowsTiedSampled`, `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every
 finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
-`stateCheck`.
+`stateCheck`. `RowsCapPublished` reads the public off the acceptance, in each form.
 -/
 
 @[expose] public section
@@ -219,7 +219,7 @@ theorem otherAnswer_refused : (answered s!"audit {0}" tiedAudit otherAnswer).toB
 accepts a rows-form period whose audit 0 is tied and answered by another protocol than one-stage's. -/
 theorem rowsTiedSampled_nontrivial : ¬ RowsTiedSampledOf acceptAllRows := by
   intro h
-  let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+  let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, none⟩
   let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩
   obtain ⟨prof, pub, f, ha, -, -⟩ := h p ⟨#[tiedAudit], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl s .empty
     ⟨0, 0, 0, 0⟩ rfl 0 tiedAudit otherAnswer rfl rfl tiedWindow_ties
@@ -262,7 +262,7 @@ theorem rowsProgWired : RowsProgWired := by
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
 def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
-def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, none⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Lean.Json :=
@@ -380,5 +380,45 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+/-! ## The published response cap -/
+
+theorem rowsCapPublished : RowsCapPublished := by
+  intro p c e pub prof h
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;> simp [CapPublished, hf]
+
+/-- **`RowsCapPublished`'s honest lemma**: the period check accepts a period under a schedule with a response cap,
+`cappedPeriod` with nothing registered. A period with link-windows needs the network certifier's LMS signatures and
+one-stage's answers, which the period's difftest builds and checks against the mirror. -/
+theorem rowsCapPublished_honest :
+    ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
+
+/-- **`RowsCapPublished`'s nontrivial lemma**: the public `acceptAllRows` publishes for `cappedPeriod`, the rows form's
+terms of no link-window, names no cap, and the period's schedule has one. -/
+theorem rowsCapPublished_nontrivial :
+    ¬ CapPublished cappedPeriod
+      (rowsTerms #[] ⟨0, 0, 0, 0⟩ #[] cappedPeriod.cells cappedPeriod.jitter cappedPeriod.windows) := by
+  intro h
+  cases h
+
+/-- **No period check that accepts every period has `RowsCapPublished`'s property.** -/
+theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
+  fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
 
 end Properties.NetworkPeriod

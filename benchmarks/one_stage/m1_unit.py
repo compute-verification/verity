@@ -34,8 +34,9 @@ Program it refuses every session once its checks pass.
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
-Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
-chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
+Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, unit_cells (the cells its layout
+takes of its slot of 2^unit_log: a template's with its copies aligned), k_log, block_bits (where its block's last range ends,
+of 2^k_log), vus_per_block and chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
 """
 from __future__ import annotations
 
@@ -199,7 +200,7 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     finite e4m3 codes and powers of two as GLM-5.3's requantised block scales), read through the split for the part template
     ``tp`` (a ``COLS`` part in column blocks, a ``COORDS`` part in coordinates) as a window reads it.  Returns the units' rows by
     port, their outputs (the row's, as committed; every output port's words in order), those outputs by the numpy twin of the
-    whole row (`tp_allreduce_check.mnnvl_norm_rows`, `deepgemm_twins.deepgemm_linear_row`), and the IR reference of the
+    whole row (`tp_allreduce_check.mnnvl_norm_rows`, its scale rs `mnnvl_norm_of`'s, `deepgemm_twins.deepgemm_linear_row`), and the IR reference of the
     template's word on every unit's rows."""
     from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
@@ -221,13 +222,14 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
         q, s, y, _nf = DT.deepgemm_linear_row(acts["x"], wts["w"].reshape(N, K), wts["ws"].reshape(NB, KG))
         members, outs = [("x_q", K, "e4m3"), ("x_s", KG, "f32"), ("out", N, "bf16")], [q.astype(np.uint8), s.astype(np.uint32),
                                                                                       y.astype(np.uint16)]
-        op, width = "model.layers.3.mlp.shared_experts.gate_up_proj", N
+        op, width, named = "model.layers.3.mlp.shared_experts.gate_up_proj", N, {}
     else:
         world, width = int(S["WORLD"]), int(S["N"])
         parts, res, w = bf16_rows(rng, world, width), bf16_rows(rng, 1, width)[0], bf16_rows(rng, 1, width)[0]
         normed, r = TAC.mnnvl_norm_rows(parts[:, None], res[None], w, int(S["SHOT"]), int(S["CLUSTER"]), float(S["EPS"]),
                                         S["FMA"] in (True, "true"))
         acts, wts = {"parts": parts.reshape(-1), "res": res}, {"w": w}
+        named = {"rs": TAC.mnnvl_norm_of(r, w, int(S["SHOT"]), int(S["CLUSTER"]), float(S["EPS"]), S["FMA"] in (True, "true"))[1]}
         members, outs = [("normed", width, "bf16"), ("residual", width, "bf16")], [normed[0], r[0]]
         op = "model.layers.3.post_attention_layernorm"
     vals = {**acts, **{mm[0]: o for mm, o in zip(members, outs, strict=True)}}
@@ -257,7 +259,8 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     (m,) = SRW.members([tp.id], [[one]], [n])
     data, entries = SRW.read(m, [one], Store(), lambda f, lo, hi: wts[f][lo:hi])
     packed = tp.packed or (16,) * (len(m.rows) + len(m.outs))
-    twin = np.concatenate([_packed(outs[j], b).reshape(n, -1) for j, b in zip(p[2], packed[len(m.rows):], strict=True)], axis=1)
+    twin = np.concatenate([_packed(named[j] if isinstance(j, str) else outs[j], b).reshape(n, -1)
+                           for j, b in zip(p[2], packed[len(m.rows):], strict=True)], axis=1)
     return {"call": row, "member": m, "rows": data["rows"], "outs": np.concatenate([data["outs"][q_] for q_, _w in m.outs], axis=1),
             "twin": twin, "reference": _reference(SRW._bind(tp.word), data["rows"], m.rows, packed), "entries": entries}
 
@@ -441,6 +444,7 @@ def main() -> int:
     import a11_kinds as K
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
+    from verity_flock import tmpl as TMPL
     from verity_vllm.pipeline import serving_rows as SRW
 
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -477,8 +481,11 @@ def main() -> int:
     tm = getattr(st.low, "template", None)
     own = None if tm is None else {"defs": len(tm.defs), "rows": sum(len(df.rows) for df in tm.defs),
                                    "refs": sum(len(x) + len(y) for df in tm.defs for _c, x, y in df.rows)}
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
-        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
+    seconds = round(time.time() - t, 1)
+    cells = st.low.layout.useful if tm is None else TMPL.layout(tm, a.structural)[tm.root].size
+    say("built", seconds=seconds, structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
+        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_cells=cells, unit_log=m["unit_log"],
+        block_bits=max((r["pos0"] + r["count"]) << r["slot_log"] for r in m["ranges"]),
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
         domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
     if not a.bin:

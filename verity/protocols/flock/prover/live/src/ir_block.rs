@@ -10,7 +10,7 @@
 //! each opened at two verifier points sampled after the commitment (both reps). The verifier computes their values from its
 //! own instance file, so the statement is the relation on public inputs and outputs (no commitment scheme binds them).
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError, atomic::{AtomicBool, Ordering}};
 
 use flock_core::{
     lincheck::{CscCircuit, LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
@@ -218,7 +218,24 @@ pub struct IrUnitNet {
 
 /// A clone starts undecided, so a copy whose rows are then edited decides anew.
 #[derive(Default)]
-pub struct PassCache(OnceLock<bool>);
+pub struct PassCache(OnceLock<Option<Owns>>);
+
+/// What a one-pass net's rows say of their own columns, a bit a row (row i: bit i % 64 of word i / 64), decided once with
+/// whether it is one ([`IrUnitNet::one_pass`]):
+/// whether its A side, and its B side, reads the row's own column an odd number of times, and whether its z must be 0 for
+/// z to be a & b there (`zero`: an input row whose A side alone is its column; any later row that reads its own).
+#[derive(Default)]
+pub struct Owns {
+    a: Vec<u64>,
+    b: Vec<u64>,
+    zero: Vec<u64>,
+}
+
+/// All ones where bit `i` of `bits` is set.
+#[inline(always)]
+fn mask(bits: &[u64], i: usize) -> u64 {
+    0u64.wrapping_sub(bits[i / 64] >> (i % 64) & 1)
+}
 
 impl Clone for PassCache {
     fn clone(&self) -> Self {
@@ -235,10 +252,108 @@ pub trait RowWord: Copy + PartialEq + std::fmt::Debug + Send + Sync {
     fn set(&mut self, g: usize, w: u64);
     fn xor(self, o: Self) -> Self;
     fn and(self, o: Self) -> Self;
+    /// `n` rows of zero, an empty vector with room for `n` rows, and a vector a walk is done with: a `u64` row's are the
+    /// kept ones ([`keep_rows`]).
+    fn zeroed(n: usize) -> Vec<Self> {
+        vec![Self::splat(0); n]
+    }
+    fn take(n: usize) -> Vec<Self> {
+        Vec::with_capacity(n)
+    }
+    fn give(_: Vec<Self>) {}
+}
+
+/// Row vectors walks are done with, kept for the walks after them. A statement's walk writes z, a and b for every lane
+/// group, each as long as the unit has rows. On a large unit each is a mapping of its own, which the kernel faults in a
+/// page at a time (the device prover's pages are small ones, [`crate::huge_pages`]) and takes back when the vector is
+/// dropped, statement after statement. A kept vector is faulted in once.
+static KEPT: Mutex<Vec<Vec<u64>>> = Mutex::new(Vec::new());
+/// The most vectors kept: z, a and b of eight lane groups, the most a pass walks.
+const KEPT_MAX: usize = 24;
+static KEEP: OnceLock<AtomicBool> = OnceLock::new();
+
+fn keep() -> &'static AtomicBool {
+    KEEP.get_or_init(|| AtomicBool::new(std::env::var("FC_UNIT_KEEP").as_deref() != Ok("0")))
+}
+
+/// Whether walks keep their row vectors for the walks after them; `FC_UNIT_KEEP=0`: none is kept, each walk maps its own.
+pub fn keep_rows() -> bool {
+    keep().load(Ordering::Relaxed)
+}
+
+static KEEP_HUGE: OnceLock<AtomicBool> = OnceLock::new();
+
+fn keep_huge() -> &'static AtomicBool {
+    KEEP_HUGE.get_or_init(|| AtomicBool::new(std::env::var("FC_UNIT_KEEP").as_deref() != Ok("small")))
+}
+
+/// Whether a kept vector asks for huge pages when it is mapped ([`crate::huge_pages::advise_huge`]); `FC_UNIT_KEEP=small`:
+/// it is mapped as the prover's page policy has every other allocation.
+pub fn set_keep_huge(on: bool) {
+    keep_huge().store(on, Ordering::Relaxed);
+}
+
+/// A vector with room for `n` rows that a walk will keep: one mapping, asking for huge pages unless told not to.
+fn fresh(n: usize) -> Vec<u64> {
+    let v: Vec<u64> = Vec::with_capacity(n);
+    if keep_huge().load(Ordering::Relaxed) {
+        crate::huge_pages::advise_huge(v.as_ptr() as *mut u8, 8 * v.capacity());
+    }
+    v
+}
+
+fn kept_size(n: usize) -> bool {
+    keep_rows() && n * 8 >= crate::huge_pages::MIN_BYTES
+}
+
+/// Sets [`keep_rows`]; turned off, the kept vectors are dropped.
+pub fn set_keep_rows(on: bool) {
+    keep().store(on, Ordering::Relaxed);
+    if !on {
+        let kept = std::mem::take(&mut *KEPT.lock().unwrap_or_else(PoisonError::into_inner));
+        drop(kept);
+    }
+}
+
+/// The smallest kept vector with room for `n` rows, empty.
+fn kept(n: usize) -> Option<Vec<u64>> {
+    let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+    let best = kept.iter().enumerate().filter(|(_, v)| v.capacity() >= n).min_by_key(|(_, v)| v.capacity()).map(|(i, _)| i);
+    best.map(|i| kept.swap_remove(i))
 }
 
 impl RowWord for u64 {
     const N: usize = 1;
+    fn zeroed(n: usize) -> Vec<u64> {
+        match kept(n) {
+            Some(mut v) => {
+                v.resize(n, 0);
+                v
+            }
+            None if kept_size(n) => {
+                let mut v = fresh(n);
+                v.resize(n, 0);
+                v
+            }
+            None => vec![0; n],
+        }
+    }
+    fn take(n: usize) -> Vec<u64> {
+        kept(n).unwrap_or_else(|| if kept_size(n) { fresh(n) } else { Vec::with_capacity(n) })
+    }
+    /// Kept where it is a mapping of its own (glibc's largest mmap threshold); past [`KEPT_MAX`] it takes the place of a
+    /// smaller one.
+    fn give(mut v: Vec<u64>) {
+        v.clear();
+        if keep_rows() && v.capacity() * 8 >= crate::huge_pages::MIN_BYTES {
+            let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+            if kept.len() < KEPT_MAX {
+                kept.push(v);
+            } else if let Some(small) = kept.iter_mut().min_by_key(|k| k.capacity()).filter(|k| k.capacity() < v.capacity()) {
+                std::mem::swap(small, &mut v);
+            }
+        }
+    }
     #[inline(always)]
     fn splat(w: u64) -> Self {
         w
@@ -297,10 +412,55 @@ fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
     rows.row_len(i) == 1 && rows.row_cols(i).next() == Some(i)
 }
 
-/// Row `i`'s XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of times.
-fn fold_own<W: RowWord>(row: &[u32], i: usize, z: &[W]) -> (W, W) {
-    let (x, o) = row.iter().fold((W::splat(0), 0u64), |(x, o), &c| (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i))));
-    (x, W::splat(o))
+/// How many column indices before it reads z at one a walk ([`IrUnitNet::eval_wide`]) asks the cache for it, unless
+/// `FC_UNIT_AHEAD` says.
+pub const AHEAD: usize = 256;
+
+/// The walk's distance: `FC_UNIT_AHEAD` column indices when set (0: it never asks), else [`AHEAD`]. A walk's words are the
+/// same at every distance.
+pub fn unit_ahead() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| std::env::var("FC_UNIT_AHEAD").ok().map_or(AHEAD, |v| {
+        v.parse().unwrap_or_else(|_| panic!("FC_UNIT_AHEAD={v}: a number of column indices"))
+    }))
+}
+
+/// Asks the cache for `z[c]` before it is read: no value depends on it.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+#[allow(unused_unsafe)]
+fn ask<W>(z: &[W], c: u32) {
+    use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
+    // SAFETY: a prefetch reads nothing and faults at no address, and the address is computed without a dereference
+    unsafe { _mm_prefetch::<{ _MM_HINT_T0 }>(z.as_ptr().wrapping_add(c as usize) as *const i8) }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+#[inline(always)]
+fn ask<W>(_: &[W], _: u32) {}
+
+/// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, so a row's own column adds nothing ([`Owns`] says where a
+/// row reads it). With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are
+/// one array in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead
+/// stops at the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic: the loop
+/// holds nothing but the read and the XOR, since each further step a column index leaves the processor fewer reads in
+/// flight at once. So distance 0 is the bare loop, and a row's indices are paired once with the indices `ahead` after
+/// them, as many as the array still has, the rest read bare.
+#[inline(always)]
+fn fold<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> W {
+    let (s, e) = (rows.off[i] as usize, rows.off[i + 1] as usize);
+    let row = &rows.cols[s..e];
+    let bare = |x: W, row: &[u32]| row.iter().fold(x, |x, &c| x.xor(z[c as usize]));
+    if ahead == 0 {
+        return bare(W::splat(0), row);
+    }
+    let far = &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..];
+    let n = row.len().min(far.len());
+    let x = row[..n].iter().zip(&far[..n]).fold(W::splat(0), |x, (&c, &f)| {
+        ask(z, f);
+        x.xor(z[c as usize])
+    });
+    bare(x, &row[n..])
 }
 
 /// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
@@ -454,12 +614,16 @@ impl IrUnitNet {
     /// rows once for all of them. None: the net has no one-pass form ([`IrUnitNet::one_pass`]). Every row is written in order
     /// and read only by later rows (and the constant's, set first), so only z is initialized.
     pub fn eval_wide<W: RowWord>(&self, input: impl Fn(usize) -> W) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
-        if !self.one_pass() {
-            return None;
-        }
+        self.eval_wide_ahead(input, unit_ahead())
+    }
+
+    /// [`IrUnitNet::eval_wide`] asking the cache for z `ahead` column indices before each read (0: never). Its rows are the
+    /// same at every `ahead`.
+    pub fn eval_wide_ahead<W: RowWord>(&self, input: impl Fn(usize) -> W, ahead: usize) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
+        let own = self.owns()?;
         let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
         let (zero, one) = (W::splat(0), W::splat(!0));
-        let (mut z, mut a, mut b) = (vec![zero; u], Vec::with_capacity(u), Vec::with_capacity(u));
+        let (mut z, mut a, mut b) = (W::zeroed(u), W::take(u), W::take(u));
         for i in 0..first {
             let (oa, ob) = (own_row(&self.a, i), own_row(&self.b, i));
             if oa {
@@ -470,12 +634,12 @@ impl IrUnitNet {
         }
         z[cp] = one;
         for i in first..cp {
-            let (x, oa) = fold_own(self.a.row(i), i, &z);
-            let (y, ob) = fold_own(self.b.row(i), i, &z);
+            let x = fold(&self.a, i, &z, ahead);
+            let y = fold(&self.b, i, &z, ahead);
             let zi = x.and(y);
             z[i] = zi;
-            a.push(x.xor(zi.and(oa)));
-            b.push(y.xor(zi.and(ob)));
+            a.push(x.xor(zi.and(W::splat(mask(&own.a, i)))));
+            b.push(y.xor(zi.and(W::splat(mask(&own.b, i)))));
         }
         a.push(one);
         b.push(one);
@@ -486,13 +650,45 @@ impl IrUnitNet {
     /// last with rows `[cp]`, every input row `[i]` or empty, and every other row reading only earlier columns, its own and
     /// the constant's.
     pub fn one_pass(&self) -> bool {
-        *self.pass.0.get_or_init(|| {
+        self.owns().is_some()
+    }
+
+    /// A one-pass net's [`Owns`] (None: not one), decided on the first call, which a walk makes before its passes run side
+    /// by side: `a` and `b` must not change after it.
+    fn owns(&self) -> Option<&Owns> {
+        self.pass.0.get_or_init(|| {
             let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
             let input = |rows: &Rows, i: usize| rows.row_len(i) == 0 || own_row(rows, i);
             let earlier = |rows: &Rows, i: usize| rows.row(i).iter().all(|&c| c as usize <= i || c as usize == cp);
-            u > 0 && cp == u - 1 && first <= cp && self.order.is_none() && own_row(&self.a, cp) && own_row(&self.b, cp)
+            let one = u > 0 && cp == u - 1 && first <= cp && self.order.is_none() && own_row(&self.a, cp) && own_row(&self.b, cp)
                 && (0..first).all(|i| input(&self.a, i) && input(&self.b, i))
-                && (first..cp).into_par_iter().all(|i| earlier(&self.a, i) && earlier(&self.b, i))
+                && (first..cp).into_par_iter().all(|i| earlier(&self.a, i) && earlier(&self.b, i));
+            one.then(|| {
+                let odd = |rows: &Rows, i: usize| rows.row(i).iter().filter(|&&c| c as usize == i).count() as u64 & 1;
+                let words: Vec<[u64; 3]> = (0..u.div_ceil(64)).into_par_iter().map(|w| {
+                    (64 * w..u.min(64 * w + 64)).fold([0u64; 3], |[a, b, zero], i| {
+                        let (oa, ob) = (odd(&self.a, i), odd(&self.b, i));
+                        let z = if i < first { oa & !ob } else if i < cp { oa | ob } else { 0 };
+                        [a | oa << (i % 64), b | ob << (i % 64), zero | z << (i % 64)]
+                    })
+                }).collect();
+                Owns { a: words.iter().map(|w| w[0]).collect(), b: words.iter().map(|w| w[1]).collect(), zero: words.iter().map(|w| w[2]).collect() }
+            })
+        }).as_ref()
+    }
+
+    /// Whether `z`, a lane group's rows from one pass ([`IrUnitNet::eval_wide`]), is a & b on the lanes of `used`, read
+    /// from z alone. A row that reads no column of its own has z = a & b by construction (z is the AND of its two sums);
+    /// a row that reads its own on either side has a & b = 0, as has an input row whose A side alone is its column; so z
+    /// is a & b exactly when it is 0 on those rows.
+    pub fn one_pass_z_is_ab(&self, z: &[u64], used: u64) -> bool {
+        self.owns().expect("a one-pass net").zero.iter().enumerate().all(|(w, &m)| {
+            let mut m = m;
+            std::iter::from_fn(|| (m != 0).then(|| {
+                let t = m.trailing_zeros() as usize;
+                m &= m - 1;
+                64 * w + t
+            })).all(|i| z[i] & used == 0)
         })
     }
 
@@ -1089,7 +1285,7 @@ mod tests {
             let input = |col: usize| (col as u64 + 3).wrapping_mul(0x9e37_79b9_7f4a_7c15);
             let (z, a, b) = net.eval64(input);
             let (pz, pa, pb) = at.eval64_flat(input);
-            assert!(at.pass.0.get() == Some(&false), "a placed net took the one-pass path");
+            assert!(at.pass.0.get().map(Option::is_some) == Some(false), "a placed net took the one-pass path");
             for x in 0..net.useful {
                 assert_eq!((pz[pos[x]], pa[pos[x]], pb[pos[x]]), (z[x], a[x], b[x]), "net {seed}: logical row {x}");
             }
@@ -1107,7 +1303,7 @@ mod tests {
                 let input = |col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(k as u32 * 7);
                 assert!(net.eval64_flat(input) == net.eval64(input), "net {seed}, inputs {k}");
             }
-            assert!(net.pass.0.get() == Some(&true), "net {seed} took the two-pass path");
+            assert!(net.pass.0.get().map(Option::is_some) == Some(true), "net {seed} took the two-pass path");
             assert!(net.clone().pass.0.get().is_none(), "a clone keeps the decision");
             // a row reading a later column: the two-pass evaluation, still equal
             let mut fwd = net.clone();
@@ -1115,7 +1311,7 @@ mod tests {
             fwd.a = appended(&fwd.a, i, i + 5);
             let input = |col: usize| col as u64 * 0x2545_f491_4f6c_dd1d;
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
-            assert!(fwd.pass.0.get() == Some(&false), "a later column took the one-pass path");
+            assert!(fwd.pass.0.get().map(Option::is_some) == Some(false), "a later column took the one-pass path");
         }
     }
 
@@ -1123,14 +1319,19 @@ mod tests {
     fn eval_wide_is_eval64_per_group() {
         fn check<W: RowWord>(net: &IrUnitNet, k: u64) {
             let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(7 * g as u32 + 1) ^ g as u64;
-            let (z, a, b) = net.eval_wide(|col| {
+            let wide = |col: usize| {
                 let mut w = W::splat(0);
                 (0..W::N).for_each(|g| w.set(g, input(g, col)));
                 w
-            }).expect("a one-pass net");
+            };
+            let (z, a, b) = net.eval_wide(&wide).expect("a one-pass net");
             for g in 0..W::N {
                 let word = |v: &[W]| v.iter().map(|w| w.word(g)).collect::<Vec<u64>>();
                 assert!((word(&z), word(&a), word(&b)) == net.eval64(|col| input(g, col)), "{} groups, inputs {k}: group {g}", W::N);
+            }
+            // asking ahead changes no word: never, the next index, past a row, past the net
+            for ahead in [0, 1, 7, AHEAD, usize::MAX] {
+                assert!(net.eval_wide_ahead(&wide, ahead) == Some((z.clone(), a.clone(), b.clone())), "{} groups, inputs {k}: asking {ahead} ahead", W::N);
             }
         }
         assert_eq!([align_of::<Row2>(), align_of::<Row4>(), align_of::<Row8>()], [16, 32, 64]);
@@ -1148,6 +1349,80 @@ mod tests {
         fwd.a = appended(&fwd.a, WORD + 3, WORD + 8);
         assert!(fwd.eval_wide(|_| Row2::splat(1)).is_none(), "a row reading a later column has no one-pass form");
     }
+
+    /// A walk's words are a function of the net and its inputs alone: the digest (SHA-512's first 16 bytes) of z, a and b on
+    /// a fixed net and fixed inputs, eight lane groups in one pass and each of the eight alone. A change to the walk that
+    /// changes a word fails here, even one that changes `eval64` with it.
+    #[test]
+    fn the_walk_words_are_pinned() {
+        fn pin(words: impl Iterator<Item = u64>) -> String {
+            let mut h = sha2::Sha512::new();
+            words.for_each(|w| h.update(w.to_le_bytes()));
+            crate::hex(&h.finalize()[..16])
+        }
+        let net = random_net(99, 3, 40_000);
+        let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(7 * g as u32 + 1) ^ g as u64;
+        let (z, a, b) = net.eval_wide(|col| Row8(std::array::from_fn(|g| input(g, col)))).expect("a one-pass net");
+        let wide = pin([&z, &a, &b].into_iter().flat_map(|v| (0..8).flat_map(move |g| v.iter().map(move |w| w.word(g)))));
+        let flat: Vec<[Vec<u64>; 3]> = (0..8).map(|g| net.eval64_flat(|col| input(g, col)).into()).collect();
+        let alone = pin((0..3).flat_map(|v| flat.iter().flat_map(move |t| t[v].iter().copied())));
+        assert_eq!((wide.as_str(), alone.as_str()), (WALK_PIN, WALK_PIN), "the walk's z, a and b words: eight groups a pass, each alone");
+    }
+
+    /// A kept vector comes back clean: z all zero, a and b empty, whatever the walk before left in it. Vectors large enough
+    /// to be kept are given back full of ones, and the walks after them (this test's and, in the same process, every other
+    /// test's) must still write `eval64`'s words.
+    #[test]
+    fn a_kept_vector_comes_back_clean() {
+        let n = crate::huge_pages::MIN_BYTES / 8;
+        (0..6).for_each(|_| u64::give(vec![!0u64; n]));
+        let net = random_net(7, 2, 30_000);
+        let input = |col: usize| (col as u64 + 5).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        for _ in 0..3 {
+            let (z, a, b) = net.eval_wide(input).expect("a one-pass net");
+            assert!((z.clone(), a.clone(), b.clone()) == net.eval64(input), "a walk on kept vectors");
+            [z, a, b].into_iter().for_each(u64::give);
+        }
+        let (z, a) = (u64::zeroed(n), u64::take(n));
+        assert!(z.len() == n && z.iter().all(|&w| w == 0), "a kept z is zero");
+        assert!(a.is_empty() && a.capacity() >= n, "a kept a is empty and holds the rows");
+    }
+
+    /// [`IrUnitNet::one_pass_z_is_ab`] is the check that reads z, a and b, on nets with rows that read their own column on
+    /// either side or both, and input rows that are their column on one side only, at several lane masks, both answers seen.
+    #[test]
+    fn one_pass_z_is_ab_is_the_check_of_all_three() {
+        let mut seen = [0usize; 2];
+        for seed in 0..40u64 {
+            let mut net = random_net(seed, 2, 400);
+            let first = net.in_words * WORD;
+            for i in (first + 3..net.const_pos).step_by(7) {
+                match i % 3 {
+                    0 => net.b = appended(&net.b, i, i),
+                    1 => { net.a = appended(&net.a, i, i); net.b = appended(&net.b, i, i); }
+                    _ => {}
+                }
+            }
+            net.b = net.b.with_row(5, &[]);
+            net.a = net.a.with_row(9, &[]);
+            net.pass = PassCache::default();
+            assert!(net.one_pass(), "seed {seed}: a one-pass net");
+            let input = |col: usize| (col as u64 + seed).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+            let (z, a, b) = net.eval_wide(input).expect("a one-pass net");
+            assert!((z.clone(), a.clone(), b.clone()) == net.eval64(input), "seed {seed}");
+            // the lanes where z is a & b on every row, alone and with one lane where it is not
+            let bad = z.iter().zip(&a).zip(&b).fold(0u64, |x, ((z, a), b)| x | (z ^ (a & b)));
+            for used in [!bad, !bad | (bad & bad.wrapping_neg()), !0u64, 1, 1 << 63, 1 << (seed % 64), 0] {
+                let want = z.iter().zip(&a).zip(&b).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+                assert_eq!(want, used & bad == 0, "seed {seed}, lanes {used:#x}: the test's own check");
+                assert_eq!(net.one_pass_z_is_ab(&z, used), want, "seed {seed}, lanes {used:#x}");
+                seen[want as usize] += 1;
+            }
+        }
+        assert!(seen[0] >= 40 && seen[1] >= 80, "both answers: {seen:?}");
+    }
+
+    const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
 
     #[test]
     fn csc_reads_the_rows_in_place() {

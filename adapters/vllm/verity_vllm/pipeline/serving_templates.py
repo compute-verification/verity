@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -28,9 +29,12 @@ WIDE_COORDS = ("ScaledMmFp8BlockSharedScale_v1",)
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
 #: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, torch's multimem
-#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add)
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add);
+#: and the norms' apply units, ``PARTS`` of a norm row whose G columns are blocks of the row's N (``COL_SPANS``), each reading
+#: the row's scale whole
 COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
-        "ResidualAdd_v1": "N"}
+        "ResidualAdd_v1": "N", "RMSNormApplyCudaVector8_v1": "G", "RMSNormFusedApplyCudaVector8_v1": "G",
+        "DsaRMSNormApply_v1": "G", "RmsNormMnnvlApply_v1": "G"}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
@@ -55,20 +59,88 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
 #: `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s.
 #: `deepgemm.FlashInferFp8Linear`: its quantisation of x once (q, s, which FlashInfer keeps in its workspace), then the same GEMM
 #: of those q and s (tests/program/test_deepgemm_parts.py).
+#: The RMSNorms, cut at the scale every output element reads (`cuda_rmsnorm_split`, `dsa_norm`, `tp_allreduce`): the row's sum
+#: of squares (its scale, an intermediate), then its outputs in ``COLS`` column blocks of G elements, each reading its columns,
+#: their weights and the scale (vLLM's vector-8 CUDA norms, the fused one with its residual add redone per block; DSA's;
+#: and the fused all-reduce's norm of its committed r, after its all-reduce and residual add), so that no unit returns a whole
+#: row. A row outside every decoder layer keeps its ``FINAL`` cut.
+_SUMSQ = (("arg", 0),)
 PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
-                                      ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
+                                      ("RmsNormMnnvlSumSq_v1", (("out", 1),), ("rs",)),
+                                      ("RmsNormMnnvlApply_v1", (("out", 1), ("arg", 2), ("mid", "rs")), (0,))),
          "DeepGemmFp8Linear_v1": (("Fp8GroupQuantUe8m0_v1", (("arg", 0),), (0, 1)),
                                   ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,))),
          "FlashInferFp8Linear_v1": (("FlashInferFp8Quant1x128_v1", (("arg", 0),), ("q", "s")),
-                                    ("ScaledMmFp8BlockSharedScale_v1", (("mid", "q"), ("mid", "s"), ("arg", 1), ("arg", 2)), (0,)))}
+                                    ("ScaledMmFp8BlockSharedScale_v1", (("mid", "q"), ("mid", "s"), ("arg", 1), ("arg", 2)), (0,))),
+         "RMSNormCudaVector8_v1": (("RMSNormSumSqCudaVector8_v1", _SUMSQ, ("scale",)),
+                                   ("RMSNormApplyCudaVector8_v1", (("arg", 0), ("arg", 1), ("mid", "scale")), (0,))),
+         **dict.fromkeys(("RMSNormFusedCudaVector8_v1", "RMSNormFusedCudaVector8_v3"), (
+             ("RMSNormFusedSumSqCudaVector8_v1", (("arg", 0), ("arg", 1)), ("scale",)),
+             ("RMSNormFusedApplyCudaVector8_v1", (("arg", 0), ("arg", 1), ("arg", 2), ("mid", "scale")), (0, 1)))),
+         "DsaRMSNorm_v1": (("DsaRMSNormSumSq_v1", _SUMSQ, ("r",)),
+                           ("DsaRMSNormApply_v1", (("arg", 0), ("arg", 1), ("mid", "r")), (0,)))}
+#: the cut of a row outside every decoder layer (`in_layer`) of a row family whose ``PARTS`` cut a norm at its scale: the final
+#: norm, whose output feeds the LM head, stays one unit a token on its unsplit Definition (the row itself, ``()``; the fused
+#: all-reduce's all-reduce and residual add, then its whole norm of r), where a split's apply blocks would raise the location's
+#: leakage and its sum of squares rewrite the whole row's scale. Such a row is read by its ``FINAL`` cut, and never by its
+#: scale cut; a row inside a layer is read by its scale cut when the partition holds it, else by its ``FINAL`` cut.
+FINAL = {"AllReduceRmsNormMnnvl_v1": (PARTS["AllReduceRmsNormMnnvl_v1"][0],
+                                      ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
+         **dict.fromkeys(("RMSNormCudaVector8_v1", "RMSNormFusedCudaVector8_v1", "RMSNormFusedCudaVector8_v3", "DsaRMSNorm_v1"), ())}
+_IN_LAYER = re.compile(r"(?:^|\.)layers\.\d+\.")
+
+
+def in_layer(op_path: str) -> bool:
+    """Whether a row of ``op_path`` (its module path, the wrapper's prefix stripped) is inside a decoder layer: its norms and
+    the fused all-reduces the layer calls (``model.layers.<n>.``), not the model's final norm (``model.norm``, or the fused
+    all-reduce + norm the model itself calls)."""
+    return _IN_LAYER.search(op_path) is not None
+
+
+def scale_cut(word: str, spec: str) -> str | None:
+    """For a row of ``spec`` whose family has a ``FINAL`` cut: ``"split"`` when template word ``word`` is only in its scale cut
+    (``PARTS``), ``"whole"`` when it is the row itself or only in its ``FINAL`` cut, None when both cuts hold it (the fused
+    all-reduce's residual add) or the row has no ``FINAL`` cut."""
+    from verity_vllm.query.program_view import spec_base
+
+    row, fam = spec_base(spec), spec_base(word)
+    if row not in FINAL:
+        return None
+    if fam == row:
+        return "whole"
+    split, final = any(p[0] == fam for p in PARTS[row]), any(p[0] == fam for p in FINAL[row])
+    return None if split == final else "split" if split else "whole"
+
+
+def final_hits(ts: list[Template], hits: list[tuple[int, int]], spec: str, op_path: str) -> list[tuple[int, int]]:
+    """Of the hits ``(k, units)`` of templates ``ts`` on a row of ``spec`` at ``op_path``, those that read it
+    (`serving_rows.member_rows`): all of them unless the row's family has a ``FINAL`` cut.  Such a norm row is read by its scale
+    cut (``PARTS``) when it is inside a decoder layer (`in_layer`) and the partition holds a part of that cut, and otherwise only
+    by its ``FINAL`` cut (the row itself, or the fused all-reduce's residual add and whole norm): the final norm is never split."""
+    from verity_vllm.query.program_view import spec_base
+
+    if spec_base(spec) not in FINAL:
+        return hits
+    cut = {k: scale_cut(ts[k].word, spec) for k, _ in hits}
+    take = "split" if in_layer(op_path) and "split" in cut.values() else "whole"
+    return [(k, n) for k, n in hits if cut[k] in (None, take)]
 #: the statics a ``PARTS`` row family's parts take that the row has none of: the block-FP8 linears quantise and scale in 128-wide
 #: blocks (`deepgemm.FP8_BLOCK`)
 PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}, "FlashInferFp8Linear_v1": {"G": 128}}
-#: each part family, by the row families it is a part of
+#: each part family, by the row families it is a part of (in its ``PARTS`` or ``FINAL`` cut)
 PART_OF: dict[str, dict[str, tuple]] = {}
-for _row, _ps in PARTS.items():
-    for _p in _ps:
-        PART_OF.setdefault(_p[0], {})[_row] = _p
+for _cuts in (PARTS, FINAL):
+    for _row, _ps in _cuts.items():
+        for _p in _ps:
+            PART_OF.setdefault(_p[0], {})[_row] = _p
+#: the norms' apply units (``COLS`` along G): the row static their G columns are blocks of, the row's N
+COL_SPANS = {"RMSNormApplyCudaVector8_v1": "N", "RMSNormFusedApplyCudaVector8_v1": "N", "DsaRMSNormApply_v1": "N",
+             "RmsNormMnnvlApply_v1": "N"}
+
+
+def col_span(fam: str) -> str:
+    """The row static a ``COLS`` family's column blocks divide: its own axis, or the row's ``COL_SPANS`` static."""
+    return COL_SPANS.get(fam, COLS[fam])
 #: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
@@ -85,13 +157,20 @@ CHAINS = {"SparseMla_v1": ("SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1"),
 #: a ``CHAINS`` unit's role by its index in its row family's entry
 CHAIN_ROLES = ("block", "end", "cols", "combine")
 CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs)}
-#: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, every split
-#: count's top-p pipeline (stats blocks and their parts, probabilities, each round's step blocks and combines) and the select's
-#: chunks, each carrying what the stage after it reads; the units are the cut the row's module names (`sampling.CUTS`:
-#: `topp_stages.plan`), which circuit-check holds to the Flock block in the row's place
+#: the row Definitions cut into stages (the ``stage`` layout, `stage_rows`), by the row family: its stage families, each carrying
+#: what the stage after it reads.  A stochastic top-p select's are every split count's top-p pipeline (stats blocks and their
+#: parts, probabilities, each round's step blocks and combines) and the select's chunks (`topp_stages`); a greedy select's are
+#: its chunks' partial argmaxes and their combine (`greedy_stages`).  The units are the cut the row's module names
+#: (`sampling.CUTS`, `b1.CUTS`: the ``plan`` of the module ``STAGE_PLANS`` names), which circuit-check holds to the Flock block
+#: in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
-STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES}
+STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
+          "TokenSelect_v1": ("GreedyChunk_v1", "GreedyCombine_v1")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
+_TOPP_PLAN = "verity.definitions.registry.topp_stages"
+#: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are
+STAGE_PLANS = {"GumbelTopPTokenSelect_v1": _TOPP_PLAN, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_PLAN,
+               "TokenSelect_v1": "verity.definitions.registry.greedy_stages"}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
 #: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
@@ -127,7 +206,7 @@ class Template:
     ``"stage"`` for a ``STAGES`` stage family, ``"expert"``, ``"fused"``, ``"read"`` and ``"slots"`` for the per-expert cut's
     block GEMMs, fused blocks, table reads and router slots (``EXPERTS``, ``FUSED``, ``READ``, ``SLOTS``), ``"history"`` for a
     ``HISTORY`` row's history reads (`history_read`); else ``"row"``).
-    ``packed``: a row, coordinate, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
+    ``packed``: a row, coordinate, column block, slice, part, K-chunk, chain, stage, expert or slots template with a port that is not 16-bit
     elements, each port's element bits (its parameters', then its return fields'); its ports are committed as their elements'
     bytes. A read's (a history read's too) and a fused block's ports are bits (a key, digests, salt and path, and a fused block's operands' bytes),
     committed as Flock's bit rows."""
@@ -193,7 +272,7 @@ def template(t: str) -> Template:
     if widths != {16} and layout not in ("s8", "read", "fused", "history"):
         ports = [*view[:-1], *(getattr(view[-1], "fields", None) or (view[-1],))]
         elems = [ty.width_set() for ty in ports]
-        if layout not in ("row", "coord", "slice", "part", "kchunk", "chain", "stage", "expert", "slots") or any(
+        if layout not in ("row", "coord", "cols", "slice", "part", "kchunk", "chain", "stage", "expert", "slots") or any(
                 len(e) != 1 or not e <= PACKED or sum(ty.leaf_widths()) % 16 for e, ty in zip(elems, ports)):
             raise ValueError(f"template {t}: the serving rows commit u16 words, and its ports' {'elements' if w is not fn else 'words'} "
                              f"are {sorted(widths)} bits (a row template's port may be elements of one of {sorted(PACKED)} bits, "
@@ -285,13 +364,14 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
     parameters), for a ``COORDS`` family of N > 1, its coordinates (a ``WIDE_COORDS`` family's Definition at each width c of
     `coord_widths`, N / c of them, coarse to fine, then every family's at N = 1, N of them), for a ``COLS`` family,
     its Definition at each halving W / k of its width (k of them) that `cols_refused` admits, for a ``PARTS`` family, each part
-    at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving, a ``COORDS`` part also in coordinates), for
+    of its ``PARTS`` and ``FINAL`` cuts at the row's statics and its ``PART_STATICS`` (a ``COLS`` part also at each halving of
+    its `col_span`, a ``COORDS`` part also in coordinates), for
     a ``SLICES`` family, its Definition at every axis 1 (the product of its extents of them), for a ``KCHUNKS`` row family, at
     each chunk width k (`chunk_widths`), its first, middle and last chunks (N, N (K / k - 2) and N of them), for a ``CHAINS``
     row family, its cut (`sparse_mla.head_chain`: per head the first visited block at its key count, the later blocks at BN and
     the end; `sparse_mla_split.split_chain`: a split row's at NS = 1, else per head and split its blocks so and its end in
-    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (`topp_stages.cut`:
-    each stage Definition and its units in `topp_stages.plan`), for an ``EXPERTS`` row family, at each block of n rows
+    column blocks, and per head the combine of each column block), for a ``STAGES`` row family, its cut (the ``cut`` of the
+    module ``STAGE_PLANS`` names: each stage Definition and its units in its ``plan``), for an ``EXPERTS`` row family, at each block of n rows
     (`block_rows`), its
     block family at N = n, the read of a block's rows, ``EmbeddingRead_v1{V=E, H=n K / 2}``, and its ``FUSED`` block reading
     them (`fused_block`; N / n of each), and the read of a G-block's scale row, ``EmbeddingRead_v1{V=E, H=2 K / G}`` (N / G of
@@ -320,10 +400,11 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
         n = math.prod(int(spec_statics(spec)[a]) for a in axes)
         if n > 1 and (c := _bind(spec, **dict.fromkeys(axes, 1))) is not None:
             hit += ((descriptor_id(c), n),)
-        for fam in [spec_base(spec)] + [p[0] for p in PARTS.get(spec_base(spec), ())]:
+        cuts = [p[0] for c in (PARTS, FINAL) for p in c.get(spec_base(spec), ())]
+        for fam in [spec_base(spec), *dict.fromkeys(cuts)]:
             own = fam == spec_base(spec)
             over = {} if own else PART_STATICS.get(spec_base(spec), {})
-            if not own and (c := _bind(spec, fam, **over)) is not None:
+            if not own and fam not in COL_SPANS and (c := _bind(spec, fam, **over)) is not None:
                 hit += ((descriptor_id(c), 1),)
                 n = int(spec_statics(spec).get("N", 1)) if fam in COORDS else 1
                 for w in coord_widths(fam, {**spec_statics(spec), **over}) if n > 1 else ():
@@ -332,7 +413,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                 if n > 1 and (c := _bind(spec, fam, **over, N=1)) is not None:
                     hit += ((descriptor_id(c), n),)
             if (axis := COLS.get(fam)) is not None:
-                W, k = int(spec_statics(spec)[axis]), 2
+                W, k = int(spec_statics(spec)[col_span(fam)]), 2
                 while W % k == 0:
                     c = _bind(spec, None if own else fam, **over, **{axis: W // k})
                     if c is not None and cols_refused(descriptor_id(c)) is None:
@@ -350,8 +431,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
 
             hit += tuple((descriptor_id(c), n) for c, n in {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)](sp))
         if spec_base(spec) in STAGES:
-            from verity.definitions.registry.topp_stages import cut
-
+            cut = importlib.import_module(STAGE_PLANS[spec_base(spec)]).cut
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
         if (fam := EXPERTS.get(spec_base(spec))) is not None:
             from verity.commitments.gates.embedding import read

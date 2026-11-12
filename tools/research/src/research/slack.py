@@ -677,8 +677,8 @@ def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) ->
         return json.load(r)
 
 
-# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py, sha256
-# 34ea37fb0126e20a22160649e502565d7b443d6bfd9feb438528bff3163a7886) reads it in `oidc_token()`.
+# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py) reads it
+# in `oidc_token()`.
 class _UnixHTTP(http.client.HTTPConnection):
     def __init__(self, path: str):
         super().__init__("cursor-agent", timeout=10)
@@ -2043,8 +2043,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     if ns.worker and (ns.verb != "comment" or ns.handle):
         raise SlackError("--worker goes with `comment` alone, never with --as: --as HANDLE is for the handle's holder, "
                          "--worker NAME for a lane's worker, which holds no handle")
-    if ns.worker and not WORKER_RE.fullmatch(ns.worker):
-        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
+    worker_lane, worker_name = (ns.worker.split("/", 1) if ns.worker and "/" in ns.worker else (None, ns.worker))
+    if ns.worker and not WORKER_RE.fullmatch(worker_name):
+        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS, "
+                         "or proofs/LINTOOLS to sign as your own lane)")
+    if worker_lane:
+        handles = {h["handle"]: h for h in reg["handles"]}
+        if worker_lane.lstrip("@") not in handles:
+            raise SlackError(f"--worker {ns.worker}: @{worker_lane.lstrip('@')} is no handle in the registry")
+        worker_lane = worker_lane.lstrip("@")
+        owner = next((h["handle"] for h in reg["handles"] if (sfx := _branch_suffix()) and sfx in h.get("branch_suffixes", [])),
+                     None)
+        if owner and owner != worker_lane:
+            raise SlackError(f"--worker {ns.worker}: this checkout's branch ends in @{owner}'s suffix, so its worker signs as "
+                             f"{owner}/{worker_name}")
     if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
@@ -2163,11 +2175,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
         if ns.worker:
-            lane = linear.owners(reg).get(info["team"]["key"])
+            lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
-                                 "no lane to comment as")
-            author = f"{lane}/{ns.worker}"
+                                 "no lane to comment as: sign as your own, --worker LANE/NAME")
+            author = f"{lane}/{worker_name}"
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
             return 0
@@ -3887,6 +3899,12 @@ def notion_error(what: str, e: urllib.error.HTTPError) -> str:
     return f"{what}: Notion answered {why}"
 
 
+class NotionError(SlackError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 class Notion:
     """The Asks for Daniel database through Notion's API, with $NOTION_API_KEY: a Notion connection's token, shared on the
     database. $RESEARCH_NOTION_URL points it at another server (the tests' fake)."""
@@ -3906,7 +3924,7 @@ class Notion:
         try:
             out = http_json(method, self.base + path, data, headers)
         except urllib.error.HTTPError as e:
-            raise SlackError(notion_error(what, e)) from None
+            raise NotionError(notion_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: Notion is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict):
@@ -3973,14 +3991,25 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
         print(f"dry-run: POST {NOTION_API}/data_sources/{db['data_source']}/query {json.dumps(query, sort_keys=True)}", file=sys.stderr)
         return 0
     notion = Notion()
-    rows = []
+    rows, readable = [], True
     for p in notion.call("POST", f"/data_sources/{db['data_source']}/query", query).get("results", []):
         props = p.get("properties", {})
-        comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+        comments: list = []
+        if readable:
+            try:
+                comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+            except NotionError as e:
+                if e.status != 403:
+                    raise
+                readable = False
+                print(f"ask-daniel pages: {e}: the pages are listed without their comments. The Notion connection behind "
+                      "$NOTION_API_KEY lacks the Read comments capability (Notion's integration settings, the connection, "
+                      "Capabilities); until its owner turns it on, read a page's comments in Notion or with the Notion MCP",
+                      file=sys.stderr)
         newest = comments[-1] if comments else None
         rows.append({"url": p.get("url"), "edited": p.get("last_edited_time"),
                      **{k.lower().replace(" ", "_"): prop_text(props.get(k)) for k in ("Ask", "Lane", "Status", "Decision", "Card ID", "Deadline")},
-                     "comments": len(comments),
+                     "comments": len(comments) if readable else None,
                      "newest_comment": newest and {"at": newest.get("created_time"), "text": prop_text({"type": "rich_text", "rich_text": newest.get("rich_text")})}})
     if ns.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
@@ -4447,8 +4476,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
                         "sender; check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
-                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
-                        "LANE the handle of the issue's team, and rings no one")
+                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
+                        "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
+                        "alone, LANE is the handle of the issue's team")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
