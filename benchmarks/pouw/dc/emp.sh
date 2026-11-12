@@ -5,6 +5,8 @@
 #   research run --on auto --wait -- bash benchmarks/pouw/dc/emp.sh build SRC...
 #       builds each SRC for sm_90a, gates every probe's SASS (probe.py gate) and writes $OUT/bins.tgz, $OUT/sass/,
 #       gate-build.txt and gate-build.json. A source that fails to build is named and skipped; the rest still build.
+#       bins.tgz carries the build's cuobjdump and nvdisasm in tools/, which time's gate reads SASS with
+#       (POUW_CUDA_BIN), so a node with no CUDA toolkit gates the binaries with the tools that built them.
 #   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --send bins.tgz \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/dc/emp.sh time [REPS]
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), records the clocks (A1: nvidia-smi -q -d CLOCK
@@ -44,6 +46,8 @@ build)
   rc=$?
   grep -c '^PASS' "$OUT/gate-build.txt" | xargs echo "emp.sh: gate PASS"
   grep -A3 '^REFUSED' "$OUT/gate-build.txt" | grep -v 'as declared' >&2
+  mkdir "$WORK/bin/tools"
+  cp "$(command -v cuobjdump)" "$(command -v nvdisasm)" "$WORK/bin/tools/"
   tar -C "$WORK/bin" -czf "$OUT/bins.tgz" .
   [ $rc -eq 0 ] || exit 1
   ;;
@@ -55,6 +59,7 @@ time)
     WORK=$(mktemp -d)
     trap 'rm -rf "$WORK"' EXIT
     tar -C "$WORK" -xzf "$IN/bins.tgz"
+    [ -x "$WORK/tools/cuobjdump" ] && export POUW_CUDA_BIN=${POUW_CUDA_BIN:-$WORK/tools}
     mkdir -p "$OUT/env"
     lease=()
     if [ -n "${EMP_GPU:-}" ]; then
@@ -85,7 +90,7 @@ time)
   trap 'kill "$smi_pid" 2>/dev/null' EXIT
   rc=0
   for b in "$WORK"/*; do
-    [ -x "$b" ] || continue
+    [ -f "$b" ] && [ -x "$b" ] || continue
     python3 "$PROBE" run "$b" --out "$OUT/$(basename "$b")" --reps "$REPS" ${EMP_ONLY:+--only "$EMP_ONLY"} \
       ${EMP_PASSED_ONLY:+--passed-only} \
       || { echo "emp.sh: probe.py run $(basename "$b") failed" >&2; rc=1; }
