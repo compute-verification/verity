@@ -5,6 +5,8 @@ CPU only, over stand-ins for the Program loaders and the oracle's reading; the p
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -68,6 +70,18 @@ def derived(args: SimpleNamespace, required: Record | None, sampling: Record | N
     """`oracle_producers_of_record` for the two requests, its record without the time it took and the method's text."""
     facts, record = CP.oracle_producers_of_record(args, required, REQS, sampling or {})
     return facts, {k: v for k, v in record.items() if k not in ("wall_s", "method")}
+
+
+LOADED = ("import json, sys\n"
+          "import verity_vllm.pipeline.commit_plan\n"
+          "print(json.dumps([p for p in ('numpy', 'torch', 'vllm', 'verity') if p in sys.modules]))\n")
+
+
+def test_the_plan_s_module_loads_neither_numpy_torch_vllm_nor_the_core_at_import() -> None:
+    """A process that reads a plan's key or a plan's record (the row's stages, the Commit's parser) loads the module and none of
+    the four with it: what derives the facts (`query.required`, the workload's reader) is imported where it is called."""
+    out = subprocess.run([sys.executable, "-c", LOADED], capture_output=True, text=True, check=True).stdout
+    assert json.loads(out) == []
 
 
 def test_the_facts_are_read_from_the_one_program_dir_for_every_request(monkeypatch: pytest.MonkeyPatch) -> None:
