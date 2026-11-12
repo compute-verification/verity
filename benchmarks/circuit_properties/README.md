@@ -37,6 +37,19 @@ in seconds. `flat` computes them gate by gate from the definitions; the tests ho
 covering every node form, the Boolean GEMM, and b1's layer at tiny shapes. `measure.Ambiguous` refuses the one case the
 summaries can't count exactly (one value bound to two activation leaves above the op); `flat` measures it.
 
+## The min-cut bound's work
+
+`work.read(program)` reads off a word Program what `min_cut.bound` takes of a circuit: |C|, the charged
+products' MACs N and output wires O, each operand's kind and width, and the arrays they multiply, which give F. The
+products are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and
+`DotRef`), and the lookups another (`work.LOOKUPS`, the gathers). A product is charged where both operands are wholly
+reached from a fresh input, neither reads a lookup of a table no fresh input reaches, and the two are no one array; in
+a scan, a carried operand is a weight, charged from the iteration that first finds it reached from a fresh input (the
+carry is iterated to a fixed point, so a loop's iterations cost what its distinct contexts do). `work.bound(work, c, k)`
+is the most blocks over its sub-works, through the calculator's `min_cut`. Everything is per array, and uncertain
+statuses charge less, so the work read is a sub-work of what the statements count. The module docstring has the rules;
+the training benchmark's `tests/test_program_reading.py` holds a training loop's reading beside its trace's.
+
 ## Interface
 
 ```python
@@ -72,7 +85,7 @@ names what it reads of both among its `inputs`.
 The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), writes `DIR/properties.json`; without
 either it writes no file.
 
-Nothing loads the package. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
+The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
 `verity/protocols/inference_only/rho/data/circuits.toml` as data, each number with its source.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.

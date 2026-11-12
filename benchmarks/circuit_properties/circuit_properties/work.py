@@ -26,7 +26,7 @@ status is its callee's returned runs. Where a status is uncertain the reading ch
 where every word read is, a lookup's where any may be, and two arrays are one where any references overlap, so the
 work it reads is a sub-work of the one the statements count, and any sub-work's bound holds.
 
-`bound` takes the best bound over the sub-works whose products are at least a threshold β_w·β_x, at least a
+`bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
 contraction length and of one kind or both, each at the β_w·β_x, the least output width and the ω of its own
 products, through the calculator's `min_cut`.
 """
@@ -44,7 +44,7 @@ from typing import NamedTuple
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import is_input, is_registered
-from verity.circuits.refs import Affine, Concat, Explicit, Strided
+from verity.circuits.refs import Affine, Concat, Strided
 
 from .ops import ids
 
@@ -599,6 +599,6 @@ def bound(work: Work, c: float, k: float, n: float | None = None) -> Priced | No
                 N, O = sum(g.macs for _, g in M), sum(g.wires for _, g in M)
                 b = mc.bound(c, k, n, N=N, O=O, size=work.gates, beta_w=bw, beta_x=bx,
                              b=min(g.out_width for _, g in M), F=mc.share(omega))
-                if best is None or b.slowdown > best.bound.slowdown:
+                if best is None or b.blocks > best.bound.blocks:
                     best = Priced(b, tuple(g for _, g in M), omega, N, O)
     return best
