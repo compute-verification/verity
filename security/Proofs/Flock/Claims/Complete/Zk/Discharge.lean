@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Shape
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
