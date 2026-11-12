@@ -191,15 +191,14 @@ that read no byte carries no evidence. The sessions' coins are not read by `Run.
 def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (dev : Properties.Challenger.History),
     AcceptedTwo i it j → CheckReadsDraw key →
-    ∃ (read₁ read₂ : ℕ) (d₁ d₂ : ByteArray),
-      Spot.Registration.digest i.record = .ok d₁ ∧ Spot.Registration.digest it.record = .ok d₂ ∧
+    ∃ (read₁ read₂ : ℕ),
       (∃ resolved workTable draw rest, Spot.Select.select resolved i.params.verifier.program
         i.params.verifier.query workTable i.closure i.source = .ok (draw, rest, read₁)) ∧
       (∃ sample ns ks draw, Spot.Select.selectSecond sample ns ks it.source = .ok (draw, read₂)) ∧
-      (0 < read₁ → ∃ w, i.params.verifier.windowRoot = some w ∧
-        FromDevice dev key w d₁ i.coins (i.source.extract 0 read₁)) ∧
-      (0 < read₂ → ∃ w, it.params.verifier.windowRoot = some w ∧
-        FromDevice dev key w d₂ it.coins (it.source.extract 0 read₂))
+      (0 < (i.source.extract 0 read₁).size → ∃ w d, i.params.verifier.windowRoot = some w ∧
+        Spot.Registration.digest i.record = .ok d ∧ FromDevice dev key w d i.coins (i.source.extract 0 read₁)) ∧
+      (0 < (it.source.extract 0 read₂).size → ∃ w d, it.params.verifier.windowRoot = some w ∧
+        Spot.Registration.digest it.record = .ok d ∧ FromDevice dev key w d it.coins (it.source.extract 0 read₂))
 
 /-! ## The top statement -/
 
