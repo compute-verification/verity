@@ -249,3 +249,17 @@ Ours, not the launcher's: `--requests 8 --bucket-requests 64 --rate 2 --max-toke
 - **NET-340 has no goal label.** `research queue open` warned of it.
 - **The comment on NET-340** is corrected in place (its one comment, through the Linear client's `commentUpdate`, since `research msg linear` has no verb that edits; it names #9153 at `dc0c3b5c4769`).
 
+[2026-11-12T06:29Z] 468ac3851139
+WATERLINE, NET-361, 10:30 PM PST Wed: what the callers pass as `engine`, and the rule I take. Nothing built yet.
+
+- **The serve passes neither `asdict(Engine)` nor vLLM's whole configuration.** `serve_openai.main` hands `engine.step_trace.scheduler_config(sched)` to `serve_commit.served_statics`, which calls `compile_slice.statics`, which calls `replay_step.statics` [read: `serve_openai.py:627,647`, `serve_commit.py:189-198`, `compile_slice.py:351`]. That dict is a pick of named attributes: the read keys less two, plus `scheduler` (the class's name), `policy` and `max_num_partial_prefills` where vLLM has it [read: `step_trace.py:59-75`].
+- **Every other caller passes `Engine`'s fields** (`asdict` or `__dict__`, so with `policy`), those fields less `policy` (the six `compile_slice_*.json` fixtures, `compile_slice_zk.engine_class`), or a literal of read keys (the sidecar, the demos, the tests) [read: `git grep`, each caller].
+- **So "any unread key is refused" alone would refuse every serve and every `asdict(Engine)`. The rule is one named list in `replay_step.py`:** the 11 keys the binding reads; `policy`, bound only at `fcfs`; `scheduler`, bound only at `Scheduler` with async off or `AsyncScheduler` with async on; the draft keys, bound only unset (absent, None, 0, false, empty); `max_num_partial_prefills`, any value, since vLLM's v1 scheduler never reads it [read: its `scheduler.py` at 0.8.5, 0.10.0, 0.11.0; the pin has no such field]; every other key refused by name.
+- **The draft keys I found:** `num_speculative_tokens` (vLLM's `SpeculativeConfig` and #9143's `DraftEngine`), `speculative` (the trace header's entry, #9143's `schedule.speculative` and the recorder branch's `scheduler_config`), and the header's `num_lookahead_tokens`, `num_prefill_lookahead`, `use_eagle_block_drop`, `draft_slots` [read: #9143 at `cbb993cc2049`, the pin's `scheduler.py:261-294`].
+
+**Two things the refusal does not reach, for you to weigh:**
+1. **On `main` a draft serve hands `statics` no draft key at all.** `scheduler_config` picks none, so the refusal cannot fire at serve start until the recorder branch (`cursor/vllm-specdec-bd1a`, which adds `speculative`) lands [read: both]. Until then only #9143's `DraftEngine` dict is refused. The pick is vllm's file; I do not touch it.
+2. **`scheduler_config` also hands no `watermark`, `scheduler_reserve_full_isl` or `max_num_scheduled_tokens`,** all of which the pin's scheduler reads [read: the pin's `scheduler.py:126-128,314,330`]. The binding takes its defaults for the first two and has no static for the third. `statics` cannot refuse a key it is not handed, and requiring them would refuse every serve today. Not in this pull request.
+
+**One choice I make unless you say otherwise:** the recorder branch also adds `kv_cache_dtype` where it is not `auto`. I leave it unlisted, so it is refused by name when that branch lands; listing it as harmless is one line (the pool's size in blocks is `num_gpu_blocks`, which the binding reads). Say if you want it listed now.
+
