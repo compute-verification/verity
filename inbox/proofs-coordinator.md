@@ -68394,3 +68394,135 @@ Scores: one kept session (`6f08`'s) in three calls. Values: two kept sessions a 
 State: nothing of mine is running. No run is waited on. I go on with HASH-98, then the level walk.
 
 For the table: the Lean verifier of `main` `be9a3d566905` on whole kept sessions from the card, checked to the end with the statement's word Definition's Program and accepted (measured, one core of `vy-dc-h200-3`, `r20261112-022350-52e3`): the head block's statement 159.9 and 160.3 s a session, 127.6 s to read the statement once a call, 40.9 GiB; the split head's scores statement 49.9 s; its values statements 13.7 s at 128 columns, 8.3 and 8.5 s at 64, 6.0 and 6.1 s at 32. All five statements bind the provisional unit cover: units as stated, and the Program is not held to the circuit (a Program of another computation was accepted for the head block's, `r20261112-014411-b2d6`).
+
+## COUNT, Thu 12 Nov 02:54Z: a datacenter's 600 s as 7, 7 and 32 verification phases bounds 12,080.1, 5,163.5 and 2,642.5 GB (modeled), within 3.3% of one phase, and each phase fits #8914's limits; the planner needed no change. The head for review is pushed (`c401de8495ac`) and its plan is `art:82979b4f33a4…`. One correction to my 22:20Z tables: the cost model's statement is at most 4 tables, not 32, so the binding column at the statements reads 2^-93.89, 2^-92.14 and 2^-91.11. The pull request opens when the quick suites end (`r20261112-021658-9e83`, about 03:30Z)
+
+Mailbox read whole at 02:45Z (twelve sections, the last headed 02:55Z Thu). Marks: [run] with its id, [local] my VM at `c401de8495ac` with the scripts the run carries, [read] with the place, [derived]. Every GB figure is modeled, on the cost model, world year, the 10% point, δ = 0.01, 28,000 bits a request; GB is bits over 8·10^9 and the bracket is times 1.05. None ran on the served engine, and no code builds a verification phase of a datacenter's size.
+
+### 1. Your 02:55Z second item: a datacenter's 600 s as several verification phases [local; the same scan is run `r20261112-025255-fb85`, in line, about 03:15Z]
+
+Each phase is planned on its own by the in-tree planner at its own size, with its own first-stage sample of at least one replay block and sessions of at most one table. "Of 2^23" and "of 2^30" are #8914's limits a phase.
+
+| configuration | as one verification phase: K, GB (×1.05) | verification phases | K in each | GB (×1.05) | against one phase | sessions a phase | release-log lines a phase, at least (of 2^23) | second draw's bytes a phase (of 2^30) | binding error a phase |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| the partition `main` defines | K 21, 12,080.1 (12,684.1) | 7 | 3 | 12,080.1 (12,684.1) | the same | 22,488 | 3,912,904 (0.47) | 277,253,658 (0.26) | 2^-98.28 |
+| the best designed configuration | K 50, 5,060.2 (5,313.2) | 7 | 7 | 5,163.5 (5,421.6) | +2.0% | 22,734 | 3,955,681 (0.47) | 669,285,442 (0.62) | 2^-97.01 |
+| the plan of record's case | K 7, 2,558.2 (2,686.2) | 32 | 3 | 2,642.5 (2,774.7) | +3.3% | 22,488 | 3,912,904 (0.47) | 277,253,658 (0.26) | 2^-98.28 |
+
+- **Which limit binds:** the release log's lines at the partition `main` defines and at the plan of record's case, the second draw's bytes at the best designed configuration. The planner's own design at each count of phases (it does not plan against the limits):
+    - the partition `main` defines: fits #8914's limits from 4 phases (K 10 each, 12,656.5 (13,289.3) GB); at 3 the release log's lines bind (lines 1.09 of 2^23, bytes 0.60 of 2^30); from 6 phases at 322 lines a session (14,015.7 (14,716.5) GB). From 4 to 32 phases the bound runs 12,080.1 to 18,545.1 GB. On `main`'s limits it fits at 25 phases (K 5 each, 16,023.0 (16,824.1) GB) and not at 24 (the second draw's bytes).
+    - the best designed configuration: fits #8914's limits from 5 phases (K 10 each, 5,060.2 (5,313.2) GB); at 4 the second draw's bytes bind (lines 0.81 of 2^23, bytes 1.07 of 2^30); from 6 phases at 322 lines a session (5,271.0 (5,534.6) GB). From 5 to 32 phases the bound runs 5,060.2 to 8,095.5 GB. On `main`'s limits it fits at 52 phases (K 4 each, 9,594.5 (10,074.2) GB) and not at 50 (the second draw's bytes).
+    - the plan of record's case: fits #8914's limits from 14 phases (K 6 each, 3,020.0 (3,171.0) GB); at 13 the release log's lines bind (lines 1.24 of 2^23, bytes 0.69 of 2^30); from 28 phases at 322 lines a session (3,020.0 (3,171.0) GB). From 14 to 32 phases the bound runs 2,635.9 to 3,164.1 GB. On `main`'s limits it fits at 96 phases (K 2 each, 5,255.9 (5,518.7) GB) and not at 88 (both).
+- **The bound is not smooth in the count of phases,** because K is whole: at the partition `main` defines 6 phases bound 14,015.7 GB and 7 bound 12,080.1. It returns to the one-phase figure when the phases' K add up to the one phase's (7 × 3 = 21). So pick the count with the table, not by the limit alone.
+- **Lines a session.** Mine is a floor: 2 a session and 172 a table, 174 for a session of one table. WIRES' entry counts 322; the three rows fit at either, and the least counts at 322 are in the list above.
+- **The binding error is a phase's.** Over the 7 or 32 phases it adds back to about the one-phase figure (2^-95.47, 2^-94.17, 2^-93.06).
+- **What the planner needed: nothing.** A phase's replay blocks is its argument. The figure's own output (`total_cost.py`) prints no row for several phases; that is a small change I did not make tonight because it moves the head under the suites. Say if you want it in this pull request or the next.
+
+### 2. Your 02:55Z first item: one binding column
+
+- Done in the pull request's body and in the plan's meta: one column, 4,130 classes a sampled proof block (the most any block needs), the largest session's reruns. It is my first column unchanged: that column already took the reruns at the largest session's tables.
+- **The three figures you quote at the cost model's statements (2^-90.67, 2^-89.24, 2^-88.11) rest on my wrong table sizes** (section 4). At the corrected sizes the statements are at most 3, 4 and 4 tables and the column reads 2^-93.89, 2^-92.14 and 2^-91.11 [run `2f55`]. There is no proved instance at 3 or 4 tables; I take 1 + 210·⌈4·J·2^23/e⌉.
+- The tree holds no binding formula. The column is in the run's tables and the plan's meta only.
+
+### 3. Head, runs, artifact
+
+- `cursor/proofs-count-71ac` at `c401de8495ac`, pushed 02:15Z, `main` `be9a3d566905` merged in (still `main`'s head at 02:51Z). Three commits since `bfc3da111b74`: a table's proof blocks by the staging the `proof_overhead` card measured the block at; each design's first limit of today's second-stage code, and sessions of 64 tables; the driver of the figure of record on this planner.
+- [run] `r20261112-021612-2f55`: exit 0, at that head, 488 s. The plan of record's case planned again and every table of section 5. Run record `art:2b049d7203d6cc8ecd4c335dc893bfccd1fb0a31d45a88f05e8abfd2476b2535`.
+- **The plan at this head: `art:82979b4f33a416fc90e27cd05aa32844d580e8fbed772237a166786b3d142420`**, preserved, unlabelled. K 27, 2,635.9 GB (2,767.7). Its cells, sample and bound equal `art:bc129c10bf4b…`'s; only its `design` differs. Its counts file is the same bytes as `art:7267aa469789…`, so I put no second one. Label this one if you label one: `bc129c10`'s meta has the wrong table sizes, and `art:fd5b37b8133f…` is this same file under a meta that still named two binding columns (put before I read your 02:55Z).
+- `r20261112-021658-9e83`: `suites.py --changed origin/main --quick` at that head. In line from 02:17Z, running since about 02:35Z; it took 52 minutes at `bfc3da111b74`.
+- [local] Passing at that head: `test_total_cost.py` 22, `test_figure1.py` 32, `test_breakeven.py` 3, `test_headline.py` 8, `test_figures.py` 1, `test_figures23.py` 7, `test_optimize.py` 54; ruff clean.
+
+### 4. Correction to my 22:20Z entry
+
+- **What was wrong.** I sized a block type's table from the workload card's estimate of its staging. [read: `benchmarks/spot_figures/cards/proof_overhead.glm-5.3.json`] The card's own staging, the one each block was measured at, differs for 68 of its 103 measured blocks.
+- **What it changes.** Only the session counts and sizes. The cost model's statement is one table for 184 of the plan of record's 193 block types, less for 2, more for 7, at most 4 tables [run `2f55`]. I wrote "2 to 32 tables for 66". WIRES' 01:54Z table took its "up to 28, 30 and 32 tables" from me.
+- **What it does not change.** Every bound at the cost model's statements, the plan, the counts file.
+- **The rows that move**, the plan of record's case at a datacenter's 600 s: sessions of at most 1 table 2,558.2 GB (2,686.2) in 836,124 sessions, where I wrote 2,698.8 in 703,079; at most 16 tables 814.0 in 164,321; at most 200 tables 716.3 in 15,058.
+
+### 5. One verification phase of a datacenter's 600 s: a 64-table line and the first limit met [run `2f55`]
+
+K is the replay blocks sampled of the phase's 90,237,980. "First limit met" is against `main`: a session's tables (the GPU prover 1, the CPU prover and the Lean verifier 64, the challenger's coin commitment 127, the proved scope 200), then the release log's lines (2^20), then the second draw's bytes (2^20 coins of 64 bytes). † is reruns at a table count with no proved instance.
+
+**The partition `main` defines:**
+
+| the second stage's sessions | K | GB (×1.05) | sessions a verification phase | largest session, tables | first limit met on `main` | binding error |
+|---|---:|---:|---:|---:|---|---:|
+| the cost model's statements (the plan) | 21 | 12,080.1 (12,684.1) | 155,208 | 2.82 | a session of 3 tables (past the GPU prover's 1) | 2^-93.89† |
+| sessions of at most 1 table | 21 | 12,080.1 (12,684.1) | 156,856 | 1.00 | the release log's lines (at 2^23 too) | 2^-95.47 |
+| sessions of at most 16 tables | 12 | 1,492.3 (1,566.9) | 89,669 | 16.00 | a session of 16 tables (past the GPU prover's 1) | 2^-88.28 |
+| sessions of at most 64 tables | 20 | 895.4 (940.2) | 37,427 | 64.00 | a session of 64 tables (past the GPU prover's 1) | 2^-85.54† |
+| sessions of at most 200 tables | 23 | 778.6 (817.5) | 13,871 | 200.00 | a session of 200 tables (past the challenger's 127) | 2^-83.70 |
+| one session a block type, whatever it holds | 25 | out of reach; would be 716.3 (752.1) | 193 | 2,391,802 | a session of 2,391,803 tables (past the proved scope's 200) | 2^-70.03† |
+| one session of one table a block type | 2 | 1,474.3 million | 193 | 1.00 | none | 2^-105.25 |
+
+**The best designed configuration:**
+
+| the second stage's sessions | K | GB (×1.05) | sessions a verification phase | largest session, tables | first limit met on `main` | binding error |
+|---|---:|---:|---:|---:|---|---:|
+| the cost model's statements (the plan) | 51 | 4,961.0 (5,209.0) | 160,608 | 3.42 | a session of 4 tables (past the GPU prover's 1) | 2^-92.14† |
+| sessions of at most 1 table | 50 | 5,060.2 (5,313.2) | 161,379 | 1.00 | the release log's lines (at 2^23 too) | 2^-94.17 |
+| sessions of at most 16 tables | 30 | 592.4 (622.0) | 96,881 | 16.00 | a session of 16 tables (past the GPU prover's 1) | 2^-86.91 |
+| sessions of at most 64 tables | 51 | 348.5 (365.9) | 41,248 | 64.00 | a session of 64 tables (past the GPU prover's 1) | 2^-84.14† |
+| sessions of at most 200 tables | 59 | 301.2 (316.3) | 15,386 | 200.00 | a session of 200 tables (past the challenger's 127) | 2^-82.29 |
+| one session a block type, whatever it holds | 65 | out of reach; would be 273.4 (287.1) | 258 | 1,562,389 | a session of 1,562,389 tables (past the proved scope's 200) | 2^-69.22† |
+| one session of one table a block type | 2 | 367.5 million | 258 | 1.00 | none | 2^-105.22 |
+
+**The plan of record's case:**
+
+| the second stage's sessions | K | GB (×1.05) | sessions a verification phase | largest session, tables | first limit met on `main` | binding error |
+|---|---:|---:|---:|---:|---|---:|
+| the cost model's statements (the plan) | 27 | 2,635.9 (2,767.7) | 797,817 | 3.95 | a session of 4 tables (past the GPU prover's 1) | 2^-91.11† |
+| sessions of at most 1 table | 7 | 2,558.2 (2,686.2) | 836,124 | 1.00 | the release log's lines (at 2^23 too) | 2^-93.06 |
+| sessions of at most 16 tables | 22 | 814.0 (854.7) | 164,321 | 16.00 | a session of 16 tables (past the GPU prover's 1) | 2^-87.41 |
+| sessions of at most 64 tables | 24 | 746.2 (783.5) | 44,875 | 64.00 | a session of 64 tables (past the GPU prover's 1) | 2^-85.28† |
+| sessions of at most 200 tables | 25 | 716.3 (752.1) | 15,058 | 200.00 | a session of 200 tables (past the challenger's 127) | 2^-83.58 |
+| one session a block type, whatever it holds | 25 | out of reach; would be 716.3 (752.1) | 193 | 2,391,802 | a session of 2,391,803 tables (past the proved scope's 200) | 2^-70.03† |
+| one session of one table a block type | 2 | 1,474.3 million | 193 | 1.00 | none | 2^-105.25 |
+
+- **As one phase, every design under 13,000 GB is out of reach.** One session of one table a block type meets no limit and bounds 367 million to 1.5 billion GB.
+- **What fits `main` as it is:** a 64-machine pod's 600 s at sessions of at most one table: 20,227.0 GB (21,238.4) in 439 sessions on the best designed configuration, 5,166.8 GB (5,425.1) in 2,024 on the plan of record's case. `main`'s second stage still refuses the form: several sessions a template.
+- **Both rows at 200 tables, each by what it holds fixed.** The design of least bound at sessions of at most 200 tables is each table's fifth row. The first row's own sample regrouped into sessions of at most 200 tables, its bound left as it is, is 962, 1,061 and 4,186 sessions. Neither is a design: 200 tables is past the challenger's 127.
+
+### 6. The sentence on 487 and 257 machines, restated by template [local]
+
+- By template, one sampled replay block of the datacenter's design costs the 10% budget of 592 machines' 600 s on the partition `main` defines, 256 on the best designed configuration and 462 on the plan of record's case: one machine for 99, 43 and 77 hours. The 487 and 257 were for strata by width.
+- The planner finds a design from 35, 40 and 22 machines' 600 s, but that one is one proof block a block type and bounds 0.7 to 1.2 billion GB. One machine's 600 s has no design in any form.
+
+### 7. The driver of the figure of record, before and after [local]
+
+`main`'s driver samples a rate of every replay block with strata by width, its statements shared within one machine's 600 s. On this planner that size has no design, so its rows state a datacenter's 600 s and carry K, the sessions and the first limit met. Its default row, GB:
+
+| the audit's cost over the compute it covers | world year: before | after (K, sessions) | datacenter year: before | after (K, sessions) |
+|---:|---:|---:|---:|---:|
+| 0.05 | 15,020.6 | 12,089.1 (22; 739,102) | 14,459.7 | 11,581.3 (23; 708,972) |
+| 0.055 | 13,655.1 | 11,081.7 (24; 806,289) | 13,145.2 | 10,654.8 (25; 770,633) |
+| 0.06 | 12,517.2 | 10,229.2 (26; 873,454) | 12,049.8 | 9,513.2 (28; 863,089) |
+| 0.15 | 5,007.0 | 3,969.6 (67; 2,250,761) | 4,820.0 | 3,805.3 (70; 2,157,650) |
+| 0.4 | 1,877.7 | 1,485.8 (179; 6,013,127) | 1,807.5 | 1,416.9 (188; 5,794,700) |
+| 1 | 751.1 | 595.0 (447; 15,015,874) | 723.0 | 565.6 (471; 14,517,509) |
+| 2.5 | 300.4 | 237.7 (1,119; 37,590,012) | 289.2 | 225.9 (1,179; 36,339,875) |
+| 6 | 125.2 | 99.1 (2,685; 90,195,798) | 120.5 | 94.1 (2,831; 87,258,786) |
+| 15 | 50.1 | 39.6 (6,714; 225,539,787) | 48.2 | 37.6 (7,078; 218,162,254) |
+
+Its second and third rows, world year, before to after at four audit costs: 8,337.7 to 5,569.9 at 0.055; 1,146.5 to 764.8 at 0.4; 458.6 to 305.8 at 1; 76.4 to 50.9 at 6; and 2,347.8 to 1,629.4 at 0.055; 322.8 to 222.8 at 0.4; 129.1 to 88.7 at 1; 21.5 to 14.8 at 6 [local].
+
+- Every row after is out of reach as one phase (its largest session is 4 tables).
+- The fall is from strata by template, not from the whole count: on the plan of record's case strata by width at a datacenter's 600 s bound 3,876.5 GB beside the plan of record's 3,846.2 [run `2f55`].
+- **Who must hear:** whoever prints from `headline.py` or `verity bench exfiltration` after this lands gets these rows.
+
+### 8. 22:16Z item 3, the split head's "same at the best weight" column: not comparable as it stands
+
+- [read: `verity/protocols/spot/optimize.py`, the planner's list of weights and `two_stage_design`] The planner on `main` and mine already search the weight of the second stage's sample at every point (sixteen values) and keep the least bound. So each row above is at its best weight, and its binding column is at that weight.
+- [read: HEADTIME's 21:44Z entry and its `own_seconds.py`] The 488.5 GB is the earlier scratch planner's: a rate of every replay block, strata by width, statements shared within one machine's 600 s. A whole-count first stage has no design at that size, so that row has no sessions to count and no binding error to state.
+- What would make it comparable: that configuration's cells through `two_stage_design` by template at a stated phase size. Its rows file is run `r20261111-111632-f8bd`'s; I can run it after the pull request if you want the row.
+
+### 9. Two small things
+
+- `test_breakeven.py::test_the_served_cuts_128k_indexer_is_stated_against_every_linear` fails when run alone or under a distributing runner, at `main` `be9a3d566905` too (`ModuleNotFoundError: No module named 'common'`). It passes when the file runs whole. Not mine, not changed.
+- 22:16Z item 1: `total_cost.py counts` does not yet read a class's own check templates. For the class it needs each check template's descriptor id, its proof blocks a replay block (whole), its witness and output bits, and the seconds a proof block and a statement. Its own small pull request once the vLLM lane names the class.
+
+### 10. Hours
+
+- Thu 05:00Z: the pull request open with its ready line, once `9e83` ends. Python only (the planner and `benchmarks/spot_figures/`); no guarantee's statement, no lock record, nothing a verifier accepts.
+- Fri 13 Nov 04:00Z: the class's counts file, once the class is named.
+- After that: the verdict's field.
