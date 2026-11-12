@@ -168,10 +168,9 @@ class _DeviceArena:
             if wait and not self.GROW and any(b.numel() >= min_bytes for b in self.all):
                 t0 = time.perf_counter()
                 while best < 0:
-                    if not self._cv.wait(timeout=1.0):
-                        if time.perf_counter() - t0 > self.WAIT_TIMEOUT_S:
-                            raise RuntimeError(f"native collector arena: waited {self.WAIT_TIMEOUT_S:.0f}s for a free block >= {min_bytes} B "
-                                               f"(ring {[int(b.numel()) >> 20 for b in self.all]} MiB, all busy): the worker is not releasing blocks")
+                    if not self._cv.wait(timeout=1.0) and time.perf_counter() - t0 > self.WAIT_TIMEOUT_S:
+                        raise RuntimeError(f"native collector arena: waited {self.WAIT_TIMEOUT_S:.0f}s for a free block >= {min_bytes} B "
+                                           f"(ring {[int(b.numel()) >> 20 for b in self.all]} MiB, all busy): the worker is not releasing blocks")
                     best = self._best_free(min_bytes)
                 self.waits += 1
                 self.wait_s += time.perf_counter() - t0
@@ -768,7 +767,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self._init_views()
         self._q: queue.Queue = queue.Queue()
         self._done: dict[int, StepCommitment] = {}
-        self._layouts: dict[int, list[TensorMeta]] = {}
+        self._layouts: dict[int, Any] = {}          # a step's metas: its `TensorMeta`s, or a cached plan's record (`plan_cache.PlanMetas`)
         self.sources: list[Any] = []
         self._worker: threading.Thread | None = None
         # optional CPU pinning experiment (env VERITY_PIN=1): serving thread -> one core, worker + hash threads -> other cores
@@ -836,7 +835,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         # modules dropped per class, None until applied
         self.skip_classes = skip_classes_of_env()
         self.skipped: dict[str, list[str]] | None = None
-        self._side = None                           # the worker's CUDA side stream (created lazily on the worker thread)
+        self._side: Any = None                      # the worker's CUDA side stream (created lazily on the worker thread)
         if engine is not None:
             self._geo_digest = geo_digest or self._model_geo_digest()
             self._modules: list[tuple[str, Any]] = self._select_modules()
@@ -869,7 +868,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             if f is None:
                 continue
             e = f(envelope, self.model)
-            extra_pt += int(e.get("per_token_bytes", 0)); extra_ps += int(e.get("per_seq_bytes", 0)); extra_n += int(e.get("tensors_per_step", 0))
+            extra_pt += int(e.get("per_token_bytes", 0))
+            extra_ps += int(e.get("per_seq_bytes", 0))
+            extra_n += int(e.get("tensors_per_step", 0))
             extra_step += int(e.get("per_step_bytes", 0))
         if self.acquire_inputs:
             # the manifest-driven `<consumer>/in` acquisitions: one per-token tensor per consumer per step (its width from the
@@ -878,7 +879,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 m = dict(self._modules).get(n)
                 if m is not None and (_mro_names(m) & ACQUIRE_INPUT_CLASSES):
                     continue
-                extra_pt += int(bpt); extra_n += 1
+                extra_pt += int(bpt)
+                extra_n += 1
             rec["promoted_inputs"] = {"consumers": sorted(self.acquire_inputs), "per_token_bytes": sum(int(v) for v in self.acquire_inputs.values())}
         if extra_pt or extra_ps or extra_step or extra_n:
             B = max(1, int(envelope.get("batch") or 1))
@@ -1076,6 +1078,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
         WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None)))
+        roots: list[Any]
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
         items = list(self.model.named_parameters()) + list(self.model.named_buffers())
@@ -1105,7 +1108,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         self.sources.append(src)
         self.name = f"{self.name}+{getattr(src, 'short_name', 'hidden_m1')}"
 
-    def flush_after_plane(self, what: str) -> bool:  # noqa: ARG002
+    def flush_after_plane(self, what: str) -> bool:
         """Hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
         snapshots at `_acquire` (D2D on the compute stream), so nothing is staged and nothing needs to leave early -> False.  The gather
         collector (`native_collect.NativeCollectCommitter`) overrides this with the flush."""
@@ -1781,6 +1784,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         moe_of = self._moe_layer_of()
 
         # no step-reading source or attention declarations: a step's verdict reads its names, step 0's and the manifest only
+        verdicts: dict[Any, Any]
         step_free, verdicts = rt_src is None and not cb_srcs and not (decls and man["fa2_hidden_per_layer"]), {}
         for step in sorted(self._layouts):
             metas = self._layouts[step]
@@ -1793,7 +1797,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             mod_names = Counter({n: c for n, c in names.items() if not n.startswith(HIDDEN_M1_PREFIXES) and not n.startswith("moe/") and moe_of(n) is None and not TP_PARTIAL_RE.search(n) and not CALL_DEPENDENT_RE.search(n) and n not in own})
             tp_bad = tp_partials_bad(man, names)
             mod_names, rt_bad = rt_src.split_step_names(mod_names, step, False, metas) if rt_src is not None else (mod_names, {})
-            by_module = Counter()
+            by_module: Counter[str] = Counter()
             for n, c in mod_names.items():
                 by_module[self._module_of(n)] += c
             step_expected = rt_src.step_modules(expected_modules) if rt_src is not None else expected_modules
@@ -2010,6 +2014,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
 
     def coverage_declaration(self, run: RunCommitment) -> dict:
         by_class: dict[str, dict] = {}
+        fam: tuple[str, ...]
         families: set[str] = set()
         moe_of = self._moe_layer_of()
         for step, metas in self._layouts.items():
@@ -2078,7 +2083,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                             "count": None, "bytes": None, "evidence": "source rows bound above; exact-model conformance from verity.circuits registry (row-4 work)"})
         for src in self.sources:
             classes.extend(src.declaration_classes())
-        notes = ["binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "
-                 "(hidden-vllm-kernel) are NOT bound by this committer — the hidden path (CMT-2) covers those classes",
+        notes = [("binds ONLY naturally materialised values (module outputs in HBM); FA2 interior (hidden-fa2) and norm kernel interiors "
+                  "(hidden-vllm-kernel) are NOT bound by this committer — the hidden path (CMT-2) covers those classes"),
                  "value identity = (step, tensor ordinal, byte range) via the published per-step layout whose digest is in the step root"]
         return declaration(self.name, f"native-host-{self.commit_scheme}", classes, notes)
