@@ -303,8 +303,8 @@ def chain(fold: str, start: int | tuple[int, int], words: Sequence[Sequence[int]
     return out
 
 
-__all__ = ["E2E_KEY_BASE", "EGEMM_KEY_BASE", "FOLDS", "KEY_RULES", "M32", "PFILL_KEY_DEFAULTS", "SCHEDULES", "SERVED_KA",
-           "SERVED_KK", "SERVED_ROT", "chain", "duo_final", "duo_step", "duo_word", "e2e_xin_absorb", "e2e_xin_keys",
-           "egemm_xin13_absorb", "egemm_xin13_start", "egemm_xin_keys", "int8_ratio", "key_ok", "key_ok_r11", "key_ok_r9",
-           "kj19", "lambda8_ok", "li_step", "mix32", "pfill_keys", "pfill_start", "ram_step", "rotl", "served_duo_absorb",
-           "served_entry", "served_start", "xin13_step"]
+__all__ = ["E2E_KEY_BASE", "EGEMM_KEY_BASE", "FOLDS", "KEY_RULES", "M32", "NCH", "NCT", "PFILL_KEY_DEFAULTS",
+           "SCHEDULES", "SERVED_KA", "SERVED_KK", "SERVED_ROT", "chain", "duo_final", "duo_step", "duo_word",
+           "e2e_xin_absorb", "e2e_xin_keys", "egemm_xin13_absorb", "egemm_xin13_start", "egemm_xin_keys", "int8_ratio",
+           "key_ok", "key_ok_r11", "key_ok_r9", "kj19", "lambda8_ok", "li_step", "mix32", "pfill_keys", "pfill_start",
+           "ram_step", "rotl", "served_duo_absorb", "served_entry", "served_start", "xin13_step"]

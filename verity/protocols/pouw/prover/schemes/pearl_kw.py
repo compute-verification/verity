@@ -730,7 +730,7 @@ class PearlKW:
 
 
 __all__ = ["ADA", "B200", "Built", "Device", "H100", "LANES", "NOISE_NORM", "Ops", "PATTERN", "PearlKW", "R", "Reject",
-           "TILE", "WINDOW", "bf16_div", "bf16_fma", "bf16_mul", "bf16_of_fraction", "bf16_to_f32", "budget", "device_dot",
-           "exact_norms", "extract", "f32", "f32_bits", "f32_of_bits", "f32_to_bf16", "f32_to_fp8", "fp10_row",
-           "fp8_to_f32", "grid_exponent", "hash_labelled", "lam", "noisy_quantize", "open_row", "parse_row", "replay",
-           "sample_line", "skip"]
+           "SIGMA_MIN", "TILE", "WINDOW", "bf16_div", "bf16_fma", "bf16_mul", "bf16_of_fraction", "bf16_to_f32",
+           "budget", "device_dot", "exact_norms", "extract", "f32", "f32_bits", "f32_of_bits", "f32_to_bf16",
+           "f32_to_fp8", "fp10_row", "fp8_to_f32", "grid_exponent", "hash_labelled", "lam", "noisy_quantize",
+           "open_row", "parse_row", "replay", "sample_line", "skip"]
