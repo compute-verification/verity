@@ -122,6 +122,54 @@ def test_to_length_holds_a_request_sent_without_ignore_eos_to_its_max_tokens_as_
     hooks.uninstall()
 
 
+def test_idle_reset_empties_the_prefix_cache_for_a_request_that_finds_the_scheduler_long_empty(tmp_path):
+    """A pass's first request, which arrives after the scheduler has held nothing for the idle time (or ever), finds
+    the prefix cache reset; a request that arrives while another is in the scheduler, or sooner after the last step
+    than the idle time, does not, so nothing inside a pass resets it. Each reset is recorded with its idle time and
+    the scheduler's answer."""
+    class Cached(Scheduler):
+        resets = 0
+
+        def has_requests(self):
+            return bool(self.requests)
+
+        def reset_prefix_cache(self):
+            self.resets += 1
+            return True
+
+    sched, now, lines = Cached(), [100.0], []
+    idle = P.IdleReset(sched, lines.append, idle_s=5.0, clock=lambda: now[0], now=lambda: 1000.0 + now[0])
+
+    def add(rid: str, at: float) -> int:
+        now[0] = at
+        idle.arrive()
+        sched.add_request(Request(rid, [1]))
+        return sched.resets
+
+    def finish(rid: str, at: float) -> None:
+        now[0] = at
+        sched.finish_requests(rid, "done")
+        idle.step()
+
+    assert add("a", 100.0) == 1                       # the first request ever
+    assert add("b", 130.0) == 1                       # another is in the scheduler
+    finish("a", 131.0)
+    finish("b", 140.0)
+    assert add("c", 144.9) == 1                       # empty, but for less than the idle time
+    finish("c", 150.0)
+    assert add("d", 155.0) == 2                       # the next pass's first
+    assert lines == [{"t": 1100.0, "idle_s": None, "reset": True}, {"t": 1155.0, "idle_s": 5.0, "reset": True}]
+    wired = Cached()
+    done = P.install(wired, {"out": str(tmp_path), "idle_reset": True})
+    wired.add_request(Request("x", [1]))
+    wired.add_request(Request("y", [2]))
+    wired.update_from_output(None, None)
+    (resets,) = tmp_path.glob("prefix_resets.*.jsonl")
+    assert wired.resets == 1 and wired.order == ["x", "y"] and len(resets.read_text().splitlines()) == 1
+    assert isinstance(done[0], P.IdleReset) and done[0].busy_at is not None
+    done[-1].uninstall()
+
+
 def test_a_missing_number_is_skipped_after_its_hold_and_a_held_abort_never_reaches_the_scheduler():
     sched, now = Scheduler(), [0.0]
     gate = P.ReleaseGate(sched.add_request, lambda ids: sched.finish_requests(ids, "aborted"), key=P.release_key,
