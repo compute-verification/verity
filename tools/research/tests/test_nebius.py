@@ -1,6 +1,7 @@
 """The Nebius server (pods/nebius/): an ssh machine `research run --on` reaches by the host its registry file names, the lease loop
-stopping a non-RunPod machine through its own command, gpu-lease sharing the GPUs, launch.sh's rendered cloud-init and VM spec,
-and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe is stubbed."""
+stopping a non-RunPod machine through its own command, which sends its stop without the null device, gpu-lease sharing the GPUs,
+launch.sh's rendered cloud-init and VM spec, and the weight list's pins.  No cloud: nothing here calls Nebius; the ssh probe and the
+CLI are stubbed."""
 from __future__ import annotations
 
 import base64
@@ -100,6 +101,50 @@ def test_an_ssh_entry_without_a_usable_host_is_refused(reg):
         remote.pod_target({"provider": "ssh", "name": "x"})
     with pytest.raises(remote.Refused, match="runpod or ssh"):
         remote.pod_target({"provider": "aws", "name": "x"})
+
+
+# ---- the stop command ----------------------------------------------------------------------------------------------------------------------
+
+VM = "computeinstance-e00fake"
+
+
+def stop_vm(tmp_path: Path, *args: str, can_read: bool = True) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """vm_stop.sh on a machine whose null device cannot be opened (every `/dev/null` in it names a path whose parent is a regular
+    file), beside a metadata service that hands out a token and a `nebius` that prints as the CLI does; and the CLI's calls."""
+    bin_dir, tmp, calls = tmp_path / "bin", tmp_path / "tmp", tmp_path / "calls"
+    for d in (bin_dir, tmp):
+        d.mkdir(exist_ok=True)
+    (tmp_path / "file").write_text("")
+    script = tmp_path / "vy-nebius-stop"
+    script.write_text((NEBIUS / "vm_stop.sh").read_text().replace("/dev/null", str(tmp_path / "file" / "null")))
+    (bin_dir / "curl").write_text("#!/bin/sh\nprintf token-from-metadata\n")
+    (bin_dir / "nebius").write_text(f'#!/bin/sh\necho "$*" >> {calls}\necho "what the CLI prints"\n'
+                                    f'case "$*" in *"instance get"*) exit {0 if can_read else 1};; esac\n')
+    for shim in bin_dir.iterdir():
+        shim.chmod(0o755)
+    calls.unlink(missing_ok=True)
+    r = subprocess.run(["sh", str(script), *args], env={"PATH": f"{bin_dir}:/usr/bin:/bin", "TMPDIR": str(tmp)},
+                       capture_output=True, text=True)
+    assert list(tmp.iterdir()) == [], "the token's directory is removed however the script ends"
+    return r, calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_the_stop_command_sends_the_stop_though_the_null_device_cannot_be_opened(tmp_path):
+    """Catches a redirect to the null device before the stop: under `set -e` it ends the script with the stop never sent, and the
+    machine runs on past its lease."""
+    r, calls = stop_vm(tmp_path, VM)
+    assert (r.returncode, r.stdout) == (0, f"TERMINATED {VM} (nebius compute instance stop)\n"), r.stderr
+    profile, stop = calls
+    assert re.search(rf" --token-file {re.escape(str(tmp_path / 'tmp'))}/[^/ ]+/token --skip-auth$", profile), "the token goes by file"
+    assert stop.endswith(f"compute instance stop --id {VM} --async") and "token-from-metadata" not in profile + stop
+
+
+def test_the_stop_commands_probe_says_whether_the_account_can_read_the_vm_though_the_null_device_cannot_be_opened(tmp_path):
+    r, calls = stop_vm(tmp_path, "--probe", VM)
+    assert (r.returncode, r.stdout) == (0, f"the attached service account can read {VM}\n"), r.stderr
+    assert calls[-1].endswith(f"compute instance get --id {VM}") and not any("instance stop" in c for c in calls)
+    r, calls = stop_vm(tmp_path, "--probe", VM, can_read=False)
+    assert r.returncode == 4 and r.stdout.startswith(f"the attached service account cannot read {VM}") and len(calls) == 2
 
 
 # ---- gpu-lease -----------------------------------------------------------------------------------------------------------------------------
