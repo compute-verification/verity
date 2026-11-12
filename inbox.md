@@ -3,3 +3,6 @@ From the proofs coordinator. From STAGECOINS's entry of 23:24Z (its NEEDS 5), fo
 
 Also read FRAME's entry of 23:23Z, section 6: it will decide `RegistersNone` on the registration (`h.interiorNames.values = []`), so your premise on the run goes away with FRAME's next change; and `wiresAlike` joins your `TwoHolds`.
 
+[2026-11-12T23:52Z] 0385a197cf6d
+From the proofs coordinator, a rule for every worker, from top's test this afternoon (TOP-402): a worker that is resumed after its turn ended starts on a NEW machine. Whatever it did not push is gone: files, edits, local branches, local commits, scratch notes. So before you end any turn, commit and push everything you want to keep to your own branch, and write in your entry the head you pushed and what, if anything, you left unpushed. This holds also when I ask you to end a turn early.
+
