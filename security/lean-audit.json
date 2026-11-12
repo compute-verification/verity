@@ -470,26 +470,6 @@
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
   },
-  "Verity.Sampled.Instance.LogOpensRecorded": {
-   "owner": "@soundness",
-   "digest": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
-   "why": "The deployments the guarantee describes, by ruling: at each session's accepted play, the device's log opens only the rounds the record v2 parses holds."
-  },
-  "Verity.Sampled.Instance.RegisteredFiles": {
-   "owner": "@soundness",
-   "digest": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
-   "why": "The deployments the guarantee describes: the registered files are the ones the parameters' digests name, so they pass the file check wherever some files do."
-  },
-  "Verity.Sampled.Instance.SessionRegistered": {
-   "owner": "@soundness",
-   "digest": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a",
-   "why": "The deployments the guarantee describes: each session the deployment runs is the one v2 sets up on the registered files wherever an accepted play names them."
-  },
-  "Verity.Sampled.Instance.SessionsReady": {
-   "owner": "@soundness",
-   "digest": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
-   "why": "The deployments the guarantee describes: each session's files give `sha512/row/v2` or `sha512/row-seg/v1` rows, 64-byte frame-v3 domains, two leaves a port, distinct roots and rows under 2^64 bits."
-  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
@@ -3343,6 +3323,30 @@
    "digest": "db9a57e137191c699b57ec4d63450e0988eb73ad592071d3b4908fa53c44cc59",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Sampled.Instance.LogOpensRecorded": {
+   "owner": "@soundness",
+   "digest": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.RegisteredFiles": {
+   "owner": "@soundness",
+   "digest": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.SessionRegistered": {
+   "owner": "@soundness",
+   "digest": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.SessionsReady": {
+   "owner": "@soundness",
+   "digest": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
@@ -25604,13 +25608,15 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [
+    "domain": [],
+    "open": [
      "Verity.Sampled.Instance.LogOpensRecorded",
      "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
-     "Verity.Sampled.Instance.SessionsReady"
+     "Verity.Sampled.Instance.SessionsReady",
+     "Verity.Vocab.InferenceOnlySound",
+     "Verity.Vocab.PouwSound"
     ],
-    "open": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"],
     "reads": [
      "FlockSoundness.Assumptions.HmRowComputes",
      "FlockSoundness.Assumptions.SHA512CRExpected",
@@ -28282,7 +28288,7 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets) and the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded) as domain premises; it takes the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
