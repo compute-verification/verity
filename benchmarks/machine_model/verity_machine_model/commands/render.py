@@ -4,6 +4,7 @@
                                           none"""
 from __future__ import annotations
 
+import argparse
 import tomllib
 from collections import Counter
 from pathlib import Path
@@ -156,8 +157,13 @@ def _attacks(data: Path) -> str | None:
     for a in all_attacks(data):
         fams.setdefault(a.family, []).append(a)
     m = model(data)
-    order = lambda e: m.epochs.index(e) if e in m.epochs else -1
-    span = lambda es: ", ".join(sorted(es, key=order))
+
+    def order(e: str) -> int:
+        return m.epochs.index(e) if e in m.epochs else -1
+
+    def span(es: set[str]) -> str:
+        return ", ".join(sorted(es, key=order))
+
     body = [[f, len(xs), "; ".join(sorted({a.design for a in xs})), span({a.since or m.epochs[0] for a in xs}),
              span({a.until or "open" for a in xs})] for f, xs in fams.items()]
     return _table(["family", "attacks", "designs", "since", "until"], body) if body else None
@@ -247,7 +253,10 @@ def _theta(data: Path) -> str | None:
                      f"measured SMSP-cycles a MMA over the lone INT8 MMA's {f.lone:.2f}, less 1"])
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
-    share = lambda u, rd: "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
+
+    def share(u: T.Unit, rd: str) -> str:
+        return "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
+
     out += ["### Units, with their verdicts",
             _table(["unit", "what", "verdict", "rates", "bound a SM-clock", "share, sheet", "share, measured", "why",
                     "settles it"],
@@ -296,13 +305,13 @@ def render(data: Path = DATA, sections: list[str] | None = None) -> str:
     return "\n\n".join(out) + "\n"
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     r = sub.add_parser("render")
     r.add_argument("sections", nargs="*", metavar="SECTION",
                    help=f"the sections to print, of {', '.join(SECTIONS)} (default: all)")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     if bad := [s for s in args.sections if s not in SECTIONS]:
         raise SystemExit(f"render: no section {', '.join(bad)}; the sections are {', '.join(SECTIONS)}")
     print(render(args.data, args.sections), end="")

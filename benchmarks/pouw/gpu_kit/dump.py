@@ -27,13 +27,6 @@ class Buffer:
     data: bytes
 
 
-def digests_from_words(words: bytes) -> bytes:
-    """Digests held as native (little-endian) uint64 words -> SHA-512's bytes: what `gk::Dump::digests` writes."""
-    if len(words) % 64:
-        raise DumpError(f"{len(words)} bytes is not a whole number of 64-byte digests")
-    return b"".join(words[i:i + 8][::-1] for i in range(0, len(words), 8))
-
-
 def write(directory: Path, name: str, data: bytes, layout: str = "bytes") -> None:
     if layout not in LAYOUTS:
         raise DumpError(f"layout {layout!r}: one of {LAYOUTS}")
