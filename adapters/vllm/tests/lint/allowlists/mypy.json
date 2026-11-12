@@ -723,7 +723,6 @@
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "assignment", "symbol": "SingleRow.build", "detail": ""},
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "var-annotated", "symbol": "SingleRow.__init__", "detail": ""},
     {"file": "verity_vllm/pipeline/row_tp.py", "kind": "arg-type", "symbol": "TpRow.match", "detail": ""},
-    {"file": "verity_vllm/pipeline/row_tp.py", "kind": "return-value", "symbol": "TpRow.launch_of", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "index", "symbol": "TickGate.add", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "misc", "symbol": "ReleaseOrder._flush", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "arg-type", "symbol": "CommitWindows._served_rows", "detail": ""},

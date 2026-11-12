@@ -232,7 +232,8 @@ class TpRow(Row):
         else:
             cmd = self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML), "--workload", self.wl,
                            "--tp", str(self.W), "--rank", str(r), "--out", out, *self.tgt_args, *args)
-        open(f"{out}.rc", "w").write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
+        with open(f"{out}.rc", "w") as rc:
+            rc.write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
 
     def construction(self) -> None:
         """The Build's construction (``--build-construction``): a switched row's AOT Build reads its ``aot.trace`` Build's derive dirs
@@ -272,11 +273,12 @@ class TpRow(Row):
         """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
         if (lp, t) not in self.lctx:
             self.lctx[(lp, t)] = self.launch_args(lp, t)
-        if self.lctx[(lp, t)] is None:
+        args = self.lctx[(lp, t)]
+        if args is None:
             self.verdict("build", "FAIL", f"rc=1 the launch context of shape LP{lp} T{t} did not read (row.log)")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        return self.lctx[(lp, t)]
+        return args
 
     def compose(self, r: int) -> None:
         """GP-01's workload Program of rank ``r`` over its request Programs."""
@@ -344,7 +346,7 @@ class TpRow(Row):
             self.derive_all(todo, jobs)
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
-                self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
+                self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={Path(f).read_text().strip()} {_tail_bytes(f[:-3] + '.log')}")
         kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
         if kept:
             self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
@@ -483,9 +485,9 @@ class TpRow(Row):
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0
         ok = "FAIL"
-        if rc_cap == 0 and rc_ctl == 0 and rc_chk == 0 and R.tp_passed(f"{M}/tp2_match.json"):
-            if not fp or (rc_fold == 0 and R.tp_passed(f"{M}/fold_match/tp2_fold_match.json")):
-                ok = "PASS"
+        if (rc_cap == 0 and rc_ctl == 0 and rc_chk == 0 and R.tp_passed(f"{M}/tp2_match.json")
+                and (not fp or (rc_fold == 0 and R.tp_passed(f"{M}/fold_match/tp2_fold_match.json")))):
+            ok = "PASS"
         R.tp_match_summary(M, rc_cap, rc_ctl, rc_chk, rc_fold, ok, fp)
         self.verdict("match", ok, f"rc={rc_cap}/{rc_ctl}/{rc_chk}/{rc_fold} wall={wall}s tp2_match[{chk or 'none'}] {fold}")
         self.tl("stage.match", "end", ("ok", ok), ("wall_s", wall))
