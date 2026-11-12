@@ -95766,3 +95766,88 @@ The launcher's own estimate was a start 14 to 19 minutes after each launch. If t
 **#9357.** Its body has no `Lane` line: the queue's pattern (`LANE_RE`, a line starting `Lane NAME`) matches nothing in it; the only "lane" is mid-sentence on line 34. It ends `Refs PRF-528` and `Goal proofs/weight-security-bridge` [run: `gh pr view`, the pattern applied]. The fix is its author's: `Lane proofs` as a line of the body, by `research queue edit 9357 --body-file`. It is a draft at `bb527fd2e2d2`, and its body says no second reader has read the diff from `ecbbaca17b69` [run]. The entry on the three mended texts is not in this file yet [run: the headings, 18:49Z]; I read them at that head when it is.
 
 I wrote nothing to Linear or Slack, and pushed only to `cursor/proofs-frame-names-3b1e`. The pull request's body still describes the old head; I update it with the ready line.
+
+## FOLD, Thu 12 Nov 18:54Z: #9264 is merged with #9209's marked head and today's `main` at `6dc48bd394e2`, pushed; its ready line waits on four runs that are in line for slots (records `909d`, quick tier `cdb1`, two Lean tries), not before 20:15Z; the one pass is FIXEDCOST's #9251 at `b2744360ecd3`, not merged with `main` since its base; a trial merge of it is clean and its runs are out; #9209's `Goal` line is in; COUNT's table is below
+
+Your order of about 18:40Z. Clock read for every time here; runs through `research run --on auto` only.
+
+**1. #9209: the `Goal` line is in, the head is unmoved (`4c8742d0d449`).**
+
+- [run] Body edited at 18:45Z: `Goal proofs/exfiltration-under-300gb`, after `Issue: PRF-587`. Not your guess, and this is why: PRF-587's only goal label is `proofs/exfiltration-under-300gb` [read: Linear, 18:43Z; you set it at 12:15Z], and the queue writes and checks a `Goal` line by the issue's labels, warning on one "no label of PRF-587 names" [read: `tools/research/src/research/queue.py`, `with_goals`]. Both goals are live, each `off-track` [run: `research goals show --json`, 18:42Z]. If you want `proofs/spot-verifier-cost` as well it is one more line, and a label on PRF-587, which is yours to set.
+- [read] The same edit corrects the body for the runs that ended: `r20261112-125155-ae58` rc 0, 61 suites, 61 passed, none cached, none failed (12:52Z to 13:32Z); `r20261112-131448-cdde` rc 0, outcome pass, the verifier's package (18,149 declarations in 254 modules, 11 guarantees), the certifier's Lean, `security`, `security/Properties` and `security/Proofs` each PASS, `regenerated` empty (13:16Z to 14:15Z); `r20261112-073043-f29b` ended failed, rc 1, at 16:15:47Z: `lean-suites` 28 of 29 suites passed, `verity-vllm` on its time limit; `circuit-check` and the ratchet gate have no step record, so they did not run.
+
+**2. The seconds for COUNT (PRF-577), as you ordered for the mark.** [read: each run's `table.txt`, kept in my artifacts] Measured: one kept session of each staged statement, a fresh `flock-verify verify … --zk --session DIR` a call, the two builds in turn on one pinned idle core under `nice -n 19`, at the runners' allocator setting (`MIMALLOC_PURGE_DELAY=-1`); medians. Before is `main` at `d6075b75d289`, after is `a62f144764f7`. Not on the served engine, and not timed again on the merged head `4c8742d0d449`.
+
+| statement | before, s | after, s | times faster | of which setup at the sample, s (before, after) | circuit read, s (before, after) | peak, GiB | run, node, rounds |
+|---|---|---|---|---|---|---|---|
+| head block (256 blocks, 12.2 GB circuit) | 118.763 | 38.892 | 3.054 | 2.229, 2.352 | 105.6, 103.1 | 45.58 | `r20261112-072850-28dd`, `vy-nebius-cpu-14`, 2 |
+| MoE expert read and GEMM K=6144 (1.79 GB) | 20.190 | 11.838 | 1.706 | 0.644, 0.651 | 19.54, 19.03 | 7.79 | `r20261112-072824-c560`, `vy-nebius-cpu-3`, 3 |
+| GEMM K=512 (112 MB) | 3.650 | 3.202 | 1.140 | 0.414, 0.419 | 2.601, 2.588 | 0.567 | `r20261112-074701-c19c`, `vy-nebius-cpu-2`, 5 |
+
+- The seconds are the verifier's own line for the session, which holds the setup at the sample as well as the check. The sessions carry no Program, so each call is the refusal after `Zk.verify` passed; `RecordText.check` and `KsScope.checkOf` ran in no call. Same verdict bytes in every call.
+- The same build reads 5 to 6% apart between nodes (up to 9% seen), so a row's two columns compare and one row's seconds against another run's do not.
+
+**3. #9264: what it is, what it buys, where it stands.**
+
+- **What it is:** the two values the verifier builds once a column in each lincheck round, the coins' tensor and the projection onto 64 sums, as compiled loops proved equal to `Stmt.tensor` and `Stmt.project` and switched in by `@[csimp]`, so nothing the verifier accepts or refuses changes.
+- **What it buys, on top of #9209** (measured as in the table above; before is the same tree with #9209's `Flock/Statement.lean`; all before the merges, at the tree of `1997812848a4`):
+
+| statement | before, s | after, s | times faster | label |
+|---|---|---|---|---|
+| MoE | 11.266 | 10.128 | 1.112 | [run] measured, `r20261112-111136-ee57`, `vy-nebius-cpu-14`, core 79, 5 rounds, quiet |
+| GEMM K=512 | 3.346 | 3.292 | 1.016 | [run] measured, `r20261112-114309-6609`, `vy-nebius-cpu-9`, core 121, 7 rounds, quiet |
+| head block | 39.454 | 39.424 | 1.001 | [run] **not a result**: `r20261112-114224-9b5c`, `vy-nebius-cpu-4`, 5 rounds, the circuit read 103 to 124 s |
+| head block, third try | 43.536 | 44.573 | 0.977 | [read, 18:50Z] **not a result**: `r20261112-121258-2efb`, `vy-nebius-cpu-3`, core 103, 5 rounds; the circuit read 103 to 130 s, the core 59% and 50% busy at two of six readings, load 48 to 96 |
+
+  - **On the head block #9264's gain is not established.** Three runs were disturbed and show none at the median. The one quiet head run is of the tensor in blocks (`0ee255d7fa`, not this head's loop): 42.278 to 40.220 s, `r20261112-102711-0566`, `vy-nebius-cpu-7`, 3 rounds. So book MoE's 1.14 s and GEMM K=512's 0.05 s a session, and nothing for the head. I did not launch a fourth head run: it needs a node with a quiet hour, which is yours to ask infra for.
+- **The head and what it sits on** [run]: `6dc48bd394e22826cc9ddab87d054c2008a6dd28`, pushed without force at 18:39Z. It is `1997812848a4`, then #9209's marked head `4c8742d0d449` merged in (`82c5d677c647`), then `main` at `0582899c4392` merged in. Neither merge stopped; the lock's merge driver printed no warning. `git diff origin/main` of the head is four files: `Flock/Comp.lean` (#9209's 53 lines), `Flock/Statement.lean`, `Flock/Test/FoldFast.lean`, and the one root in the verifier's `lean-audit.json`. It stays unmarked, base #9209's branch; until #9209 is on `main` the page's diff also shows `main`'s commits since `71a2afe671aa`.
+- **The head's Lean inputs changed** [run: `git diff --stat 71a2afe671aa origin/main`]: since #9209's head took `main`, `main` changed 17 files of the verifier's package (`Flock.lean`, `FlockVerify.lean`, `Flock/ProgramRead.lean`, `Flock/ProvedScope.lean`, the lock, four new modules, others); none is `Flock/Statement.lean` or `Flock/Comp.lean`. So every Lean run is made again:
+
+| what, at `6dc48bd394e2` | run | where | state at 18:53Z |
+|---|---|---|---|
+| `verity lean try Flock/Statement.lean --siblings` | `r20261112-184243-b9cd` | `vy-nebius-cpu-1` | **exit 0** [read]: lean exit 0 in 29 s; none of its 20 theorems uses an axiom beyond the three; no clash among the 95 built siblings, 40 unchecked for want of a build of their source |
+| `verity lean try Flock/Test/FoldFast.lean` | `r20261112-184243-cf72` | `vy-nebius-cpu-1` | waiting: every check slot taken |
+| `verity lean try Flock/Comp.lean --siblings` | `r20261112-184243-6e88` | `vy-nebius-cpu-1` | waiting |
+| records, `lean_changed.py --records verity/protocols/flock/verifier`, no `--update` | `r20261112-184011-909d` | `vy-nebius-cpu-12` | waiting: every check slot taken |
+| quick tier, `suites.py --changed origin/main --quick` | `r20261112-184017-cdb1` | `vy-nebius-cpu-3` | waiting: 4 checks ahead |
+
+- **What the ready line waits on:** those four. ETA [guess]: the nodes are full, so the wait is the unknown; once on a slot the records run took 59 minutes at #9209's head (`cdde`) and the quick tier 40 (`ae58`). Not before 20:15Z; 20:30Z to 21:30Z likely.
+- Not run on #9264 at any head: the whole check (kernel replay, `lean-agreement`, `circuit-check`, the ratchet gate). No session timed on the merged head.
+- Its body is edited for all of this at 18:51Z, with `Goal proofs/exfiltration-under-300gb`.
+
+**4. The one-pass verifier: it is FIXEDCOST's, #9251, and it has not moved since 09:54Z.**
+
+- [read: `gh pr view 9251`, 18:45Z] **#9251**, open, unmarked, base `main`, head `b2744360ecd3e5ae5be3a0dabb8ee3328d488615` on `cursor/proofs-fixedcost-46fc`, 11 commits, 7 files, 636 lines added and 7 removed; last commit 09:54:14Z, opened 10:45:24Z. No inbox entry after FIXEDCOST's 11:11Z changes it. `Refs PRF-587`, no `Goal` line (the queue will warn as it did for #9209).
+- [read: the branch] It holds #9209 at its first head `a62f144764f7`, not the marked head, and `main` at `d6075b75d289` (its merge-base). Its body says "it is marked after #9209 lands and `main` is merged here".
+- **Your 10:37Z condition is met in the text** [read: `Flock/ZkOnePass.lean` at `b2744360ecd3`, and the body's first paragraph]: `Zk.verifyOnePass_eq (spec) (sts) (record) (proofs) : verifyOnePass spec sts record proofs = verify spec (sts.map Setup.ofCircuit) record proofs`, no hypothesis, named in the first paragraph. I read the file as a second reader: `verifyOnePass` is `Zk.verify` on setups that differ from `Setup.ofCircuit` only in `fold`; the walks' points are read from the record unchecked, and `walksOf_ok` holds for every record because `walks2_ok` holds for any two points, so nothing rests on them. The three new modules hold no `@[extern]`, `@[implemented_by]`, `@[csimp]`, `unsafe`, `partial`, `opaque`, axiom, `sorry` or `native_decide` [run: grep]. Unlike #9209 and #9264 it is not a `@[csimp]` switch: the executable's call is edited (`FlockVerify.lean`, four hunks), and the theorem is about the function it now calls. Not read line by line: `Flock/FoldGiven.lean`'s 322 lines and `Flock/FoldTwo.lean`'s 161 beyond their statements.
+- **What its ready line lacks** [derived from the above and its body's "What was run"]:
+  1. The merge of `main` (and with it #9209's marked head). `main` changed 17 files of the verifier's package since its base, `FlockVerify.lean` among them (114 lines; the function #9251 edits, `verifyCmd`, is `verifyCmdBy` on `main` now).
+  2. On the merged head: the Lean tries of its four files, the records run, the quick tier. Every run in its body is of a head on `main` at `d6075b75d289`.
+  3. `lean-agreement`: no run of it at any head of #9251 is in its body, and this change is the one that edits what `flock-verify verify --zk` calls. The queue's candidate check runs it; a run before the mark would be `check.py`'s step alone.
+  4. A `Goal` line.
+  5. Its head-block figure rests on two rounds (38.04 and 37.83 s before, 31.83 and 32.25 s after, `r20261112-093040-3adb`); MoE and GEMM do not move.
+- **The merge is clean in text, and I have its runs out on a trial branch of mine, not on FIXEDCOST's** [run]:
+  - `git merge-tree` of `b2744360ecd3` with `main` at `0582899c4392`: exit 0, no stop; the four hunks land in `verifyCmdBy`. With #9264's head too: exit 0, no stop. `Flock/FoldGiven.lean` reads `baseOf_eq_fast`, `tensor` and `project`, none of which #9264 restates.
+  - The trial: `cursor/proofs-fold-onepass-trial-8a5a` at `8a5aebc549a65e018ba78c728627c859ddc29721` = `b2744360ecd3` + `4c8742d0d449` + `main` at `0582899c4392`, two merges, no stop, pushed 18:48Z. It holds no change of mine; against `main` it is #9251's seven files. FIXEDCOST can fast-forward #9251's branch to it, or make the same merge; I push nothing to that branch.
+  - Whether the merged `FlockVerify.lean` builds is not known until `2665` ends: text that merges is not text that compiles.
+
+| what, at the trial `8a5aebc549a6` | run | where | state at 18:53Z |
+|---|---|---|---|
+| `verity lean try FlockVerify.lean` | `r20261112-184833-2665` | `vy-nebius-cpu-3` | waiting: 8 checks ahead |
+| `verity lean try Flock/ZkOnePass.lean --siblings` | `r20261112-184832-798c` | `vy-nebius-cpu-3` | waiting |
+| `verity lean try Flock/FoldGiven.lean --siblings` | `r20261112-184833-a4f9` | `vy-nebius-cpu-3` | waiting |
+| `verity lean try Flock/FoldTwo.lean --siblings` | `r20261112-184832-2977` | `vy-nebius-cpu-3` | waiting |
+| records, as above | `r20261112-184832-0f88` | `vy-nebius-cpu-3` | waiting: 12 checks ahead |
+| quick tier, as above | `r20261112-184838-cb02` | `vy-nebius-cpu-14` | waiting: 12 checks ahead |
+
+  - ETA [guess]: 12 checks ahead of the two long ones; not before 21:00Z.
+- One thing a reader of #9251 should know [read: `origin/main`]: `main` gained `Flock/WitnessZk.lean` since #9251's base, whose line 63 calls `Zk.verify r.1 (r.2.map Setup.ofCircuit) record proofs`. #9251 switches `flock-verify verify --zk` only, so that caller stays on two walks. It is not a soundness matter.
+- **To have it on `main` before Friday's run:** it needs your word on who merges into #9251's branch (FIXEDCOST, by a fast-forward to the trial or the same merge), then its mark when the trial's runs pass. I can do everything but push to that branch.
+
+**Not established, and what I did not do.**
+
+- Nothing on #9264's merged head has passed but one Lean try; nothing on the trial has ended.
+- The scaling twin, a third lever, the allocation-count guard: not started, as ordered.
+- Nothing written to Linear or Slack. Pushed: `cursor/proofs-fold-columns-7d9a` (two merges) and the new `cursor/proofs-fold-onepass-trial-8a5a`; both without force.
+
+I end my turn on the runs above. Resume me when `909d` and `cdb1` have ended and the next entry is #9264's ready line; the trial's verdicts go in the same entry if they are back.
