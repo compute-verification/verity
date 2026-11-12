@@ -16,11 +16,9 @@ below which they pay.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
+from collections.abc import Callable
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import checked_strip as cs
 from exact_kit.checks import Checks
@@ -28,15 +26,17 @@ from exact_kit.checks import Checks
 #: Warp instructions an IMMA's 128 words cost when each word is 8 IDP.4A, and when it is the measured dp4a word (10.59
 #: issue units a word, `scalar_route.py`'s no-table costs).
 IDP4A, DP4A_MEASURED = 128 * 8 / 32, 128 * 10.59 / 32
+#: A depth k to its routes, each a change to a tile's (MMAs, other warp instructions).
+Routes = Callable[[int], list[tuple[float, float]]]
 
 
-def dp4a(a, b, acc):
+def dp4a(a: np.ndarray, b: np.ndarray, acc: np.ndarray) -> np.ndarray:
     """IDP.4A.S8.U8: acc + Σ_{j<4} a_j·b_j over the four bytes of each 32-bit lane, wrapping at 32 bits."""
     return (acc + (a.reshape(*a.shape[:-1], -1, 4).astype(np.int64) * b.reshape(*b.shape[:-1], -1, 4)).sum(-1)
             .sum(-1)) & cs.MASK
 
 
-def lin_routes(per_imma, xbin=12):
+def lin_routes(per_imma: float, xbin: float = 12) -> Routes:
     def routes(k):
         m = cs.n_digits((k // 32) * -128, (k // 32) * 127)
         return [(-(k // 32), per_imma * (k // 32)), (-(m - 1), per_imma * (m - 1)),
@@ -44,7 +44,7 @@ def lin_routes(per_imma, xbin=12):
     return routes
 
 
-def pv_routes(per_imma, xbin=12):
+def pv_routes(per_imma: float, xbin: float = 12) -> Routes:
     def routes(k):
         g = k // 32 - 1
         m = cs.n_digits(g * -128, g * 127) if g else 1
@@ -53,15 +53,15 @@ def pv_routes(per_imma, xbin=12):
     return routes
 
 
-def lin_x(x):
+def lin_x(x: float) -> Routes:
     return lambda k: cs.word_routes("co32c", k, x) + [cs.o_routes("co32c", k)["scalar"](x)]
 
 
-def pv_x(x):
+def pv_x(x: float) -> Routes:
     return lambda k: cs.pv_routes(k, x)
 
 
-def linears(fold, model, routes=None):
+def linears(fold: float, model: str, routes: Routes | None = None) -> float:
     h = c = 0.0
     for _, k, n in cs.TS_SHAPES[model]:
         th, tb = cs.ts_best("co32c", k, n, fold, routes(k) if routes else [])
@@ -69,7 +69,7 @@ def linears(fold, model, routes=None):
     return h / c - 1
 
 
-def pv(fold, rep, ctx, routes=None):
+def pv(fold: float, rep: int, ctx: int, routes: Routes | None = None) -> float:
     h = c = 0.0
     for beta in range(ctx // 32):
         if beta >= 256 and beta % 8:
