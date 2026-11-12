@@ -78949,3 +78949,128 @@ Clock: `date -u` read 08:32Z. By read only, nothing built or run. `Spot/OneStage
 8. [derived] **What `MULTI_REFUSED` means, for whoever reads `members.ALL_PASSED`:** every check the form runs today passed (`OneStageZk.lean:1256` is its only source [run: `grep` over the Lean of `verity/protocols` at that commit]). After soundness's ruling 2 the form gains a check of every member's files, drawn or not; until then `ALL_PASSED` on a two-member audit (`benchmarks/one_stage/tests/test_audit_two_members.py:198`) is not "this would be accepted". The module's words, "exactly where every check before the refusal passed", are right as written.
 9. [read, not exhaustive] No lemma says no other path gives the text of `MULTI_REFUSED`. Each `throw` I read in `OneStageZk.lean` has the verifier's own prefix (`member NAME:`, `session NAME`, `roots:`, `registered:`), so I see none; I did not read Flock's or the challenger's reasons.
 10. **Nothing in this stops the mark.** Two wording points for the body, neither a code change: "never exits 0" is the `refusal` command's; add the process dying to the cases outside the theorem.
+
+## FIXEDCOST, Thu 12 Nov 08:32Z: one pass for a table's two repetitions, measured on the fold alone beside the second worker's fold: the second coin vector costs a fifth of a walk on the head and a twentieth on MoE, which is 7.2 s of the head's 38.9 s check and 1.0 s of MoE's 11.8 s, a third of my 07:31Z bound; on MoE the scaling, the projection and the tensor are now 6.4 s and come before it; I build the one pass (the verifier's) and propose the second worker takes those three functions
+
+Tags: [run] a command I ran, with its run id; [read] a file or a run's output I read now, with its place; [relayed]
+another lane's statement I did not check; [derived] my arithmetic, with its steps; [guess]. Times are from `date -u`.
+Mailbox read at 08:31Z: newest section still yours of 06:46Z. Everything here is the Lean verifier's fold timed alone in
+a benchmark tool, on staged statements; nothing ran on the served engine; none of the one-pass folds is in the verifier;
+the second worker's fold is on its branch (`a62f144764`), not on `main`.
+
+### 0. What changed in my 07:31Z entry
+
+1. **Lever 1's bound was wrong, and low.** I wrote "at most 36%" of the head's check and "at most 11%" of MoE's. The
+   second worker measured 67% and 41% on the same sessions [relayed: its 08:22Z entry, section E]. My bound was the
+   allocator's share of the walk in a profile, and left out two things: the read of a row's columns, which the profile
+   counts as the walk's own code and which `Sparse.rowFold` (on `main`, `Flock/Comp.lean:167`) does faster (with today's
+   sum unchanged the walk is 0.81 of today's on the head and on MoE [run `a9f8`, `7196`]), and what the scattered cells
+   cost after the walk [relayed: the same entry].
+2. **Levers 2 and 3 measure a third of their bounds.** The bounds hold ("at most 19%" and "38%" of the head's check, "13%"
+   and "26%" of MoE's), but they were shares of today's walk. What one pass saves is a share of the walk after lever 1,
+   and that walk is 0.21 of today's on the head and 0.31 on MoE [run `a9f8`, `7196`]. Measured: 6% and 8% of the head's
+   check as it is on `main`, 5% and 6% of MoE's (section 2).
+3. **The table "what the rows add up to" is void.** Section 2 replaces it, starting from the second worker's measured
+   sessions.
+4. **The order I gave holds on the head only.** On MoE lever 4 is ahead of the one pass (section 3).
+
+### 1. The fold alone, with one, two and four coin vectors a pass
+
+Seconds for the A side and the B side of the unit's matrix together, at `MIMALLOC_PURGE_DELAY=-1`, one pinned core,
+`main` at `62bf29346f` plus my benchmark script. The four coin vectors are built as the lincheck builds its own
+(`Stmt.tensor`). Every result was compared with `Sparse.foldT`'s: 10 comparisons a run, none different [run].
+
+| | head, 606.5 M and 761.9 M entries | MoE, 124.3 M and 90.3 M | GEMM K=512, 3.7 M and 4.6 M |
+|---|---|---|---|
+| today's fold, one vector | 43.0 | 3.29 | 0.120 |
+| a row's columns read by `rowFold`, today's sum | 34.8 | 2.65 | 0.093 |
+| that read, the sum written into the column's cell (the form the second worker built) | 8.99 | 1.01 | 0.035 |
+| **one pass, two vectors, a column's two sums in one cell: for both** | **10.81** | **1.07** | **0.038** |
+| one pass, four vectors, four sums in one cell: for all four | 17.66 | 1.57 | 0.054 |
+| the second vector, as a share of one walk [derived] | 0.20 | 0.055 | 0.09 (the tool reads whole milliseconds) |
+| the third and the fourth, each [derived] | 0.38 | 0.25 | 0.23 |
+| run, machine, core | `r20261112-081523-a9f8`, `vy-nebius-cpu-14`, 111 | `r20261112-081523-7196`, the same, 63 | `r20261112-081523-3265`, the same, 95, the second of two repeats |
+
+- My single-vector figure agrees with the second worker's for the same form: 8.99 s here at `-1`, 4.65 + 6.18 = 10.83 s
+  there at the default setting on another machine; MoE 1.01 against 1.11 [relayed, derived].
+- A cell of four sums is 72 bytes, more than one cache line; a cell of two is 40 [derived: 8 of header and 16 a sum]. I
+  take that to be why the third and fourth vectors cost more than the second [guess].
+- Forms that were worse, so nobody tries them again [run `r20261112-074208-823c` head, `r20261112-074209-e8fe` MoE,
+  `r20261112-074208-4397` GEMM]: two vectors in one pass into an array each while every entry still allocates (0.93 of
+  two walks on the head); a `ByteArray` accumulator, a byte at a time (0.53 of today's walk on the head, 1.1 on MoE, 1.1
+  to 1.2 on GEMM), which agrees with the second worker's flat layouts [relayed].
+
+### 2. What that is in a session's check
+
+Start from the second worker's measured check of a session at `-1` with its fold: head 38.89 s, MoE 11.84 s, GEMM
+3.20 s [relayed: its section E]. The rest is [derived] from section 1's seconds, and assumes a session's two walks cost
+what the tool's cost.
+
+| a later session's check, s | with the second worker's fold [relayed] | and one pass for a table's two repetitions | and one pass for two sessions |
+|---|---|---|---|
+| head | 38.9 | 31.7 (less 2 × 8.99 − 10.81 = 7.2) | 29.7 (less 17.98 − 17.66 / 2 = 9.15) |
+| head, times over 6.2 s | 6.3 | 5.1 | 4.8 |
+| MoE | 11.84 | 10.9 (less 0.96) | 10.6 (less 1.24) |
+| MoE, times over 5.2 s | 2.3 | 2.1 | 2.0 |
+| GEMM K=512 | 3.20 | 3.17 | 3.16 |
+
+- More than four vectors a pass is not measured. If each further vector costs what the fourth does, a session's two
+  vectors come to 6.8 s on the head and 0.5 s on MoE, 2.0 s and 0.3 s less than the last column [derived; guess that
+  the cost holds].
+- If so, no number of sessions a pass brings the head's walk under 6.8 s a session in this form [guess], and the
+  head's check less its walk is 20.9 s with the second worker's fold [derived: 38.89 − 2 × 8.99, the session and the
+  tool on the same machine]. The one pass does not bring the head to 6.2 s; nothing here changes that line of my
+  07:31Z title.
+
+### 3. Which lever is next on each type, and who builds it
+
+- **MoE: lever 4 first.** One repetition's fold with the second worker's change is 4.98 s: the tensor 1.15, the two
+  walks 1.30, `baseOf`'s map 0.59, `Stmt.project` 1.44, 0.5 unsplit [relayed: its section F]. The three functions of
+  lever 4 are 2 × 3.18 = 6.4 s of the 11.84 s check; the one pass removes 0.96 s [derived].
+- **Head: about equal, and lever 4 is not measured there.** The one pass removes 7.2 s. The check less its walk is
+  20.9 s, not split after the second worker's fold. Before it, the scaling, the projection and the tensor were 14.9%,
+  6.4% and 2.9% of the check, 29.7 s of 122.6 [run `r20261112-070503-7cc9` for the shares, `1ad4` for the seconds], part of which was the scattered cells and is gone
+  [relayed]. What part of the 20.9 s lever 4 removes nobody has measured.
+- **My proposal:** the second worker builds lever 4. It offered at 08:22Z, the pattern is its own (a faster twin and an
+  equation the compiler uses, in `Statement.lean`, no caller edited), and its kit times a session before and after. I
+  build the one pass, which is mine by design and meets `verifyCmd`. If you want it the other way round, say so. Until
+  you answer I work on the one pass's equation, in a new file, which meets nothing either of us has changed.
+
+### 4. The one pass, as I am building it
+
+1. **The pass** (new file under `Flock/`): `rowFold`'s read, a cell holding a column's two sums, the update in a
+   function the compiler does not inline, as the second worker's `addCell` is. Its equation: the cells' first halves
+   are `Sparse.foldT m e₀` and the second halves `Sparse.foldT m e₁`. It rests on the second worker's
+   `foldRow_eq_row` [read: `a62f144764`, `Comp.lean`], so my branch starts from its commit.
+2. **The fold given its walks.** Copies of `baseOf`, `slotBase`, `partialRangesT`, `foldedPartial` and `folded` that
+   take the walk and the tensor as arguments, each proved equal to today's when the arguments are `Sparse.foldT` and
+   `Stmt.tensor`. A table of finished walks, each entry proved to be `foldT` of its key, is read by pointer and then by
+   value; a miss runs the plain walk.
+3. **Nothing accepted can change:** `Setup.fold` is replaced by the fold over that table, the replaced `Setup` is
+   proved equal to `Setup.ofCircuit st`, and `Zk.verify` is called as it is on an equal argument. The lemma that a
+   table of true entries changes nothing is proved in a scratch file (axioms `propext`, `Quot.sound`) [run: `lean` on
+   one file on my VM, no run id].
+4. **The coins for the table** come from a first pass over each repetition's transcript up to the zerocheck's last
+   round: the walk's vector is `tensor (skipWeights z) ρ[.. sl − 6]` and reads no later coin [read: `Zk.lean:149-172`,
+   `:199`; `Statement.lean:317-319`]. That pass needs no proof: a vector it gets wrong is a miss.
+5. **What it meets:** `FlockVerify.lean` at two places, `setupOf`'s result, which must carry the statements
+   (`:1143-1144`), and the line that calls `Zk.verify` (`:1186`). Two other lanes have branches on `verifyCmd` (the kept
+   process, the program held); I will say what `git merge-tree` finds against each and against the remote-merge branch
+   before any ready line. `Comp.lean` and `Statement.lean` are not edited.
+6. **Next from me:** the pass's equation tried with `verity lean try`, and its run id, in my next entry.
+
+### Runs
+
+| run | what | exit | record |
+|---|---|---|---|
+| `r20261112-081523-a9f8` | head, the forms with `rowFold`'s read | 0 | `art:80fb34c6648b61fc867b5f22ff9e480adeb95c64cece56d46e452e702cd43b2a` |
+| `r20261112-081523-7196` | MoE, the same | 0 | `art:6046497da3e9bbfe1497636567932ad792c48f6fd114eb1120ddfc1c7ea23022` |
+| `r20261112-081523-3265` | GEMM K=512, the same, two repeats | 0 | `art:7cdd97dd0325e28ea53dbc79ab73297216d7a9b193b5498effc5c13d0e127843` |
+| `r20261112-074208-823c` | head, the forms with today's read and the `ByteArray` forms | 0 | `art:b3c9db30124f725b37c9bc13d71e3c9f562e911080528dedccf493dd2aef4b1e` |
+| `r20261112-074209-e8fe` | MoE, the same | 0 | `art:9e0530efd4aead9b595dea72bd0043bf626e2a40d067a859dd84c717cd252194` |
+| `r20261112-074208-4397` | GEMM K=512, the same, two repeats | 0 | `art:0159e314a8b4e7f85a91c78367f7bdbc5f74781004432d0d37685bbaa989ce8b` |
+| `r20261112-075643-b131`, `r20261112-075644-320e`, `r20261112-075644-3d7c`, `r20261112-082056-307f` | cancelled by me before they started: the first three waited 24 min for a slot, the fourth would have repeated `a9f8` | | |
+| `r20261112-082056-c5e0`, `r20261112-082056-09b6` | GEMM and MoE, every form in one process; waiting for a slot at 08:32Z; nothing above rests on them | | |
+
+The tool is in the notes, `lanes/proofs/20261112T0450Z-fixedcost/`: `FoldMain.lean` (`flock-fold CIRCUIT [STATEMENT
+[SET]]`), `fold_job.sh`, `launch_fold.sh NAME CPUS MEM_GB TIMEOUT [REPS] [PURGE] [SET]`.
