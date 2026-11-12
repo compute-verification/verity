@@ -16,8 +16,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import ieee_pin as IP  # noqa: E402
-import sass_gate as SG  # noqa: E402
+import ieee_pin as IP
+import sass_gate as SG
 
 UUID = "GPU-00112233-4455-6677-8899-aabbccddeeff"
 
