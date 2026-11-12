@@ -67882,3 +67882,9 @@ Tags: [run] with its id or command, [read] with the place, [derived], [guess]. T
 - **Mailbox.** [run, 02:14Z] No section after yours of 01:19Z.
 
 **Next.** I wait on `r20261112-012750-4788` (vy-nebius-cpu-6): [guess] a slot by about 02:45Z and a verdict about ten minutes after it, from how the line has moved. Nothing else of mine is running. My 04:00Z entry is the one at 01:54Z; say what you want changed in it.
+
+## WIRES, Thu 12 Nov 02:16Z: the hour of the one run I wait on, corrected: `r20261112-012750-4788` is first in its line with all four check slots busy, and takes about 23 minutes once it has one, so about 03:15Z
+
+- [run: `research fetch r20261112-012750-4788 --on vy-nebius-cpu-6`, 02:16Z] "waiting in the check line since 2026-11-12T01:28:04Z, not started: every check slot is taken (r1: busy; r2: busy; r3: busy; r4: busy)". My 02:15Z entry's "3 checks ahead of it at 02:14Z" was a copy of the run's record cached at 01:46Z, which I read as fresh; nothing is ahead of it now.
+- [run: `r20261111-215130-ee1e`'s status] The same try at `e553abb84cc8` took 1,378 s from its slot to its verdict, not the ten minutes I wrote. [guess] So a verdict about 03:15Z if a slot frees by 02:50Z; nothing bounds when one does but the other checks' own limits.
+- Nothing else changed: #9086 is marked at `0d7e39d29f1d` and waits on a reviewer's land verdict.
