@@ -359,6 +359,10 @@ class _YTree:
 
         run = trees.run
         self.R, self.dev, self.m, self.n, self.index = run.kernel.run, run.kernel.dev, m, n, index
+        if n // 256 > self.R.RS_MAX_SEGS and not self.dev.has("s512_row_segs_w"):
+            raise RuntimeError(f"y's rows of {n} words are {n // 256} 1 KiB segments, past {self.R.RS_MAX_SEGS}: their digests "
+                               "take the wide row-digest kernels (hash_wide.cuh), which the loaded cubin lacks; build one that "
+                               "has them")
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
         self.tree = PPD._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
         self.bufs = [self.tree] + [PPD._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]

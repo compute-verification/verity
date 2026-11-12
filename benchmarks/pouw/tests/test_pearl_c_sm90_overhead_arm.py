@@ -292,6 +292,9 @@ class Twin:
     def __init__(self, host, widen: bool = True):
         self.host, self.widen, self.stream, self.launched, self.allocs = host, widen, None, [], 0
 
+    def has(self, name: str) -> bool:
+        return True
+
     def alloc(self, n: int) -> int:
         self.allocs += 1
         return self.host.alloc(n)
@@ -323,8 +326,11 @@ class Recording:
 
     pd_smem, rs_heads = {"no hash_decode.cuh launch": 0}, True
 
-    def __init__(self):
-        self.log, self.allocs, self.stream = [], 0, None
+    def __init__(self, wide: bool = True):
+        self.log, self.allocs, self.stream, self.wide = [], 0, None, wide
+
+    def has(self, name: str) -> bool:
+        return self.wide or not name.endswith("_w")
 
     def alloc(self, n: int) -> int:
         self.allocs += 1
@@ -450,3 +456,14 @@ def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
     for name, p, _ in arm:
         for q in p:
             assert q == 0 or q in held or any(a <= q < a + size for a, size in spans), (name, hex(q))
+
+
+def test_a_cubin_without_the_wide_row_digests_is_refused_where_y_s_rows_need_them():
+    """y's rows past 128 segments (gate_up's 57,344 words, the LM head's 128,256) take the wide row-digest kernels: on a
+    cubin that lacks them the call is refused at prepare, naming them, and narrower widths still commit y."""
+    trees = _trees(Recording(wide=False))
+    trees.pipes[8192] = trees._pipe(8192)
+    assert OA._YTree(trees, 16, 8192, OA.INDEX).tree.numel()
+    for n in (57344, 128256):
+        with pytest.raises(RuntimeError, match=f"{n // 256} 1 KiB segments, past 128: .* wide row-digest kernels"):
+            OA._YTree(trees, 16, n, OA.INDEX)
