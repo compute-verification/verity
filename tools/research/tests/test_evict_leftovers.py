@@ -32,10 +32,11 @@ def age(path: Path, hours: float) -> None:
 
 
 def process(proc: Path, pid: int, *, pgid: int | None = None, start: int = 100, state: str = "S", cwd: str = "/",
-            cmdline: str = "python3", environ: str = "", fds: tuple[str, ...] = ()) -> None:
+            cmdline: str = "python3", environ: str = "", fds: tuple[str, ...] = (), unit: str = "session-1.scope") -> None:
     """A process in the fake /proc, with every field of `stat` the readers take (its group, state and start time among them)."""
     d = proc / str(pid)
     (d / "fd").mkdir(parents=True)
+    (d / "cgroup").write_text(f"0::/system.slice/{unit}\n")
     (d / "stat").write_text(f"{pid} (p{pid}) {state} 1 {pgid or pid} {pgid or pid} 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 {start} 1000 10\n")
     (d / "comm").write_text(f"p{pid}\n")
     os.symlink(cwd, d / "cwd")
@@ -572,6 +573,8 @@ NOT_OVER = {
     "2: its status is launched and the process it records (pid 70) is not known to have exited": dict(
         status={"state": "launched", "pgid": 60, "pid": 70}, live=[dict(pid=70, start=999)]),
     "2: its status is running and it records no process": dict(status={"state": "running", "pgid": 60}),
+    f"2: 1 process(es) of its job unit research-job-{RID} run": dict(
+        status=RUNNING, live=[dict(pid=90, unit=f"research-job-{RID}.service"), dict(pid=91, unit=f"research-job-{RIDS[1]}.service")]),
     "unknown: no launch.json names its runner": dict(runner=None),
     "unknown: no status.json names its workload's process group": dict(),
     "2: process 80 (p80) names its run": dict(status={"state": "done", "pgid": 60}, live=[dict(pid=80, environ=f"RESEARCH_RUN_ID={RID}\0")]),
@@ -595,7 +598,7 @@ def test_the_clone_of_a_run_that_is_over_goes(root, proc, why):
 @pytest.mark.parametrize("why", NOT_OVER)
 def test_the_clone_of_a_run_that_may_not_be_over_stays_and_is_named(root, proc, why):
     """A live runner, a live member of the workload's group, a recorded process that still runs or that only a pid speaks for,
-    a missing record, a live process that names the run: each keeps the clone."""
+    a process left in the run's job unit, a missing record, a live process that names the run: each keeps the clone."""
     case = dict(NOT_OVER[why])
     for p in case.pop("live", []):
         process(proc, **p)

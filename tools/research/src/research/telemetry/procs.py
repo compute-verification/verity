@@ -110,6 +110,16 @@ def live_group(pgid: int, proc: str | os.PathLike[str] = "/proc") -> list[dict[s
     return [st for pid in list_pids(proc) if (st := stat_fields(pid, proc)) and st["pgrp"] == pgid and st["state"] not in ("Z", "X")]
 
 
+def unit_pids(unit: str, proc: str | os.PathLike[str] = "/proc") -> list[int]:
+    """The processes in the systemd unit `unit` (its full name), by the cgroup each one's /proc entry names: a unit's processes
+    are in neither the process group nor the descendants of whoever started it."""
+    def inside(pid: int) -> bool:
+        text, _ = _read(f"{os.fspath(proc)}/{pid}/cgroup", 4096)
+        return any(unit in line.split(":", 2)[-1].split("/") for line in (text or "").splitlines())
+
+    return [pid for pid in list_pids(proc) if inside(pid)]
+
+
 def gone(pid: Any, ticks: Any, proc: str | os.PathLike[str] = "/proc") -> bool:
     """Whether a recorded process is known not to run: its pid has no /proc entry, or one started at another time (the pid was
     reused).  No pid, or a stat without a start time, is not known gone: a pid alone never says its process exited."""

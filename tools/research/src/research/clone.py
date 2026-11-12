@@ -143,10 +143,12 @@ def not_over(run_dir: Path, proc: str | os.PathLike[str] = "/proc") -> str | Non
     machine: it never writes a final status, and its clone would otherwise stay for good.  Gone is decided from the recorded
     pid and its start time (`procs.gone`): the pid has no /proc entry, or names a process started at another time.  A pid alone
     never says its process exited, so a status with no start time under a live pid, anything unreadable, or a process that may
-    still be the run's (a recycled pid included) is not over.  The reason starts with its kind: `2:` a process runs,
-    `unknown:` a record is missing."""
+    still be the run's (a recycled pid included) is not over.  Nor is one whose runner died and left a job user's workload
+    behind: that runs in a unit of its own (`jobuser.unit_name`), outside the process group, so its processes are asked for by
+    the unit's cgroup.  The reason starts with its kind: `2:` a process runs, `unknown:` a record is missing."""
+    from .jobuser import unit_name
     from .runs import TERMINAL
-    from .telemetry.procs import gone, live_group, running
+    from .telemetry.procs import gone, live_group, running, unit_pids
 
     try:
         runner = int(json.loads((run_dir / "launch.json").read_text())["runner_pid"])
@@ -167,10 +169,12 @@ def not_over(run_dir: Path, proc: str | os.PathLike[str] = "/proc") -> str | Non
     if state in TERMINAL:
         return None
     rec = next((t for t in reversed(transitions) if isinstance(t, dict) and t.get("pid") is not None), st)
-    if gone(pid := rec.get("pid"), rec.get("starttime_ticks"), proc):
-        return None
-    return f"2: its status is {state} and " + ("it records no process" if pid is None else
-                                               f"the process it records (pid {pid}) is not known to have exited")
+    if not gone(pid := rec.get("pid"), rec.get("starttime_ticks"), proc):
+        return f"2: its status is {state} and " + ("it records no process" if pid is None else
+                                                   f"the process it records (pid {pid}) is not known to have exited")
+    if left := unit_pids(f"{unit_name(run_dir.name)}.service", proc):
+        return f"2: {len(left)} process(es) of its job unit {unit_name(run_dir.name)} run"
+    return None
 
 
 @functools.lru_cache(maxsize=1)
