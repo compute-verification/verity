@@ -93744,3 +93744,75 @@ four-process cells (1.1342 and 2.4174) are three provers filing beside a fourth 
 To read it again: `research data fetch art:d5315b644fe0b758a3274d31733aaf91f40a0712e800513c9f1e77889f62a861 --to DIR`,
 then `python3 read.py DIR/out` and `python3 provers.py DIR/out`, both in the notes under
 `lanes/proofs/20261112T0450Z-fixedcost/prf589/`.
+
+## CROSSCLOSE, Thu 12 Nov 17:23Z: the table for today's `main`: lean's next merge needs one file of ours by path (`test_difftest.py`, `ac843f35dc13`); after it only #9237, #9253 and #9091 of our open heads still stop; every landing order of the marked heads now has a row
+
+**Where the sides are** [run: `git fetch`, `git ls-remote`, 17:20Z to 17:22Z]
+
+- Lean's landing tip: `f3ffe4e2bbcb`, unchanged since 16:36Z. `main`: `6d95fcc68dd3` (#9274, #9281, #9302, #9286, #9278 past `4520abe708b0`). Those five change no file a close holds, and lean's tip stops against it in the same two files as at 17:13Z: our `test_difftest.py`, and `tools/verity/check/public_boundary.toml` (kernels and lean, not ours).
+- Our heads, none moved since I fetched them. On `main`: #9116, #9173, #9081, #9215, #9274. Open: #9237 `9d4aec0111fb`, #9199 `7a528d6b1c01`, #9176 `99f2f3ba2cf1`, #9229 `9e075516baff`, #9212 `f2412ec7156f`, #9080 `a5eb973283ee`, #9075 `cbe0bcdd160d`, #9253 `cf5587e21642`, #9091 `675dea740d6a`, #9285 `2308c3b05d46`.
+
+**Lean's next merge** [run: `git merge` of `f3ffe4e2bbcb` with `main` `4520abe708b0`, closed, my trial `b7f2da3f4f82`, not pushed]
+
+- By path, one file: `verity/protocols/spot/verifier/lean/tests/test_difftest.py` from `ac843f35dc139f6511334c46ff4c4226da9de2d5` (`fc4019234796`). One stop, the `PIECE_RUNS` lines; outside it git's merge.
+- Nothing else of ours: the README, `optimize.py`, `test_optimize.py`, `a5.py`, `test_a5_wiring.py`, `whole_run.py`, `FlockVerify.lean` and the pin merge with no stop.
+- Tried: `r20261112-171809-f6bf`, every quick suite that merge touches (125), on my trial, running, 5 passed, 0 failed so far. `public_boundary.toml` there is my stand-in (both sides' added lines kept) [guess that it is what its owners want].
+
+**The open heads against that merge** [run: `git merge-tree` of each head with `b7f2da3f4f82`; the three rows of the 17:13Z guess hold]
+
+| head | stops in | row | what git gives where nothing stops |
+|---|---|---|---|
+| #9237 | `test_difftest.py`, the import line, one stop | `82a48d3a8dda` (`d9eedb9620de`), git's merge outside the stop | README `71ad3eb23f5c`, `a5.py` `3e7002b4b8a2` |
+| #9199 | nothing | none needed | `a5.py` `a704f32474f1` (= `c364515fd276`'s), README `71ad3eb23f5c` |
+| #9176, #9229, #9080 | nothing | none needed | `991d5feffbe1`, README `3ef3565c986c` (= `1e9547d76fd1`'s) |
+| #9212 | nothing | none needed | `797c39d4c99b`, README `a2b2ebc20904` (= `2f6a899ce9cb`'s) |
+| #9075 | nothing | none needed | `07b08a1d7864`, README `eb6b9ea7edbf` (= `7d09ccd7ccc2`'s) |
+| #9253 | `FlockVerify.lean`, two stops | `b58ece80e982` | |
+| #9091 | PoUS's pin | `0add9868cafe` | |
+
+- [derived] So the rows you marked with stay right: where a head no longer stops, the row's file is the bytes git gives.
+
+**One thing to change in how the rows are used: by path, only `test_difftest.py`**
+
+- [run] #9199 is under #9237 and writes five lines of spot's verifier README. If #9199 lands before #9237, a README taken by path from a row without #9237 (`ac843f35dc13`, `1e9547d76fd1`, `2f6a899ce9cb`, `7d09ccd7ccc2`) loses those five lines. I tried it: the closed merge with #9199 and #9176 in has README `cfafdbb6bb80` and `test_difftest.py` `991d5feffbe1`, and no one commit of mine holds that pair.
+- [run] The README has not stopped in any merge I made (each head alone, both orders of all fourteen, the twelve sets below), so git's merge of it is right and it needs nothing by path. [derived] The same for every order I did not make.
+- So: `test_difftest.py` by path from the row, the README left to git. #9199 does not touch `test_difftest.py`. My commits still hold both files; the README in each is right unless #9199 is on `main` without #9237.
+
+**Every landing order of the marked heads has a row** (`cursor/proofs-landing-closes-99d1`, tip `826cea0776932dff8b9890eb77f0458b79ca7358`; four new commits, the first eight unchanged)
+
+`main` holds lean's line, #9116, and:
+
+| also in | sha | `test_difftest.py` | tried |
+|---|---|---|---|
+| none | `ac843f35dc13` | `fc4019234796` | `f794`, `f6bf` running |
+| #9237 | `82a48d3a8dda` | `d9eedb9620de` | `0008`, 3 of 3 |
+| #9176 (#9229 and #9080 change nothing in it) | `1e9547d76fd1` | `991d5feffbe1` | `a785`, `b901`, `fdea`, `e604` |
+| #9176, #9212 | `2f6a899ce9cb` | `797c39d4c99b` | `1863` |
+| #9075 | `7d09ccd7ccc2` | `07b08a1d7864` | `cc58`, `4c6e` |
+| #9237, #9176 | `4952287ca89a` | `024a86e1288e` | `3219`, 3 of 3 |
+| #9237, #9176, #9212 | `b47c0b4fb02e` | `5b9b8b5bd36b` | `2980`, 3 of 3 |
+| #9237, #9075 | **`f2126d7aa0dc2c130871ea4c8c0504d985cbbc5f`** new | `fb2f009c526f` | `r20261112-171534-7ec9` running |
+| #9176, #9075 | **`fa3d8efe35e36df0103d3beba7f1b54ad1273070`** new | `c97849ac4d25` | `r20261112-171604-35b1` running |
+| #9176, #9212, #9075 | **`fb026b17a1249214c2c9cea56a739064957a31ef`** new | `64a3bcc73001` | `r20261112-171634-ce24` running |
+| #9237, #9176, #9075 | **`826cea0776932dff8b9890eb77f0458b79ca7358`** new | `fef86a4bc3a5` | `r20261112-171728-859b` running |
+| all four | `23112d7b0b6c` | `d8c25c98dac9` | `6644`, `48b8` running; `8a96` 18 Lean tries exit 0 |
+
+- [run] The four new ones are cut on the closed merge `b7f2da3f4f82`. The two without #9237 have no stop at all: every line is git's merge. The two with it have the one import stop, closed as `8cf9f9bc82d7`. Each read: no marker, 47 `PIECE_RUNS` entries all distinct, no test name twice.
+- [derived] #9212 holds #9176, so twelve sets are all there are. A row is needed only where git stops; with `ac843f35dc13` in lean's line that is only when #9237 comes in. The other rows say what git should give, for a check.
+- **The four new shas are cut and read, not yet tried.** Each try is spot's difftest suite, spot's verifier suite and the repository's on its tree.
+
+**Runs ended** [run]
+
+- `r20261112-161131-8a97`, ended 17:17Z, rc 0: #9080 with #9176's close on the merged tree (`4d5b4839a3f2`): 7 of 7 Lean tries exit 0; its two suites pass (the repository's and the Lean check tool's, 1,063 tests).
+- The three joined rows' tries, as at 17:13Z: 1,567, 1,609 and 1,620 tests passed (`0008`, `3219`, `2980`).
+
+**Runs in flight** [run: polled 17:22Z]
+
+- `r20261112-161536-c09d` (the merge whole at `main` `87fec6c6491b`, my trial): 116 of 125 suites passed, 0 failed. ETA 17:45Z [guess].
+- `r20261112-164720-cb51` (the 27 suites lean's 9 differing files reach, lean's own tree): 20 of 27 passed, 0 failed.
+- `r20261112-171809-f6bf` (the merge whole at `main` `4520abe708b0`): 5 of 125 passed, 0 failed. ETA 19:00Z [guess].
+- `r20261112-165537-6644` (every marked head in, on lean's tip): 11 of 80 passed, 0 failed. ETA 18:30Z [guess].
+- `r20261112-165959-48b8` (every head in, the 28 Lean files under `security/` the heads change): 1 of 28 tries done, exit 0. ETA past 18:30Z [guess].
+- The four subset tries above: ETA 17:35Z [guess].
+
+Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f0458b79ca7358`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
