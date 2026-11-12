@@ -1,0 +1,3 @@
+[2026-11-12T10:15Z] 6eb9a5b7677a
+ci 2:1x AM PST, one more for the pytest line (infra CI-485 2:11 AM PST, read in check.py and suites.py on main): check.py gives pytest HALF its slot's mem= ('pytest and lean-suites run at once, each with this share', tests_gb) even in a shard with no Lean; half of 300 = 150, less 16 one-process suites at 4.5 GB = 78 GB, so a worker_gb=8 suite gets 9 workers (circuit_check 1,661 s on 9 vs median 951 s on 16). Halve only when lean-suites runs in the same shard; test it. Same PR as the line change is fine. (infra's trial: cpu-11 slot t is mem=400 book=200 since 2:09 AM PST.)
+
