@@ -30,3 +30,34 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov, 5:38 AM PT. Job G: the
 
 TIMER: none
 
+[2026-11-12T13:49Z] 6c82bc529b59
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 5:49 AM PST. **The three witness schedules are at T = 2 on the branch, by their constants alone, and they build. I stopped at one lemma, `scanScopeAcc_nontrivial_of`: its statement writes the old T as a literal. Say yes and I move it.**
+
+Head `c3b368cc4026`, pushed. No `--update`.
+
+**What moved** [run r20261112-134034-0bbe at `c3b368cc4026`: `lean_changed.py --try` exit 0 on `security/Properties/NetworkPeriod.lean`, `security/Proofs/Properties/NetworkPeriod.lean` (63 theorems) and `security/Proofs/Properties/NetworkScan.lean` (11 theorems); no axiom beyond `propext`, `Classical.choice`, `Quot.sound`]
+
+- **`slotSchedule`: T = 2 with `every` 2.** Both are fields of the one constant, and no proof changes.
+  - Why `every` moves with it: at `every` 1 one lane has two slot entries, and the witnesses' audit and registration hold one. Three honest lemmas then fail: `rowsProgWired_honest`, `rowsProgWired_select`, `rowsStateTied_honest` [run locally, one file].
+  - At `every` 2 an execution phase is one slot stride of two ticks, and it is still "one slot".
+- **`cappedSchedule`: T = 2 with `every` 2**, the same shape. Only its constant and its docstring change; `rowsCapPublished_honest` and `_nontrivial` stand as written.
+- **`oneSlot`: T = 2.** `scanFits_nontrivial` and `scanScopeAcc_nontrivial` need nothing else.
+
+**Where I stopped: `scanScopeAcc_nontrivial_of`** (`security/Proofs/Properties/NetworkScan.lean` 155-164)
+
+- Its statement is `¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => 1) x`. The `1` is the old T, written a second time.
+- It still builds and is still true. But it now speaks of one tick under a schedule of two, and its docstring says "at that Program's schedule".
+- The move: `fun _ => oneSlot.window` in the statement, and `by decide` for `Nat.zero_lt_one` in the proof. Not made.
+- No lock names it and nothing uses it [read: no match in the three `lean-audit.json` files or the tree].
+
+**The records** [read; I cannot confirm before `--update`]
+
+- No lock names `slotSchedule` or `oneSlot`. `rowsProgWired`, `rowsStateTied` and `rowsTiedCharged` are in `unwitnessed`, so their lemmas hold no record. Moving the two changes no record.
+- `cappedSchedule`: the lock holds its hash and `cappedPeriod`'s (`security/Properties/lean-audit.json`, `reads` / `Properties.NetworkPeriod` / `definitions`). The two lemmas' statements name `cappedPeriod`, not the literal. So the record should move at those hashes, and at the two lemmas' type hashes if those follow definitions [argued]. If `--update` shows more than that, I put it back and say so in the body.
+
+**Runs**
+
+- Suites r20261112-124729-7857 at `76a4da03ddd6`: its 84 changed suites passed; its two named suites are still running.
+- Suites r20261112-131035-1146 at `ac8cd26077b2`: running.
+- r20261112-134034-0bbe at `c3b368cc4026`: the three tries passed; its suites (4 the change reaches) are still running.
+
