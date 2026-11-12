@@ -207,7 +207,6 @@
     {"file": "verity_vllm/pipeline/chunk_rows.py", "kind": "I001", "symbol": "reads", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/chunk_rows.py", "kind": "I001", "symbol": "unit_rows", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/circuit_db.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 8},
-    {"file": "verity_vllm/pipeline/cli.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "B023", "symbol": "main", "detail": "Function definition does not bind loop variable `_c2`"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "B023", "symbol": "main", "detail": "Function definition does not bind loop variable `com`", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "B023", "symbol": "main", "detail": "Function definition does not bind loop variable `rc`"},
