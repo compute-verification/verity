@@ -1477,6 +1477,7 @@ def main(argv: list[str] | None = None) -> int:
         progress.unlink(missing_ok=True)
     cache = None if a.no_cache or a.update_pins else a.cache or (None if a.all else default_cache())
     if cache:
+        CC.expire(cache)
         if (why := prebuild(log=None if a.quiet else print)) is not None:
             print(f"circuit-check: refused: {why}", file=sys.stderr)
             return 2
