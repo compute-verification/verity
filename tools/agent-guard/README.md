@@ -64,8 +64,8 @@ python3 tools/agent-guard/inbox.py check AGENT_ID                  on its own VM
 python3 tools/agent-guard/procs.py [PATTERN]                       processes and their command lines, tokens cut
 python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent
 python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner
-tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
+tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
 uv run tools/verity/check/suites.py tools/agent-guard              its tests
 ~~~
 
