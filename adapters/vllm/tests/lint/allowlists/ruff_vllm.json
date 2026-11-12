@@ -926,7 +926,6 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 26},
     {"file": "verity_vllm/pipeline/tp/commit_replay.py", "kind": "T201", "symbol": "fold", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/tp/import_path.py", "kind": "T201", "symbol": "write_import_path_runtime", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "I001", "symbol": "_engine_main", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "T201", "symbol": "_check_main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "T201", "symbol": "_engine_main", "detail": "`print` found", "count": 4},
     {"file": "verity_vllm/pipeline/tp/phases.py", "kind": "T201", "symbol": "warmups", "detail": "`print` found"},
