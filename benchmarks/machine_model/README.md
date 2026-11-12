@@ -44,6 +44,9 @@ own and changes with it.
 - **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
   Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
   its `__all__` lists. `benchmarks/pouw/lean_headline.py` gives the same names to the files that load that path.
+- **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data, which
+  `benchmarks/pouw/lean_headline_dc.py` writes as Lean: `reading(family, vector, full, q)` with `FAMILIES` and `SM90`,
+  and the constants its `__all__` lists.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -168,6 +171,8 @@ headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and `S
 - `lean_headline`: sm_120's headline instances, exact, and their Lean files: `instance() -> Instance` (the data sheet's)
   and `measured() -> Measured`, each checked against the model's own numbers, `render` and `render_measured`, and
   `write(check)`.
+- `dc_reading`: the H200's and B200's headline instances, exact: `reading(family, vector, full, q) -> Reading` on a
+  family's data sheet and on its measured vector, whose certificate an LP over the Lean menu finds (`certificate`).
 - `redteam`: from a device's census alone, how much room an adversary has to beat a row: `audit`, `margin_audit`,
   `least_filler`, `uniform_gap`.
 - `theta`: the card table: `theta(data) -> Theta`, `check`, and what it derives on the data sheet and measured
