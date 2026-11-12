@@ -86,8 +86,10 @@ import multiprocessing as mp
 import os
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -108,6 +110,10 @@ from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E40
 from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+
+if TYPE_CHECKING:
+    from verity.circuits.defs import SpecializedDefinition
+    from verity_flock.class_statement import UnitStager
 
 RC = (32, 32)
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -136,15 +142,15 @@ HOLDS = {"other-registration-file": "honest"}
 HELD = {"other-registration-file-held": "other-registration-file"}
 #: the combine row ``combine-skips-p5-bit``'s circuit leaves a bit of unread
 LAZY_ROW = 5
-def tile(k: int):
+def tile(k: int) -> Any:
     return HW.h1_tile(k, RC, H.PouwH1Tile3 if U.tile() == "v3" else None)
 
 
-def f32(x) -> np.ndarray:
+def f32(x: np.ndarray | Sequence[float] | float) -> np.ndarray:
     return np.asarray(x, np.float32).view(np.uint32)
 
 
-def u32_words(words) -> list[int]:
+def u32_words(words: np.ndarray | Sequence[int]) -> list[int]:
     return [int(v) for v in np.ascontiguousarray(np.asarray(words, np.uint16).astype("<u2")).view("<u4")]
 
 
@@ -167,7 +173,7 @@ def _template(name: str, d):
                                     conformance="protocol-defined", register=False, **ports))
 
 
-def lazy_combine(d, x: int, j: int, i: int):
+def lazy_combine(d: Any, x: int, j: int, i: int) -> SpecializedDefinition:
     """The combine ``d`` reading bit ``i`` of its partials row ``x`` in place of bit ``j``, so that no wire reads bit
     ``j``: a circuit that leaves a ``read_in_full`` row's bit unread (``combine-skips-p5-bit``)."""
     params, ret = d.signature()
@@ -199,7 +205,7 @@ class Bound:
         return {"partition": P.digest(self.part), "program": self.part["program"]}
 
 
-def bound(name: str, d) -> Bound:
+def bound(name: str, d: object) -> Bound:
     program = Program(_template(name, d))
     query = P.template_instances_query([d])
     part = P.partition(program, query)
@@ -208,7 +214,7 @@ def bound(name: str, d) -> Bound:
     return Bound(d, program, query, part)
 
 
-def window(t, k: int) -> Program:
+def window(t: Any, k: int) -> Program:
     """A window of one call at K over the leaf's tile ``t``: its one unit is the leaf."""
     return HW.program((("w", k, RC[1]),), (("w", 0),), RC[0], RC, unit=lambda _k: Z.unit(t))
 
@@ -298,7 +304,7 @@ def partials(leaf: Leaf, roots: tuple) -> list[list[int]]:
     return out
 
 
-def world(name: str, ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> World:
+def world(name: str, ctx: Ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> World:
     rec = R.record(ctx.reg.program, ctx.reg.query, {"law": "subset", "k": 1}, SCHEME, [],
                    {"kind": "stand-in", "harness": "h1_lanes", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
@@ -309,7 +315,7 @@ def world(name: str, ctx, leaf: Leaf, regs: dict, roots: tuple, rows: list) -> W
     return World(name, leaf, roots, regs, d, sample, tree, PR.record(d, sample, [tree.entry()], ops), rec)
 
 
-def entries(ctx, w: World) -> tuple[dict, dict]:
+def entries(ctx: Ctx, w: World) -> tuple[dict, dict]:
     """The verifier's entries and roots of ``w``, from its registration record and produced record alone
     (`leaf_lanes.verifier_entries`, Lean's `PouwWindow.Lanes.roots?`, which `pouw-leaf-own` holds each file to)."""
     return LL.verifier_entries(w.reg_record, w.record, LL.lanes(*RC), ctx.wp)
@@ -325,12 +331,12 @@ def opening(tree: G.Registered, position: int, row: int | None = None) -> dict:
             "path": tree.path(position).hex()}
 
 
-def known(words, salt: bytes) -> dict:
+def known(words: Sequence[int], salt: bytes) -> dict:
     """A row the statement commits afresh, which the public file states: no registered read."""
     return {"row": [int(x) for x in words], "salt": salt}
 
 
-def known_rows(ctx, w: World, kind: str, ln: int | None, index: int) -> dict:
+def known_rows(ctx: Ctx, w: World, kind: str, ln: int | None, index: int) -> dict:
     """The statement's known ports (`leaf_lanes.known_rows`), each ``(value, row, salt)`` as the verifier computes them:
     lane l's ``pub`` (index l) and ``admit``, and ``o0`` the row 1, under salts anyone derives (`h1unit.pub_salt`,
     `ok_salt`)."""
@@ -343,12 +349,12 @@ def known_rows(ctx, w: World, kind: str, ln: int | None, index: int) -> dict:
     return {p: (v, row, salts[p]) for p, (v, row) in rows.items()}
 
 
-def known_opening(ctx, w: World, value: str, row: list[int], salt: bytes) -> dict:
+def known_opening(ctx: Ctx, w: World, value: str, row: list[int], salt: bytes) -> dict:
     """The prover's opening of a known port's row: ``row`` committed under ``salt`` as its one-row tree."""
     return opening(PR.commit(ctx.prog, value, [row], w.registration, [salt], schema=V2), 0)
 
 
-def stager(ctx, kind: str, variant: str | None = None):
+def stager(ctx: Ctx, kind: str, variant: str | None = None) -> UnitStager:
     """``kind``'s stager, or with ``variant`` ``lazy`` the combine over `lazy_combine` (``ctx.lazy``), in `h1unit.layout`'s
     form (`h1unit.stager`). A templated one's template and layout mode go beside its circuit (``unit.tmpl``,
     ``unit.layout``), for the prover's ``flock-tmpl-unit``."""
@@ -385,7 +391,7 @@ def expected(kind: str, ln: int | None, w: World, ins: dict, index: int | None =
     return [Z.combine_reference(ps, u32_words(ins[LL.RECEIPT]["row"]))]
 
 
-def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, index: int, free: tuple = (),
+def statement(ctx: Ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, index: int, free: tuple = (),
               lane_index: int | None = None, dropped: tuple = (), variant: str | None = None) -> dict:
     """Stage one statement and write the verifier's files: ``ins`` each input port's opening (`opening`,
     `known_opening`); the verifier reads ``w``'s registration and produced roots at `leaf_lanes.reads`' rows and registers
@@ -449,7 +455,8 @@ def statement(ctx, kind: str, ln: int | None, tag: str, w: World, ins: dict, ind
 CTX = None
 
 
-def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int | None = None, pub_free: bool = False) -> dict:
+def lane_ins(ctx: Ctx, w: World, ln: int, partial: dict | None = None, pub_index: int | None = None,
+             pub_free: bool = False) -> dict:
     """Lane ``ln``'s openings; ``pub_index``: the index its ``pub`` row holds, when not ``ln``; ``pub_free``: its ``pub``
     row committed afresh, the public file stating it."""
     t = w.regs
@@ -464,14 +471,14 @@ def lane_ins(ctx, w: World, ln: int, partial: dict | None = None, pub_index: int
     return ins
 
 
-def combine_ins(ctx, w: World, p5: dict | None = None) -> dict:
+def combine_ins(ctx: Ctx, w: World, p5: dict | None = None) -> dict:
     got = {f"p{x}": opening(w.tree, x) for x in range(LL.lanes(*RC))}
     if p5 is not None:
         got["p5"] = p5
     return {**got, LL.RECEIPT: opening(w.regs[LL.RECEIPT], 0)}
 
 
-def jobs(ctx) -> list[tuple]:
+def jobs(ctx: Ctx) -> list[tuple]:
     """Every statement: ``(tag, kind, lane, world, negative)``."""
     n = LL.lanes(*RC)
     honest = [(f"lane{ln}", LL.LANE, ln, "honest", None) for ln in range(n)] + [("combine", LL.COMBINE, None, "honest", None)]
@@ -521,7 +528,7 @@ class Ctx:
     place: dict | None = None
 
 
-def prepare(args) -> None:
+def prepare(args: argparse.Namespace) -> None:
     global CTX
     t0 = time.time()
     work = Path(args.work)
@@ -653,7 +660,7 @@ def _time(p: Path) -> dict | None:
     return json.loads(p.read_text()) if p.exists() else None
 
 
-def summarize(args) -> int:
+def summarize(args: argparse.Namespace) -> int:
     work, out = Path(args.work), Path(args.out)
     plan, prep = json.loads((work / "plan.json").read_text()), json.loads((work / "prepare.json").read_text())
     rows, opened, verdicts, known = {}, {}, {}, {}
@@ -702,7 +709,7 @@ def summarize(args) -> int:
     return 0 if ok else 1
 
 
-def cost(args) -> None:
+def cost(args: argparse.Namespace) -> None:
     """A lane's and the combine's ANDs at K (`--k`, 4096 the served one), each its statement's lowering
     (`class_statement.unit_lowering`, structural under ``H1_TMPL=structural``, as `h1unit.stager` lowers it), and a leaf's: 32
     lanes and the combine."""
@@ -745,6 +752,10 @@ def main() -> None:
     else:
         sys.exit(summarize(a))
 
+
+__all__ = ["Bound", "Ctx", "LL", "Leaf", "RC", "REGISTERED", "ROOTS_TAG", "SALT_TAG", "SCHEME", "STEPS", "U", "World",
+           "code_words", "derived", "known_opening", "known_rows", "lane_rows", "leaf_data", "opening", "partials",
+           "receipt_reg", "sample_digest", "stager", "tile", "u32_words", "window"]
 
 if __name__ == "__main__":
     main()

@@ -448,10 +448,10 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
 
 
 @pytest.mark.slow
-def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
+def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
-    for an assertion), the flat statement, said on stderr."""
+    for an assertion), the flat statement, said in a warning."""
     from verity.circuits.boolean import BIT
     from verity.circuits.boolean.forms import add
     from verity.circuits.boolean.trace import definition
@@ -473,10 +473,9 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
         raise NotImplementedError(f"{definition.id}: an assertion is not laid out: its row reads its own column")
 
     monkeypatch.setattr(SL, "lower", refuse)
-    capsys.readouterr()
-    fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
+    with pytest.warns(UserWarning, match="the flat statement: struct_lower refuses H1StagerToy"):
+        fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
-    assert "the flat statement: struct_lower refuses H1StagerToy" in capsys.readouterr().err
 
 
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
