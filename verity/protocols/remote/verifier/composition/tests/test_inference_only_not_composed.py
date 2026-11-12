@@ -40,12 +40,14 @@ def v0_names() -> set[str]:
 
 
 def lean_components(path: Path) -> tuple[list[str], list[str]]:
-    """A composite's `components`, the Lean names it lists, and the ids its `#guard` pins them to."""
+    """A composite module's `components` (each composite's it defines), the Lean names they list, and the ids their
+    `#guard`s pin them to."""
     text = path.read_text()
-    names = re.search(r"^def components\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
-    ids = re.search(r"^#guard components\.map \(·\.id\) ==\s*\[(.*?)\]", text, re.M | re.S)
-    assert names and ids, f"{path.name}: no `def components : ... := [...]` or no `#guard` on their ids"
-    return [n.strip() for n in names[1].split(",")], re.findall(r'"([^"]*)"', ids[1])
+    names = re.findall(r"^def components\s*:[^\n]*?:=\s*\[(.*?)\]", text, re.M | re.S)
+    ids = re.findall(r"^#guard components\.map \(·\.id\) ==\s*\[(.*?)\]", text, re.M | re.S)
+    assert names and len(names) == len(ids), f"{path.name}: a `def components : ... := [...]` without a `#guard` on its ids"
+    return ([n.strip() for ns in names for n in ns.split(",")],
+            [i for xs in ids for i in re.findall(r'"([^"]*)"', xs)])
 
 
 def configuration_ids() -> list[str]:
@@ -67,7 +69,7 @@ def unlisted(where: str, ids: list[str]) -> list[str]:
 def composed() -> set[str]:
     """Every id a composite's Lean or the reference composes."""
     return {i for p in COMPOSITES.values() for i in lean_components(p)[1]} | {
-        C.id for p in (R.ONSITE, R.REMOTE) for C in p.components}
+        C.id for p in (R.ONSITE, R.REMOTE_V1, R.REMOTE) for C in p.components}
 
 
 @pytest.mark.parametrize("composite", sorted(COMPOSITES))
@@ -78,7 +80,7 @@ def test_lean_components(composite):
     assert not v0_names() & set(names) or V0 in ids, f"{composite}.components holds v0 under an id its `#guard` doesn't pin"
 
 
-@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE], ids=lambda p: p.id)
+@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE_V1, R.REMOTE], ids=lambda p: p.id)
 def test_reference_components(product):
     ids = [C.id for C in product.components]
     assert not unlisted(f"the reference's {product.id}", ids), unlisted(f"the reference's {product.id}", ids)

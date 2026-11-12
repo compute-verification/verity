@@ -8,27 +8,33 @@ or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the verifier
-establishes with no hardware of its own at the developer's site. It composes three protocols (`Core.Remote.components`):
+Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the
+verifier establishes with no hardware of its own at the developer's site. It composes three protocols
+(`Core.Remote.V1.components`):
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
+- work, by Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`): tiles of the run's retained passes, sampled by work
+  weight on a live coin, are recomputed, and the run's commitment names the one record the policy and SPOT
+  committed to (`Core.Remote.V1.run`). H1's development executable, `verity/remote/v0` (`Core.Remote.protocol`),
+  which no configuration names, has PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too) in its place: the GPU's time is credited
   to useful matmuls through receipts the live coins open, the period's windows all or nothing, each window's Commit
-  record the one record the policy and the one-stage audit committed to;
+  record that one record;
 - the inference-only policy (`verity/inference-only/v0`): the registered circuit divides into inference blocks within
   their gate and fresh-input budgets, checked from the registered circuit and the registered information alone.
 
 Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
 the commitment, never flipped again) and on what each subprotocol's own
-guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite states none of its own in Lean
-yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet. `lifecycle/` is the
-only demo that steps through the whole remote composite, on CPU with a
-stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
-sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The
-inference-only policy runs in `lifecycle/` only: no served run produces the declared division yet. Five other things are called "remote" (PoUB among them);
+guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite's
+(`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
+hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
+remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
+(`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
+and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
+runs in `lifecycle/` only: no served run produces the declared
+division yet. Five other things are called "remote" (PoUB among them);
 `verity/protocols/remote/verifier/README.md`, "Which remote", lists them.
 
 ## How far a demo runs, and how far it's proved

@@ -145,6 +145,9 @@ def test_a_committed_byte_not_retained_outside_the_excluded_interiors_is_refused
 PARTS = Path(__file__).parent / "fixtures" / "llama32_1b_bi_eager_served_window_parts.json"
 SERVED_ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2)], 1: [("runner-a", 0, 1, 3, 3), ("runner-b", 1, 2, 2, 2)]}
 SERVED_NAMES = {"runner-a": "b0-1", "runner-b": "b0-2"}
+#: the digest the row's manifest names (``manifest_digest``): the fixture keeps a cut of its identities, so not one computed
+#: over them, and the seal records the digest the manifest names without recomputing it
+MANIFEST_DIGEST = "ef" * 64
 _ITEM = {"bfloat16": 2, "float32": 4, "int32": 4, "int64": 8}
 
 
@@ -168,8 +171,10 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     return fx, d, s
 
 
-def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None):
-    """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned."""
+def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name=None, kept=None, manifest_path=None, drop=()):
+    """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned. The row's
+    manifest, naming its digest (`MANIFEST_DIGEST`), is read from ``manifest_path`` (the fixture's path by default), without the
+    keys ``drop``."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
@@ -195,7 +200,10 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
-        com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
+        man = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
+        man["manifest_digest"] = MANIFEST_DIGEST
+        com.required_manifest = {k: v for k, v in man.items() if k not in drop}
+        com.required_manifest_path = str(manifest_path or PARTS)
     leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
             "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
@@ -248,6 +256,47 @@ def test_without_the_rows_manifest_a_window_binds_raw_names(tmp_path):
     assert r.manifest is None and store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "0")
     assert not store.has("b0-1", 1, "model.layers.0.mlp.gate_up_proj", "out")
     assert not store.has("b0-1", 1, "model.layers.1.self_attn.rotary_emb", "query")
+    assert "required_manifest" not in r.ctx["served_window"]
+
+
+def test_a_sealed_windows_record_binds_the_rows_manifest_by_its_digest(tmp_path):
+    """The context names the row's required manifest by its path, its Program digest and its own digest, the one over its
+    identities that predict row writes as ``manifest_digest`` (B-OF-RECORD holds both digests to predict's record)."""
+    fx, seal = _parts_window(tmp_path, True, port=PORT, manifest_path=tmp_path / "pred" / "manifest.json")
+    d, s = seal(ss.seal_window)
+    r = _store(d, s)[0]
+    assert r.ctx["served_window"]["required_manifest"] == {"path": str(tmp_path / "pred" / "manifest.json"),
+                                                           "program_digest": fx["program_digest"],
+                                                           "manifest_digest": MANIFEST_DIGEST}
+
+
+@pytest.mark.parametrize("key", ["manifest_digest", "program_digest"])
+def test_a_rows_manifest_that_names_no_digest_is_refused_at_the_seal(tmp_path, key):
+    """A committer carrying a manifest without its digest (one predict row didn't write) seals nothing: the record would bind
+    the manifest by a digest it holds as None."""
+    _fx, seal = _parts_window(tmp_path, True, port=PORT, drop=(key,))
+    with pytest.raises(ValueError, match=f"{PARTS.name} names no {key}, and a sealed window binds its manifest by it"):
+        seal(ss.seal_window)
+    d = tmp_path / "w5"
+    assert not (d / "commit" / "replay_bundle_p0").exists() and not (d / "commit" / "verdict.json").exists()
+
+
+def test_serve_openai_refuses_a_rows_manifest_that_names_no_digest_before_it_serves(tmp_path, monkeypatch):
+    """`manifest_of_record`, which `committer` reads before the engine serves: a manifest naming no ``manifest_digest`` is
+    refused by name, and one naming both digests is the Commit's."""
+    import re
+
+    from verity_vllm.commit import partition
+    from verity_vllm.config import UsageError
+
+    monkeypatch.setattr(partition, "require_partition", lambda man, *_a: man)
+    p = tmp_path / "manifest.json"
+    p.write_text(json.dumps({"program_digest": "ab" * 64, "identities": []}))
+    opts = SimpleNamespace(required_manifest=str(p))
+    with pytest.raises(UsageError, match=re.escape(f"{p} names no manifest_digest")):
+        ss.manifest_of_record(opts)
+    p.write_text(json.dumps({"program_digest": "ab" * 64, "manifest_digest": "cd" * 64, "identities": []}))
+    assert ss.manifest_of_record(opts)["manifest_digest"] == "cd" * 64
 
 
 #: each request's token rows of each step (`SERVED_ROWS`)
@@ -500,6 +549,21 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
     assert ADV.registered_compiler("inner-compiler", "cd" * 64).cap_bits == ADV.CAP_BITS
+
+
+def test_bs_builder_item_is_what_the_registration_log_registers_once():
+    """B's entry in the registration log: the inner compiler's digest, advice v0 and ℓ, read back as the log's builder; a
+    second builder is refused."""
+    from verity.hardware import registration as REG
+    from verity.protocols.certifier.verifier import advice as I1
+
+    item = ADV.builder_item(ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=4096))
+    assert item == {"advice": I1.SCHEMA, "cap": 4096, "digest": "cd" * 64, "kind": "builder"}
+    auditor = REG.Auditor()
+    assert REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,))])).view().builder == item
+    other = ADV.builder_item(ADV.registered_compiler("other-compiler", "ab" * 64))
+    with pytest.raises(REG.Refused, match="entry 1: duplicate-information"):
+        REG.check(auditor, "onsite", REG.chain("onsite", [REG.Information((item,)), REG.Information((other,))]))
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])

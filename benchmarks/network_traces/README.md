@@ -9,8 +9,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
-- Every other `.sh` here is a job on a node, its command and resources in its header. The proving jobs build Flock's
-  `flock-circuit`, the Lean `flock-verify` and the Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
+- Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
+  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `flock-verify` and the
+  Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
 - The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
@@ -49,6 +50,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network certifier process of its own;
   `deviations.sh` is its tries as a job behind one ssh forward (below).
+- **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
+  it against the relay's record of that run (below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -110,14 +113,16 @@ certifier run's witness never go on the developer's machine. Without the gate's 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, so the engine
-closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
-slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
-runs the chain's certifier path on that fetch with the serve dir's endpoint records, run dir and quarantine private
-beside the fetch, and answers with `network-period check` on the rows form of the scan's
-execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that execution phase, and the Lean check accepts; beside that answer goes
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
+network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
+`scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
+and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
+admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
+endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
+form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
+request of the audited window is a certified one inside that execution phase, and the Lean check accepts; beside that
+answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
@@ -126,7 +131,11 @@ on the developer's node, so `trusted-host` is assumed with the auditor's devices
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
-bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
+(`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
+(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
+consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
+releases through its own hold.
 
 ## A cheating server
 
@@ -205,6 +214,67 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   terminating chunk was written, so its server did not get the watermark whole; a stream that ended clean has none.
   A try keeps what that log says of the watermark: its last line, the lost releases and the kind of error that
   stopped it, if one did.
+
+## A second count from a packet capture
+
+`capture_flows.py` reads a capture taken beside a run through the relay, at a point that is neither the server's
+process nor the network certifier's, and counts the bytes between the two a second time. Its docstring says which bytes
+are compared, why they must agree and what it refuses. It says "agrees" or the difference in bytes, and gives no
+protocol's verdict.
+
+**Taking the capture**, where every packet between the server and the network certifier passes:
+
+    tcpdump -i IFACE -U -s 130 -w run.pcap 'ip host SERVER'
+
+- The filter keeps the flows with the server's address on one side and nothing else, so a shared link's other traffic
+  never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one), and `vlan and (…)` on
+  a link whose frames carry a VLAN tag. The reader refuses a file that still holds a flow between two addresses it
+  wasn't given; `--skip-foreign` counts and skips them.
+- `-s 130` keeps at most each packet's first 130 bytes: every header and, where the headers are shorter (a common
+  packet's are 54 to 66 bytes), the first bytes of its content, so the file holds the start of each segment. The
+  reader needs the 130 for the longest headers it reads, and reads every length from the headers, never from how
+  much was kept.
+- Start it before the run's first connection and stop it after its last has closed: a flow without its SYN or its FIN
+  is only a floor. `tcpdump` gets its packets a little after they pass, so stop it only once the file has stopped
+  growing (`-U` writes each packet as it comes), or its last packets are lost.
+- The file is pcap; `tcpdump -r IN -w OUT.pcap` rewrites a pcapng one. A capture point that writes each direction of a
+  fibre to its own file gives two files: name both.
+
+**On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
+certifier and the load on one machine's loopback (`warden_serve.py rehearse --fake --watermark`), a capture of the
+loopback beside them, then the reader. The front and the relay share an address there, so the front's is given with
+its port, and the load's connections to the relay are among the other flows. It is a `research run` job where the job
+may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
+link between two machines under the capture.
+
+**Reading it:**
+
+    python benchmarks/network_traces/capture_flows.py --capture run.pcap --server SERVER[:PORT] \
+        --certifier CERTIFIER --run RUN --out capture_flows.json
+
+`RUN` is the relay's run directory (`warden_serve.py serve`); without it the capture is summed and listed only. The
+result file holds every flow's sums, and the table is:
+
+- The packets read and what was skipped, then the record's connections to the server and how many of its execution
+  phases' records (each phase's ingress, egress and reasons) are certified under its key.
+- A line for each direction between the server and the certifier: its flows, `packets` and `wire bytes` (every frame,
+  with its headers, ACKs and retransmissions), `payload bytes` (above the TCP header, a retransmitted segment each time
+  it was sent), `stream bytes` (each sequence number once, which the record's count is held against), `holes` (bytes
+  of sequence numbers the capture missed) and `record bytes`. Then what the direction says: `agrees`; `differs by N
+  bytes`, the capture's less the record's, where both counts are exact; `bound: …` with the range the difference lies
+  in, where a count is only a bound (a hole, a flow without its SYN or FIN, a connection that failed or whose release
+  was lost, the watermark's connection in no pair) and the range holds 0; `differs: …` where it doesn't.
+- The pairing. No record holds a port, so connections and flows are paired by their two counts, as multisets: how many
+  paired and how many of each stay unpaired. Two connections of equal counts aren't told apart, and "agree" is said of
+  the sums and the multisets, never of one connection.
+- Each connection whose counts are bounds, and the bytes the server answered on the watermark's connection, which are
+  in no record and in no sum. Where that connection pairs with no flow, its answer can't be told from the server's
+  other bytes and stays in the sum from the server: that direction is then a bound, lower by as many bytes as the
+  capture counts from the server on the largest flow in no pair, and the line says so.
+- Every other flow with a given address on one side, a line each: what the given side sent (`out`) and received
+  (`in`). Machines are named `server`, `certifier` and `other-N`, with their ports: no address is printed or written.
+
+It exits 0 when it read the capture and 2 when it refused it.
 
 ## The chain's run of record
 
@@ -316,20 +386,25 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
-- No term for incorrect proof blocks with every proof block sampled, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the certifier's written buckets tell a receiver no more than an idle one. The
-  certifier hands each bucket to a pacer that releases it at a time fixed before the bucket is made
-  (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+- No term for incorrect proof blocks with every proof block sampled.
+- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
+  record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
+  one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The certifier hands each bucket
+  to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py
+  --paced-ms`), and a certifier on the host's clock always paces. Still, the host's state after the server's writes for
+  the next bucket moves when a bucket reaches the client. The scan's period check (`scan_period.py`) passes the same
+  bound as `NetworkCheck.Period`'s `jitter`.
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
-reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
-outside due and occupied slots, so an execution phase's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
-compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
-prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the execution phase
-by name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`,
-`io_shell.SlotEntry_v1` at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1`
-stand-in, whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads
-the requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, an execution phase whose scan's
+reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
+and ignores it outside due and occupied slots, so an execution phase's entries are its NR·nb boundaries'. Unless each
+lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
+(`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
+passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (`wired`). `wired` pins the template's
+whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
+`SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
+whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
+requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, an execution phase whose scan's
 state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
 (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
 that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
@@ -372,8 +447,8 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves execution phase 0. A monitoring period's figures scale its per-execution-phase and per-request terms at
   the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced certifier's written buckets tell a
-  receiver no more than an idle one.
+- The jitter term is T bits a sampling block, one a bucket: J assumed at D_j = 2; at D_j = 1 not met (next-bucket
+  host-state channel).
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the execution phase's free inputs above.
 

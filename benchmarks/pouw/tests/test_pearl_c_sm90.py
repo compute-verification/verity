@@ -40,7 +40,10 @@ S = load("pearl_c_sm90_sass_gate", HERE / "sass_gate.py")
 RUN = load("pearl_c_sm90_run", HERE / "run.py")
 
 SOURCE = (HERE / "pearl_c_sm90.cu").read_text()
-HASH_SOURCE = (HERE.parent / "pearl_c" / "hash_h3.cuh").read_text() + (SM120_DIR / "hash_fast.cuh").read_text()
+HASH_SOURCE = "".join(f.read_text() for f in (HERE.parent / "pearl_c" / "hash_h3.cuh", SM120_DIR / "hash_fast.cuh",
+                                               HERE.parent / "pearl_c" / "hash_wide.cuh"))
+#: hash_wide.cuh's kernels, each with its launch's block: the row digests past RS_MAX_SEGS segments, launched at no other shape
+WIDE = {"s512_heads_w": 128, "s512_row_segs_w": RUN.RS_FAST_NT, "s512_folds_w": RUN.RS_FOLD_NT}
 #: hash_decode.cuh's variants the cubin builds (pearl_c_sm90.cu's PD_VARIANT_LIST), each its four kernels
 PD_BUILT = [int(v) for v in re.findall(r"X\((\d+)\)", re.search(r"#define PD_VARIANT_LIST\(X\)(.*)", SOURCE).group(1))]
 #: hash_prefill.cuh's variants the cubin builds (pearl_c_sm90.cu's PL_INSTANCE lines), each its four kernels
@@ -180,10 +183,81 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
+    """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
+    registry declares, so a capture that would race on the rows doesn't run them by default."""
+    from verity_config.settings import of
+
+    for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
+        if raw is None:
+            monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
+        else:
+            monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
+        assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
+        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+    sys.modules.pop("pearl_c_sm90_run_bf16_rows")
+
+
+def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypatch):
+    """`Debit.resident`'s body makes words()'s launches, chunk for chunk (rows, sizes, B̃ and scratch the same; A′ at the
+    chunk's rows in the one copy put before it), and after its first call nothing else: no copy, synchronization or
+    allocation, so `Dev.timed` times the count's kernels alone."""
+    class Dev:
+        def __init__(self, cubin):
+            self.log, self.top = [], 1 << 20
+
+        def open(self):
+            pass
+
+        def alloc(self, n):
+            self.log.append(("alloc", n))
+            p, self.top = self.top, self.top + -(-n // 256) * 256
+            return p
+
+        def free(self, p):
+            self.log.append(("free", p))
+
+        def ck(self, f, *a):
+            self.log.append((f,))
+
+        def launch(self, name, grid, block, p=(), i=(), **kw):
+            self.log.append((name, grid, block, p, i))
+
+        def sync(self):
+            self.log.append(("sync",))
+
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setitem(sys.modules, "run", RUN)
+    monkeypatch.setattr(RUN, "Dev", Dev)
+    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    rng = np.random.default_rng(7)
+    a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
+    budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
+    w, r = deb.Debit(b"", budget), deb.Debit(b"", budget)
+    w.words(a, b)
+    body = r.resident(a, b)
+    put = [e for e in r.dev.log if e[0] == "cuMemcpyHtoD_v2"]
+    body()
+    r.dev.log.clear()
+    body()
+    assert len(put) == 2 and all(e[0].startswith("debit_") for e in r.dev.log)
+    want = [e for e in w.dev.log if e[0].startswith("debit_")]
+
+    def named(d, e, a_at):
+        by = {p: n for n, (p, _) in d.live.items()}
+        return e[0], e[1], e[2], e[4], tuple("A′" if x == a_at else by.get(x, x) for x in e[3])
+
+    assert len(want) == len(r.dev.log) == 9
+    for i, (got, ref) in enumerate(zip(r.dev.log, want)):
+        assert named(r, got, r.live["a_all"][0] + i // 3 * deb.BLOCK_ROWS * k) == named(w, ref, w.live["a"][0])
+    sys.modules.pop("pearl_c_sm90_debit")
+
+
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
     """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
     gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
     before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
     launched = []
 
     class D:
@@ -232,6 +306,91 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     RUN.widen_a(dev, 1, 2, 8, 16, 4096)
     RUN.widen_a(dev, 1, 2, 8, 16, 4096, pdl=False)
     assert calls == ["programmatic", "plain"]
+
+
+def test_pd_shared_launches_the_same_pd_commit_and_pd_tree_in_half_an_sm():
+    """`pd_setup` gives each served pd_commit and pd_tree and each stamp twin PD_WHOLE's dynamic shared memory (all a CTA
+    may take beside its static, so one CTA an SM) and `Pipeline.pd_shared`'s (half an SM's beside its static and the
+    driver's reserve, so two CTAs an sm_90 SM and not three), each at least the PD_PAIR_SMEM the code uses and within the
+    limit it sets; a static that leaves less is refused.  Under ``pd_shared`` a pipeline launches the same functions with
+    the same grid, block and parameters, its shared memory alone changed, in each mode and with stamps."""
+    sm = H100_MAX_DYN + RUN.CTA_RESERVED_SMEM
+
+    class D:
+        def __init__(self, static):
+            self.static, self.dev, self.limit, self.launched = static, 0, {}, []
+
+        def get(self, call, attr, x):
+            return H100_MAX_DYN if call == "cuDeviceGetAttribute" else self.static[x.rsplit("_", 1)[0]]
+
+        def fn(self, name):
+            return name
+
+        def ck(self, call, fn, attr, v):
+            self.limit[fn] = v
+
+        def launch(self, name, grid, block, smem=0, p=(), i=(), **kw):
+            self.launched.append((name, grid, block, smem, tuple(p), tuple(i)))
+
+        def sync(self):
+            pass
+
+    static = {"pd_commit": 6000, "pd_tree": 1500}
+    d = D(static)
+    RUN.pd_setup(d)
+    for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED):
+        for f, whole, shared in (("pd_commit", d.pd_smem, d.pd_smem_shared), ("pd_tree", d.pd_tree_smem, d.pd_tree_smem_shared)):
+            cta = {x: x + static[f] + RUN.CTA_RESERVED_SMEM for x in (whole[v], shared[v])}
+            assert v & RUN.PD_WHOLE and whole[v] == H100_MAX_DYN - static[f] and 2 * cta[whole[v]] > sm
+            assert shared[v] == (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2 - static[f] >= RUN.PD_PAIR_SMEM
+            assert 2 * cta[shared[v]] <= sm < 3 * cta[shared[v]] and d.limit[f"{f}_{v}"] == whole[v]
+    with pytest.raises(RuntimeError, match="pd_tree_shared"):
+        RUN.pd_setup(D({"pd_commit": 6000, "pd_tree": 70000}))
+
+    pipe = RUN.Pipeline.__new__(RUN.Pipeline)
+    pipe.b = dict.fromkeys(("xa", "rowdig_a", "tree_a", "seeds_a", "lkeys_a", "pd_count", "seed_a", "line_a", "ea_codes"), 1)
+    pipe.keys = dict.fromkeys(("unit", "dom_a", "salt_key", "hm"), 2)
+    pipe.dev, pipe.rows_bf16, pipe.fillers, pipe.split_a, pipe.k, pipe.m, pipe.m_real = d, None, True, True, 4096, 64, 32
+    for pipe.pd in RUN.PD_SERVED:
+        for pipe.stamps in (0, 9):
+            got = {}
+            for pipe.pd_shared in (False, True):
+                d.launched.clear()
+                pipe.pd_commit(0)
+                pipe.pd_commit(1)
+                pipe.pd_tree()
+                got[pipe.pd_shared] = list(d.launched)
+            v = pipe.pd_a | (RUN.PD_STAMP if pipe.stamps else 0)
+            assert [x[3] for x in got[False]] == [d.pd_smem[v]] * 2 + [d.pd_tree_smem[v]]
+            assert [x[3] for x in got[True]] == [d.pd_smem_shared[v]] * 2 + [d.pd_tree_smem_shared[v]]
+            assert [x[:3] + x[4:] for x in got[True]] == [x[:3] + x[4:] for x in got[False]]
+            assert [x[0] for x in got[True]] == [f"pd_commit_{v}"] * 2 + [f"pd_tree_{v}"]
+    pipe.pd_shared = False
+
+
+def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_commitment_reads_bf16_rows(monkeypatch):
+    """`e2e.bf16_race`: a whole capture with hashing forking each call's A tree and A scales (`whole_defer_a`,
+    `whole_fork_stats`) on this kernel, under BF16_ROWS and from a cubin with BF16_ROWS_MARK (`Pipeline.reads_bf16`'s own),
+    races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
+    the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
+    BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
+    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
+    kernel = SimpleNamespace(run=RUN, dev=marked)
+
+    def run(**kw):
+        return SimpleNamespace(**{"kernel": kernel, "hashing": True, "whole_defer_a": True, "whole_fork_stats": True, **kw})
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
+    got = E2E.whole_check(run(), {})
+    assert got == {"check": "whole", "hashing": True, "refused": E2E.BF16_RACE, "ok": False}
+    assert all(w in got["refused"] for w in ("rows_a", "widen_a", "PEARLC_BF16_ROWS=0", "PEARLC_WHOLE_FORK_STATS=0"))
+    for kw in ({"whole_defer_a": False}, {"whole_fork_stats": False}, {"hashing": False},
+               {"kernel": SimpleNamespace(run=RUN, dev=SimpleNamespace(has=lambda name: False))},
+               {"kernel": SimpleNamespace(run=RUN, dev=object())},
+               {"kernel": SimpleNamespace(run=SimpleNamespace(), dev=marked)}):
+        assert not E2E.bf16_race(run(**kw)), kw
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not E2E.bf16_race(run())
 
 
 def test_a_programmatic_launch_waits_at_its_entry():
@@ -344,7 +503,7 @@ def test_the_sm90a_build_passes_the_gate(tmp_path):
     assert not problems, problems
     for name in ("gemm_pearlc", "gemm_pearlc_n64", "gemm_pearlc_d"):
         assert funcs[name]["HGMMA"] == 4 and funcs[name]["QGMMA"] % 4 == 0
-    assert H3_LAUNCHED | {"s512_pads", "lines"} <= set(funcs)
+    assert H3_LAUNCHED | {"s512_pads", "lines"} | set(WIDE) <= set(funcs)
 
 
 @pytest.fixture(scope="module")
@@ -439,7 +598,7 @@ def own_kernels() -> list[str]:
 
 def kernel_names() -> list[str]:
     """Every kernel in the cubin: pearl_c_sm90.cu's (the grouped calls' too) and those of the hashing it includes
-    (hash_h3.cuh, hash_fast.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
+    (hash_h3.cuh, hash_fast.cuh, hash_wide.cuh, hash_decode.cuh's variants and hash_prefill.cuh's)."""
     pd = ["pd_heads"] + [f"pd_{kind}_{v}" for v in PD_BUILT for kind in ("commit", "tree", "tiles", "probe")]
     pl = [f"pl_{kind}_{v}" for v in PL_BUILT for kind in PL_KINDS]
     return own_kernels() + list(MARKS) + grouped_kernels() + sorted(set(re.findall(KERNEL, HASH_SOURCE))) + pd + pl
@@ -448,8 +607,8 @@ def kernel_names() -> list[str]:
 def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
     """Bytes each pointer slot must hold for the launch, from the kernel's indexing in pearl_c_sm90.cu."""
     if name == "lines":
-        count = i[2]
-        return {0: 32, 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
+        count = i[2]   # lines t < i4 take p4's keys; only the rest read p0's
+        return {**({0: 32} if count > i[4] else {}), 1: 32 * count, 2: 32 * count, 3: 128 * count, 4: 32 * i[4]}
     if name == "stats_s5":
         rows, k = i[:2]
         return {0: 4 * rows * k, 1: 4 * rows, 2: 4 * rows, 3: 4 * rows, 4: 8 * rows}
@@ -505,6 +664,13 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         return {0: 64 * (i[2] * i[1] + (i[0] - i[2]) * i[3]), 1: 64 * i[0]}
     if name in ("s512_heads", "pd_heads"):
         return {}
+    if name in WIDE:                                           # a width's s + 1 header states: read only where given
+        k = i[0] if name == "s512_heads_w" else i[1]
+        heads = {0 if name == "s512_heads_w" else 2: 64 * (k // 256 + 1)}
+        if name == "s512_heads_w":
+            return heads
+        rows = {0: 4 * i[0] * k, 1: 64 * i[0] * (k // 256)} if name == "s512_row_segs_w" else {0: 64 * i[0] * (k // 256), 1: 64 * i[0]}
+        return {**rows, **(heads if p[2] else {})}
     if name == "hm_leaves":
         return {0: 64 * i[0], 1: 64 * i[0], 2: 32, 3: 128 + 192 * 256 * 64, 5: 8}
     if name == "s512_frame_leaves":
@@ -560,7 +726,8 @@ def threads(name: str, i: list[int]) -> int:
             "pb": lambda: 32 * i[0], "gen_f32": lambda: i[0] * i[1], "diff_words": lambda: i[0],
             "s512_rows": lambda: i[0], "s512_seeds": lambda: i[0], "s512_tile_leaves": lambda: -(-i[0] // 64) * (i[1] // 64),
             "s512_row_segs": lambda: i[0] * (i[1] // 256), "s512_tile_segs": lambda: tile_segs(i), "s512_folds": lambda: i[0],
-            "s512_heads": lambda: segs,
+            "s512_heads": lambda: segs, "s512_heads_w": lambda: i[0] // 256 + 1,
+            "s512_row_segs_w": lambda: i[0] * (i[1] // 256), "s512_folds_w": lambda: i[0],
             "hm_leaves": lambda: i[0], "s512_frame_leaves": lambda: i[1], "s512_pads": lambda: i[1] - i[0],
             "s512_nodes": lambda: i[1], "s512_tree_small": lambda: 1, "quant_s5": lambda: i[0] * i[1] // 16,
             f"pl_leaves_{RUN.PL_VARIANT}": lambda: i[0], f"pl_seeds_{RUN.PL_VARIANT}": lambda: i[0],
@@ -639,6 +806,14 @@ def test_runner_dry_run(small_fixture, ship, tmp_path):
     assert json.loads((small_fixture / "check.json").read_text())["weight"] == F.WEIGHT != 0
     assert nonces == {(RUN.nonce_args(F.HM96_WEIGHTS + F.WEIGHT), False), ((0, 0), True),
                       (RUN.nonce_args(F.HM96_TRANSCRIPT), False)}, nonces
+    # check_pd's /shared forms: pd_commit in both modes and pd_tree, each a launch of a PD_WHOLE form but its shared memory
+    pd: dict[int, set] = {}
+    for ev in evs:
+        if ev["op"] == "launch" and ev["name"].startswith(("pd_commit_", "pd_tree_")):
+            pd.setdefault(ev["smem"], set()).add((ev["name"], tuple(ev["grid"]), ev["block"], tuple(ev["p"]), tuple(ev["i"])))
+    half = (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2
+    assert set(pd) == {H100_MAX_DYN, half} and pd[half] <= pd[H100_MAX_DYN]
+    assert {(x[0], x[4][2]) for x in pd[half]} == {("pd_commit_851", 0), ("pd_commit_851", 1), ("pd_tree_851", 0)}
 
     log = tmp_path / "launches.jsonl"
     r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
@@ -754,6 +929,10 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert g[0] == threads(name, i) and ev["block"] == 32 and i[0] % 16 == 0 and i[1] % 64 == 0
         if name in ("s512_row_segs", "s512_tile_segs"):
             assert ev["block"] == RUN.RS_FAST_NT and i[1] % (256 if name == "s512_row_segs" else 64) == 0
+            assert name == "s512_tile_segs" or i[1] <= 256 * RUN.RS_MAX_SEGS
+        if name in WIDE:                                    # only rows the kernels above can't take, none past the widest
+            k = i[0] if name == "s512_heads_w" else i[1]
+            assert ev["block"] == WIDE[name] and k % 256 == 0 and RUN.RS_MAX_SEGS < k // 256 <= RUN.RS_WIDE_MAX_SEGS, ev
         if name == "s512_folds":
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
         if name.startswith("pd_commit_"):
@@ -764,6 +943,7 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
             assert bool(p[12]) == (i[0] < i[3]) and RUN.PD_PAIR_SMEM <= ev["smem"] <= H100_MAX_DYN, ev
         if name.startswith(("pd_commit_", "pd_tree_")):
             assert bool(p[13]) == bool(int(name.rsplit("_", 1)[1]) & RUN.PD_STAMP), ev
+            assert ev["smem"] in (H100_MAX_DYN, (H100_MAX_DYN - RUN.CTA_RESERVED_SMEM) // 2), ev
         if name.startswith("pl_"):
             half = RUN.PD_PAIR_SMEM // 2
             shape = {"pl_leaves": (-(-i[0] // RUN.PL_ROWS), 128, half), "pl_seed_a": (1, 64, half),
@@ -780,3 +960,140 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert ev["smem"] == RUN.PD_PAIR_SMEM // 2
             else:
                 assert g[0] == tiles and ev["block"] == 32 and ev["smem"] == 0
+
+
+def test_a_row_digest_launch_its_kernel_cant_take_never_reaches_the_device():
+    """`rs_refusal`, which `Dev.launch` raises before anything else: s512_rows, s512_row_segs and s512_folds past RS_MAX_SEGS
+    segments (they hold no bound of their own), hash_wide.cuh's kernels past RS_WIDE_MAX_SEGS (the kernels' own constants),
+    and any of them with k not a positive multiple of 256.  Up to its most segments each launch goes through."""
+    assert RUN.RS_MAX_SEGS == int(re.search(r"\bRS_MAX_SEGS = (\d+)", HASH_SOURCE).group(1))
+    assert RUN.RS_WIDE_MAX_SEGS == int(re.search(r"\bRS_WIDE_MAX_SEGS = (\d+)", HASH_SOURCE).group(1))
+    assert set(RUN.RS_KERNELS) == {"s512_rows", "s512_row_segs", "s512_folds", *WIDE}
+    ok = {"s512_rows": (3, 32768), "s512_row_segs": (3, 256), "s512_folds": (5, 128, 3, 31), "s512_heads_w": (262144,),
+          "s512_row_segs_w": (2, 33024), "s512_folds_w": (2, 128256)}
+    assert set(ok) == set(RUN.RS_KERNELS) and {RUN.rs_refusal(name, i) for name, i in ok.items()} == {None}
+    bad = [("s512_rows", (1, 33024)), ("s512_row_segs", (1, 128256)), ("s512_folds", (4, 129, 4, 129)), ("s512_folds", (4, 32, 2, 501)),
+           ("s512_heads_w", (262400,)), ("s512_row_segs_w", (1, 262400)), ("s512_folds_w", (1, 262400)), ("s512_rows", (1, 1000)),
+           ("s512_row_segs", (1, 0)), ("s512_row_segs_w", (1, 33000)), ("s512_folds_w", (1, -256)), ("s512_heads_w", ())]
+    for name, i in bad:
+        with pytest.raises(ValueError, match=f"^{name} takes"):       # before `self` is read: nothing is launched
+            RUN.Dev.launch(None, name, 1, 128, p=(0, 0, 0), i=i)
+    # a row today's kernels refuse and the wide ones take is sent there by name; past them, nowhere
+    assert "hash_wide.cuh" in RUN.rs_refusal("s512_row_segs", (1, 33024))
+    assert "hash_wide.cuh" not in RUN.rs_refusal("s512_row_segs", (1, 262400))
+
+
+def test_a_fold_count_is_refused_as_the_kernel_would_read_it():
+    """s512_folds' segment counts (`rs_fold_counts`): an int slot is an int32, so a negative count would reach the kernel as
+    its low 32 bits (200 - 2^32 as 200, past RS_MAX_SEGS): refused always.  A zero is refused only where a unit would fold
+    it: the tile leaves pass one for the last row block when every block is full, and that goes through."""
+    wrapped, a = 200 - 2**32, RUN.Args()
+    a.i[1] = wrapped
+    assert a.i[1] == 200 > RUN.RS_MAX_SEGS                             # what the kernel would have been given
+    for i in ((4, wrapped, 4, 32), (4, 32, 2, wrapped), (4, 32, 4, wrapped), (4, -1, 0, 32), (4, 0, 4, 32), (4, 0, 1, 32),
+              (4, 32, 2, 0), (4, 32, 0, 0)):
+        with pytest.raises(ValueError, match="^s512_folds takes"):    # before `self` is read: nothing is launched
+            RUN.Dev.launch(None, "s512_folds", 1, RUN.RS_FOLD_NT, p=(0, 0), i=i)
+    for i in ((8, 32, 8, 0), (8, 32, 0, 8), (8, 0, 0, 8), (0, 0, 0, 0), (5, 128, 5, 128)):
+        assert RUN.rs_refusal("s512_folds", i) is None
+
+
+def test_row_digests_send_each_row_to_the_kernels_that_take_it():
+    """`Pipeline.row_digests`: a row of at most RS_MAX_SEGS segments launches what it did (s512_rows, or with the scratch
+    s512_row_segs and s512_folds); a wider row hash_wide.cuh's two launches, from the pipeline's header states or, under sha
+    "ref" or with none, from none; and past RS_WIDE_MAX_SEGS, with no scratch for a wide row, or with k not whole segments,
+    nothing is launched."""
+    log = []
+    dev = SimpleNamespace(launch=lambda name, grid, block, smem=0, p=(), i=(), **kw: log.append((name, grid, block, tuple(p), tuple(i))))
+    nt, fold = RUN.RS_FAST_NT, RUN.RS_FOLD_NT
+
+    def run(k, sha, scratch=7, heads=9, count=5):
+        log.clear()
+        RUN.Pipeline.row_digests(SimpleNamespace(dev=dev, k=k, sha=sha, b={"rs_heads_w": heads}), 1, 2, scratch, count)
+        return list(log)
+
+    assert run(32768, "fast") == [("s512_row_segs", RUN.cdiv(5 * 128, nt), nt, (1, 7), (5, 32768)),
+                                  ("s512_folds", 1, fold, (7, 2), (5, 128, 5, 128))]
+    assert run(32768, "ref") == run(32768, "fast", scratch=0) == [("s512_rows", 5, 128, (1, 2), (5, 32768))]
+    assert run(33024, "fast") == [("s512_row_segs_w", RUN.cdiv(5 * 129, nt), nt, (1, 7, 9), (5, 33024)),
+                                  ("s512_folds_w", 1, fold, (7, 2, 9), (5, 33024))]
+    assert run(128256, "ref") == [("s512_row_segs_w", RUN.cdiv(5 * 501, nt), nt, (1, 7, 0), (5, 128256)),
+                                  ("s512_folds_w", 1, fold, (7, 2, 0), (5, 128256))]
+    assert [ev[3] for ev in run(262144, "fast", heads=0)] == [(1, 7, 0), (7, 2, 0)]
+    for k, scratch in ((262400, 7), (33024, 0), (128256, 0), (33000, 7), (1000, 7), (0, 7)):
+        with pytest.raises(ValueError):
+            run(k, "fast", scratch)
+        assert not log, k
+
+
+#: y's tree as the served path builds it on the device: a pipeline of k = n words that owns its tensor maps and its header
+#: states alone, the caller's tree, digests and scratch, the rows hashed a chunk at a time.  argv: run.py, the cubin, n, rows,
+#: rows a chunk
+Y_TREE = """
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("run", sys.argv[1])
+R = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(R)
+n, rows, chunk = (int(x) for x in sys.argv[3:6])
+dev = R.Dev(open(sys.argv[2], "rb").read())
+dev.open()
+keys = {name: dev.alloc(R.TIMING_KEYS[name]) for name in ("dom_b", "salt_key", "hm")}
+p = R.Pipeline(dev, R.BM, R.BM, n, "h100", keys, 0, 0, bufs={"tree_b": 0, "segdig_b": 0})
+p.b["tree_b"] = dev.alloc(R.NB * (2 * R.pow2(rows) - 1))
+dig, seg = dev.alloc(64 * rows), dev.alloc(64 * (n // 256) * chunk)
+for _, f in p.tree_setup("b", rows, "dom_b"):
+    f()
+for r in range(0, rows, chunk):
+    x = dev.alloc(4 * n * min(chunk, rows - r))
+    p.row_digests(x, dig + 64 * r, seg, min(chunk, rows - r))
+    dev.sync()
+    dev.free(x)
+R.Pipeline.hm_level0(p, "b", dig, rows, "dom_b", nonce=R.nonce_args(7))
+p.levels("b", rows, "dom_b")
+dev.sync()
+p.free()
+"""
+
+
+@pytest.mark.slow
+def test_runner_dry_run_takes_rows_past_128_segments(small_fixture, ship, tmp_path):
+    """On the stand-in, a shape whose rows are 129 segments (64 x 128 x 33,024): A's and B's row digests are hash_wide.cuh's
+    launches from the header states the pipeline wrote once, every launch fits its buffers, and none of s512_rows,
+    s512_row_segs or a row's s512_folds is launched (the folds left are the tiles').  Then y's tree as the served path
+    builds it at the head's width (rows of 128,256 words, 501 segments; 129 rows in chunks of 50): the same kernels, and its
+    header states freed with the pipeline."""
+    log = tmp_path / "wide.jsonl"
+    r = subprocess.run([sys.executable, str(ship / "run.py"), str(small_fixture / "check.json")],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1", PEARLC_UNGATED="1", SHAPES="64x128x33024"),
+                       capture_output=True, text=True)
+    assert r.returncode == 4, r.stderr
+    assert [x["shape"] for x in map(json.loads, r.stdout.splitlines()) if x["kind"] == "timing"] == [[64, 128, 33024]]
+    allocs, launched, timed, maps = {}, [], False, set()
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs, maps)
+        if ev["op"] == "launch":
+            timed = timed or ev["name"] == "gen_f32"
+            if timed:
+                launched.append(ev)
+    names = {ev["name"] for ev in launched}
+    assert set(WIDE) <= names and not names & {"s512_rows", "s512_row_segs"}
+    assert [ev["i"][0] for ev in launched if ev["name"] == "s512_heads_w"] == [33024]
+    assert {ev["i"][0] for ev in launched if ev["name"] == "s512_row_segs_w"} == {64, 128}             # A's rows, B's
+    assert all(ev["p"][2] for ev in launched if ev["name"] in ("s512_row_segs_w", "s512_folds_w"))    # from the states
+    assert {ev["i"][1] for ev in launched if ev["name"] == "s512_folds"} == {32}
+
+    log = tmp_path / "y.jsonl"
+    r = subprocess.run([sys.executable, "-c", Y_TREE, str(ship / "run.py"), str(ship / "pearl_c_sm90.cubin"), "128256", "129", "50"],
+                       env=dry_env(ship, log, PEARLC_ANY_GPU="1"), capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    allocs, launched = {}, []
+    for ev in map(json.loads, log.read_text().splitlines()):
+        track(ev, allocs)
+        if ev["op"] == "launch":
+            launched.append(ev)
+    rows = [(ev["name"], ev["i"][0]) for ev in launched if ev["name"].startswith("s512_") and ev["name"] not in ("s512_heads",)]
+    assert rows[:7] == [("s512_heads_w", 128256), ("s512_pads", 129), ("s512_row_segs_w", 50), ("s512_folds_w", 50),
+                        ("s512_row_segs_w", 50), ("s512_folds_w", 50), ("s512_row_segs_w", 29)], rows[:8]
+    assert not {name for name, _ in rows} & {"s512_rows", "s512_row_segs", "s512_folds"}
+    states = [ev["p"][0] for ev in launched if ev["name"] == "s512_heads_w"]
+    assert len(states) == 1 and states[0] not in allocs                                             # freed with the pipeline

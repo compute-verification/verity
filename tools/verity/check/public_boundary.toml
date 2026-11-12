@@ -47,9 +47,12 @@ ml = [
     "benchmarks/definitions/numerics/cuda",
     "verity/commitments/randomness/{__init__.py,pyproject.toml,tests}",
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
-    "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
+    "verity/commitments/{identity.py,indexed.py,keyed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
-    "verity/{circuits,definitions}",
+    "verity/circuits",
+    "verity/definitions/{__init__.py,boolean.py,call_scope.py,circuits,commitments,cross_call.py,encoding.py,evidence.json}",
+    "verity/definitions/{evidence.py,kernels,numerics,ops,private_circuits,pyproject.toml,README.md,registry,replay.py}",
+    "verity/definitions/{silicon,tests,tiny.py,word.py}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
@@ -63,7 +66,6 @@ pouw = [
 # device, and its part of the security analysis
 certifier = [
     "verity/protocols/certifier",
-    "verity/protocols/inference_only/verifier/nci",
     "verity/protocols/certifier/prover",
     "verity/protocols/certifier/device",
     "security/*/NetworkCertifier{,.lean}",
@@ -110,14 +112,15 @@ shared = [
 # the repository's structure the public tests and the Lean check read
 structure = ["ruff.toml", "security/lean-audit.json", "security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
 # the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs, but the served window's
-# launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`
+# launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`, and the four that read
+# other private parts (`benchmarks/prove_path`, `benchmarks/harness`, Pearl's kernels, the remote verifier's executable and
+# the inference-only policy): `served_pearlplus.sh`, `served_composite.sh`, `inference_only.py` and `served_compare.py`
 benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
-    "benchmarks/one_stage/{served_pearlplus,served_composite}.sh",
-    "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
+    "benchmarks/one_stage/{served_verdicts,composite,served_cases,served_integrity,served_shares}.py",
     # the block record the served verdicts write, which `served_verdicts.py` loads from `benchmarks/one_stage/interfaces`
     "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
-    "benchmarks/one_stage/{served_overhead,served_compare}.py",
+    "benchmarks/one_stage/served_overhead.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
@@ -128,9 +131,9 @@ benchmarks = [
     "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
     "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
-    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h}",
-    # the -h3 hashing both cubins include
-    "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
+    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
+    # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
+    "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
     "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
@@ -290,7 +293,7 @@ flock_bench = [
 # what a public directory holds that is not its own: another area's package or tool that sits under it, and is no part
 # of the public tree
 nested = [
-    "verity/definitions/{evaluate,requirement}",
+    "verity/definitions/requirement",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/protocols/flock/sigma",
@@ -339,6 +342,12 @@ paths = ["security/*/Accounting{,.lean}", "security/Proofs/Properties/Accounting
 from = ["pouw"]
 
 [[needed]]
+why = "the evaluator's arithmetic Pearl+'s Lean verdict recomputes (FP32, the casts and the tensor-core dots: the public `verity.circuits` Definitions as executable Lean), and its properties' proofs, which Pearl+'s analysis reads"
+paths = ["verity/definitions/evaluate/Evaluate", "security/Proofs/Properties/Core/Evaluate.lean"]
+from = "*"
+via = ["lean import"]
+
+[[needed]]
 why = "the world a device runs in (`Core.World`: its clock, coins, links and signer's state), which the network certifier's device's driver reads"
 paths = ["verity/hardware/world"]
 from = ["certifier"]
@@ -371,7 +380,7 @@ paths = [
     "adapters/vllm",
     "benchmarks/one_stage",
 ]
-until = "PRF-285: the v3 ledger names a period's prover `prover`"
+until = "the v3 ledger names a period's prover `prover`"
 
 [[residue]]
 what = "an open conjecture's test, which its lock entry must name, is a file the export leaves out"

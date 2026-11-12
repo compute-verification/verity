@@ -244,15 +244,40 @@ def p_match_reason(broken: list[dict]) -> str:
             f"way into a product's operand")
 
 
+def repriced(trace: dict) -> list[dict]:
+    """The raw rows of a job's trace whose product is priced in another dtype than it was traced in, the dtype the
+    trace's circuit counts it in (`capture.products.priced_dtype` and `traced_dtype`), the largest first by its MACs.
+    A trace of this capture has none; one of a capture before `capture.products.PRICED_AS_TRACED_FROM` has its
+    float32 attention products, which that capture's rule prices in bf16 (`capture.products.AUTOCAST`)."""
+    from .capture import products
+
+    found = [r for r in trace["rows"] if products.priced_dtype(r, trace.get("capture")) != products.traced_dtype(r)]
+    return sorted(found, key=lambda r: -r["count"] * math.prod(r["dims"].values()))
+
+
+def repriced_reason(trace: dict, found: list[dict]) -> str:
+    """Why there is no slowdown over a trace's own circuit where `repriced` finds rows: the work would be priced in
+    one dtype and the circuit it is divided by in another."""
+    from .capture import products
+
+    r, d = found[0], found[0]["dims"]
+    return (f"unmeasured: {sum(x['count'] for x in found)} of the traced step's matrix products are priced in "
+            f"another dtype than its circuit counts them in (the largest: {r['count']} {r['phase']} {r['op']} of "
+            f"{d['m']}×{d['k']} by {d['k']}×{d['n']}, traced in {products.traced_dtype(r)} and priced in "
+            f"{products.priced_dtype(r, trace.get('capture'))}), and one slowdown has one price; retrace the "
+            f"record with {THE_CODE} {products.PRICED_AS_TRACED_FROM} or later, which prices each product as traced")
+
+
 def priced(trace: dict) -> dict:
     """A job's trace (`run.trace_step`'s) as the block `products_of_trace` reads: each raw product row priced
-    (`capture.products.priced`), at the k the job classified the rows at and at each other k of the console's dial
-    (`at`), with the capture's version (None on a trace that states none), the traced step's tokens and, where the
-    trace has it, the version of the code that took it (`capture_code`)."""
+    (`capture.products.priced`, by its capture's rule), at the k the job classified the rows at and at each other k
+    of the console's dial (`at`), with the capture's version (None on a trace that states none), the traced step's
+    tokens and, where the trace has it, the version of the code that took it (`capture_code`)."""
     from .capture import products
 
     def block(b: dict) -> dict:
-        return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
+        return {"k": b["k"], "rows": [products.priced(r, trace.get("capture")) for r in b["rows"]],
+                "p_match": b["p_match"]}
 
     return block(trace) | {"capture": trace.get("capture"), "tokens": trace["tokens"],
                            "at": {k: block(b) for k, b in trace["at"].items()}} | (
