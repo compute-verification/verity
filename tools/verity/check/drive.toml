@@ -81,9 +81,11 @@ lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain",
                     "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
-# and holds count unsigned (`research.labelauth`). `ready`, `judge` and `review` sign what they can either way, and refuse
-# what they can't once it is on. true is refused while the low-risk lane could land a change to the registry, labelauth.py,
-# queue.py or landing.py (`SIGNED_GUARDS`)
+# and holds count unsigned (`research.labelauth`). A PR reader's name (`review-36`) counts only under a delegation by the
+# holder of the handle whose `staffs` in the registry names it. `ready`, `judge` and `review` sign what they can either way,
+# and refuse what they can't once it is on. false: none is judged. "shadow": each counts as written, and the verified queue's
+# loop logs each it counted that doesn't authenticate (an `unauthenticated` line of its decisions). true is refused while
+# the low-risk lane could land a change to the registry, labelauth.py, queue.py or landing.py (`SIGNED_GUARDS`)
 signed_verdicts = false
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so (`research.stale`); 0 is off

@@ -216,9 +216,10 @@ READY = "ready"
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
-#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires.
+#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires once on.
 LABEL_AUTH = "label_auth"
-#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it until a time.
+#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it, or as a
+#: PR reader's name it staffs, until a time.
 LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
@@ -424,10 +425,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
-       "`signed_verdicts` counts such a label only with one"),
+       "`signed_verdicts`, once on, counts such a label only with one"),
     _k(LABEL_DELEGATION, GROUP_VERIFICATION, TEXT, "on an agent's delegation target (task:<sha512>), by a handle: {schema, lane, "
-       "agent, until, token}, the handle's holder letting that agent authenticate labels as it until then (`research queue "
-       "delegate`)"),
+       "agent, until, token}, the handle's holder letting that agent authenticate labels as `lane`, the handle or a PR reader's "
+       "name it staffs, until then (`research queue delegate`)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),

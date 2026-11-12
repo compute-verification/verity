@@ -1,13 +1,16 @@
 """Authenticated ready marks and land verdicts: drive.toml's `signed_verdicts`.
 
 A label that lets drive land a PR, `ready = true` or `reviewed = land` on `pr:{n}@{head}`, counts with the flag on only beside a
-`label_auth` label on the same target that authenticates it (`Verifier`).  Its value is ``{"for": NONCE, "token": JWT}``,
+`label_auth` label on the same target that authenticates it (`Verifier`); with the flag "shadow" it counts either way, and the
+verified queue's loop logs each one that doesn't authenticate.  Its value is ``{"for": NONCE, "token": JWT}``,
 optionally with ``"delegation"``: a Cursor OIDC token (issuer `ISSUER`, audience `AUDIENCE`) whose `nonce` claim is the label's
 nonce (`label_nonce`, SHA-512 over `LABEL_TAG` and the label's canonical document, so it names one target, key, value, author,
 time and ref), minted within `SKEW_S` of the label's time by the agent that holds the label's `by` in `main`'s registry, or by
-an agent that holder delegated the handle to.  A delegation (`delegation`) is the holder's token over a statement naming the
-handle, the agent and an end at most `DELEGATION_MAX_DAYS` after it was minted; `research queue delegate AGENT --by HANDLE`
-writes it on `delegation_target(AGENT)`, and `Signer` copies it into each companion that agent writes for that handle, so a
+an agent that name is delegated to.  A delegation (`delegation`) is a token over a statement naming the name, the agent and an
+end at most `DELEGATION_MAX_DAYS` after it was minted, minted by the holder of that handle, or, for a name that is no handle's
+(a PR reader's), by the holder of the handle whose `staffs` in the registry it matches (`speaks_for`): that is how a reader
+is registered, and its name counts under no token but a registered agent's.  `research queue delegate AGENT --by NAME`
+writes it on `delegation_target(AGENT)`, and `Signer` copies it into each companion that agent writes under that name, so a
 companion is checked from its own target alone.  Labels that withhold a landing (`ready = false`, `reviewed = hold`) count
 unsigned: they can only keep a PR out.
 
@@ -20,6 +23,7 @@ from __future__ import annotations
 import base64
 import binascii
 import calendar
+import fnmatch
 import hashlib
 import json
 import os
@@ -150,18 +154,27 @@ def delegation_statement(lane: str, agent: str, until: str) -> dict:
 
 
 def delegation(lane: str, agent: str, until: str, mint: Callable[[str], str]) -> dict:
-    """The delegation of handle ``lane`` to ``agent`` until ``until``: its statement and ``mint``'s token over its nonce,
-    minted by the handle's holder."""
+    """The delegation of the name ``lane`` to ``agent`` until ``until``: its statement and ``mint``'s token over its nonce,
+    minted by the agent that speaks for the name (`speaks_for`)."""
     st = delegation_statement(lane, agent, until)
     return {**st, "token": mint(_nonce(DELEGATION_TAG, st))}
 
 
-class Verifier:
-    """Judges ready marks and land verdicts against their `label_auth` companions, with the issuer's ``keys`` and ``holders``
-    ({agent id: handle}, from `main`'s registry)."""
+def speaks_for(handle: str | None, name: str, staffs: dict[str, tuple[str, ...]]) -> bool:
+    """Whether the holder of ``handle`` delegates ``name``: its own handle, or a name it staffs, one a glob of its ``staffs``
+    ({handle: globs}, the registry's) matches.  No handle speaks for nothing."""
+    return bool(handle) and (handle == name or any(fnmatch.fnmatchcase(name, p) for p in staffs.get(handle, ())))
 
-    def __init__(self, keys: dict[str, tuple[int, int]], holders: dict[str, str]):
+
+class Verifier:
+    """Judges ready marks and land verdicts against their `label_auth` companions, with the issuer's ``keys``, ``holders``
+    ({agent id: handle}) and ``staffs`` ({handle: the globs of the names its holder delegates beside its own}), both from
+    `main`'s registry."""
+
+    def __init__(self, keys: dict[str, tuple[int, int]], holders: dict[str, str],
+                 staffs: dict[str, tuple[str, ...]] | None = None):
         self.keys, self.holders = keys, {a: _who(h) for a, h in holders.items()}
+        self.staffs = {_who(h): tuple(globs) for h, globs in (staffs or {}).items()}
         self._seen: dict[tuple, str | None] = {}
 
     def why(self, label: Label, beside: Iterable[Label]) -> str | None:
@@ -211,8 +224,9 @@ class Verifier:
         cl = claims(d.get("token"), self.keys)
         if cl.get("nonce") != _nonce(DELEGATION_TAG, st):
             raise AuthError("its delegation's token isn't over the delegation")
-        if not isinstance(by := cl.get("cloud_agent_id"), str) or self.holders.get(by) != lane:
-            raise AuthError(f"its delegation was minted by {by!r}, which doesn't hold {lane} in main's registry")
+        if not isinstance(by := cl.get("cloud_agent_id"), str) or not speaks_for(self.holders.get(by), lane, self.staffs):
+            raise AuthError(f"its delegation was minted by {by!r}, which doesn't hold {lane} in main's registry, nor a handle "
+                            "that staffs it")
         until = epoch(st["until"])
         if until - cl["iat"] > DELEGATION_MAX_DAYS * 86400 + SKEW_S:
             raise AuthError(f"its delegation runs past {DELEGATION_MAX_DAYS} days")
@@ -222,10 +236,10 @@ class Verifier:
 
 class Signer:
     """``store`` writing labels as this agent: `add_label` writes each landing label (`landing`) with its `label_auth` companion,
-    ``mint`` (a nonce to a token) signing it, and this agent's delegation for the label's handle when the store has one; every
+    ``mint`` (a nonce to a token) signing it, and this agent's delegation for the label's name when the store has one; every
     other attribute is ``store``'s.  ``required`` (drive.toml's `signed_verdicts` on at `main`): a landing label it can't sign
-    is refused, AuthError and nothing written, as is one by a handle whose holder (``holders``, {agent id: handle}, when given)
-    isn't this agent and that delegated nothing to it; otherwise the label is written unsigned, with a note to ``log``."""
+    is refused, AuthError and nothing written, as is one by a name this agent neither holds (``holders``, {agent id: handle},
+    when given) nor is delegated; otherwise the label is written unsigned, with a note to ``log``."""
 
     def __init__(self, store, mint: Callable[[str], str], required: bool = False, holders: dict[str, str] | None = None,
                  now: Callable[[], str] = utc_now, log: Callable[[str], None] = print):
@@ -244,8 +258,8 @@ class Signer:
             except AuthError as e:
                 if self.required:
                     raise AuthError(f"drive.toml's `signed_verdicts` is on at `main`, and it can't be signed: {e}") from None
-                self.log(f"{key} = {value} on {target} is written unsigned ({e}); drive counts it while drive.toml's "
-                         "`signed_verdicts` is off")
+                self.log(f"{key} = {value} on {target} is written unsigned ({e}); drive counts it until drive.toml's "
+                         "`signed_verdicts` is on")
         path = self.store.add_label(target, key, value, by, ref=ref, ts=label.ts)
         if auth is not None:
             self.store.add_label(target, vocab.LABEL_AUTH, auth, by, ts=label.ts)
@@ -260,8 +274,9 @@ class Signer:
             if d := self.delegation(agent, label.by, label.ts):
                 auth["delegation"] = d
             elif self.holders is not None:
-                raise AuthError(f"this agent ({agent}) doesn't hold {label.by} in main's registry and {label.by} delegated "
-                                f"nothing to it: {label.by}'s holder runs `research queue delegate {agent} --by {label.by}`")
+                raise AuthError(f"this agent ({agent}) doesn't hold {label.by} in main's registry and nothing delegates "
+                                f"{label.by} to it: the holder of {label.by}, or of the handle that staffs it, runs "
+                                f"`research queue delegate {agent} --by {label.by}`")
         return auth
 
     def delegation(self, agent: str, lane: str, ts: str) -> dict | None:

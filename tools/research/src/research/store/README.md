@@ -460,8 +460,8 @@ prints the table; the groups are:
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
   `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
   (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
-  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
-  agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
+  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, by that label's author, and `label_delegation` on an
+  agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).

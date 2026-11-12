@@ -10,7 +10,8 @@ records run's, the jobs and kinds its graph lacks, and the `queue/*` branches it
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
+`signed_verdicts` (on "shadow" each mark and verdict counts, and each that doesn't authenticate is logged once:
+`unauthenticated`), a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
 `main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
 mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working out, `--move-carry-jobs` heads
 at once in jobs detached from the tick, which outlive it), with a land verdict by a non-owner (its head's, or with
@@ -619,6 +620,12 @@ class Past:
         """The newest verdict carry decision logged of each PR's head (`World._carry`), by (number, head)."""
         return {(r.get("number"), (r.get("heads") or [""])[0]): r.get("why") for r in self.of("carry")}
 
+    def unauthenticated(self) -> dict[tuple, str]:
+        """Why each mark or verdict logged as counted unauthenticated wouldn't count (`Loop._unauthenticated`), by
+        `StoreLabels.unauthenticated`'s key."""
+        return {(r.get("number"), (r.get("heads") or [""])[0], r.get("label"), r.get("by"), r.get("written")): r.get("why")
+                for r in self.of("unauthenticated")}
+
     def flaked(self) -> set[str]:
         return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")} | self._posting(
             "flaky", lambda r: {r.get("key")})
@@ -780,7 +787,7 @@ def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
     change to `SIGNED_GUARDS`, a move's renames too, could change who holds a handle or how a label is judged."""
     if not flags.lowrisk_lane:
         return "drive.toml's `lowrisk_lane` is off, so a move lands only with one"
-    if flags.signed_verdicts and (guarded := sorted(f for f in files if vqueue.meets((f,), SIGNED_GUARDS))):
+    if flags.signed_verdicts == "on" and (guarded := sorted(f for f in files if vqueue.meets((f,), SIGNED_GUARDS))):
         return (f"it changes {', '.join(guarded)}, and under drive.toml's `signed_verdicts` a move changing `SIGNED_GUARDS` "
                 "lands only with one")
     return ""
@@ -907,6 +914,8 @@ class World:
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
         #: carries}
         self.carried: dict[int, dict] = {}
+        #: under drive.toml's `signed_verdicts = "shadow"`, the labels' `StoreLabels.unauthenticated`, filled as they are read
+        self.unauthenticated: dict[tuple, str] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Landing | None = None
         self._slim: Landing | None = None
@@ -959,13 +968,24 @@ class World:
         """New labels, read as drive's tick reads them (one `StoreLabels` keeps what it pulled, so a mark, a verdict or a
         withdrawal written since would go unread): marks from drive.toml's `marked_after` at ``main`` on (else the queue
         rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change, or,
-        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them."""
+        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them.
+        With `signed_verdicts = "shadow"` each mark and verdict counts, and the labels keep why one wouldn't
+        (`StoreLabels.unauthenticated`, which the loop logs); when the registry or the issuer's keys can't be read, none is
+        judged and the tick goes on."""
         q, flags = self.q, flags_at(self.repo, main)
         self.labels = labels = self.labels_at()
         labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
         labels.moved, labels.owners = q.mapped_change if q.mapped_jobs else None, self._owners
-        if flags.signed_verdicts:
+        self.unauthenticated = {}
+        if flags.signed_verdicts == "on":
             labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
+        elif flags.signed_verdicts == "shadow":
+            try:
+                labels.verify, labels.shadow = label_verifier(self.repo, MAIN, self.keys, q.log), True
+                self.unauthenticated = labels.unauthenticated
+            except Exception as e:  # noqa: BLE001 -- the shadow changes nothing the queue lands
+                self.log(f"research queue vqueue: drive.toml's `signed_verdicts` is \"shadow\" and no mark or verdict is judged "
+                         f"now: {type(e).__name__}: {e}")
         q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
                                                                           labels.marked_at, labels.prefetch)
 
@@ -2301,6 +2321,8 @@ class Tick:
     records: dict[str, dict] = field(default_factory=dict)
     #: the verdict carry's decisions (`World.carried`)
     carried: dict[int, dict] = field(default_factory=dict)
+    #: why each mark and verdict the tick's `ready` counted wouldn't count under `signed_verdicts` (`World.unauthenticated`)
+    unauthenticated: dict[tuple, str] = field(default_factory=dict)
     #: each ready PR a candidate on `main`'s chain holds without it as a member, left out of `snap.ready` (a build of it
     #: merges nothing): {number: (head, the lowest such candidate)}
     riding: dict[int, tuple[str, str]] = field(default_factory=dict)
@@ -2443,7 +2465,7 @@ class Loop:
                         records=self.records is not None)
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
-                    riding=riding)
+                    dict(w.unauthenticated), riding=riding)
 
     def _read(self, p: Past, sha: str, base: str, fresh: bool = False, ended: bool | None = None
               ) -> tuple[Judged, dict | None]:
@@ -2647,7 +2669,8 @@ class Loop:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
-               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
+               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t) \
+            + self._unauthenticated(t)
         new += self._flaky(t) + self._bases(t) \
             + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t))
         steps.lap("notices")
@@ -3320,6 +3343,14 @@ class Loop:
         said = t.past.carries()
         return [self.record(t, "carry", members=[n], heads=[c["head"]], number=n, why=c["why"], old=c["old"],
                             carries=c["carries"]) for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
+
+    def _unauthenticated(self, t: Tick) -> list[dict]:
+        """Each ready mark and land verdict the tick counted that drive.toml's `signed_verdicts` wouldn't, on "shadow"
+        (`StoreLabels.unauthenticated`): the PR, the head the label is on, its key (`label`), author (`by`) and time
+        (`written`), and why, logged once a label while the reason is the same."""
+        said = t.past.unauthenticated()
+        return [self.record(t, "unauthenticated", members=[n], heads=[head], number=n, label=key, by=by, written=ts, why=why)
+                for (n, head, key, by, ts), why in sorted(t.unauthenticated.items()) if said.get((n, head, key, by, ts)) != why]
 
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test

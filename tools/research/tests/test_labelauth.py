@@ -1,7 +1,9 @@
 """Authenticated ready marks and land verdicts (`research.labelauth`, drive.toml's `signed_verdicts`).  A landing label counts
 only beside a `label_auth` companion whose identity token, signed under a key generated here, is over that label's nonce and
-was minted at its time by its handle's holder in the registry, or by a worker that holder delegated to; ejections and holds
-count unsigned.  No network, no clock: the issuer's keys are seeded RSA keys and every time is given."""
+was minted at its time by its handle's holder in the registry, or by a worker that holder delegated to, or, for a PR reader's
+name, by an agent the holder of the handle that staffs the name delegated it to; ejections and holds count unsigned.  On
+"shadow" each counts and why one wouldn't is kept.  No network, no clock: the issuer's keys are seeded RSA keys and every
+time is given."""
 from __future__ import annotations
 
 import base64
@@ -11,6 +13,7 @@ import json
 import math
 import random
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -25,7 +28,10 @@ from research.store.model import Label
 HOLDER = "bc-0000000a-0000-4000-8000-00000000000a"
 OTHER = "bc-0000000b-0000-4000-8000-00000000000b"
 WORKER = "bc-0000000c-0000-4000-8000-00000000000c"
+READER = "bc-0000000d-0000-4000-8000-00000000000d"
 HOLDERS = {HOLDER: "ci", OTHER: "proofs"}
+STAFFS = {"ci": ("review-*",)}
+REAL_REGISTRY = Path(__file__).resolve().parents[3] / Q.REGISTRY
 TS = "2026-11-02T03:00:00Z"
 T = L.epoch(TS)
 HEAD = "a" * 40
@@ -99,8 +105,8 @@ def _jwks(seed: int = 1) -> dict:
                       "e": _b64(e.to_bytes(3, "big"))}]}
 
 
-def _verifier(holders: dict[str, str] = HOLDERS) -> L.Verifier:
-    return L.Verifier(L.jwks(_jwks()), holders)
+def _verifier(holders: dict[str, str] = HOLDERS, staffs: dict[str, tuple[str, ...]] | None = None) -> L.Verifier:
+    return L.Verifier(L.jwks(_jwks()), holders, staffs)
 
 
 def _land(by: str = "ci", ts: str = TS, target: str = TARGET, ref: str | None = None) -> Label:
@@ -218,6 +224,159 @@ def test_a_workers_label_counts_under_its_holders_delegation_and_not_outside_it(
     assert "outside its delegation" in v.why(late, [_auth(late, _mint(WORKER, iat=L.epoch(late.ts)), _delegation())])
 
 
+def test_a_readers_verdict_counts_only_under_a_delegation_of_its_name_by_the_holder_of_the_handle_that_staffs_it():
+    """A reader's name is no handle's, so no agent holds it: its land verdict counts when its token's agent carries a delegation
+    of that name minted by the holder of the handle whose `staffs` in the registry matches it, and under nothing else."""
+    lab, v = _land(by="review-36"), _verifier(staffs=STAFFS)
+    d = _delegation(lane="review-36", agent=READER)
+    assert v.why(lab, [_auth(lab, _mint(READER), d)]) is None
+    assert v.why(_land(by="@Review-36"), [_auth(_land(by="@Review-36"), _mint(READER), d)]) is None
+    minted_by = "its delegation was minted by {!r}, which doesn't hold review-36 in main's registry, nor a handle that staffs it"
+    assert _verifier().why(lab, [_auth(lab, _mint(READER), d)]) == minted_by.format(HOLDER)      # a registry staffing no one
+    cases = {
+        "unsigned": [],
+        f"its token is {READER!r}'s, which doesn't hold review-36 in main's registry, and it carries no delegation":
+            [_auth(lab, _mint(READER))],
+        f"its token is {HOLDER!r}'s, which doesn't hold review-36 in main's registry, and it carries no delegation":
+            [_auth(lab, _mint(HOLDER))],                                # the staffer registers a reader; it isn't one
+        minted_by.format(OTHER): [_auth(lab, _mint(READER), _delegation(lane="review-36", agent=READER, minter=OTHER))],
+        minted_by.format(READER): [_auth(lab, _mint(READER), _delegation(lane="review-36", agent=READER, minter=READER))],
+        f"its delegation is of 'review-37' to {READER!r}, not of review-36 to its token's {READER!r}":
+            [_auth(lab, _mint(READER), _delegation(lane="review-37", agent=READER))],
+        f"its delegation is of 'review-36' to {READER!r}, not of review-36 to its token's {WORKER!r}":
+            [_auth(lab, _mint(WORKER), d)],
+        "the label's time is outside its delegation":
+            [_auth(lab, _mint(READER), _delegation(lane="review-36", agent=READER, until="2026-11-02T02:59:59Z"))],
+    }
+    for why, beside in cases.items():
+        assert v.why(lab, beside) is not None and why in v.why(lab, beside), why
+    # staffing a reader's name reaches no handle, and no name its globs don't match
+    for name in ("proofs", "reviewer", "top-review-1"):
+        other = _land(by=name)
+        got = v.why(other, [_auth(other, _mint(READER), _delegation(lane=name, agent=READER))])
+        assert got == f"its delegation was minted by {HOLDER!r}, which doesn't hold {name} in main's registry, nor a handle " \
+                      "that staffs it", name
+
+
+def test_the_staffer_registers_a_readers_agent_which_then_signs_its_verdicts_as_that_reader(store, capsys):
+    """`research queue delegate AGENT --by review-N`, by the holder of the handle that staffs the name, is a reader's
+    registration: the reader's own `review` then writes a verdict that authenticates, and no other handle's holder can."""
+    for holders, staffs, minter in ((HOLDERS, STAFFS, OTHER), (HOLDERS, None, HOLDER), (HOLDERS, {"proofs": ("review-*",)}, HOLDER)):
+        with pytest.raises(QueueError, match="doesn't hold review-36 in main's registry .*nor a handle whose `staffs` there names it"):
+            Q.delegate(store, READER, "review-36", 1, holders, mint=_mint(minter, iat=T - 3600), now=lambda: T - 3600, staffs=staffs)
+    assert store.labels(L.delegation_target(READER)) == []
+    signer = L.Signer(store, _mint(READER), required=True, holders=HOLDERS, now=lambda: TS)
+    with pytest.raises(L.AuthError, match=f"`research queue delegate {READER} --by review-36`"):
+        signer.add_label(TARGET, vocab.REVIEWED, "land", "review-36")
+    assert Q.delegate(store, READER, "review-36", 1, HOLDERS, mint=_mint(HOLDER, iat=T - 3600), now=lambda: T - 3600,
+                      staffs=STAFFS) == 0
+    assert f"{READER} signs as review-36 until 2026-11-03T02:00:00Z, while this agent holds ci" in capsys.readouterr().out
+    (written,) = store.labels(L.delegation_target(READER))
+    assert (written.by, written.value["lane"], written.value["agent"]) == ("ci", "review-36", READER)
+    signer.add_label(TARGET, vocab.REVIEWED, "land", "review-36", ref="read it")
+    (auth,) = store.labels(TARGET, key=vocab.LABEL_AUTH)
+    assert (auth.value["delegation"]["lane"], auth.value["delegation"]["agent"]) == ("review-36", READER)
+    counted = StoreLabels(store, log=lambda s: None, verify=_verifier(staffs=STAFFS))
+    assert unreviewed(counted.reviews(7, HEAD), {"vllm"}) is None and counted.refusals(7, HEAD, vocab.REVIEWED) == []
+    store.add_label(TARGET, vocab.REVIEWED, "land", "review-37", ts="2026-11-02T03:01:00Z")       # written as a reader by anyone
+    assert [lab.by for lab in counted.reviews(7, HEAD)] == ["review-36"]
+    assert counted.refusals(7, HEAD, vocab.REVIEWED) == ["reviewed = land by review-37 at 2026-11-02T03:01:00Z: unsigned"]
+
+
+def _registry(tmp_path, handles: list[dict] | None) -> None:
+    """A commit of ``tmp_path`` whose registry holds ``handles`` (none: no registry)."""
+    if not (tmp_path / ".git").exists():
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    if handles is not None:
+        (tmp_path / Q.REGISTRY).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / Q.REGISTRY).write_text(json.dumps({"handles": handles}))
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty",
+                    "-m", "x"], check=True)
+
+
+def test_the_registry_names_the_names_each_handle_staffs_and_a_glob_never_reaches_a_handle(tmp_path, monkeypatch):
+    """A handle's `staffs` in `main`'s registry is the reader names its holder registers agents under; one that matched a
+    handle would let that holder sign as it, so the registry is refused, as one that can't be parsed is."""
+    ci, proofs = {"handle": "ci", "holder": HOLDER, "staffs": ["review-*"]}, {"handle": "proofs", "holder": OTHER}
+    _registry(tmp_path, None)
+    assert Q.staffs_at(tmp_path, "HEAD") == {}
+    _registry(tmp_path, [ci, proofs])
+    assert Q.staffs_at(tmp_path, "HEAD") == STAFFS and Q.holders_at(tmp_path, "HEAD") == HOLDERS
+    monkeypatch.setattr(L, "issuer_keys", lambda cache, log=print: L.jwks(_jwks()))
+    v = Q.label_verifier(tmp_path, "HEAD", tmp_path / "keys.json")
+    lab = _land(by="review-36")
+    assert v.why(lab, [_auth(lab, _mint(READER), _delegation(lane="review-36", agent=READER))]) is None
+    for staffs, why in ((["pro*"], "it matches proofs, and a handle is delegated only by its own holder"),
+                        (["review-*", "*"], "it matches ci, proofs, and a handle is delegated only by its own holder"),
+                        (["ci"], "it matches ci, and"),
+                        ("review-*", "it is a list of names or globs of names"),
+                        (["Review-*"], "it is a list of names or globs of names"),
+                        (["review *"], "it is a list of names or globs of names"),
+                        ([""], "it is a list of names or globs of names"),
+                        ([7], "it is a list of names or globs of names")):
+        _registry(tmp_path, [{**ci, "staffs": staffs}, proofs])
+        with pytest.raises(QueueError, match="registry.json at HEAD: ci's staffs = ") as e:
+            Q.label_verifier(tmp_path, "HEAD", tmp_path / "keys.json")
+        assert why in str(e.value), staffs
+
+
+def test_the_repositorys_registry_staffs_readers_under_ci_and_reaches_no_handle():
+    """ci staffs the PR readers (the team skill's "Landing"), so its holder registers each reader's agent."""
+    handles = json.loads(REAL_REGISTRY.read_text())["handles"]
+    staffs = Q.staffs_of(handles, str(Q.REGISTRY))
+    assert [h for h in staffs if L.speaks_for(h, "review-36", staffs)] == ["ci"]
+    assert not any(L.speaks_for(h, o["handle"], staffs) for h in staffs for o in handles if o["handle"] != h)
+
+
+def test_in_shadow_every_mark_and_verdict_counts_and_why_one_wouldnt_is_kept(store):
+    """`signed_verdicts = "shadow"`: the labels read exactly as with the flag off, and each ready mark and land verdict the
+    verifier wouldn't count is kept with why, by its PR, head, key, author and time; an authenticated one, an ejection and a
+    hold aren't."""
+    def labels() -> StoreLabels:
+        out = StoreLabels(store, log=lambda s: None, verify=_verifier(staffs=STAFFS))
+        out.shadow = True
+        return out
+
+    def read(lab: StoreLabels) -> tuple:
+        return lab.ready(7, HEAD), lab.ready_by(7, HEAD), unreviewed(lab.reviews(7, HEAD), {"vllm"}), lab.lands(7, HEAD)
+
+    store.add_label(TARGET, vocab.READY, True, "vllm", ts="2026-11-02T02:58:00Z")
+    store.add_label(TARGET, vocab.REVIEWED, "land", "review-36", ts="2026-11-02T02:59:00Z")
+    L.Signer(store, _mint(READER), now=lambda: TS).add_label(TARGET, vocab.REVIEWED, "land", "review-37")
+    shadow = labels()
+    assert read(shadow) == read(StoreLabels(store, log=lambda s: None)) == (True, "vllm", None, True)
+    assert shadow.refusals(7, HEAD, vocab.READY) == shadow.refusals(7, HEAD, vocab.REVIEWED) == []
+    assert shadow.unauthenticated == {
+        (7, HEAD, vocab.READY, "vllm", "2026-11-02T02:58:00Z"): "unsigned",
+        (7, HEAD, vocab.REVIEWED, "review-36", "2026-11-02T02:59:00Z"): "unsigned",
+        (7, HEAD, vocab.REVIEWED, "review-37", TS):
+            f"its token is {READER!r}'s, which doesn't hold review-37 in main's registry, and it carries no delegation"}
+    strict = StoreLabels(store, log=lambda s: None, verify=_verifier(staffs=STAFFS))
+    assert not strict.ready(7, HEAD) and strict.unauthenticated == {}                       # on: refused, as `refusals` says
+    Q.delegate(store, READER, "review-38", 1, HOLDERS, mint=_mint(HOLDER, iat=T - 3600), now=lambda: T - 3600, staffs=STAFFS)
+    L.Signer(store, _mint(READER), now=lambda: "2026-11-02T03:01:00Z").add_label(TARGET, vocab.REVIEWED, "land", "review-38")
+    store.add_label(TARGET, vocab.REVIEWED, "hold", "proofs", ref="wait", ts="2026-11-02T03:02:00Z")
+    store.add_label(TARGET, vocab.READY, False, "merge-queue", ts="2026-11-02T03:03:00Z")
+    shadow = labels()
+    assert read(shadow) == read(StoreLabels(store, log=lambda s: None)) == (False, "vllm", "held by proofs (wait)", False)
+    assert sorted(k[3] for k in shadow.unauthenticated) == ["review-36", "review-37", "vllm"]
+
+
+def test_in_shadow_a_label_the_verifier_cant_judge_still_counts_and_says_so(store):
+    class Broken:
+        def why(self, label, beside):
+            raise RuntimeError("no keys")
+
+    store.add_label(TARGET, vocab.READY, True, "vllm", ts=TS)
+    labels = StoreLabels(store, log=lambda s: None, verify=Broken())
+    with pytest.raises(RuntimeError):
+        labels.ready(7, HEAD)
+    labels.shadow = True
+    assert labels.ready(7, HEAD)
+    assert labels.unauthenticated == {(7, HEAD, vocab.READY, "vllm", TS): "it can't be judged: RuntimeError: no keys"}
+
+
 def test_with_a_verifier_only_authenticated_marks_count_and_an_ejection_holds_unsigned(store):
     labels = StoreLabels(store, log=lambda s: None, verify=_verifier())
     store.add_label(TARGET, vocab.READY, True, "ci", ts="2026-11-02T02:59:00Z")
@@ -293,18 +452,26 @@ def test_a_mark_or_verdict_the_signer_refuses_is_not_written(store, capsys):
 
 
 def test_the_flag_is_off_by_default_and_on_only_while_the_low_risk_lane_cant_change_who_holds_a_handle():
-    assert DriveFlags().signed_verdicts is False
+    assert DriveFlags().signed_verdicts == "off" and DriveFlags.parse("signed_verdicts = false\n").signed_verdicts == "off"
     excludes = '["*.lean", "landing.py", "queue.py"]'
     with pytest.raises(QueueError, match="registry.json or tools/research/src/research/labelauth.py land on its ready mark"):
         DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {excludes}\n")
     full = '["*.lean", "landing.py", "queue.py", "labelauth.py", ".agents/skills/using-slack/"]'
-    assert DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {full}\n").signed_verdicts
+    assert DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {full}\n").signed_verdicts == "on"
     without_landing = '["*.lean", "drive.py", "queue.py", "labelauth.py", ".agents/skills/using-slack/"]'
     with pytest.raises(QueueError, match="a change to tools/research/src/research/landing.py land on its ready mark"):
         DriveFlags.parse(f"signed_verdicts = true\nlowrisk_excludes = {without_landing}\n")
-    assert DriveFlags.parse("signed_verdicts = true\nlowrisk_lane = false\n").signed_verdicts
-    with pytest.raises(QueueError, match="true or false"):
-        DriveFlags.parse('signed_verdicts = "yes"\n')
+    assert DriveFlags.parse("signed_verdicts = true\nlowrisk_lane = false\n").signed_verdicts == "on"
+    for bad in ('"yes"', '"on"', '"off"', "1", '"Shadow"'):
+        with pytest.raises(QueueError, match='signed_verdicts = .*false, "shadow" .*or true'):
+            DriveFlags.parse(f"signed_verdicts = {bad}\n")
+
+
+def test_the_shadow_refuses_nothing_so_it_runs_beside_the_low_risk_lane_as_it_is():
+    """ "shadow" counts every label, so no lane gains by changing who holds a handle: it needs none of what "on" needs."""
+    flags = DriveFlags.parse(f'signed_verdicts = "shadow"\nlowrisk_excludes = ["*.lean"]\n')
+    assert flags.signed_verdicts == "shadow" and flags.lowrisk_lane
+    assert "signed_verdicts=shadow" in flags.line()
 
 
 def test_a_client_reads_only_the_flag_at_main(tmp_path):
@@ -316,9 +483,12 @@ def test_a_client_reads_only_the_flag_at_main(tmp_path):
         return subprocess.run(["git", "-C", str(tmp_path), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
 
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    assert Q.signed_at(tmp_path, commit("on = [\"m\"]\n")) is False
-    assert Q.signed_at(tmp_path, commit("signed_verdicts = true\nsome_newer_key = 1\n")) is True
-    with pytest.raises(QueueError, match="signed_verdicts = 'yes': true or false"):
+    assert Q.signed_at(tmp_path, "HEAD") == "off"                                           # no drive.toml there
+    assert Q.signed_at(tmp_path, commit("on = [\"m\"]\n")) == "off"
+    assert Q.signed_at(tmp_path, commit("signed_verdicts = false\n")) == "off"
+    assert Q.signed_at(tmp_path, commit("signed_verdicts = true\nsome_newer_key = 1\n")) == "on"
+    assert Q.signed_at(tmp_path, commit('signed_verdicts = "shadow"\nsome_newer_key = 1\n')) == "shadow"
+    with pytest.raises(QueueError, match="signed_verdicts = 'yes': false, \"shadow\" or true"):
         Q.signed_at(tmp_path, commit('signed_verdicts = "yes"\n'))
 
 
