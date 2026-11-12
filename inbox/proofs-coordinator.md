@@ -68163,3 +68163,42 @@ Mailbox read at 02:33Z and again at 02:42Z: last section 02:25Z Thu [read: `git 
 - As you ruled at 02:25Z: no records run and no mark as a stack. After #8940 is on `main`: one merge of `main`, the records run at that head, the changed suites, the mark, then a reviewer's land verdict (the Lake file's root keeps it out of the low-risk lane) [read: the team skill's Landing].
 - One thing the merge has to carry: if `main` gains another root in `security/Proofs/lakefile.toml` first, the listing's line is regenerated in the merge commit (`pins.py --regen`), or `test_no_pin_is_stale` fails again [derived from this run].
 - Hours: `r20261112-024035-116f`'s verdict in an entry when it ends, about 03:05Z [guess]; the 06:00Z line on #8940 stands; the ready line stays Thu 12 Nov 08:00Z and moves with #8940.
+
+## LAND2, Thu 12 Nov 02:52Z: #8003 read. Recommendation: close it; nothing CIR-185 is done by needs it, and what serves the per-expert cut is on `main` and in #8454
+
+Read at `9c32981736ee` (a draft, last commit Tue 10 Nov 18:09Z) against `main` at `be9a3d566905` and #8454 at `3f583195b999`. I changed nothing on its branch.
+
+**1. What of it is not on `main` or in #8454, file by file.** Its change over its merge base with `main` (`e7b03e4a6c89`) is six files, +1027 −12 [`git diff --stat`, by me]. #8454 touches none of the six [its 14 files, `gh pr diff --name-only`].
+
+| file | what #8003 has | on `main` | in #8454 |
+|---|---|---|---|
+| `benchmarks/spot_proved/moe_window.py` (534 lines, new) | Stages one MoE layer of a `capture.py` capture as a one-stage window: the router's slots, the table reads, the per-expert GEMMs, fused or not; a forged arm and a benchmark-values arm | absent | absent |
+| `benchmarks/spot_proved/run_moe_window.sh` (182, new) | The job: builds, then the three arms audited by `records_audit.py audit`, then served against benchmark seconds by template | absent | absent |
+| `benchmarks/spot_proved/tests/test_moe_window.py` (283, new) | Six tests on a synthetic capture, two of them slow | absent | absent |
+| `benchmarks/spot_proved/pyproject.toml` | The suite's inputs for what the harness imports, at the paths before the layout move | `main`'s list, without them | as `main` |
+| `benchmarks/one_stage/a5.py` (two hunks) | `coins_outcome` skips the coins' negatives when the audit is told to skip negatives | not there: `main` skips the audit's other negatives under that flag (line 1015), the coins' still run (line 442) | as `main` |
+| `benchmarks/prove_path/records_audit.py` (two hunks) | `audit` runs under a5's memo (`@AM.memoized`) | not there: `a5.main` is memoized, `records_audit.audit` is not | as `main` |
+
+The first half of its title (served table reads register every port of their member) is on `main` as #8020, merged Sun 8 Nov; its body says its diff dropped that [read].
+
+**2. Whether it merges with `main`: no.**
+
+- GitHub reads it conflicting. `git merge-tree` stops on two files: `benchmarks/prove_path/records_audit.py` (`main` added a function where #8003 adds the decorator) and `benchmarks/spot_proved/pyproject.toml` (the inputs list) [run by me].
+- `main` has two layout moves it lacks (`6581bcf197`, `c1ca25a247`). I ran `tools/move/restack.py` on it as a dry run, which pushes nothing: it crosses the first move, runs the second's script, and ends `conflicted` on the same two files [`~/wt/logs/restack8003.json` on my VM].
+- Without the restack the three new files merge as text and then fail at import: every Verity import in the harness and its test names a package `main` no longer has (`verity.core.protocols.spot.one_stage`, `verity.ml.circuits`, `verity.ml.windows`, …), and the job's `PYTHONPATH` names two directories `main` no longer has (`verity/ml/flock/python`, `integrations/vllm`). Each module it reads does exist on `main` at its moved path [checked by name, not run].
+
+So a carry is: restack across two moves, settle two files by hand, rewrite the suite's 44 inputs at the moved paths, then the quick tier.
+
+**3. Recommendation: close it.**
+
+- **CIR-185 does not wait on it by its own text.** Its four "done when" lines are: listed records carry tables, table reads and openings; the serving rows build GLM-5.3's per-expert members at TP8; `tp-register-tables` regenerates the pins; the pull request marked with circuits' and vllm's suites green. The first three are on `main` (#7858, #7860, #7905, #7941, #8020, #8081, each merged by Mon 9 Nov [`gh pr view`]). The fourth is #8454, which you marked at 02:32Z.
+- **What replaced the harness.** It stages a window from a capture's recorded tensors, and its own text calls that "provenance, not proof". The served route is a Commit's own serving-rows window of the per-expert cut: the partition and the tables in the request are #8454's, its members staged by `benchmarks/served_units/stage_window.py` and timed by `prove_time.sh`. That is the route the fused members were measured on (the Tue 10 Nov 09:05Z comment on CIR-185).
+- **It has no result.** The two served runs its body names (`r20261108-051615-53ff`, `r20261108-051638-ee9f`) were cancelled on Sun 8 Nov after 5.4 h each as superseded, with no result [`research inspect`]. Its body says the served arms were not run again.
+
+**What closing leaves behind, so nobody thinks it landed:**
+
+- The unfused per-expert cut with the router's slots in the same window, as a staged circuit. #8454's partition is the fused cut and leaves the router's slots out.
+- A like-for-like benchmark arm at the same shapes, and the forged arm on this cut.
+- The two small changes to `a5.py` and `records_audit.py` in the table. They stand on their own (about six lines) and would be a pull request of their own if the audit's time needs them. I have not written it.
+
+**One thing closing does not settle.** The CIR-185 comment says Lean's `verify` was not run on a session of the fused served window, and the table reads have no price. #8003 would not supply either for a served window: it audits a window staged from a capture. What would is the one-stage audit on a Commit's serving-rows window cut by #8454's partition (`a5_glm53_commit.sh` commits such windows on `main` today) [my reading of the two scripts' headers; not run]. Whether CIR-185 wants that before it closes is circuits' and yours to say.
