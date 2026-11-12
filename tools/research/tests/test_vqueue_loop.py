@@ -1446,18 +1446,25 @@ def _decided(w: World) -> tuple[list, dict, dict]:
 
 def test_a_tick_in_a_process_of_its_own_takes_what_the_tick_before_judged_on_main_and_decides_the_same(env, monkeypatch):
     """The live loop runs each tick in a process of its own (`--once`): what `ready` judged of each head on `main` (its files,
-    the moves it lacks, whether it is a Lean change and merges) is kept in the loop's cache, so the next tick's World judges
-    none of it again and decides what a World with no cache decides."""
+    the moves it lacks, whether it is a Lean change and merges, and its own change, which the labels read) is kept in the
+    loop's cache, so the next tick's World works none of it out again and decides what a World with no cache decides."""
     _judged_world(env)
     plain = _decided(env.loop(lambda s: []).world)
     ready, left, lacking = plain
     assert [(r.number, r.lean, r.conflict) for r in ready] == [(1, False, False), (2, True, False), (3, False, True)], ready
     assert set(left) == {4, 5} and set(lacking) == {4}, left
     cache = env.tmp / "cache"
-    assert _decided(env.loop(lambda s: [], cache=cache).world) == plain
+    first = env.loop(lambda s: [], cache=cache).world
+    main = first.fetch()
+    own = {p.head: first.q.own_change(p.head) for p in env.o.gh.prs.values()}
+    assert (first.ready(main), first.left, first.lacking) == plain
     for name in ("own_files", "lacked_moves", "lean_change", "merged_tree", "base_drivers"):
         monkeypatch.setattr(L, name, lambda *a, _name=name, **k: pytest.fail(f"{_name} ran again"))
-    assert _decided(env.loop(lambda s: [], cache=cache).world) == plain
+    warm = env.loop(lambda s: [], cache=cache).world
+    assert _decided(warm) == plain
+    runs, real = [], subprocess.run
+    monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: runs.append(argv) or real(argv, *a, **k))
+    assert {h: warm.q.own_change(h) for h in own} == own and runs == []
 
 
 def test_what_a_tick_judged_is_judged_again_on_a_new_main_or_by_other_code(env, monkeypatch):
@@ -1490,8 +1497,9 @@ def test_ready_asks_git_which_heads_the_clone_lacks_and_which_main_holds_in_one_
     main, argvs, real = w.fetch(), [], subprocess.run
     monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: argvs.append(list(argv)) or real(argv, *a, **k))
     w.ready(main)
+    heads = {p.head for p in env.o.gh.prs.values()}
     assert sum(any(x.startswith("--batch-check") for x in a) for a in argvs) == 1, argvs
-    assert not [a for a in argvs if "--is-ancestor" in a], argvs
+    assert not [a for a in argvs if "--is-ancestor" in a and heads & set(a)], argvs
     assert w.left[5] == (env.o.gh.prs[5].head, "its head is on `main`")
 
 
