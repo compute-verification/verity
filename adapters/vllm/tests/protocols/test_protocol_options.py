@@ -11,13 +11,18 @@ import subprocess
 import sys
 import types
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from verity_vllm import config
 from verity_vllm import protocols as PO
+from verity_vllm.config import RowConfig
 from verity_vllm.engine import hooks
+from verity_vllm.pipeline import cli, row_stages
+from verity_vllm.pipeline import row as ROW
+from verity_vllm.pipeline import row_records as R
 from verity_vllm.program.frontend.target_profile import (
     ApplicabilityError,
     ArtifactIdentity,
@@ -132,7 +137,7 @@ def _pous(log):
         for m in target.model.modules():
             m.stored = m.weight + 100
             h.wrap(m.quant_method, "apply",
-                   lambda orig, m=m: (lambda layer, x, bias=None: orig(types.SimpleNamespace(weight=layer.stored - 100), x, bias)))
+                   lambda orig, m=m: (lambda layer, x, bias=None: orig(SimpleNamespace(weight=layer.stored - 100), x, bias)))
         h.service("responder", lambda: log.append("responder up") or "handle", lambda handle: log.append(f"responder down {handle}") or {"answered": 0})
         log.append("pous")
         return PO.Option(name=f"pous:{scheme}", hooks=h, commits={"storage_root": "c"}, release=lambda: log.append("pous released"))
@@ -409,12 +414,6 @@ def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
 
 
 def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_path, capsys):
-    from types import SimpleNamespace
-
-    from verity_vllm.config import RowConfig
-    from verity_vllm.pipeline import cli, row_stages
-    from verity_vllm.pipeline import row as ROW
-    from verity_vllm.pipeline import row_records as R
     row = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     seen = {}
 
