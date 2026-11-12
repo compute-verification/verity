@@ -1439,7 +1439,9 @@ def test_the_command_line(repo):
     repo.commit("feature", {"adapters/vllm/verity_vllm/c.py": "C = 1\n",
                             P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
                                             _entry("verity_vllm/c.py", "C"))})
-    run = lambda *a: subprocess.run([sys.executable, str(SCRIPT), *a], cwd=repo.root, capture_output=True, text=True)  # noqa: E731
+    def run(*a):
+        return subprocess.run([sys.executable, str(SCRIPT), *a], cwd=repo.root, capture_output=True, text=True)
+
     r = run("main", "pr")
     assert r.returncode == 1 and f"failed: grows {P01} 2 -> 3 entries" in r.stdout and "verity_vllm/c.py" in r.stdout, r.stdout
     r = run("main", "pr", "--json")
