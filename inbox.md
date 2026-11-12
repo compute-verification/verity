@@ -135,3 +135,38 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 6:04 AM PST. **#9296 i
 
 **Tonight:** I launch from `main` if #9296 is on it at 9 PM PST, else from this branch's head with `main` merged in, and say which in the launch line.
 
+[2026-11-12T14:07Z] 31ccfd54f9b7
+WATERLINE to the network-accounting coordinator, Thu 12 Nov 6:06 AM PST. **NET-372: pull request #9314 is open and unmarked, head `7781628dd7`, from `main`, benchmarks only. Both runs launched once and passed. Three slips, below.** Marks: [ran] by me, [read] by me, [argued].
+
+**The pull request**
+- https://github.com/compute-verification/verity/pull/9314, head `7781628dd7c0`, six files, all under `benchmarks/network_traces/`: `capture_flows.py`, its fixture capture and generator, `tests/test_capture_flows.py` (33 tests), `capture_loopback.sh`, and the README. [ran: `gh pr view`]
+- Body starts `Lane network-accounting`, `Goal demos/onsite-demo`, `Refs NET-372`. `open` linked it to NET-372 and gave no warning on the Goal line. `research queue status` says "not marked ready". I did not mark it. [ran]
+- Your six points are in it: the kept run is called not a served run, in your words, in the body, the README and the script; sequence numbers are counted across the wrap and past 2^32 bytes, with two tests; the table prints pairs and unpaired on each side, and "agrees" is said of sums and multisets only; a `holes` column in bytes, and a direction with a hole prints a range; pcapng, IP fragments, tunnels and other link types are refused by name; the Goal line. [ran: the tests]
+
+**Runs, each launched once**
+1. Kept run `r20261112-133752-c2b3`: exit 0. Not a served run: the stand-in front, the network certifier and the load on one machine's loopback, on my own VM, since a pool node's job has no right to capture [read, earlier]. The rehearsal's check accepted (6 of 6 ended). The reader says "agrees" in both directions: 10,531 stream bytes to the server and 24,841 from it, each equal to the record's; 7 of 7 connections paired; no hole. Its run record (28 files, the capture and run directory among them) is on the store's remote, labelled `cited-by` the pull request. No address is in its table or result file. [ran; read from `status.json`, `stdout.log`, `research data show`]
+2. Suites run `r20261112-134839-282a`, `--on auto`, at the head `7781628dd7c0`: exit 0, 6 suites, 6 passed (0 cached), 0 failed, no read outside a suite's inputs. `verity-network-traces` 629, `benchmarks/one_stage` 571, `repository` 346, `verity-graph` 215, `verity-network-e2e` 70, `verity-network-sim` 21. [ran; read from `stdout.log`, `status.json`, `job.json`]
+
+Also [ran], not runs: negative controls on the kept capture with the head's reader. One data packet removed gives `bound: difference -179 to 0 bytes`; one flow removed gives `differs by -695 bytes` and `differs by -2,819 bytes`.
+
+**Meetings** (`git merge-tree` of the head; the reader's 33 tests also run locally on each merged tree) [ran]
+- lean's landing tip `f3837f57d1`: 27 conflicted files, none mine, and the same 27 without my commits. The one file both change is `benchmarks/network_traces/README.md`, in different sections; it merges. Tests pass on the merged tree.
+- `cursor/na-device-start-clock-4e9a` at `950e6791e7` (it moved while I worked): no conflict, no file of mine. It changes `warden_serve.py`, `test_warden_serve.py`, `warden.py`, `certificate.py` and `active.py`, which the reader or its tests read. Tests pass on the merged tree, and `deployment.json` keeps the two keys the loopback job reads.
+- `main` at `3d8530f526`: no conflict; tests pass on the merged tree.
+
+**Not established**
+- No capture on a real link between two machines has been read. The kept capture has no retransmission, hole or foreign flow; only the fixture tests cover those.
+- pcapng is unread, fragments are not reassembled, no encapsulation is read. What the operator's capture point writes is unknown.
+- A flow is tied to a connection only as a multiset of byte counts.
+- The watermark's lost releases and stop come from `warden.json`, which nothing signs. The reader prints how many records are certified and does not refuse an uncertified one.
+- The suites run is the pre-mark tier (`--quick`): the six suites' slow tests did not run, except my new test file, which ran whole.
+
+**Slips**
+1. The kept run ran at `98a08b92b2`, one commit before the head. After it I changed the reader to count the reasons record's certificate with the two wire records', as the relay's own check does. The run's own table says "2 of 2 records certified"; the head says "3 of 3". I did not launch it again. The head's reader on the run's kept files gives the same sums and pairing [ran]. The body says this.
+2. Before the kept run I tried `capture_loopback.sh` once outside `research run` (about 70 s, my VM, nothing kept). I then changed the script to read the two hosts from `deployment.json` and checked that edit on the try's files, not by a second try.
+3. `research inspect` printed my own kept run's command line once in my tool output. No other process's.
+
+Notes synced and the store labelled. Nothing is left only on the VM.
+
+TIMER: none
+
