@@ -5,10 +5,12 @@ report's `error`.  It starts no removal after its time limit (`budget_s`); the n
 and says what it would.  The report counts what went (`deleted`, `deleted_inodes`, `deleted_bytes`, as removing it freed them:
 a file with another link frees nothing) and what stayed by the kind its reason starts with (`kept_by`): `2:` in use (a live
 process names it, a lock is held, a run has not ended), `recent:`, `run:` (a request's run dir exists), `retired:`,
-`unknown:` (a record, a name or a layout the pass does not know), `budget:`, `error:`, `unestablished:`.  A path kept because
-it is in use, unknown or failed is named with its reason, in the log and in `kept_first`.  What a live process names (cwd,
-root, exe, open files, maps, command line, environment: `evict.live_texts`) is read when a pass first needs it and again once
-`SCAN_S` old.
+`record:` (a `research keep` record), `unknown:` (a record, a name or a layout the pass does not know), `budget:`, `error:`,
+`unestablished:`.  A path kept because it is in use, recorded, unknown or failed is named with its reason, in `kept_first` and
+in the log, which names the first `LISTED` of each kind.  What a live process names (cwd, root, exe, open files, maps, command
+line, environment: `evict.live_texts`) is read when a pass first needs it and again once `SCAN_S` old.  Nothing a
+`research keep` record covers goes (`retention.py`): a path with a record of its own, under a directory that has one, or
+holding one stays whole, for `research retention` to decide.
 
 * **uv's editable shards and temporary build directories** (`evict_uv`).  uv keys an editable wheel by its source path
   (`<cache>/sdists-v<N>/editable/<digest>`), so every shipped source tree and every run clone leaves a shard per workspace
@@ -63,7 +65,7 @@ REQUEST_KEEP_S = 3600        # a request written this recently may be on its way
 BUDGET_S = 4 * 60            # no removal of a pass starts after this long: with evict_src's, they stay inside the unit's `timeout 3000`
 SCAN_S = 60                  # what live processes name is read again before a removal once the last reading is this old
 LISTED = 20                  # how many paths a report names of those deleted, and of those kept with a reason to act on
-LOUD = ("2", "error", "unknown", "unestablished")
+LOUD = ("2", "error", "record", "unknown", "unestablished")
 UV_TAG = "CACHEDIR.TAG"
 UV_SIGNATURE = "Signature: 8a477f597d28d172789f06886806bc55"
 UV_LOCK = ".lock"
@@ -81,8 +83,8 @@ _RUN_NAMED = re.compile(rf"(?<![0-9A-Za-z])({ids.RUN_RE.pattern.strip('^$')})(?!
 """A run id anywhere in what a process names (its RESEARCH_RUN_ID, a path under its run dir, request or clone)."""
 
 
-class _Held(Exception):
-    """A lock this pass did not take; the message is why its path stays."""
+class _Stays(Exception):
+    """Found under a removal's way: a lock this pass did not take, a record beneath the path.  The message is why the path stays."""
 
 
 class _Pass:
@@ -95,9 +97,17 @@ class _Pass:
         self.say = log or (lambda s: None)
         self.rep: dict[str, Any] = {"dir": str(where), "dry_run": dry_run, "found": 0, "deleted": 0, "deleted_inodes": 0,
                                     "deleted_bytes": 0, "kept": 0, "kept_by": {}, "deleted_first": [], "kept_first": [], "error": None}
+        self.said: dict[str, int] = {}
+        self.above: dict[Path, str | None] = {}
 
     def now(self) -> float:
         return self.t_wall + self.clock() - self.t0
+
+    def line(self, kind: str, text: str) -> None:
+        """Say `text`, for the first `LISTED` lines of its kind: the pass's last line has the counts of the rest."""
+        self.said[kind] = self.said.get(kind, 0) + 1
+        if self.said[kind] <= LISTED:
+            self.say(f"{self.name}: {text}")
 
     def freed(self, inodes: int, nbytes: int) -> None:
         self.rep["deleted_inodes"] += inodes
@@ -108,7 +118,7 @@ class _Pass:
         self.freed(inodes, nbytes)
         if len(self.rep["deleted_first"]) < LISTED:
             self.rep["deleted_first"].append(str(path))
-        self.say(f"{self.name}: {'would delete' if self.dry_run else 'deleted'} {path} ({inodes} inodes, {nbytes / 1e6:.1f} MB)")
+        self.line("deleted", f"{'would delete' if self.dry_run else 'deleted'} {path} ({inodes} inodes, {nbytes / 1e6:.1f} MB)")
 
     def stay(self, path: Path | None, why: str, n: int = 1) -> None:
         kind = why.split(":", 1)[0]
@@ -119,20 +129,41 @@ class _Pass:
         if kind in LOUD and len(self.rep["kept_first"]) < LISTED:
             self.rep["kept_first"].append({"path": str(path), "why": why})
         if kind in LOUD or kind == "retired":
-            self.say(f"{self.name}: kept {path}: {why}")
+            self.line(kind, f"kept {path}: {why}")
+
+    def recorded(self, path: Path) -> str | None:
+        """Why a `research keep` record keeps `path`: its own, or one on a directory above it, which covers everything beneath
+        (`retention.load`; the directories above a directory are read once a pass).  One that cannot be read keeps it too."""
+        from .. import retention as RT
+
+        def at(p: Path, where: str) -> str | None:
+            try:
+                return f"record: a `research keep` record{where} covers it; `research retention` decides" if RT.load(p) else None
+            except RT.RecordError as e:
+                return f"record: {e}"
+
+        if why := at(path, ""):
+            return why
+        if path.parent not in self.above:
+            real = Path(os.path.realpath(path.parent))
+            self.above[path.parent] = next((why for p in (real, *real.parents) if p.name and (why := at(p, f" on {p}"))), None)
+        return self.above[path.parent]
 
     def each(self, paths: list[Path], one: Callable[[Path], None]) -> str | None:
-        """`one(path)` for each path until the time limit, after which the rest stay for the next pass.  A path whose lock is
-        held, that changed under the pass or that failed stays with that reason; a condition that cannot be established stops
-        the pass, and is returned."""
+        """`one(path)` for each path until the time limit, after which the rest stay for the next pass.  A path a `research keep`
+        record covers, whose lock is held, that changed under the pass or that failed stays with that reason; a condition that
+        cannot be established stops the pass, and is returned."""
         self.rep["found"] += len(paths)
         for i, path in enumerate(paths):
             if self.clock() - self.t0 > self.budget_s:
                 self.stay(None, f"budget: no removal starts after {self.budget_s / 60:g} min; the next pass goes on", len(paths) - i)
                 break
             try:
+                if why := self.recorded(path):
+                    self.stay(path, why)
+                    continue
                 one(path)
-            except _Held as e:
+            except _Stays as e:
                 self.stay(path, str(e))
             except FileNotFoundError:
                 self.stay(path, "recent: it changed while it was read")
@@ -181,11 +212,16 @@ def _mtime(p: Path) -> float | None:
 
 
 def _walk(path: Path) -> tuple[float, int, int]:
-    """(newest mtime, inodes, bytes) of the tree at `path`: the last write anywhere in it, and what removing it frees."""
+    """(newest mtime, inodes, bytes) of the tree at `path`: the last write anywhere in it, and what removing it frees.  A tree
+    that holds a `research keep` record stays whole (`_Stays`), as `research retention` leaves it."""
+    from ..retention import SIDECAR
+
     st = os.lstat(path)
     newest, inodes, nbytes = st.st_mtime, 1, 0
     for dp, dns, fns in os.walk(path, onerror=EV._raise_oserror):
         for n in (*dns, *fns):
+            if n.endswith(SIDECAR):
+                raise _Stays(f"record: it holds a `research keep` record ({os.path.join(dp, n)}); `research retention` decides")
             s = os.lstat(os.path.join(dp, n))
             newest = max(newest, s.st_mtime)
             if stat.S_ISDIR(s.st_mode):
@@ -205,19 +241,19 @@ def _unlink(path: Path, dry_run: bool = False) -> tuple[int, int]:
 
 def _take(path: Path, create: bool = False) -> int:
     """A descriptor holding an exclusive flock on the regular file `path`, taken without waiting and only while `path` still
-    names that file; `_Held` says why not.  Opened read-only (a flock needs no more) and without following a link."""
+    names that file; `_Stays` says why not.  Opened read-only (a flock needs no more) and without following a link."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC | (os.O_CREAT if create else 0), 0o666)
     try:
         held = os.fstat(fd)
         if not stat.S_ISREG(held.st_mode):
-            raise _Held(f"unknown: its {path.name} is not a regular file")
+            raise _Stays(f"unknown: its {path.name} is not a regular file")
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise _Held(f"2: its lock is held ({path.name})") from None
+            raise _Stays(f"2: its lock is held ({path.name})") from None
         at = EV._quiet(lambda: os.lstat(path))
         if at is None or (at.st_dev, at.st_ino) != (held.st_dev, held.st_ino):
-            raise _Held(f"2: its lock file was replaced while this pass took it ({path.name})")
+            raise _Stays(f"2: its lock file was replaced while this pass took it ({path.name})")
     except BaseException:
         os.close(fd)
         raise

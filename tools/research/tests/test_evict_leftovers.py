@@ -1,7 +1,7 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
 build directories, the store's lock files, request directories whose run dir is gone, and the clones of runs that are over.
 Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
-ended, a name or layout the pass does not know.  Every path is under `tmp_path`, /proc is a directory there, and time is the
+ended, a name or layout the pass does not know, a `research keep` record.  Every path is under `tmp_path`, /proc is a directory there, and time is the
 `now` and `clock` each pass is given."""
 import fcntl
 import json
@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from research import clone, remote
+from research import clone, remote, retention
 from research.store import evict as EV
 from research.store import fetchset
 from research.store import leftovers as L
@@ -634,3 +634,64 @@ def test_a_clone_dry_run_a_failed_removal_and_the_time_limit(root, proc, monkeyp
         {"path": str(b), "why": "error: OSError: [Errno 39] Directory not empty after 3 attempts"}]
     assert clones(root, root / "no-proc")["error"].startswith("2: cannot list"), "a /proc it cannot read removes nothing"
     assert b.is_dir()
+
+
+# ---- every pass: `research keep` records, and how much it says -------------------------------------------------------------------------
+
+def keep(path: Path, top: Path) -> Path:
+    """Record `path` with `research keep`; the record's file."""
+    retention.keep(path, owner="@infra", expires=None, priority="keep", root=top, node="node")
+    return retention.sidecar(path)
+
+
+def test_nothing_a_keep_record_covers_goes(cache, root, proc, tmp_path):
+    """A record of its own, inside the directory or beside it, one on a directory above, one anywhere beneath, and one that
+    cannot be read: each keeps the path whole, for `research retention` to decide."""
+    covers = "record: a `research keep` record covers it; `research retention` decides"
+    own, beside, holds = shard(cache, D1, 100), build(cache, ".tmpAbC123", 100), build(cache, ".tmpAbC124", 100)
+    keep(own, tmp_path)
+    os.rename(keep(beside, tmp_path), retention.beside(beside))
+    nested = keep(holds / "lib", tmp_path)
+    before = snapshot(cache)
+    rep = uv(cache, proc)
+    assert rep["deleted"] == 0 and rep["deleted_inodes"] == 0 and rep["kept_by"] == {"record": 3} and snapshot(cache) == before
+    assert {k["path"]: k["why"] for k in rep["kept_first"]} == {
+        str(own): covers, str(beside): covers,
+        str(holds): f"record: it holds a `research keep` record ({nested}); `research retention` decides"}
+
+    unread = request(root, RIDS[0])
+    (root / "requests" / f"{RIDS[0]}.retention.json").write_text("not json")
+    before = snapshot(root)
+    rep = requests(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_by"] == {"record": 1} and snapshot(root) == before
+    assert rep["kept_first"][0]["path"] == str(unread)
+    assert rep["kept_first"][0]["why"].startswith(f"record: {root / 'requests' / RIDS[0]}.retention.json: unreadable")
+
+    for rid in RIDS[1:3]:
+        a_clone(root, rid, status={"state": "done", "pgid": 60})
+    keep(root / "scratch", tmp_path)
+    store = tmp_path / "store"
+    lock_file(store, key(1))
+    keep(store / "locks", tmp_path)
+    before = snapshot(root), snapshot(store)
+    above = "record: a `research keep` record on {} covers it; `research retention` decides"
+    rep = clones(root, proc)
+    assert rep["deleted"] == 0 and rep["kept_by"] == {"record": 2}
+    assert {k["why"] for k in rep["kept_first"]} == {above.format(os.path.realpath(root / "scratch"))}
+    rep = locks(store)
+    assert rep["deleted"] == 0 and rep["found"] == 1 and rep["kept_by"] == {"record": 1}
+    assert rep["kept_first"][0]["why"] == above.format(os.path.realpath(store / "locks"))
+    assert (snapshot(root), snapshot(store)) == before
+
+
+def test_a_pass_names_the_first_twenty_of_each_kind_and_counts_them_all(tmp_path):
+    store = tmp_path / "store"
+    for n in range(25):
+        lock_file(store, key(n))
+        lock_file(store, f"another-programs-{n}")
+    lines = []
+    rep = locks(store, log=lines.append)
+    assert rep["deleted"] == 25 and len(rep["deleted_first"]) == 20 and rep["kept_by"] == {"unknown": 25} and len(rep["kept_first"]) == 20
+    assert len([ln for ln in lines if ln.startswith("locks: deleted /")]) == 20
+    assert len([ln for ln in lines if ln.startswith("locks: kept /")]) == 20
+    assert len(lines) == 41 and lines[-1] == "locks: deleted 25 of 50 (0.0 GB, 25 inodes); kept 25 unknown:25"
