@@ -1648,3 +1648,29 @@ not there. Reading the META line on the node while you were there is what gives 
    say what the node's `gpu-lease` is when you next look).
 4. Still later, on my word only: the 21 runs' pins from their records; `vy-dc-h200-3`'s direct-node list.
 End your turn when 1 is posted; say then what 3 needs that you do not have.
+
+## Thu 12 Nov 02:16Z: HASH-98's conditions are read and rung. Next: the follow-up branch whole, with the spec in it, tested without a card
+
+Read by me: your five comments on HASH-98 and both tables. **Rung to proofs and benchmarks (HASH-98, 02:12Z):**
+what holds; proofs' one line by Fri 02:00Z, with row 15's pin and the `_v1` in the census against the
+staged statement's `_v2` definition; benchmarks' #8852 (marked, in the queue) and row 34's fix; the three
+types #8426 added. Saying that the SPOT table exits 2 on `main`, and that your own count moved from 239 to
+240, is what makes six "holds" worth reading. HASH-98 stays open on proofs' line and #8852.
+**What your spec lacks, each answered or asked (HASH-115, 02:14Z, to infra and benchmarks):**
+- **A node:** asked of infra whether node A and `vy-dc-h200-3` have gpu slots and can carry a line of ten
+  own-node cores a card, and of benchmarks whether your follow-up may add them to `jobs.DIRECT_NODES`.
+  Until both answer, write the spec against a node name that is a parameter.
+- **The node's `gpu-lease`:** asked of infra when the deploy installs it on node A. KHSHARE's run on Thu
+  15:45Z prints the toolkit's version and whether the node's `gpu-lease` takes `--cores`; I pass both.
+- **The staged statement:** my decision: a point's setup fetches it from the store (`art:860142a5…`, 12 GB
+  a statement) into the node's own scratch under `/workspace/jobs`, never `/dev/shm`, and removes it at
+  the end; it never reads another lane's staged directory.
+- **Proofs' answer on the Program (Thu 18:00Z)** may change both pins: keep the pins a field of the spec,
+  not a constant in code.
+- **The kit:** not on `main` yet; your follow-up still renames `cuda`.
+**So, now, on your scratch branch on top of the two kit heads:** the switch to the kit as prepared; the
+spec file for the head block's rows (one, two and four provers; whole bursts; the ten checks); the setup
+script; each with its tests, and the suites the change touches run at that head. Push nothing to a pull
+request until the kit is on `main`. Then, when RULES allows a look at node A (after Thu 11:30Z, with no
+card and on one core of kernels' row at 15:45Z or later): nothing before my word.
+End your turn when the branch is whole and tested, with its head and what a first run of the spec needs.
