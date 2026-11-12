@@ -739,3 +739,11 @@ Thu 17:30Z is released** (calendar, 03:16Z): do no more on that fallback.
   `CHECK_SLOTS=/workspace/research/locks/gpu/slots`, and the node's description says the check slots
   stop taking checks 90 minutes before a booked window. Read infra's answer before you say Thursday's
   plan at 18:00Z; if a booking would refuse your start, say so on INF-660 through me.
+- **Added 03:54Z, after your release post (read; the four runs' states checked by me; memory-accounting and
+  infra rung):** infra may now replace `vy-nebius-2`'s `gpu-lease` (from 24 Oct) with `main`'s; it says
+  on INF-660 when and at which commit. **Before Thursday's 21:00Z start, check `night.sh`'s and
+  `launch.sh`'s lease calls against `main`'s `tools/research/src/research/pods/sh/gpu_lease.sh`** (they
+  ask by name and pass no `--cores`): read it, and dry-run where you can; say in your 18:00Z plan that
+  you did. **And in your reading on HASH-120, say plainly what the failed arm costs the table:** which
+  of the 3.3 undecided points the profile's split by kernels was to decide, whether the trace's split
+  decides them instead, and whether the arm needs another lease (Thursday's, inside 21:00Z to 22:15Z).
