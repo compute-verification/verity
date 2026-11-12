@@ -39,10 +39,12 @@ no job writes): the grade never reads it and passes it on, beside each record it
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
   `work.priced`): the grade holds no price. Where the Fit fails it is the slowdown the benchmark's one entry point
   gives on those products (`calculator.slowdown`, which `formalism.bound` calls): the grade computes none. A search
-  record with no trace, with one the capture refused or of a capture version this tree doesn't read, or with a step
-  `formalism.measure` refuses, has no ρ, and then there is no S; the reason names how the trace is taken again
-  (`retrace`). So does a record whose trace was not taken (`trace.failed`: the process that traced the step raised, or
-  ended), whose ρ is unmeasured, not refused: nothing was found against the step;
+  record with no trace, with one the capture refused or of a capture version this tree doesn't read, with one that
+  prices a product of M in another dtype than the record's op log names for it (`priced_apart`: ρ divides the
+  trace's work by the record's count, and the two have one price), or with a step `formalism.measure` refuses, has
+  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`). So does a record whose
+  trace was not taken (`trace.failed`: the process that traced the step raised, or ended), whose ρ is unmeasured,
+  not refused: nothing was found against the step;
 - **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
@@ -113,8 +115,10 @@ BESIDE = {"circuit": "the measured step's cut of its gradient and its structure,
 BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
                 "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
-#: has no trace to read: one refused, or one that was not taken
-RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
+#: has no trace to read: one refused, or one that was not taken. `RETRACE_ON` is the job less its device, for a trace
+#: that is to be taken on a device of the job's kind
+RETRACE_ON = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device "
+RETRACE = RETRACE_ON + "cpu"
 
 
 # ---- the fit -----------------------------------------------------------------------------------------------------------
@@ -358,16 +362,19 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
 
 # ---- ρ, the bound of record and the periods --------------------------------------------------------------------------
 
-def retrace(record: dict) -> str:
+def retrace(record: dict, on: str = "cpu") -> str:
     """How a record's trace is taken again, which a record ρ can't read says: by the job that re-traces a record's
     own config (`RETRACE`), which reads its `config.text`, takes the trace with the capture of the tree it runs in
     (so this tree's, for a trace this grade is to read) and refuses a tree that reads the config as another program
-    than the record's; a record without its `config.text` or its `commit` has no config to re-trace from."""
+    than the record's; a record without its `config.text` or its `commit` has no config to re-trace from. The job
+    is a CPU's unless `on` names another kind of device (`RETRACE_ON`), which a trace that must run its products
+    as the record's job did asks for (`priced_apart_reason`)."""
     lacks = [k for k, v in (("config.text", (record.get("config") or {}).get("text")), ("commit", record.get("commit")))
              if not v]
     if lacks:
         return f"the record has no {' and no '.join(lacks)}, so no config to re-trace from"
-    return (f"re-trace it at the record's commit {record['commit']} and config.text with a CPU job, `{RETRACE}`, "
+    job = "a CPU job" if on == "cpu" else f"a job on {on}"
+    return (f"re-trace it at the record's commit {record['commit']} and config.text with {job}, `{RETRACE_ON}{on}`, "
             f"RUN_JSON the record: the tree the job runs in takes the trace with its own capture, and refuses a "
             f"config it reads as another program than the record's")
 
@@ -404,6 +411,72 @@ def with_circuit(record: dict, circuit: dict) -> dict:
     return out
 
 
+def priced_apart(tr: dict, log: dict) -> list[dict]:
+    """The products of a record's trace `tr` that the products term's M holds (`work.in_m`) and that the trace prices
+    in another dtype (`capture.products.priced_dtype`) than the record's op log names for them: ρ divides the work of
+    the trace's products by the record's count, so the two have one price only where the two dtypes are one. `log` is
+    the record's `macs_log` through the checkpoint ρ is read at. A product is matched to the log's ops as
+    `formalism.other_program` matches a trace to a run, by its shape (m, K, n) in either orientation
+    (`formalism.log_products`), and by whether it is the backward's; the dtypes the log names for it are those of
+    every op of that shape. Each found is {"row", "priced", "named"}, the largest first by its MACs.
+
+    What this finds is a product priced in a dtype the record ran no product of its shape in. A product whose shape
+    the log never ran is `other_program`'s to find, one the log names in several dtypes is apart from none it is
+    priced in, and an op whose row names no dtype names none: a record written before rows named one is counted by
+    the assumed dtypes, and has nothing here to differ from."""
+    from .capture import products
+
+    named: dict[tuple, set] = {}
+    for key in log.get("ops", {}):
+        phase, _, op, shapes, dtype = gates.split_key(key)
+        if dtype is None:
+            continue
+        try:
+            prods = F.log_products(op, json.loads(shapes))
+        except (ValueError, TypeError, IndexError, ZeroDivisionError):
+            continue
+        for _, m, k, n in prods or ():
+            named.setdefault((phase == "bwd", m, k, n), set()).add(dtype)
+    found = []
+    for r in tr["rows"]:
+        if not work.in_m(r):
+            continue
+        back, shape = r["phase"] == "backward", (r["dims"]["m"], r["dims"]["k"], r["dims"]["n"])
+        names = named.get((back, *shape), set()) | named.get((back, *shape[::-1]), set())
+        priced = products.priced_dtype(r, tr.get("capture"))
+        if names and priced not in names:
+            found.append({"row": r, "priced": priced, "named": sorted(names)})
+    return sorted(found, key=lambda x: -x["row"]["count"] * math.prod(x["row"]["dims"].values()))
+
+
+def priced_apart_reason(record: dict, found: list[dict]) -> str:
+    """Why ρ is refused where `priced_apart` finds products in `record`'s trace, with the way out: the work would be
+    priced in one dtype and the count it is divided by in another. It names how many, and the largest with its two
+    dtypes. For a product its capture's rule prices in another dtype than it was traced in (a capture before
+    `capture.products.PRICED_AS_TRACED_FROM`), the way out is the trace taken again by this tree's capture, which
+    prices each product as traced (`retrace`). For one priced as traced, the traced step ran it in another dtype than
+    the job did, as a CPU's trace of a card's job does where torch's autocast casts a product on a card and not on a
+    CPU (`mv`, `addmv` and `addr`): the way out is the trace taken again on a device of the kind the record states
+    its job ran on."""
+    from .capture import products
+
+    x, tr = found[0], record["trace"]
+    r, d, named = x["row"], x["row"]["dims"], " or ".join(x["named"])
+    if x["priced"] != products.traced_dtype(r):
+        fix = (f"trace the job again at capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product "
+               f"in the dtype it was traced in ({products.traced_dtype(r)} here; this trace is capture "
+               f"{tr.get('capture')}'s); {retrace(record)}")
+    else:
+        kind = str(record.get("device") or "").split(":")[0]
+        fix = (f"the traced step ran it in {x['priced']}, not as the job did, and only a trace whose step runs it in "
+               f"{named} has one price with this record: trace the job again on a device of the kind it ran on"
+               + (f"; {retrace(record, kind)}" if kind else ", which the record does not state"))
+    return (f"{sum(x['row']['count'] for x in found)} of the traced step's matrix products in M are priced in another "
+            f"dtype than the search record's op log names for them (the largest: {r['count']} {r['phase']} {r['op']} "
+            f"of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in {x['priced']} where the record names {named}), "
+            f"and one slowdown has one price: {fix}")
+
+
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
     traced (`traced.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
@@ -421,8 +494,9 @@ def traced(record: dict, row: dict) -> dict:
     it; without it they state none, since a record whose trace was taken again keeps its job's `training_slowdown`.
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
-    the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
-    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
+    the capture refused, with one of a capture version this tree's `priced` doesn't read, with one that lacks a
+    key of `TRACE`, or with one that prices a product of M in another dtype than the record's op log names for it
+    (`priced_apart`); and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
     record whose trace was not taken (`failed`, with why: `run.inside`, `run.outside`) raises a plain `ValueError`
     with the same way out: its step is unmeasured, and nothing refused it."""
     from .capture import products
@@ -444,6 +518,9 @@ def traced(record: dict, row: dict) -> dict:
     lacks = [k for k in TRACE if k not in tr]
     if lacks:
         raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which ρ reads; {retrace(record)}")
+    apart = priced_apart(tr, row.get("macs_log") or {})
+    if apart:
+        raise F.Refused(priced_apart_reason(record, apart))
     steps = changed_steps(record, prefix(record, row["checkpoint_step"]))
     if not steps and (row.get("output") or {}).get("e_bytes") != 0:
         raise F.Refused(f"update-free prefix: E is not empty, but no step through checkpoint {row['checkpoint_step']} "

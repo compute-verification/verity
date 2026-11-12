@@ -476,10 +476,13 @@ def test_a_records_provenance_is_passed_on_and_never_read():
 
 
 def named(run: dict, dtype: str = "float32") -> dict:
-    """`run` (a `job` or a `traced` one) as this version's counter writes it: every row of its op log names `dtype`."""
+    """`run` (a `job` or a `traced` one) as this version's counter writes it: every row of its op log names a dtype.
+    A `job`'s names `dtype`. A `traced` one's names bf16, the dtype its trace ran its products in, whatever `dtype`
+    is: a job counts and traces one step, and a record that names another dtype than its trace prices has no ρ
+    (`G.priced_apart`)."""
     rec = copy.deepcopy(run["record"])
     for st in rec["structures"].values():
-        st["log"] = [[*row, dtype] for row in st["log"]]
+        st["log"] = [[*row, "bfloat16" if "trace" in rec else dtype] for row in st["log"]]
     return run | {"record": rec}
 
 
@@ -757,6 +760,86 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     assert b["bound_of_record"] == a["bound_of_record"] and b["p"] == a["p"] and b["S"] == a["S"]
     assert "priced" not in (a["S"]["why"] or "") and {x["priced"] for x in a["records"] + b["records"]} == {
         G.PRICED[True]}
+
+
+@pytest.fixture(scope="module")
+def adapted(tmp_path_factory):
+    """One search job of the tiny start under LoRA, which builds each adapted weight's update B·A in float32, outside
+    the cast."""
+    return synthetic.run_job(tmp_path_factory.mktemp("lora"), **synthetic.JOBS["lora"])[0]
+
+
+def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_names_is_refused(ran, adapted):
+    """ρ divides the work of the trace's products by the record's count, so their one price is that each product M
+    holds is priced, in the trace, in the dtype the record's op log names for it (`G.priced_apart`); else the record
+    has no ρ, and no S.
+
+    M holds a LoRA job's two builds of B·A, float32 in its trace and in its record. With the trace its job took, of
+    this capture, each is priced as traced, nothing is apart and the record grades. The same rows as an earlier
+    capture's are priced by that capture's rule, a product traced wider than bf16 at bf16: the builds are then bf16
+    in the work and float32 in the count, and ρ is refused, saying how many, the largest with its two dtypes and the
+    way out, the job traced again at capture `PRICED_AS_TRACED_FROM` or later. A job with no product of M wider than
+    bf16 has none apart under either capture: attention's float32 products are outside M.
+
+    A trace whose step ran M's products in another dtype than the job did is refused at this capture too, and there
+    the way out is a trace whose step runs them as the job did: the job traced again on a device of the kind the
+    record states, a card for a card's job. A record whose log names no dtype has none to differ from, and a product
+    whose shape the log never ran is `formalism.other_program`'s to find, not this rule's."""
+    tr, row, earlier = adapted["trace"], G.rows_of(adapted)[-1], products.READS[0]
+    old = tr | {"capture": earlier}
+    builds = [r for r in tr["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
+    assert len(builds) == 2 and all(r["phase"] == "forward" and not r["token_dims"] for r in builds)
+    assert G.names_dtypes(adapted) is True and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.priced_apart(tr, row["macs_log"]) == [] and G.traced(adapted, row)["formalism"]["products"]["he"]["groups"]
+    apart = G.priced_apart(old, row["macs_log"])
+    assert sorted(apart, key=str) == sorted(({"row": r, "priced": "bfloat16", "named": ["float32"]} for r in builds),
+                                            key=str)
+    assert all(x["row"] in work.repriced(old) for x in apart)
+    d = apart[0]["row"]["dims"]
+    assert d["m"] * d["k"] * d["n"] == max(math.prod(r["dims"].values()) for r in builds)
+    said = (f"2 of the traced step's matrix products in M are priced in another dtype than the search record's op log "
+            f"names for them (the largest: 1 forward mm of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in "
+            f"bfloat16 where the record names float32), and one slowdown has one price: trace the job again at "
+            f"capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product in the dtype it was "
+            f"traced in (float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
+    with pytest.raises(F.Refused) as refused:
+        G.traced(adapted | {"trace": old}, row)
+    assert str(refused.value) == said and G.RETRACE in said
+
+    config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
+    runs = [{"seed": 0, "split": "search", "record": adapted}]
+    a = G.grade(config, registry("tiny", synthetic.SHAPE), runs, runs)
+    b = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": adapted | {"trace": old}}], runs)
+    assert a["rho"]["rho"] is not None and a["rests_on"]["capture"] == products.CAPTURE
+    assert b["rho"]["rho"] is None and b["rho"]["why"] == f"refused: {said}" and b["S"]["why"] == b["rho"]["why"]
+    assert (b["S"]["honest"], b["S"]["any"]) == (None, None) and b["p"] == a["p"]
+    assert f"none: refused: {said[:60]}" in G.text(b)
+    as_if = G.grade(config, registry("tiny", synthetic.SHAPE), [runs[0] | {"record": adapted | {"trace": old}}], runs,
+                    as_if_assumed=True)
+    assert as_if["rho"]["rho"] is not None and as_if["schema"] == G.SCHEMA_AS_IF
+    assert G.priced_apart(old, G.rows_of(G.without_dtypes(adapted))[-1]["macs_log"]) == []
+    elsewhere = old | {"rows": [r | {"dims": r["dims"] | {"k": r["dims"]["k"] + 1}} if r in builds else r
+                                for r in tr["rows"]]}
+    assert G.priced_apart(elsewhere, row["macs_log"]) == []
+
+    mine, last = ran["trace"], G.rows_of(ran)[-1]
+    assert [G.priced_apart(t, last["macs_log"]) for t in (mine, mine | {"capture": earlier})] == [[], []]
+    held = [r for r in mine["rows"] if work.in_m(r)]
+    assert held and {products.traced_dtype(r) for r in held} == {"bfloat16"}
+    uncast = mine | {"rows": [r | {"dtypes": ["float32", "float32"]} if r in held else r for r in mine["rows"]]}
+    found = G.priced_apart(uncast, last["macs_log"])
+    assert len(found) == len(held) and all((x["priced"], x["named"]) == ("float32", ["bfloat16"]) for x in found)
+    again = ("priced in float32 where the record names bfloat16), and one slowdown has one price: the traced step ran "
+             "it in float32, not as the job did, and only a trace whose step runs it in bfloat16 has one price with "
+             "this record: trace the job again on a device of the kind it ran on")
+    job = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device "
+    for device, way in (("cpu", f"; {G.retrace(ran)}"), ("cuda:0", f"; {G.retrace(ran, 'cuda')}"),
+                        (None, ", which the record does not state")):
+        with pytest.raises(F.Refused) as refused:
+            G.traced(ran | {"trace": uncast, "device": device}, last)
+        assert str(refused.value).endswith(again + way) and "or later" not in str(refused.value)
+    assert ran["device"] == "cpu" and f"with a CPU job, `{job}cpu`" in G.retrace(ran) and G.RETRACE == job + "cpu"
+    assert f"with a job on cuda, `{job}cuda`" in G.retrace(ran, "cuda")
 
 
 def test_a_jobs_own_trace_gives_both_sensitivities_back(ran):

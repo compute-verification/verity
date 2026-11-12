@@ -129,6 +129,26 @@ def beta_eff(w: float, r: float, k: float) -> float:
     return w / (1 + (k_star(k, w) / r) ** 2) if r > 0 else 0.0
 
 
+def left_out(row: dict) -> str | None:
+    """Which of `he_of_rows`' left-out MACs a product row whose two operands both depend on the update is counted in,
+    None where M holds it: `self_macs` for one array times itself, `gathered_macs` for a product with an operand that
+    reads a gather's rows, `left_out_macs` for the optimizer's products and attention's (two token-indexed dims among
+    m, k and n)."""
+    if row["self"]:
+        return "self_macs"
+    if any(row["gathered"]):
+        return "gathered_macs"
+    if row["phase"] == "optimizer" or sum(x in row["token_dims"] for x in ("m", "k", "n")) >= 2:
+        return "left_out_macs"
+    return None
+
+
+def in_m(row: dict) -> bool:
+    """Whether the products term's M holds a product row, a trace's raw one or a priced one: its two operands both
+    depend on the update, and nothing leaves it out (`left_out`)."""
+    return all(row["affected"]) and left_out(row) is None
+
+
 def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None) -> dict | None:
     """The products term's M from a step's product rows at k (training_slowdown.capture.products' rows) over `steps` steps
     after the run's first (None: one step captured on its own, which stands for one after the first ones), each of
@@ -187,7 +207,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     vocab = max((r["dims"]["n"] for r in rows if r["phase"] == "forward" and r["token_dims"] == ["m"]
                  and any(r["affected"])), default=None)
     groups: dict = {}
-    total = alone = gathered = left = trained = 0.0
+    total = trained = 0.0
+    out = {"self_macs": 0.0, "gathered_macs": 0.0, "left_out_macs": 0.0}
     for r in rows:
         if not all(r["affected"]):
             continue
@@ -195,14 +216,9 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
         macs = n * r["macs"]
         total += macs
         d, td = r["dims"], r["token_dims"]
-        if r["self"]:
-            alone += macs
-            continue
-        if any(r["gathered"]):
-            gathered += macs
-            continue
-        if r["phase"] == "optimizer" or sum(x in td for x in ("m", "k", "n")) >= 2:
-            left += macs
+        why = left_out(r)
+        if why:
+            out[why] += macs
             continue
         w_op, b_y = HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)
         betas, widths, weight = [], [], []
@@ -232,8 +248,7 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
         g["macs"] += (keep if td else 1.0) * macs
         g["wires"] += n * r["outputs"] * b_y
     return {"k": float(k), "groups": [groups[x] for x in sorted(groups)], "r_step": r_step, "candidates_macs": total,
-            "self_macs": alone, "gathered_macs": gathered, "left_out_macs": left, "steps": steps,
-            "step_tokens": tokens, "trained_weights": trained if tokens and trained else None}
+            **out, "steps": steps, "step_tokens": tokens, "trained_weights": trained if tokens and trained else None}
 
 
 def p_match_reason(broken: list[dict]) -> str:

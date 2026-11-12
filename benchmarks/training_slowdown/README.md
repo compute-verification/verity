@@ -385,6 +385,17 @@ version. The other is `--as-if-assumed`, which counts every record by the assume
 block says so in its first two lines and begins every other line with `as-if`, and it writes
 `OUT/slowdown.as-if.json` (`slowdown-as-if/v1`), never `slowdown.json`. An as-if figure is no config's slowdown.
 
+ρ divides the work of the search record's traced products by the record's count, so the two have one price too: a
+product the term's M holds is priced, in the trace, in the dtype the record's op log names for it. A record whose
+trace prices one in another (`grade.priced_apart`, which matches a product to the log's ops by its shape and by
+whether it is the backward's) has no ρ, and then there is no S. The reason names the product, the two dtypes and the
+way out: for a product its capture's rule prices in another dtype than it was traced in, the job traced again at
+capture `capture.products.PRICED_AS_TRACED_FROM` or later, which prices each product as traced; for one priced as
+traced, whose traced step ran it in another dtype than the job did, the job traced again on a device of the kind the
+record states. torch's autocast casts `mv`, `addmv` and `addr` on a card and not on a CPU, so a card's job whose M
+holds one is refused so when it is traced again on a CPU: it is traced again on a card. A record whose log names no
+dtype has none to differ from.
+
 A record states torch's switch for TF32 matrix products as it stands when the record is written, by both of torch's
 readings of it (`tf32`: `torch.backends.cuda.matmul.allow_tf32` and `torch.get_float32_matmul_precision()`), and the
 block says of each record whether it was on, off or not stated (a record written before one stated it, which is read
