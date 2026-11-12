@@ -301,7 +301,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
     leaves out beside it (`ledger.NAMED_TERMS`)."""
-    from . import ledger, verifier_party  # here: the party imports this module, and a leg alone reads the ledger
+    from . import ledger, verifier_party  # here: the party imports this module, and this function alone reads the ledger
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
