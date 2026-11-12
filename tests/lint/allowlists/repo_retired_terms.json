@@ -3553,8 +3553,6 @@
     {"file": "benchmarks/spot_proved/tests/test_stage_moe_allreduce.py", "count": 33},
     {"file": "benchmarks/spot_proved/tests/test_stage_rows.py", "count": 28},
     {"file": "benchmarks/spot_proved/tests/test_stage_wires.py", "count": 16},
-    {"file": "benchmarks/stacked_share/beta.py", "count": 1},
-    {"file": "benchmarks/stacked_share/share.py", "count": 2},
     {"file": "benchmarks/tc_probe/instances_hw.py", "count": 12},
     {"file": "benchmarks/tc_probe/tests/test_trust.py", "count": 6},
     {"file": "benchmarks/tc_probe/trust.py", "count": 11},
