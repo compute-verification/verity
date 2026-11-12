@@ -40,10 +40,6 @@ all of them together, which a boundary link of a host of that model carries at m
 machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
 the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts.
 
-~~~python
-from verity.hardware.cards import load, skus
-skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
 B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with them what a card computes from one
@@ -51,6 +47,10 @@ B200, `clock.memory` on all three GPU cards and `sm.count` on the B200, and with
 board and vBIOS, which the named assumptions `accounting-declared-device` and `accounting-sheet-clock` state
 (`verity.claims`) and no mark does. A host card's `store.l2`, `l1d` and `l1i` are likewise its guest's CPUID.
 
+~~~python
+from verity.hardware.cards import load, skus
+skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
 ~~~
 
 **The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
