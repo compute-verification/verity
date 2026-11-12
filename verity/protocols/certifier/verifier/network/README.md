@@ -67,6 +67,7 @@ bits a covert sender in the server can move through the network certifier in the
 | --- | --- |
 | `network-records` | `verity/protocols/certifier/verifier/lean_audit.py` (`lean_audit.Audit`) and `service.py`'s link-window verdict (`verdicts`' `link-window`); the records' runners (`benchmarks/network_e2e/run.sh`, `benchmarks/network_traces/chain_record.sh`) build it and pass it on |
 | `network-period` | `benchmarks/network_traces/certifier_piece.py`, `block_certifier.py` and `scan_period.sh` |
+| `network-rows` | `benchmarks/network_traces/certifier_piece.py`, in step 1 of each of its steps, on the kept network certifier run (`warden_chain.rows_audit_case`) |
 | `network-check-difftest` | the Lean check, on the vectors below |
 | `network-check` | only its own test, `tests/test_network_check_protocol.py`; the records run `network-records` |
 
