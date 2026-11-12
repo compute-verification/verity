@@ -1,0 +1,144 @@
+{
+ "eager": {
+  "LP": 256,
+  "T": 31,
+  "C": 0,
+  "chunks": [],
+  "templates": 330,
+  "instances": 1267135,
+  "plan_s": 0.6,
+  "top": [
+   [
+    193725,
+    "SiluMul_v2{I=256}"
+   ],
+   [
+    179088,
+    "RoPEHeadGptJ_v2{D=64}"
+   ],
+   [
+    172200,
+    "Fp8GroupQuantUe8m0_v1{K=256,G=128}"
+   ],
+   [
+    153600,
+    "MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+   ],
+   [
+    153600,
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=6144,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+   ],
+   [
+    39681,
+    "RMSNormFusedCudaVector8_v3{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}"
+   ],
+   [
+    22386,
+    "DsaRMSNorm_v1{N=2048,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}"
+   ],
+   [
+    22386,
+    "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}"
+   ],
+   [
+    22386,
+    "BatchedGemm_v1{B=8,K=512,N=256,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}"
+   ],
+   [
+    22386,
+    "BatchedGemm_v1{B=8,K=192,N=512,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}"
+   ],
+   [
+    21525,
+    "ResidualAdd_v1{N=6144}"
+   ],
+   [
+    21525,
+    "MoeSum_v1{TOPK=8,H=6144}"
+   ],
+   [
+    21525,
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}"
+   ],
+   [
+    21525,
+    "Fp8GroupQuantUe8m0_v1{K=6144,G=128}"
+   ],
+   [
+    19968,
+    "DeepGemmFp8Linear_v1{K=6144,N=2624}"
+   ]
+  ]
+ },
+ "compiled": {
+  "LP": 256,
+  "T": 31,
+  "C": 0,
+  "chunks": [],
+  "templates": 330,
+  "instances": 1267135,
+  "plan_s": 0.1,
+  "top": [
+   [
+    193725,
+    "SiluMul_v2{I=256}"
+   ],
+   [
+    179088,
+    "RoPEHeadGptJ_v2{D=64}"
+   ],
+   [
+    172200,
+    "Fp8GroupQuantUe8m0_v1{K=256,G=128}"
+   ],
+   [
+    153600,
+    "MoeExpertFp8Gemm_v1{E=256,K=6144,N=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+   ],
+   [
+    153600,
+    "MoeExpertFp8GemmW_v1{E=256,K=256,N=6144,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+   ],
+   [
+    39681,
+    "RMSNormFusedCudaVector8_v3{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}"
+   ],
+   [
+    22386,
+    "DsaRMSNorm_v1{N=2048,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}"
+   ],
+   [
+    22386,
+    "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}"
+   ],
+   [
+    22386,
+    "BatchedGemm_v1{B=8,K=512,N=256,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}"
+   ],
+   [
+    22386,
+    "BatchedGemm_v1{B=8,K=192,N=512,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}"
+   ],
+   [
+    21525,
+    "ResidualAdd_v1{N=6144}"
+   ],
+   [
+    21525,
+    "MoeSum_v1{TOPK=8,H=6144}"
+   ],
+   [
+    21525,
+    "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}"
+   ],
+   [
+    21525,
+    "Fp8GroupQuantUe8m0_v1{K=6144,G=128}"
+   ],
+   [
+    19968,
+    "DeepGemmFp8Linear_v1{K=6144,N=2624}"
+   ]
+  ]
+ }
+}

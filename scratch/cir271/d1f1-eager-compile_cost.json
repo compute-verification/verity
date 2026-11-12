@@ -1,0 +1,411 @@
+{
+ "window": "0:256:32",
+ "requests": [
+  [
+   0,
+   256,
+   32
+  ]
+ ],
+ "rank": 0,
+ "layers": null,
+ "engine": {
+  "max_num_batched_tokens": 2048,
+  "max_model_len": 4096,
+  "long_prefill_token_threshold": 256,
+  "max_num_seqs": 256,
+  "enable_prefix_caching": false
+ },
+ "execution": "eager",
+ "graphs": {
+  "compilation": null,
+  "cudagraph_mode": null
+ },
+ "digests": [
+  "615bc15c637022b784b765e1aa5db8a71ce16e563659ad1c6821a8e3051b1f02edb90a1b1d168319df92ed0e5bafc2a22480dba27ec4db53499cddc460be8982"
+ ],
+ "workload_digest": "2b0e18f29066bbecf07884e1b96692df53409716e299c61202a2f4c65817146ad678767c05fd2a58b538e5d2fa1dfaef952eb7622e4d169571e54d3e534162b8",
+ "root_nodes": {
+  "615bc15c637022b784b765e1aa5db8a71ce16e563659ad1c6821a8e3051b1f02edb90a1b1d168319df92ed0e5bafc2a22480dba27ec4db53499cddc460be8982": 76783
+ },
+ "root_kinds": {
+  "615bc15c637022b784b765e1aa5db8a71ce16e563659ad1c6821a8e3051b1f02edb90a1b1d168319df92ed0e5bafc2a22480dba27ec4db53499cddc460be8982": {
+   "call SparseMlaSplit": 22386,
+   "call FlashInferFp8Linear": 12090,
+   "call BatchedGemm": 4836,
+   "call AllReduceRmsNormMnnvl": 4836,
+   "batch RoPEHeadGptJ": 2496,
+   "batch SiluMul": 2478,
+   "batch Fp8GroupQuantUe8m0": 2475,
+   "call DsaRMSNorm": 2418,
+   "call DsaLatentRow": 2418,
+   "call SiluMul": 2418,
+   "batch MoeExpertFp8Gemm": 2400,
+   "batch MoeExpertFp8GemmW": 2400,
+   "call LlBf16DotprodGemm": 2325,
+   "call MoeRouterSigmoidBias": 2325,
+   "call Fp8GroupQuantUe8m0": 2325,
+   "call MoeSum": 2325,
+   "call ResidualAdd": 2325,
+   "batch DeepGemmFp8Linear": 390,
+   "call AllReduceMultimem": 157,
+   "batch BatchedGemm": 156,
+   "batch RMSNormFusedCudaVector8": 155,
+   "batch DsaRMSNorm": 78,
+   "batch DsaLatentRow": 78,
+   "batch CublasSplitKGemmF32Out": 75,
+   "batch MoeRouterSigmoidBias": 75,
+   "batch MoeSum": 75,
+   "batch ResidualAdd": 75,
+   "call Gemm": 32,
+   "call AllGather": 32,
+   "call TokenSelect": 32,
+   "call EmbeddingShard": 31,
+   "call AllReduceMnnvl": 31,
+   "call RMSNormCudaVector8": 31,
+   "batch EmbeddingShard": 1,
+   "batch RMSNormCudaVector8": 1,
+   "call RMSNormFusedCudaVector8": 1,
+   "call StopCheck": 1
+  }
+ },
+ "transfer_gates": [
+  "TokenSelect_v4{V=154880}"
+ ],
+ "wall_s": 66.212,
+ "wall_min": 1.104,
+ "peak_gib": 1.59,
+ "profiled": false,
+ "phases": [
+  {
+   "phase": "compile_steps",
+   "path": "compile_steps",
+   "depth": 0,
+   "calls": 1,
+   "wall_s": 66.194,
+   "peak_gib": 1.59
+  },
+  {
+   "phase": "steps.request_program",
+   "path": "compile_steps/steps.request_program",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 47.158,
+   "peak_gib": 1.427
+  },
+  {
+   "phase": "build.dead_free_form",
+   "path": "compile_steps/steps.request_program/build.dead_free_form",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 15.06,
+   "peak_gib": 1.427
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/steps.request_program/build.dead_free_form/Builder.finish",
+   "depth": 3,
+   "calls": 4,
+   "wall_s": 0.046,
+   "peak_gib": 1.349
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/steps.request_program/Builder.finish",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 10.755,
+   "peak_gib": 1.359
+  },
+  {
+   "phase": "build.drive",
+   "path": "compile_steps/steps.request_program/build.drive",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 9.789,
+   "peak_gib": 1.16
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/steps.request_program/build.drive/Builder.finish",
+   "depth": 3,
+   "calls": 1308,
+   "wall_s": 0.278,
+   "peak_gib": 1.157
+  },
+  {
+   "phase": "build.Program",
+   "path": "compile_steps/steps.request_program/build.Program",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 7.074,
+   "peak_gib": 1.32
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/steps.request_program/build.Program/Builder.finish",
+   "depth": 3,
+   "calls": 1,
+   "wall_s": 4.006,
+   "peak_gib": 1.32
+  },
+  {
+   "phase": "codec.program_digest",
+   "path": "compile_steps/steps.request_program/codec.program_digest",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 4.191,
+   "peak_gib": 1.425
+  },
+  {
+   "phase": "build.decoder",
+   "path": "compile_steps/steps.request_program/build.decoder",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 0.088,
+   "peak_gib": 0.243
+  },
+  {
+   "phase": "build.with_checks",
+   "path": "compile_steps/steps.request_program/build.with_checks",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 0.001,
+   "peak_gib": 1.16
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/steps.request_program/build.with_checks/Builder.finish",
+   "depth": 3,
+   "calls": 2,
+   "wall_s": 0.0,
+   "peak_gib": 1.16
+  },
+  {
+   "phase": "batch.check_compiled",
+   "path": "compile_steps/batch.check_compiled",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 9.867,
+   "peak_gib": 1.558
+  },
+  {
+   "phase": "batch.separable",
+   "path": "compile_steps/batch.check_compiled/batch.separable",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 8.968,
+   "peak_gib": 1.558
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/batch.check_compiled/batch.separable/Builder.finish",
+   "depth": 3,
+   "calls": 1,
+   "wall_s": 0.046,
+   "peak_gib": 1.474
+  },
+  {
+   "phase": "batch.workload_labels",
+   "path": "compile_steps/batch.check_compiled/batch.workload_labels",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 0.893,
+   "peak_gib": 1.474
+  },
+  {
+   "phase": "batch._solo",
+   "path": "compile_steps/batch.check_compiled/batch._solo",
+   "depth": 2,
+   "calls": 1,
+   "wall_s": 0.001,
+   "peak_gib": 1.474
+  },
+  {
+   "phase": "codec.program_digest",
+   "path": "compile_steps/codec.program_digest",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 3.86,
+   "peak_gib": 1.59
+  },
+  {
+   "phase": "score.request_component",
+   "path": "compile_steps/score.request_component",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 0.94,
+   "peak_gib": 1.36
+  },
+  {
+   "phase": "steps.dead_units",
+   "path": "compile_steps/steps.dead_units",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 0.308,
+   "peak_gib": 1.36
+  },
+  {
+   "phase": "Builder.finish",
+   "path": "compile_steps/Builder.finish",
+   "depth": 1,
+   "calls": 1,
+   "wall_s": 0.055,
+   "peak_gib": 1.36
+  },
+  {
+   "phase": "transfer_gates",
+   "path": "transfer_gates",
+   "depth": 0,
+   "calls": 1,
+   "wall_s": 0.017,
+   "peak_gib": 1.521
+  }
+ ],
+ "timeline": [
+  {
+   "phase": "build.decoder",
+   "path": "compile_steps/steps.request_program/build.decoder",
+   "depth": 2,
+   "wall_s": 0.088,
+   "rss0_gib": 0.24,
+   "rss1_gib": 0.243,
+   "peak_gib": 0.243
+  },
+  {
+   "phase": "build.drive",
+   "path": "compile_steps/steps.request_program/build.drive",
+   "depth": 2,
+   "wall_s": 9.789,
+   "rss0_gib": 0.264,
+   "rss1_gib": 1.16,
+   "peak_gib": 1.16
+  },
+  {
+   "phase": "build.with_checks",
+   "path": "compile_steps/steps.request_program/build.with_checks",
+   "depth": 2,
+   "wall_s": 0.001,
+   "rss0_gib": 1.16,
+   "rss1_gib": 1.16,
+   "peak_gib": 1.16
+  },
+  {
+   "phase": "build.dead_free_form",
+   "path": "compile_steps/steps.request_program/build.dead_free_form",
+   "depth": 2,
+   "wall_s": 15.06,
+   "rss0_gib": 1.312,
+   "rss1_gib": 1.336,
+   "peak_gib": 1.427
+  },
+  {
+   "phase": "build.Program",
+   "path": "compile_steps/steps.request_program/build.Program",
+   "depth": 2,
+   "wall_s": 7.074,
+   "rss0_gib": 1.292,
+   "rss1_gib": 1.32,
+   "peak_gib": 1.32
+  },
+  {
+   "phase": "codec.program_digest",
+   "path": "compile_steps/steps.request_program/codec.program_digest",
+   "depth": 2,
+   "wall_s": 4.191,
+   "rss0_gib": 1.32,
+   "rss1_gib": 1.36,
+   "peak_gib": 1.425
+  },
+  {
+   "phase": "steps.request_program",
+   "path": "compile_steps/steps.request_program",
+   "depth": 1,
+   "wall_s": 47.158,
+   "rss0_gib": 0.24,
+   "rss1_gib": 1.36,
+   "peak_gib": 1.427
+  },
+  {
+   "phase": "steps.dead_units",
+   "path": "compile_steps/steps.dead_units",
+   "depth": 1,
+   "wall_s": 0.308,
+   "rss0_gib": 1.36,
+   "rss1_gib": 1.36,
+   "peak_gib": 1.36
+  },
+  {
+   "phase": "score.request_component",
+   "path": "compile_steps/score.request_component",
+   "depth": 1,
+   "wall_s": 0.94,
+   "rss0_gib": 1.36,
+   "rss1_gib": 1.36,
+   "peak_gib": 1.36
+  },
+  {
+   "phase": "codec.program_digest",
+   "path": "compile_steps/codec.program_digest",
+   "depth": 1,
+   "wall_s": 3.86,
+   "rss0_gib": 1.36,
+   "rss1_gib": 1.474,
+   "peak_gib": 1.59
+  },
+  {
+   "phase": "batch._solo",
+   "path": "compile_steps/batch.check_compiled/batch._solo",
+   "depth": 2,
+   "wall_s": 0.001,
+   "rss0_gib": 1.474,
+   "rss1_gib": 1.474,
+   "peak_gib": 1.474
+  },
+  {
+   "phase": "batch.workload_labels",
+   "path": "compile_steps/batch.check_compiled/batch.workload_labels",
+   "depth": 2,
+   "wall_s": 0.893,
+   "rss0_gib": 1.474,
+   "rss1_gib": 1.474,
+   "peak_gib": 1.474
+  },
+  {
+   "phase": "batch.separable",
+   "path": "compile_steps/batch.check_compiled/batch.separable",
+   "depth": 2,
+   "wall_s": 8.968,
+   "rss0_gib": 1.474,
+   "rss1_gib": 1.523,
+   "peak_gib": 1.558
+  },
+  {
+   "phase": "batch.check_compiled",
+   "path": "compile_steps/batch.check_compiled",
+   "depth": 1,
+   "wall_s": 9.867,
+   "rss0_gib": 1.474,
+   "rss1_gib": 1.523,
+   "peak_gib": 1.558
+  },
+  {
+   "phase": "compile_steps",
+   "path": "compile_steps",
+   "depth": 0,
+   "wall_s": 66.194,
+   "rss0_gib": 0.224,
+   "rss1_gib": 1.523,
+   "peak_gib": 1.59
+  },
+  {
+   "phase": "transfer_gates",
+   "path": "transfer_gates",
+   "depth": 0,
+   "wall_s": 0.017,
+   "rss0_gib": 1.521,
+   "rss1_gib": 1.521,
+   "peak_gib": 1.521
+  }
+ ]
+}

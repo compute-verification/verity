@@ -1,0 +1,9 @@
+{
+ "execution": "eager",
+ "LP": 256,
+ "T": 31,
+ "wall_s": 0.4,
+ "error": "KeyError: 'sweep'",
+ "trace": "Traceback (most recent call last):\n  File \"/workspace/research/runs/r20261112-201401-469e/out/node.py\", line 13, in <module>\n    r = build_node_program(reg.phi, \"request\", LP=256, T=31, with_desc=False)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/research/src/5f0c008aa0403ac275f5626828c534f93d987048/adapters/vllm/verity_vllm/program/predict/node.py\", line 222, in build_node_program\n    batch = launch_batch(phis[0], LP, T) if wrapper == \"request\" else None\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/research/src/5f0c008aa0403ac275f5626828c534f93d987048/adapters/vllm/verity_vllm/program/predict/common.py\", line 301, in launch_batch\n    if not LC.batch_dispatch(w):\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/research/src/5f0c008aa0403ac275f5626828c534f93d987048/adapters/vllm/verity_vllm/pipeline/launch_context.py\", line 78, in batch_dispatch\n    return ((workload.get(\"engine\") or {}).get(\"target\") or {}).get(\"batch_invariant\") is False and len(_requests(workload)) > 1\n                                                                                                        ^^^^^^^^^^^^^^^^^^^\n  File \"/workspace/research/src/5f0c008aa0403ac275f5626828c534f93d987048/adapters/vllm/verity_vllm/pipeline/launch_context.py\", line 133, in _requests\n    s = workload[\"sweep\"]\n        ~~~~~~~~^^^^^^^^^\nKeyError: 'sweep'\n",
+ "peak_gib": 0.24
+}
