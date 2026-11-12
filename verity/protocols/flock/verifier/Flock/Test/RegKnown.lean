@@ -1,7 +1,10 @@
 /-
 `Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
 its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
-`registered.Registered.commit` roots them; ports without `known` are untouched.
+`registered.Registered.commit` roots them; ports without `known` are untouched. And the tree a statement publishes
+for such a port (`Registered.publishedRoot`, `Registered.knownTrees`): the value's own tree where the statement's
+table is the value's rows at the value's domain, another root at another domain or layout, and an entry of the
+verifier's list for each port at known content that the statement publishes a tree for.
 -/
 module
 
@@ -66,5 +69,39 @@ def passes (f : Json) : Bool := (run f).toBool
 #guard !passes (file (hexOf (root ks))
   (some (Json.mkObj [("rows", Json.arr #[Lean.toJson #[1], Lean.toJson #[1]]), ("salts", Json.arr #[Json.str (hexOf (salt 0))])])))
 #guard (Registered.knownOf (file (hexOf (root ks)) (some (knownJ ks)))).toOption.map (·.map (·.1)) == some #["o1"]
+
+-- a statement's table that is the value's rows, at the value's domain, is the value's tree
+#guard Registered.publishedRoot reg dom ks #[0, 1] == root ks
+-- and another tree at another domain, in another order, or over fewer rows
+def pubDom : ByteArray := Sha512.hash "verity/test/published-domain".toUTF8
+#guard Registered.publishedRoot reg pubDom ks #[0, 1] != root ks
+#guard Registered.publishedRoot reg dom ks #[1, 0] != root ks
+#guard Registered.publishedRoot reg dom ks #[1] != Registered.publishedRoot reg dom ks #[0]
+-- an instance's row is the row its unit reads; two instances of one row, and a unit that reads none, are refused
+#guard (Registered.tableRows reg #[1, 0]).toOption == some #[1, 0]
+#guard (Registered.tableRows reg #[1]).toOption == some #[1]
+#guard !(Registered.tableRows reg #[0, 0]).toBool
+#guard !(Registered.tableRows reg #[0, 2]).toBool
+
+/-- A statement's header of instances at the units `units`, publishing a tree at `pubDom` for each of `ports`. -/
+def header (units : Array Nat) (ports : List String := ["o1"]) : Json :=
+  Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson units)]),
+    ("frame_v3", Json.mkObj [("domain_ids", Json.mkObj (ports.map fun p => (p, Json.str (hexOf pubDom))))])]
+
+def trees (units : Array Nat) (ports : List String := ["o1"]) : Except String (Array (String × ByteArray)) :=
+  Registered.knownTreesOf (file (hexOf (root ks)) (some (knownJ ks))) (header units ports)
+
+-- the one port at known content: its published domain, row count, schema index and root
+#guard (trees #[1, 0]).toOption == some #[("o1", pubDom ++ Flock.be64 2 ++ ByteArray.mk #[1] ++
+  Registered.publishedRoot reg pubDom ks #[1, 0])]
+#guard ((trees #[1]).toOption.map (·.map (·.2.size))) == some #[137]
+-- a port the statement publishes no tree for has no entry, and the list of none is its count alone
+#guard (trees #[0, 1] ["i0"]).toOption == some #[]
+#guard Registered.knownList #[] == Flock.be32 0
+#guard ((trees #[0, 1]).toOption.map fun ts => (Registered.knownList (ts.map (·.2))).size) == some (4 + 137)
+-- a file whose root is not its known rows' lists nothing
+#guard !(Registered.knownTreesOf (file (hexOf (Sha512.hash .empty)) (some (knownJ ks))) (header #[0, 1])).toBool
+-- an instance at a unit in which the program reads no row of the value
+#guard !(trees #[0, 2]).toBool
 
 end Flock.Test.RegKnown
