@@ -204,6 +204,24 @@ def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
         MF.program_dirs_for(fx, str(tmp_path))
 
 
+def test_program_dirs_for_passes_over_a_result_nested_past_the_parser(tmp_path):
+    """A result.json nested deeper than Python's parser reads, whole or in one part, is no JSON the lookup can read (`json`
+    raises `RecursionError` for it, which is no `ValueError`): the candidate is passed over like one that is not JSON."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    nested = "[" * 100_000 + "]" * 100_000
+    with pytest.raises(RecursionError):
+        json.loads(nested)
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text(nested)
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").write_text('{"ok": true, "LP": 168, "T": 9, "C": ' + nested + "}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+
+
 def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
     """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
     the dir does not have."""

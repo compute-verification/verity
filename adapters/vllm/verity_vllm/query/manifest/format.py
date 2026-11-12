@@ -721,7 +721,7 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                     try:
                         with open(rj) as f:
                             res = json.load(f)
-                    except (OSError, ValueError):      # unreadable, or not JSON: not this request's Program
+                    except (OSError, ValueError, RecursionError):      # unreadable, not JSON, or nested past the parser: not this request's Program
                         continue
                     if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
