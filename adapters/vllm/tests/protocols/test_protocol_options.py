@@ -215,10 +215,10 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
 
 
 def test_an_unknown_protocol_has_no_adapter():
+    reason = f"unknown protocol 'zk' (known: {', '.join(config.PROTOCOLS)})"
     with pytest.raises(PO.Refused) as e:
         PO.adapter("zk")
-    assert e.value.reasons == ("unknown protocol 'zk' (known: pouw, pous, sampled-proofs)",)
-    assert str(e.value) == "protocol options refused: unknown protocol 'zk' (known: pouw, pous, sampled-proofs)"
+    assert e.value.reasons == (reason,) and str(e.value) == f"protocol options refused: {reason}"
 
 
 def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
@@ -233,11 +233,11 @@ def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch)
         assert hooks.live() == live
 
 
-def test_a_capture_runs_the_set_without_sampled_proofs_and_refuses_what_the_set_refuses(monkeypatch):
+def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(monkeypatch):
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
     p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
-    ctx = PO.capture_context(p, settings={"pouw": {"draws": 7}, "sampled-proofs": {}})
-    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"draws": 7}})
+    ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, config.PROTOCOLS[2]: {}})
+    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"rounds": 7}})
     assert PO.capture_context(None) is None and PO.capture_context(TargetProfile()) is None
     with pytest.raises(PO.Refused) as e:
         PO.capture_context(p, settings={"pous": {}})
@@ -246,11 +246,11 @@ def test_a_capture_runs_the_set_without_sampled_proofs_and_refuses_what_the_set_
 
 
 def test_a_protocols_config_holds_one_object_a_protocol(tmp_path):
-    assert PO.load_settings(None) == {} and PO.load_settings({"pouw": {"draws": 7}}) == {"pouw": {"draws": 7}}
+    assert PO.load_settings(None) == {} and PO.load_settings({"pouw": {"rounds": 7}}) == {"pouw": {"rounds": 7}}
     (tmp_path / "protocols.json").write_text(json.dumps({"pous": {"rounds": 2}}))
     assert PO.load_settings(tmp_path / "protocols.json") == {"pous": {"rounds": 2}}
     with pytest.raises(ValueError, match=r"protocols config: the entries of \['pous', 'pouw'\] are not objects"):
-        PO.load_settings({"pouw": 7, "pous": [], "sampled-proofs": {}})
+        PO.load_settings({"pouw": 7, "pous": [], "zk": {}})
 
 
 def test_an_adapter_this_tree_does_not_hold_fills_nothing_from_the_engine(monkeypatch):
