@@ -223,6 +223,7 @@ class Engine:
         assert core.batch_queue_size == 2, "the loop under test is the one async scheduling runs on one stage"
         core.batch_queue = deque(maxlen=core.batch_queue_size)
         core.is_ec_consumer, core.is_pooling_model, core.aborts_queue = True, False, queue.Queue()
+        core.is_mm_encoder_only = False
         core.use_spec_decode = core.check_for_draft_tokens = draft is not None
         core.async_scheduling = sched.async_scheduling
         self.open: set[str] = set()
