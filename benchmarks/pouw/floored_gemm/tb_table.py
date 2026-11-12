@@ -3,7 +3,7 @@
 python3 tb_table.py BENCH.jsonl [RUN_OUT_DIR]
 
 η is m n k over the time, against 1,024 int8 MACs/SM/clk x SMs x the SM clock NVML read at each rep. Arms: lt cuBLASLt
-int8; b the noised call without receipts (form + GEMM + peel); c duo /32 and c2 duo2 /32 (W13's); t4, t2, t1 the
+int8; b the noised call without receipts (form + GEMM + peel); c duo /32 and c2 duo2 /32 (table.py's); t4, t2, t1 the
 tensor-core receipts TB4, TB2, TB1 /32 (form + GEMM), t2w and t1w their k32 packings, a trailing c the chained kinds;
 g0 and every arm ending in g the GEMM alone.
 """

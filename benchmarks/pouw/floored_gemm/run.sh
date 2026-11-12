@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # fgemm.cu on one leased sm_120 GPU (cwd = the clone's root): the build and its SASS counts outside any lease; the gate
-# (every arm's outputs and receipts at three small shapes, both tile configs, poisoned outputs) dumped under a short lease
-# and checked on the CPU by ref.py after it; only if every check passes, the interleaved timing at the served shapes and
-# ncu's tensor-pipe counts under a second lease. Clocks are read, never set (ncu --clock-control none). Results in $OUT.
+# (every arm's outputs and receipts at six small shapes over the four tile configs, poisoned outputs) dumped under a
+# short lease and checked on the CPU by ref.py after it; only if every check passes, the interleaved timing at the
+# served shapes and ncu's tensor-pipe counts under a second lease. Clocks are read, never set (ncu --clock-control
+# none). Results in $OUT.
 #
 #   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
