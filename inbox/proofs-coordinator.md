@@ -101560,3 +101560,72 @@ def RefusedAt : Prop :=
 - So the notice to Daniel is two lists: the thirteen, whose meaning changes (one of them in its text), and the records that only take the Site's types, which move and say what they said. I give the second list from the records run, not before.
 
 **What I do meanwhile.** The spec's types (`Kind`, `Loc`, `Link`, `Auditor`, `Refusal`), each entry's clauses (`Kinds`, `Rates`, `Timed`, `Chips`, `Owners`, `Covered`) and `Complete`, with the three additions, then the notice. I do not write `RefusedAt` until you say.
+
+## GATHER, Thu 12 Nov 21:07Z: the tree's pull request is #9480, unmarked; head `d5f8313e35` holds the audit record's fix and vllm's select20; its rehearsals wait for slots; the first run at V = 154,880 ended exit 0 with 1 unit a proof block
+
+**The tree's pull request is [#9480](https://github.com/compute-verification/verity/pull/9480), opened unmarked at 21:02Z against `main`, head `d5f8313e35942c3aa2cabd8ea24c4cc20da34e59` [run: `research queue open`, then `gh pr view 9480`, 21:02Z]. That head is `f461ac0edeb2` plus two commits: `f801b050fd`, which ends the false `registered` failure in the one-stage audit's own audit record (driver files only, nothing the verifier accepts changes), and the merge of vllm's `cursor/vllm-select20-5b1e` at `cfd26a2b842f` (two stops, both sides kept) [run: `git log`, 20:54Z]. The small rehearsal of the merged head at V = 2,560 is `r20261112-205635-964a` (cpu-8, lane's pool) and has waited for memory since 20:57Z; the rehearsal of a class of whole instances is `r20261112-205700-5640` (cpu-10), 4 ahead of it at 21:03Z [run: `research fetch --all`, slot.json, 21:03Z]. STOPS' `r20261112-191841-86b4`, the first run at V = 154,880 to end, is exit 0: a chunk's session at k_log 24 and the combine's at k_log 25, each 1 unit a proof block, 20 of 20 accepts by each verdict, round 2 with no code, the outcome refused by `two-stage-form` alone, `held` true [run: its summary.json, 21:03Z]. I end my turn on `964a`, `5640`, `c30d` and `4978`; `c30d` should end near 21:45Z [guess], `964a` about 10 minutes after it gets a slot [derived: `5a5c` took 10 minutes from its slot at 20:04:52Z to its end at 20:14:46Z]. The first try's head is `d5f8313e35` if `964a` holds; I say so, or not, well before Fri 05:30Z.**
+
+**1. The pull request (your item 4).**
+
+- #9480, base `main`, head branch `cursor/proofs-gather-served-select-b88b` at `d5f8313e35`, open, not a draft, no ready mark, GitHub says it merges, 64 files against `main` [run: `gh pr view 9480 --json …`, 21:02Z].
+- Of the 64 files, 13 are the tree's own (the four commits of mine and vllm's five), all under `adapters/vllm/` or `benchmarks/`; the other 51 come by merge from #9075, #9237 and #9082, none of which is on `main` [run: `git diff --name-only origin/main...HEAD` split by commit, and `git merge-base --is-ancestor` for each head, 20:58Z].
+- The body's first lines are `Lane proofs` and `Goal proofs/spot-two-stage-e2e`, and it ends on `Issue: none: the lane's lead files and links this path's issue` [read: the body I wrote]. I wrote nothing to Linear. If the goal should be `accounting/network-glm53`, or an issue should be linked, say so and I edit the body, or you link it.
+- The body says: opened for reading, not ready; the three pull requests it lands after; that a held run is refused by `two-stage-form` alone today; that the driver proves on CPUs and writes no timings yet; what ran and at which head; a table of what `summary.json`'s `accepted`, `record`, `round_two`, `outcome` and `held` each mean [read: the body, 9,098 bytes after one edit at 21:04Z].
+
+**2. The false `registered` failure (your item 3): fixed on the tree, commit `f801b050fd`.**
+
+- Cause: `benchmarks/one_stage/a5.py` decided its own audit record of the interior sample without the verifier's `own_reads`, so the combine's reads of the 19 chunks' results, which are ports of the interior registration at their own roots, counted as registered reads the registration does not list [read: `a5.py` at `f461ac0edeb2`, the call of `V.audit_record`; `verity/protocols/spot/verifier/one_stage/verifier.py:541-583`]. The stream decides the interior's audit record with `own_reads=True` [read: `verity/protocols/spot/verifier/service.py:2460-2462`].
+- The fix: `a5.audit` passes `own_reads` when a caller's stream drew the sample (its `drawn`), to the audit record and to its negatives (`a0.audit_negatives` takes the keyword), and `audit.json` gains `"own_reads": true`; `two_stage_small.py`'s `expect` gains a seventh check, `record`, that a linked run's own audit record fails nothing [read: the diff of `f801b050fd`, 4 files, +27 −13].
+- It changes nothing the verifier accepts: no file under `verity/` or `security/` is in the commit [run: `git show --stat f801b050fd`, 20:58Z]. The stream's audit record, which decides the outcome, is made by the same code as before [derived].
+- Evidence so far. On `5a5c`'s own registration, sample and verdicts, the Python half of the audit record fails `registered` without own reads and fails nothing with them; with them it still refuses a read of `logits` against another root, a read of a chunk's result against another root, a verifier of record that did not run, and no verifier of record [run: `/opt/cursor/artifacts/served-select/own-reads-record-probe.py` on `5a5c`'s `out/second`, 20:45Z]. `benchmarks/one_stage/tests/test_two_stage_second.py`: 8 passed at `f801b050fd` [run: 20:52Z]. The Lean half's verdict on a5's record with own reads is not shown until `964a` ends [derived].
+- **Four things a reader of Friday's files should know, which the fix brings or uncovers:**
+  1. In a run that holds, the top-level `accepted` of `summary.json` becomes `true` while `outcome.accepted` stays `false` with `statements: ["two-stage-form"]` [derived: `two_stage.py:810` takes a5's `ok`; not yet seen in a run]. The top-level `accepted` is the one-stage audit's own audit record, not the outcome. The PR body's table says so; I did not rename the key, because COUNT's reader or vllm's may read it. Say if you want it renamed or dropped.
+  2. `audit.audit.wrong_units` in `summary.json` was `None` in `5a5c` and will hold a5's own figure for the interior sample [derived]. It is not the run's bound.
+  3. Five of the 18 negatives re-decide a5's audit record with one input altered. In `5a5c` and `86b4` their base itself failed `registered`, so their `refused: true` showed nothing; with the fix the base passes [read: `a0.audit_negatives`; derived].
+  4. `benchmarks/one_stage/replay.py`, which re-decides recorded one-stage runs, knows nothing of own reads [read]. I left it: nothing on Friday's path replays a two-stage run's `audit.json` through it [guess].
+
+**3. vllm's select20 merged (your 20:53Z).**
+
+- You said `2196` is done exit 0 [relayed: your 20:53Z message]. `cursor/vllm-select20-5b1e` was still at `cfd26a2b842f` [run: `git fetch`, `git rev-parse`, 20:52Z].
+- Merge commit `d5f8313e35`, pushed 20:54Z [run]. Two stops, as I said at 20:26Z, each keeping both sides: `benchmarks/serve_tax/replay.py` (vllm's `--capture-template` with no default of its own, beside the tree's `--private`) and `benchmarks/serve_tax/tests/test_replay.py` (the tree's tests and vllm's one more) [run: the merge, 20:53Z].
+- At `d5f8313e35`, each file run alone on the VM: `test_replay.py` 18 passed, `test_serve_tax.py` 74 passed, `test_interior_rows.py` 21 passed, `test_two_stage_second.py` 9 passed [run: 20:54Z, `/opt/cursor/artifacts/served-select/local-tests-merge-select20.log`]. The design probe at V = 2,560 derives as before: 20 templates, 19 wires, 20 links, one return, held [run: 20:54Z].
+- I have not read VLLM-412 for vllm's dry line (due 23:30Z); your 20:53Z said merge now, so I did [relayed]. I read VLLM-412 and, at 01:00Z, VLLM-300 for the 00:25Z small serve's result, and put both in an entry.
+- `main` was still `5f0c008aa040` at 20:52Z, and #9375 is not in the tree [run: `git rev-parse origin/main`; `git merge-base --is-ancestor`, 20:58Z].
+
+**4. The first run at V = 154,880 to end: STOPS' `r20261112-191841-86b4`, exit 0** [run: `research fetch --all --on vy-nebius-cpu-10`, 21:02Z; table at `/opt/cursor/artifacts/served-select/86b4/table.txt`].
+
+- It ran STOPS' branch `cursor/proofs-stops-premortem-greedy-7a2e` at `7c2636e740e0`: the same Definitions (#9075's head) and verifier base as this tree, its own layout and stand-in arguments [run: `git ls-remote`, `git diff --stat 7c2636e740e0 08528b27dcc8`, 21:04Z]. So it speaks for the sizes, not for this tree's code; `c30d` is this tree at `08528b27dcc8`.
+- Stand-in serve, CPUs, `GreedySelect_v1{V=154880,N=7744}`, 2 output tokens a span; first-stage sample spans 1 and 4; second stage law `work`, k = 1, 40 strata, 40 units of the interior's 80 [run: summary.json].
+
+| Session | k_log | Units a proof block | Units of the template | Units proved | m | Proving, seconds | Lean's verifier, seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| each of the 19 `GreedyChunk_v2{N=7744,OFF}` | 24 | 1 | 4 | 2 | 27 | 3.6 to 49.2 | 53.2 to 82.9 |
+| `GreedyCombine_v2{V=154880,N=7744}` | 25 | 1 | 4 | 2 | 28 | 29.6 | 53.3 |
+
+  [run: summary.json `audit.circuits[T].k_log`, `audit.timing[T]`; statements.json `header.units.vus_per_block`, `header.instances`; m = k_log + max(3, ⌈log2(units / units a block)⌉) is derived]. The seconds are on a slot of 30 CPU cores with other sessions running beside each one, so they are not a rate [run: slot.json `cores: 34-63`; guess on the sharing].
+- Verdicts: `lean-draw`, `lean-verify`, `m0-verifier` each 20 of 20 true; 22 of 22 checks before the sample; 20 of 20 pins; 18 of 18 negatives; `round_two` `{"ok": true, "codes": []}`; outcome `{"accepted": false, "interior": ["statements"], "replay_sample": [], "statements": ["two-stage-form"], "symbol": "reject"}`; `held` true; `SMALL` line all six true [run: summary.json, expect.txt]. Its own audit record fails `registered`, the failure `f801b050fd` ends [run].
+- 56 minutes from slot (20:01:05Z) to end (20:56:52Z); the run's cgroup peaked at 99.2 GiB [run: slot.json, status.json, resources.jsonl's `cgroup.memory_peak_bytes`, whose scope is named `shared_pod_cgroup`, so I cannot say it holds this run alone]. `5a5c` at V = 2,560 peaked at 32.0 GiB by the same field [run].
+- This answers your 19:47Z ask for the block sizes at V = 154,880, and confirms what my 20:05Z shape assumed: one unit a proof block there. So m of a chunk's session is 24 + max(3, ⌈log2(units of its template)⌉) and the combine's 25 + the same, and every session stays at or under 34 while a template has at most 512 units in the second stage's population (1,024 for 35) [derived from this run's k_log and units a block; the population's size per class is as in the 20:05Z entry].
+
+**5. Runs** [run: `research fetch`, 21:02Z to 21:04Z unless said].
+
+| Run | What | Head | Where | State |
+| --- | --- | --- | --- | --- |
+| `r20261112-205635-964a` | the 20-unit class at V = 2,560, the first try's rehearsal | `d5f8313e35` | cpu-8, lane's pool, 64 GB | waiting since 20:57Z: the node's memory is reserved by live runs, `4978`'s 128 GB among them |
+| `r20261112-205700-5640` | the class of whole instances, default sizes | `d5f8313e35` | cpu-10, lane's pool, 64 GB | waiting since 20:57Z, 4 ahead |
+| `r20261112-193739-c30d` | V = 154,880, 2 output tokens | `08528b27dcc8` | cpu-7, research line | running; slot at 20:38:31Z; first stage done (spans 4 and 5 of 6); second stage running |
+| `r20261112-201421-4978` | V = 154,880, 4 spans of 256 output tokens, 2 of them sampled, so 512 units a template | `f461ac0edeb2` | cpu-8, lane's pool, 128 GB, 4 h | running; slot at 20:34:08Z; the stand-in serve is still evaluating |
+| `r20261112-191841-86b4` | STOPS', V = 154,880, 2 output tokens | `7c2636e740e0` | cpu-10 | done exit 0 |
+| `r20261112-201344-2e7a` | V = 2,560 at the head before this one | `f461ac0edeb2` | cpu-12 | cancelled by me at 20:55Z after 42 minutes with no slot; `964a` replaces it |
+
+- cpu-13 refused `964a`'s first launch at 20:56Z: 64 GB asked, 32.9 GB available, 662.9 GB held by 4 reservations [run: `research run --on vy-nebius-cpu-13`, `MemoryNotAvailable`]. If `964a` has no slot at 21:17Z I cancel it and relaunch on cpu-13 if it then has 64 GB, else on cpu-12 [derived from your 20:23Z rule].
+- `4978` may not fit its 128 GB: `86b4` peaked at 99.2 GiB with 4 units a template, and `4978` has 512 [guess]. If it is killed for memory I relaunch it with more and say so.
+
+**6. What is not established.**
+
+- No run has ended at `d5f8313e35`; the fix's effect in a real run (Lean's half included) and the merged tree's rehearsal are `964a`'s to show.
+- No run at V = 154,880 has ended on this tree.
+- Nothing ran on the served engine.
+- No full check ran at this head; the local tests are the four files above.
+
+**Next.** `964a`'s verdict the moment it ends: sessions, Lean's accepts, round 2's refusal by name, `held`, and whether `record` is true; then `5640`, `c30d`, `4978`. VLLM-412's dry line after 23:30Z and VLLM-300 at 01:00Z, read only. The first try's head and rehearsal to you before Fri 05:30Z, or by Fri 03:00Z the word that it cannot be. STOPDRIVER's branch when it is ready, for the second head by Fri 11:00Z.
