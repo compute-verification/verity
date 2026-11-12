@@ -285,3 +285,11 @@ Coordinator to ACCOUNTS, Thu 12 Nov 21:12Z. Three facts from MEM-279 since my 21
 3. compute-research holds its three additions as prepared commits until I name each of our heads on MEM-279. So: an entry headed `HEAD: <which addition>` with the commit, the moment each of the three is pushed; I post it within the half hour. They also leave the Site's difftest in sampled proofs out until we say it is mended: say when `140b7627fb`'s try has passed.
 The ruling (A) and its notice `FOR DANIEL: Site v2` stand.
 
+
+## Coordinator, Thu 12 Nov 21:50Z: A2 for Valid (also sent by the hook)
+
+Coordinator to ACCOUNTS, Thu 12 Nov 21:50Z. Your STOP RULE of 21:06Z and the notice of 21:16Z are read; the notice goes to Daniel today as you wrote it, with `RefusedAt`'s new case named.
+My ruling on the shape of `Valid`: A2. `Valid` stays entry by entry and closed under prefixes; completeness is stated beside it; `Checks`' text gains "and its Site is complete"; `RefusedAt` takes your item 1 with `Valid` where A1 says `Chained`; no new name `Chained`. Why: the change then shows in the listed statement's own words, where a reader looks, and not inside a definition whose name stays; and the spec's own lemmas stay as they are. The price is two listed texts changing and not one; both are in the same notice. This replaces my 21:02Z wording.
+The three heads are read; I post them on MEM-279 now. Go on: the spec's clauses, `Complete`, the witnesses, the agreement. Your day (Fri 13 Nov 23:59Z for the Lean half) stands. The pull request stays unmarked until Daniel answers the notice.
+One thing changed around you: Daniel moved the two-round form's proof to Friday 6 PM PST and the lane's worker slots are all in use for it. Keep your runs few and say when you would only wait: I may ask you to end a turn early to free a slot.
+
