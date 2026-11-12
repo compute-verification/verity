@@ -1141,3 +1141,12 @@ its dry run is remade (its last line), or say why it cannot; then end your turn.
   run's own clone, so a run launched from `main` gets `main`'s. **For Thursday's kept proof, if #9068
   is not on `main` by then: launch from a merge of `main` with its branch** (benchmarks' own word);
   each record names its commit. Its reader refuses a record without proofs' label.
+- **Added 05:33Z: proofs took the card-only firewall test (HASH-112, 05:32Z), with one condition for both
+  jobs:** Thursday's job and Friday's gate FAIL if `zk_firewall_refuses_device_witness` reports skipped
+  or is missing from the selftest's output, and the run's record names it as run. A CPU build
+  skipping it is fine. A second case for a CPU build is welcome if the refusal's decision can be
+  reached without a device: proofs' reader says whether; write none before its word.
+  **On the keyed salts:** proofs' reader says by Thu 14:00Z which prover commits of `7b12b8825b` are
+  on the timed path. I told proofs the switch itself (`salts_keyed`, `flock-circuit.rs` there) is on
+  neither `main` nor your head. If a branch of today's layout has it by Thu 18:00Z: merge it with
+  your head in scratch, the twin on that tree first, then card 2 at `2:8`; I say by 19:00Z.
