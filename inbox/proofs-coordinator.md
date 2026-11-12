@@ -72038,3 +72038,71 @@ for OS randomness and derivations matched. Next entry by 06:38Z.
 - **When it passes** I fill the body's two open slots and open the pull request unmarked, then write its ready line. The body is otherwise filled, with `ba14`'s figures at the head (`20261112T0430Z-draft-keptverify-pr-body.md` in the lane's notes). Resume me at its verdict.
 - **Second branch** (`cf5587e216`): its quick tier `r20261112-053423-42ee` has run since 05:36Z, ETA about 06:20Z [guess: `a0e1` took 39 minutes from its slot]. Its measurement `r20261112-053448-9a71` is waiting with 5 checks ahead, ETA about 06:50Z [guess]. Its records run goes out after `7fbc`'s verdict. Its body's checks and merges sections are rewritten for the merged head, with slots for these three runs.
 - Nothing else has changed since my 05:36Z entry. The VM was replaced before this turn; nothing unpushed was lost.
+
+## ONSITE, Thu 12 Nov 05:42Z: PRF-573 is #9144 at `4c43611f2e78`, unmarked; the symbol is `S0`, as #9129 writes it into its JSON; three runs green; `claims.py:19` from the list is left alone, and it was my own row that put it there
+
+Tags: [read] a file or record I read now, with its place; [run] a command's or a run's output, with its id; [derived] follows from the reads beside it; [guess] mine, unchecked. Times are from `date -u`.
+
+**1. The symbol is `S0`, and I did not stop.**
+
+- [read] #9129 is open at head `47c7b338a8f4`, the head you named, with no label (`gh pr view 9129`, 05:41Z).
+- [read] It writes "PoUS state bound" three ways: the line's name itself (`benchmarks/memory/run.py:333`, `references.json:2`); `S₀ = ⌊ρ·|C|⌋` in prose (`benchmarks/memory/README.md:49`, `run.py:300`); and the ASCII `S0 = floor(rho*|C|)` inside the `unit` string of the JSON document it writes (`run.py:314`), which its test pins (`tests/test_memory.py:256`).
+- [derived] `S0` is the one of the three it puts into a record, so that is "exactly what it writes" in a form a record can carry, and your stop condition (no symbol a record can carry) is not met.
+- [read] It is the Lean's and the verifier's name for the same value: "the state bound is `S₀ = ⌊ρ·|C|⌋`" (`security/Definitions/Pous/Guarantees/Obligation.lean:135`); `s_bits` is `⌊ρ·blocks·w⌋` (`verity/protocols/pous/verifier/check/PousCheck/RunProtocol.lean:37`, `verity/protocols/pous/verifier/period.py:119`).
+- [guess] If memory-accounting wants the record to say something else (`S₀`, or a longer name), it is a five-place swap: the enum, the writer, the two fixtures, two tests. [read] #9129 itself names no symbol for the block record: its body says "PoUS's verifier texts (`verity/protocols/pous/verifier/`) and the block record's `S_cert` are untouched" (line 42 of the body, `gh pr view 9129`, 05:43Z). [derived] So whether the record should say `S0` is still theirs to confirm if you want their word; I took their spelling, not their decision.
+
+**2. One place on your list is not changed: `benchmarks/datacenter/datacenter/claims.py:19`.**
+
+- [read] The line: "`Held(store, bits)`: the system held `bits` of a registered store on average over `during` (`bits` × the length in bit-ticks: PoUS's S_cert·T; a wipe's labels too)" (`claims.py:18-19` at `62bf29346f76`).
+- [read] The file builds `Held` from a model's trace (`claims.py:179`, `:189`) and has no read of a block record or of a `symbol` (`rg "symbol|block.record" benchmarks/datacenter` finds nothing).
+- [derived] So its `S_cert` is the sense you said stays: bits held on average over the period, as `ARCHITECTURE.md:159` has it ("S_cert bits held on average over the period (S_cert · T bit-ticks)").
+- [derived] `S0·T` there would be false by about the window's length, since the Lean credits `S` only where `S · len + S_chip + ∑ cap_i · round ≤ S₀` (`security/Properties/Pous/Obligation.lean:43`).
+- [read] The place reached your list from my own 04:32Z entry, whose table row calls all three "prose that calls PoUS's figure `S_cert`" (line 70563 of this file at `origin/cursor/verity-proofs-84b5`, fetched 05:42Z). [derived] That row was wrong about the third; the other two do name the block record's quantity (below).
+- If you still want line 19 to say something else, give me the sentence and it is one more commit on the branch.
+
+**3. The pull request.**
+
+- [run] #9144, https://github.com/compute-verification/verity/pull/9144, opened with `research queue open --head cursor/proofs-pous-symbol-a05f --sha 4c43611f2e782b02ef6f8538bf2329bac132dba4 --title … --body-file … --issue PRF-573 --by proofs`; it printed the link to PRF-573 through the Linear app.
+- [read] Open, not a draft, no label, so not marked; head `4c43611f2e78`; `Lane proofs` on its line 3 and `Refs PRF-573` on line 40 of the body (`gh pr view 9144`, 05:41Z).
+- [run] Branch `cursor/proofs-pous-symbol-a05f`, two commits on `62bf29346f76` (`f40a210594` the rename, `4c43611f2e` the test rewritten), 8 files, +33 −11 (`git diff --shortstat origin/main...HEAD`).
+- [run] `open` warned: "--issue PRF-573: no label of it names a live goal of the Goals page (its labels: from:proofs)", so the body carries no `Goal` line. [derived] The label is yours to put on PRF-573; I don't write to Linear.
+- The body's first paragraph says what you asked: a record before carries `{"symbol": "S_cert", "value": <s_bits>, "unit": "bits", "certified": <bool>}`, one after carries `{"symbol": "S0", …}` with nothing else changed, the format stays v2, and a record written before still passes [read, the body].
+
+**4. What changed, at `4c43611f2e78`.**
+
+- [read] Schema, `block-record.v2.schema.json:37-38`: the enum is `["integrity bound", "W_cert", "S0", "S_cert", "Q_cert", "K", "foreign_bits"]`, and `symbol` gains the description "PoUS's quantity is S0, its state bound floor(rho*|C|); S_cert is that quantity's older name, read only: a record that carries it passes and nothing writes it." [derived] I put the sentence on the `symbol` property, beside the enum, rather than in the schema's top description; say so if you meant the other.
+- [read] Writer, `block_record.py:115`: `{"symbol": "S0", "value": int(q["s_bits"]), …}`; docstring `:13-15` lists `S0` and says a record may carry `S_cert`, read and never written.
+- [read] Fixtures: `block-record-b71a-w30.json` and `block-record-r2-period0.json`, the one string each; [run] both are still byte-for-byte what `json.dumps(…, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n"` gives. [read] `block-record-r1-window10.json` has `pous: null` and is untouched.
+- [read] Pinned test, `benchmarks/pous/tests/test_pous_served_piece.py:225`: `{"symbol": "S0", "value": 0, "unit": "bits", "certified": False}`.
+- [read] Prose: `report.py:592` "PoUS's state bound S0, the bandwidth audit's Q_cert and the wipe's foreign_bits compose at M4"; `interfaces/README.md:57-59` lists `S0` and adds "S0 is PoUS's state bound ⌊ρ·|C|⌋; the schema also reads `S_cert`, that quantity's older name, which nothing writes".
+- [read] New test, `tests/test_block_record.py:182-197`: the writer's row gives `S0`; for a record built by `from_period` and for each of the two fixtures, exactly one quantity carries `S0`, the same record under `S_cert` validates and `check` returns `{}`, and under a symbol outside the enum it does not validate.
+- [read] Not touched: `ARCHITECTURE.md:159-160`, everything under `security/`, and `claims.py:19` (2 above). No Lean, lock or circuit file is in the diff (`gh pr view 9144 --json files`: the 8 files are under `benchmarks/one_stage/interfaces/` and `benchmarks/pous/tests/`).
+
+**5. Readers of the block record's `S_cert`: none besides what the pull request changes.**
+
+- [run] `git grep S_cert` at the base outside `security/` and `archive/` finds eleven lines: `ARCHITECTURE.md:159, 160`; `claims.py:19`; the schema's `:37`; `block_record.py:13, 114`; the two fixtures; `interfaces/README.md:57`; `report.py:592`; the pinned test's `:225`.
+- [read] No code compares, branches on or prints a quantity's `S_cert`. `block_record.check` recomputes derived fields and `at_deltas` reads a quantity's `value` (`block_record.py`); `report.py` reads a quantity's `drawn`, `of`, `value` and `tiles` and never `symbol` (`rg symbol report.py` finds nothing).
+- [read] The other tests that pin a quantity's symbol pin other ones: `K` (`benchmarks/network_traces/tests/test_block_certifier.py:66`, `test_certifier_piece.py:222`), `Q_cert` (`benchmarks/one_stage/tests/test_served_bandwidth.py:72, 116`, `benchmarks/pous/tests/test_pous_served_piece.py:589`), `integrity bound` and `foreign_bits` (`interfaces/tests/test_block_record.py:55, 173`).
+- [read] `benchmarks/one_stage/onsite_periods.py:114` prints a `symbol`, of the terms of `delta_net` (`:133, :140`), not of a block record.
+- [read] The files outside `benchmarks/` that name the block record (`demos/onsite_served/served_table.py`, `verity/protocols/reporting.py`, `verity/composite/device/live_challenger/auditor.py`, `tools/move/security_dir_map.toml:55`, `tools/verity/check/public_boundary.toml:116`) read no `symbol` or `quantity` of it.
+- [run] GitHub's code search finds neither `S_cert` nor `block-record` in `compute-verification/infra`. [guess] That search covers the default branch only, and I did not look for readers of stored records anywhere else.
+
+**6. Checks, all at `4c43611f2e78`, the tree clean.**
+
+- [run] `r20261112-052728-1b05`, done, rc 0: the two suites you asked for, whole, none cached: `benchmarks/one_stage/interfaces` 88 passed, `benchmarks/pous` 207 passed and 1 skipped.
+- [run] `r20261112-052811-9011`, done, rc 0: the pre-mark run, `suites.py --changed 62bf29346f76 --quick`. It says the change touches seven suites, and 7 passed, 0 cached, 0 failed: `verity-network-traces` 533, `benchmarks/one_stage/interfaces` 88, `benchmarks/one_stage` 541, `benchmarks/pous` 205, `benchmarks/prove_path` 148, `repository` 308, `verity-graph` 208. It ran `test_pous_served_piece.py` whole, slow tests included.
+- [run] `r20261112-053648-1433`, done, rc 0: the pinned test alone with its log kept under the run's `out/logs/`: `PASSED tests/test_pous_served_piece.py::test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads`; the one skip is the module that imports `gmpy2`. [derived] I added this third run because the first two print counts and not test names.
+- [run] On my VM, one test file: `tests/test_block_record.py`, 18 passed. With `main`'s writer put back the new test fails; with `main`'s schema put back 6 of the 18 fail. Both files were restored and the tree was clean after.
+- [run] `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`: passed at `4c43611f2e78`. It failed at `f40a210594` alone, on four new sites of the record's key `legs`, a word the Glossary retires, in the new test; the second commit rewrote the test to add none, and the gate judges a branch's commits together.
+- [run] `ruff check` on the four changed Python files finds one thing, E731 at `report.py:495`, which `main`'s copy has too.
+
+**7. The ready line.**
+
+`research queue ready 9144 --mark --by proofs`
+
+- [derived] It waits on nothing of mine: the pre-mark run is green at the head, and none of the 8 files is under an entry of `lowrisk_excludes` (`tools/verity/check/drive.toml:71-78`, matched as `research.queue.lowrisk` matches, `tools/research/src/research/queue.py:1183`), so it lands on the mark alone.
+- [read] `main` has moved from the branch's base `62bf29346f76` to `d6075b75d289`; its change touches none of the 8 files (`git diff --stat 62bf29346f76..origin/main` over them is empty) and GitHub says `MERGEABLE` (05:41Z). I did not merge `main` into the branch.
+- It waits on you for two things, either of which changes the head and so needs the pre-mark run again: whether `S0` stands (1 above), and whether `claims.py:19` stays as it is (2 above).
+- [run] I ran no form of `research queue ready`, so the mark's preflight has not seen this head.
+
+**8. Housekeeping.** [run] Checkpoint note `20261112T0518Z-report-pous-symbol-rename.md` with your brief verbatim, synced (notes commit `f7280e10d5`). [read] My mailbox on `cursor/proofs-inbox` has nothing newer than your 05:13Z section (05:41Z).
