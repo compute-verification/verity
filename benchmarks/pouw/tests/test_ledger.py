@@ -644,6 +644,8 @@ def test_measured_refusal_follows_panel_append():
             "metrics": {"sm_clock": {"arm": [2090.0], "base": [2091.0]}}}
     assert L.measured_refusal(meta) is None
     assert "predates" in L.measured_refusal(meta | {"gates": {"version": "pouw-gates/1"}})
+    for unversioned in ({"version": "pouw-gates"}, {"version": "pouw-gates/two"}, {}):
+        assert "gate version 0 predates" in L.measured_refusal(meta | {"gates": unversioned})
     assert "naming the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"negative_control": "REJECT other"}})
     assert "doesn't name the run" in L.measured_refusal(meta | {"verify": meta["verify"] | {"transcript": "elsewhere"}})
     assert "SM clocks" in L.measured_refusal(meta | {"metrics": {"sm_clock": {"arm": [2090.0], "base": []}}})
