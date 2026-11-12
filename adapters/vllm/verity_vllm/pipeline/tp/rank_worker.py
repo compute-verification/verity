@@ -39,8 +39,14 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
-from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
+from verity_vllm.records.schema_ids import (
+    CENSUS_RANK_SCHEMA,
+    ENGINE_PROFILE_SCHEMA,
+    LATE_READ_CHECK_SCHEMA,
+    TP_PARAM_HASHES_SCHEMA,
+)
 
 __all__ = ["EXTENSION"]
 
@@ -100,6 +106,12 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _collector_counters(rc: Any) -> dict[str, Any]:
+    """The counters a run's native collector stated; none when its committer has no collector, or states none."""
+    stated = rc.extra.get("native_collect")
+    return stated if stated else {}
+
+
 def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
     hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
@@ -111,7 +123,7 @@ def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
                        "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
             "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
-            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
+            "collector": {k: v for k, v in _collector_counters(rc).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -130,7 +142,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
     import torch
     from vllm.distributed import parallel_state as ps
 
-    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": settings.raw("CUDA_VISIBLE_DEVICES"),
                            "worker_class": type(worker).__mro__[1].__module__ + "." + type(worker).__mro__[1].__name__,
                            "worker_mro": [f"{c.__module__}.{c.__name__}" for c in type(worker).__mro__[:4]],
                            "runner_class": f"{type(worker.model_runner).__module__}.{type(worker.model_runner).__name__}"}
@@ -152,7 +164,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
+    out["nccl_env"] = settings.redact({k: v for k, v in settings.environ().items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -354,7 +366,7 @@ class TP2CaptureWorkerExtension:
                  "reduce_results", "gather_output", "skip_bias_add", "use_fused_embedding")
         for name, m in model.named_modules():
             cls = type(m).__name__
-            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == "LogitsProcessor"):
+            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == LC.LOGITS):
                 continue
             d = {k: getattr(m, k, None) for k in attrs if hasattr(m, k)}
             si = getattr(m, "shard_indices", None)
@@ -362,7 +374,7 @@ class TP2CaptureWorkerExtension:
                 d["shard_indices"] = {k: getattr(si, k) for k in dir(si) if not k.startswith("_") and isinstance(getattr(si, k), int)}
             d["class"] = f"{type(m).__module__}.{cls}"
             mods[name] = d
-        doc = {"schema": "verity-capture/tp2-param-hashes/v0", "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
+        doc = {"schema": TP_PARAM_HASHES_SCHEMA, "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
                "n_params": sum(1 for v in params.values() if v["kind"] == "param"), "n_buffers": sum(1 for v in params.values() if v["kind"] == "buffer"),
                "total_bytes": sum(v["nbytes"] for v in params.values()), "tensors": params, "modules": _jsonable(mods)}
         out = Path(out_dir)
@@ -450,7 +462,10 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above, so structure would count fewer collectives per step than the Build's links and FAIL.  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import (
+            mid_module_site_census,
+            patch_targets,
+        )
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
@@ -483,7 +498,7 @@ class TP2CaptureWorkerExtension:
             st["cur"] = st["cur_stack"].pop() if st["cur_stack"] else None
 
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
-                if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
+                if type(m).__name__ in (LC.ROW_LINEAR, LC.EMBEDDING, LC.LOGITS, LC.LM_HEAD) + MOE_COLLECTIVE_CLASSES
                 or getattr(m, "reduce_results", False) is True
                 or n in st["mid_sites"]]                                          # mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]
@@ -843,17 +858,19 @@ class TP2CaptureWorkerExtension:
                 sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
             if slot:
                 sampled_replay["host_slot"] = slot
+        errors = rc.extra.get("errors")
+        errors = errors if errors else []
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
                           "leaves": sum(s.n_leaves for s in rc.steps), "bytes_bound": sum(s.n_bytes for s in rc.steps), "tensors": sum(s.n_tensors for s in rc.steps),
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
-                          "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
+                          "errors_n": rc.extra.get("errors_n", len(errors)), "errors": errors[:10],
                           "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "plans_cached": _collector_counters(rc).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
                           "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
@@ -862,7 +879,8 @@ class TP2CaptureWorkerExtension:
         identity of that request goes UNBOUND and coverage FAILS for it (fail-closed; this was the r15-tp06 B8 first-attempt FAIL:
         96330/96493 unbound per rank with the raw `<uuid>-<hex>` ids in the map)."""
         st = self._tp2_commit
-        order = dict(st.get("request_ids") or {}) or {str(r): f"r{i}" for i, r in enumerate(st.get("request_order") or [])}
+        ids, listed = st.get("request_ids"), st.get("request_order")
+        order = dict(ids) if ids else {str(r): f"r{i}" for i, r in enumerate(listed if listed else [])}
         rid = str(rid)
         if rid in order:
             lg = order[rid]
@@ -1087,10 +1105,10 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
+        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
@@ -1226,8 +1244,10 @@ class TP2CaptureWorkerExtension:
             res["t6_4"] = self._t6_4_check(com, rc)
             # the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
-            tpp = res.get("tp_partials") or {}
-            bm = (tpp.get("by_member") or {}).get("out") or {}
+            tpp = res.get("tp_partials")
+            by_member = tpp.get("by_member") if tpp else None    # a compare that did not run, raised or failed early counts no member
+            out = by_member.get("out") if by_member else None
+            bm = out if out else {}                              # no `/out` compared
             res["t6_4"]["out_tensors_vs_clone"] = int(bm.get("tensors") or 0)
             res["t6_4"]["clone_mismatches"] = int(bm.get("tensors") or 0) - int(bm.get("tap_equal") or 0) if bm else None
             res["t6_4"]["clone_rule"] = "committed <L>.mlp.experts/out == TPPartialSource bind-time clone _bytes(y) (tp_partials.by_member.out); None = no /out compared"
@@ -1236,7 +1256,7 @@ class TP2CaptureWorkerExtension:
             elif res["t6_4"].get("result") is None and (res["t6_4"]["clone_mismatches"] or 0) > 0:
                 res["t6_4"]["result"] = False           # not-applicable by the pair rule, but a committed /out differs from its bind-time clone
         except Exception as e:  # noqa: BLE001
-            res["t6_4"] = {"schema": "verity/commit-integ/t6_4-check/v1", "result": False, "error": repr(e)[:300]}
+            res["t6_4"] = {"schema": LATE_READ_CHECK_SCHEMA, "result": False, "error": repr(e)[:300]}
         if vc is not None:
             vc.uninstall()
         if tps is not None:
@@ -1302,7 +1322,7 @@ class TP2CaptureWorkerExtension:
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()
-        doc = {"schema": "verity-capture/census-rank/v0", "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
+        doc = {"schema": CENSUS_RANK_SCHEMA, "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
                "device_us": round(sum(float(e.get("dur", 0.0) or 0.0) for e in ks), 1), "kernels": summary,
                "cpu_ops": dict(sorted(cpu_ops.items(), key=lambda kv: -kv[1])[:200]),
                "method": "one torch.profiler.profile(activities=[CPU, CUDA]) session in this rank's process over the whole observed-free "

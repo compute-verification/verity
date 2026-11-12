@@ -150,15 +150,13 @@ def known_modules(cmap: dict[str, Any], env: dict[str, int]) -> set[str]:
 class RouteSource:
     short_name = "routes"
 
-    def __init__(self, com: Any, model: Any, cmap: dict[str, Any], *, rank: int = 0, world: int | None = None,
-                 config: Mapping[str, Any] | None = None, target: bool | None = None) -> None:
+    def __init__(self, com: Any, model: Any, cmap: dict[str, Any], *, rank: int = 0, target: bool | None = None) -> None:
         if not cmap.get("route_site"):
             raise ValueError(f"capture map {cmap.get('id')}: no route_site")
         self.sites = CM.route_sites(cmap)
         self.c, self.cmap, self.site, self.rank = com, cmap, self.sites[0], int(rank)
         self.on_target = on_target(cmap) if target is None else bool(target)
-        world = world_of(model) if world is None else world
-        self.env = CM.symbols(cmap, dict(config) if config is not None else model.config.to_dict(), world)
+        self.env = CM.symbols(cmap, model.config.to_dict(), world_of(model))
         #: per site, layer -> the module whose method it is; a decision's layers are those of its sites
         self.site_layers: list[dict[int, Any]] = []
         self.decisions: dict[str | None, set[int]] = {}
