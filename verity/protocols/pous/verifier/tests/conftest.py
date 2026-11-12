@@ -1,7 +1,8 @@
 """Every memory challenger in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
 scans for clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger`,
-`memory_challenger.MemoryChallenger` or `streamed_wipe.Challenger` left on its default `time.perf_counter_ns`; such a test
-passes or fails with the load on `check`'s slot. Here the default clock fails the test that reads it, every time. The test
+`memory_challenger.MemoryChallenger` or `streamed_wipe.Challenger` left on its default clock (`time.perf_counter_ns`; the
+wipe's `streamed_wipe.raw_clock_ns`); such a test passes or fails with the load on `check`'s slot. Here the default clock
+fails the test that reads it, every time. The test
 signer's leaf states and session logs go under the suite's basetemp (`pous_test_signer.DIR`)."""
 
 from __future__ import annotations

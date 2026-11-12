@@ -161,7 +161,7 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
         WM.counted(uncounted, RECORD)
     said = str(refusal.value)
     assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
-    assert "its monotonic clock (CLOCK_MONOTONIC ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
+    assert "its raw monotonic clock (CLOCK_MONOTONIC_RAW ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
     assert "until what the memory challenger signs ties its session to the span the record counts" in said
     assert "no --egress" in said
     for accepted in (uncounted, counted):

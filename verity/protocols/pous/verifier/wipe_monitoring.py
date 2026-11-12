@@ -24,7 +24,7 @@ by it, in the same closing words (`UNPRICED`).
 (`verity.protocols.reporting`).
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
-record (`REFUSED`), because the memory challenger signs its session's times on its monotonic clock and a record's
+record (`REFUSED`), because the memory challenger signs its session's times on its raw monotonic clock and a record's
 window (`t0_unix_ns`, `t1_unix_ns`) is real time handed to the record's writer, so nothing signed says a record covers
 the wipe's session.
 
@@ -60,8 +60,8 @@ PRF_TERMS = f"labels' and coins' PRF advantage {UNPRICED}"
 EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPRICED}, δ_net (the network certifier's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
-REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
-           "(CLOCK_MONOTONIC ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
+REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its raw monotonic "
+           "clock (CLOCK_MONOTONIC_RAW ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
            "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
            "comparing the two would compare two clocks. A wipe whose check was given no egress count stays uncounted "
            "until what the memory challenger signs ties its session to the span the record counts: until then give no "

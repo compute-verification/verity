@@ -268,12 +268,13 @@ def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
 def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | None = None,
         log: mc.SessionLog | None = None, party: Side | None = None,
         prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover, egress_mib: int | None = None,
-        clock: Callable[[], int] = time.perf_counter_ns, secret: bytes | None = None, session_id: bytes | None = None,
+        clock: Callable[[], int] = sw.raw_clock_ns, secret: bytes | None = None, session_id: bytes | None = None,
         coin_secret: bytes | None = None, stop_after: int | None = None, trusted_sha512: str | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL,
         chunk: int = wipe_party.CHUNK) -> Wipe:
     """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger signs under
-    `signer`, claims its session in `log` and reads `clock`; `secret`, `session_id` and `coin_secret`
+    `signer`, claims its session in `log` and reads `clock` (the raw monotonic clock, which the session's header
+    names); `secret`, `session_id` and `coin_secret`
     are fresh from the OS unless a test gives them. With `party` its side runs where `party` starts it, with its own
     secret, coins, key, log and clock, and those arguments are unused. `prover` makes the prover's side,
     which with `stop_after` leaves after that many reads. `egress_mib` is the evidence's egress count, which the

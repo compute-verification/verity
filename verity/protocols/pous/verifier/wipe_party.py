@@ -71,13 +71,13 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
-          reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
+          reads: int = READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` once it
-    ends. A prover that closes first leaves it unsigned. This side has no mark source, so the session's start mark is
-    empty."""
+    `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
+    `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
+    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
     c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
                       params_of(request, reads), signer, log=log, clock=clock)
     try:
@@ -159,10 +159,13 @@ def commitment_of(j: Mapping[str, Any]) -> sw.WipeCommitment:
 
 
 def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
-    """`SignedWipe.to_json()`'s inverse, on the challenger's own report. A session of another format (`sw.PROTOCOL`)
-    or with a start mark that is not one (`sw.mark_of`) is refused."""
+    """`SignedWipe.to_json()`'s inverse, on the challenger's own report. A session of another format (`sw.PROTOCOL`),
+    one whose header names another clock than the raw one (`sw.CLOCK`), or one with a start mark that is not one
+    (`sw.mark_of`) is refused."""
     if j["commitment"].get("protocol") != sw.PROTOCOL:
         raise ValueError(f"a signed wipe is {sw.PROTOCOL}, not {j['commitment'].get('protocol')!r}")
+    if j["commitment"].get("clock") != sw.CLOCK:
+        raise ValueError(f"a signed wipe's times are on {sw.CLOCK}, not {j['commitment'].get('clock')!r}")
     batches = tuple(sw.BatchRecord(r["b"], r["first"], r["count"], r["send_ns"], r["receipt_ns"], r["wrong"],
                                    bytes.fromhex(r["digest"])) for r in j["batches"])
     return sw.SignedWipe(commitment_of(j["commitment"]), j["ended"], sw.mark_of(j["start_mark"]), j["fill_start_ns"],

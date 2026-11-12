@@ -19,6 +19,7 @@ from pous_fakes import Clock
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_party as WP
+from verity.protocols.pous.verifier import wipe_period
 from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
@@ -145,6 +146,27 @@ def test_one_session_an_id():
         challenger(log=log)
 
 
+DEFAULT_CLOCK = sw.Challenger.__init__.__kwdefaults__["clock"]
+"""`Challenger`'s default clock as the module has it: read at import, before `conftest.py` replaces it in each test."""
+
+
+def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypatch):
+    """`raw_clock_ns` reads `CLOCK_MONOTONIC_RAW`, the clock the header names. It is the default of `Challenger`, of the
+    wipe's party and of an in-process wipe, and a challenger on it is refused where that clock ticks too coarsely."""
+    asked = []
+    monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
+    assert sw.raw_clock_ns() == 7 and asked == [("ns", sw.time.CLOCK_MONOTONIC_RAW)]
+    assert DEFAULT_CLOCK is sw.raw_clock_ns
+    assert WP.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_period.run.__kwdefaults__["clock"] is sw.raw_clock_ns
+    monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 1e-9)
+    assert challenger(clock=sw.raw_clock_ns).clock is sw.raw_clock_ns
+    monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 4e-3)
+    with pytest.raises(ValueError, match=f"the clock ticks every .* ns, coarser than {mc.CLOCK_RESOLUTION_NS} ns"):
+        challenger(clock=sw.raw_clock_ns)
+    assert asked[1:] == [("res", sw.time.CLOCK_MONOTONIC_RAW)] * 2
+    assert challenger(clock=Clock(1_000_000)).commitment.header()["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
+
+
 CERTIFICATE = b"a start certificate, as the network certifier returned it"
 
 
@@ -181,7 +203,7 @@ def signed_bytes(s: sw.SignedWipe) -> bytes:
     """What a session signs, rebuilt here from the format: the header's 16 keys in sorted order, with no spaces, and no
     egress count among them."""
     p = s.commitment.params
-    header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC ns",
+    header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC_RAW ns",
               "ended": s.ended, "fill_end_ns": s.fill_end_ns, "fill_start_ns": s.fill_start_ns, "k": p.k,
               "label_bytes": 64, "labels": p.labels, "limit_ns": p.limit_ns, "protocol": "verity-pous/streamed-wipe/v2",
               "records_tree": "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",
@@ -272,7 +294,7 @@ def test_the_start_message_is_the_commitment():
     """The start message is the tagged SHA-512 of the commitment's header alone, and one byte of the commitment
     changed is another start message, which the mark source is handed."""
     c = challenger()
-    head = ('{"batch":1,"clock":"CLOCK_MONOTONIC ns","k":40,"label_bytes":64,"labels":256,"limit_ns":1000000,'
+    head = ('{"batch":1,"clock":"CLOCK_MONOTONIC_RAW ns","k":40,"label_bytes":64,"labels":256,"limit_ns":1000000,'
             '"protocol":"verity-pous/streamed-wipe/v2",'
             '"records_tree":"verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",'
             f'"server":"{SERVER.hex()}","session":"{SESSION.hex()}",'
@@ -319,14 +341,21 @@ def test_the_end_message_is_the_signed_message_and_its_signature():
 
 
 def test_the_reader_refuses_another_format_or_mark():
-    """`wipe_party.signed_of` reads a session back with its mark, empty or not; it refuses a v1 session by name, and a
-    `start_mark` of another length, in upper case, or that is no hex."""
+    """`wipe_party.signed_of` reads a session back with its mark, empty or not; it refuses a v1 session by name, a v2
+    session whose header names another clock than the raw one, and a `start_mark` of another length, in upper case, or
+    that is no hex."""
     for certificate in (CERTIFICATE, None):
         signed = session(certificate)[1]
         j = json.loads(json.dumps(signed.to_json()))
         assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
                           "scheme", "public_key", "signature"}
         assert WP.signed_of(j) == signed
+        assert j["commitment"]["clock"] == sw.CLOCK == "CLOCK_MONOTONIC_RAW ns"
+        for other in ("CLOCK_MONOTONIC ns", "CLOCK_MONOTONIC_RAW", "CLOCK_REALTIME ns", None):
+            with pytest.raises(ValueError, match=f"a signed wipe's times are on CLOCK_MONOTONIC_RAW ns, not {other!r}"):
+                WP.signed_of(j | {"commitment": j["commitment"] | {"clock": other}})
+        with pytest.raises(ValueError, match="a signed wipe's times are on CLOCK_MONOTONIC_RAW ns, not None"):
+            WP.signed_of(j | {"commitment": {k: v for k, v in j["commitment"].items() if k != "clock"}})
         v1 = {k: v for k, v in j.items() if k != "start_mark"} | {"egress_bits": 1234}
         v1["commitment"] = j["commitment"] | {"protocol": "verity-pous/streamed-wipe/v1"}
         for old in (v1, v1 | {"start_mark": j["start_mark"]}):

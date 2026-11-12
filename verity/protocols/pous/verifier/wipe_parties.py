@@ -10,6 +10,9 @@ The challenger drives the same `streamed_wipe.Challenger` as `wipe_party.serve`,
 and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's send and receipt
 on its clock, the coin secret sampled when the first batch is revealed, the session signed once it ends. It is given
 no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as `serve`. Its
+header names the raw monotonic clock (`streamed_wipe.CLOCK`), so the clock its machine gives it is to read that one,
+`sources.RealClock(streamed_wipe.raw_clock_ns)`: the runtime's own real clock reads `time.monotonic_ns`, which time
+synchronisation slews. Its
 machine gives it `signing-key` (`capabilities["signer"]`, a `memory_challenger.Signer`, with `capabilities["log"]`, its
 session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`

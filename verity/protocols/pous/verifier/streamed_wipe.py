@@ -23,7 +23,8 @@ session has five steps:
    It does not verify them: bytes that are no certificate cost the session, never the count.  It holds the mark before
    it reads its clock for the fill, so no label is streamed before it.  With no source the start mark is empty.
 3. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
-   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
+   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.  Its clock
+   is the raw monotonic clock (`raw_clock_ns`), which the header names (`CLOCK`).
 4. **Challenge.** Once the fill is complete the challenger flips its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
@@ -79,6 +80,9 @@ END_TAG = b"verity-pous/streamed-wipe/end/v1\0"
 RECORD_BINDING = b"verity-pous/streamed-wipe/batch-records/v1\0"
 RECORDS_TREE = "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1"
 RECORD_SCHEMA = "pous/streamed-wipe/batch-record/v1"
+CLOCK = "CLOCK_MONOTONIC_RAW ns"
+"""The clock a session's times are on, as its header names it: Linux's raw monotonic clock, in ns.  Time synchronisation
+slews `CLOCK_MONOTONIC`, so an interval on that clock states no rate; the raw clock is never adjusted."""
 LABEL_BYTES = DIGEST_BYTES["sha512"]
 LABEL_BITS = 8 * LABEL_BYTES
 MARK_BYTES = DIGEST_BYTES["sha512"]
@@ -90,6 +94,11 @@ DEPLOYED_FILL_BYTES = 2_600_000_000_000
 DEPLOYED_LABELS = DEPLOYED_FILL_BYTES // LABEL_BYTES
 DEPLOYED_K = 74_000
 """The deployed challenge count: retained prior content at most about 1.02 GB plus the egress, at δ = 2^-40."""
+
+
+def raw_clock_ns() -> int:
+    """A reading of `CLOCK`, the raw monotonic clock, in ns: what a `Challenger` reads unless a clock is injected."""
+    return time.clock_gettime_ns(time.CLOCK_MONOTONIC_RAW)
 
 
 def _sha512(*parts: bytes) -> bytes:
@@ -179,7 +188,7 @@ class WipeCommitment:
         return {"protocol": PROTOCOL, "records_tree": RECORDS_TREE, "server": self.server.hex(),
                 "session": self.session.hex(), "labels": p.labels, "label_bytes": LABEL_BYTES, "k": p.k,
                 "batch": p.batch, "limit_ns": p.limit_ns, "tiers": [[t, b] for t, b in p.tiers],
-                "clock": "CLOCK_MONOTONIC ns"}
+                "clock": CLOCK}
 
     def to_json(self) -> dict[str, Any]:
         """The commitment as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Commitment.ofJson`): its header."""
@@ -287,13 +296,14 @@ class Challenger:
     """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
     into `log` before anything else.  `coin_secret` is sampled from the OS when the fill completes unless a test gives
     it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
-    with none the session's start mark is empty."""
+    with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
+    whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
-                 log: SessionLog, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
+                 log: SessionLog, clock: Callable[[], int] = raw_clock_ns, resolution_ns: int | None = None,
                  coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
         if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC_RAW) * 1e9 if clock is raw_clock_ns else 1
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         self.key = wipe_key(secret, server, session)
@@ -535,9 +545,9 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
     return math.ceil(log2_delta / math.log2(1 - slack_labels / n))
 
 
-__all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
+__all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord", "Challenger",
            "Prover", "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for",
            "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of", "message",
-           "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]
+           "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]
