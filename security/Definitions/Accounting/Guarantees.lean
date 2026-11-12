@@ -26,6 +26,7 @@ public import Definitions.Accounting.Guarantees.Joint
 public import Definitions.Accounting.Guarantees.JointLive
 public import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.Guarantees.Localization
 public import Definitions.Accounting.Guarantees.Memory
 public import Definitions.Accounting.Guarantees.PerRun
