@@ -3,8 +3,9 @@
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
 # commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
 # and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
-# committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
-# flock-circuit and Lean's flock-verify are built from this tree, in scratch.
+# committed value is changed (committed consistently, the prover's self-check skipped), which the audit must reject with
+# the ZK server releasing no proof of it (with PP_PLAIN=1, which has no ZK server, with Lean refusing the proof it reads).
+# M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
 #     (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
 #     from adapters/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,

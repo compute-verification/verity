@@ -10,6 +10,9 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
   only inside plain's interim scope, one table under a stratified sample, which a stratified rate states (`a5.plain_refusal`).
+* A forged rank's verdict (`forged_row`), on records written as a5 and a0 write an audit's: behind the ZK server it passes on
+  no proof of the forged unit's member released, and in a plain audit on Lean refusing the proof it read. A Lean verdict on
+  no proof, refused at setup or for want of the session's files, counts for neither.
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile, and c only where the window's leak count
   is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
@@ -270,21 +273,120 @@ def test_an_audit_listens_on_ports_no_other_audit_holds():
     assert PP.PORTS.start <= base and base + 2 * A5.RANK_PORTS <= PP.PORTS.stop
 
 
-def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool = True) -> dict:
-    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": drawn,
+#: the ZK server's reason for holding back a forged unit's proof, as the prover's record of the session gives it
+HELD = "FIREWALL-REFUSED: circuit: the constraints lincheck final fail on a rep's pads"
+#: the verifier's reason on a session whose proof never arrived
+NO_PROOF = "R7: no proof for circuit/rep0 (lone rep)"
+#: Lean's refusals on no proof: for want of a session's proof file, and at the statement's setup
+NO_FILE = "session files: no such file or directory (error code: 2)\n  file: session-m0/sessions/l0000/circuit.rep0.bin"
+AT_SETUP = "setup: U2: the draw's K is 4, not the verifier's 1"
+#: a refusal of Lean's on a proof it read
+ON_THE_PROOF = "circuit/rep0: the lincheck's final check fails"
+
+
+def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | None = 0, stopped: str | None = None,
+            digest: bool = True, sample: tuple[int, ...] = (0, 1, 2), before: bool = True) -> dict:
+    """A forged rank's audit as a5 leaves one in ``d``, its unit 1 of member 0 forged -> a5's summary of it. Member 0's
+    session has ``proofs`` proof streams in the verifier's record of it (no record where None) and a prover's log, written
+    as `a0.run` writes one, whose ``LIVE`` line gives ``stopped`` as why it stopped short. Lean's verdict on the session
+    refuses with ``lean_why`` (it accepts where None, and the audit with it), its own where ``digest``, else a0's stand-in
+    for none. ``zk_server``: the sessions ran behind the ZK server; without it, plain."""
+    import a0
+
+    accepted = lean_why is None
+    m0_why = None if accepted else NO_PROOF if not proofs else "the proof fails its check"
+    session = d / "session-m0"
+    if proofs is not None:
+        (session / "sessions" / "l0000").mkdir(parents=True)
+        (session / "sessions" / "l0000" / "session.json").write_text(json.dumps({
+            "proof_sha512": [{"stream": f"circuit/rep{r}", "bytes": 9, "sha512": "cd" * 64} for r in range(proofs)],
+            "verdict": {"accepted": accepted, "why": m0_why or ""}}))
+    session.mkdir(parents=True, exist_ok=True)
+    live = {"accepted": accepted, "why": m0_why or "", **({"prover_stopped": stopped} if stopped else {})}
+    a0.run([sys.executable, "-c", f"print({'LIVE' + chr(9) + json.dumps(live)!r})"], session / "prove.log")
+    verdicts = {"m0-verifier/m0": {"accepted": accepted, "why": m0_why},
+                "lean-draw/m0": {"accepted": accepted},
+                "lean-verify/m0": {"accepted": accepted, "why": lean_why, "of_record": True,
+                                   "digest": "ab" * 64 if digest else None}}
+    (d / "audit.json").write_text(json.dumps({"accepted": accepted, "verdicts": verdicts}))
+    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": list(sample),
+            "firewall": "the ZK server's binary" if zk_server else None, **({} if zk_server else {"plain": {"coins": "tree"}}),
             "checks_before_draw": {"registration": before, "source": True},
-            "audit": {"accepted": accepted, "verdicts": {"m0-verifier/m0": lean, "lean-verify/m0": lean}, "why": {}}}
+            "audit": {"accepted": accepted, "verdicts": {k: v["accepted"] for k, v in verdicts.items()},
+                      "why": {k: v.get("why") for k, v in verdicts.items() if not v["accepted"]}}}
 
 
-@pytest.mark.parametrize("summary, ok", [
-    (_summary([0, 1, 2], False, False), True),
-    (_summary([0, 2], False, False), False),
-    (_summary([0, 1, 2], True, True), False),
-    (_summary([0, 1, 2], False, True), False),
-    (_summary([0, 1, 2], False, False, before=False), False),
-], ids=["refused-by-lean", "forged-unit-not-drawn", "accepted", "lean-accepted", "refused-before-the-draw"])
-def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summary, ok):
-    assert PP.forged_row(summary, {"member": 0, "unit": 1})["ok"] is ok
+@pytest.mark.parametrize("lean_why, kw, ok, released, lean", [
+    (NO_FILE, {"stopped": HELD}, True, True, None),
+    (AT_SETUP, {"stopped": HELD}, True, True, None),
+    (NO_FILE, {}, False, False, None),
+    ("no session recorded", {"proofs": None, "stopped": HELD, "digest": False}, False, False, None),
+    (ON_THE_PROOF, {"proofs": 2}, False, False, True),
+    (None, {"proofs": 2}, False, False, False),
+    (NO_FILE, {"stopped": HELD, "sample": (0, 2)}, False, True, None),
+    (NO_FILE, {"stopped": HELD, "before": False}, False, True, None),
+], ids=["no-proof-released", "lean-refused-at-setup", "the-prover-stopped-on-its-own", "no-session-recorded",
+        "a-proof-left-and-lean-refused-it", "accepted", "forged-unit-not-sampled", "refused-before-the-sample"])
+def test_behind_the_zk_server_a_forged_rank_passes_on_no_proof_released(tmp_path, lean_why, kw, ok, released, lean):
+    """Under `--zk` the ZK server holds a false member's proof back, so the rank passes on that: the verifier's record of
+    the forged unit's session lists no proof and the prover's gives the ZK server's refusal. Lean's verdict on that session
+    is on no proof, at setup or for want of the session's files, and is no value of ``lean_refused``; a proof that left
+    fails the rank even where Lean refused it."""
+    row = PP.forged_row(_forged(tmp_path, lean_why, zk_server=True, **kw), {"member": 0, "unit": 1}, tmp_path)
+    checks = row["checks"]
+    assert (row["ok"], row["passes_on"]) == (ok, "no_proof_released"), row
+    assert (checks["no_proof_released"], checks["lean_refused"]) == (released, lean), row
+    assert checks["rejected"] is (lean_why is not None) and checks["forged_unit_drawn"] is ("sample" not in kw)
+    assert sorted(row["no_value"]) == (["lean_refused"] if lean is None else []), row
+    if lean is None:
+        assert row["no_value"]["lean_refused"] == f"the Lean verifier read no proof: lean-verify/m0: {lean_why.splitlines()[0]}"
+    assert row["sessions"] == {"m0": {"proofs": kw.get("proofs", 0), "prover_stopped": kw.get("stopped")}}
+
+
+@pytest.mark.parametrize("lean_why, kw, ok, lean", [
+    (ON_THE_PROOF, {"proofs": 2}, True, True),
+    (AT_SETUP, {"proofs": 2}, False, None),
+    (NO_FILE, {}, False, None),
+    ("no verdict (rc 139): ", {"proofs": 2, "digest": False}, False, None),
+    (None, {"proofs": 2}, False, False),
+    (ON_THE_PROOF, {"proofs": 2, "sample": (0, 2)}, False, True),
+], ids=["lean-refused-the-proof", "lean-refused-at-setup", "lean-had-no-proof-file", "no-verdict-of-leans-own", "accepted",
+        "forged-unit-not-sampled"])
+def test_a_plain_forged_rank_passes_on_lean_refusing_the_proof_it_read(tmp_path, lean_why, kw, ok, lean):
+    """Under ``--plain`` no ZK server stands before the verifier, so the proof leaves and the rank passes on Lean's own
+    verdict refusing it. A verdict that read no proof (refused at setup or for want of the session's files, or a0's
+    stand-in for none) is no value of ``lean_refused`` and passes nothing, and ``no_proof_released`` has no value."""
+    row = PP.forged_row(_forged(tmp_path, lean_why, zk_server=False, **kw), {"member": 0, "unit": 1}, tmp_path)
+    checks = row["checks"]
+    assert (row["ok"], row["passes_on"]) == (ok, "lean_refused"), row
+    assert (checks["no_proof_released"], checks["lean_refused"]) == (None, lean), row
+    assert row["no_value"]["no_proof_released"] == "the sessions ran behind no ZK server"
+    assert ("lean_refused" in row["no_value"]) is (lean is None), row
+    assert row["sessions"] == {"m0": {"proofs": kw.get("proofs", 0), "prover_stopped": None}}
+
+
+def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_held(tmp_path):
+    """The records audit knows no forged member, so it reads every sampled member's session: the honest member's proof
+    left and Lean accepted it, the false member's was held back, and Lean's refusal for want of its files is the only
+    one, so ``lean_refused`` has no value."""
+    import records_audit as RA
+
+    _forged(tmp_path / "honest", None, zk_server=True, proofs=2)
+    false = _forged(tmp_path / "false", NO_FILE, zk_server=True, stopped=HELD)
+    d = tmp_path / "window"
+    d.mkdir()
+    shutil.copytree(tmp_path / "honest" / "session-m0", d / "session-m0")
+    shutil.copytree(tmp_path / "false" / "session-m0", d / "session-m1")
+    verdicts = {f"{k.split('/')[0]}/m{i}": v for i, w in enumerate(("honest", "false"))
+                for k, v in json.loads((tmp_path / w / "audit.json").read_text())["verdicts"].items()}
+    (d / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
+    row = RA.forged_outcome({**false, "audit": {"accepted": False, "why": {}}}, d)
+    assert row["ok"] is True and row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
+                                                   "lean_refused": None}, row
+    assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
+    assert row["no_value"] == {"lean_refused": "the Lean verifier read no proof: lean-verify/m1: " + NO_FILE.splitlines()[0]}
+    (d / "session-m1" / "prove.log").write_text((d / "session-m0" / "prove.log").read_text())
+    assert RA.forged_outcome({**false, "audit": {"accepted": False, "why": {}}}, d)["ok"] is False
 
 
 @pytest.fixture(scope="module")

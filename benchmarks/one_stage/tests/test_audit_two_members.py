@@ -155,13 +155,21 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     """One bit of one member's committed output flipped, committed as consistently as an honest window (the prover's
-    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the changed member's
-    session ends with no proof and each of its verdicts refuses, the other member's accept, and the audit record
-    rejects."""
+    self-check off, ``--forged``): every check before the sample passes, both members are sampled, the ZK server releases
+    no proof of the changed member, so its session ends with none and each of its verdicts refuses, the other member's
+    accept, and the audit record rejects. Lean refuses the changed member's session for want of its proof file, a
+    verdict on no proof, so the audit passes on the proof held back and ``lean_refused`` has no value."""
     window = _window(tmp_path / "window", flipped=True)
     rc, row, out, said = _audit(tmp_path, window, binaries, "--forged")
     assert rc == 0 and row.get("ok") is True, said
-    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "lean_refused": True}, row["forged"]
+    forged = row["forged"]
+    assert forged["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
+                                "lean_refused": None}, forged
+    assert forged["passes_on"] == "no_proof_released" and forged["sessions"]["m0"]["prover_stopped"] is None, forged
+    assert forged["sessions"]["m1"]["proofs"] == 0, forged
+    assert forged["sessions"]["m1"]["prover_stopped"].startswith(RA.ZK_SERVER_REFUSED), forged
+    assert forged["no_value"]["lean_refused"].startswith(
+        f"the Lean verifier read no proof: lean-verify/m1: {RA.NO_SESSION_FILES}"), forged
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
     assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]

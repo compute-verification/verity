@@ -129,9 +129,9 @@ party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
-``--forged``: the window holds a forged unit, and the
-audit passes when every check before the sample passed and Lean refused the outcome (the prover runs with its self-check
-skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
+``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
+record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
+self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
 """
 from __future__ import annotations
 
@@ -800,6 +800,67 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
+#: how the ZK server's reason for a message it holds back opens (its Lean's own text), which the prover's record of its
+#: session gives as why it stopped (``prover_stopped``; live PROTOCOL.md, the ZK server's send check)
+ZK_SERVER_REFUSED = "FIREWALL-REFUSED"
+#: how a Lean verdict's reason opens where a file of the session's (its record, a rep's proof) was not there to read
+#: (`FlockVerify`'s ``verify``): like a refusal at setup, which `a0.lean_refused` leaves out, the verifier read no proof
+NO_SESSION_FILES = "session files:"
+
+
+def session_proofs(sdir: Path) -> dict[str, Any]:
+    """What member session ``sdir`` (a5's ``session-m<k>``) records of its proofs leaving the prover: ``proofs``, how many
+    proof streams the verifier's record of the session lists (``session.json``'s ``proof_sha512``; None where the session
+    has no record, or its record no such list), and ``prover_stopped``, why the prover's record says it stopped short (its
+    ``LIVE`` line, in `a0.session`'s ``prove.log``; None where it didn't, or printed no such line)."""
+    recs = sorted((sdir / "sessions").glob("*/session.json"))
+    listed = json.loads(recs[-1].read_text()).get("proof_sha512") if recs else None
+    log = sdir / "prove.log"
+    live = next((json.loads(x[5:]) for x in (log.read_text().splitlines() if log.is_file() else ()) if x.startswith("LIVE\t")), {})
+    return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
+
+
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None) -> dict[str, Any]:
+    """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
+    member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
+    record rejects, and the false member was stopped where its sessions stop one:
+
+    * behind the ZK server (the summary names its binary), no proof of it may leave the prover: ``no_proof_released``, the
+      session of the member holding the forged unit (``member``; any sampled member's where None) has no proof in the
+      verifier's record of it, and the prover's record gives the ZK server's refusal as why it stopped (`session_proofs`,
+      `ZK_SERVER_REFUSED`). The Lean verifier refuses that session too, for want of its files: a verdict on no proof.
+    * behind none (a plain audit), the proof leaves, and Lean's own verdict must refuse it: ``lean_refused``, the Lean
+      verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's files, `NO_SESSION_FILES`).
+
+    ``checks`` holds both, and the window passes on the one its sessions call for (``passes_on``). A check with nothing to
+    read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK server, and ``lean_refused`` where
+    Lean refused only sessions it read no proof of (False where it refused none). ``sessions`` is what each session read
+    records (`session_proofs`), and ``why`` the audit's reasons."""
+    import a0
+
+    audit, behind, no_value = s.get("audit") or {}, bool(s.get("firewall")), {}
+    record = json.loads((wdir / "audit.json").read_text()) if (wdir / "audit.json").is_file() else {}
+    lean = {k: v for k, v in (record.get("verdicts") or {}).items() if k.startswith("lean-verify/") and v.get("accepted") is not True}
+    read = [k for k, v in lean.items() if a0.lean_refused(v) and not v["why"].startswith(NO_SESSION_FILES)]
+    refused: bool | None = bool(read)
+    if lean and not read:
+        refused = None
+        no_value["lean_refused"] = "the Lean verifier read no proof: " + "; ".join(
+            f"{k}: {(v.get('why') or 'no reason given').split(chr(10), 1)[0]}" for k, v in sorted(lean.items()))
+    dirs = sorted(wdir.glob("session-m*")) if member is None else [wdir / f"session-m{member}"]
+    sessions = {d.name.removeprefix("session-"): session_proofs(d) for d in dirs}
+    released: bool | None = None
+    if behind:
+        released = any(x["proofs"] == 0 and str(x["prover_stopped"] or "").startswith(ZK_SERVER_REFUSED) for x in sessions.values())
+    else:
+        no_value["no_proof_released"] = "the sessions ran behind no ZK server"
+    on, other = ("no_proof_released", "lean_refused") if behind else ("lean_refused", "no_proof_released")
+    checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
+              "rejected": audit.get("accepted") is False, "no_proof_released": released, "lean_refused": refused}
+    return {"ok": all(v is True for c, v in checks.items() if c != other), "checks": checks, "passes_on": on,
+            "no_value": no_value, "sessions": sessions, "why": audit.get("why")}
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -904,11 +965,7 @@ def audit(a: argparse.Namespace) -> int:
     else:
         ordered = False
     if a.forged:
-        verdicts = (s.get("audit") or {}).get("verdicts") or {}
-        checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()),
-                  "rejected": (s.get("audit") or {}).get("accepted") is False,
-                  "lean_refused": any(v is False for k, v in verdicts.items() if k.startswith("lean-verify/"))}
-        row["forged"] = {"ok": all(checks.values()), "checks": checks, "why": (s.get("audit") or {}).get("why")}
+        row["forged"] = forged_outcome(s, out / "window")
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
