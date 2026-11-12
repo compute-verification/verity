@@ -66,10 +66,11 @@ starts, or a Python started by a program it starts, traces its own opens while i
 doesn't start; the failure names the test and the file. Nothing sees into other programs (bash, git, `uv`, a Python run with
 `-I`, `-E` or `-S`, or on a PYTHONPATH without the tracer): what they read is unchecked, and checking it would mean keying
 their suite on the whole tree. List what they read under `inputs`, or give the test a stand-in for it. A test file that starts one
-fails its suite unless the suite names it under `[tool.verity.tests] untraced` (fnmatch patterns from its directory; a conftest's
-program, every file the run ran), as the graph's test-file runner decides (`undeclared_untraced`), and the failure names the line
-to add; a compiler alone passes, as the runner lets a file whose code builds native code start one, and a suite of
-`AFTER_LEAN`, which the graph runs whole, is not held to it. The one exception is the
+fails its suite unless the suite names it under `[tool.verity.tests] untraced` (fnmatch patterns from its directory), as the
+graph's test-file runner decides (`undeclared_untraced`; a shared fixture's program is each module's that uses it), and the
+failure names the line to add; a compiler alone passes, as the runner lets a file whose code builds native code start one, and a
+suite of `AFTER_LEAN`, which the graph runs whole, is not held to it. A conftest's or hook's program outside any test is a
+warning (`hook_untraced`): which files' own runs start it, this run can't tell. The one exception is the
 suite's own build outputs (`artifacts`, a Lean executable reads only what its arguments name): such a program's start is taken
 as reading the repository paths it is given, a file with the files beside it and a directory whole, checked against the inputs
 like any read, and `lake build` of them in their package as reading nothing the key doesn't hold (`VERITY_SUITE_PROGRAMS`).
@@ -1893,34 +1894,40 @@ def combine_parts(rows: list[dict]) -> list[dict]:
 COMPILERS = frozenset({"g++", "gcc", "c++", "cc", "clang", "clang++", "nvcc", "ninja"})
 
 
-def undeclared_untraced(suite: Suite, untraced: dict[str, list[str]], ran: list[str]) -> dict[str, list[str]]:
-    """{test module (or "*"): its programs} of ``untraced`` (a run's programs no tracer sees into, by the root-relative module
-    whose tests started them) that the suite's `[tool.verity.tests] untraced` doesn't name, as the graph's test-file runner
-    decides (`runners/test_file.allowed`, its family's `_named_tests`): a module is named when its path from the suite's
-    directory matches one of the fnmatch patterns, and "*" (a conftest or hook, which every test file's own run repeats) when
-    every module of ``ran`` (the run's tests' files, from the suite's directory) is. Compilers alone pass: the runner lets a
-    file whose closure builds native code start them, a closure this run doesn't see. A suite of `AFTER_LEAN` has none: the
-    graph runs it whole, as check does (its lean-suites tasks), and gives none of its files a task of its own."""
-    if suite.name in AFTER_LEAN or suite.path in AFTER_LEAN:
+def held(suite: Suite) -> bool:
+    """Whether the graph gives the suite's test files tasks of their own, whose runner holds each to `untraced`: not a suite of
+    `AFTER_LEAN`, which it runs whole, as check does (its lean-suites tasks)."""
+    return suite.name not in AFTER_LEAN and suite.path not in AFTER_LEAN
+
+
+def undeclared_untraced(suite: Suite, untraced: dict[str, list[str]]) -> dict[str, list[str]]:
+    """{test module: its programs} of ``untraced`` (a run's programs no tracer sees into, by the root-relative module whose tests
+    started them) that the suite's `[tool.verity.tests] untraced` doesn't name, as the graph's test-file runner decides
+    (`runners/test_file.allowed`, its family's `_named_tests`): a module is named when its path from the suite's directory
+    matches one of the fnmatch patterns. Compilers alone pass: the runner lets a file whose closure builds native code start
+    them, a closure this run doesn't see. Not "*", a hook's (`hook_untraced`), nor a suite the graph doesn't hold (`held`)."""
+    if not held(suite):
         return {}
     base = "" if suite.path == "." else suite.path + "/"
+    return {m: sorted(progs) for m, progs in untraced.items()
+            if m != "*" and not all(Path(p).name in COMPILERS for p in progs)
+            and not any(fnmatch.fnmatchcase(m.removeprefix(base), p) for p in suite.untraced)}
 
-    def named(rel: str) -> bool:
-        return any(fnmatch.fnmatchcase(rel, p) for p in suite.untraced)
 
-    out = {}
-    for m, progs in untraced.items():
-        if all(Path(p).name in COMPILERS for p in progs):
-            continue
-        if not (all(named(f) for f in ran or ["*"]) if m == "*" else named(m.removeprefix(base))):
-            out[m] = sorted(progs)
-    return out
+def hook_untraced(suite: Suite, untraced: dict[str, list[str]]) -> list[str]:
+    """The programs no tracer sees into that a conftest or hook started outside any test ("*"), compilers aside, where the
+    suite's `untraced` doesn't hold "*".  The graph's runner fails each test file whose own run starts one, unless named, but a
+    whole run can't tell which do: a hook may start it for some of the selected tests (circuit-check's catalog for those that
+    ask for it), so it fails nothing here.  A fixture's are its users' (the guard's `pytest_fixture_setup`)."""
+    if not held(suite) or "*" in suite.untraced:
+        return []
+    return sorted(p for p in untraced.get("*", ()) if Path(p).name not in COMPILERS)
 
 
 def untraced_fix(suite: Suite, undeclared: dict[str, list[str]]) -> str:
     """The lines to add to the suite's pyproject.toml that name ``undeclared``'s modules under `[tool.verity.tests] untraced`."""
     base = "" if suite.path == "." else suite.path + "/"
-    names = sorted({"*" if m == "*" else m.removeprefix(base) for m in undeclared})
+    names = sorted(m.removeprefix(base) for m in undeclared)
     where = f"{base}pyproject.toml"
     if suite.untraced:
         return f"{where}: add to [tool.verity.tests] untraced = [...]\n" + "\n".join(f'    "{n}",' for n in names)
@@ -2221,8 +2228,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     rep["reads"] = {m: sorted(fs) for m, fs in sorted(reads.items())}
     out = rep.get("outside") or {}
     rep["outside"] = dict.fromkeys(out, "*") if isinstance(out, list) else out      # a report written before the attribution
-    ran = sorted({n.split("::", 1)[0] for n in [*(rep.get("passed") or {}), *(rep.get("failed") or [])]})
-    undeclared = undeclared_untraced(suite, untraced, ran)
+    undeclared = undeclared_untraced(suite, untraced)
     # a child's read outside the inputs is the test's own: no key covers it, so nothing vouches for a pass
     passed = (ran_all and reported and not rep["outside"] and not rep["unguarded"] and not child_outside and not timed_out
               and not undeclared)
@@ -2754,12 +2760,14 @@ def main(argv: list[str] | None = None) -> int:
                   + (f"\n        list each file under [tool.verity.tests] inputs in {s.path}/pyproject.toml with a comment saying why, "
                      "or give the test a stand-in for it" if files else ""))
         if r.undeclared:
-            few = [f"{'a conftest or hook' if m == '*' else m.removeprefix(s.path + '/')}: {', '.join(p[:4])}"
-                   for m, p in list(r.undeclared.items())[:10]]
+            few = [f"{m.removeprefix(s.path + '/')}: {', '.join(p[:4])}" for m, p in list(r.undeclared.items())[:10]]
             print("        its tests started programs the read guard can't trace, in files its [tool.verity.tests] untraced doesn't "
                   "name, which the graph's test-file runner fails:\n          " + "\n          ".join(few)
                   + "\n        name each, which keys it on the suite's whole tree, or give the test a stand-in:\n          "
                   + untraced_fix(s, r.undeclared).replace("\n", "\n          "))
+        if hook := hook_untraced(s, r.untraced or {}):
+            print(f"        warning: a conftest or hook started {', '.join(hook[:4])} outside any test, which the graph's test-file "
+                  "runner fails in each file whose own run starts it that its untraced doesn't name; this run can't tell which")
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
                   "and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it")
