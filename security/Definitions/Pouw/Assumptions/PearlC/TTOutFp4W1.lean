@@ -22,13 +22,18 @@ weaker as they grow.
 side (B̃'s forming, B̃·F_A, P_B), which D-SK keys by the salt; `qa·m·k` (in `wrefFp4` only); SHA-512 work; and every
 fetch.
 
-**The noise.** W1 makes no oracle call. D-SK (`Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`) states `B̃`'s lines as a
-function of the oracle's answer at `seed_B`, for every oracle `H`. So at a `sem` in the domain they are either read
-from `H`, which a W1 program cannot call after the salt, or the same at every salt. At a `sem` whose `B̃` lines vary
-with the salt without reading `H` (SHA-512 of the salt, as deployed), D-SK fails, the domain is empty and these
-assumptions are vacuous. So, unlike the FP8 forms at `NoiseSha512.sha512Sem`, these say nothing about the deployment
-until D-SK and the lines are stated over SHA-512 (an `Fp4Sem` whose lines a W1 program computes with `sha`
-instructions, `pearl_c4.line`).
+**The noise.** W1 makes no oracle call. D-SK (`Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`) states `B̃`'s lines as the
+ones SHA-512 gives from `seed_B` of the salt's bytes (`NoiseSha512Fp4`), which a W1 program computes with `sha`
+instructions. These assumptions speak at `sha512Fp4Sem base salt rootA rootB`, the deployment's noise
+(`pearl_c4.py`'s lines op for op), which meets D-SK.
+
+**One salt.** As for the FP8 forms (`TTOutW1`), each form here takes the cost model's `salt` and the semantics
+separately. It speaks at the deployment when `sem := sha512Fp4Sem base salt rootA rootB` with the `salt` its cost model
+reads.
+
+**The program's text is bounded** (`W1.Prog.bounded`), so a W1 program can't hold the reference at `sha512Fp4Sem` as a
+table of one leaf per salt in its code (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`, which is about W1 programs alone,
+not a protocol's noise).
 -/
 
 @[expose] public section

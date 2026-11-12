@@ -2,6 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.TileGap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
+public import Definitions.Pouw.PearlC.NoiseSha512
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 
@@ -17,6 +18,10 @@ import Mathlib.Tactic.Positivity.Finset
   `5473473967/895794400000` (0.61102%) at 16384³, per unit (`pearlCGapFp4Sm120_8192`, `_16384`) and per audit tile
   (`pearlCSampledFp4Sm120_8192`, `_16384`). They are `fp4-delta/README.md`'s `lut256` values at 8.376. Per `m·k`, the
   credit is `n + 32 + 256·n/k + fs` and `W_ref` adds `qa`. At `fs = 97.76` they were 0.71761% and 0.61112%.
+* **The deployed noise is in the domain:** `sha512Fp4Sem` meets D-SK at any injective salt encoding
+  (`sha512Fp4Sem_saltKeyedB`), the 32-byte salt's bytes are one (`salt32_bytes_injective`), and a workload whose units
+  all have one shape D₄ admits is in the one-shape domain there (`sha512Fp4Sem_inDomain`), at 8192³ and 16384³ among
+  others (`sha512Fp4Sem_inDomain_headline`). So the headline instances at `sha512Fp4Sem` are not vacuous on the noise.
 * **The sub-grid flags read the ticket's chain:** on rows `cTilde` accepts, the firings they replay fold to `cTilde`'s
   chain (`fires_fold_eq_cTilde`).
 * **Sanity checks**, by the kernel: the forming's E2M1 cast (`e2m1Mag_ties`, `e2m1Mag_grid`, `e2m1Word_examples`), the
@@ -240,6 +245,42 @@ on shape grounds. -/
 theorem pearlCShapeFp4_headline : pearlCShapeFp4 sh8192 ∧ pearlCShapeFp4 sh16384 := by
   unfold pearlCShapeFp4 sh8192 sh16384
   decide +kernel
+
+/-- **The deployed noise meets D-SK**: `sha512Fp4Sem` at any injective encoding of the salt. -/
+theorem sha512Fp4Sem_saltKeyedB {Q R S : Type} (base : Fp4Sem Q R S) {salt : S → List ℕ}
+    (hs : Function.Injective salt) (rootA : ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) :
+    (sha512Fp4Sem base salt rootA rootB).SaltKeyedB :=
+  ⟨salt, rootB, hs, fun _ _ _ _ _ => rfl⟩
+
+/-- The 32-byte salt's bytes are an injective encoding. -/
+theorem salt32_bytes_injective : Function.Injective NoiseSha512.Salt32.bytes := by
+  intro a b h
+  have h' : (fun i => (a i).val) = fun i => (b i).val := List.ofFn_inj.mp h
+  funext i
+  exact Fin.ext (congrFun h' i)
+
+/-- **D₄ is not empty at the deployed noise**: a workload of at most `2^64` units, all of one shape `s` that D₄ admits,
+is in the one-shape domain at `sha512Fp4Sem` over the 32-byte salt, for any base scales, roots, record and cap. -/
+theorem sha512Fp4Sem_inDomain {Q R : Type} (d : Fp4Device) (base : Fp4Sem Q R NoiseSha512.Salt32) (ρ : ℚ)
+    (rootA : ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) (s : Shape) (hs : pearlCShapeFp4 s) (N : ℕ) (hN : N ≤ 2 ^ 64)
+    (fixedId : ℕ → ℕ) (fixed : ℕ → Codes) :
+    (⟨⟨N, fun _ => s, fixedId⟩, fixed⟩ : Workload).InDomain
+      (pearlCProtocolFp4 d (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) ρ)
+      (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) s) :=
+  ⟨hN, ⟨sha512Fp4Sem_saltKeyedB base salt32_bytes_injective rootA rootB, fun _ _ => hs⟩, fun _ _ => rfl⟩
+
+/-- **The headline domains are not empty at the deployed noise**: one unit of 8192³, and one of 16384³, on sm_120 at
+the cap `1/400`. -/
+theorem sha512Fp4Sem_inDomain_headline {Q R : Type} (base : Fp4Sem Q R NoiseSha512.Salt32)
+    (rootA : ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) (fixed : ℕ → Codes) :
+    (⟨⟨1, fun _ => sh8192, fun _ => 0⟩, fixed⟩ : Workload).InDomain
+        (pearlCProtocolFp4 devFp4Sm120 (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) (1 / 400))
+        (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) sh8192) ∧
+      (⟨⟨1, fun _ => sh16384, fun _ => 0⟩, fixed⟩ : Workload).InDomain
+        (pearlCProtocolFp4 devFp4Sm120 (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) (1 / 400))
+        (pearlCDomainFp4At (sha512Fp4Sem base NoiseSha512.Salt32.bytes rootA rootB) sh16384) :=
+  ⟨sha512Fp4Sem_inDomain _ base _ rootA rootB _ pearlCShapeFp4_headline.1 1 (by norm_num) _ fixed,
+    sha512Fp4Sem_inDomain _ base _ rootA rootB _ pearlCShapeFp4_headline.2 1 (by norm_num) _ fixed⟩
 
 /-- **D-NF rejects a negative β** (`pearl_c4`'s `test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise`).
 `β = −1/4096` casts to `0x80`, whose significand under sm_120's low-7-bit decode is `0`, a zero scale; `β = −1` casts

@@ -22,7 +22,7 @@ variable {Q R S : Type}
 `g₀ = 1/400` and `δPearlC`. It is `TTOutPearlCDev`'s statement on `Fp4Device`'s maps. `PearlCDevice` reads E4M3 codes,
 32-MAC atoms and promotion groups, so the FP4 line has its own record. At `G = 0` rev1 is this same statement, because
 rev1's first-add term is zero with no promotion. The domain includes D-SK (`Fp4Sem.SaltKeyedB`), so at a `sem` whose
-`B̃` is not keyed by A's salt it claims nothing. -/
+`B̃` is not the one SHA-512 keys by this job's salt it claims nothing. -/
 def TTOutFp4 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : Fp4Device)
     (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
   TTOut CM (pearlCProtocolFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
@@ -71,16 +71,17 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
   on the FP32 error bound of `s5_stats`' `ρ²`, about `(k/256 + 13)·u ≈ 270u ≈ 2^-15.9` at `k = 2^16`, against the
   `2⁻¹⁰` allowance, and on the numerical table of `s5_stats`' error. There is no Lean
   lemma about `s5_stats` until `s5_stats` is pinned.
-- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are sampled from
-  `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), so `B̃` is a function of the salt
-  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. A variant that fixes
-  `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
+- **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are the ones SHA-512
+  gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` at an injective encoding of the salt
+  (`NoiseSha512Fp4.seedB` and `drawB`, `pearl_c4.seed_b` and `line` op for op), so `B̃` is a function of the salt
+  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. The deployed noise,
+  `sha512Fp4Sem`, meets it. A variant that fixes `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
 - **The shared definitions it reads.** The ticket is `Fp4.cTilde` at `Fp4.sm120Nvf4`, U is `Fp4Dev.peelFp4` (the FP4
   chains feeding `PeelExact`'s BF16 peel), the forming is `Fp4Dev.formRow`, and the salt-dead predicate is
   `Fp4Dev.saltDead4`.
-- **`sem`.** The noise lines (`Fp4Sem.lines`) and the row scales `alpha` and `beta` become shared definitions as they
-  land. `TTOutFp4Sm120` at any other of these is a different assumption, and replacing one with the landed definition
-  is a re-grant.
+- **`sem`.** D-SK pins `B̃`'s lines to SHA-512's, and `sha512Fp4Sem` pins all four (`NoiseSha512Fp4`). The row scales
+  `alpha` and `beta` become shared definitions as they land. `TTOutFp4Sm120` at any other of these is a different
+  assumption, and replacing one with the landed definition is a re-grant.
 - **What it carries.** As for FP8: joint skips of several firings within a word that no lone flag sees, which no replay
   count bounds. At `G = 0` the whole `k/64`-firing chain is one group, so these are the only joint skips.
 - **What falsifies it.** A program of the model that outputs correct ticket and useful words within the cap, on some

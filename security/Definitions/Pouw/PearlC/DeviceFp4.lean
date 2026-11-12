@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.Tile
 public import Definitions.Pouw.PearlC.Fp4Skip
+public import Definitions.Pouw.PearlC.NoiseSha512Fp4
 
 /-!
 # Pearl-C4's device record: NVFP4 on sm_120 (trusted; definitions only; staged, nothing pinned)
@@ -31,10 +32,11 @@ same fields and no promotion (`G = 0`):
   salt-dead codes per element instead. The screen `x² > 90·ρ²`, about 9.49ρ (`Fp4Dev.screenDead`, `DEAD_RHO_SQ = 90`),
   covers every salt-dead element at the pinned scales (`CodeProofs.saltDead4_screened`), and `Fp4Dev.RowRules4`, D-NF
   with the cap, is kept as `RhoDFp4`'s premise.
-* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)`
-  (SHA-512 of the label block and the message, its first 32 bytes; `pearl_c4.labelled`), and `B̃ = form(B, E_B, F_B)`
-  with `E_B`, `F_B` sampled from `seed_B`. The verifier forms `B̃` itself on every sampled tile and rejects when the checked
-  values differ. It is a condition of the domain.
+* **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines
+  SHA-512 gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB` and `drawB`, op for op
+  `pearl_c4.seed_b` and `line`), at an injective encoding of the salt. The verifier forms `B̃` itself on every sampled
+  tile and rejects when the checked values differ. It is a condition of the domain, and the deployed noise
+  (`sha512Fp4Sem`) meets it.
 * **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
   units). Its executable reference is `pearl_c4.tile_debit` (`9363e5012`), and each term carries the
   reference's name for it:
@@ -83,10 +85,11 @@ same fields and no promotion (`G = 0`):
 * **The protocol, domain and tiles** (`pearlCProtocolFp4`, `pearlCDomainFp4`, `pearlCTilesFp4`) are
   `pearlCProtocolDev`'s, `pearlCDomainDev`'s at `G = 0` and `pearlCTilesDev`'s shapes, on these maps. The domain is
   the reference's shapes (`PearlC4.check`) with `n ≥ 4096` in place of its `n ≥ 128`. It also requires D-SK of
-  `sem`'s lines, so it is empty at a `sem` whose `B̃` is not keyed by A's salt.
+  `sem`'s lines, so it is empty at a `sem` whose `B̃` is not the one SHA-512 keys by this job's salt.
 
-`Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines from the oracle and the rows'
-scales `α` and `β`. `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the §3/§4 prices (`Fp4Prices.sm120`).
+`Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines and the rows' scales `α` and `β`.
+`sha512Fp4Sem` pins the lines to SHA-512's (`NoiseSha512Fp4`). `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the
+§3/§4 prices (`Fp4Prices.sm120`).
 -/
 
 @[expose] public section
@@ -704,10 +707,9 @@ structure Lines4 (m n k : ℕ) where
   EB : Matrix (Fin n) (Fin 32) Nib
   FB : Matrix (Fin k) (Fin 32) Nib
 
-/-- What Pearl-C4's protocol takes that is not pinned yet, as `PearlCSem` does for FP8: the unit's noise lines from the
-oracle, keyed by the seed tuple (SHA-512 of the seeds under `pearl-c4/v2/line`, four lines to a block, `pearl_c4.line`);
-and a row's scale `α` and noise scale `β`
-as FP32 values (`pearl_c4.stats`). -/
+/-- What Pearl-C4's protocol takes that is not pinned yet, as `PearlCSem` does for FP8: the unit's noise lines, which
+D-SK (`Fp4Sem.SaltKeyedB`) and `sha512Fp4Sem` pin to SHA-512's (`NoiseSha512Fp4`); and a row's scale `α` and noise scale
+`β` as FP32 values (`pearl_c4.stats`). -/
 structure Fp4Sem (Q R S : Type) where
   lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
     Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k
@@ -716,26 +718,38 @@ structure Fp4Sem (Q R S : Type) where
 
 variable {Q R S : Type}
 
-/-- **D-SK: `B̃` is keyed by this job's salt** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule of
-TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (SHA-512, `pearl_c4.labelled`), with the salt from this
-job's epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines of `seed_B`.
-- `seedB s W` is the query `seed_B` at salt `s` and B's committed words `W`, which `root_B` binds. It is injective in
-  the salt, so a `B̃` keyed by another salt, or by none, is excluded.
-- `drawB sh r` reads `E_B`'s `n` lines and `F_B`'s `k` lines from the oracle's answer `r` at `seed_B` (SHA-512 under
-  `pearl-c4/v2/line` of `seed_B ‖ role ‖ ⌊index/4⌋`, line `index` its quarter `index mod 4`, `pearl_c4.line`). So `B̃` is a function of the salt and root_B alone, never of the
-  activations, and never an input fixed before the salt.
+/-- **D-SK: `B̃` is keyed by this job's salt through SHA-512** (theory §1, "D-SK"; `pearl_c4.seed_b`), a domain rule
+of TT_OUT-FP4. `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB`), with the salt from this job's
+epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines SHA-512 gives from
+`seed_B` (`NoiseSha512Fp4.drawB`, `pearl_c4.line`).
+- `salt s` is the salt's bytes, an injective encoding: distinct salts are distinct SHA-512 messages. Nothing here
+  assumes SHA-512 itself injective.
+- `rootB w` is the root of weight `w`'s commitment, fixed with the weights before the salt. So `B̃` is a function of the
+  salt and `root_B` alone, never of the activations or the oracle, and never an input fixed before the salt.
 - The ticket, U and the debit read `unitForm`'s `B̃`, never a prover-supplied one, and `Correct` compares a unit's words
   with theirs. So the verifier forms `B̃` itself on every sampled tile, and a transcript whose checked values differ from
   this `B̃`'s is rejected.
 
-A variant that fixes `B̃` before A's salt is outside D₄: it needs the per-salt split debit instead. -/
+The deployed noise meets it: `sha512Fp4Sem` at any injective salt encoding. A variant that fixes `B̃` before A's salt is
+outside D₄: it needs the per-salt split debit instead. -/
 def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
-  ∃ (seedB : S → Codes → Q) (drawB : (sh : Shape) → R →
-      Matrix (Fin sh.n) (Fin 32) Nib × Matrix (Fin sh.k) (Fin 32) Nib),
-    (∀ W : Codes, Function.Injective fun s : S => seedB s W) ∧
+  ∃ (salt : S → List ℕ) (rootB : ℕ → List ℕ), Function.Injective salt ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes),
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
-        drawB (U.layout.shape u) (H (seedB s (U.fixed (U.layout.fixedId u))))
+        NoiseSha512Fp4.drawB (U.layout.shape u) (NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u)))
+
+/-- **Pearl-C4's semantics with SHA-512's noise** (`pearl_c4.py`'s h0): `base` with its lines replaced by
+`NoiseSha512Fp4`'s at the salt's bytes `salt s`, the root `rootA u act` of unit `u`'s committed activations and the root
+`rootB (fixedId u)` of its weight: `E_A` from the unit's `seed_A`, and `F_A`, `E_B`, `F_B` from the weight's `seed_B`.
+The oracle is unused. -/
+def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) :
+    Fp4Sem Q R S :=
+  { base with
+    lines := fun _ s U u act =>
+      let sB := NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u))
+      let sA := NoiseSha512Fp4.seedA (salt s) (rootA u act) (rootB (U.layout.fixedId u)) u
+      ⟨(NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).2,
+        (NoiseSha512Fp4.drawB (U.layout.shape u) sB).1, (NoiseSha512Fp4.drawB (U.layout.shape u) sB).2⟩ }
 
 /-- A committed operand of `p` rows and `q` columns passes Pearl-C4's rules: every word a widened BF16 word (its low
 16 bits zero) and finite, every row passing `RowAdmit4`. -/

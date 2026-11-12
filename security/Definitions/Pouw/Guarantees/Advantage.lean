@@ -69,9 +69,9 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 8192³, in ε form**: `GapFp4Sm120_8192` at the advantage
-`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds only for noise the domain's
-rule allows (D-SK, `Fp4Sem.SaltKeyedB`) and says nothing yet about the deployed NVFP4 noise, at which the domain is
-empty. -/
+`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds for noise the domain's rule
+allows (D-SK, `Fp4Sem.SaltKeyedB`), SHA-512's lines from `seed_B` of this job's salt, and so at the deployed NVFP4 noise
+(`sha512Fp4Sem`, `sha512Fp4Sem_inDomain`). -/
 def _root_.Pouw.Guarantees.PearlC.EpsFp4Sm120_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S),
     TTOutFp4Sm120W1 sha fetch salt sem (1 / 400) →

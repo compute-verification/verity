@@ -75,9 +75,9 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 16384³**, worst case under the cap `1/400`: `g = 5473473967/895794400000` (0.61102%).
-It holds only for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`), and says nothing yet
-about the deployed NVFP4 noise, whose lines are SHA-512 of the salt: there the domain is empty
-(`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). -/
+It holds for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`): `B̃`'s lines are the ones
+SHA-512 gives from `seed_B` of this job's salt. The deployed NVFP4 noise is such noise: `sha512Fp4Sem`, `pearl_c4.py`'s
+lines op for op (`NoiseSha512Fp4`), meets D-SK, and its one-shape domain holds workloads (`sha512Fp4Sem_inDomain`). -/
 def _root_.Pouw.Guarantees.PearlC.GapFp4Sm120_16384 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh16384)
@@ -89,9 +89,9 @@ namespace Pouw.PearlC
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
 
 /-- **Pearl-C4's headline on sm_120, 8192³**, worst case under the cap `1/400`: `g = 9875013901/1376663200000` (0.71732%).
-It holds only for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`), and says nothing yet
-about the deployed NVFP4 noise, whose lines are SHA-512 of the salt: there the domain is empty
-(`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). -/
+It holds for noise the domain's rule allows (D-SK, `Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`): `B̃`'s lines are the ones
+SHA-512 gives from `seed_B` of this job's salt. The deployed NVFP4 noise is such noise: `sha512Fp4Sem`, `pearl_c4.py`'s
+lines op for op (`NoiseSha512Fp4`), meets D-SK, and its one-shape domain holds workloads (`sha512Fp4Sem_inDomain`). -/
 def _root_.Pouw.Guarantees.PearlC.GapFp4Sm120_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S) (hTT : TTOutFp4Sm120W1 sha fetch salt sem (1 / 400)),
     GGap (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
