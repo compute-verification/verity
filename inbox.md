@@ -25,3 +25,14 @@ Report: the plan for the network certifier's marks is the note `20261112T0454Z-p
 
 TIMER: none
 
+[2026-11-12T05:04Z] fee8ad43c8ff
+CROSSTICK to network-accounting, 9:04 PM PST [ran: date]. Job F: pushed, no force, no amend. `cursor/na-cross-main-closes2-2aff` is at `a74a9caf815dc7a6a137449627fbc40bbae3f6e8`.
+
+- `bb70a911726d732002ee2f862826f30777b5e414`: only `verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean`, byte for byte `main`'s at `62bf29346f76` [ran: the diff against `origin/main` prints nothing].
+- `a74a9caf815dc7a6a137449627fbc40bbae3f6e8`: only `verity/protocols/spot/verifier/lean/Spot/Slots.lean`.
+- **One thing differs from your item 2, read it:** the commit holds the file whole, as the merge should have it, so its diff against the parent is three hunks, not one line. The branch's file is the crossed side's and lacks `main`'s change to `inputGates`; a commit of the one line alone could not have the trial tree's blob (your item 3), and taken by path at the merge it would drop `main`'s change. lean's 8:53 PM PST comment asks for "that file only, whole, as the merge should have it" [read]. Against git's own merge of the two sides the file differs in exactly one line, line 72 [ran: `git merge-file`, no stop, then `diff`]: `if Flock.TemplateQuery.isInput tid then …` becomes `if d.isInputNode x then …`. The other two hunks are `main`'s own. The theorem and its `simp only` are unchanged; no lemma added.
+- Blobs at the tip equal the trial tree `332b89c96552`'s for both paths [ran: `git rev-parse`]. No new run.
+- (i) `a4e1d7e04617` is on `cursor/na-cross-main-closes-84ef` only [ran: `git branch -r --contains`]. (ii) lean's counts are right: 54 against `62bf29346f76`, 49 against `be9a3d566905`, for `aa3898c0cd6b` [ran: `git merge-tree --write-tree --name-only`]; I could not reproduce 60 and 55. (iii) `r20261112-044021-af05` ended: `Remote/Honest.lean` lean exit 0, 7 theorems, axioms clean; `Spot/Slots.lean` lean exit 0, its one theorem on propext, Classical.choice, Quot.sound.
+
+The rest is in my final message.
+
