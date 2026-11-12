@@ -104,7 +104,7 @@ class Env:
         monkeypatch.setattr(L, "gating", lambda repo, sha: list(self.gates))
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
-    def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+    def loop(self, decide, clone: str = "clone", cache: Path | None = None, **kw) -> Loop:
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -113,7 +113,7 @@ class Env:
                    land_into="main")
         q.branch = "main"
         w = Fake(q, self.labels, Executor(self.graph2), post=lambda text, to=(): self.posts.append(text) or True,
-                 now=lambda: self.clock)
+                 now=lambda: self.clock, cache=cache)
         w.withdrawn, w.cancelled = self.withdrawn, self.cancelled
         return Loop(w, self.log, decide=decide, now=lambda: self.clock, out=self.out.append, **kw)
 
@@ -1422,6 +1422,77 @@ def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_after_th
     assert vqueue._stale(flying, set(), w.left, frozenset(w.pulled)) is None     # a candidate holding #1 stays
     prio.write_text("1\n2\n")
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3] and w.left == {}
+
+
+def _judged_world(env: Env) -> str:
+    """Open PRs `ready` judges each way: #1 plain, #2 a Lean change, #3 one that doesn't merge onto `main`, #4 one lacking a
+    move whose retired names its change names, #5 one whose head is on `main`; returns `main`."""
+    base = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, LEAN)
+    env.o.gh.put(3, env.o.change({"x.txt": "three\n"}, base=base))
+    env.o.gh.put(4, env.o.change({"e.txt": "reads c.txt\n"}, base=base))
+    env.o.gh.put(5, base)
+    _main_to(env, {"x.txt": "main\n"})
+    _, move = _landed_move(env.o, '[paths]\n"c.txt" = "moved/c.txt"\n', {"c.txt": None, "moved/c.txt": "c\n"})
+    env.listed(move, {})
+    return move
+
+
+def _decided(w: World) -> tuple[list, dict, dict]:
+    """What a tick's `ready` decides in ``w``: the Ready set, why each other PR is left out, and the moves those lack."""
+    return w.ready(w.fetch()), dict(w.left), dict(w.lacking)
+
+
+def test_a_tick_in_a_process_of_its_own_takes_what_the_tick_before_judged_on_main_and_decides_the_same(env, monkeypatch):
+    """The live loop runs each tick in a process of its own (`--once`): what `ready` judged of each head on `main` (its files,
+    the moves it lacks, whether it is a Lean change and merges) is kept in the loop's cache, so the next tick's World judges
+    none of it again and decides what a World with no cache decides."""
+    _judged_world(env)
+    plain = _decided(env.loop(lambda s: []).world)
+    ready, left, lacking = plain
+    assert [(r.number, r.lean, r.conflict) for r in ready] == [(1, False, False), (2, True, False), (3, False, True)], ready
+    assert set(left) == {4, 5} and set(lacking) == {4}, left
+    cache = env.tmp / "cache"
+    assert _decided(env.loop(lambda s: [], cache=cache).world) == plain
+    for name in ("own_files", "lacked_moves", "lean_change", "merged_tree", "base_drivers"):
+        monkeypatch.setattr(L, name, lambda *a, _name=name, **k: pytest.fail(f"{_name} ran again"))
+    assert _decided(env.loop(lambda s: [], cache=cache).world) == plain
+
+
+def test_what_a_tick_judged_is_judged_again_on_a_new_main_or_by_other_code(env, monkeypatch):
+    """The judgements kept are those of `main`'s commit and of the code and git that made them: a `main` moved since, or a
+    cache another deploy wrote, is judged afresh, and the cache then holds only the new `main`'s, of the heads open."""
+    main = _judged_world(env)
+    cache, merged = env.tmp / "cache", []
+    _decided(env.loop(lambda s: [], cache=cache).world)
+    kept = json.loads((cache / L.JUDGED_CACHE).read_text())
+    heads = {env.o.gh.prs[n].head for n in (1, 2, 3)}
+    assert kept["main"] == main and set(kept["judged"]) == heads and set(kept["lacked"]) == heads | {env.o.gh.prs[4].head}
+    real = L.merged_tree
+    monkeypatch.setattr(L, "merged_tree", lambda repo, base, head, **k: merged.append(head) or real(repo, base, head, **k))
+    (cache / L.JUDGED_CACHE).write_text(json.dumps({**kept, "judging": "another deploy's"}))
+    _decided(env.loop(lambda s: [], cache=cache).world)
+    assert set(merged) == heads
+    merged.clear()
+    moved = _main_to(env, {"m.txt": "m\n"})
+    _decided(env.loop(lambda s: [], cache=cache).world)
+    assert set(merged) == heads
+    kept = json.loads((cache / L.JUDGED_CACHE).read_text())
+    assert kept["main"] == moved and set(kept["judged"]) == set(merged)
+
+
+def test_ready_asks_git_which_heads_the_clone_lacks_and_which_main_holds_in_one_process_each(env, monkeypatch):
+    """However many PRs are open, `ready` asks which of their heads the clone lacks in one `cat-file` and which `main` holds in
+    one `rev-list`, not a process of each a PR."""
+    _judged_world(env)
+    w = env.loop(lambda s: []).world
+    main, argvs, real = w.fetch(), [], subprocess.run
+    monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: argvs.append(list(argv)) or real(argv, *a, **k))
+    w.ready(main)
+    assert sum(any(x.startswith("--batch-check") for x in a) for a in argvs) == 1, argvs
+    assert not [a for a in argvs if "--is-ancestor" in a], argvs
+    assert w.left[5] == (env.o.gh.prs[5].head, "its head is on `main`")
 
 
 def test_a_head_landed_on_the_old_paths_checked_holds_its_holders_back_from_nothing_but_still_lands_first(env):
