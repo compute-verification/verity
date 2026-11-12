@@ -11275,6 +11275,14 @@
      {
       "function": "Spot.Select.Rule.ofJson",
       "outcome": "none"
+     },
+     {
+      "function": "Spot.Select.Rule.ofJson",
+      "outcome": "none"
+     },
+     {
+      "function": "Spot.Select.Rule.ofJson",
+      "outcome": "none"
      }
     ]
    },

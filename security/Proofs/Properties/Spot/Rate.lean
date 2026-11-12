@@ -302,12 +302,20 @@ theorem rate?_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified
       exact absurd hl (throw_ne _ _)
   · rfl
 
+/-- A rule object whose design text is a fixed count is refused with `FIXED`. -/
+theorem ofJson_fixed (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : Nat) :
+    Select.Rule.ofJson (ruleOfText (kind ++ ":" ++ Nat.repr K)) = .error (Select.FIXED (kind ++ ":" ++ Nat.repr K)) := by
+  rw [ofJson_ruleOfText, rate?_fixed kind hk K]
+  rfl
+
 /-! ## The property and its witnesses -/
 
 /-- **`RuleAtRate`**: a parsed rule samples at least its rate over whatever the prover registers, a work rate design's
 table holds each stratum's floor at the rate, and a fixed count is refused. -/
 theorem ruleAtRate : RuleAtRate := by
-  refine ⟨fun j rule n sizes r hj ho => ?_, fun t p query table out h => tableOver_cases h, fun K t ht => ?_⟩
+  refine ⟨fun j rule n sizes r hj ho => ?_, fun t p query table out h => tableOver_cases h,
+    ofJson_fixed "subset" (Or.inl rfl), ofJson_fixed "stratified" (Or.inr (Or.inl rfl)),
+    ofJson_fixed "work" (Or.inr (Or.inr rfl))⟩
   · rcases ofJson_cases hj with rfl | ⟨t, rfl, hr⟩ | ⟨g, t, k, rfl, hr⟩
     · exact (Option.some.inj ho).symm
     · have ho' : (Select.textOver t n sizes).map Select.Rule.law = some r := ho
@@ -326,14 +334,6 @@ theorem ruleAtRate : RuleAtRate := by
         obtain ⟨x, hp⟩ := Option.isSome_iff_exists.1 hr
         obtain ⟨num, den, tables⟩ := x
         exact ⟨t', rfl, subset_of_textOver hp hx⟩
-  · have hf : Select.rate? t = false := by
-      simp only [fixedTexts, List.mem_cons, List.mem_nil_iff, or_false] at ht
-      rcases ht with rfl | rfl | rfl
-      · exact rate?_fixed "subset" (Or.inl rfl) K
-      · exact rate?_fixed "stratified" (Or.inr (Or.inl rfl)) K
-      · exact rate?_fixed "work" (Or.inr (Or.inr rfl)) K
-    rw [ofJson_ruleOfText, hf]
-    rfl
 
 /-- **`RuleAtRate`'s honest lemma**: the rule object at the rate design `rate:1/2` parses, and over four units it is
 `subset:2`. -/

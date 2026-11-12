@@ -112,21 +112,20 @@ def TableAtRate (t : String) (p : Program) (query : Json) (out : Option Json) : 
 /-- A rule object as a Spec writes it under the design text `t`: `{rule: law, law: t}`. -/
 def ruleOfText (t : String) : Json := Json.mkObj [("rule", "law"), ("law", Json.str t)]
 
-/-- The fixed counts' design texts at `K`: `subset:K`, `stratified:K` and `work:K`. -/
-def fixedTexts (K : Nat) : List String := [s!"subset:{K}", s!"stratified:{K}", s!"work:{K}"]
-
 /-- **A parsed rule samples at least its rate over whatever the prover registers.** For every rule object `j` that
 `Rule.ofJson` parses as `rule`, every `n` and every `sizes`, where `Rule.over` gives the rule `r` over `n` units in
 strata of `sizes` units, `r` is `AtRate`'s: the count it names is at least the rate's share of `n`, and of each
 stratum. For every design text, program, query and work table, where `Rule.tableOver` gives a table under the rule
 `law t`, that table is `TableAtRate`'s: each stratum's floor is at the rate. And a fixed count is refused: at every
-`K`, the rule object whose design text is `subset:K`, `stratified:K` or `work:K` (`fixedTexts`) is refused with
+`K`, the rule object whose design text is `subset:K`, and likewise `stratified:K` and `work:K`, is refused with
 `FIXED`. -/
 def RuleAtRate : Prop :=
   (∀ (j : Json) (rule : Select.Rule) (n : Nat) (sizes : List Nat) (r : Select.Rule),
     Select.Rule.ofJson j = .ok rule → rule.over n sizes = some r → AtRate rule r n sizes) ∧
   (∀ (t : String) (p : Program) (query : Json) (table out : Option Json),
     (Select.Rule.law t).tableOver p query table = .ok out → TableAtRate t p query out) ∧
-  ∀ K, ∀ t ∈ fixedTexts K, Select.Rule.ofJson (ruleOfText t) = .error (Select.FIXED t)
+  (∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"subset:{K}") = .error (Select.FIXED s!"subset:{K}")) ∧
+  (∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"stratified:{K}") = .error (Select.FIXED s!"stratified:{K}")) ∧
+  ∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"work:{K}") = .error (Select.FIXED s!"work:{K}")
 
 end Properties.Spot
