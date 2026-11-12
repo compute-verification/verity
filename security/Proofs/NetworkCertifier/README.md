@@ -37,8 +37,8 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/RecordRows.lean  trusted: the network certifier's record as the Python one writes it
     (RowsFormat): a row a bucket of frames that name their connections, in ordinal order
     (bucketFrames), the lanes read back from them (lanesOfRows), and the schedules it holds (Fits)
-../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the incorrect proof blocks add under a sampled audit: their
-    committed bits (faultyBits), the possible incorrect sets at δ (faultySets), the
+../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty proof blocks add under a sampled audit: their
+    committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
     sequences accepted with one (AcceptedFaulty, AccSeqsSampled), and what an accepted
     audit gives that count (AdviceIn, freeInputs, AsReg, RLeak); the runs before a
     run, which a period's operator reads (runsBefore)
@@ -128,15 +128,15 @@ Period.lean     the leak through the network certifier over a monitoring period:
     the period)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
     period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
-Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform sample misses `f` blocks with
+Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
     probability at most `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over
     windows on independent coins (pr_adaptive_le), and with each window's
     soundness error added, the monitoring period's bound (pooledIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
     each window's error added (pr_adaptive_add_le, the monitoring-period step
-    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of incorrect sets
+    Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
     under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
-    decode to at each sample, read back from the certifier's record
+    decode to at each draw, read back from the certifier's record
     (encard_pooledGood_le, pooledLeak; pooledLeak_fixed at operators fixed
     before the period), each over any per-window event
     (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
