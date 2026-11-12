@@ -3782,7 +3782,7 @@
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "count": 64},
     {"file": "benchmarks/one_stage/interfaces/verity_e2e_demo/report.py", "count": 102},
     {"file": "benchmarks/spot_figures/binding.py", "count": 18},
-    {"file": "benchmarks/spot_figures/breakeven/headline.py", "count": 7},
+    {"file": "benchmarks/spot_figures/breakeven/headline.py", "count": 2},
     {"file": "benchmarks/spot_figures/tests/test_binding.py", "count": 13},
     {"file": "archive/examples/h200/kv_reads.py", "count": 7},
     {"file": "archive/examples/h200/m3bundle.py", "count": 36},
