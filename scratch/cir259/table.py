@@ -16,7 +16,7 @@ def timed(p: Path):
     t = p.read_text(errors="replace")
     m = re.search(r"Maximum resident set size \(kbytes\): (\d+)", t)
     e = re.search(r"Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): (\S+)", t)
-    return (e[1] if e else None), (round(int(m[1]) / 2**20, 2) if m else None)
+    return (e[1] if e else None), (round(int(m[1]) / 2**20, 4) if m else None)
 
 
 def words(v: dict | None) -> str:
@@ -57,7 +57,7 @@ for run in sys.argv[1:]:
         vj = d / "verdicts.json"
         v = json.loads(vj.read_text()) if vj.exists() else {}
         row["lean"] = {k: {"says": words(x), "exit": x.get("exit"), "wall": x.get("wall"),
-                           "peak_gb": round(x["maxrss_kb"] / 2**20, 2) if x.get("maxrss_kb") else None} for k, x in v.items()}
+                           "peak_gb": round(x["maxrss_kb"] / 2**20, 4) if x.get("maxrss_kb") else None} for k, x in v.items()}
         held = v.get("B.statement.held") or {}
         pc = ((held.get("statement") or {}).get("partition_check") or {})
         row["units"] = pc.get("units")

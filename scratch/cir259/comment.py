@@ -22,17 +22,18 @@ ROWS = [
     ("dsa-krow", "8aa4", "krow", None),
     ("dsa-topk", "11a8", "topk", None),
     ("sparse-mla-head", "9dd0", "head64", None),
-    ("sparse-mla-head", "75c2", "head1b", None),
     ("sparse-mla-head", "8aa4", "headend", None),
     ("token-select", "1147", "greedychunk", None),
     ("token-select", "1147", "greedycombine", None),
-    ("token-select", "9dd0", "tokensel", None),
+    ("token-select", "9dd0", "tokensel", "census:TokenSelect_v1{V=154880}"),
     ("s8-linear", "11a8", "s8", "s8-coord"),
 ]
-EXTRA = [  # staged beside the replacements: the census's own names where the replacement is a Boolean version, and a small head block
-    ("router, the census's name", "a739", "router-word", None),
-    ("dsa-q, the census's name", "a739", "dsa-q-word", None),
-    ("sparse-mla-head, one key, the census's name", "75c2", "head1w", None),
+EXTRA = [  # staged beside the replacements: a small head block both ways, and the census's own names where the replacement is a Boolean version
+    ("beside: sparse-mla-head's block, Boolean version, one key", "75c2", "head1b", None),
+    ("beside: sparse-mla-head's block as the census names it, one key", "75c2", "head1w", None),
+    ("beside: router as the census names it", "a739", "router-word",
+     'census:MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}'),
+    ("beside: dsa-q as the census names it", "a739", "dsa-q-word", None),
 ]
 NOT = [  # staged before the 13:07Z answer; not replacements
     ("`moe-w13`'s inner coordinate", "8aa4", "w13c"),
@@ -61,8 +62,8 @@ def lean(r) -> str:
     prog = "the verifier's program is not the one the partition object names"
     if not L:
         b = r["circuit_bytes"]
-        return (f"Lean not run: its circuit.txt is {b / 2**30:.1f} GB, and my job held a check to six times that, "
-                f"{b * 6 // 2**30 + 4} GB, over its memory")
+        return (f"Lean not run: its circuit.txt is {b:,} bytes, and my job holds a check to six times that plus 4 GB, "
+                f"{b * 6 // 2**30 + 4} GB, over its 96 GB")
     held, ks, v = say("B.statement.held"), say("B.ks-form"), say("B.verify.held")
     od, vd, np = say("B.statement.other-def"), say("B.verify.other-def"), say("B.verify.no-program")
     if (held == "ok, units derived" and ks == "KS-FORM ok" and v == "accepted" and od and prog in od and vd and prog in vd
@@ -84,30 +85,35 @@ def row(part, run, tag, spec):
     r = find(run, tag)
     if r is None:
         return f"| `{part}` | {tag} | MISSING | | | |"
+    part = f"`{part}`" if " " not in part else part
     if not r.get("staged"):
-        return f"| {part} | `{spec or tag}` | 1 | | not staged | {r.get('refusal')} [run: {r['run']}] |"
+        at = f", stopped after {secs(r['stage_wall'])} at {r['stage_peak_gb']:.1f} GB" if r.get("stage_wall") else ""
+        return f"| {part} | `{spec or tag}` | 1 | | not staged{at} | \"{r.get('refusal')}\" [run: {r['run']}] |"
     name = f"`{spec}`, which is `{r['definition']}`" if spec else f"`census:{r['definition']}`"
     peak = max((v.get("peak_gb") or 0) for v in (r.get("lean") or {"x": {}}).values())
-    part = f"`{part}`" if " " not in part else part
     most = f"; Lean at most {peak:.1f} GB" if r.get("lean") else ""
     return (f"| {part} | {name} | {r['n']} | {r['ands']:,}, {r['k_log']} | {secs(r['stage_wall'])} at {r['stage_peak_gb']:.1f} GB"
             f" | {lean(r)}{most} [run: {r['run']}] |")
 
 
+import sys
+
+if "--not" in sys.argv:   # the four staged before the 13:07Z answer, as one sentence's list
+    out = []
+    for part, run, tag in NOT:
+        r = find(run, tag)
+        assert lean(r) == "all four", (tag, lean(r))
+        out.append(f"{part} `{r['definition']}` ({r['ands']:,} ANDs, `k_log` {r['k_log']})")
+    print("; ".join(out))
+    sys.exit(0)
+if "--sessions" in sys.argv:
+    for (run, tag), r in sorted(T.items()):
+        p, s = r.get("prove") or {}, r.get("serve") or {}
+        if isinstance(p, dict) and p.get("maxrss_kb"):
+            print(f"{run} {tag}: prover {p['wall_s']} s at {p['maxrss_kb'] / 2**20:.1f} GB; serve {s.get('wall_s')} s at "
+                  f"{(s.get('maxrss_kb') or 0) / 2**20:.1f} GB; fail={r.get('session_failed')}")
+    sys.exit(0)
 print("| `PARTS` type | staged with `--bind` as | N | ANDs, `k_log` | staging | Lean verifier, with its partition object and Program |")
 print("|---|---|---|---|---|---|")
-for x in ROWS:
+for x in ROWS + EXTRA:
     print(row(*x))
-print()
-for x in EXTRA:
-    print(row(*x))
-print()
-for part, run, tag in NOT:
-    r = find(run, tag)
-    print(f"- {part}: `{r['definition']}` N={r['n']}, {r['ands']:,} ANDs, `k_log` {r['k_log']}; {lean(r)} [run: {r['run']}]")
-print()
-for (run, tag), r in sorted(T.items()):
-    p, s = r.get("prove") or {}, r.get("serve") or {}
-    if isinstance(p, dict) and p.get("maxrss_kb"):
-        print(f"{run} {tag}: prover {p['wall_s']} s at {p['maxrss_kb'] / 2**20:.1f} GB; serve {s.get('wall_s')} s at "
-              f"{(s.get('maxrss_kb') or 0) / 2**20:.1f} GB; fail={r.get('session_failed')}")
