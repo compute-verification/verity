@@ -378,7 +378,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     for (_rid, i), had in ways.items():
         widths = sorted(g for g in had if g > 0)
         if (0 in had and len(had) > 1) or len(widths) > 1:
-            a, b = (0, next(g for g in had if g)) if 0 in had else widths
+            a, b = (0, next(g for g in had if g)) if 0 in had else widths[:2]
             raise ValueError(f"row {i}: the partition names its key blocks {_WAYS.get(a, f'as values units of {a} columns')} "
                              f"({had[a]}) and {_WAYS.get(b, f'as values units of {b} columns')} ({had[b]}); a row's key blocks "
                              f"are served one way")

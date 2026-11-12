@@ -603,6 +603,19 @@ def test_a_combine_of_64_columns_reads_each_split_s_end_from_the_unit_the_partit
         members(s, [*tmpls[:6], c2], dict.fromkeys(tmpls, 64))
 
 
+def test_a_row_named_at_every_width_of_its_values_units_is_refused_by_its_two_narrowest():
+    """A row of DV = 512 has values units of five widths (`serving_templates.values_widths`); a partition that names its key
+    blocks at all five is refused as one that names two is, and the refusal names the two narrowest."""
+    S = {**TOY, "DV": 512}
+    widths = values_widths(512)
+    assert widths == [256, 128, 64, 32, 16]
+    tmpls = [scores(16, S), *(values(16, S, G=g) for g in widths)]
+    with pytest.raises(ValueError, match=re.escape(
+            f"row 5: the partition names its key blocks as values units of 16 columns ({values(16, S, G=16)}) and as values "
+            f"units of 32 columns ({values(16, S, G=32)}); a row's key blocks are served one way")):
+        members(Served(row(S), n=1), tmpls, dict.fromkeys(tmpls, 64))
+
+
 def test_a_row_at_ns_1_in_scores_and_values_units_ends_on_each_column_block():
     """Prefill's split count: the chain's end on each column block reads the last scores unit's lanes and the last values
     unit of its column block's O, and the ends' outputs, column block by column block, are the served row."""
