@@ -15,7 +15,6 @@
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Model", "detail": ""},
     {"file": "tests/acquire/test_scale_products_source.py", "kind": "assignment", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
     {"file": "tests/acquire/test_scale_products_source.py", "kind": "attr-defined", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
-    {"file": "tests/check/test_pouw_ncp_v2_end_to_end.py", "kind": "var-annotated", "symbol": "_program", "detail": ""},
     {"file": "tests/commit/test_native_collect.py", "kind": "name-defined", "symbol": "_as_bytes", "detail": ""},
     {"file": "tests/commit/test_native_collect.py", "kind": "name-defined", "symbol": "test_native_hook_body_collects_like_the_python_wrapper.Pair", "detail": ""},
     {"file": "tests/commit/test_native_collect.py", "kind": "name-defined", "symbol": "test_native_hook_body_collects_like_the_python_wrapper.Single", "detail": ""},
