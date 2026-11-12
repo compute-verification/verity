@@ -46,6 +46,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
   runbook (below).
+- **The response tie's verdict as a run's record:** `response_tie_verdict.py` writes what the response tie's
+  verifier decided on a class of an execution phase as one line of a run's files: the run, the verifier's module
+  and commit, the verdict (accepted and complete apart) and `proved_by`, null while the verifier is Python.
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
