@@ -15,8 +15,9 @@ PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to
 The directory is not a package. A caller puts it on `sys.path` and imports `receipt_folds` (the steps, key rules and
 schedules) or `receipt_conform` (the checks), taking the names each module's `__all__` lists; a kernel includes
 `receipt_folds.cuh` by relative path. `receipt_folds` imports the standard library alone, and `receipt_conform` imports
-the workspace only where `e2e_definitions` evaluates E2E's Definitions (`verity.circuits`). Neither reads the environment, and
-nothing under `verity/` imports them: they are a definition and its checks, not code a prover or verifier runs.
+the workspace only where `e2e_definitions` evaluates E2E's Definitions (`verity.circuits`). Neither reads the
+environment, and nothing under `verity/` imports them: they are a definition and its checks, not code a prover or
+verifier runs.
 
 ## The folds
 
