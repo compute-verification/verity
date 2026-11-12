@@ -47,7 +47,10 @@ from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import sampling as SM
 
 from verity_vllm.program.frontend.rules.base import RuleSet
-from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
+from verity_vllm.program.frontend.rules.training_attention import (
+    FlashSdpa,
+    FlashSdpaBackward,
+)
 from verity_vllm.program.frontend.rules.training_emit import (
     _DT,
     F32,
@@ -575,7 +578,8 @@ class FusedAdamW(_TrainRule):
                    emitted=f"F32Fma_v2 x{(5 if wd != 0 else 4) * n} + F32Mul_v2/F32Div_v2/F32Add_v2/F32Sub_v2/F32Sqrt_v1 per element")
 
 
-def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False,
+                   deterministic: bool = False) -> RuleSet:
     """The default rules that target ATen ops (`rules.TORCH_RULES`) and the default families, with the training rules: views of
     static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
@@ -587,11 +591,13 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
     (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
     and a clamp as their kernels do (`FusedAdamW`, `Clamp`), `kthvalue` as its radix select does (`KthValue`) and torch's flash
-    attention forward as its kernels do (`FlashSdpa`, placed first), in the rule set
+    attention forward and backward as its kernels do (`FlashSdpa`, `FlashSdpaBackward`, placed first), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs: `Matmul` lowers an `mm` at a shape the TF32 capture covers
     (`cublas_bf16.TRAIN_TF32`) as cuBLAS's unsplit TF32 GEMM (`GemmTf32_v1`) and refuses the rest
-    (``training-cc<major>.<minor>-tf32``)."""
+    (``training-cc<major>.<minor>-tf32``).  `deterministic`, at a `cc`: the step runs under deterministic algorithms, which the
+    traced graph doesn't show either, so the flash attention backward is its deterministic kernels' and `FlashSdpaBackward` lowers
+    it; without it the rule refuses every call (the suffix ``-deterministic``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES, TORCH_RULES
 
     first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
@@ -600,8 +606,11 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
                                          EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
-    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
+    if deterministic and cc is None:
+        raise ValueError("training_rules: deterministic is a GPU's (its flash attention backward); without a cc no rule reads it")
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "") + ("-deterministic" if deterministic else "")
+    return RuleSet(name, first + ([FlashSdpa(cc), FlashSdpaBackward(cc, deterministic)] if cc else []) + list(TORCH_RULES) + last,
+                   list(DEFAULT_FAMILIES))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
