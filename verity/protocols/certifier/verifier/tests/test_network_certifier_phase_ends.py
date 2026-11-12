@@ -292,13 +292,13 @@ def test_an_arrival_with_no_tick_left_is_closed_with_no_cell():
             clock.advance(t * TAU)
             await device.until(lambda w, t=t: w.ticks > t)
         held = Client(device, cells(id_req(1, 3), B))
-        await held.task
+        await device.until(lambda w: w.turned_away + w.ordinals == 1)
         assert (device.turned_away, held.writes, held.closed) == (1, [], False)
         running.cancel()
         with pytest.raises(asyncio.CancelledError):
             await running
         after = Client(device, cells(id_req(2, 3), B))
-        await after.task
+        await device.until(lambda w: w.turned_away + w.ordinals == 2)
         return device, held, after
 
     device, held, after = asyncio.run(main())
