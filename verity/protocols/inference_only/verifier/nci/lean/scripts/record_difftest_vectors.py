@@ -1231,7 +1231,7 @@ def _wide(c: Circuit, p: str) -> bool:
 
 
 def formats(fr, c: Circuit, held: dict[str, tuple], roots: dict[str, str], before: int) -> tuple[dict, dict]:
-    """A random circuit's row formats, drawn with `fr`, and the registration they need: the log's first record's values
+    """A random circuit's row formats, chosen with `fr`, and the registration they need: the log's first record's values
     `held` and the run's own record's (`ran`). About a third of the registered parameters that `_wide` allows and the
     run commits get a 32-bit format, of either schema, registered in 32-bit leaves by the run's own record or else by
     the first record (θ, at its width); about a third of those `held` registers as θ in 16-bit leaves get a 16-bit
