@@ -5,10 +5,12 @@ serving, so nothing declared before the run predicts them.  `StepTrace` records 
 (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, `engine.env`), through `engine.hooks`, without changing what the engine does:
 
 - ``scheduler.add_request``: a request's arrival, its prompt length and sampling parameters, and the step it arrived before.
-  Where the engine held other requests and had scheduled nothing since its last step (every one of them held back, as a
-  request at its token limit is until its last step's output is back), the arrival also says after how many such empty
-  schedules it came (``after_empty``): the next schedule runs it with the requests that output released, one before runs it
-  alone;
+  Where the scheduler's last schedule scheduled nothing (every request it held was held back, as a request at its token
+  limit is until its last step's output is back, or it held none), the arrival also says after how many such empty
+  schedules it came (``after_empty``). Under async scheduling the engine processes the step in flight after an empty
+  schedule, so such a request is first scheduled once that step has finished its requests and cached their last blocks;
+  put back before the empty schedule, it is scheduled while that step is in flight, and one whose prompt goes on from a
+  request that step finished hits a block less;
 - ``scheduler.schedule``: the step's index among the steps that schedule tokens (an empty schedule runs no forward);
 - ``scheduler.update_from_output(scheduler_output, model_runner_output)``: the step's rows in the model runner's order
   (``model_runner_output.req_ids``: the order the step's tokens are laid out in, Model Runner V2's ``sort_batch_req_ids``), each
@@ -203,7 +205,7 @@ class StepTrace:
         def add_request(orig):
             def wrapped(request, *a, **kw):
                 fresh = request.request_id not in sched.requests
-                after = {"after_empty": me.empty} if me.empty and sched.requests else {}
+                after = {"after_empty": me.empty} if me.empty else {}
                 out = orig(request, *a, **kw)
                 if fresh:
                     sp = getattr(request, "sampling_params", None)
