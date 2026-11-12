@@ -29,7 +29,8 @@ def on_rank_grid(parts: list[np.ndarray], srcs: list[str], which: str, ck: Any, 
     if suffix != "weight_scale_inv":
         return parts
     from verity_vllm.program.model import fp8_moe_block
-    bs = (ck.config.get("quantization_config") or {}).get("weight_block_size")
+    quant = ck.config.get("quantization_config")   # config.json of a checkpoint that is not quantized has none, and then no block size
+    bs = quant.get("weight_block_size") if quant else None
     if not (isinstance(bs, (list, tuple)) and len(bs) == 2 and bs[0] == bs[1]):
         raise KeyError(f"{srcs[0]}: block scales, but config.json's quantization_config has no square weight_block_size (got {bs!r})")
     G = int(bs[0])

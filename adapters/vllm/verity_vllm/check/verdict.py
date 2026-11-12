@@ -126,7 +126,8 @@ class CommitChecks:
         if d.get("schema") not in (None, SCHEMA):
             raise ValueError(f"not a {SCHEMA} document: schema {d.get('schema')!r}")
         kw = {k: d.get(k) for k in cls.__dataclass_fields__ if k in d and k != "checks"}
-        return cls(checks=[CheckResult.from_dict(c, CR.reject_of(c)) for c in d.get("checks") or []], **kw)  # type: ignore[arg-type]
+        checks = d.get("checks")   # a document that lists none reads as no checks
+        return cls(checks=[CheckResult.from_dict(c, CR.reject_of(c)) for c in checks] if checks else [], **kw)  # type: ignore[arg-type]
 
     def dumps(self) -> str:
         return json.dumps(self.to_dict(), indent=1, sort_keys=False, default=str) + "\n"
@@ -268,7 +269,8 @@ def correspondence_of_build(build_summary: BuildSummary | Mapping[str, Any] | No
         source = "build_summary.json"
     else:
         for w, r in (result_jsons or {}).items():
-            d = ((r or {}).get("program") or {}).get("correspondence_digest")
+            program = r.get("program") if r else None   # a wrapper whose result.json has no Program block states no digest
+            d = program.get("correspondence_digest") if program else None
             if d:
                 digests[w] = str(d)
         if digests:

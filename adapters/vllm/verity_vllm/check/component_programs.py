@@ -53,6 +53,9 @@ def post_load_tensors(builds: dict[int, str]) -> dict[str, list[str]]:
     for r, b in builds.items():
         names: set[str] = set()
         for d in component_program_dirs(str(b)):
-            names |= set((json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors") or {}).get("parameters") or {})
+            fact = json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors")   # a result.json without the block registers nothing
+            made = fact.get("parameters") if fact else None                                       # absent for a model without the post-load hook
+            if made:
+                names |= set(made)
         out[str(r)] = sorted(names)
     return out

@@ -16,9 +16,12 @@ def route_pin_gate(sr: dict | None, *, rank: int) -> tuple[dict | None, str | No
     is the FAIL text."""
     sr = sr if isinstance(sr, dict) else {}
     fams: dict[str, int] = {}
-    for f, n in (((sr.get("population") or {}).get("by_family")) or {}).items():
+    population = sr.get("population")       # the replay's rows by family; a record without them counts none
+    by_family = population.get("by_family") if population else None
+    for f, n in by_family.items() if by_family else ():
         fams[f] = fams.get(f, 0) + int(n or 0)
-    for u in sr.get("unreplayable") or []:
+    unreplayable = sr.get("unreplayable")   # the families the replay could not evaluate, each with its count; a record without them counts none
+    for u in unreplayable if unreplayable else ():
         f = str(u.get("family")).split(" (")[0]
         fams[f] = fams.get(f, 0) + int(u.get("n") or 0)
     bound = BC.route_bound(fams)

@@ -49,6 +49,12 @@ def build_roles(program_dir: str | None) -> dict[str, dict[str, Any]]:
     return {}
 
 
+def _role(roles: dict[str, dict[str, Any]], field: str) -> str | None:
+    """The role the Build gave `field`; None for a field it gave none."""
+    entry = roles.get(field)
+    return entry.get("role") if entry else None
+
+
 def served_words(ck: Any, src: str, bits: int, rows: tuple[int, int] | None = None) -> tuple[np.ndarray, str] | None:
     """An f32 field whose checkpoint tensor is an e8m0 block scale: its upcast (`E8M0_UPCAST`).  A bf16 field whose checkpoint tensor is
     e4m3 beside a `weight_scale_inv`: vLLM's upcast at load (deepseek_v2 `_try_load_fp8_indexer_wk`: GLM-5.3's indexer wk, fused bf16
@@ -100,11 +106,12 @@ class Rewrites:
     def __init__(self, fields: list[str], roles: dict[str, dict[str, Any]], raw: Callable[[str], tuple[np.ndarray, dict]], config: dict):
         self.raw, self.config = raw, config
         self._pair: dict[str, tuple[np.ndarray, np.ndarray, dict]] = {}
-        bs = (config.get("quantization_config") or {}).get("weight_block_size") or [0]
+        quant = config.get("quantization_config")   # config.json of a checkpoint that is not quantized has none: G = 0, no field rewritten
+        bs = (quant.get("weight_block_size") if quant else None) or [0]
         self.G = int(bs[0])
         names = set(fields)
-        self.requant = {f for f in fields if (roles.get(f) or {}).get("role") in REQUANT_ROLES}
-        self.absorb = {f: f.rsplit(".", 1)[0] + ".kv_b_proj.weight" for f in fields if (roles.get(f) or {}).get("role") == ABSORB_ROLE}
+        self.requant = {f for f in fields if _role(roles, f) in REQUANT_ROLES}
+        self.absorb = {f: f.rsplit(".", 1)[0] + ".kv_b_proj.weight" for f in fields if _role(roles, f) == ABSORB_ROLE}
         if self.requant:
             self.requant |= {k + sfx for k in self.absorb.values() for sfx in ("", SCALE[len(".weight"):]) if k + sfx in names}
 
