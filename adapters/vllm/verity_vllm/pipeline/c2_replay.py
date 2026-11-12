@@ -352,9 +352,11 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity_vllm.check.replay import pouw_circuit as PWC
+    from verity.protocols.pouw.prover.circuit import SCHEMES
 
-    return next((e for e in entries if e.split(":", 1)[0] == PWC.pouw.NAME and e.split(":", 1)[1] in PWC.PC.C.SCHEMES), None)
+    from verity_vllm.protocols import pouw
+
+    return next((e for e in entries if e.split(":", 1)[0] == pouw.NAME and e.split(":", 1)[1] in SCHEMES), None)
 
 
 def plan(s: ReplaySources, planner: Any = None) -> dict[str, Any]:
