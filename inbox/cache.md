@@ -239,3 +239,47 @@ cache on (session as the replay block; pages read as committed inputs under a ne
 what serving commits against 1% of serving time and what the replay reads; speculative decoding on; AgentX first;
 one recommended route with its changes by lane. Still to read: vLLM's `cache_salt` at the pin, the serving notes'
 measured rows for the commitment, AgentX's session lengths against a cap.
+
+## Entry 3, 02:50Z Thu 12 Nov (my VM's clock; entry 2's header said 02:35Z and was written at 02:22Z)
+
+Read your 02:20Z correction and 02:28Z section at 02:48Z; following both. The final gains advice by class, the
+circuit compiled ahead of time, and a context column at 1,048,576 beside 131,072.
+
+**Your point to Daniel, "a long context and a cache hit are one question": right for the replay, not for the
+guarantee.** File and line:
+
+- `RequestsCover`'s first clause (`security/Properties/Spot/TwoStageCheck.lean:58`) needs every proof block a request
+  reads to be in one replay block. A request cut into spans that are replay blocks breaks it, as a hit across
+  requests does. So the patterns' form on `main`, the form the figure of record is in, covers neither.
+- `ServedCover` (the same file, lines 89-95), the capped form's hypothesis, has no such clause. It needs only that
+  no two requests read one proof block, and bounds the bits served by the requests reading in each replay block by
+  `N` times `S`. A span reading its own request's earlier spans satisfies it with `N` = 1: inside one request the
+  capped form charges no fan-out. A hit across requests breaks its first clause unless the readers are one "request".
+- `req` is any map from served outputs to a type (`∀ R ... req`, lines 80-82 and 102-103). So naming the session
+  as the request needs no new theorem, in either form.
+- What I did not check: which form the 128k row's figure is in when its replay blocks are spans. The capped form at
+  the plan prices 1,945 times the patterns' form in the cost model [modeled, entry 2].
+
+**#8403** [PR body read whole]: agreed, and it is the charge the figure of record makes (`PREFIX_OFF`). My entries
+price it as "prove again": 14,229 GB at the plan, 552,000 GB on AgentX [modeled]. Its own "not covered" matters more
+on agent traffic: a hit whose producers ran in an earlier execution phase, "most of a steady-state window's hit
+FLOPs". The pool read does not give F = 1 (entry 2).
+
+**New since entry 2:**
+
+- AgentX's dataset card [read whole]: 21,635,381,376 prompt tokens and 106,474,498 output tokens over 98,827
+  requests in 393 sessions, so r = 45 cached tokens a computed token [arithmetic]. It is a sample of the largest
+  sessions (`--sampling top`, at least 20 requests). Its 98.31% counts blocks "the same session sent earlier", so a
+  cache keyed by session (vLLM's `cache_salt`, in the pin) keeps all of it. Block ids are local to a session: the
+  corpus cannot say what sessions share.
+- Session as the replay block, more sizes [modeled, run `r20261112-022258-7eb7`, world, one year, GB at 10% of
+  compute]: 252 requests 22,922; 1,000 requests 33,304; 252 requests with each request's cap at 4,298 tokens 34,427.
+  Against 552,000 for proving the prefix again and 14,229 for the figure of record.
+- The cost model holds 13.45 GPU-seconds of egress at each edge (`headline.HOLD`): 2.2% of serving time at 600 s
+  phases, whatever the cache does [arithmetic from the constant]. The 1% goal needs phases of 1,345 s or longer
+  under that rule.
+
+**Running:** `r20261112-024202-2e5d` (AgentX's mean session in the model) and `r20261112-024625-487a` (the AgentX
+corpus on a CPU pool: requests and served tokens a session, times between reuses, what splitting a session costs).
+Both about 03:15Z. The draft of the final is `lanes/proofs/20261112T0240Z-report-stock-vllm-departures.md`, synced
+now; it does not yet hold your 02:20Z and 02:28Z asks.
