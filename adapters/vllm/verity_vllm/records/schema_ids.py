@@ -44,6 +44,9 @@ REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
 #: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
 #: writes
 SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
+#: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),
+#: which `predict` writes
+ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
 
 # --- the row driver (`verity_vllm.pipeline`)
 #: a row's `config_record.json` (`pipeline.config_record.SCHEMA`), which `record` writes

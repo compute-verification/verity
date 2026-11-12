@@ -7,6 +7,7 @@ from verity_vllm.records import schema_ids
 
 #: the ids as the records on disk have them
 ON_DISK = {
+    "ADMISSION_PLAN_SCHEMA": "verity/admission-plan/v1",
     "AOT_COMPARISON_SCHEMA": "verity-vllm/aot-comparison/v1",
     "BATCH_DECOMP_SCHEMA": "cb-a/batch-decomp/v1",
     "BOUNDARY_LINKAGE_SCHEMA": "verity-sweep/boundary-linkage/v1",
