@@ -28,9 +28,11 @@ all of them (the guards below):
 * `start_ms` and `span_ms`, in the public output: the certification period's span on that session's clock, its first
   millisecond and its length in milliseconds. The clock is the network certifier's count of its own ticks: millisecond
   0 is the start of the session's first execution phase, an execution phase is T ticks, and a tick is a whole number of
-  milliseconds (the schedule's `window` and `bucket_ms`). So the certification period of the parameters' `windows`
-  execution phases from the session's `first` has `start_ms = first · T · bucket_ms` and
-  `span_ms = windows · T · bucket_ms`, and a step of the account is a millisecond under every schedule;
+  milliseconds. So the certification period of the parameters' `windows` execution phases from the session's `first`
+  has `start_ms = first · T · bucket_ms` and `span_ms = windows · T · bucket_ms`, and a step of the account is a
+  millisecond whatever T and the tick are. In the rows form they are the schedule's (`window`, `bucket_ms`), which
+  the parameters hold. In the clock form they are the link's grid's, its buckets and their `bucket_ms`, which each
+  execution phase's proof takes as a public input and the parameters do not hold;
 * `certified`, in the public output: that the answer certifies its `K`. The period check writes it only as true, and
   only when both hold: the one-stage answers its `K` rests on are verified, which it takes as given, and the site's
   network certifier mediates the link's egress. An answer that certifies nothing holds no `certified`, and says why
