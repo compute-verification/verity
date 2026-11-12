@@ -134,6 +134,11 @@
    "except": [],
    "why": "the count of (c, k)-inference blocks on a circuit record is code: the record's summary (NciCheck.Record) and each Definition's Boolean gates by the gate table (NciCheck.Count)"
   },
+  "NciCheck.RecordRows": {
+   "imports": ["NciCheck.Record"],
+   "except": [],
+   "why": "a block's rows on a circuit record, and the rate rule in rows, are code: the record's summary (NciCheck.Record) and each template's rows of one unit from a table it is handed; no circuit file, nothing of NciCheck.Count, no Mathlib and nothing of Security"
+  },
   "NciCheck.Protocol": {
    "imports": ["NciCheck.Baseline", "CoreProtocol.Protocol"],
    "except": [],
