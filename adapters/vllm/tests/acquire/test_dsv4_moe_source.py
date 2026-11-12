@@ -289,6 +289,7 @@ def test_every_label_binds_its_row_of_the_manifest_of_record(monkeypatch):
     bind none (the GEMMs' Calls hold them)."""
     _v, c, model, src = attached(monkeypatch, range(L))
     run_step(model, range(L), 4)
+    src.uninstall()
     names = acquired(c)
     rows = manifest_rows(0, 4)
     got = Binder(rows, rank=0, ports=src.ports()).bind(0, names)
@@ -309,6 +310,7 @@ def test_identity_check_holds_each_layer_to_its_values_and_a_hash_layer_to_one_m
     are none of the committer's modules (here the router gate's), so the hash layers' `<experts>/in` is no unexpected module."""
     _v, c, model, src = attached(monkeypatch, range(L))
     run_step(model, range(L), 4)
+    src.uninstall()
     gate = "model.layers.3.ffn.gate"
     names = [gate, *acquired(c)]
     com = NativeHostCommitter(None, run_id="dsv4-moe", gpu_tree=True)
