@@ -189,7 +189,8 @@ def test_a_family_priced_several_ways_is_split_by_its_ways_and_only_an_own_row_i
         "family": (0.25, {"B_v1": 0.25})}
     point = E.at_share("world year", "r1", own, 0.10, ("r2", plan))
     marks = {i["input"]: i["mark"] for i in E._inputs({"world year": point}, ["r1"], {"inputs": {}},
-                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW)}
+                                                       {"at_zero_in": [], "GB": None}, 0.10, 0.003, E.ROW,
+                                                       E.served_share(None))}
     assert {k: v for k, v in marks.items() if k.startswith("proving priced")} == {
         "proving priced steady": "measured", "proving priced modeled": "modeled", "proving priced family": "modeled"}
 
@@ -1164,7 +1165,7 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "61fde301a626b1a1bf2698f6b48ce9fffe6928a444f24ee38962d5c1de0588de",
+NO_VERDICTS = {"text": "e0392b94b57bb58246d58acbd77af0f96aeb69034c5afee877b4fa987a6cfcdf",
                "json": "9105f3ca602a3ea5f1463be4f67c9747c2bbc8ea7ddc7a831bde6883eef81816"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
