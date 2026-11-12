@@ -49,9 +49,9 @@ from typing import Any
 
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 
-from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _put, _zeros
 from verity_vllm.protocols.pouw.pearl_c.kernel import _load
+from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into, screen_into
 
 #: the call buffers' least rows
@@ -80,6 +80,10 @@ class _Call:
     and ``side`` (the tile leaves), the main lane's event for ``tree`` before step ``cut``.  ``execs`` are its graphs'
     executables once captured (main, tree or 0, side or 0); off the GPU the scatter takes the call's offsets from ``at``.
     ``src`` is each of A's rows' source in the staged x behind its zero row (0, or 1 + its gathered row)."""
+    at: tuple[int, int]
+    graphs: tuple[Any, ...]
+    execs: tuple[int, ...]
+    ev_tree: Any
 
     def __init__(self, run: Any, g: _Group, us: list, split: bool, side: frozenset[str], b: dict[str, Any]):
         import numpy as np
@@ -152,6 +156,12 @@ class _Group:
     of the `ROTATED` ones (the first ``b``'s own), the event after each set's last side steps (``done``) and the next call's
     set (``turn``); its layouts (``calls``), the pinned host slots their tables go up from (``host``) and the driver that
     uploads them (``driver``, the run's or its own; None off the GPU)."""
+    b: dict[str, Any]
+    grouped: Any                # the kernel's `grouped.Grouped` over the call buffers; None until the first `fit`
+    poisoned: object | None     # the pass whose poison byte the call buffers hold
+    host: Any
+    host_np: Any
+    host_ev: list[Any]
 
     def __init__(self, run: Any, G: Any, ws: tuple[int, ...]):
         import torch
@@ -431,6 +441,7 @@ def _replay(run: Any, g: _Group, c: _Call, j: int, slot: int, nbytes: int, b: di
 
 def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...], bias: Any) -> Any:
     import torch
+
     from verity_vllm.protocols.pouw.pearl_c import CALL_CAPACITY
     if set(run.schedule.side) - set(SIDE_STEPS):
         raise ValueError(f"{run.entry}: a grouped call runs only {', '.join(sorted(SIDE_STEPS))} on a side lane, not "
@@ -454,7 +465,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
     side = _side(run, G)
     split = "tree_seed_a" in side
     raw = run.stream()
-    caller = run.torch_stream(raw) if cuda else None
+    caller: Any = run.torch_stream(raw) if cuda else None
     main = run.main if run.schedule.main_priority == "greatest" else None
     lane_raw, lane = (main.raw, main.stream) if main is not None else (raw, caller)
     g.fit(run, rows, run.schedule.ring if side else 1)

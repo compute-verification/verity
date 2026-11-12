@@ -6,8 +6,17 @@ from dataclasses import dataclass
 
 import pytest
 
-from verity_vllm.query.units import (PartitionError, Policy, ValueRef, VerificationUnit, boundary, boundary_values,
-                                       partition_by, required_values, unit_boundary)
+from verity_vllm.query.units import (
+    PartitionError,
+    Policy,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    boundary_values,
+    partition_by,
+    required_values,
+    unit_boundary,
+)
 
 
 @dataclass(frozen=True)

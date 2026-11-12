@@ -67,10 +67,12 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
     * without a required manifest (no Q(P) asked for) the absence is stated, not failed (there was nothing to reconcile against).
     `per_rank_identity_check_ok` is a different check (the binding map's identities vs the manifest) and is not touched."""
     from verity_vllm.check.c2_rules import _query_population_scope
-    pop = (sr or {}).get("population") if isinstance((sr or {}).get("population"), dict) else {}
+    pop = (sr or {}).get("population")
+    if not isinstance(pop, dict):
+        pop = {}
     chk = pop.get("query_checks") if isinstance(pop.get("query_checks"), dict) else None
     note, fail = _query_population_scope(sr if isinstance(sr, dict) else None)
-    block = {"rule": "population.query_checks (reconciliation against Q(P)) per rank -> verdict, fail closed; commit_verdict._query_population_scope text",
+    block: dict[str, Any] = {"rule": "population.query_checks (reconciliation against Q(P)) per rank -> verdict, fail closed; commit_verdict._query_population_scope text",
              "rank": int(rank), "present": chk is not None, "ok": (chk or {}).get("ok") if chk is not None else None,
              "counts": ({k: int((v or {}).get("n") or 0) for k, v in chk.items() if isinstance(v, dict) and "n" in v} if chk else None),
              "note": note, "fail": fail}
@@ -138,7 +140,9 @@ def no_evaluator_gate(cblock: dict, sr_: dict, *, rank: int, xrank_families: fro
     from verity_vllm.check.replay import replay_codes as RC
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
 
-    pop = sr_.get("population") if isinstance(sr_.get("population"), dict) else {}
+    pop = sr_.get("population")
+    if not isinstance(pop, dict):
+        pop = {}
     if isinstance(pop.get("not_evaluable"), dict):
         not_ev, codes = pop["not_evaluable"], RC.not_evaluable_codes(pop)
     else:
@@ -272,7 +276,7 @@ def annotate_value_correspondence(vc: dict | None, sr_comp: dict, lk_comp: dict,
         vc["result"] = False
     if replay_on:
         comps["replay"] = {"result": sr_comp.get("result"), "reference": "see components.sampled_replay (MAN-06 sampled exact replay, per rank)"}
-        both = (sr_comp.get("result") is True and lk_comp.get("result") is True)
+        both: bool | None = (sr_comp.get("result") is True and lk_comp.get("result") is True)
         if sr_comp.get("deferred"):
             both = None
             vc["result"] = False if vc.get("result") is False else None
@@ -303,7 +307,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
     per_run = [{r_: {"sampled_replay": (c.get("sampled_replay") or {}).get("result"), "grade": (c.get("sampled_replay") or {}).get("grade"),
                      "boundary_linkage": (c.get("boundary_linkage") or {}).get("result")} for r_, c in p.items()} for p in pairs]
     sr_ok = len(srs) > 0 and all(s.get("result") is True for s in srs.values()) and all(all(v["sampled_replay"] is True for v in p.values()) for p in per_run)
-    lk_ok = len(lks) > 0 and all(l.get("result") is True for l in lks.values()) and all(all(v["boundary_linkage"] is True for v in p.values()) for p in per_run)
+    lk_ok = len(lks) > 0 and all(link.get("result") is True for link in lks.values()) and all(all(v["boundary_linkage"] is True for v in p.values()) for p in per_run)
     smp = {r_: (s.get("sample") or {}) for r_, s in srs.items()}
     popn = {r_: (s.get("population") or {}) for r_, s in srs.items()}
     keys = {r_: (s.get("strata_keys") or {}) for r_, s in srs.items()}
@@ -320,7 +324,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
     for k_ in keys.values():
         for lv, n_ in ((((k_.get("lifetime") or {}).get("values")) or {}).items()):
             lifetimes[lv] = lifetimes.get(lv, 0) + int(n_)
-    sr_comp = {"result": sr_ok if all(s for s in srs.values()) else None,
+    sr_comp: dict[str, Any] = {"result": sr_ok if all(s for s in srs.values()) else None,
                "method": ("per rank, in the rank's committing process (tp2_worker finalize): sampled_replay on THIS rank's binding map (identity.rank == r), "
                           "THIS rank's request Programs of record (derive_step --tp 2 --rank r; components per (LP, T)), the rank's committed members and "
                           "its weight SHARDS re-registered at replay; stratified seeded sample, bit-exact compare with the committed output members; rows fed "
@@ -353,12 +357,12 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                "per_rank": {r_: {k2: s.get(k2) for k2 in ("result", "grade", "why", "rank", "rank_note")} for r_, s in srs.items()},
                "per_run": per_run,
                "why": (None if sr_ok else "; ".join(f"rank {r_}: {s.get('grade')} {s.get('why') or s.get('error') or 'no result'}" for r_, s in srs.items() if s.get("result") is not True) or "a rank of an earlier pair failed")}
-    lk_comp = {"result": lk_ok if all(l for l in lks.values()) else None,
+    lk_comp: dict[str, Any] = {"result": lk_ok if all(link for link in lks.values()) else None,
                "method": ("per rank, exhaustive over (engine step, request): committed input_token_ids at the arrival step == the declared prompt of the workload; "
                           "at every later step == that request's committed sampled_token_ids of the previous step (boundary_linkage on the rank's map)"),
-               "checked": sum(int(l.get("pairs") or 0) for l in lks.values()), "linked": sum(int(l.get("linked") or 0) for l in lks.values()),
-               "per_rank": {r_: {k2: l.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, l in lks.items()},
-               "why": (None if lk_ok else "; ".join(f"rank {r_}: {l.get('why') or 'no result'}" for r_, l in lks.items() if l.get("result") is not True) or "a rank of an earlier pair failed")}
+               "checked": sum(int(link.get("pairs") or 0) for link in lks.values()), "linked": sum(int(link.get("linked") or 0) for link in lks.values()),
+               "per_rank": {r_: {k2: link.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, link in lks.items()},
+               "why": (None if lk_ok else "; ".join(f"rank {r_}: {link.get('why') or 'no result'}" for r_, link in lks.items() if link.get("result") is not True) or "a rank of an earlier pair failed")}
     deferred = sorted({str(r_) for p in pairs for r_, c in p.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred"}, key=int)
     if deferred:
         for comp in (sr_comp, lk_comp):
@@ -387,6 +391,7 @@ def seal(out: Path, summ: dict[str, Any], rows: list[dict[str, Any]], bundles_of
         pair = int(row["pair"])
         for rk, c in sorted(row["commit"]["per_rank"].items()):
             b = bundles_of[pair][int(rk)]
+            assert b is not None
             ctx = {"tp": {"world": world, "rank": int(rk)}, "pair": pair, "label": label, "code": versions.get("git_head"),
                    "run_root": c["run_root"], "tp_run_root": row["commit"]["tp_run_root"], "weight_registration": c.get("weight_registration"),
                    "replay": replay_cfg, "required_manifest": required_manifest, "required_manifest_sha256": man_sha,

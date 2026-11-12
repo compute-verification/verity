@@ -13,25 +13,28 @@ import bisect
 import json
 import re
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, bind
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array
+from verity.commitments.windows import interface as I
+from verity.commitments.windows import wiring as WI
+from verity.definitions.ops import gemm as GE
+from verity.definitions.registry import moe
+from verity.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
-from tests.program.test_tp_binding import N, ROWS, rank_body
-from verity_vllm.pipeline.tp import grain as TG, wires as TW
+from tests.program.test_tp_binding import ROWS, N, rank_body
+from verity_vllm.pipeline.tp import grain as TG
+from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
-
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import Builder, bind
-from verity.definitions.ops import gemm as GE
-from verity.circuits.refs import Affine, Coll
-from verity.circuits.types import Array
-from verity.definitions.registry import moe, tp_allreduce as TA
-from verity.definitions.registry.prims import BF16
-from verity.commitments.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
 #: the fused bodies' hidden row: four chunks of 64 (`grain.chunk`)
@@ -63,7 +66,7 @@ def fused_body(world: int, rank: int):
     return B.finish(Coll(row, second[-1][0].refs))
 
 
-def _fns(sites: TW.Sites) -> dict[str, object]:
+def _fns(sites: TW.Sites) -> dict[str, Any]:
     return {descriptor_id(fn): fn for fn, _ in sites.circuit.templates}
 
 
@@ -188,7 +191,7 @@ def _window(sites: TW.Sites, values: dict) -> I.Window:
     return win
 
 
-def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[object, int, slice]:
+def _row(ms, publics: dict, tid: str, unit: int, row: str) -> tuple[Any, int, slice]:
     """The member holding ``tid``'s unit ``unit``, that unit's global index, and where its row ``row``'s string sits in the
     member's public body."""
     base = min(m.base for m in ms if m.template == tid)
@@ -410,7 +413,9 @@ def test_a_wire_closing_a_cycle_is_refused_and_the_tp_windows_wires_have_none(to
         replace(c, wires=wires)
     with pytest.raises(ValueError, match=r"cycle: wire \d+ .* is on a cycle of templates") as e:
         replace(c, wires=wires, order=None)
-    named = wires[int(re.match(r"cycle: wire (\d+)", str(e.value))[1])]
+    cyclic = re.match(r"cycle: wire (\d+)", str(e.value))
+    assert cyclic is not None
+    named = wires[int(cyclic[1])]
     assert {named.reader, named.writer, ptid, ctid} <= set(str(e.value).split("each reading the next: ")[1].split(";")[0]
                                                          .split(" <- "))
     honest = I.ordered(c.units, c.wires, {})

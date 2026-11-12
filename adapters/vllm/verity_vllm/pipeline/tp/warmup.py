@@ -6,8 +6,9 @@ record runs hit every plan and stage bounded.  The run is never a record: its ra
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.pipeline.c2_replay import rss_kb

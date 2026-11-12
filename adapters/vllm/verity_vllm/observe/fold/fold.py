@@ -92,13 +92,11 @@ from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, array_of, concat, runs, tuple_of
-from verity_vllm.program import sampling_event as SE
-from verity.definitions.registry import b1
-from verity.definitions.replay import replayer
 from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
+from verity.definitions.registry import b1
+from verity.definitions.replay import replayer
 
-from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -116,10 +114,16 @@ from verity_vllm.observe.events import (
     TritonLaunch,
     ViewDesc,
 )
-from verity_vllm.observe.log import split_steps
 from verity_vllm.observe.fold.memory import MemoryModel, Unresolved, compact_refs
-from verity_vllm.observe.fold.patterns.collectives import FUSED_KIND as FUSED_COLLECTIVE_KIND, KINDS as COLLECTIVE_KINDS
-from verity_vllm.observe.fold.patterns.target import GEMM_TARGET_SCRATCH_KEY, X01_SCRATCH_KEY, WeightOnlyCalls
+from verity_vllm.observe.fold.patterns.collectives import (
+    FUSED_KIND as FUSED_COLLECTIVE_KIND,
+)
+from verity_vllm.observe.fold.patterns.collectives import KINDS as COLLECTIVE_KINDS
+from verity_vllm.observe.fold.patterns.target import (
+    GEMM_TARGET_SCRATCH_KEY,
+    X01_SCRATCH_KEY,
+    WeightOnlyCalls,
+)
 from verity_vllm.observe.fold.resolver import (
     Collective,
     Compute,
@@ -146,13 +150,17 @@ from verity_vllm.observe.fold.resolver import (
     parts_of,
     resolve_step,
     spec_label,
+    whole_view,
 )
 from verity_vllm.observe.fold.summary import REFERENCE_INTEGRITY_RULE, summarize  # noqa: F401  (re-exported: fold_compare, tests)
 from verity_vllm.observe.fold.supplied import SuppliedInputs
-from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.fold.token_select import token_select_output
+from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
 from verity_vllm.observe.fold.views import row_view
 from verity_vllm.observe.fold.witnesses import WitnessInputs
+from verity_vllm.observe.log import split_steps
+from verity_vllm.program import model as analytic
+from verity_vllm.program import sampling_event as SE
 
 I32 = Value(32)
 
@@ -386,19 +394,20 @@ class _Fold:
             raise FoldError("second RunHeader")
         self.header = h
         cfg = dict(self.profile.config or {})
-        if not cfg:
-            cfg = dict((h.model or {}).get("config") or {})
+        if not cfg and h.model and h.model.get("config"):
+            cfg = dict(h.model["config"])
         self.config = cfg
         self.weights_type = weights_type_of(self.profile, cfg)
-        reqs = list((h.workload or {}).get("requests") or [])
+        reqs = (h.workload or {}).get("requests")
         if not reqs:
             raise FoldError("RunHeader.workload has no requests")
-        self.requests = reqs
+        self.requests = reqs = list(reqs)
         self.req_index = {r["request_id"]: i for i, r in enumerate(reqs)}
         # n > 1: the runner's rows carry vLLM's child ids (`{index}_{request_id}`, header `workload.children`, a
         # fact of the fork recorded by the adapter).  A child's prompt IS its parent's prompt parameter (one root, not n copies);
         # the served sequences (Program outputs) are per child.  A child naming an unknown parent is a header error.
-        children = list((h.workload or {}).get("children") or [])
+        children = h.workload.get("children")
+        children = list(children) if children else []
         for c in children:
             if c.get("parent") not in self.req_index:
                 raise FoldError(f"RunHeader.workload.children: {c.get('request_id')!r} names unknown parent {c.get('parent')!r}")
@@ -414,9 +423,9 @@ class _Fold:
         # Program -- one `seed` / `seed_<i>` parameter (Array<1, Value<64>>, i = the request's index, like the prompts) between the
         # prompts and the weights; the sampler instance reads it through a `Param("seed", ...)` operand (resolver).  Layout:
         # prompts..., seeds..., weights (weights stay the LAST input node: cb_a.compare / batch_decomp rely on that).
-        samp = dict((h.workload or {}).get("sampling") or {})
-        self.seed_param: dict[int, int] = {}      # request index -> parameter index
-        if samp.get("greedy") is not True:
+        samp = h.workload.get("sampling")
+        self.seed_param = {}      # request index -> parameter index
+        if not samp or samp.get("greedy") is not True:
             for i, r in enumerate(reqs):
                 if r.get("seed") is not None:
                     self.seed_param[i] = len(params)
@@ -428,7 +437,7 @@ class _Fold:
         # `_finish`.  Layout: prompts..., seeds..., peers..., weights (weights stay the LAST input node; the codec lowers a homogeneous bf16
         # RecordType to ONE Input16 node per request, so the request-owned Input nodes stay the leading ones -- batch_decomp).  A TP1 log
         # (no tp2 note) allocates nothing here: its layout and digests are unchanged.
-        tp = dict((h.notes or {}).get("tp2") or {})
+        tp = (h.notes or {}).get("tp2")
         self.tp = None
         if tp and int(tp.get("world_size") or 1) > 1:
             if tp.get("rank") is None:
@@ -565,9 +574,8 @@ class _Fold:
                 if top_open is not None and ev.id == top_open:
                     top_open = None
                     nxt = self._flush_and_execute(pending, pairs, nxt)
-            elif isinstance(ev, TritonLaunch):
-                if ev.parent is None:
-                    nxt = self._flush_and_execute(pending, pairs, nxt)
+            elif isinstance(ev, TritonLaunch) and ev.parent is None:
+                nxt = self._flush_and_execute(pending, pairs, nxt)
         for ev in pending:
             self._mem_event(ev)
         pending.clear()
@@ -606,11 +614,11 @@ class _Fold:
 
     def _write_tokens(self, start: StepStart, links: list[StepLink]) -> None:
         link_by_row: dict[int, StepLink] = {}
-        for l in links:
-            if l.step != start.step:
-                self._problem("StepLink", f"StepLink for step {l.step} inside step {start.step}", {})
+        for link in links:
+            if link.step != start.step:
+                self._problem("StepLink", f"StepLink for step {link.step} inside step {start.step}", {})
                 continue
-            link_by_row[l.row] = l
+            link_by_row[link.row] = link
         if len(start.input_token_ids) < len(start.rows):
             raise FoldError(f"step {start.step}: {len(start.input_token_ids)} input token ids for {len(start.rows)} rows")
         for i, (req, pos) in enumerate(start.rows):
@@ -639,22 +647,22 @@ class _Fold:
         if start.input_ids_view is None and start.rows:
             self.notes.append(f"step {start.step}: no input_ids_view; token refs were not written into memory")
 
-    def _token_refs(self, start: StepStart, i: int, req: str, pos: int, l: StepLink | None) -> Refs:
+    def _token_refs(self, start: StepStart, i: int, req: str, pos: int, link: StepLink | None) -> Refs:
         """The reference of token row `i`: a prompt parameter leaf, or the sampler output a StepLink names."""
         tok = int(start.input_token_ids[i])
         if req not in self.req_index:
             raise FoldError(f"step {start.step} row {i}: unknown request {req!r}")
-        if l is not None:
-            if l.request_id != req:
-                raise FoldError(f"step {start.step} row {i}: StepLink names request {l.request_id!r}, the row is {req!r}")
-            if l.relation != "eq":
-                raise FoldError(f"step {start.step} row {i}: StepLink relation {l.relation!r} is not 'eq'")
-            samp = self.sampled.get((req, l.src_step))
-            if (l.value is not None and int(l.value) != tok) or (samp is not None and int(samp) != tok):
-                raise FoldError(f"step {start.step} row {i}: token {tok} != StepLink.value {l.value} / sampled at step {l.src_step} {samp}")
-            refs = self.outputs.get((req, l.src_step))
+        if link is not None:
+            if link.request_id != req:
+                raise FoldError(f"step {start.step} row {i}: StepLink names request {link.request_id!r}, the row is {req!r}")
+            if link.relation != "eq":
+                raise FoldError(f"step {start.step} row {i}: StepLink relation {link.relation!r} is not 'eq'")
+            samp = self.sampled.get((req, link.src_step))
+            if (link.value is not None and int(link.value) != tok) or (samp is not None and int(samp) != tok):
+                raise FoldError(f"step {start.step} row {i}: token {tok} != StepLink.value {link.value} / sampled at step {link.src_step} {samp}")
+            refs = self.outputs.get((req, link.src_step))
             if refs is None:
-                raise FoldError(f"step {start.step} row {i}: StepLink to step {l.src_step} whose sampler output for {req!r} is unknown")
+                raise FoldError(f"step {start.step} row {i}: StepLink to step {link.src_step} whose sampler output for {req!r} is unknown")
             return refs
         r = self.req_index[req]
         prompt = self.requests[r]["prompt_token_ids"]
@@ -882,7 +890,7 @@ class _Fold:
         own = op.own
         M = max(int(own.shape[0]), 1) if op.flat and own.rank == 2 else c.rows        # token rows: one Compute row when flat
         N = int(ptype.elem.n) // M if op.flat else int(ptype.elem.n)
-        if own.rank != 2 or tuple(own.shape) != (M, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1) or (op.flat and (c.rows != 1 or M * N != ptype.elem.n)):
+        if own.rank != 2 or tuple(own.shape) != (M, N) or own.dtype != "bfloat16" or tuple(own.strides) != (N, 1) or (op.flat and (c.rows != 1 or ptype.elem.n != M * N)):
             raise FoldError(f"{what}: own partial must be a row-major bf16 [{M}, {N}] view{' (one flat row)' if op.flat else ''}, got {own!r}")
         if op.kind not in (*COLLECTIVE_KINDS.values(), FUSED_COLLECTIVE_KIND):
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
@@ -1015,7 +1023,7 @@ class _Fold:
             n = operand_rows(op)
             if n is not None and n < t.rows:
                 raise FoldError(f"move: {type(op).__name__} covers {n} rows, the move has {t.rows}")
-        if t.src.view.bits != t.dst.view.bits:
+        if whole_view(t.src).bits != whole_view(t.dst).bits:
             raise FoldError(f"move between widths {t.src.view.dtype} -> {t.dst.view.dtype} ({t.hint})")
         return [self._read_operand(t.src, i) for i in range(t.rows)]
 
@@ -1267,8 +1275,8 @@ class _Fold:
                 self._problem("ValuesEmpty", msg, {})
             self.params = self.B.params = self.supplied_inputs.finalise(self.params)
         body = self.B.finish(out)
-        params, ret_type = self.params, out.type
-        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), replayer(body),
+        all_params, ret_type = self.params, out.type
+        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=all_params, _r=ret_type: (_p, _r), replayer(body),
                                    doc=f"captured from a raw observation log under profile {h.profile_id}",
                                    conformance="derived: capture fold", register=False)
         spec = bind(defn, PROFILE=h.profile_id, WORKLOAD=workload_digest(h.workload))
@@ -1312,21 +1320,3 @@ class _Fold:
                         "request_index": ri, "leaves": self.peers_leaves[ri],
                         "fields": [{k: v for k, v in f.items() if k != "type"} for f in self.peers_fields[ri]]})
         return out
-
-
-def instance_nodes(result: FoldResult, *, spec_prefix: str | None = None, step: int | None = None, layer: int | None = None,
-                   row: int | None = None) -> list[dict]:
-    """Navigation: the instance records matching the filters (spec id prefix, step, layer from the hint, row)."""
-    out = []
-    for m in result.instances:
-        if spec_prefix is not None and not m["spec"].startswith(spec_prefix):
-            continue
-        if step is not None and m["step"] != step:
-            continue
-        if layer is not None and _layer_of(m["hint"]) != layer:
-            continue
-        if row is not None and m["row"] != row:
-            continue
-        out.append(m)
-    return out
-

@@ -18,9 +18,9 @@ anything that may import that (a composition's decoder) may import this.
 module
 
 public import Lean.Data.Json
-public import Flock.Canon
+public import Base.Canon
 meta import Lean.Data.Json
-meta import Flock.Canon
+meta import Base.Canon
 
 @[expose] public section
 set_option backward.privateInPublic true

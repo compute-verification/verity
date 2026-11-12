@@ -13,12 +13,24 @@ import types
 
 import numpy as np
 import pytest
-
-from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF, T, V, build_dir, dense_program
 from verity.circuits.evaluation import evaluate, evaluate_batch
+from verity.definitions.call_scope import specialization
+
+from tests.acquire.call_boundary_programs import (
+    DENSE,
+    EMB,
+    EPS,
+    IL,
+    LP,
+    PF,
+    H,
+    T,
+    V,
+    build_dir,
+    dense_program,
+)
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
-from verity.definitions.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
@@ -260,7 +272,8 @@ def test_a_body_that_reads_a_program_input_or_another_step_is_refused_by_name(tm
 # ------------------------------------------------------------------------------------------------------------------------------ FP8
 @pytest.fixture(scope="module")
 def fp8(tmp_path_factory):
-    from tests.check.test_sampled_replay_fp8 import G, H as HF, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import G, I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import H as HF
 
     inst, woff, wbits = _program_fp8()
     rng = np.random.default_rng(23)
@@ -281,7 +294,9 @@ def _fp8_rows(rng, rows, n, edges):
 
 
 def test_fp8_group_quant_on_edge_words_is_the_ir_and_the_consuming_gemm_replays(fp8):
-    from verity_vllm.check.replay import evaluate as EV, index as IX, opening as OP
+    from verity_vllm.check.replay import evaluate as EV
+    from verity_vllm.check.replay import index as IX
+    from verity_vllm.check.replay import opening as OP
 
     rng = np.random.default_rng(5)
     model = runtime(["model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"])
@@ -419,7 +434,7 @@ def _drive_pair(pair, com, src, order, rows_of=lambda e, rows: rows):
     for e in range(3):
         live = [r for r in order if e < pair.worlds[r].steps]
 
-        def pack(key, last=False):
+        def pack(key, last=False, *, live=live, e=e):
             cs = [(r, c) for r in live for c in pair.worlds[r].at[(e, key)][-1 if last else 0:]]
             return _tensor(np.array([pair.worlds[r].vals[c][:H] for r, c in cs], dtype=np.uint16), torch.bfloat16)
 

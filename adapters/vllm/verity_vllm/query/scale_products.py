@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
 
-from verity.definitions.registry import fp8
-from verity.definitions.registry import fp8_vocab
+from verity.definitions.registry import fp8, fp8_vocab
 from verity.definitions.registry import prims as P
+
+from verity_vllm.query.manifest.format import identity_rows
 
 FAMILY = "scale_products"
 MEMBER = "scale_products"
@@ -44,7 +46,7 @@ POLICY_TEXT = ("scale products: per token row of " + ", ".join(sorted(SHARED)) +
                "F32Mul_v1(x_s[kb], w_s[nb][kb]), nb major -- `<linear module>/scale_products` (family scale_products, f32 [rows, N/G * K/G])")
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
@@ -125,7 +127,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
     """op_path -> {"n_blocks", "k_blocks"} of every `scale_products` identity of a manifest; a site named with two geometries is refused."""
     out: dict[str, dict[str, int]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         g = {"n_blocks": int(r["n_blocks"]), "k_blocks": int(r["k_blocks"])}

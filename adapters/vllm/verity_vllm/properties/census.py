@@ -51,11 +51,18 @@ import time
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
-from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
-from verity_vllm.properties.record import seal
+from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
+from verity_vllm.observe.kernel_trace import (
+    kernels_of_trace_events,
+    load_trace,
+    summarize_kernels,
+)
+from verity_vllm.properties import kernel_allowlist
+from verity_vllm.properties.record import REGISTRY, seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -311,8 +318,6 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
 def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, set[str]], dict[str, set[int]], dict[str, int]]:
     """From one step's resolutions: declared kernel -> {pattern names}, declared kernel -> {root event ids that declare it},
     declared kernel -> number of parts declaring it."""
-    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
-
     pats: dict[str, set[str]] = {}
     events: dict[str, set[int]] = {}
     parts_n: Counter = Counter()
@@ -330,8 +335,6 @@ def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, 
 
 def declaring_events(resolutions: list, roots: list, kernel: str) -> list[dict]:
     """The step's root events whose resolution declares `kernel`: id, op, module and the allocations its declaring parts write."""
-    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
-
     out = []
     for root, r in zip(roots, resolutions):
         parts = [p for p in parts_of(r) if isinstance(p, (Compute, Transparent)) and kernel in p.kernels]
@@ -359,10 +362,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
 
     profile, prof_mod = load_profile(profile_name)
     # protected: a profile cannot allowlist kernels by itself
-    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST
-    from verity_vllm.properties.kernel_allowlist import LAUNCH_COUNT_ALLOWLIST
-    allow = set(FROZEN_ALLOWLIST) | set(proposed_allowlist)
-    profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(FROZEN_ALLOWLIST))
+    allow = set(kernel_allowlist.KERNEL_ALLOWLIST) | set(proposed_allowlist)
+    profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(kernel_allowlist.KERNEL_ALLOWLIST))
     per_step_roots: dict[int, list] = {}
 
     def on_step(se, sr):
@@ -419,8 +420,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                 counts[k]["infrastructure"] = census_count - sum(launched.values())
             if not launched or sum(launched.values()) == len(events[k]):
                 continue
-            if k in LAUNCH_COUNT_ALLOWLIST:
-                counts[k]["exempt"] = LAUNCH_COUNT_ALLOWLIST[k]
+            if k in kernel_allowlist.LAUNCH_COUNT_ALLOWLIST:
+                counts[k]["exempt"] = kernel_allowlist.LAUNCH_COUNT_ALLOWLIST[k]
                 count_exempt[k] += 1
                 continue
             evs = declaring_events(sr.resolutions, per_step_roots[i], k)
@@ -442,8 +443,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                          "steps_present": sorted(row["counts"]), "claims": sorted(row["claims"]),
                          "patterns": sorted(row["patterns"]), "residue": not row["claims"]})
     total_kernels = sum(cs["n_kernels"] for cs in census_steps)
-    rep = {
-        "schema": "verity-capture/census-reconciliation/v2",
+    rep: dict[str, Any] = {
+        "schema": REGISTRY["census"].schema,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
@@ -462,7 +463,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         "steps": steps_out,
         "ambiguous": ambiguous[:64],
         "count_mismatches": count_mismatches,
-        "count_allowlist": {k: LAUNCH_COUNT_ALLOWLIST[k] for k in sorted(count_exempt)},
+        "count_allowlist": {k: kernel_allowlist.LAUNCH_COUNT_ALLOWLIST[k] for k in sorted(count_exempt)},
         "match_table": {k: list(v) for k, v in KERNEL_MATCH.items()},
         "compute_kernels": sorted(COMPUTE_KERNELS),
         "allowlist": sorted(allow), "profile_extra_allowlist": profile_extra_allowlist,
