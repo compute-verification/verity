@@ -191,6 +191,8 @@ def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_na
     vllm = types.ModuleType("vllm")
     vllm.SamplingParams = lambda **kw: NS(**kw)
     monkeypatch.setitem(sys.modules, "vllm", vllm)
+    # the replay's capture of logits rows is not asked for here, so its module (and the records it reads) is not loaded
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.sampler_capture", types.ModuleType("sampler_capture"))
     serving = Engine(held=("a",))
     trace = StepTrace().install(serving)
     serving.add_request("a", {"prompt_token_ids": [1]}, NS(max_tokens=2))
