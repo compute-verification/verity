@@ -269,7 +269,7 @@ def _tree(tmp_path: Path, monkeypatch, files: dict[str, str]) -> Path:
 LAKE = """#!/bin/sh
 case "$1" in
   --version) {version} ;;
-  build) mkdir -p .lake/build/bin && printf 'fv' > .lake/build/bin/flock-verify && {build} ;;
+  build) mkdir -p .lake/build/bin && printf 'fv' > .lake/build/bin/exe && {build} ;;
 esac
 """
 
@@ -280,17 +280,17 @@ esac
 def test_lean_build(tmp_path, monkeypatch, version, build_, status):
     _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version=version, build=build_), "pkg/lean-toolchain": "v4\n"})
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": "pkg/.lake/build/bin/flock-verify"}]})
+                  "outputs": [{"name": "exe", "path": "pkg/.lake/build/bin/exe"}]})
     res = _execute(doc, tmp_path / "work", lean_build.run)
     assert res["status"] == status, res
-    assert (res["outputs"] == {"flock-verify": contract.digest(b"fv")}) == (status == "pass")
+    assert (res["outputs"] == {"exe": contract.digest(b"fv")}) == (status == "pass")
 
 
 #: a build of `pkg` and of `dep`, which it requires by path: each `.lake/build` with a module's olean, trace and object, and pkg's
 #: executable with its trace
 BUILT = {f"{p}/.lake/build/{f}": f"{p} {f}" for p in ("pkg", "dep") for f in ("lib/lean/M.olean", "lib/lean/M.trace",
                                                                               "ir/M.c.o.export")}
-BUILT["pkg/.lake/build/bin/flock-verify.trace"] = "trace"
+BUILT["pkg/.lake/build/bin/exe.trace"] = "trace"
 
 
 def _built(root: Path) -> dict[str, str]:
@@ -304,13 +304,13 @@ def test_lean_build_packs_its_whole_build_but_the_executables(tmp_path, monkeypa
     make = "; ".join(f"mkdir -p {Path('..') / Path(p).parent} && printf '{t}' > {Path('..') / p}" for p, t in BUILT.items())
     root = _tree(tmp_path, monkeypatch, {"bin/lake": LAKE.format(version="exit 0", build=make), "pkg/lean-toolchain": "v4\n"})
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean", "vars": {"builds": "pkg dep"},
-                  "outputs": [{"name": "flock-verify", "path": "pkg/.lake/build/bin/flock-verify"},
+                  "outputs": [{"name": "exe", "path": "pkg/.lake/build/bin/exe"},
                               {"name": lean_build.TREE, "path": build.TREE_PATH}]})
     res = _execute(doc, tmp_path / "work", lean_build.run)
-    assert res["status"] == "pass" and set(res["outputs"]) == {"flock-verify", lean_build.TREE}, res
+    assert res["status"] == "pass" and set(res["outputs"]) == {"exe", lean_build.TREE}, res
     with tarfile.open(tmp_path / "work" / build.TREE_PATH) as tf:
         packed = {m.name: tf.extractfile(m).read().decode() for m in tf}
-    assert packed == BUILT and _built(root) == {**BUILT, "pkg/.lake/build/bin/flock-verify": "fv"}
+    assert packed == BUILT and _built(root) == {**BUILT, "pkg/.lake/build/bin/exe": "fv"}
     assert (root / "pkg" / ".lake" / lean_build.STAMP).read_text() == res["outputs"][lean_build.TREE]
 
 
@@ -512,7 +512,7 @@ a = sys.argv[1:]
 root = Path(__file__).resolve().parents[3]
 built = {p: (root / p).read_text() for p in json.loads(os.environ["BUILT"]) if (root / p).is_file()}
 assert built == json.loads(os.environ["BUILT"]), ("the tests' lake builds find the whole build in the tree", built)
-assert os.access(root / "pkg/.lake/build/bin/flock-verify", os.X_OK)
+assert os.access(root / "pkg/.lake/build/bin/exe", os.X_OK)
 Path(a[a.index("--json") + 1]).write_text(json.dumps([{"suite": "lean/a", "name": "a", "status": "passed", "failed_tests": []}]))
 """
 
@@ -534,17 +534,17 @@ def test_lean_suites_stages_lean_builds_whole_build_in_a_tree_without_it(tmp_pat
     monkeypatch.setattr(lean_build, "ROOT", made)
     bin_ = "pkg/.lake/build/bin"
     doc = _graph({"id": "lean-build:pkg", "kind": "lean-build", "env": "lean",
-                  "outputs": [{"name": "flock-verify", "path": f"{bin_}/flock-verify"},
+                  "outputs": [{"name": "exe", "path": f"{bin_}/exe"},
                               {"name": lean_build.TREE, "path": build.TREE_PATH}]},
                  {"id": SUITES, "kind": "lean-suites", "env": "py", "vars": {"suites": "a", "bin": bin_, "tree": build.TREE_PATH},
-                  "reads": [{"task": "lean-build:pkg", "output": "flock-verify"}, {"task": "lean-build:pkg", "output": lean_build.TREE}],
+                  "reads": [{"task": "lean-build:pkg", "output": "exe"}, {"task": "lean-build:pkg", "output": lean_build.TREE}],
                   "outputs": [{"name": "report", "path": lean_suites.REPORT}], "resources": {"cores": 3, "mem_gb": 5, "disk_gb": 1}})
     archive = tmp_path / "archive"
     lean_build.pack(["pkg", "dep"], set(), archive)
     for n in (1, 2):
         work = tmp_path / f"work{n}"
         (work / bin_).mkdir(parents=True)
-        (work / bin_ / "flock-verify").write_text("fv")
+        (work / bin_ / "exe").write_text("fv")
         (work / build.TREE_PATH).parent.mkdir(parents=True)
         (work / build.TREE_PATH).write_bytes(archive.read_bytes())
         res = _execute(doc, work, lean_suites.run)
@@ -553,7 +553,7 @@ def test_lean_suites_stages_lean_builds_whole_build_in_a_tree_without_it(tmp_pat
             assert not (root / "pkg" / ".lake" / lean_build.STAMP).exists()
             continue
         assert res["status"] == "pass", res
-        assert _built(root) == {**BUILT, f"{bin_}/flock-verify": "fv"}
+        assert _built(root) == {**BUILT, f"{bin_}/exe": "fv"}
         assert calls.read_text().splitlines() == [f"{root / 'pkg'} build"], "check's lake build, once a tree"
         assert (root / "pkg" / ".lake" / lean_build.STAMP).read_text() == contract.file_digest(archive)
 
