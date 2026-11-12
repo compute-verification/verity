@@ -30,6 +30,8 @@ parameter is: its LMS public key, I ‖ T[1], in lower-case hex. `keyRefusal` is
 `siteOf` reads the site as the log's view writes it (`Core.Site.toJson`: `{"links", "locs", "sheets"}`), each location
 and link by the Site's own readers. The sheets are not read, since the reading reads no figure, so the Site it returns
 has none. Nothing here holds the site to an accepted log: its caller does.
+
+`registered.py` is the Python mirror, held to this on the same vectors by `tests/test_network_certifier_registered.py`.
 -/
 
 @[expose] public section
@@ -64,6 +66,10 @@ def siteOf (j : Json) : V Core.Site := do
 /-- The network certifiers' links of `S`, by id, in the Site's order: those that join a network certifier and a host. -/
 def certifierLinks (S : Core.Site) : List String := (S.links.filter fun k => S.Joins k .certifier .host).map (·.id)
 
+/-- What a refusal of a link says a right one is: the network certifiers' links of `S`. -/
+def rightLinks (S : Core.Site) : String :=
+  s!"the network certifiers' links there are [{", ".intercalate (certifierLinks S)}]"
+
 /-- A link's end as a refusal names it: its kind and id, the outside, or an id nothing registers. -/
 def endName (S : Core.Site) (i : String) : String :=
   if i = Core.Site.outside then "the outside" else
@@ -91,12 +97,11 @@ and key and the link's `β`, with `head`, the head of the log `S` was read at, c
 `S`, one that doesn't join a network certifier and a host, and a key that is not the certifier's are each refused,
 naming the network certifiers' links of `S` or the certifier's registered key. -/
 def registered (S : Core.Site) (head link key : String) : V Registered := do
-  let right := s!"the network certifiers' links there are [{", ".intercalate (certifierLinks S)}]"
   let some k := S.links.find? (·.id == link)
-    | throw s!"link {link}: no link of the registered hardware; {right}"
+    | throw s!"link {link}: no link of the registered hardware; {rightLinks S}"
   unless S.Joins k .certifier .host do
     throw s!"link {link}: it joins {endName S k.ends.1} and {endName S k.ends.2}, not a network certifier and a host; \
-      {right}"
+      {rightLinks S}"
   let (c, host) := if S.kind? k.ends.1 = some .certifier then k.ends else (k.ends.2, k.ends.1)
   let some x := S.loc? c | throw s!"link {link}: network certifier {c} is not registered"
   if let some why := keyRefusal x key then throw s!"link {link}: {why}"
@@ -153,8 +158,19 @@ private def links : String := "the network certifiers' links there are [up0, up2
 #guard refusal { site with links := [{ id := "up0", ends := ("cert0", "node9"), β := 1, latency := 1 }] } "up0" key0 ==
   some "link up0: it joins certifier cert0 and node9, which is not registered, not a network certifier and a host; \
     the network certifiers' links there are []"
+-- the outside is the outside, whatever is registered under its name
+#guard refusal { site with locs := site.locs ++ [{ id := outside, kind := .host }],
+                           links := { id := "up5", ends := ("cert0", outside), β := 9, latency := 1 } :: site.links }
+    "up5" key0 ==
+  some s!"link up5: it joins certifier cert0 and the outside, not a network certifier and a host; {links}"
+-- a name the site gives twice: the first link and the first location of it
+#guard (registered { site with locs := site.locs ++ [{ id := "cert0", kind := .certifier, key := key1 }],
+                               links := site.links ++ [{ id := "up0", ends := ("node1", "cert1"), β := 7,
+                                                         latency := 1 }] }
+    "h" "up0" key0).toOption == some ⟨"h", "up0", "node0", "cert0", key0, 100⟩
 -- another certifier's key, and a key no certifier registers
-#guard refusal site "up0" key1 == some s!"link up0: the key {key1} is not network certifier cert0's registered key, {key0}"
+#guard refusal site "up0" key1 ==
+  some s!"link up0: the key {key1} is not network certifier cert0's registered key, {key0}"
 #guard refusal site "up2" "00" == some s!"link up2: the key 00 is not network certifier cert1's registered key, {key1}"
 -- a registered key that is not lower-case hex: the example's own, an upper-case one, an odd one, none
 #guard refusal ⟨[], Example.locs, Example.links⟩ "up0" "k0" ==
