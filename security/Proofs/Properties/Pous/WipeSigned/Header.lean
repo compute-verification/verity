@@ -15,8 +15,8 @@ import Proofs.Properties.Pous.MemoryChallenger.Sort
 /-!
 # The wipe's signed header determines its commitment
 
-`StreamedWipe.header` writes the commitment's fields, how the session ended, the fill's readings, the number of batches
-and the egress as sorted JSON. The sort moves no field by its value (`header_eq`, through `Sort.qsort_map`). Each entry
+`StreamedWipe.header` writes the commitment's fields, how the session ended, the start mark, the fill's readings, the
+number of batches and the egress as sorted JSON. The sort moves no field by its value (`header_eq`, through `Sort.qsort_map`). Each entry
 is its key, a colon and its value, and each value is read back from the value followed by a comma or the closing brace
 (`Sep`): a string or the tiers because what they write is a prefix code (`WipeJson`), a number because its characters
 are digits and a sign. So the entries come back one by one (`entries_inj`), and with them every field (`header_inj`),
@@ -33,23 +33,27 @@ open MemoryChallenger Flock WipeJson
 def keys : List (String × Nat) :=
   [("protocol", 0), ("records_tree", 1), ("server", 2), ("session", 3), ("labels", 4), ("label_bytes", 5), ("k", 6),
    ("batch", 7), ("limit_ns", 8), ("tiers", 9), ("clock", 10), ("ended", 11), ("fill_start_ns", 12),
-   ("fill_end_ns", 13), ("batches", 14), ("egress_bits", 15)]
+   ("fill_end_ns", 13), ("batches", 14), ("egress_bits", 15), ("start_mark", 16)]
 
 /-- The header's values, in `keys`'s places. -/
-def vals (c : StreamedWipe.Commitment) (e : String) (fs fe : Int) (n : Nat) (eg : Int) : List String :=
-  c.headerFields.map (·.2) ++ [pyJsonStr e, toString fs, toString fe, toString n, toString eg]
+def vals (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat) (eg : Int) :
+    List String :=
+  c.headerFields.map (·.2) ++
+    [pyJsonStr e, toString fs, toString fe, toString n, toString eg, pyJsonStr (hexOf sm)]
 
 /-- The order the header writes its keys in, which no field moves. -/
 def order : Array (String × Nat) := keys.toArray.qsort fun x y => decide (x.1 < y.1)
 
-def entry (c : StreamedWipe.Commitment) (e : String) (fs fe : Int) (n : Nat) (eg : Int) (x : String × Nat) : String :=
-  pyJsonStr x.1 ++ ":" ++ (vals c e fs fe n eg)[x.2]!
+def entry (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat) (eg : Int)
+    (x : String × Nat) : String :=
+  pyJsonStr x.1 ++ ":" ++ (vals c e sm fs fe n eg)[x.2]!
 
-theorem header_eq (c : StreamedWipe.Commitment) (e : String) (fs fe : Int) (n : Nat) (eg : Int) :
-    StreamedWipe.header c e fs fe n eg = "{" ++ ",".intercalate (order.toList.map (entry c e fs fe n eg)) ++ "}" := by
+theorem header_eq (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat) (eg : Int) :
+    StreamedWipe.header c e sm fs fe n eg =
+      "{" ++ ",".intercalate (order.toList.map (entry c e sm fs fe n eg)) ++ "}" := by
   have hf : (c.headerFields ++ [("ended", pyJsonStr e), ("fill_start_ns", toString fs), ("fill_end_ns", toString fe),
-      ("batches", toString n), ("egress_bits", toString eg)]).toArray =
-      keys.toArray.map fun x => (x.1, (vals c e fs fe n eg)[x.2]!) := by
+      ("batches", toString n), ("egress_bits", toString eg), ("start_mark", pyJsonStr (hexOf sm))]).toArray =
+      keys.toArray.map fun x => (x.1, (vals c e sm fs fe n eg)[x.2]!) := by
     simp [keys, vals, StreamedWipe.Commitment.headerFields]
   unfold StreamedWipe.header
   simp only
@@ -119,11 +123,12 @@ theorem order_keys {x : String × Nat} (hx : x ∈ order.toList) : x ∈ keys :=
 theorem keys_order {x : String × Nat} (hx : x ∈ keys) : x ∈ order.toList :=
   Array.mem_toList_iff.mpr (Sort.mem_qsort _ (List.mem_toArray.mpr hx))
 
-theorem sep_vals (c c' : StreamedWipe.Commitment) (e e' : String) (fs fs' fe fe' : Int) (n n' : Nat) (eg eg' : Int) :
-    ∀ x ∈ keys, Sep ((vals c e fs fe n eg)[x.2]!).toList ((vals c' e' fs' fe' n' eg')[x.2]!).toList := by
+theorem sep_vals (c c' : StreamedWipe.Commitment) (e e' : String) (sm sm' : ByteArray) (fs fs' fe fe' : Int)
+    (n n' : Nat) (eg eg' : Int) :
+    ∀ x ∈ keys, Sep ((vals c e sm fs fe n eg)[x.2]!).toList ((vals c' e' sm' fs' fe' n' eg')[x.2]!).toList := by
   intro x hx
   simp only [keys, List.mem_cons, List.not_mem_nil, or_false] at hx
-  rcases hx with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h
+  rcases hx with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h <;> subst h
   · exact sep_refl (pyJsonStr StreamedWipe.PROTOCOL).toList
   · exact sep_refl (pyJsonStr StreamedWipe.RECORDS_TREE).toList
   · exact sep_str (hexOf c.server) (hexOf c'.server)
@@ -140,21 +145,23 @@ theorem sep_vals (c c' : StreamedWipe.Commitment) (e e' : String) (fs fs' fe fe'
   · exact sep_int fe fe'
   · exact sep_nat n n'
   · exact sep_int eg eg'
+  · exact sep_str (hexOf sm) (hexOf sm')
 
 /-- The header's values are read back from it. -/
-theorem vals_inj {c c' : StreamedWipe.Commitment} {e e' : String} {fs fs' fe fe' : Int} {n n' : Nat} {eg eg' : Int}
-    (h : StreamedWipe.header c e fs fe n eg = StreamedWipe.header c' e' fs' fe' n' eg') :
-    ∀ x ∈ keys, ((vals c e fs fe n eg)[x.2]!).toList = ((vals c' e' fs' fe' n' eg')[x.2]!).toList := by
+theorem vals_inj {c c' : StreamedWipe.Commitment} {e e' : String} {sm sm' : ByteArray} {fs fs' fe fe' : Int}
+    {n n' : Nat} {eg eg' : Int}
+    (h : StreamedWipe.header c e sm fs fe n eg = StreamedWipe.header c' e' sm' fs' fe' n' eg') :
+    ∀ x ∈ keys, ((vals c e sm fs fe n eg)[x.2]!).toList = ((vals c' e' sm' fs' fe' n' eg')[x.2]!).toList := by
   rw [header_eq, header_eq] at h
   have hq := congrArg String.toList h
   simp only [String.toList_append, String.toList_intercalate, List.map_map] at hq
   have hb : "{".toList = ['{'] := rfl
   have hc : ",".toList = [','] := rfl
   have he : "}".toList = ['}'] := rfl
-  have hfun : ∀ (c : StreamedWipe.Commitment) (e : String) (fs fe : Int) (n : Nat) (eg : Int),
-      (String.toList ∘ entry c e fs fe n eg) =
-        fun x => ((pyJsonStr x.1).toList ++ [':']) ++ ((vals c e fs fe n eg)[x.2]!).toList := by
-    intro c e fs fe n eg
+  have hfun : ∀ (c : StreamedWipe.Commitment) (e : String) (sm : ByteArray) (fs fe : Int) (n : Nat) (eg : Int),
+      (String.toList ∘ entry c e sm fs fe n eg) =
+        fun x => ((pyJsonStr x.1).toList ++ [':']) ++ ((vals c e sm fs fe n eg)[x.2]!).toList := by
+    intro c e sm fs fe n eg
     funext x
     simp only [Function.comp, entry, String.toList_append]
     rfl
@@ -162,10 +169,11 @@ theorem vals_inj {c c' : StreamedWipe.Commitment} {e e' : String} {fs fs' fe fe'
   have hq := List.append_cancel_left hq
   have hne : order.toList ≠ [] := List.ne_nil_of_mem (keys_order (x := ("protocol", 0)) (by simp [keys]))
   have hs : ∀ y ∈ order.toList,
-      Sep ((vals c e fs fe n eg)[y.2]!).toList ((vals c' e' fs' fe' n' eg')[y.2]!).toList :=
-    fun y hy => sep_vals c c' e e' fs fs' fe fe' n n' eg eg' y (order_keys hy)
-  have hv := entries_inj (fun x => (pyJsonStr x.1).toList ++ [':']) (fun x => ((vals c e fs fe n eg)[x.2]!).toList)
-    (fun x => ((vals c' e' fs' fe' n' eg')[x.2]!).toList) order.toList hne
+      Sep ((vals c e sm fs fe n eg)[y.2]!).toList ((vals c' e' sm' fs' fe' n' eg')[y.2]!).toList :=
+    fun y hy => sep_vals c c' e e' sm sm' fs fs' fe fe' n n' eg eg' y (order_keys hy)
+  have hv := entries_inj (fun x => (pyJsonStr x.1).toList ++ [':'])
+    (fun x => ((vals c e sm fs fe n eg)[x.2]!).toList)
+    (fun x => ((vals c' e' sm' fs' fe' n' eg')[x.2]!).toList) order.toList hne
   have hv := hv hs
   have hv := hv hq
   exact fun x hx => hv x (keys_order hx)
@@ -179,11 +187,12 @@ theorem commitment_ext {c c' : StreamedWipe.Commitment} (h1 : c.server = c'.serv
   subst h1 h2 h3 h4 h5 h6 h7
   rfl
 
-/-- **The wipe's header determines its commitment**, how it ended, the fill's readings, its number of batches and its
-egress. -/
-theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {fs fs' fe fe' : Int} {n n' : Nat} {eg eg' : Int}
-    (h : StreamedWipe.header c e fs fe n eg = StreamedWipe.header c' e' fs' fe' n' eg') :
-    c = c' ∧ e = e' ∧ fs = fs' ∧ fe = fe' ∧ n = n' ∧ eg = eg' := by
+/-- **The wipe's header determines its commitment**, how it ended, its start mark, the fill's readings, its number of
+batches and its egress. -/
+theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {sm sm' : ByteArray} {fs fs' fe fe' : Int}
+    {n n' : Nat} {eg eg' : Int}
+    (h : StreamedWipe.header c e sm fs fe n eg = StreamedWipe.header c' e' sm' fs' fe' n' eg') :
+    c = c' ∧ e = e' ∧ sm = sm' ∧ fs = fs' ∧ fe = fe' ∧ n = n' ∧ eg = eg' := by
   have v := vals_inj h
   have v2 := v ("server", 2) (by simp [keys])
   have v3 := v ("session", 3) (by simp [keys])
@@ -197,6 +206,7 @@ theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {fs fs' fe f
   have v13 := v ("fill_end_ns", 13) (by simp [keys])
   have v14 := v ("batches", 14) (by simp [keys])
   have v15 := v ("egress_bits", 15) (by simp [keys])
+  have v16 := v ("start_mark", 16) (by simp [keys])
   change (pyJsonStr (hexOf c.server)).toList = (pyJsonStr (hexOf c'.server)).toList at v2
   change (pyJsonStr (hexOf c.session)).toList = (pyJsonStr (hexOf c'.session)).toList at v3
   change (toString c.params.labels).toList = (toString c'.params.labels).toList at v4
@@ -209,11 +219,13 @@ theorem header_inj {c c' : StreamedWipe.Commitment} {e e' : String} {fs fs' fe f
   change (toString fe).toList = (toString fe').toList at v13
   change (toString n).toList = (toString n').toList at v14
   change (toString eg).toList = (toString eg').toList at v15
+  change (pyJsonStr (hexOf sm)).toList = (pyJsonStr (hexOf sm')).toList at v16
   have hx {a b : ByteArray} (h : (pyJsonStr (hexOf a)).toList = (pyJsonStr (hexOf b)).toList) : a = b :=
     Properties.NetworkRecords.Bytes.hexOf_inj (pyJsonStr_inj (String.toList_inj.mp h))
   have ht : c.params.tiers = c'.params.tiers :=
     (tiers_split (r := []) (r' := []) (by rw [List.append_nil, List.append_nil]; exact v9)).1
   exact ⟨commitment_ext (hx v2) (hx v3) (natStr_inj v4) (natStr_inj v6) (natStr_inj v7) (natStr_inj v8) ht,
-    pyJsonStr_inj (String.toList_inj.mp v11), intStr_inj v12, intStr_inj v13, natStr_inj v14, intStr_inj v15⟩
+    pyJsonStr_inj (String.toList_inj.mp v11), hx v16, intStr_inj v12, intStr_inj v13, natStr_inj v14,
+    intStr_inj v15⟩
 
 end MemoryChallenger.Properties.SecurityProofs.WipeHeader

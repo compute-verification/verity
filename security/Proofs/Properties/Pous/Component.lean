@@ -629,12 +629,12 @@ private def honestCommitment : StreamedWipe.Commitment := ⟨.empty, .empty, ⟨
 /-- Its one batch: batch 0, of index 0, sent when the fill ended and answered at once with no wrong answer. -/
 private def honestBatch : StreamedWipe.Batch := ⟨0, 0, 1, 0, 0, 0, .empty⟩
 
-/-- The session, ended complete under S1's scheme, the key `pk` and the signature `sig`. -/
+/-- The session, ended complete with an empty start mark under S1's scheme, the key `pk` and the signature `sig`. -/
 private def honestSession (pk sig : ByteArray) : StreamedWipe.Signed :=
-  ⟨honestCommitment, StreamedWipe.COMPLETE, 0, 0, #[honestBatch], 0, LMS, pk, sig⟩
+  ⟨honestCommitment, StreamedWipe.COMPLETE, .empty, 0, 0, #[honestBatch], 0, LMS, pk, sig⟩
 
 private theorem honest_message :
-    ∃ m, StreamedWipe.message honestCommitment StreamedWipe.COMPLETE 0 0 #[honestBatch] 0 = .ok m := by
+    ∃ m, StreamedWipe.message honestCommitment StreamedWipe.COMPLETE .empty 0 0 #[honestBatch] 0 = .ok m := by
   unfold StreamedWipe.message StreamedWipe.recordsRoot
   rw [Array.mapM_eq_mapM_toList]
   exact ⟨_, rfl⟩
