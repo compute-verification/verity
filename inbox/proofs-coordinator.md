@@ -99329,3 +99329,68 @@ Mailbox read at 19:59Z (newest section yours of 19:47Z) [run: `git show origin/c
 **Seen and not touched** (other lanes' entries, each alive through another alternative, so no test would catch them): [run] alternatives that match no tracked file inside live entries: `pod_records` (`test_admission_telemetry_of_record.py`, `test_rmsnorm_fused_of_record.py`), `[public]` `benchmarks/one_stage/{served_pearlplus.sh,served_cases.py,inference_only.py,served_compare.py}`, `[needed]` `security/Models`.
 
 **Job 1.** [run] `r20261112-195303-8050` (the binary blobs' printable text over the whole history) had not started at 20:04Z; its result goes in a short entry when it ends.
+
+## PERIODREAD, Thu 12 Nov 20:09Z: `c71f` passed on #9416's marked head; its goal line waits on the queue tool's GitHub limit; PR 1 is still unbuilt (its runs wait for slots); two things read for PR 2 that are yours to rule before I build on them
+
+Your 20:03Z message is read (hook `488485c77b5f`; the mailbox file is unchanged at `52e37590b5`). I can pause.
+
+### #9416, marked at `76aaa72e7799`
+
+- **`r20261112-193808-c71f` passed**: exit 0, 4 suites, 4 passed on the merged head (`benchmarks/one_stage` 644, `benchmarks/prove_path` 155, `repository` 352, `verity-graph` 220) [run]. The body says so [run: `research queue edit 9416`, 19:53Z].
+- **The goal line is written and not yet applied.** The line is `Goal proofs/sampled-audits-sound`, PRF-600's own label [run: Linear's `get_issue`; `research goals show`]. `research queue edit 9416` answered "GraphQL: API rate limit already exceeded for installation ID 171128908" three times between 20:06Z and 20:09Z [run]. I retry at each checkpoint and say when it is in. The head does not move.
+
+### PR 1: `cursor/proofs-prf600-period-ledger-3b1f` at `c9a52b0134b9`, not opened
+
+- **One commit since my last entry:** the package's README names the reader, what it refuses, and that nothing calls it yet but its difftest. No Lean or test line changed since `3b3ae8b023d1` [run: `git diff --stat`].
+- **Nothing of its Lean is compiled yet.** Three runs at `3b3ae8b023d1`:
+  - `r20261112-193837-0e33`, the quick tier: took its slot at 19:52Z and is running. The change reaches 61 suites, since every package that requires SPOT's verifier rebuilds. 1 passed so far, none failed [run: its `stdout.log` at 20:07Z].
+  - `r20261112-193141-2687` and `r20261112-194932-40e7`, the build and the difftest alone, on two machines: both still in line [run: each `slot.json`].
+- **ETA:** the difftest's answer when the first of the three reaches it. I guess 20:30Z to 21:00Z. If the Lean does not compile I fix it on the branch and say so.
+
+### For PR 2, read while waiting. Two are yours before I build on them.
+
+**1. The public file is held to the registration only where it shares no rows** (your ruling 3's stop).
+
+- **What holds it.** The header's scheme, roots, domains, instance count and unit indices are held to the record (`publicHeld`, `Spot/OneStageZk.lean:347-352`). Its circuit, format, statement, classes and schemas are held to the verifier's circuit, and each row's `b ‖ c` to the header's root, by the session's verifier (`Flock/HmRow.lean:1343-1374`, `:1956-1979`) [read].
+- **What I could not find held: a shared-row file's refs.** Such a file's body says which row of a table each instance reads. The loader only bounds a ref by its table's size (`HmRow.lean:1361-1363`). An output row's ref and a shared read's are fixed (`:1947`, `:2156`), and a registered read's rows are opened at the verifier's own positions (`Flock/Registered.lean:1-5`). For an input port that is none of those I found no check [read; I did not read all of Flock's verifier].
+- **Why it matters here and not in one-stage v2.** v2 takes the file's digest as the verifier's, taken before the sample (`a5.py`, `case_v2`'s docstring) [read]. The period's check takes it from the case, after the sample. A file the registration does not fix is then the prover's choice after its coins.
+- **My default: v1 refuses a public file whose header has `shared_rows`, by name (`names`).** A file without them has no refs, and every byte the verifier reads of it is held as above [derived]. If lean knows where the refs are held, the refusal goes.
+- **The same for the registered file.** Flock covers a shared-row file only with the verifier's own registered reads (`Flock/ProvedScope.lean:347-357`) [read]. Those reads name roots, and a row table's root is the window's own (`a5.py:142-150`) [read]. So `proofs.registered` differs by window wherever a window registers a value of its own. v1 holds one registered file for every window (your "everything else is the verifier's `audit`"), so such windows do not pass v1. They are refused, never accepted wrongly [derived].
+
+**The table as it stands** (PR 2's first commit), for one-stage v2's parameters at a window:
+
+| key | at a window it is | held to |
+|---|---|---|
+| `window_root` | the window's root | the ledger: the open of the window's session |
+| `challenger` | the period's own `key` and `label` | the verifier |
+| `log` | `audit`'s log, then the records of the audits before it in the ledger's order | each a registration a signed release log shows sampled |
+| `proofs.public` | the case's | the registration, for a file without shared rows (above) |
+| `seed_salt`, `day`, `declarations` | refused in `audit`: each is one window's, read from its session's log or the ledger, and v1 does not derive them | |
+| every other key, `proofs.circuit` and `proofs.registered` among them | `audit`'s, the same at every window | the verifier |
+
+- **What the last row costs.** One program, query and registered file for every window of the lane. Windows of different sizes, or a window with a registered value of its own, do not pass v1 [derived].
+- **The case's evidence carries no ledger, pins, history or session.** The check puts its own in: the period's commitment, its evidence's pins, the verifier's `main`, and the window's session files it held to the ledger's end. The case gives the record, the public file's digest, the sample's segment, and one-stage's evidence less `coins` [design].
+
+**2. The executable needs one line in the package's lock, and you said no lock entry before PR 3.**
+
+- An executable's entry point is listed under `exempt` in `verity/protocols/spot/verifier/lean/lean-audit.json`, one line each (`Spot.ZkMain`, `Spot.Main`, four more) [read].
+- **My default: PR 2 has no executable.** Its check is served to its test through the difftest's table, as PR 1's reader is. The executable `sampled-proofs-period` and its `exempt` line go in PR 3 with the first lock entry. Say if you want the line in PR 2 instead.
+
+**3. For you to know, not to rule: what the `auditedOpen` split saves.**
+
+- The split takes the period's own read of a window's session off the ledger's check: one check of the ledger for the whole period, where my 17:32Z entry counted one more a window [derived].
+- **It does not take one-stage v2's own two.** v2 checks the ledger once to read the sample's coins and once to read the coin trees (`coinsOf`, `treesOf`, `Spot/OneStageZk.lean:666-677`), inside its own check [read]. So PR 2 costs `2m + 1` ledger checks for `m` audits, not 1.
+- Taking those out means the period's check stops calling one-stage v2 whole, and its statement needs a lemma that the pieces are v2's check. 18 proof files read `drawCoins` and 12 read `checkOneAt` [run: `rg -c`]. **I keep v2 whole in PR 2**, so "an accepting one-stage v2 audit" in the statement is v2's own function, and I name the cost in the body. A later pull request can split it.
+- The one proof that follows the split in PR 2 is `auditedOpen_ok` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean:479-497`), by `mvcgen` over the body [read].
+
+### Not established
+
+- **PR 1's Lean compiles**: not yet.
+- **Whether Flock holds a shared-row file's other refs**: not found, and I did not read all of it.
+- **Whether the audit's own one-member public file shares rows**: not read. If it does, my default in 1 refuses the windows the driver makes today.
+- **The clock**: as my 19:23Z entry; no word needed to go on.
+
+### State
+
+- #9416 marked at `76aaa72e7799`, body's goal line pending. PR 1 at `c9a52b0134b9`, runs `0e33` (running), `2687`, `40e7` (in line).
+- From you: 1 (refuse shared-row public files in v1, or another way), and 2 (the executable in PR 3, or its line in PR 2).
