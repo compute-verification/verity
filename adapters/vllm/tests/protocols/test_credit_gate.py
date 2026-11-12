@@ -1110,6 +1110,27 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     assert PHC.draw_k(layout) == 12
 
 
+def test_the_rehearsals_gate_keeps_each_verb_its_exit_and_its_answer_less_the_secrets(monkeypatch):
+    """`pouw_h1_rehearsal.Gate` runs a verb as its command with the verb's words and answers the JSON the command
+    printed. Its ``log`` keeps the verb, the exit code and the answer without its ``secret`` and ``key``. A command
+    that printed no JSON answers a refusal naming its exit code and what it said."""
+    said = iter([(0, b'{"session": "s0", "secret": "s", "key": "k"}', b""), (2, b"", b"no such peer\n")])
+    ran = []
+
+    def run(argv, capture_output):
+        ran.append(argv)
+        rc, out, err = next(said)
+        return SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+
+    monkeypatch.setattr(RH.subprocess, "run", run)
+    gate = RH.Gate(["gate", "dir"])
+    assert gate("status", "s0") == {"session": "s0", "secret": "s", "key": "k"}
+    assert gate("reserve", "--peer", "p") == {"refused": "exit 2: no such peer\n"}
+    assert ran == [["gate", "dir", "status", "s0"], ["gate", "dir", "reserve", "--peer", "p"]]
+    assert gate.log == [{"verb": ["status", "s0"], "rc": 0, "answer": {"session": "s0"}},
+                        {"verb": ["reserve", "--peer", "p"], "rc": 2, "answer": {"refused": "exit 2: no such peer\n"}}]
+
+
 def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_reports_its_eps():
     """The proof system sizes the K a period's open commits (`draw_k`) for the share of a window's work it
     expects credited (`EXPECTED_CREDIT`, 8/9) at `DRAW_EPS` and δ = 2^-40, through `window.k_prime`'s own inputs, since
