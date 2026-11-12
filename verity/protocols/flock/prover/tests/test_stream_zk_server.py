@@ -71,8 +71,9 @@ WORDS = re.compile(r"[0-9a-f]{32,}")
 def differ(a, b, at: tuple = ()) -> list[str]:
     """Where `b` is not `a` less the seconds and what a session's coins decide, each place by its keys and indices; empty
     when it is. Two floats are two readings of a clock; two strings of one length in lowercase hex, 32 digits or more,
-    are two sessions' field words or digests; a string holding a JSON object is that object. Everything else is equal:
-    keys, lengths, counts, names, verdicts."""
+    are two sessions' field words or digests; two strings that open with a brace each hold a JSON object (a record's
+    `Hello`) and are that object, and one that is no JSON raises. Everything else is equal: keys, lengths, counts, names,
+    verdicts."""
     here = "/".join(map(str, at)) or "(the whole)"
     if isinstance(a, dict) and isinstance(b, dict):
         if a.keys() != b.keys():
@@ -88,10 +89,7 @@ def differ(a, b, at: tuple = ()) -> list[str]:
         if len(a) == len(b) and WORDS.fullmatch(a) and WORDS.fullmatch(b):
             return []
         if a.startswith("{") and b.startswith("{"):
-            try:
-                return differ(json.loads(a), json.loads(b), at)
-            except ValueError:
-                pass
+            return differ(json.loads(a), json.loads(b), at)
     return [] if type(a) is type(b) and a == b else [f"{here}: {a!r} against {b!r}"]
 
 
@@ -130,6 +128,9 @@ def test_differ_takes_a_sessions_own_coins_and_seconds_and_nothing_else():
     assert differ(pair, {**pair, "label": "m0"}) == ["(the whole): ['label'] in one alone"]
     # a short name in hex digits is a name, not a word
     assert differ({"unit": "cafe"}, {"unit": "face"}) == ["unit: 'cafe' against 'face'"]
+    # a string that opens with a brace is read as the JSON it holds, and is not taken as text where it holds none
+    with pytest.raises(ValueError):
+        differ({"hello": "{no JSON"}, {"hello": "{no JSON"})
 
 
 def test_order_reason_names_a_member_whose_first_line_is_before_the_closing_round_of_the_one_before():
