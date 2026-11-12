@@ -716,11 +716,10 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["AUDITOR_KEYS", "CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS",
-           "PREMISE", "PROTOCOL", "REHEARSAL",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
            "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
            "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
            "SessionLogError", "SignedSession", "Signer",
            "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
-           "covering_certificate", "holds", "lms_verify", "message", "records_root", "register", "resolution_of",
-           "trusted_host", "verdict", "verify_coin"]
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
+           "verify_coin"]
