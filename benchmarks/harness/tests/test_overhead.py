@@ -31,6 +31,17 @@ CUBIN = b"stand-in cubin"
 CUBIN_ART = "art:" + "a" * 64
 #: the gpu-lease wait the door puts before its node job, as the run's attempt records it
 LEASE = kit.lease(1, 60)
+#: the kit's stamp of the node the stand-in run holds its lease on
+STAMP = {"card": "NVIDIA H200", "gpus": [{"uuid": UUID, "sm_mhz": 1980, "mem_mhz": 3201}], "driver": "570.1", "cuda": "13.0",
+         "node": "node", "commit": SHA}
+
+
+@pytest.fixture(autouse=True)
+def stamped(monkeypatch):
+    """The node side's result is written under the kit's host stamp, which asks nvidia-smi and git: a stand-in host here."""
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: dict(STAMP))
+
 
 # ---- stand-in timings ---------------------------------------------------------------------------------------------------------
 
@@ -414,6 +425,9 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     result = json.loads((tmp_path / "r20261104-020000-0001" / "result.json").read_text())
     assert result["validation"]["status"] == "passed" and result["validation"]["evidence"] == ["out/points.json"]
     assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.l}
+    for m in result["measurements"]:
+        assert (m["unit"], m["run"], m["commit"], m["host"]) == ("m", "r20261104-020000-0001", SHA, STAMP)
+        assert m["inputs"] == ["out/points.json"] and m["ci95"] is None and m["verdict"] is None
 
 
 def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
@@ -485,7 +499,13 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     assert not list((run_dir / "out").glob("*.nsys-rep")) and not list((run_dir / "out").glob("*.sqlite"))
     result = json.loads((run_dir / "result.json").read_text())
     assert result["validation"]["status"] == "passed"
-    assert {m["name"] for m in result["measurements"]} == {"gamma_C", "gamma_L"}
+    written = {m["name"]: m for m in result["measurements"]}
+    assert set(written) == {"gamma_C", "gamma_L"}
+    for name, p in doc["points"].items():
+        m = written[f"gamma_{name}"]
+        assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
+        assert (m["target"], m["verdict"], m["inputs"]) == (O.GAMMA_CAP, "within target", ["out/overhead.json"])
+        assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
 def test_stocks_gamma_is_the_aa_control_of_its_twinned_kernel_against_its_original(tmp_path):
