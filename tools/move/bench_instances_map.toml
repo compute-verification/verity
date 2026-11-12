@@ -1,0 +1,50 @@
+# The bench instances' move: what `tools/move/layout.py --map tools/move/bench_instances_map.toml` moves and rewrites.
+#
+# `fixtures/bench-instances/` holds the numerical bench's instances, which `verity_numerical.bench.instances` reads (its
+# `DEFAULT_ROOT`), with the tensor-core probe and Flock's pod scripts. A file goes beside its reader, so the directory
+# goes into the numerical bench, as `benchmarks/numerical/bench-instances/`.
+#
+# - The directory moves whole and laid out as it was. It holds no Python package, so no module is renamed.
+# - What changes is each path to the directory: its readers' defaults, the pod scripts, the census's input sets, the
+#   fixture registry's rows and the lists that name it.
+# - No Lean module, lakefile or manifest names it.
+# - No directory is split, so the map has no [split] table and reads the same on any base.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It runs after
+# `config_map.toml`, on the commit that map makes, so its [roots] have `verity_config` at `tools/config/`.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"fixtures/bench-instances/" = "benchmarks/numerical/bench-instances/"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
+# directory's, so a file only a branch has under it is carried
+paths = ["fixtures/bench-instances/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
+# archive), files whose bytes a digest pins, and Lean sources. A module's source is in its build key, so a path
+# rewritten in a comment would compile the module again, and every module that imports it. A `.lean` file that writes
+# a path outside a comment is still rewritten (`include`); lakefiles and Lake manifests are too.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/definitions/silicon/captures/**",
+           "verity/definitions/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "adapters/vllm/tools/migrate/superseded_quarantine.py",
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+           "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean"]
+
+[modules]
+# none: `layout.py --modules` derives no rename, since no Python module is under the directory
