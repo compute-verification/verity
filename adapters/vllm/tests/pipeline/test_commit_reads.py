@@ -150,25 +150,27 @@ def test_the_generated_kernels_are_the_ones_the_versions_compilation_holds() -> 
 
 
 NO_ROWS = "no per-step request rows (single request or none recorded): declared arrive_steps"
+#: the fields of the engine's schedule of record that say where each request ran and whether the declaration stands
+PLACEMENT = ("declared_arrive_steps", "observed_arrive_steps", "equal_declared", "all_equal_declared", "scheduled_steps", "contiguous",
+             "complete", "use", "why")
 
 
-def schedule(request_rows: Any, declared: dict[str, int], caps: dict[str, int]) -> Record:
-    """The engine's schedule of record less its `basis`, the sentence that says what it is read from."""
-    of_record = commit.engine_schedule(request_rows, declared, caps)
-    assert of_record.pop("basis").startswith("engine schedule of record: per-committed-step request rows")
-    return of_record
+def placement(request_rows: Any, declared: dict[str, int], expected_steps: dict[str, int]) -> Record:
+    """The engine's schedule of record for requests declared to arrive at `declared` and expected to run `expected_steps`."""
+    of_record = commit.engine_schedule(request_rows, declared, expected_steps)
+    return {field: of_record[field] for field in PLACEMENT}
 
 
 @pytest.mark.parametrize("request_rows", [None, {}])
 def test_a_collector_that_recorded_no_request_rows_leaves_the_declared_schedule(request_rows: Any) -> None:
-    assert schedule(request_rows, {"r0": 0}, {"r0": 32}) == {
+    assert placement(request_rows, {"r0": 0}, {"r0": 32}) == {
         "declared_arrive_steps": {"r0": 0}, "observed_arrive_steps": {}, "equal_declared": None, "all_equal_declared": False,
-        "scheduled_steps": {}, "contiguous": None, "steps_equal_caps": False, "complete": False, "use": "declared", "why": NO_ROWS}
+        "scheduled_steps": {}, "contiguous": None, "complete": False, "use": "declared", "why": NO_ROWS}
 
 
 def test_the_schedule_of_record_places_each_request_at_the_first_committed_step_it_ran_in() -> None:
     request_rows = {2: [("r1", 0, 1)], 0: [("r0", 0, 1)], 1: [("r0", 0, 1), ("r1", 1, 2)]}
-    assert schedule(request_rows, {"r0": 0, "r1": 5}, {"r0": 2, "r1": 2}) == {
+    assert placement(request_rows, {"r0": 0, "r1": 5}, {"r0": 2, "r1": 2}) == {
         "declared_arrive_steps": {"r0": 0, "r1": 5}, "observed_arrive_steps": {"r0": 0, "r1": 1},
         "equal_declared": {"r0": True, "r1": False}, "all_equal_declared": False, "scheduled_steps": {"r0": 2, "r1": 2},
-        "contiguous": True, "steps_equal_caps": True, "complete": True, "use": "observed", "why": None}
+        "contiguous": True, "complete": True, "use": "observed", "why": None}
