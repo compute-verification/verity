@@ -27,8 +27,9 @@ Lean-change test (`queue.lean_change`) of a change that compiles (a lock's alone
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze, a move `main` landed that it lacks whose retired
-names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`), which a
-candidate's drop for a member no longer
+names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`, or a held PR's
+head it holds, directly or through others, its owner told once a head and held head which and what releases it:
+`queue.held_below`, `Loop._behind_held`), which a candidate's drop for a member no longer
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
 them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
@@ -221,7 +222,7 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, listed, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
-from .queue import Retired, lacked_moves, lacks_why
+from .queue import Retired, held_below, held_waits, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -652,8 +653,8 @@ class Past:
             "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
     def told(self, kind: str = "skip") -> set[str]:
-        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), or a move a head lacks
-        (`lacks`, `Loop._lacking`)."""
+        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), a move a head lacks
+        (`lacks`, `Loop._lacking`), or a held head a head waits on (`behind_held`, `Loop._behind_held`)."""
         def heads(r: dict) -> set[str]:
             return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
 
@@ -952,6 +953,9 @@ class World:
         self.held_out: dict[int, tuple[str, str, str]] = {}
         #: of those left out for a move they lack whose names their change names: {number: (head, the last such move, why)}
         self.lacking: dict[int, tuple[str, str, str]] = {}
+        #: of those, the marked ones holding a held PR's head, directly or through others (`queue.held_below`): {number: (head,
+        #: the held head, why)}
+        self.behind_held: dict[int, tuple[str, str, str]] = {}
         #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
         #: regenerated of each move PR: its map, tip, commit and `move_check.py --json` report} (`_move`)
         self.on_mark: set[int] = set()
@@ -1108,6 +1112,12 @@ class World:
                                                  + (f": {left[a][1]}" if a in left else ""))) for n, a in out.items())
             cause.update((n, "stacked") for n in out)
             chosen = {n: v for n, v in chosen.items() if n not in out}
+        self.behind_held = {}
+        for n in sorted(left):
+            if n in entries and (cause.get(n) == "stacked" or entries[n].why.startswith("contains")) and (
+                    below := held_below(entries, n, lambda a: why[a] if cause.get(a) == "held" else None)):
+                self.behind_held[n] = (entries[n].pr.head, entries[below[0]].pr.head,
+                                       held_waits(below[0], entries[below[0]].pr.head, below[1]))
         while more := {n for n, e in entries.items() if n not in chosen and n not in pulled and pulled & set(e.after)}:
             pulled |= more
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
@@ -2699,7 +2709,7 @@ class Loop:
         steps.lap("notices")
         new += self._followed(t)
         steps.lap("followed")
-        new += self._conflicts(t) + self._lacking(t) + self._riding(t) + self._launched(t)
+        new += self._conflicts(t) + self._lacking(t) + self._behind_held(t) + self._riding(t) + self._launched(t)
         steps.lap("notices")
         new += self._moved(t)
         steps.lap("on_main")
@@ -2733,11 +2743,6 @@ class Loop:
                     self.write(rec)
                     logged.append(rec)
                 steps.lap("on_main")
-        if not stopped and self.left_out is not None:
-            for rec in self._leaves(t):
-                self.write(rec)
-                logged.append(rec)
-            steps.lap("leave")
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
@@ -2752,6 +2757,11 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
+        if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
+            for rec in self._leaves(t):
+                self.write(rec)
+                logged.append(rec)
+            steps.lap("leave")
         return logged
 
     def keep(self, t: Tick) -> None:
@@ -3657,22 +3667,35 @@ class Loop:
 
     def _lacking(self, t: Tick) -> list[dict]:
         """Tell the owner of each PR `ready` left out for a move it lacks whose retired names its own change names
-        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`Past.told`, as a skip
-        is told).  A post that fails is told again by the next tick; with --shadow it is only logged."""
-        recs, told = [], t.past.told("lacks")
-        for n, (head, move, why) in sorted(self.world.lacking.items()):
-            if f"{head}@{move}" in told:
+        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`_tell_once`)."""
+        return self._tell_once(t, "lacks", "of the move it lacks", {
+            n: (head, move, why, f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` "
+                                 f"{t.main[:12]}: {why} (`research queue ready {n}`)")
+            for n, (head, move, why) in self.world.lacking.items()})
+
+    def _behind_held(self, t: Tick) -> list[dict]:
+        """Tell the owner of each marked PR `ready` left out for holding a held PR's head (`World.behind_held`) that head and
+        what releases it: once a head and held head, the base (`_tell_once`)."""
+        return self._tell_once(t, "behind_held", "that it waits on a held head", {
+            n: (head, held, why, f"#{n} at {head[:12]} goes into no candidate on `main` {t.main[:12]}: {why}")
+            for n, (head, held, why) in self.world.behind_held.items()})
+
+    def _tell_once(self, t: Tick, kind: str, what: str, notes: dict[int, tuple[str, str, str, str]]) -> list[dict]:
+        """Tell each PR's owner its note of ``notes`` ({number: (head, base, why, text)}) once a head and base (`Past.told`, as
+        a skip is told), logged as ``kind``.  A post that fails is told again by the next tick; with --shadow it is only
+        logged."""
+        recs, told = [], t.past.told(kind)
+        for n, (head, base, why, text) in sorted(notes.items()):
+            if f"{head}@{base}" in told:
                 continue
-            text = (f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` {t.main[:12]}: {why} "
-                    f"(`research queue ready {n}`)")
-            line = dict(base=move, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
+            line = dict(base=base, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
             if self.shadow:
-                recs.append(self.record(t, "lacks", **line, done=False))
-            elif not self._say(t, "lacks", text, to, base=move, heads=[head], number=n):
-                recs.append(self.record(t, "lacks", **line, done=False, posted=False,
-                                        error=f"telling #{n}'s owner of the move it lacks failed: the next tick tells again"))
+                recs.append(self.record(t, kind, **line, done=False))
+            elif not self._say(t, kind, text, to, base=base, heads=[head], number=n):
+                recs.append(self.record(t, kind, **line, done=False, posted=False,
+                                        error=f"telling #{n}'s owner {what} failed: the next tick tells again"))
             else:
-                recs.append(self.record(t, "lacks", **line, done=True, posted=True))
+                recs.append(self.record(t, kind, **line, done=True, posted=True))
         return recs
 
     def _riding(self, t: Tick) -> list[dict]:

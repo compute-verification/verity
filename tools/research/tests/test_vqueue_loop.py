@@ -1980,6 +1980,52 @@ def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_an
     assert leaves()[3:] == [(3, [h3b], "held")]
 
 
+def test_a_tick_whose_leave_lines_fail_has_still_written_its_state_file(env):
+    """The `leave` lines come last: a `left_out` that raises fails the tick only once its actions are logged and its state
+    file written (`Loop.keep`)."""
+    env.put(1, {"a.txt": "1\n"})
+
+    def broken(s: Snapshot) -> list:
+        raise RuntimeError("left_out broke")
+
+    loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"), left_out=broken)
+    with pytest.raises(RuntimeError, match="left_out broke"):
+        loop.tick()
+    assert json.loads(state.read_text())["tick"] == 1 and _acts(env.lines()) == ["build"], env.lines()
+
+
+@pytest.mark.parametrize("label", [False, True])
+def test_a_pr_left_out_for_holding_a_held_head_tells_its_owner_once_a_head_which_head_and_what_releases_it(env, label):
+    """A marked PR holding a held PR's head, directly or through another PR, goes into no candidate (`World.ready`): its owner
+    is told once a head and held head the head it waits on and what releases it (`Loop._behind_held`), and `research queue
+    status` says the same.  The hold is a reviewer's, or a `hold` label, which keeps the held PR from being admitted."""
+    env.o.gh.put(1, one := env.o.change({"a.txt": "1\n"}), labels=("hold",) if label else ())
+    env.o.gh.put(2, two := env.o.change({"b.txt": "2\n"}, base=one))
+    env.o.gh.put(3, three := env.o.change({"c.txt": "3\n"}, base=two))
+    if label:
+        hold, release = "held (`hold` label)", "the `hold` label comes off #1"
+    else:
+        env.labels.held.add(1)
+        hold, release = ("held by reviewer (no reason)",
+                         "#1's holder gives that head a `land` verdict (`research queue review 1 --land`)")
+    why = (f"it waits on #1's head {one[:12]}, which is {hold}: it is taken once {release}, or once it no longer holds "
+           "#1's commits")
+    loop = env.loop(lambda s: [])
+    loop.tick()
+    told = [r for r in env.lines() if r["action"] == "behind_held"]
+    assert [(r["number"], r["heads"], r["base"], r["why"]) for r in told] == [
+        (2, [two], one, why), (3, [three], one, why)], told
+    assert told[0]["text"] == f"#2 at {two[:12]} goes into no candidate on `main` {env.main()[:12]}: {why}"
+    assert env.posts == [f"{' '.join(r['to'])} vqueue: {r['text']}" for r in told], env.posts
+    loop.tick()
+    assert len(env.posts) == 2, env.posts
+    env.o.gh.put(3, three_b := env.o.change({"c.txt": "3b\n"}, base=two))
+    loop.tick()
+    assert [(r["number"], r["heads"]) for r in env.lines() if r["action"] == "behind_held"][2:] == [(3, [three_b])]
+    status = loop.world.q.status(loop=True, reviews=env.labels.reviews)
+    assert {n: (status[n].state, status[n].why) for n in (2, 3)} == {2: ("waiting", why), 3: ("waiting", why)}, status
+
+
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
