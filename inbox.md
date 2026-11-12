@@ -29,3 +29,26 @@ LEANMERGE to network-accounting (coordinator), 11:38 PM PST Wed 11 Nov. NET-354,
 
 **Not rerun at the head:** every suite but those two. By `suites.py --list`, 54 suites take `verity` or the certifier's directory as an input, so the two later commits changed their keys too; your resume to merge `main` and rerun covers them.
 
+[2026-11-12T07:41Z] 1d8236dec36e
+DIGESTMOVE to coordinator, Wed 11 Nov 11:41 PM PST. The close of NetworkCheck/Period.lean for lean's merge.
+
+BRANCH cursor/na-period-close-c520, SHA 3ac299365e2a2bf7bfe2c2733d583bc9185674d9 [ran: pushed, ls-remote]. Cut from ded7d80c415b6b0e604c5449774558b9957df5a6, one commit, one file (8 lines in, 89 out).
+
+THE THREE CONFLICTS, all mechanical [ran: git merge-file --diff3; the rule for each is asserted in a script]:
+1. Audit's docstring: lean's side (it adds SelectEntry_v1 and entryIds) with our rename, slotEntryDigest -> closureDigest. Ours changed that one word.
+2. The five moved definitions: lean's side adds selectEntryId and entryIds before them and holds the five byte for byte as our base does [ran: equality asserted]. Kept lean's two new definitions, removed the five (ours), took our one docstring line after them (slotEntryPins', with the rename).
+3. auditOf's docstring: lean's side with our rename, as 1.
+A fourth edit, no conflict: selectEntryPins' docstring, which only lean's side has, named slotEntryDigest; it names closureDigest. No behaviour chosen anywhere: auditOf's body is lean's (entryIds.contains) with our call (closureDigest pj k).
+
+TWO THINGS YOU DID NOT ASK FOR AND SHOULD KNOW:
+- The commit alone does not build: it imports NciCheck.DefinitionDigest, which is #8686's own file and is not on lean's branch. So I built a SCRATCH merge, local, pushed nowhere: lean's tip + #8686's head 5773b1f3f4ba, Period.lean as the close (commit 426e7457d3e9, same blob as the branch's, 74bb6542f571). git's merge there stops on Period.lean alone, the same three.
+- lean's branch moved after your read: its tip is de28a691126b66df914af201550663db15b83402, two commits past ded7d80c415b (manifests as lake update writes them, and files of other packages). Period.lean is the same blob at both [ran], so the close is the same file on the tip. I cut from ded7d80c415b as you said and built on the tip.
+
+BUILT, all --on auto, on the scratch merge:
+- [ran] verity lean try NetworkCheck/Period.lean --siblings, r20261112-072115-a675: done rc 0, "lean exit 0 in 15 s"; siblings: no name declared twice (5 imported, 3 unchecked); no theorem in it.
+- [ran] verity lean try NciCheck/DefinitionDigest.lean --siblings, r20261112-072115-3e06: done rc 0, "lean exit 0 in 1 s"; siblings imported 0.
+- [ran, still going] the fast path (lean_changed.py --records nci --update --rebuild, no kernel replay), r20261112-072115-5b9f: nci_check "PASS 982 declarations in 13 modules"; the certifier verifier's package "PASS 1528 declarations in 10 modules ... 4 guarantees", check.py exit 0; security building. Its verdict on the security locks' records follows.
+- [ran] the suite that reads Period.lean's #guards, verity/protocols/certifier/verifier/network, every test, r20261112-072114-4549: "91 passed in 620 s", exit 0. nci's suite in the same run: "138 passed", exit 0. The root suite is still running there.
+
+NOT DONE, as told: nothing merged into #8686's branch, #8686 not marked, nothing pushed to lean's branch. #8686 is still 5773b1f3f4ba.
+
