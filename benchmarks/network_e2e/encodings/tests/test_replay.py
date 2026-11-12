@@ -427,6 +427,52 @@ def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
         R.kept_bits(other)
 
 
+def _second_serve(recs: list[dict], after: int, empty: int) -> list[dict]:
+    """`recs`' serve once more by the same engine, from step `after` on and `empty` empty schedules after its last step:
+    its requests renamed, its steps and arrivals moved."""
+    f = "{}-again".format
+    out = []
+    for r in recs[1:]:
+        if r["kind"] == "arrive":
+            out.append(r | {"request": f(r["request"]), "before_step": r["before_step"] + after,
+                            "after_empty": (r.get("after_empty") or 0) + (0 if r["before_step"] else empty)})
+        else:
+            assert r["kind"] == "step"
+            out.append(r | {"step": r["step"] + after, "rows": [[f(i), a, n] for i, a, n in r["rows"]]}
+                       | {k: [f(i) for i in r[k]] for k in ("new", "resumed", "preempted")}
+                       | {k: {f(i): v for i, v in r[k].items()} for k in ("cache_hit", "emitted", "drafts", "finished")})
+    return out
+
+
+@pytest.mark.parametrize("name", ["async-draft3-prefix-cache", "sync-draft5", "async-draft1-light"])
+def test_a_span_of_a_longer_serve_is_a_trace_of_its_own(name):
+    """One load of a serve that ran others before it, begun with the engine drained and its prefix cache reset: its
+    records alone, from step 0, load as the serve of those requests and the replay reproduces them. The empty schedules
+    the engine made at the end of the load before are not the span's."""
+    recs = R.records(DRAFT / f"{name}.jsonl")
+    tok = DRAFT / f"{name}.tokens.json"
+    toks = {f"{i}-again": v for i, v in json.loads(tok.read_text()).items()} if tok.exists() else None
+    both = recs + _second_serve(recs, sum(r["kind"] == "step" for r in recs), 2)
+    whole, t = trace(name, DRAFT), R.load_step_trace(R.span(both, lambda i: i.endswith("-again")), tokens=toks)
+    assert t.ids == [f"{i}-again" for i in whole.ids]
+    assert (t.requests, t.before_step, t.passed, t.emitted) == (whole.requests, whole.before_step, whole.passed, whole.emitted)
+    assert [(s.rows, s.drafts, s.cache_hit) for s in t.steps] == [(s.rows, s.drafts, s.cache_hit) for s in whole.steps]
+    assert R.kept_bits(t) == R.kept_bits(whole)
+    first = R.load_step_trace(R.span(both, lambda i: not i.endswith("-again")))
+    assert (first.ids, first.passed, [s.rows for s in first.steps]) == (whole.ids, whole.passed, [s.rows for s in whole.steps])
+
+
+def test_a_span_that_is_not_a_serve_of_its_own_is_refused():
+    recs = R.records(DRAFT / "sync-draft5.jsonl")
+    ids = [r["request"] for r in recs if r["kind"] == "arrive"]
+    with pytest.raises(ValueError, match="none of the trace's arrivals"):
+        R.span(recs, lambda i: False)
+    with pytest.raises(ValueError, match="holds requests outside the span"):
+        R.span(recs, lambda i: i in ids[:20])
+    with pytest.raises(ValueError, match="steps are not"):
+        R.span([r for r in recs if (r["kind"], r.get("step")) != ("step", 3)], lambda i: True)
+
+
 def test_a_draft_needs_what_each_row_kept():
     """The kept counts are an input the replay checks: without them, with a count over K, with counts that are not the
     request's outputs, and with a count over the drafts the row it schedules there carries, it refuses by name."""

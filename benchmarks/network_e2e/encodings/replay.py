@@ -226,6 +226,33 @@ def read_step_trace(path: str | Path, **kw: Any) -> Trace:
     return load_step_trace(records(path), **kw)
 
 
+def span(records: Iterable[dict[str, Any]], mine: Callable[[str], bool]) -> list[dict[str, Any]]:
+    """The records of the requests `mine` picks out of a longer serve's step trace, as a trace of their own from step 0:
+    for a span the engine began with nothing running or in flight and an empty prefix cache, the state the replay starts
+    from. The empty schedules the engine made before the span's first arrival are the serve's before it, so the arrivals
+    before the span's first step count theirs from the first arrival's. Refuses a span whose steps are not consecutive or
+    hold another request's rows: such a span is not a serve of its own."""
+    recs = list(records)
+    arrive = [r for r in recs[1:] if r["kind"] == "arrive" and mine(r["request"])]
+    if not arrive:
+        raise ValueError("none of the trace's arrivals is the span's")
+    first, empty = int(arrive[0]["before_step"]), int(arrive[0].get("after_empty") or 0)
+    steps = [r for r in recs[1:] if r["kind"] == "step" and any(mine(row[0]) for row in r["rows"])]
+    if [r["step"] for r in steps] != list(range(first, first + len(steps))):
+        raise ValueError(f"the span's steps are not {first}..{first + len(steps) - 1} each once")
+    for r in steps:
+        named = [row[0] for row in r["rows"]] + [i for k in ("emitted", "finished", "preempted") for i in r.get(k) or ()]
+        if not all(map(mine, named)):
+            raise ValueError(f"step {r['step']} holds requests outside the span")
+    out = recs[:1]
+    for r in arrive:
+        b = int(r["before_step"]) - first
+        out.append({**r, "before_step": b, "after_empty": int(r.get("after_empty") or 0) - (0 if b else empty)})
+    out += [{**r, "step": r["step"] - first} for r in steps]
+    out += [{**r, "after_step": r["after_step"] - first} for r in recs[1:] if r["kind"] == "finish" and mine(r["request"])]
+    return out
+
+
 def _jsonl(path: Path) -> list[dict[str, Any]]:
     lines = path.read_text(encoding="utf-8").split("\n")
     return [json.loads(line) for line in lines[:-1] if line.strip()]
