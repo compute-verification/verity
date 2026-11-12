@@ -109807,3 +109807,30 @@ None of my own statements is left unproved. What remains is compiling, and the p
 LEAN SLOT WAIT OVER TEN MINUTES: try `r20261112-233803-98af` has waited since 23:38Z, with 24 checks ahead at 23:53Z [run]. My branch `cursor/proofs-accepts-7d08` is at `168b38b1cc`, pushed, and nothing is unpushed. The one commit since my 23:51Z entry fixes a bound in `ReadsOnly.lean` that omega would not have matched: it now states the session bound at `off`, not `sessOff`. I end my turn while the try waits. When it reports I fix its errors and launch one try of `ReadsOnly.lean`, which builds all four files. Expected verdict of the try in line: about 01:00Z to 01:30Z, if the line keeps its pace [guess].
 
 **STOP RULE.** Nothing. **NEEDS.** As at 23:51Z. **To post.** Nothing. **Not established.** Nothing has compiled yet.
+
+## PERIODREAD, Thu 12 Nov 23:54Z: a Lean slot on vy-nebius-2 made my try wait past ten minutes (20, then it timed out unrun); the six retired terms of #9416 are fixed in #9546 at `ee245a981c3e`; I am not only waiting, and I can pause on your word
+
+**Lean slot, more than ten minutes (your 23:07Z rule).**
+- [run] Try `r20261112-231735-2771` (PR 3's `PeriodLedger.lean`): launched 23:17Z, took a check slot at about 23:33Z, then waited for a Lean slot ("all 4 Lean audit slot(s) of pool build are taken") until the try's own limit: exit 79 at 1206 s wall, nothing elaborated.
+- [run] The four Lean slots were held by this lane's runs, by the try's own log: records runs `7cde` (since 23:10Z), `2fdd` and `5b1a`, and the build `c68c`.
+- [run] `r20261112-231708-ddb2` (#9537's records run) started at about 23:37Z and has waited for a Lean slot since 23:47Z: 0 ahead, 4 of 4 held (status at 23:51Z).
+
+**The six retired terms (your 23:43Z, point 1): #9546, unmarked, `Lane proofs`.**
+- Head `ee245a981c3ef02869425dd08fdd3472fbed02d7`, on `cursor/proofs-a5-case-retired-terms-6d1c`, from `main` at `7e70df68bd`. A pull request of its own: #9537 does not touch the file. [run: `git diff --name-only`]
+- [run: the lint's `sites` on the file at `4175265019` and its parent] The six are lines 132, 151, 179, 188 and 196, which spell the challenger's family as a string literal, and line 148, a docstring with SPOT's older name. The file held 6 sites before #9416 and 12 after; its entry in the lint's list said 11.
+- [read: `a5.py:1213`, `:1225`, `a5_coins.py:78`] a5 itself passes its constant `a5_coins.FAMILY` there, so the five now read `a5.AC.FAMILY`; the docstring says SPOT. The file's entry in `tests/lint/allowlists/repo_retired_terms.json` falls from 11 to 6, that one line only (as `a5ff81a399` did for another file).
+- [run, on the VM, one file each] The file's 20 tests pass; the lint counts 6 found, 6 allowed; `test_no_new_retired_terms` no longer names the file; `ruff check` clean.
+- [run] Its quick tier is `r20261112-235319-090e` on vy-nebius-2, in line. No Lean in it, so no records run. Its ready line follows when the tier ends.
+
+**Your point 2: I am not only waiting.** `ddb2` waits as above; `a005` (PR 2's quick tier) and `e334` (PR 2's build and difftests) started at about 23:37Z and run. What I do meanwhile needs no node: I am writing PR 4's proofs file, `security/Proofs/Properties/Spot/Period.lean` (`LedgerMeans`, `AcceptMeans`, `CommittedOnce`), none of which exists yet. Its first compile will be one run that builds four files on one Lean slot (PR 3's two statement files at their new head, `Window.lean`'s refactor, the proofs file), not four tries.
+**I can pause: yes.** If the place is worth more to the two-round proof, say so and I stop at once. Everything is pushed except what the next line names.
+
+**Your 23:52Z rule (a resumed worker starts on a new machine).** It is what I found at 23:15Z: worktrees, run scripts and pull request bodies were gone, and I rebuilt them from the transcript. From now my scratch (bodies, run scripts, the proof plan) is on `cursor/proofs-prf600-periodread-scratch-0b7e`, a branch no pull request opens. Unpushed at this minute: that branch's first commit, which I push next.
+
+**One question.** The Lean toolchain and its source are on the VM (`~/.elan/toolchains/leanprover--lean4---v4.34.0`). I read the source for lemma names [read], and run nothing. May I run `lean` on the VM on a scratch file that imports only Lean's own library (no project file, no Mathlib, no lake; seconds, far under 1 GB)? With the Lean slots full it would let me settle the list and array helper lemmas between node runs. Until you say yes I do not.
+
+**Heads.** #9416 merged. #9537 at `44b84839217d`, unmarked, waiting on `ddb2`. PR 2 `cursor/proofs-prf600-period-audit-9c4e` at `5dacc95eab9e`, not opened. PR 3 `…-statements-e2a7` at `2df52fa474`, not opened. PR 4 `…-proofs-4c9a` at `57f9c95484`. #9546 at `ee245a981c3e`.
+
+**Not established.** Nothing of PR 3's two statement files has elaborated at its new head, and nothing of PR 4 (`line_of_device` included) has been built. #9546's suites beyond the one file. Whether `ddb2` moves any record. `CommittedOnce`'s hour: unchanged, and I say at Fri 04:00Z which it is.
+
+Mailbox read at `1f0d4a143d` (23:43:55Z), and your 23:52Z hook message `428fb6ee31f6`.
