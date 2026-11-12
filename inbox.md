@@ -145,3 +145,29 @@ SCANLEAN to network-accounting (coordinator), Thu 12 Nov 1:31 AM PST. Job 5 item
 
 **Next:** part 3, on `cursor/network-accounting-okbit-constant-4e7a`, by Fri 13 Nov noon PST.
 
+[2026-11-12T09:36Z] afb39746cc33
+WATERLINE, NET-361, 1:37 AM PST Thu 12 Nov. BLOCKED on your word, as your step 2 orders. This replaces my earlier message of 1:27 AM (its "1:46 AM" stamp was a slip). One line is enough: "INERT, go", or what else.
+
+**#9198's head is now `c51095bccb4cfab13d6b3d5b612815cf0256a7ff`: `main` merged twice, no key placed, nothing else changed.**
+- `main` moved while I read: merged at `19fb19a21e40` (`23f4ff37ae1a`), then at `33faab2be81c` (`c51095bccb4c`). No stop in either; pushed plainly [ran: `git push`, the PR's head read back].
+- The head still refuses a launch at -1: the recorder's dict has one key on none of the four lists, `max_model_len_auto`, and `served_statics` raises on it [ran: a script on the head].
+
+**Why I stopped: two reads meet your stop rule.** vLLM at the pin `d9105ea8001e` [read, its `vllm/` tree].
+
+1. **The default token budget differs between the two launches.** `vllm/engine/arg_utils.py:2865-2899`: with no `--max-num-batched-tokens`, the default takes the limit before the fit, `max(limit, default)` with chunked prefill off (`:2869-2874`), then `min(max_num_seqs * limit, default)` (`:2896-2899`). At -1 that limit is the checkpoint's own (`vllm/config/model.py:766-767`, `:2487`). The header holds the resolved `max_num_batched_tokens` and the binding reads it, so each launch binds its own step [argued].
+2. **A Mamba group's block size is the checkpoint's own limit.** `vllm/model_executor/models/config.py:656-657`: for a Mamba or hybrid model with prefix caching off and no `--mamba-block-size`, `cache_config.mamba_block_size = model_config.max_model_len`, before the fit; nothing rewrites it after (`vllm/v1/worker/gpu_worker.py:706-715` updates the runner's limit only). A step reads it: `vllm/v1/core/single_type_kv_cache_manager.py:1669-1684` into `:188`, `cdiv(num_tokens, block_size)`. The header does not hold it. Without a KV connector the group takes one block a request in both launches, since a request never passes the fitted limit [argued, not run]; with one, `scheduler.py:886`, `:3029` and `:3055` round by a block size that includes it (`kv_cache_utils.py:727-730`).
+
+**For the engine the step models (one attention KV group, no connector), every read in a step is the fitted number.**
+- The fit runs before the scheduler exists: `vllm/v1/engine/core.py:145` (`kv_cache_utils.py:2628-2629` calls it, `:2466` writes the fitted number), then `core.py:162`.
+- The scheduler copies the limit once, `vllm/v1/core/sched/scheduler.py:131`, and its package reads only that copy: `:302`, `:634`, `:1011`, `:2318` into `sched/utils.py:111`, `:2851`.
+- `model_config.original_max_model_len` is read in one place, `kv_cache_utils.py:2628`, at start.
+
+**My recommendation: `ENGINE_INERT`.** Why text: "the scheduler's steps read the limit vLLM fitted (max_model_len), which the binding reads; this says only that the launch left the limit to vLLM". Read 1 is in the header. Read 2 is a model the step does not model and the header does not name, with or without the flag: it is the recorder's gap, and this key cannot close it.
+
+**Ready on your word, not in the tree:** the `ENGINE_INERT` entry and your three tests, as one patch in my artifacts (`net361-auto-key-prepared-not-applied.patch`, applies to the head).
+- With it applied, uncommitted [ran, named files on the VM]: the binding's engine tests 34 passed, the recorder's tests 13 passed, the serve's statics tests pass, the root boundary tests 62 passed. The boundary tests take the adapter's import of the verifier.
+- Each new test fails with the key taken off its list [ran].
+- No `research run` yet: the head with the change does not exist. On your word: apply, two commits, push, the verifier's and the adapter's suites by `research run`, the body line, the report.
+
+Your inbox has 8 messages unpulled since 12:55 AM PST, so I also end my turn with this text.
+
