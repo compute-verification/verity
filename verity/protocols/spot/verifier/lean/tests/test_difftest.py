@@ -6108,14 +6108,7 @@ def test_r7_takes_the_verifiers_certified_entries(pieces, server):
         return json.loads(out)["codes"] if kind == "output" else kind
 
     alike, entry, mine, forms, wide, uncertified = CERTIFIED
-    s = SETUPS[0]
-    law = {"k": 1, "law": "subset"}
-    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], WINDOW,
-                   leaf_layer=LEAF)
-    lone = _json({"record": rec, "params": {
-        "anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports,
-        "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME, "work_table": None}})
-    own = _v2_audit(REGISTERED_SETUPS[0], {"W": 2})
+    lone, own = _v1_audit("all", SETUPS[0]), _v2_audit(REGISTERED_SETUPS[0], {"W": 2})
     for a, unheld, unregistered in ((lone, ["keys"], ["keys"]), (own, ["R7-values"], ["R7-values", "R7-certified"])):
         assert codes(a, lambda b, x: None) == []
         assert codes(a, alike) == [] and codes(a, wide) == []
