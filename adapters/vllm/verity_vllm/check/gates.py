@@ -215,8 +215,9 @@ class GateResult:
 
     @classmethod
     def from_json(cls, d: dict) -> GateResult:
+        evidence, detail = d.get("evidence"), d.get("detail")   # a result written without either consulted no artifact and details nothing
         return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
-                   evidence=list(d.get("evidence") or []), detail=dict(d.get("detail") or {}), reason=d.get("reason"))
+                   evidence=list(evidence) if evidence else [], detail=dict(detail) if detail else {}, reason=d.get("reason"))
 
     def result(self) -> CheckResult:
         """The gate as a `CheckResult` named by its id: `pass` holds, `fail` is a mismatch, `skipped` did not run, any other status is undecided."""
@@ -260,7 +261,8 @@ class RunArtifacts:
     # locating ----------------------------------------------------------------------------------------
 
     def path(self, key: str) -> Path:
-        over = (self.manifest.get("artifacts") or {}).get(key)
+        placed = self.manifest.get("artifacts")   # the manifest's own places, by key; a run that states none keeps every default
+        over = placed.get(key) if placed else None
         if over:
             rel = over
         elif key in ARTIFACTS:
@@ -357,14 +359,14 @@ class RunArtifacts:
 
     def workload_requests(self) -> list[dict]:
         """`[{request_id, prompt_len, max_tokens}]` from the manifest, else from the control / capture tokens.json."""
-        wl = self.manifest.get("workload") or {}
-        reqs = wl.get("requests")
+        wl = self.manifest.get("workload")
+        reqs = wl.get("requests") if wl else None
         if reqs:
             return [dict(r) for r in reqs]
         for key in ("control_tokens", "tokens"):
             tok = self.json(key)
             if isinstance(tok, dict) and tok.get("requests"):
-                return [{"request_id": r.get("request_id"), "prompt_len": len(r.get("prompt_token_ids") or []),
+                return [{"request_id": r.get("request_id"), "prompt_len": len(ids) if (ids := r.get("prompt_token_ids")) else 0,
                          "max_tokens": r.get("max_tokens")} for r in tok["requests"]]
         return []
 
@@ -375,8 +377,9 @@ class RunArtifacts:
         Fallback for older control files: `max(max_tokens)` (one prefill + max_tokens-1 decode steps, every request at step 0),
         as `noninterference.compare` also falls back."""
         ctl = self.json("control_tokens")
-        if isinstance(ctl, dict) and (ctl.get("timing") or {}).get("engine_steps") is not None:
-            return int(ctl["timing"]["engine_steps"])
+        timing = ctl.get("timing") if isinstance(ctl, dict) else None
+        if timing and timing.get("engine_steps") is not None:
+            return int(timing["engine_steps"])
         mt = [int(r["max_tokens"]) for r in self.workload_requests() if r.get("max_tokens") is not None]
         return max(mt) if mt else None
 
@@ -402,9 +405,10 @@ class RunArtifacts:
         c_bare variant (also a bare run).  Never a workload-authored accepted list."""
         ct = self.json("control_tokens")
         if isinstance(ct, dict) and ct.get("requests"):
-            return {str(r["request_id"]): [int(t) for t in r.get("generated_token_ids") or []] for r in ct["requests"]}, "control/tokens.json"
+            return {str(r["request_id"]): [int(t) for t in ids] if (ids := r.get("generated_token_ids")) else [] for r in ct["requests"]}, "control/tokens.json"
         ni = self.json("noninterference")
-        c = ((ni or {}).get("tokens") or {}).get("c_bare") if isinstance(ni, dict) else None
+        variants = ni.get("tokens") if isinstance(ni, dict) else None   # the comparison's ids by variant; a report without them has no bare run
+        c = variants.get("c_bare") if variants else None
         if isinstance(c, dict) and c:
             return {str(k): [int(t) for t in v] for k, v in c.items()}, "noninterference c_bare"
         return None, "none"
@@ -1240,7 +1244,8 @@ def diag_structure(fs: dict | None) -> dict:
     stripped: list[Counter] = []
     for s in decode:
         c: Counter = Counter()
-        for label, n in (s.get("spec_histogram") or {}).items():
+        histogram = s.get("spec_histogram")   # a step that states none counts no specialization
+        for label, n in histogram.items() if histogram else ():
             c[strip_T(label)] += int(n)
         stripped.append(c)
     counts = [int(s.get("n_instances", 0)) for s in decode]
@@ -1268,7 +1273,9 @@ def diag_family_match(cmp_: dict | None) -> dict:
     st = (cmp_ or {}).get("structure") if isinstance(cmp_, dict) else None
     if not isinstance(st, dict):
         return {"status": "unavailable"}
-    classes = st.get("classes") or {}
+    classes = st.get("classes")
+    if not classes:
+        classes = {}   # a structure report that states no class has none, classified or not
     uncl = sorted(k for k in classes if str(k).startswith("unclassified:"))
     return {"status": st.get("status"), "family": st.get("family"), "matched": st.get("matched"), "superset": st.get("superset"),
             "n_extra": st.get("n_extra"), "classes": {k: (v.get("count") if isinstance(v, dict) else v) for k, v in classes.items()},
@@ -1281,12 +1288,16 @@ def diag_overhead(m0: dict | None, versions: dict | None) -> dict:
     cost with the hook's four clock reads subtracted (M6 addendum: 4 reads per recorded call)."""
     if not isinstance(m0, dict) or not isinstance(m0.get("results"), dict):
         return {"status": "unavailable"}
-    host = (versions or {}).get("host") or (m0.get("versions") or {}).get("host") or {}
+    recorded = m0.get("versions")   # the capture's versions.json states the host, else the ladder's own record does; else no field of it is known
+    host = (versions.get("host") if versions else None) or (recorded.get("host") if recorded else None)
+    if not host:
+        host = {}
     clock_us = host.get("clock_read_us")
     base = m0.get("baseline_step_wall_s")
     rungs = {}
     for rung, r in m0["results"].items():
-        reps = [x for x in (r.get("reps") or []) if isinstance(x, dict) and x.get("step_wall_mean_s") is not None]
+        timed = r.get("reps")   # a rung that states no repetition was not timed
+        reps = [x for x in timed if isinstance(x, dict) and x.get("step_wall_mean_s") is not None] if timed else []
         if not reps:
             continue
         step = sum(x["step_wall_mean_s"] for x in reps) / len(reps)
