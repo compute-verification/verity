@@ -281,10 +281,7 @@ def _recorded(cache: Path, jobs: int) -> dict:
         said = [ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip()]
         for ln in said if r.returncode else [ln for ln in said if ln.startswith("circuit-check")]:
             print(ln, flush=True)
-        try:
-            got = json.loads(out.read_text())
-        except (OSError, ValueError):
-            got = {}
+        got = json.loads(out.read_text()) if out.is_file() else {}    # it writes its report last: none when it died
     if r.returncode and "why" not in got:
         got["why"] = f"`circuit-check --all --records-only` exited {r.returncode}" + (f": {said[-1][:300]}" if said else "")
     return got

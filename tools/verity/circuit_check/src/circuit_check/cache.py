@@ -2491,7 +2491,8 @@ def _miss(p: Path, x: BaseException) -> None:
 
 
 def unread() -> list[str]:
-    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records) but could not read,
+    """Each entry this process found under a key it looked up (`lookup`, `recorded`, `units`' records; or under any key,
+    where `units.untaken` asked whether the cache holds a binding's record) but could not read,
     with what reading it raised: a record it names missing (OSError) or not the bytes its name digests (ValueError, `_record`),
     or the entry not one this version writes.  Each counted as no entry; a run's report lists them (its ``cache.unread``)."""
     return list(_MISSED)

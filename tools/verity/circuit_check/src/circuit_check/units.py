@@ -1104,22 +1104,22 @@ def untaken(cache: Path | None, entries: list[Entry]) -> dict:
     this checker's version, under any key; else ``{}``.  The names are those of the variables this process's keys hold
     (`cache.key`'s environment), never their values.  A record is looked for under its key, so a process with one keyed
     variable more or fewer than the one that stored the records, or one set otherwise, finds none of them and builds every
-    binding, and its count of the reused alone says nothing of it.  Asked before the run stores what it built."""
+    binding, and its count of the reused alone says nothing of it.  Asked before the run stores what it built.  An entry
+    it cannot read is listed with the run's unread ones (`cache.unread`)."""
     if cache is None or not entries or any(e.reused for e in entries):
         return {}
     k = key(REGISTERED, 0)
+    top = Path(cache) / k["version"]
     with CC.internal():
-        try:
-            dirs = sorted(d for d in (Path(cache) / k["version"]).iterdir() if d.name != CC.READS)
-        except OSError:
-            return {}
-        for d in dirs:
-            try:
-                # every entry of a directory has its key: the first says whether they are bindings' records
-                if json.loads(min(d.glob("*.json")).read_bytes())["key"]["request"]["target"][0] == REQUEST:
-                    return {"keyed": sorted(k["environment"])}
-            except (OSError, ValueError, KeyError, TypeError, IndexError):
+        for d in sorted(top.iterdir()) if top.is_dir() else ():
+            # every entry of a directory has its key: the first says whether they are bindings' records
+            if d.name == CC.READS or (first := min(d.glob("*.json"), default=None)) is None:
                 continue
+            try:
+                if json.loads(first.read_bytes())["key"]["request"]["target"][0] == REQUEST:
+                    return {"keyed": sorted(k["environment"])}
+            except (OSError, ValueError, KeyError, TypeError, IndexError) as x:
+                CC._miss(first, x)
     return {}
 
 
