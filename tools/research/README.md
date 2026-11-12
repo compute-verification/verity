@@ -449,43 +449,44 @@ What `research run` does:
 ### Retention of node data: `research keep`, `research retention`
 
 `src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
-(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data.
-It covers everything beneath its
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`. It covers everything beneath its
 path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
 gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
 is written for it, and a sidecar wins.
 
+A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
+directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the run's only copy.
+A run still running, queued or in a slot line never goes, nor anything under a `research keep` record. To keep a run:
+`research keep RUNDIR ...` before the 7 days are over, or preserve it: `research data custody RUN --publish`. gc takes these runs
+only with `--unpreserved-runs`; otherwise it and the report list them apart, with their count, bytes and inodes.
+
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
-research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research keep show PATH    # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
-a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
+a failed push records nothing. The report never walks into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) of blocks or inodes, or with `--force`. It deletes
+Policy `default` (`default/v0`) acts only over `--high-pct` (80%) of blocks or inodes, or with `--force`. It deletes
 the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
-path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no
-nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
-`--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
-now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
-`withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
-vouch for the run dir (the store README's §10.1). Without `--apply` gc deletes nothing and
-reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
-unowned, unpreserved files on a node that nobody can decide to delete.
+path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
+unpreserved run's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
+`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
+now under it at its size, and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
+fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
+`--apply` gc deletes nothing and reads no remote; either way it prints every deletion and every skip with its reason.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
-outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
-refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`.
 
 ### Slack
 

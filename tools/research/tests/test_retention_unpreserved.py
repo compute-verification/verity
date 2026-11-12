@@ -1,7 +1,8 @@
 """The record of a run that custody never preserved (research.retention): a finished or runner-dead run that custody did not
 preserve gets a low-priority retention record that expires UNPRESERVED_RUN_EXPIRY after the run directory's last write, so the
-collector takes it. Which directories qualify and which never do, where the record lives, and what gc and the report print.
-Every directory is under tmp_path, with each entry's mtime set by hand and the process table a directory the test writes."""
+collector takes it. Which directories qualify and which never do, where the record lives, what gc and the report print, and the
+README's statement of the rule. Every directory is under tmp_path, with each entry's mtime set by hand and the process table a
+directory the test writes."""
 from __future__ import annotations
 
 import json
@@ -11,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from test_retention import NOW, UNIT, Disk, by_path, clock, kept, never_in_use, run_dir
+from test_retention import NOW, REPO, UNIT, Disk, by_path, clock, kept, never_in_use, run_dir
 
 from research import retention as R
 from research import runs
@@ -547,3 +548,17 @@ def test_an_unpreserved_run_this_user_cannot_remove_is_left_and_takes_none_of_th
     finally:
         (stuck / "out").chmod(0o755)
 
+
+# ---- 5: the constant ------------------------------------------------------------------------------------------------------------------
+
+def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_keep_a_run():
+    text = (REPO / "tools/research/README.md").read_text()
+    section = text[text.index("### Retention of node data"):text.index("### Slack")]
+    days = R.UNPRESERVED_RUN_EXPIRY // timedelta(days=1)
+    rule = (f"A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires {days} days "
+            "after the run directory's last write, so the collector takes it")
+    assert rule in " ".join(section.split()), "the README states the rule with UNPRESERVED_RUN_EXPIRY's value"
+    assert "`UNPRESERVED_RUN_EXPIRY`" in section and f"before the {days} days are over" in " ".join(section.split())
+    for needed in ("`research keep RUNDIR ...`", "`research data custody RUN --publish`", "`--unpreserved-runs`", "[--unpreserved-runs]"):
+        assert needed in section, f"the retention section names {needed}"
+    assert f"{days} d after its last write" in R.UNPRESERVED_HEAD and f"expires {R.UNPRESERVED_RUN_EXPIRY.days} days" in rule
