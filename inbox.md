@@ -122,3 +122,25 @@ scan_cost: r20261112-160747-765d (group 8) beside r20261112-135528-7404 (group 1
 
 **NET-396 is read whole** [read Linear], with your 10:40 AM PST message. I start it now with the list of every reader of the two lines in the tree, and change no line before you have it. Tonight's 10:15 PM PST job comes before it.
 
+[2026-11-12T18:52Z] d5559bf69486
+TERMGB to the network-accounting coordinator, Thu 12 Nov 10:54 AM PST, to your 10:51 AM. **The weights-tie run ended and shows something else than I argued, so I build nothing for `--refused-read`: all three ties, the honest one too, are refused before the sample, by a rule lean's branch itself holds. No tie reaches a session, so the run says nothing on whether a proof leaves the ZK server. The two-member module passed. Your NET-394 lines are read.**
+
+**`r20261112-181836-593d`: failed, exit 1** [read: its status and its files], on #9329's scratch at `c0f05db5ae4c`
+- Each tie's commit and verify pass at `work-rate:1/613` (613 units, 57 members a tie) [read: each `commit.json` and `verify.json`]. The rate's lines hold as far as the arm goes.
+- Each tie's audit then exits 1 in about 10 s with `refused: {"output-class-needs-a-closure-map": {"units": 613}}`, before the sample: no challenger session opens, no member is proved, `sessions` is empty [read: each `summary.json`]. The honest tie pins nothing either.
+- Why: the arm gives the audit every unit as the output class (`--outputs`), and `a5.audit` refuses any window with an output class before the sample (`a5.output_refusal`; the audit's own docstring says so) [read].
+- **It is lean's branch's own state, not the merge's** [argued, not run on lean's branch alone]: `benchmarks/one_stage/a5.py` is one blob at lean's `238ad6621c27` and at my scratch; `main` holds that refusal and not the arm; lean's long branch held the arm. No line my merge changed in `records_audit.py` reads the output class [read: the diff]. So #9375 as it stands lands an arm whose honest tie cannot pass. That is lean's to hear; no check runs the arm.
+- What follows for A: the question stays as I argued it and no run can show it until an output class can be audited. I leave `--forged` and `run.sh` as they are. #9329's body gets the arm's name and that state when I write it, if you want it there.
+
+**For soundness, as you asked, one sentence:** the ZK server is set up on the statement, the partition and the program and not on the verifier's registered reads [read: `a0.firewall_env`], so a true proof whose read opens no root the verifier holds would leave it and be refused by Lean on the read [argued]; no run shows it, since the one arm with that shape is refused before its sample.
+
+**`r20261112-181454-3f14`: done, exit 0** [read]: the real two-member module on built binaries at `c0f05db5ae4c`, "2 passed in 368.52s", the honest test and the one-bit test.
+
+**`r20261112-181342-dd6c`** (the suites): still waiting for a slot at 10:49 AM PST [read].
+
+**NET-394**: your 10:51 AM lines read; they replace items 1 and 2. I start it now on `cursor/na-certifier-term-simulated-b4e6` (from `main` at `0582899c4392`) while the suites wait, and push it as soon as items 1 and 2 build, with its name to you. At `main` my figures equal yours [ran]: scan 50,753,639 and 48,906,024; `design, no stop block` 26,300,627 and 24,453,012; `design` 1,847,615 and 0. The 1:30 PM report keeps its hour, and lean's branch is taken again at its ready line.
+
+Least sure of: that the arm fails the same way on lean's branch alone. I read the code as the same; I did not run it there.
+
+TIMER: none
+
