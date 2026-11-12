@@ -35,6 +35,12 @@ tracer sees into (`untraced`), as `child/verity_suite_reads.py` classifies them;
 
 Two kinds of skip fail instead: one for an unreachable evidence store under a recorded check (`STORE_UNREACHABLE`), and a
 `pytest.importorskip` whose missing module is this checkout's (`importorskip`), which means it moved.
+
+It keeps the environment's values out of a failure's text: a suite runs in its caller's environment, credentials included,
+and a run's log is published. While a suite runs, `os.environ`'s repr names its variables and holds no value
+(`_environ_names`, from this module's load until the session ends). A copy of the environment (`dict(os.environ)`) still
+prints as a dict does, and so does the environment of a Python a test starts (the forms: `STILL` in `tests/test_guard.py`).
+To see a value, run the test alone in an emptied environment.
 """
 from __future__ import annotations
 
@@ -397,6 +403,30 @@ def importorskip(modname: str, minversion: str | None = None, reason: str | None
 
 if _ACTIVE:
     pytest.importorskip = importorskip
+
+
+#: how to read a value the guard withholds from a failure's text
+SEE_VALUES = "to see them, run the test alone in an emptied environment"
+_Environ = type(os.environ)
+_environ_repr = _Environ.__repr__
+
+
+def _environ_names(env) -> str:
+    """`os.environ`'s repr while a suite runs: its names and no value. It reads the names as the repr it stands in for does,
+    from the mapping's own table, so a subclass that records each read of the environment records none here."""
+    names = sorted(os.fsdecode(k) for k in getattr(env, "_data", env))
+    return f"<os.environ: values withheld ({SEE_VALUES}); names: {' '.join(names)}>"
+
+
+if _ACTIVE:
+    _Environ.__repr__ = _environ_names             # as the module loads, so an assert in a conftest's import prints no value either
+
+
+def pytest_unconfigure(config) -> None:
+    """The session is over: the environment's repr is the one this module found, for a process that goes on after
+    `pytest.main` returns. A fork the tests made keeps the names-only one for as long as it lives."""
+    if _Environ.__repr__ is _environ_names:
+        _Environ.__repr__ = _environ_repr
 
 
 @pytest.hookimpl(hookwrapper=True)

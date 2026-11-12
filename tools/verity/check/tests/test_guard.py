@@ -1,10 +1,12 @@
 """The read guard in one process and across pytest-xdist workers: a file the tests open outside the suite's inputs fails the
 suite whichever process opened it, and a suite nothing vouches for (no report, a worker without a record) fails too. And
-each suite's own `--basetemp`, which no sweep takes while anything still uses it."""
+each suite's own `--basetemp`, which no sweep takes while anything still uses it. And what a failure's text holds of the
+environment a suite runs in: its names, and no value but in the forms listed here."""
 from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import sys
 import threading
@@ -365,6 +367,214 @@ def test_a_module_level_importorskip_of_a_module_of_ours_that_moved_fails_collec
     r = S.run(suite, ["pkg"], [], tmp_path / "logs", 1)
     log = r.log.read_text()
     assert r.status == "failed" and "mine.gone is not importable" in log, log
+
+
+#: what every value of the caller's environment is made of in the test below, so a log holding it printed one, or a piece of one
+MARK = "hush"
+#: the caller's environment there: dummy values, and nothing of the machine's
+CALLER = {"DUMMY_KEPT": MARK * 4, "DUMMY_CHANGED": MARK * 5, "DUMMY_HOME": MARK * 6, "DUMMY_PATH": MARK * 7}
+#: a suite's tests, each failing with the environment or a copy of it in reach of its failure's text
+FORMS = '''import os
+import subprocess
+import sys
+
+
+def child():
+    """A child's environment: the caller's with one variable changed."""
+    return {**os.environ, "DUMMY_CHANGED": os.environ["DUMMY_CHANGED"] * 2}
+
+
+def differing(got, want):
+    return sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))
+
+
+def test_copy_to_copy():
+    assert child() == {**os.environ, "X": "1"}
+
+
+def test_list_of_copies():
+    assert [child()] == [{**os.environ, "X": "1"}]
+
+
+def test_copies_inside_recorded_calls():
+    assert {"calls": [("run", child())]} == {"calls": [("run", {**os.environ, "X": "1"})]}
+
+
+def test_comparison_and_another_clause():
+    got = child()
+    assert got == {**os.environ, "X": "1"} and got["X"] == "1", "its message"
+
+
+def test_copy_held_in_a_variable():
+    want = dict(os.environ)
+    assert child() == want
+
+
+def test_copy_to_the_environment():
+    assert child() == os.environ
+
+
+def test_copy_with_a_key_no_environment_takes():
+    assert {**os.environ, 1: "1"} == os.environ
+
+
+def test_name_in_a_copy():
+    assert "MISSING" in dict(os.environ)
+
+
+def test_name_in_the_environment():
+    assert "MISSING" in os.environ
+
+
+def test_get_by_name():
+    assert os.environ.get("MISSING") == "set"
+
+
+def test_length_of_a_list_of_environments():
+    assert len([os.environ]) == 2
+
+
+def test_environment_in_the_message():
+    got = 1
+    assert got == 2, f"under {os.environ}"
+
+
+def test_call_compared_with_a_list():
+    assert differing(child(), {**os.environ, "X": "1"}) == []
+
+
+def test_call_compared_with_a_number():
+    assert len(differing(child(), {**os.environ, "X": "1"})) == 0
+
+
+def test_call_negated():
+    assert not differing(child(), {**os.environ, "X": "1"})
+
+
+def test_call_on_copies_held_in_variables():
+    got, want = child(), dict(os.environ)
+    assert not differing(got, want)
+
+
+def test_copy_in_the_message():
+    got = 1
+    assert got == 2, f"under {dict(os.environ)}"
+
+
+def test_copy_as_the_tests_argument(tmp_path, environment=dict(os.environ)):
+    assert tmp_path is None
+
+
+def test_under_half_of_the_environment():
+    assert {k: v for k, v in os.environ.items() if k.startswith("DUMMY_")} == {}
+
+
+def test_pairs_of_names_and_values():
+    assert sorted(child().items()) == sorted(os.environ.items())
+
+
+def test_one_variable_by_name():
+    assert os.environ["DUMMY_CHANGED"] == "set"
+
+
+def test_copy_the_test_prints():
+    print(dict(os.environ))
+    raise AssertionError
+
+
+def test_copy_in_an_exceptions_message():
+    raise ValueError(dict(os.environ))
+
+
+def test_python_the_test_starts():
+    done = subprocess.run([sys.executable, "-c", "import os; raise SystemExit(repr(os.environ))"], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+'''
+#: the suite's conftest: the first of the environment's repr as it loads, before any test, and once the session is over
+REPRS = '''import os
+from pathlib import Path
+
+import pytest
+
+LOADED = repr(os.environ)[:12]
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    Path(__file__).with_name("reprs.txt").write_text(f"{LOADED} {repr(os.environ)[:8]}")
+'''
+#: the tests of `FORMS` whose failure still prints a value, each with why the guard doesn't reach it
+STILL = {
+    "test_copy_to_copy": "pytest's explanation of a comparison prints its sides",
+    "test_list_of_copies": "pytest's explanation of a comparison prints its sides",
+    "test_copies_inside_recorded_calls": "pytest's explanation of a comparison prints its sides",
+    "test_comparison_and_another_clause": "pytest's explanation of a comparison prints its sides",
+    "test_copy_held_in_a_variable": "pytest's explanation of a comparison prints its sides",
+    "test_copy_to_the_environment": "pytest's explanation of a comparison prints its sides",
+    "test_copy_with_a_key_no_environment_takes": "pytest's explanation of a comparison prints its sides",
+    "test_name_in_a_copy": "pytest's explanation of a comparison prints its sides",
+    "test_call_compared_with_a_number": "pytest prints a call's arguments where the comparison has no explanation of its own",
+    "test_call_negated": "no comparison: pytest prints the call's arguments",
+    "test_call_on_copies_held_in_variables": "pytest prints a call's arguments, whatever names hold them",
+    "test_copy_in_the_message": "the message is a string by the time the assert fails",
+    "test_copy_as_the_tests_argument": "pytest prints a failing test's arguments",
+    "test_under_half_of_the_environment": "a mapping holding under half of the environment isn't taken as one",
+    "test_pairs_of_names_and_values": "a list of pairs, or of values, isn't a mapping",
+    "test_one_variable_by_name": "one variable read by name is the test's own to show",
+    "test_copy_the_test_prints": "captured output is the test's own text",
+    "test_copy_in_an_exceptions_message": "an exception's message is its raiser's text",
+    "test_python_the_test_starts": "a Python a test starts has Python's own repr, and what it writes is the test's to show",
+}
+#: what the text of the other failures holds: the environment's names-only repr, or the names a test took before its assert
+NAMED = {
+    "test_name_in_the_environment": "'MISSING' in <os.environ: values withheld",
+    "test_get_by_name": "<os.environ: values withheld",
+    "test_length_of_a_list_of_environments": "<os.environ: values withheld",
+    "test_environment_in_the_message": "<os.environ: values withheld",
+    "test_call_compared_with_a_list": "['DUMMY_CHANGED', 'X'] == []",
+}
+
+
+def _failures(log: str) -> dict[str, str]:
+    """Each failed test's text in a pytest log: its part of the failures, and its line of the short summary."""
+    body, _, summary = log.partition(" short test summary info ")
+    parts = re.split(r"^_+ (test_\w+) _+$", body, flags=re.M)
+    texts = dict(zip(parts[1::2], parts[2::2]))
+    for line in summary.splitlines():
+        if m := re.match(r"FAILED \S+::(test_\w+)", line):
+            texts[m[1]] += line
+    return texts
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_a_failure_names_the_environment_and_prints_no_value_of_it(tmp_path, monkeypatch, workers):
+    """A suite runs in its caller's environment, credentials included, and a run's log is published. Each test of `FORMS` fails
+    with the environment or a copy of it in reach, in a suite `run` starts in an environment of dummy values, in one process
+    and on xdist workers: where the environment itself would print, its text names the variables, says how to see the values
+    and holds none. The forms that still print one are `STILL`, each with why; one that stops printing fails here until it
+    leaves the list. The environment's repr holds no value from before the suite's conftest loads, and is Python's own again once the
+    session is over."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (tmp_path / "pkg" / "tests" / "test_reads.py").unlink()
+    (tmp_path / "pkg" / "tests" / "test_forms.py").write_text(FORMS)
+    (tmp_path / "pkg" / "tests" / "conftest.py").write_text(REPRS)
+    for k in list(os.environ):
+        monkeypatch.delenv(k)
+    for k, v in CALLER.items():
+        monkeypatch.setenv(k, v)
+    G = _load(monkeypatch, "guard_under_test", HERE / "guard" / "verity_suite_guard.py")     # inert: no report is asked of it
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    log = r.log.read_text()
+    texts = _failures(log)
+    assert sorted(texts) == sorted([*STILL, *NAMED]) and r.counts["failed"] == len(texts), log
+    assert sorted(t for t, text in texts.items() if MARK in text) == sorted(STILL), log
+    assert log.count(MARK) == sum(text.count(MARK) for text in texts.values()), log
+    for test, named in NAMED.items():
+        assert named in texts[test], texts[test]
+        assert G.SEE_VALUES in texts[test] or "<os.environ" not in texts[test], texts[test]
+    assert (tmp_path / "pkg" / "tests" / "reprs.txt").read_text() == "<os.environ: environ("
 
 
 def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
