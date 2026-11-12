@@ -24,6 +24,7 @@ of the classes' representatives its sessions need. `K_s` bounds each phase's exp
 partition's counts only on the calls spent in refused runs.
 
 * `sum_lin4`: a sum of four scaled terms and a constant.
+* `sum_two_le`: phases' averages, each bounded by two others, summed.
 * `sum_hash_avg_le`: the phases' parts that count calls, summed, at the averages' totals.
 * `pr_phases_avg_le`: **the period's step at averages**, for phases whose bounds have that shape.
 * `CompiledTwo.phases_oneWait_le_avg_of_phase`: the period's step from any bound of a phase at its averages.
@@ -45,6 +46,20 @@ theorem sum_lin4 {n : ℕ} (x₁ x₂ x₃ x₄ : Fin n → ℝ) (c₁ c₂ c₃
   rw [Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib, Finset.sum_add_distrib,
     ← Finset.mul_sum, ← Finset.mul_sum, ← Finset.mul_sum, ← Finset.mul_sum, Finset.sum_const, Finset.card_univ,
     Fintype.card_fin, nsmul_eq_mul]
+
+/-- **Phases' averages bounded by two others, summed.** Where phase `i`'s average `a i` is at most
+`C i · f i + N i · r i` with `f i` and `r i` nonnegative, `C i ≤ C'`, `N i ≤ N'`, and the phases' `f i` and `r i`
+sum to at most `T` and `R`, the phases' `a i` sum to at most `C' · T + N' · R`. -/
+theorem sum_two_le {n : ℕ} (a f r C N : Fin n → ℝ) {C' N' T R : ℝ} (ha : ∀ i, a i ≤ C i * f i + N i * r i)
+    (hf : ∀ i, 0 ≤ f i) (hr : ∀ i, 0 ≤ r i) (hC : ∀ i, C i ≤ C') (hN : ∀ i, N i ≤ N') (hC0 : 0 ≤ C')
+    (hN0 : 0 ≤ N') (hT : ∑ i, f i ≤ T) (hR : ∑ i, r i ≤ R) : ∑ i, a i ≤ C' * T + N' * R :=
+  calc ∑ i, a i ≤ ∑ i, (C' * f i + N' * r i) :=
+        Finset.sum_le_sum fun i _ => (ha i).trans
+          (add_le_add (mul_le_mul_of_nonneg_right (hC i) (hf i)) (mul_le_mul_of_nonneg_right (hN i) (hr i)))
+    _ = C' * ∑ i, f i + N' * ∑ i, r i := by
+        rw [Finset.sum_add_distrib, Finset.mul_sum, Finset.mul_sum]
+    _ ≤ C' * T + N' * R :=
+        add_le_add (mul_le_mul_of_nonneg_left hT hC0) (mul_le_mul_of_nonneg_left hR hN0)
 
 /-- **The phases' parts that count calls, summed, at averages.** Phase `i` pays `a` times
 `T_i + e_i·A_s,i + c_i` and `f` times `T_i + e_i·A_s,i + A_k,i + e_i·A_m,i + (1 + K_i)·c_i`. With `e_i ≤ e`,

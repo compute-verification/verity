@@ -39,6 +39,8 @@ whole partition's count is paid only on the calls spent in refused runs.
 * `code_eventTwoX_oneWait_le_cls_avg_strata`: that bound at `code_callsAvg`'s three products.
 * `code_phases_oneWait_le_avg`: the bound over a monitoring period at the period's averages
   (`CompiledTwo.phases_oneWait_le_avg`), at SPOT[Flock]'s compiled two-stage verifier.
+* `code_phases_oneWait_le_avg_strata`: that bound at the period's expected calls and its expected calls in runs
+  whose second stage is refused, the three totals by template.
 -/
 
 @[expose] public section
@@ -490,5 +492,130 @@ theorem code_phases_oneWait_le_avg (hB : Built h) (hS : Addresses h)
     (fun i _ _ _ _ _ hC => code_eventTwoX_oneWait_le_cls_avg h hB hS hL (hx i) (hP i) (hd i) (hin i) (P i)
       (hneeds i) (hcls i) hC (hBc i) (hX i) (hI i))
     he0 hKs0 hT hAs hAk hAm hKs he hc
+
+/-- **The one-wait bound over a monitoring period, at the code, by template**: `code_phases_oneWait_le_avg` at the
+period's totals that `code_hAs`, `code_hAk_cls` and `code_hAm_cls` give phase by phase. `C_s`, `C_k`, `N` and `S_k`
+are at least every phase's counts of `code_callsAvg`: the always-checked blocks plus `K · Σ_t k_t`, their classes
+plus `K · Σ_t k_t · M t`, the partition's proof blocks and the partition's classes. Where the period's phases call
+SHA-512 at most `T` times on average in total, both parties' calls counted, and at most `T_R` of them on average in
+the runs whose second stage is refused, some phase's accepted run samples a proof block of the one-wait compiled
+verifier's `FregTwoX` with probability at most `code_phases_oneWait_le_avg`'s bound at
+`A_s = C_s · T + N · T_R` and `A_k = A_m = C_k · T + S_k · T_R`: over the whole period the partition's counts
+multiply only the calls spent in refused runs. -/
+theorem code_phases_oneWait_le_avg_strata (hB : Built h) (hS : Addresses h) {n : ℕ} {x : Fin n → Msg}
+    {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Design.Two}
+    (hx : ∀ i, parse h (x i) = some (s i)) (hP : ∀ i, partition h (s i) = some (Pt i))
+    (hd : ∀ i, two h (s i) = some (d i)) (hin : ∀ i, InScopeTwo (Pt i) (d i) (s i)) {S : Type} [Fintype S]
+    {Ω : Fin n → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
+    (φ : ∀ i, S ≃ Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) (P : ∀ i, Prover (Ω i))
+    {needs : Fin n → ℕ → Finset ℕ}
+    (hneeds : ∀ i, needs i = fun u => (Reveal.needs (partition h) (s i) u).toFinset)
+    {cls : ∀ i, Fin (𝓛[Fzk].nG (x i)) → Fin (𝓛[Fzk].nG (x i))}
+    (hcls : ∀ i, cls i =
+      Verity.FirstHit.clsOf fun g : Fin (𝓛[Fzk].nG (x i)) => gateKey h (s i) (Pt i) (d i) g.val)
+    (M : ℕ → ℕ)
+    (hM : ∀ i ρ t j, t < h.reg.ns.size → j < h.reg.ns.getD t 0 →
+      (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[Fzk].nG (x i)) (cls i) (needs i) (h.reg.blockOf ρ t j)).card ≤ M t)
+    {K₀ : ℕ} (hK : firstK h.reg.first = some K₀) {Cs N Ck Sk : ℕ}
+    (hCs : ∀ i, ((List.range (SamplingDeploy.units ((base h).atOrder (order h)) (x i))).filter fun v =>
+        h.reg.always v).length +
+      K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0).sum ≤ Cs)
+    (hN : ∀ i, SamplingDeploy.units ((base h).atOrder (order h)) (x i) ≤ N)
+    (hCk : ∀ i, (((List.range (SamplingDeploy.units ((base h).atOrder (order h)) (x i))).filter fun v =>
+        h.reg.always v).map
+        fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[Fzk].nG (x i)) (cls i) (needs i) u).card).sum +
+      K₀ * ((List.range h.reg.ns.size).map fun t => h.reg.ks.getD t 0 * M t).sum ≤ Ck)
+    (hSk : ∀ i, ((List.range (SamplingDeploy.units ((base h).atOrder (order h)) (x i))).map
+      fun u => (Claims.SamplingGeneric.Compiled.clsNeeds (𝓛[Fzk].nG (x i)) (cls i) (needs i) u).card).sum ≤ Sk)
+    {T TR Ks e c : ℝ} (he0 : 0 ≤ e) (hKs0 : 0 ≤ Ks)
+    (hT : Ex (fun σ : S =>
+      ∑ i, (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ T)
+    (hR : Ex (fun σ : S => ∑ i,
+      if Except.toBool (Spot.Select.selectSecond (h.reg.sample (src ((φ i σ).2 (order h (x i)).first)))
+        h.reg.ns h.reg.ks (stageSrc (stageCoins h (x i) (φ i σ).2))) = false then
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)
+      else 0) ≤ TR)
+    (hKs : ∀ i, Ex (fun r : Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin =>
+      (((𝓛[Fzk].toCompiled.sampleNeeds (x i) (needs i) (𝓛[Fzk].checked (x i) r)).image (cls i)).card : ℝ)) ≤ Ks)
+    (he : ∀ i, 𝓛[Fzk].oneWait.toCompiled.es (x i) ≤ e)
+    (hc : ∀ i, (𝓛[Fzk].oneWait.toCompiled.nPU (x i) : ℝ) * 𝓛[Fzk].oneWait.toCompiled.openCalls (x i) ≤ c)
+    (hBc : ∀ i, ExpectedCR FlockDeploy.sha512
+      (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 𝓛[Fzk].oneWait.toCompiled (Ω i) (P i) (x i)))
+    (hX : ∀ i (K : ℕ), ExpectedCR FlockDeploy.sha512
+      (𝓛[Fzk].oneWait.toCompiled.finderXCls FlockDeploy.sha512 (P i) (x i) (s i) (needs i) (cls i) K))
+    (hI : ∀ i (K : ℕ), ExpectedCR FlockDeploy.sha512
+      (𝓛[Fzk].oneWait.finderICls FlockDeploy.sha512 (P i) (x i) (s i) (d i).part (needs i) (cls i) K)) :
+    Pr (fun σ : S => ∃ i, (run FlockDeploy.sha512 (P i) 𝓛[Fzk].V (x i) (φ i σ).1 (φ i σ).2).out = .acc ∧
+        ∃ u ∈ 𝓛[Fzk].checked (x i) (φ i σ).2,
+          u ∈ 𝓛[Fzk].oneWait.FregTwoX FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2) ≤
+      ∑ i, (3 * 𝓛[Fzk].κs (x i) +
+          2 * Real.sqrt (𝓛[Fzk].V.k (x i) * 𝓛[Fzk].γs (x i) * PrB FlockDeploy.sha512 𝓛[Fzk].V (P i) (x i))) +
+        2 * (2 * (T + e * (Cs * T + N * TR) + n * c) +
+            4 * (T + e * (Cs * T + N * TR) + (Ck * T + Sk * TR) + e * (Ck * T + Sk * TR) +
+              (1 + Ks) * (n * c))) /
+          2 ^ (256 : ℝ) := by
+  have hp : ∀ i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)),
+      (0 : ℝ) ≤ (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ) :=
+    fun i q => Nat.cast_nonneg _
+  have hpr : ∀ i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)), (0 : ℝ) ≤
+      if Except.toBool (Spot.Select.selectSecond (h.reg.sample (src (q.2 (order h (x i)).first))) h.reg.ns
+        h.reg.ks (stageSrc (stageCoins h (x i) q.2))) = false then
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)
+      else 0 := fun i q => by
+    split_ifs
+    · exact Nat.cast_nonneg _
+    · exact le_rfl
+  have hidem : ∀ i g, cls i (cls i g) = cls i g := fun i g => by
+    rw [hcls i]
+    exact Claims.SamplingGeneric.Compiled.clsOf_idem _ g
+  have hTs : ∑ i, Ex (fun q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin) =>
+      (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)) ≤ T :=
+    (Claims.SamplingGeneric.Ex_phases_sum φ fun i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) =>
+      (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)).symm.le.trans hT
+  have hRs : ∑ i, Ex (fun q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin) =>
+      if Except.toBool (Spot.Select.selectSecond (h.reg.sample (src (q.2 (order h (x i)).first))) h.reg.ns
+        h.reg.ks (stageSrc (stageCoins h (x i) q.2))) = false then
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)
+      else 0) ≤ TR :=
+    (Claims.SamplingGeneric.Ex_phases_sum φ fun i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) =>
+      if Except.toBool (Spot.Select.selectSecond (h.reg.sample (src (q.2 (order h (x i)).first))) h.reg.ns
+        h.reg.ks (stageSrc (stageCoins h (x i) q.2))) = false then
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)
+      else 0).symm.le.trans hR
+  have hAs : Ex (fun σ : S =>
+      ∑ i, ((𝓛[Fzk].toCompiled.firstSlots (x i) (𝓛[Fzk].checked (x i) (φ i σ).2)).card : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Cs * T + N * TR :=
+    (Claims.SamplingGeneric.Ex_phases_sum φ fun i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) =>
+      ((𝓛[Fzk].toCompiled.firstSlots (x i) (𝓛[Fzk].checked (x i) q.2)).card : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)).le.trans
+      (Claims.SamplingGeneric.sum_two_le _ _ _ _ _ (fun i => code_hAs h Fzk (x i) hK _ (hp i))
+        (fun i => Ex_nonneg (hp i)) (fun i => Ex_nonneg (hpr i)) (fun i => by exact_mod_cast hCs i)
+        (fun i => by exact_mod_cast hN i) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hTs hRs)
+  have hAk : Ex (fun σ : S => ∑ i,
+      (((𝓛[Fzk].toCompiled.sampleNeeds (x i) (needs i) (𝓛[Fzk].checked (x i) (φ i σ).2)).image (cls i)).card : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Ck * T + Sk * TR :=
+    (Claims.SamplingGeneric.Ex_phases_sum φ fun i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) =>
+      (((𝓛[Fzk].toCompiled.sampleNeeds (x i) (needs i) (𝓛[Fzk].checked (x i) q.2)).image (cls i)).card : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)).le.trans
+      (Claims.SamplingGeneric.sum_two_le _ _ _ _ _
+        (fun i => code_hAk_cls h Fzk (x i) (needs i) (cls i) M (hM i) hK _ (hp i))
+        (fun i => Ex_nonneg (hp i)) (fun i => Ex_nonneg (hpr i)) (fun i => by exact_mod_cast hCk i)
+        (fun i => by exact_mod_cast hSk i) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hTs hRs)
+  have hAm : Ex (fun σ : S => ∑ i,
+      (𝓛[Fzk].toCompiled.sessCountIn (x i) (needs i)
+        (fun l => (𝓛[Fzk].toCompiled.sampleNeeds (x i) (needs i) l).image (cls i))
+          (𝓛[Fzk].checked (x i) (φ i σ).2) : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Ck * T + Sk * TR :=
+    (Claims.SamplingGeneric.Ex_phases_sum φ fun i (q : Ω i × (Fin (𝓛[Fzk].V.k (x i)) → FlockDeploy.Coin)) =>
+      (𝓛[Fzk].toCompiled.sessCountIn (x i) (needs i)
+        (fun l => (𝓛[Fzk].toCompiled.sampleNeeds (x i) (needs i) l).image (cls i))
+          (𝓛[Fzk].checked (x i) q.2) : ℝ) *
+        (𝓛[Fzk].toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) q.1 q.2 : ℝ)).le.trans
+      (Claims.SamplingGeneric.sum_two_le _ _ _ _ _
+        (fun i => code_hAm_cls h Fzk (x i) (needs i) (cls i) (hidem i) M (hM i) hK _ (hp i))
+        (fun i => Ex_nonneg (hp i)) (fun i => Ex_nonneg (hpr i)) (fun i => by exact_mod_cast hCk i)
+        (fun i => by exact_mod_cast hSk i) (Nat.cast_nonneg _) (Nat.cast_nonneg _) hTs hRs)
+  exact code_phases_oneWait_le_avg h hB hS rfl hx hP hd hin φ P hneeds hcls he0 hKs0 hT hAs hAk hAm hKs he hc hBc
+    hX hI
 
 end SpotFlock
