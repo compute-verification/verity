@@ -58,11 +58,19 @@ def test_the_commit_takes_the_planned_facts_as_they_were_derived(planned):
     assert OC.promote_handed_down(copy.deepcopy(man), got)["rows"] >= 1, "the synthetic step hands model/out down to the fused norm"
 
 
+def _another_program(a: types.SimpleNamespace) -> None:
+    a.program_digest = "q" * 64
+
+
+def _programs_under_a_root(a: types.SimpleNamespace) -> None:
+    a.programs_root, a.program_dir = a.program_dir, None
+
+
 @pytest.mark.parametrize("perturb, field", [
     (lambda a: Path(a.required_manifest).write_text(Path(a.required_manifest).read_text() + " "), "required_manifest_sha256"),
     (lambda a: Path(a.workload).write_text(Path(a.workload).read_text().replace('"max_tokens": 2', '"max_tokens": 3')), "workload_sha256"),
-    (lambda a: setattr(a, "program_digest", "q" * 64), "program_digest"),
-    (lambda a: (setattr(a, "programs_root", a.program_dir), setattr(a, "program_dir", None)), "program_dir"),
+    (_another_program, "program_digest"),
+    (_programs_under_a_root, "program_dir"),
 ])
 def test_a_plan_keyed_otherwise_is_recomputed_by_the_commit_with_the_reason(planned, perturb, field):
     """A plan whose inputs are not the Commit's (another manifest, workload, Program, or the Programs read another way) is never used:
@@ -127,7 +135,12 @@ def test_the_plan_stage_plans_the_inputs_the_commit_stage_passes(tmp_path, monke
     r.I, r.O, r.config_run = 256, 32, True
     _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
     wor: list[str] = []
-    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": wor.append(stage) or ["--weights-of-record", "w.json"])
+
+    def weights_of_record(stage: str = "commit") -> list[str]:
+        wor.append(stage)
+        return ["--weights-of-record", "w.json"]
+
+    monkeypatch.setattr(r, "weights_of_record", weights_of_record)
     ran: dict[str, list[str]] = {}
 
     def run_tl(stage, to, log, cmd, *extra):
