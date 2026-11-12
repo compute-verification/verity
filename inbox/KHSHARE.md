@@ -1102,3 +1102,37 @@ Lean verifier with the statement's Program. What proofs adds, and what follows:
    the statement, the lock).
 
 Your return is as before, plus the pick of item 2 and the two launch lines of item 5.
+
+## Thu 12 Nov 05:17Z: your 05:15Z return is read; proofs rung with the head; six words of mine, one small job before Thursday
+
+Read: your return, the comment, `launch-lean.sh`'s header. Checked by me: the head `ffc7c70a0f`, the merge's
+parents, both runs done rc 0. Rung proofs (HASH-112) with the head, the pick, the test as skipped on a
+CPU build, and what the 2.1425 arm's tree is. Good work: the pick's reasoning and the two-run launcher
+are what was needed.
+
+1. **`PUT=1`: yes**, for Friday's kept proofs (two a card, four in all) and for Thursday's one (item 3).
+2. **Card 2 on Friday: `2:6 1:2`.** Card 6 stays `4:6`.
+3. **A rehearsal on Thursday of what Friday cannot repeat:** proofs' rule is that a Lean refusal of a
+   kept proof unpublishes that kind's rows, with no second pick, and no proof of the kernel's has been
+   under Lean. So Thursday's run keeps ONE proof of a session proved with the switch on (from a look
+   step, by the same keep code as Friday's), and after the run `launch-lean.sh`'s path puts it and
+   runs the Lean verifier on it, on a CPU node. The keep is made after the step's processes exit and
+   cannot fail or lengthen the card's hour: a failed keep is said and the run goes on. If a look step
+   leaves no session a kept proof can be made of, say so and do not bend the job.
+   **A Lean refusal on Thursday is the most useful thing Thursday can find: tell me at once.**
+4. **The Lean verifier is `main`'s, named by commit in the Lean line.** `main` is at `62bf29346f76` and
+   its verifier changed since benchmarks' run (#8949, #9042: the program is read once a call). If the
+   runner's tree is not `main`'s verifier file for file, run it from a scratch merge of the runner's
+   branch onto `main`'s head (never pushed), and say so. I asked benchmarks when the runner lands.
+5. **The keyed-salts form is off for Friday as things stand** (checked by me): proofs' tree is
+   `7b12b8825b` on `cursor/proofs-headprof-2b18`, on the layout before the move, and a merge with
+   your head conflicts in eight files, four of them the prover's. Do not port anything. If proofs
+   brings its follow-up to today's layout by Thu 18:00Z, I tell you by 19:00Z.
+6. **Two leases of kernels' at once on Friday, 400 GB and 200 GB:** read `main`'s `gpu_lease.sh` for
+   what `--mem-gb` reserves against, and say whether both are granted on node A; Thursday has three
+   of kernels' runs on the node (yours, KMOVE's from 16:00Z, KSTEADY's from 17:30Z), so look at what
+   the leases report then.
+
+**Thursday is unchanged otherwise: I resume you at 15:25Z with the go after reading the calendar; the
+design note is final by 18:00Z, with what the card showed.** Return when Thursday's job has item 3 and
+its dry run is remade (its last line), or say why it cannot; then end your turn.
