@@ -237,8 +237,9 @@ merge driver only on a file both sides changed, so a `.lean` file either side ad
 merges onto since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves
 the PR out with why.
 
-Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue builds it by its
-merge like any other PR and takes it only on a land verdict, never on the low-risk rule (`World.ready`).  A ready PR whose head
+Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue regenerates its
+move on what its batch merged below it and takes it on its ready mark alone once that is certified, never on the low-risk
+rule (`World.ready`, `World._move`).  A ready PR whose head
 doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and its owner is told the files it conflicts in,
 to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
 across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same
@@ -710,8 +711,9 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
-LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
+#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
+#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 #: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
@@ -778,8 +780,8 @@ class DriveFlags:
     #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
     lowrisk_lane: bool = True
     lowrisk_per_tick: int = 20
-    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), or a file name glob;
-    #: none, the lane lands nothing
+    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
+    #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
@@ -870,7 +872,8 @@ class DriveFlags:
             if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
                                                          and ".." not in x.split("/") for x in v)):
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "and file name globs, as [\"*.lean\", \"verity/core/\"]")
+                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
+                                              "\"verity/__init__.py\"]")
             got["lowrisk_excludes"] = tuple(v)
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
@@ -1092,6 +1095,22 @@ def move_scripts(repo: Path, at: str) -> dict[str, str]:
     return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
 
 
+#: the scripts of `tools/move/` as `vqueue.meets` reads a change's files: a member below a move that changes one holds it back
+#: (`Queue._scripts_below`)
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
+
+
+def path_rows(text: str) -> list[tuple[str, str]]:
+    """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
+    included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
+    goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
+    `tomllib.TOMLDecodeError`."""
+    data = tomllib.loads(text)
+    tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
+    rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
+    return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
+
+
 def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
     """``scripts`` (`move_scripts`) written under ``dest`` at their paths, so each finds its imports beside it as in a checkout:
     ``dest``."""
@@ -1192,18 +1211,25 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
 
 
 def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
-    """Whether a change to ``files`` is low-risk, so drive lands it on its ready mark alone, with no land verdict and no wait in
-    `next` (drive.toml's `lowrisk_lane`, `drive.Driver.land_lowrisk`): no file is under an ``excludes`` entry
-    that ends in `/` (a directory from the repository's root: the verifiers under `verity/core/` and the soundness-path Python
-    in `verity/ml/`) and no file's name matches an entry without one as a glob (`*.lean`, every `lean-audit.json`, the Lake
-    files, `TRUSTED.sha256`).  ``files`` are what the PR's merge onto the landing branch's tip changes against that tip, not
-    its own diff.  No excludes, nothing is low-risk; no file, nothing to land."""
-    dirs, names = [], []
+    """Whether a change to ``files`` is low-risk, so the verified queue's loop takes it on its ready mark alone, with no land
+    verdict (drive.toml's `lowrisk_lane`, `vqueue_loop.World.ready`): no file is under an ``excludes`` entry
+    that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
+    a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
+    it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
+    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    dirs, paths, names = [], set(), []
     for x in excludes:
-        (dirs if x.endswith("/") else names).append(x)
+        if x.endswith("/"):
+            dirs.append(x)
+        elif "/" in x:
+            paths.add(x)
+        else:
+            names.append(x)
     files = list(files)
-    return bool(files and (dirs or names)) and not any(
-        f.startswith(tuple(dirs)) or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names) for f in files)
+    return bool(files and (dirs or paths or names)) and not any(
+        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        for f in files)
 
 
 #: what a row of `research queue review` says of a head the verified queue's loop takes on its ready mark alone (`lands_on_mark`)
@@ -1218,8 +1244,9 @@ def own_files(repo: Path, main: str, head: str) -> frozenset[str]:
 def lands_on_mark(flags: DriveFlags, pr: PR, why: str | None, files: Iterable[str]) -> bool:
     """Whether the verified queue's loop takes ``pr``, marked ready at its head, on that mark alone (`vqueue_loop.World.ready`,
     and `research queue review`'s rows): the low-risk lane, while ``flags`` (drive.toml's at `main`: `flags_at`) have it on,
-    when ``files`` (`own_files`) are `lowrisk` under their `lowrisk_excludes`.  Never a move PR, which lands only with a land
-    verdict, nor one ``why`` (`unreviewed`'s word on its head) says is held."""
+    when ``files`` (`own_files`) are `lowrisk` under their `lowrisk_excludes`.  Never a move PR, which the loop takes on its
+    mark alone only once its move regenerated on `main` is certified (`World._uncertified`, `vqueue_loop._off_mark`), nor one
+    ``why`` (`unreviewed`'s word on its head) says is held."""
     return (flags.lowrisk_lane and not pr.move and not (why or "").startswith("held")
             and lowrisk(files, flags.lowrisk_excludes))
 
@@ -1547,7 +1574,7 @@ def _message(pr: PR) -> str:
 
 def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
     return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
-            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
+            f"by the queue for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
             f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
 
 
@@ -2374,38 +2401,52 @@ class Queue:
 
     # -- moves (the module's `Moves`)
 
+    @staticmethod
+    def _move_key(tip: str, pr: PR, main: str) -> str:
+        """The key of move PR ``pr``'s regeneration on ``tip``, landing tip ``main`` (the state's `moves_made`)."""
+        return f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+
     def _regenerate(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
         """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip, landing tip ``main``
-        and head (`_regenerated`; the state's `moves_made`)."""
-        key = f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+        and head (`_regenerated`; the state's `moves_made`, which keeps a certified move's `move_check.py --json` report as its
+        `certificate`)."""
+        key = self._move_key(tip, pr, main)
         self._used.add(key)
         got = self._made.get(key) or {}
         if not got.get("why") and not (got.get("commit") and self._has(got["commit"])):
-            commit, why = self._regenerated(tip, pr, main)
-            got = self._made[key] = {"commit": commit} if commit else {"why": why}
+            commit, why, report = self._regenerated(tip, pr, main)
+            got = self._made[key] = {"commit": commit, "certificate": report} if commit else {"why": why}
         return got.get("commit"), got.get("why", "")
 
-    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
+    def _scripts_below(self, tip: str, main: str) -> list[str]:
+        """The scripts of `tools/move/` that the members between ``main`` and ``tip`` change: a move regenerated on ``tip``
+        runs ``main``'s, and `restack.py` carries the members above it with its base's, so it waits until they land."""
+        scripts, ours = move_scripts(self.workdir, main), move_scripts(self.workdir, tip)
+        return sorted(p for p in ours.keys() | scripts.keys() if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p))
+
+    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str, dict | None]:
         """`rename.py --map MAP` (``pr``'s `Move:` line, ``tip``'s map) run at the root of a worktree of ``tip``, committed as one
-        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT`;
-        the PR's head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its
-        landing gates are, so a member below the move can't change what judges it; and a member below that changes
-        `tools/move/`'s scripts holds the move back, since `restack.py` carries the members above it with its base's.  A map
-        ``tip`` or a script ``main`` lacks, such a member, a script that fails, a map that renames nothing there, or a move
-        `move_check.py` refuses is the reason."""
+        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT
+        --json`, given each of the map's path rows as `--map OLD=NEW` (`path_rows`): (the commit, "", its report).  The PR's
+        head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates
+        are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
+        holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
+        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None)."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
             missing.insert(0, f"{pr.move} at {tip[:12]}")
         if missing:
             return None, (f"its move can't be regenerated: there's no {' or '.join(missing)}; land the map first, then mark the "
-                          "move again")
-        ours = move_scripts(self.workdir, tip)
-        if changed := sorted(p for p in ours.keys() | scripts.keys()
-                             if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p)):
+                          "move again"), None
+        if changed := self._scripts_below(tip, main):
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
-                          f"until those members land on `{into}`")
+                          f"until those members land on `{into}`"), None
+        try:
+            rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
+        except tomllib.TOMLDecodeError as e:
+            return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
         with scratch() as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
@@ -2414,24 +2455,33 @@ class Queue:
                 r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
                                    capture_output=True, text=True, env=_script_env())
                 if r.returncode:
-                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
+                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}", None
                 _git(wt, "add", "-A")
                 tree = _out(wt, "write-tree")
                 if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
-                                  "its map moves nothing there")
+                                  "its map moves nothing there"), None
                 commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
                               env=IDENTITY).stdout.strip()
                 # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
-                c = subprocess.run([sys.executable, str(check), tip, commit], cwd=wt, capture_output=True, text=True,
-                                   env=_script_env())
-                if c.returncode:
-                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified (`{MOVE_CHECK} "
-                                  f"{tip[:12]} {commit[:12]}` exit {c.returncode}): {_tail(c, 4)}")
+                c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
+                                   cwd=wt, capture_output=True, text=True, env=_script_env())
+                said = f"`{MOVE_CHECK} {tip[:12]} {commit[:12]}`" + (f" with {len(rows)} --map rows" if rows else "")
+                judge = f"{said} couldn't judge its move regenerated on {tip[:12]} (exit {c.returncode})"
+                try:
+                    report = json.loads(c.stdout)
+                except ValueError as e:
+                    return None, f"{judge}: no JSON report ({e}): {_tail(c, 4)}", None
+                if not isinstance(report, dict):
+                    return None, f"{judge}: {_tail(c, 4)}", None
+                if c.returncode or report.get("certified") is not True:
+                    refused = "; ".join(f"{f.get('path')}: {f.get('reason')}" for f in (report.get("refusals") or [])[:3])
+                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified ({said} exit "
+                                  f"{c.returncode}): {_tail(c, 1)}" + (f": {refused}" if refused else "")), None
                 self.log(f"research queue: #{pr.number}'s move ({pr.move}) regenerated on {tip[:12]} as {commit[:12]}: "
                          f"{_tail(c, 1)}")
-                return commit, ""
+                return commit, "", report
             finally:
                 _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
                 _git(self.workdir, "worktree", "prune", check=False)
@@ -2935,7 +2985,7 @@ class Queue:
                                              f"re-mark it")
             elif e.state == "ready":
                 e.why = ("admitted: the verified queue merges it into a candidate on `main` once it has a land verdict"
-                         + (": a move lands only with one, never on its mark alone" if e.pr.move else
+                         + (", or on its mark alone once its move is certified on `main`, as drive.toml allows" if e.pr.move else
                             ", or on its mark alone when it is low-risk"))
         return entries
 

@@ -830,14 +830,14 @@ def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(wo
     main = _move_main(world, {
         "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
                                 "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
-        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('certified')\n"})
+        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
     q = world.queue()
     q._clone()
     q.fetch()
     monkeypatch.setattr(tempfile, "tempdir", str(tmp))
     monkeypatch.setattr(queue, "MERGED_ROOT", fast)
-    commit, why = q._regenerated(main, PR(1, main, "move", "Lane `lane-1`.\nMove: tools/move/x_map.toml\n"), main)
-    assert commit and why == "", why
+    commit, why, report = q._regenerated(main, PR(1, main, "move", "Lane `lane-1`.\nMove: tools/move/x_map.toml\n"), main)
+    assert commit and why == "" and report == {"certified": True}, why
     assert _git(q.workdir, "show", f"{commit}:moved.txt") == "m"
     assert Path(ran.read_text()).is_relative_to(fast), ran.read_text()
     assert not list(fast.iterdir()) and not list(tmp.iterdir())
@@ -1989,9 +1989,9 @@ def test_status_lists_every_open_pr_whose_body_names_no_linear_issue(world, monk
                                                                                   4: "none: docs only"}
 
 
-def test_the_status_command_says_a_move_lands_only_with_a_land_verdict_and_refuses_one_that_conflicts_with_main(world):
-    """The verified queue builds a move PR by its merge, as any PR, and only with a land verdict: `status --loop` refuses one
-    that doesn't merge onto `main`, and says of one that does that it never lands on its mark alone."""
+def test_the_status_command_says_when_a_move_lands_on_its_mark_and_refuses_one_that_conflicts_with_main(world):
+    """`status --loop` refuses a move PR that doesn't merge onto `main`, and says of one that does that it lands with a land
+    verdict, or on its mark alone once the loop certifies its move on `main` and drive.toml allows it."""
     base = _git(world.origin, "rev-parse", "main")
     _move_main(world, {"a.txt": "main\n"})
     world.gh.put(1, world.change({"b.txt": "1\n"}))
@@ -2000,7 +2000,7 @@ def test_the_status_command_says_a_move_lands_only_with_a_land_verdict_and_refus
     loop = world.queue(land_into="checked").status(loop=True)
     assert [loop[n].state for n in (1, 2, 3)] == ["ready", "ready", "refused"], loop
     assert loop[1].why.endswith(", or on its mark alone when it is low-risk"), loop[1]
-    assert loop[2].why.endswith(": a move lands only with one, never on its mark alone"), loop[2]
+    assert loop[2].why.endswith(", or on its mark alone once its move is certified on `main`, as drive.toml allows"), loop[2]
     assert loop[3].why == "conflicts with `main` in a.txt: merge `main` into the branch and re-mark it", loop[3]
 
 
