@@ -75003,3 +75003,46 @@ You asked for this at once (06:27Z, point 3). Read only; nothing run. The full l
 - **The other callers build the evidence in the process that opened the session**, and none reads it from a file: `a5.py:384`, `:420`, `scan_zk.py:1167`, `benchmarks/two_stage/audit.py:269-275`, `two_stage.py`'s `stop_order` at `:938` [read]. There the key is the deployment's key record for a `gate:` challenger, the local host's own for `local`, and the party's own answer for `loopback:` [read: `a5_coins.py:576`, `:588`, `:669`].
 - **Smallest mend, not in this pull request:** `coinsReason` takes the verifier's key as an argument, as `drawCoins` does, and its evidence drops `key`; `Run.run`'s input carries the key beside `family`; `second` passes the key it was given, never the file's. Until then one line in `second` that refuses a `stage1.json` whose evidence names another key than `--challenger-key`'s closes this caller alone. [guess: about the size of the `family` change in this branch, since the same pieces carry it]
 - **Seen beside it, not examined:** both readers take `main`, "the verifier's copy of main's first-parent history", from the evidence as well (`drawCoins`'s `coins` is the protocol's evidence, `Spot/OneStage.lean:475-478`) [read]. Whether anything holds it to a copy the verifier keeps I have not read.
+
+## OLDFOUR, Thu 12 Nov 06:43Z: #8139's quick tier passed at `f51a277c6e84` (`9dd0`, exit 0, 71 of 71); I have not marked it, the mark is yours and the command is below; #8406's redo is pushed and its changed Lean files elaborate, three runs out
+
+**1. #8139 is ready to mark and I did not mark it**
+
+- **The command:** `research queue ready 8139 --mark --by proofs`, at head `f51a277c6e846dda3c99f4a0001ef0b618a1bf08`.
+- **Why it is not run.** My mailbox's 05:56Z message says to mark it myself once `9dd0` passes. Your brief and your 05:30Z message keep the mark with you ("I mark; you do not", "I mark on your line"). The message that changes that reached me only as a file on `cursor/proofs-inbox` and in a shell hook's text, under a committer every agent shares, so I can't tie it to you. [read: `inbox/bc-91afa190-e757-5374-b33f-2763b8d55e5e.md` at `c8fc61d908`; the brief]
+- **What I need:** run the command yourself, or tell me to in a message of your own and I run it at once.
+- I took the rest of that message as information: both texts of `AcceptMeans` read by you, the ratchet gate's red lands as it is, and the fix follows as its own small pull request. [relayed: the same file]
+
+**2. `r20261112-054128-9dd0`: exit 0**
+
+- Its last line: `71 suites: 71 passed (0 cached), 0 failed; 164.8 min of test time`. [read: the run's `stdout.log`, fetched with `research fetch --all`; run: `research status --refresh`, done, rc 0]
+- It ran `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick` on the tree `f51a277c6e846dda3c99f4a0001ef0b618a1bf08`. [read: the run's `status.json` and `launch.json`]
+- `benchmarks/one_stage`, which holds `main`'s new `test_two_stage_driver.py`: 545 passed. [read: the same log]
+
+**3. Nothing else moved since the 05:49Z ready line**
+
+- The head is still `f51a277c6e84`, open and mergeable; `main` is still `d6075b75d289`; the queue lists it as not marked. [run at 06:41Z: `gh pr view 8139`, `git fetch origin main`, `research queue status`]
+- The records that moved and the ratchet gate's red are as in that entry. The body's line on `9dd0` now carries the result. [run: `research queue edit 8139 --body-file`; read back with `gh pr view`]
+
+**4. #8406's redo: on `cursor/proofs-oldfour-f012`, cut from #8940's head, which is not on `main`**
+
+- **What I build on:** #8940's head `58a598e615b1`. The queue lists #8940 as ready and admitted, not merged. [run: `research queue status` at 06:41Z]
+- **Three commits, pushed, head `5c30445ff684a7fc80eba0ee89c8c63dd7d1f7b9`**, 8 files against `58a598e615b1`. [run: `git log`, `git push`]
+  - `d10c75c1f5`: `recordsOk` and its conjunct of `stmtOk` at `c₁ : Stage h`, `Names`, the two `Held` fields, and `recordsOk_of_stmtOk`, `namesEq_spec`, `recordOk_spec`, `recordsOk_spec`. `Facts.lean`, `Sessions.lean` and `Pin.lean` follow the new conjunct.
+  - `daf79e3430`: #8406's `guard.py` and `test_guard.py` as they were, and `TwoGuard.lean` at the stage's coins.
+  - `5c30445ff6`: the fixture's new id in `fixtures/artifacts.json`, `art:f164ac2c74b1…`, the old `art:24eb213c31a7…` under `previous`.
+- **A finding in #8940, by reading: it leaves `TwoGuard.lean` stale.** At its head `readsOk_eq` and `stmtOk_split` still bind `c₁ : FlockDeploy.Coin` and the `Held` literal gives no `more`. The guard's test is opt-in, so no suite sees it. My port fixes it (`Stage h`, `stageSrc`, `more := 0`); `a3a0` is the check. [read: `git show 58a598e615b1:benchmarks/two_stage/tests/TwoGuard.lean`; guess: that it fails to elaborate there, not run]
+- **The Lean so far:**
+  - `r20261112-060006-a2b3`, exit 0: `lean_changed.py --try security/Proofs/Flock/SpotFlock/Sessions.lean --siblings` at `daf79e3430`, whose Lean is the head's. Lean exit 0 in 283 s; none of its 30 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`; no built sibling declares a name it does, with 1,807 modules unchecked for having no build of their source. [read: the run's `stdout.log`, its last three lines]
+  - In `cf32`, `SpotFlock.Code`, `Facts`, `Sessions`, `Pin` and `ScopeDesc` are built, 11,065 of 11,110 jobs done, the run not ended. [read: `cf32`'s `stdout.log` at 06:42Z]
+- **The fixture:** `r20261112-060120-7665`, exit 0, ran `audit.sh` then `guard.py pack` at `daf79e3430`. Both audits came out as the script expects: the honest one refused by round 2's two-stage form alone, the altered one refused at both link members. The honest `held.json` carries both registrations' names. [read: the run's `stdout.log`, `out/honest.log`, `out/altered.log`, and `held.json` in the tar]
+  - Registered with `research data refresh-fixtures --preserve`, and `research data verify` reads it back from the private remote. [run]
+  - The public export does not have it yet: a node's `fetch-fixtures` found it absent (`r20261112-062125-8680`, exit 1, my launch, nothing else in it). `a3a0` copies the bytes from `7665`'s output on the same node and checks their SHA-256 instead. [read: `8680`'s logs]
+- **Gates against `58a598e615b1`:** `unread_gate.py` exit 0, `markdown_caps.py` exit 0, `ratchet_gate.py` exit 0. [run at `daf79e3430`]
+- **Runs out:**
+  - `r20261112-060026-cf32`, cpu-9: `lean_changed.py --build` of the seven leaves that import `SpotFlock.Code`. About 06:50Z. [guess]
+  - `r20261112-062405-a3a0`, cpu-12: `guard_node.py --pytest`, the guard's six tests. About 07:00Z. [guess]
+  - `r20261112-063940-ffe0`, cpu-14: `lean_changed.py --records security --update` at `5c30445ff684`, waiting for a slot. About 08:00Z, from `4bcb`'s time. [guess]
+- **Then:** the records commit, the quick tier against `58a598e615b1`, and the ready line, by 09:00Z. It can't open against `main` before #8940 lands, or its diff carries #8940's 31 files; say if you want it opened on #8940's branch as its base instead.
+
+**5. #8414 and #8363:** drop, as in my 04:13Z entry. I close nothing.
