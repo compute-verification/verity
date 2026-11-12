@@ -18,6 +18,7 @@ public import Spot.Schedule
 public import Spot.OneStage
 public import Spot.OneStageZk
 public import Spot.MembersParse
+public import Spot.MembersRefusal
 public import Spot.Rate
 public import Spot.HiddenDraw
 public import Spot.Select

@@ -5,11 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-THEORY = Path(__file__).resolve().parents[1] / "theory"
-sys.path.insert(0, str(THEORY))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
 import fold_opt_fx as fx
 import fold_wide32 as w32
+
+THEORY = Path(__file__).resolve().parents[1] / "theory"
 
 
 def test_fold_wide3_at_32_bits(tmp_path):

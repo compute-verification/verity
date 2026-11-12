@@ -96,9 +96,9 @@ delivers wakes (`subscribe_slack_*`), Verity's bot posts and reads, so a subscri
 never fires. `research msg subscriptions --as <your handle>` prints the subscribe calls to make (exit 2 while a channel
 id is missing).
 
-- **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to your Linear team's issue events
-  (`subscribe_linear_issue`, creations and state changes), never its comments: every handle writes through one bot and
-  one Linear app, so other subscriptions wake you for your own writes.
+- **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to no Linear events: every handle
+  writes through one bot and one Linear app, so they wake you for your own writes. Another handle's ask rings your inbox,
+  and a person's new issue that nobody answers rings you through the sweep's audit (`unheard`).
 - **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
   in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.
