@@ -115,7 +115,7 @@ def _data_port(port: str) -> bool:
     return port.startswith(("a_k", "b_k")) or port == "zy"
 
 
-def extract(a) -> None:
+def extract(a: argparse.Namespace) -> None:
     import pickle
 
     from verity.protocols.pouw.verifier import credit as CR
@@ -214,7 +214,7 @@ def extract(a) -> None:
     print("EXTRACTED " + json.dumps({x: pub[x] for x in ("unit", "served_rows", "drawn", "seconds")}), flush=True)
 
 
-def smoke(a) -> None:
+def smoke(a: argparse.Namespace) -> None:
     """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
     window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
     sampled: the harness's own check, never a served result."""
@@ -305,7 +305,7 @@ def expected(sw: Served, ln: int, ins: dict) -> list[int]:
                              sw.roots, ln, RC)]
 
 
-def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> dict:
+def statement(ctx: L.Ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> dict:
     """Stage lane ``ln`` as ``tag`` and write the verifier's files: ``ins`` each input port's opening; ``entries`` each
     read port's ``(value, entry, row)`` as the verifier holds it (the window's, or the produced partials')."""
     st = ctx.stagers[LL.LANE]
@@ -355,7 +355,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
 CTX = None
 
 
-def lane_ins(ctx, sw: Served, ln: int) -> tuple[dict, dict]:
+def lane_ins(ctx: L.Ctx, sw: Served, ln: int) -> tuple[dict, dict]:
     """Lane ``ln``'s honest openings and the verifier's read entries."""
     ins, entries = {}, {}
     for port, wp in lane_reads(ctx.k, ln).items():
@@ -389,7 +389,7 @@ def run_job(job: tuple) -> dict:
     return statement(ctx, ln, tag, sw, ins, entries)
 
 
-def prepare(a) -> None:
+def prepare(a: argparse.Namespace) -> None:
     global CTX
     t0 = time.time()
     work = Path(a.work)
@@ -492,7 +492,7 @@ def prepare(a) -> None:
 
 # -- summarize --------------------------------------------------------------------------------------------------------------
 
-def summarize(a) -> int:
+def summarize(a: argparse.Namespace) -> int:
     work, out = Path(a.work), Path(a.out)
     plan, prep = json.loads((work / "plan.json").read_text()), json.loads((work / "prepare.json").read_text())
     rows, opened = {}, {}
@@ -526,7 +526,7 @@ def summarize(a) -> int:
 SHARED = ("k", "unit", "window", "draw_root", "roots", "lane_program", "registration", "produced", "ands")
 
 
-def merge(a) -> int:
+def merge(a: argparse.Namespace) -> int:
     """The summaries of jobs that each proved a share of one unit's lanes (H1L_LANES), as one: every share read the same
     window, sample, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
     both negatives were refused."""

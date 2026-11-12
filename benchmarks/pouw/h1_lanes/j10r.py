@@ -34,6 +34,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -53,6 +54,9 @@ from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E40
 from verity.protocols.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+
+if TYPE_CHECKING:
+    from verity_flock.class_statement import UnitStager
 
 RC = tuple(int(x) for x in os.environ.get("H1L_RC", "16x16").split("x"))
 RN.RC = RC
@@ -209,7 +213,7 @@ def expected(ctx: Ctx, w: World, kind: str, ln: int | None, ch: int | None) -> l
                                    lf.position, w.roots, ln, RC, ctx.n, ch, ctx.j10r)]
 
 
-def stager(ctx: Ctx, kind: str, ch: int | None):
+def stager(ctx: Ctx, kind: str, ch: int | None) -> UnitStager:
     """The statement's stager on `h1zy.statement_rows` (each input port a ``row/v2`` row of its bits, `statement_ports`),
     its output ``o0`` one ``row/v2`` row."""
     b = ctx.bound[(kind, ch)]
@@ -293,7 +297,7 @@ def run_job(job: tuple) -> dict:
     return statement(CTX, tag, CTX.worlds[wname], ln, ch if CTX.n > 1 else None)
 
 
-def prepare(args) -> None:
+def prepare(args: argparse.Namespace) -> None:
     global CTX
     t0 = time.time()
     work = Path(args.work)
@@ -386,7 +390,7 @@ def prepare(args) -> None:
                                                             "seconds")}), flush=True)
 
 
-def summarize(args) -> int:
+def summarize(args: argparse.Namespace) -> int:
     work, out = Path(args.work), Path(args.out)
     plan, prep = json.loads((work / "plan.json").read_text()), json.loads((work / "prepare.json").read_text())
     rows, opened, verdicts, known = {}, {}, {}, {}
