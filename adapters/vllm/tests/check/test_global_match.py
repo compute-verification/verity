@@ -8,28 +8,65 @@ from __future__ import annotations
 
 import gzip
 import itertools
-import os
 import json
+import os
 
 import pytest
 
-from verity_vllm.pipeline.match import persist_program
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
+from tests.check import test_batch_decomp_e2e as e2e
+from tests.check.test_batch_decomp_e2e import (
+    A_DOWN_W,
+    A_EMBED,
+    A_GU_W,
+    A_IDS,
+    A_LN1,
+    A_LN2,
+    A_NORM,
+    A_O_W,
+    A_POS,
+    A_QKV_W,
+    BF,
+    BS,
+    I32D,
+    I64D,
+    W_COS,
+    W_DOWN,
+    W_EMBED,
+    W_GU,
+    W_LN1,
+    W_LN2,
+    W_NORM,
+    W_O,
+    W_QKV,
+    Ids,
+    V,
+    profile,
+)
+from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
+from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.pipeline import cli
-from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
-from verity_vllm.records.global_match import GlobalMatch
-from verity_vllm.records import workload as WL
-from verity_vllm.records.fields import RecordError, UnknownField
-from tests.check import test_batch_decomp_e2e as e2e
-from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
-                                                                            BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
-                                                                            W_O, W_QKV, Ids, V, profile)
-from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.log import dumps as log_dumps
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.match import persist_program
+from verity_vllm.records import workload as WL
+from verity_vllm.records.fields import RecordError, UnknownField
+from verity_vllm.records.global_match import GlobalMatch
 
 KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV pages: two private pages per request for up to 4 requests
 VC = V(e2e.A_VC, (8, BS, 1, 8))
@@ -215,10 +252,11 @@ def p_attention_tgrouped(node, ctx):
     in first-occurrence order, rows = the rows sharing that T (a running decode at position p and an arriving prefill's row p land
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
-    from tests.observe.test_fold_synthetic import _kv_flat, _slot
-    from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     from verity.circuits.defs import bind
     from verity.definitions.registry import b1
+
+    from tests.observe.test_fold_synthetic import _kv_flat, _slot
+    from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
         return None
@@ -237,8 +275,8 @@ def p_attention_tgrouped(node, ctx):
 
 
 def profile_tgrouped(leak=False):
-    from verity_vllm.observe.fold.resolver import Profile
     from tests.observe import test_fold_synthetic as toy
+    from verity_vllm.observe.fold.resolver import Profile
     pats = [p for p in toy.PATTERNS if p.name != "attention"]
     pats.append(toy.Pat("attention_leak" if leak else "attention_tgrouped", e2e.p_attention_leak if leak else p_attention_tgrouped))
     return Profile("toy", pats, dict(C), toy.weight_field, False)
@@ -474,9 +512,10 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     check() in the same process still loads the record's Programs and writes the same document."""
     import verity.circuits.codec as codec
     import verity.circuits.refs as refs
+
     from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import program_compare as C
     names = [(codec, "descriptor_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
@@ -878,6 +917,7 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
     # a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
     from verity.circuits.codec import program_digest
+
     from verity_vllm.pipeline import global_program as G
     desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
             "root": "Toy_v1", "annotations": {"free": "text"}}
@@ -1001,8 +1041,9 @@ def _real_workload_descriptor(lag: int | None):
     from verity.circuits.codec import encode_program
     from verity.circuits.defs import REGISTRY
     from verity.circuits.program import Program
+
+    from tests.program.test_workload_program import _WP, _toy_request
     from verity_vllm.program import workload as W
-    from tests.program.test_workload_program import _toy_request, _WP
     reqs = []
     for i, (LP, T) in enumerate([(3, 2), (5, 0)]):
         c = W.request_component(encode_program(Program(_toy_request(LP, T))), REGISTRY, _WP(LP))
@@ -2083,8 +2124,9 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
     """The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
     (a forked worker) must never be matched against one computed in another.  The memo refuses a seeded foreign dict by name."""
     import os
-    from verity_vllm.check.match import program_compare as C
+
     from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import program_compare as C
     gp, oracle = assemble([R0, R1], tmp_path)
     B = C.load_oracle(oracle, "oracle")
     dag_hashes = GMF.ops().dag_hashes
@@ -2108,7 +2150,9 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
     """[unit 5 (a)] global_match_fast._runs_fast == verity.circuits.refs.runs on Affine / Concat-of-Affine (incl. zero-count parts and
     fusing neighbours) and falls back to the original on every other shape (Strided, Explicit, nested Concat)."""
     import random
+
     from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
+
     from verity_vllm.check.match import global_match_fast as GMF
     rng = random.Random(7)
     def affine():
@@ -2127,9 +2171,10 @@ def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(mem
     """[unit 5 (b)(c)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
     producer, and the consumer-before-producer negative) the helpers return exactly what the record's loops compute."""
     import collections
+
     from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import program_compare as C
     seen_viol = 0
     for n, (reqs, kw) in enumerate((([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
                                     ([R0, R1], {"tgrouped": True, "_swap": True}))):
@@ -2189,8 +2234,8 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
     their own id) instead of sha256(json).  Spy every dag_hashes call check() makes -- components, projections, live cones, the
     permutation fixture's per-step matching, the consumer-before-producer forward refs -- and require ONE bijection between the
     record's digests and the ids across all of them (so A-vs-P comparisons decide exactly as the record's do), under both operand forms."""
-    from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import batch_decomp as BD
+    from verity_vllm.check.match import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.setenv(GMF.COMPACT_ENV, compact)
     monkeypatch.setenv("MATCH_WORKERS", "1")
@@ -2235,6 +2280,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     fast A == B where record A != B, so the fast document put the resolved readers in the marker class.  Both shapes:
     count 2 (two producers) and the ordinary count-1 progression (one producer, its other readers after it)."""
     import inspect
+
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
     if "compact" not in inspect.getsource(BD.dag_hashes):
@@ -2314,7 +2360,8 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
                                                                           if k not in ("seconds", "derived_available", "missing_derived", "extra_derived", "pipeline")}
     if workers == "1":   # as row_pod runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
-        import subprocess, sys as _sys
+        import subprocess
+        import sys as _sys
         dout2 = tmp_path / "decomp_m.json"
         env = dict(os.environ, MATCH_IMPL=impl, MATCH_WORKERS=workers, PYTHONPATH=os.pathsep.join(p for p in _sys.path if p))
         p = subprocess.run([_sys.executable, "-m", "verity_vllm.pipeline.cli", "global-match", "--global-program", str(gpp), "--oracle", str(oracle),
@@ -2351,6 +2398,7 @@ def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(
     a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
     from verity.circuits import codec
+
     from verity_vllm.pipeline.match import persist_program as _persist
     evs = batched_log([R0, R1])
     r = fold(evs, profile(), strict=True)

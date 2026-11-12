@@ -553,7 +553,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
                      and bool(bus.settings.get("flashinfer")) and hidden_states.dtype == torch.bfloat16
                      and len(shape) == 2 and shape[1] == 6144 and M <= 42
                      and tuple(residual.shape) == shape and tuple(norm.weight.shape) == (6144,))
-            if fused:
+            if fused and bus is not None:
                 return bus.fused_allreduce_rms_norm(hidden_states, residual, norm.weight, float(norm.variance_epsilon))
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pass

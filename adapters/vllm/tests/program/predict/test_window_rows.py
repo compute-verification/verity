@@ -15,28 +15,34 @@ from typing import Any
 
 import numpy as np
 import pytest
-from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
-from tests.program.predict.test_window_circuit_fa3 import H200
-from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from verity_vllm.program.predict import scan_state as SS
-from verity_vllm.program.predict import window_builder as WB
-from verity_vllm.program.predict import window_circuit as WC
-from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict import window_weights as WW
-
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.gates import embedding as E
+from verity.commitments.windows import interface as IF
+from verity.definitions.registry import io_shell as IO
 from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.protocols.certifier.verifier import warden as W
 from verity.protocols.certifier.verifier.active import id_request
 from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.protocols.spot.verifier.one_stage import registered as CR
 from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.gates import embedding as E
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+
+from tests.program.predict import test_steps as S
+from tests.program.predict.test_window_circuit import (
+    CLASS,
+    GRAIN,
+    SPLIT,
+    SPLIT_GRAIN,
+    state_row,
+)
+from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
+from tests.program.predict.test_window_circuit_fa3 import H200
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict import window_builder as WB
+from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_rows as WR
+from verity_vllm.program.predict import window_weights as WW
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}
@@ -112,6 +118,7 @@ def window():
 
 def _position(fn, family: str) -> list[int]:
     """Each position's node of ``family`` (its first)."""
+    out: dict[int, int]
     pos, out = WR.positions(fn), {}
     for j, n in enumerate(fn.body.nodes):
         if n.fn.name == family:
@@ -206,8 +213,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             (first, _), (end, _) = plan
             (ft, fu), (et, eu) = calls
             assert first.name == "AttnBlockFirst" and end.name == "AttnHeadEnd" and rows.source[ft][fu] == WR.EVALUATED
-            l, o = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
-            node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
+            lw, ow = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
+            node = np.asarray(evaluate_batch(end, lw, ow)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
 
@@ -233,7 +240,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
-    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and max(WW.weight_nonces(values).values()) < WR.STATE_NONCE
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 
@@ -247,6 +254,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent / "verifier" / "tests" / "scan_traffic.py")
+    assert spec is not None and spec.loader is not None
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan
@@ -545,7 +553,7 @@ def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     """`_as_leaves` and `_packed` against `ScanSlots_v2` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
     gives `scan_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
     scan = SS.bridge(CLASS.scan, CLASS.prompt)
-    row = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
+    row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     (_, t), = scan.signature()[0]
     out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
     b = scan.bindings
@@ -573,7 +581,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
-    bad = {}
+    bad: dict[str, list[int]] = {}
     for fn, n in low.circuit.templates:
         tid = descriptor_id(fn)
         lay = IF.layout(fn)
@@ -599,8 +607,8 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
             part, at = flat[:, at:at + f.leaves], at + f.leaves
             want.append(part if part.shape[1] == got[-1].shape[1] else _packed(part, w))
         got, want = np.concatenate(got, axis=1), np.concatenate(want, axis=1)
-        if (u := np.flatnonzero((got != want).any(axis=1))).size:
-            bad[tid] = u.tolist()
+        if (off := np.flatnonzero((got != want).any(axis=1))).size:
+            bad[tid] = off.tolist()
     assert bad == {}
     c = win.close(salt_key=bytes(32))
     assert c is not None

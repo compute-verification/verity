@@ -4,10 +4,13 @@ producers' hashes in place of their positions (a Merkle DAG), compared as a mult
 from __future__ import annotations
 
 import collections
+import hashlib
 import json
 
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
+from verity_vllm.program.compact import expand_mixed, n_producers
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+
 
 def _producer(P: C.RootView, t) -> int | None:
     if t[0] != "N":
@@ -17,7 +20,6 @@ def _producer(P: C.RootView, t) -> int | None:
 
 def _producers(P: C.RootView, t) -> list[int]:
     """Every producer instance of a canonical N source, record form or progression."""
-    from verity_vllm.program.compact import n_producers
     return n_producers(P.steps, t)
 
 
@@ -49,11 +51,8 @@ def dag_hashes(P: C.RootView, only: set[int] | None = None) -> dict[int, str]:
     the eager fold then emits chunk-major (all ops of rows 0..c-1, then all ops of rows c..LP-1) while the request-wrapper Program
     is op-major over LP rows — the same DAG, a different sequence. `only` restricts the multiset to those instances (live cone);
     producers precede consumers in node order."""
-    import hashlib
     hashes: dict[int, str] = {}
     compact = getattr(P, "compact", False)
-    if compact:
-        from verity_vllm.program.compact import expand_mixed
     for s, idxs in enumerate(P.steps):
         for i in idxs:
             if only is not None and i not in only:

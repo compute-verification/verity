@@ -84,19 +84,22 @@ import multiprocessing
 import sys
 import tempfile
 import traceback
+from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, SupportsInt
 
 import numpy as np
-
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import flashmla_prefill_twin as PT
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
 from verity.definitions.registry import flashmla as F
 from verity.definitions.registry import flashmla_prefill as P
+
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-flashmla-capture/v1"
@@ -114,8 +117,7 @@ SWA_PBS = 64
 #: the extra caches: (page block, index width, index buffer width).  C4: 256-token blocks / 4; C128: 256 / 128, and its indices
 #: `buffer[:T, :W]` with W = min(max(next_pow2(max_seq_len / 128), 128), c128a_max_compressed) (here 128 of a 1024-wide buffer)
 #: `c128l` is a C128 layer in a step whose longest sequence is past 2^19 positions: W = 8192, the whole buffer (max_model_len 2^20)
-LAYERS: dict[str, tuple[int, int, int] | None] = {"swa": None, "c4": (64, C4_TOPK, C4_TOPK), "c128": (2, 128, 1024),
-                                                  "c128l": (2, 8192, 8192)}
+LAYERS: dict[str, tuple[int, int, int]] = {"c4": (64, C4_TOPK, C4_TOPK), "c128": (2, 128, 1024), "c128l": (2, 8192, 8192)}
 #: blocks of each cache; the last block of each is reserved for `edge`'s special rows
 CACHE_BLOCKS = {"swa": 48, "c4": 40, "c128": 512, "c128l": 4200}
 #: sha256 of vllm/third_party/flashmla/flash_mla_interface.py as cmake/external_projects/flashmla.cmake writes it from FlashMLA
@@ -341,7 +343,7 @@ def case_operands(case: str, quick: bool = False) -> dict[str, Any]:
     head_gain = np.array([0.25, 1.0, 4.0, 16.0] * (NH // 4), dtype=np.float32)[None, :, None]
     q = np.zeros((b, H_Q, D), dtype=np.uint16)
     q[:, :NH] = _bf16(rng.standard_normal((b, NH, D)).astype(np.float32) * head_gain)
-    sink = np.full(H_Q, F_NINF, dtype=np.uint32)
+    sink: np.ndarray = np.full(H_Q, F_NINF, dtype=np.uint32)
     sink[:NH] = (rng.standard_normal(NH) * 2).astype(np.float32).view(np.uint32)
     o: dict[str, Any] = {"case": case, "layer": layer, "q": q, "sink": sink, "swa_cache": random_cache(rng, "swa"),
                          "swa_lens": np.array([s for s, _ in lens], dtype=np.int32)}
@@ -354,8 +356,8 @@ def case_operands(case: str, quick: bool = False) -> dict[str, Any]:
         o["extra_lens"] = np.array([e for _, e in lens], dtype=np.int32)
         o["extra_buf"] = rng.integers(-1, 1 << 20, (b, buf), dtype=np.int32)      # past `width`: never read
         o["extra_buf"][:, :width] = -1
-        for t, (_, e) in enumerate(lens):
-            o["extra_buf"][t, :e] = _slots(rng, layer, e)
+        for t, e in enumerate(o["extra_lens"]):
+            o["extra_buf"][t, :e] = _slots(rng, layer, int(e))
         for t in range(b - case_pads(case, quick), b):
             k = int(rng.integers(0, width + 1))
             o["extra_buf"][t, :k] = _slots(rng, layer, k)
@@ -371,7 +373,7 @@ def _reserved(o: dict[str, Any], cache: str, k: int) -> np.ndarray:
     return np.arange(first, first + k, dtype=np.int32)
 
 
-def _write_row(o: dict[str, Any], cache: str, slot: int, nope=None, scale=None, rope=None) -> None:
+def _write_row(o: dict[str, Any], cache: str, slot: SupportsInt, nope=None, scale=None, rope=None) -> None:
     pbs = SWA_PBS if cache == "swa_cache" else LAYERS[o["layer"]][0]
     blk, off = divmod(int(slot), pbs)
     page = o[cache][blk]
@@ -475,6 +477,7 @@ def case_jobs(case: str, paths: dict[str, str], num_splits: np.ndarray, quick: b
     token of `edge`; under --quick only the fewest)."""
     per = np.diff(np.asarray(num_splits))
     b = per.size
+    jobs: list[dict[str, Any]]
     jobs = [{"phase": "decode", "case": case, "kind": "twin", "paths": paths, "tokens": [lo, min(b, lo + JOB_TOKENS)]}
             for lo in range(0, b, JOB_TOKENS)]
     refs = {int(np.argmin(per))} if quick else ({int(np.argmax(per)), int(np.argmin(per))} if case != "edge" else set(range(b)))
@@ -585,16 +588,16 @@ def prefill_edge(rng: np.random.Generator, o: dict[str, Any]) -> None:
     o["idx"][7, 700] = keep
 
 
-def _cache_rows(cache: np.ndarray, table: np.ndarray, r: int, positions: np.ndarray, pbs: int):
+def _cache_rows(cache: np.ndarray, table: np.ndarray, r: int, positions: Sequence[int] | np.ndarray, pbs: int):
     """Request r's cache rows at ``positions`` through its block table: (n, DN) e4m3, (n, 7) UE8M0, (n, DR) bf16."""
-    p = np.asarray(positions, dtype=np.int64)
+    p: np.ndarray = np.asarray(positions, dtype=np.int64)
     return gather_rows(cache, np.asarray(table)[r, p // pbs].astype(np.int64) * pbs + p % pbs, pbs)
 
 
 def written(a: dict[str, np.ndarray]) -> np.ndarray:
     """(R, M): the workspace rows the two gathers write."""
     nc, m = (int(v) for v in a["geom"])
-    out = np.zeros((len(a["seq_lens"]), m), dtype=bool)
+    out: np.ndarray = np.zeros((len(a["seq_lens"]), m), dtype=bool)
     for r in range(out.shape[0]):
         out[r, :int(a["comp_lens"][r])] = True
         out[r, nc:nc + int(a["gather_lens"][r])] = True
@@ -644,7 +647,7 @@ def prefill_jobs(case: str, paths: dict[str, str], lens, quick: bool) -> list[di
     `edge`; under --quick only the shortest)."""
     n = np.asarray(lens)
     b = n.size
-    job = {"phase": "prefill", "case": case, "paths": paths}
+    job: dict[str, Any] = {"phase": "prefill", "case": case, "paths": paths}
     jobs = [{**job, "kind": "gather"}]
     jobs += [{**job, "kind": "prefill-twin", "tokens": [lo, min(b, lo + JOB_TOKENS)]} for lo in range(0, b, JOB_TOKENS)]
     refs = {int(np.argmin(n))} if quick else ({int(np.argmax(n)), int(np.argmin(n))} if case != "edge" else set(range(b)))
@@ -835,9 +838,6 @@ def compare_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's real heads: `FlashMlaDecode_v1{NH=16,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     metas, ns = _metas(a)
     t = job["token"]
@@ -858,12 +858,9 @@ def compare_gather(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Every word of the GPU's workspace against `workspace` (the twin's rows where the gathers write, the sentinel elsewhere);
     `FlashMlaGatherRow_v1` (the reference) against the twin on each request's last window row, request 1's window positions 4096
     and 4097 and request 0's first five compressed rows (`edge`'s special rows)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     want, got = workspace(a, SENTINELS[0]), np.asarray(a["kv"], dtype=np.uint16)
-    bad = np.argwhere(want != got)
+    bad: np.ndarray = np.argwhere(want != got)
     rec["words"] += int(got.size)
     rec["mismatch"] += int(bad.shape[0])
     if bad.shape[0] and rec["first_mismatch"] is None:
@@ -902,9 +899,6 @@ def compare_prefill_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_prefill_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's real heads: `FlashMlaPrefill_v1{NH=16,NP,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     x, y = prefill_twin_out(a, t)
@@ -937,8 +931,6 @@ def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics: a window-only token (two blocks, one split), a full compressed token cut in
     two, the lone token's split, combine and head shapes, the combine of the most splits any batch gives a request (127), the KV
     row; the prefill's gather row and a token of one pair, of a full C4 row's nine and of a full W-8192 C128 row's 65."""
-    from verity.circuits.defs import bind
-
     st = {k: v for k, v in F.FLASHMLA_DSV4.items() if k != "NH"}
     blk = {"D": D, "BN": BN, "DOT": F.FLASHMLA_DSV4["DOT"], "SCALE": SCALE}
     targets = {

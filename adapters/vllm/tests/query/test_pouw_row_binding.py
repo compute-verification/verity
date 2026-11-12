@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.binding import coverage_check
 from verity_vllm.correspondence.reader_for_query import parse_call_name
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, Port
 from verity_vllm.query.required import member_name
 
