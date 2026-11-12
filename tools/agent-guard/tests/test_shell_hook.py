@@ -888,7 +888,7 @@ UNFOLLOWED_CDS = [
     "cd {T} | true; git push origin main", "case x in x) cd {T};; esac; git push origin main", "C=cd; $C {T}; git push origin main",
     "git push origin main; cd {T}", "popd; git push origin main", ". ./env.sh; git push origin main",
     "cd {T} && git push origin main", "cd {T}; git push --repo=origin", "(cd {T} && git push origin main)",
-    "cd {T} && git push origin HEAD", "cd {T} && git push", "cd {T} && git -C {T} push origin main",
+    "cd {T} && git push origin HEAD:main", "cd {T} && git -C {T} push origin main",
 ]
 
 
@@ -900,8 +900,28 @@ def test_a_cd_anywhere_in_the_command_leaves_a_push_unplaced(clones, form):
     and a push it can't place is judged as one to verity or infra, its current branch any branch."""
     for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
         out = clones(form.replace("{T}", target), clone)
-        assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, clone, out)
-        assert "with no `cd` in the command, `git -C <checkout> push <remote> <refspec>`" in out["agent_message"], out
+        assert out["permission"] == "deny" and "with no `cd` in the command, `git -C <checkout> push" in out["agent_message"], (
+            form, clone, out)
+
+
+def test_a_push_whose_branch_the_guard_cant_tell_is_told_so_and_what_it_accepts(clones):
+    """`cd WT && git push -u origin HEAD` updates whatever WT has checked out, not `main`: its refusal leads with what the guard
+    can't tell and why, and names the push it accepts. A push that names `main` in its own words leads with the protected
+    branches whatever the `cd`, and then says how to name another repository's checkout."""
+    prefix = "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): "
+    for form, why in (("cd {T} && git push -u origin HEAD", "the command has a `cd` in it"), ("cd {T} && git push", "a `cd`"),
+                      ("pushd {T} && git push origin @", "a `pushd`"), ("GIT_DIR={T}/.git git push", "the command sets `GIT_DIR`")):
+        for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+            out = clones(form.replace("{T}", target), clone)
+            message = out["agent_message"]
+            assert out["permission"] == "deny" and message.startswith(
+                prefix + "the guard can't tell which checkout this push runs in, so which branch it pushes, because "), message
+            assert why in message and "`git -C <checkout> push -u origin HEAD`" in message, message
+            assert "`git push -u origin <your-branch>`" in message and "only drive and the lander move" not in message, message
+    out = clones("cd {N} && git push origin main", "verity")
+    assert out["agent_message"].startswith(prefix + "this push would update `main`, `checked` or `next`"), out
+    assert "because the command has a `cd` in it" in out["agent_message"], out
+    assert "`git -C <checkout> push <remote> <refspec>`" in out["agent_message"], out
 
 
 def test_what_the_guard_can_place_in_another_repository_still_passes(clones):

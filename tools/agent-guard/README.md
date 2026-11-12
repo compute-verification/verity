@@ -30,7 +30,8 @@ repository. The typed rule reads a push's words as git does (options anywhere, b
 own `-C`, `-c` and the like), and places a push by three things only: the directory the hook is handed, git's own `-C`,
 and a URL or path given as its repository. It follows no `cd`: a `cd`, `pushd`, `popd` or `source` anywhere in the
 command, run or not, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, leaves the push unplaced
-(`git -C <checkout> push ...` places it), and the branch-switch rule refuses a switch it can't place. It judges as a push
+(`git -C <checkout> push ...` places it): such a push that names no branch is refused for that, with the push it accepts
+(`git -C <checkout> push -u origin HEAD`, or the branch by name). The branch-switch rule refuses a switch it can't place. It judges as a push
 to the queue's repositories one it can't place, or whose first word is neither a remote, a URL nor a path, an option git
 doesn't know, or git configuration set elsewhere in the command. It can't see what earlier commands left in the shell (an
 exported `GIT_DIR`, an alias); `pre_push.py`, which reads the URL git pushes to, can. Not covered by the

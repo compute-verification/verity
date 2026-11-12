@@ -29,7 +29,8 @@ option git doesn't know, or git configuration another command in the line may se
 A git command runs, for every rule, in the event's cwd (else the workspace root) joined with its own `git -C DIR`, and
 nowhere else (`indexed_invocations`). A `cd`, `pushd`, `popd` or `source` anywhere in the command, run or not, or a repository
 named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes its directory unknown (`moves`): a push is then judged as one to
-the queue's repositories with every branch its current one, and a branch switch is refused.
+the queue's repositories with every branch its current one, refused for what the guard can't tell unless its own words name
+a protected branch (`unplaced_reason`), and a branch switch is refused.
 The registry is `$AGENT_GUARD_STATE/branches.json` (default /tmp/agent-guard), one VM's: an agent on a VM of its own is never
 judged.
 """
@@ -274,9 +275,9 @@ def read_push(g: Git, env: dict[str, str]) -> Push:
     return p
 
 
-def push_targets(p: Push) -> list[str]:
-    """The branches `p` updates, as their names under refs/heads/ (`*` in one stands for any branch, and for the current branch
-    of a push the guard can't place)."""
+def push_targets(p: Push, unplaced: str = "*") -> list[str]:
+    """The branches `p` updates, as their names under refs/heads/ (`*` in one stands for any branch); its current branch is
+    `unplaced` when the guard can't place the push, and `*` when it is detached."""
     current = git(p.d, *p.options, "symbolic-ref", "--short", "-q", "HEAD", env=p.env) if p.placed else None
     out = []
     for s in p.refspecs or ["HEAD"]:
@@ -285,7 +286,7 @@ def push_targets(p: Push) -> list[str]:
             continue
         src, colon, dst = s.partition(":")
         dst = (dst or (src if colon and src else "*" if colon else "")) if colon else src
-        dst = (current or "*") if dst in ("HEAD", "@") else dst
+        dst = (current or ("*" if p.placed else unplaced)) if dst in ("HEAD", "@") else dst
         out.append(dst.removeprefix("refs/").removeprefix("heads/"))
     return out
 
@@ -338,6 +339,13 @@ def judged_note(why: str) -> str:
             f"passes once it can: name the checkout and the remote on git itself, with no `cd` in the command, `git -C "
             f"<checkout> push <remote> <refspec>`.") if why else ""
 
+
+def unplaced_reason(why: str) -> str:
+    """The refusal of a push whose current branch the guard can't tell, for `why` (Git.unknown), and the push it accepts."""
+    return (f"the guard can't tell which checkout this push runs in, so which branch it pushes, because {why}. It places a push "
+            f"only by the directory the command starts in and git's own `-C`: name the checkout on git itself, with no `cd` in "
+            f"the command, `git -C <checkout> push -u origin HEAD`, or name the branch, `git push -u origin <your-branch>`.")
+
 #: `git config` forms that list keys: an installation token sits in http.*.extraheader's value and in url.*.insteadof's name,
 #: so even `--name-only` prints it
 CONFIG_DUMPS = {"--list", "-l", "--get-regexp", "--show-origin", "--get-all", "--get-urlmatch"}
@@ -379,11 +387,14 @@ def main_or_config_reason(invocations_: list[Git], pushes: dict[int, Push], next
     for i, d, args, _, _ in invocations_:
         sub, ok = args[0], next_ok[i] if i < len(next_ok) else ""
         if sub == "push" and (why := judged(p := pushes[i])) is not None:
-            targets = {b for b in PROTECTED if any(fnmatch.fnmatchcase(b, t) for t in push_targets(p))}
+            named, targets = ({b for b in PROTECTED if any(fnmatch.fnmatchcase(b, t) for t in push_targets(p, unplaced))}
+                              for unplaced in ("", "*"))
             if not p.every and next_repaired(targets, ok, {"agent": agent, "dir": d, "args": args}):
                 continue
-            if p.every or targets:
+            if p.every or named:
                 return PROTECTED_REASON + judged_note(why)
+            if targets:
+                return unplaced_reason(why)
         if sub == "config":
             rest = args[1:]
             names = [a for a in rest if not a.startswith("-")]
