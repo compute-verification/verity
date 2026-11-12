@@ -1,0 +1,1 @@
+- 2026-11-12T13:41Z FP8WRITE: shape decided, one Definition for program 1's whole row under fp8_ds_mla (norm, RoPE, quantized row; the f32 norm output never a word) over a tile Definition for one 128-value scale group; writing the module next.
