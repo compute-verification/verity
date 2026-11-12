@@ -109674,3 +109674,28 @@ To infra, if the coordinator agrees: "The proofs line for a Lean slot on vy-nebi
 ### Not established
 
 `projection_of` has not compiled.
+
+## STOPDRIVER, Thu 12 Nov 23:49Z: I stop to wait, as your 23:43Z message asks: five runs on vy-nebius-2, the first answers about 00:15Z to 00:30Z; the card job passed its dry run at V = 2,560
+
+Mailbox read to "Coordinator, Thu 12 Nov 23:43Z: End your turn if you only wait on runs" (read).
+
+**The runs I wait on, and when I expect each.**
+
+| run | what | state at 23:47Z (read) | expected (guess) |
+|---|---|---|---|
+| `r20261112-231149-d852` | staging one chunk statement and the combine at V = 154,880, kept on the node | running since 23:25Z, in `second` since 23:36Z, peak resident memory 7.8 GB so far | ends by about 00:15Z |
+| `r20261112-234712-4ed2` | the card job on those statements, pool `gpu` | running since 23:47Z: it holds a `gpu` place and no card until `d852` leaves its statements (at most 45 minutes, and it ends at once if `d852` ends without them), then proves both under one lease of at most 10 minutes | about 10 minutes after `d852` ends, so by 00:30Z |
+| `r20261112-233759-ce6a` | Lean's verify on the dry run's four card sessions | waiting in the proofs line since 23:38Z, "33 check(s) ahead" | no estimate I can stand behind |
+| `r20261112-231207-5ddb` | quick suites at the cards head before the merge, `ddcd46b4919c` | running since 23:26Z; 45 suites passed and none failed at 23:44Z | by 00:30Z |
+| `r20261112-234519-8cc3` | quick suites at the merged cards head, `2c5806b33e8c` | in the proofs line since 23:45Z | within an hour of taking a place; it reuses `5ddb`'s passes on the node |
+
+**What is new since my 23:14Z entry.**
+
+- The staging wrapper passed its dry run at V = 2,560: `r20261112-231112-dd99` done, exit 0, 8 minutes, peak resident memory 6.9 GB (run). It kept `GreedyChunk_v2{N=128,OFF=0}` (`k_log` 22) and `GreedyCombine_v2{V=2560,N=128}` (`k_log` 24) with the audit's own pin (read).
+- The card job passed its dry run on those two statements: `r20261112-232917-a84d` done, exit 0, on one RTX PRO 6000 (run). Both statements were accepted in both sessions (a warm one and a timed one); the prover's own timer was 0.33 s (chunk) and 0.48 s (combine); the card's peak memory was 2,280 MiB and 2,655 MiB (read). So the kernels lane's job takes my staged files as they are; this is a test of the plumbing, not a figure for Friday (derived).
+- The cards branch's head is now `2c5806b33e8c`: a merge of GATHER's branch at `496aa183544b`, which had moved (it gained the `--tables` rehearsal) (run). One conflict, in the header comment of `two_stage_small.sh`; both lines kept (run). At the merge, `test_two_stage_cost.py` 15 passed and `test_a5_cards.py` 8 passed here; `test_two_stage_second.py` is too heavy for this VM and is left to `8cc3` (run).
+- `4711` and `cfca` were refused by cpu-13's memory line at 23:17Z; nothing of mine waits on cpu-13, cpu-12, cpu-10 or cpu-8 (read).
+
+**When you resume me.** The Lean job on the served-size sessions (it needs `4ed2`'s sessions and a proofs place), then the one entry with `k_log`, the card's peak memory, the prover's timer and Lean's verdict; the cards branch's ready line when `8cc3` passes, naming `2c5806b33e8c`.
+
+**Work that needs no run's answer:** the second build's first entry (the read across a tie's streams, due Fri 22:00Z, not on Friday's path). I stop rather than go on with it, so the place goes to a piece of the two-round proof; a word in my mailbox and I take it up at once (derived).
