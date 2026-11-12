@@ -115,7 +115,7 @@ def test_quick_is_a_subset():
 def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     layout = StreamLayout(1, len(rows), 2, 128, 64)
-    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    w: np.ndarray = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R = X._row_plane(w, layout)
     it = iter(row_max)
     for slab, r, nbm in rows:
@@ -174,7 +174,7 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
-    w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
+    w: np.ndarray = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
     R, o = X._row_plane(w, layout), layout.offsets
     MS = w[o["MS"]:o["total"]].reshape(1, len(rows), 2)
     it = iter(row_max)
@@ -207,7 +207,7 @@ def test_the_ms_build_writes_its_class_at_every_visited_block_and_the_masked_dig
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(six, 59, iter(rows)).sum() == 5
     assert X.expected_written(layout, 123, iter(rows)).sum() - X.expected_written(layout, 59, iter(rows)).sum() == 5
     assert not X.expected_written(layout, 123, iter(rows))[layout.total_words:].any()
-    base = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
+    base: np.ndarray = np.full(six.padded_words(), X.FILL, dtype=np.uint32)
     base[:six.total_words] = w[:six.total_words]
     assert X.masked_digest(w, layout) == X.masked_digest(base, six)
     base[six.offsets["FIN"]] = 3
