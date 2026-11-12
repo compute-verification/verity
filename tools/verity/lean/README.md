@@ -92,6 +92,12 @@ of `check.py` unless it says otherwise, or the lock's section below.
   checks the whole import closure the same way, reusing each module that passed under its key, whichever package
   checked it (`closure_plan`, `replay_keys`, `build_roots_over`); the audit prints `closure: N modules checked, M
   reused` under each package's line.
+- **`--build` judges the sources first**: before the slot and any build, each package's sources and lock against the
+  checks that read no build (`sources_judge`: the scans, the `runs` paths, the `compile_time` listings, and `exempt` and
+  `layers` over the import graph read from the headers, `source_graph`). A package that fails is reported and not built,
+  nor is one that requires an unbuilt package by path or names one under `proved_in` (`unbuilt_by_sources`). A pass
+  decides nothing: the audit runs each check again on the build, and fails where the build's import graph is not the one
+  the headers gave (`source_graph_failures`).
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).

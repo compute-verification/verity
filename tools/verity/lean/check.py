@@ -14,6 +14,10 @@ on private copies of the files they read (`Pipeline`); the replay after the buil
 and is the one that judges. The audits of `UNREAD_FACTS` that replay also write what each constant of their roots mentions
 (`Unread.lean`, `unread_facts`), which `unread.py`'s ratchet on wholly unread modules reads.
 
+With `--build` it first judges every package on its sources and its lock alone (`sources_judge`), before the slot and
+any build, and builds none that this stops (`unbuilt_by_sources`); a pass there decides nothing, since each audit runs
+those checks again on its build.
+
 It judges what it read against the package's policy and records, `lean-audit.json`. README.md is the outline: "What it
 checks" lists every way a package fails (each failure carries a code, `Failure`, which the report lists in
 `failure_codes`), then the sandbox, the Lean slot and the memory floors; "The lock" lists the policy's sections and
@@ -865,15 +869,17 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     return moves
 
 
-def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update: bool = False
+def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict | None, update: bool = False
              ) -> tuple[list[str], dict, list[str]]:
     """The `compile_time` entries against the package.  Each names one module, with the reason and the digest of its file
     as it was reviewed, so a later edit needs a new review.  No listed module may declare a guarantee or a definition a guarantee
     reads: compile-time code there (a term elaborator, a notation, a macro) could change what a
-    statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read)."""
+    statement means.  Returns (failures, the entries with today's digests, what `--update` asks a reviewer to read).
+    With ``facts`` None (`sources_judge`, before the build) nothing says what a guarantee reads, and that rule
+    (`compile-time.cited`) is left to the audit of the build."""
     fails, now, notes = [], {}, []
     cited: dict[str, set[str]] = {}
-    for p, rec in facts["pins"].items():
+    for p, rec in ({} if facts is None else facts["pins"]).items():
         for mod in {rec.get("module"), *(r["module"] for r in rec.get("reads", []))} - {None}:
             cited.setdefault(mod, set()).add(p)
     for m, entry in sorted(policy.get("compile_time", {}).items()):
@@ -1431,6 +1437,61 @@ def own_modules(facts: dict) -> set[str]:
             if "/.lake/build/" in (o := str(g.get("olean", ""))) and "/.lake/packages/" not in o}
 
 
+def orphan_failures(policy: dict, files: dict[str, str], modules: set[str]) -> list[Failure]:
+    """`orphan.file` for each of the package's ``files`` that is neither one of ``modules`` (those its roots import) nor
+    under `exempt`, and `orphan.stale-exempt` for each `exempt` entry that matches no file."""
+    fails, exempt = [], policy.get("exempt", {})
+    for m, rel in sorted(files.items()):
+        if m not in modules and not under(exempt, m):
+            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
+                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
+    for p in sorted(exempt):
+        if not any(under([p], m) for m in files):
+            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
+    return fails
+
+
+def layer_failures(policy: dict, modules: set[str], imports: dict[str, list[str]], graph: dict[str, list[str]] | None,
+                   own: set[str]) -> list[Failure]:
+    """The `layers` rules over ``modules`` and each one's direct ``imports``: an entry that matches no module, an `except`
+    that names none of its modules, and an import from outside the layer.  An import of one of ``own`` (a module this
+    repository builds) is outside unless the rule admits it; any other is outside only when what the rule admits doesn't
+    already reach it in ``graph`` ({module: its imports}, the dependencies' included), which only a build gives.  With
+    ``graph`` None (`sources_judge`, before the build) such an import is left to the audit of the build."""
+    fails, layers = [], policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+
+    def reached(start: list[str]) -> set[str]:
+        seen, stack = set(), list(start)
+        while stack:
+            if (x := stack.pop()) not in seen:
+                seen.add(x)
+                stack += graph.get(x, [])
+        return seen
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
+        if not inside:
+            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
+        for m in rule.get("except", []):
+            if m not in inside:
+                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
+                                     f"of its modules"))
+        for m in inside:
+            if m in rule.get("except", []):
+                continue
+            held = [i for i in imports.get(m, []) if admits(rule["imports"], i) or i == "Init"]
+            reach = None if graph is None else reached(held)
+            for i in imports.get(m, []):
+                if i not in held and (i in own or (reach is not None and i not in reach)):
+                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
+                                         f"({', '.join(rule['imports'])})"))
+    return fails
+
+
 def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False, owner: str | None = None,
           ticket: dict | None = None) -> tuple[list[str], dict]:
     """(failures, the policy with guarantees and reads as the build has them).  A pure function of the facts: the tests run
@@ -1468,46 +1529,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     fails += claim_failures(policy, facts) + witness_failures(policy, facts, own)
     fails += four_name_failures(policy, facts)
     modules = set(facts["modules"])
-    exempt = policy.get("exempt", {})
-    for m, rel in sorted(files.items()):
-        if m not in modules and not under(exempt, m):
-            fails.append(Failure("orphan.file", rel, f"orphan: {rel} is not imported by the roots "
-                                 f"({', '.join(policy['roots'])}) nor under `exempt`: nothing builds or audits it"))
-    for p in sorted(exempt):
-        if not any(under([p], m) for m in files):
-            fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
-    layers = policy.get("layers", {})
-    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
-
-    def admits(prefixes: list[str], i: str) -> bool:
-        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
     graph = {m: g["imports"] for m, g in facts.get("graph", {}).items()}
-
-    def reached(start: list[str]) -> set[str]:
-        seen, stack = set(), list(start)
-        while stack:
-            if (x := stack.pop()) not in seen:
-                seen.add(x)
-                stack += graph.get(x, [])
-        return seen
-    for layer, rule in sorted(layers.items()):
-        inside = [m for m in sorted(modules) if under([layer], m)
-                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
-        if not inside:
-            fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
-        for m in rule.get("except", []):
-            if m not in inside:
-                fails.append(Failure("layers.stale-except", layer, f"layers: {layer}'s `except` lists {m}, which is not one "
-                                     f"of its modules"))
-        for m in inside:
-            if m in rule.get("except", []):
-                continue
-            held = [i for i in facts["imports"].get(m, []) if admits(rule["imports"], i) or i == "Init"]
-            reach = reached(held)
-            for i in facts["imports"].get(m, []):
-                if i not in held and (i in own or i not in reach):
-                    fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
-                                         f"({', '.join(rule['imports'])})"))
+    fails += orphan_failures(policy, files, modules) + layer_failures(policy, modules, facts["imports"], graph, own)
     if conflicts := facts.get("moved_conflicts"):
         more = f" and {len(conflicts) - 8} more" if len(conflicts) > 8 else ""
         clash = "; ".join(f"{c['name']} would be {c['as']}, and so would {c['with']}" for c in conflicts[:8])
@@ -3874,6 +3897,26 @@ def module_files(pkg: Path) -> dict[str, Path]:
     return {m: d / rel for d in [*deps, pkg] for m, rel in lean_modules(d).items()}
 
 
+def source_graph(pkg: Path, roots: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """({module: the modules its header imports}, the modules whose header can't be read) over the modules ``roots`` import
+    that have a source in the package or a package it requires by path (`module_files`): the import graph read from the
+    sources (`headers.py`), with no build.  `Init` leads a module's imports unless its header says `prelude`, as it leads
+    the imports Lean elaborates the header to, so the list has the modules `Facts.lean` reports for it (`imports`)."""
+    files, headers = module_files(pkg), sibling("headers")
+    graph: dict[str, list[str]] = {}
+    cut, seen, stack = [], set(), list(roots)
+    while stack:
+        if (m := stack.pop()) in seen or m not in files:
+            continue
+        seen.add(m)
+        if (h := headers.header(files[m].read_text(errors="replace"))) is None:
+            cut.append(m)
+            continue
+        graph[m] = [*([] if h.prelude else ["Init"]), *(i.module for i in h.imports)]
+        stack += graph[m]
+    return graph, sorted(cut)
+
+
 def provers(pkg: Path, policy: dict) -> list[tuple[str, Path]]:
     """The packages the policy's `proved_in` names, each as written (a path relative to ``pkg``) and resolved."""
     return [(p, (pkg / p).resolve()) for p in policy.get("proved_in", []) if isinstance(p, str)]
@@ -5429,6 +5472,74 @@ def template(pkg: Path) -> dict:
     return {"roots": libs or [pkg.name], "guarantees": {}}
 
 
+def sources_judge(pkg: Path, policy: dict, repo: Path = ROOT, update: bool = False) -> list[Failure]:
+    """What ``pkg``'s sources and lock fail with no build: `scans`, `run_paths`, the `compile_time` listings (`listings`),
+    and the orphan and layer rules (`orphan_failures`, `layer_failures`) over the import graph read from the sources
+    (`source_graph`), which run only when every header can be read.  Each failure is one the audit of the build gives
+    again, with its code, its entry and its text, in the order that audit reports them; ``update`` is that audit's.  A
+    pass decides nothing: the audit runs each of these again, the layer rule also over the imports of modules no package
+    of the repository builds, and fails where the two graphs differ (`source_graph_failures`)."""
+    files = lean_modules(pkg)
+    fails = scans(pkg, files, policy)
+    graph, cut = source_graph(pkg, policy["roots"])
+    if not cut:
+        modules = {m for m in graph if under(policy["roots"], m)}
+        fails += orphan_failures(policy, files, modules)
+        fails += layer_failures(policy, modules, graph, None, set(module_files(pkg)))
+    return fails + run_paths(pkg, policy, repo) + listings(pkg, files, policy, None, update)[0]
+
+
+def source_graph_failures(pkg: Path, policy: dict, facts: dict) -> list[Failure]:
+    """`sources.graph` when the import graph read from ``pkg``'s sources (`source_graph`) is not the build's (``facts``):
+    the modules under the roots, or the modules one of them imports, compared as sets (a header that names a module twice
+    imports it once).  `sources_judge` judged the sources by the first before the build; the audit judges by the second."""
+    roots = policy["roots"]
+    graph, cut = source_graph(pkg, roots)
+    read, built = {m for m in graph if under(roots, m)}, set(facts["modules"])
+    differ = [f"{m} (its header can't be read)" for m in cut]
+    differ += [f"{m} (the roots import it only in the {'sources' if m in read else 'build'})" for m in sorted(read ^ built)
+               if m not in cut]
+    for m in sorted(read & built):
+        ours, theirs = set(graph[m]), set(facts["imports"][m])
+        differ += [f"{m} (it imports {i} only in the {'sources' if i in ours else 'build'})" for i in sorted(ours ^ theirs)]
+    if not differ:
+        return []
+    more = f" and {len(differ) - 8} more" if len(differ) > 8 else ""
+    return [Failure("sources.graph", None, f"sources: the import graph read from the sources' headers (`headers.py`) is not "
+                    f"the build's, at {', '.join(differ[:8])}{more}: the checks that ran before the build read the first and "
+                    f"the audit reads the second, so either `headers.py` reads a header otherwise than Lean does, or the "
+                    f"build is of other sources than these")]
+
+
+def unbuilt_by_sources(pkgs: list[Path], updated: set[Path], repo: Path = ROOT, log=print) -> dict[Path, list[Failure]]:
+    """{package: its failures} for each of ``pkgs`` a run does not build.  One whose sources or lock fail before the build
+    (`sources_judge`, with `update` for those of ``updated``) has those failures.  One that rests on a package that is
+    not built fails with `sources.unbuilt`, naming it: it requires it by path, and would compile that package's modules
+    itself where the run builds each package in its own audit and seals it; or its `proved_in` names it, and nothing
+    would prove its guarantees.  So a failure the sources already show costs no build of what it stops, and stops no
+    other package's audit.  A package whose lock names no roots, or whose lock, manifest or sources can't be read, is
+    left to its audit, which reports it."""
+    out: dict[Path, list[Failure]] = {}
+    rests: dict[Path, dict[Path, str]] = {}
+    for p in pkgs:
+        try:
+            policy = load(p)
+            if "roots" not in policy:
+                continue
+            rests[p] = {q: "its `proved_in` names" for _, q in provers(p, policy) if q in pkgs} | {
+                d: "it requires by path" for d in path_deps(p) if d in pkgs and d != p}
+            if fails := sources_judge(p, policy, repo, p in updated):
+                out[p] = fails
+        except (OSError, ValueError) as e:
+            log(f"sources: {p} is not judged before its build, whose audit reports it: {type(e).__name__}: {e}")
+    while more := {p: [f"{os.path.relpath(q, p)} ({how})" for q, how in on.items() if q in out]
+                   for p, on in rests.items() if p not in out and any(q in out for q in on)}:
+        for p, names in more.items():
+            out[p] = [Failure("sources.unbuilt", None, f"sources: not built, since this run builds none of what it rests on: "
+                              f"{', '.join(names)}; fix the failures that package's report holds first")]
+    return out
+
+
 def _open(pkg: Path, out: Path) -> tuple[dict, dict | None, Path | None]:
     """(rep, policy, work) for an audit of ``pkg`` into ``out``: the lock loaded and the work directory `audit-<tag>`
     made and cleared of a stale lock and review, shared by `audit` and `audit_from_facts`.  Returns (rep with a
@@ -5711,7 +5822,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     (dep_missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
         scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy, sealed)
     scn = scans(pkg, files, policy)
-    fails = scn + dep_missed + fails
+    fails = scn + source_graph_failures(pkg, policy, facts) + dep_missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
     if name and anonymous:
@@ -5908,7 +6019,8 @@ def audit_from_facts(pkg: Path, out: Path, facts_from: Path, update: bool = Fals
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     scanned = find.get("dependency_scans", {})
     rep["dependency_sources"] = scanned.get("read", 0)
-    fails = restore_failures(find.get("scans", [])) + restore_failures(scanned.get("missed", [])) + fails
+    fails = restore_failures(find.get("scans", [])) + source_graph_failures(pkg, policy, facts) + \
+        restore_failures(scanned.get("missed", [])) + fails
     rep["heartbeats"] = find.get("heartbeats", [])
     fails += restore_failures(find.get("anonymous", []))
     if "upstream" in policy:
@@ -6204,8 +6316,17 @@ def main(argv: list[str]) -> int:
     if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
+    # what the sources and the locks already fail, before a slot is waited for and before any build: a package this stops
+    # is not built (`unbuilt_by_sources`).  Stage A (`--facts-only`) gives no lock verdict, and a lift rewrites the sources
+    unbuilt: dict[Path, list[Failure]] = {}
+    if a.build and a.facts_only is None and not lifts:
+        t = time.monotonic()
+        unbuilt = unbuilt_by_sources(pkgs, named if a.update else set(), a.repo.resolve())
+        print(f"sources: {len(pkgs)} packages judged on their sources and locks in {time.monotonic() - t:.1f} s, before any "
+              f"build: " + (f"{len(unbuilt)} are not built ({', '.join(str(p) for p in pkgs if p in unbuilt)})" if unbuilt
+                            else "none fails, which decides nothing: each audit runs the same checks on its build"), flush=True)
     try:
-        if a.build:
+        if a.build and (a.all or len(unbuilt) < len(pkgs)):
             lean_slot(a.repo.resolve())                 # its descriptor stays open, and the slot held, until this process exits
     except RuntimeError as e:
         print(f"check.py: {e}", file=sys.stderr, flush=True)
@@ -6251,7 +6372,7 @@ def main(argv: list[str]) -> int:
                 print("\n".join(f"  tamper: {p} changed while the controls ran" for p in moved), flush=True)
 
     def one(pkg: Path) -> None:
-        if a.facts_from is None:
+        if a.facts_from is None and pkg not in unbuilt:
             for d in needs[pkg]:
                 built[d].wait()
         try:
@@ -6259,6 +6380,9 @@ def main(argv: list[str]) -> int:
             if a.facts_from is not None:
                 rep = audit_from_facts(pkg, out, a.facts_from, a.update and mine, a.owner, a.repo.resolve(),
                                        moved if mine else None, due, log=print)
+            elif pkg in unbuilt:
+                built[pkg].set()                        # unpassed, and unsealed: no package that builds rests on it
+                rep = {"package": str(pkg), "seconds": {}, "failures": list(unbuilt[pkg])}
             else:
                 rep = audit(pkg, out, a.build, a.update and mine, (not a.no_replay) and a.facts_only is None, a.fresh,
                             built=lambda: (passed.add(pkg), seal(pkg)),
