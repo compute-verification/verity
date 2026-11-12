@@ -565,7 +565,7 @@ class DsaSparseMla:
         if int(tp.num_sms) != 132:
             return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
-        parts = []
+        parts: list[Compute] = []
         for i, ((req, position), n, ns) in enumerate(zip(ctx.start.rows, valid, splits)):
             try:
                 slots = kv_slots(ctx, req, n, layer=_module(node))
