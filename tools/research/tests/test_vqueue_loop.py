@@ -1707,6 +1707,44 @@ def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_def
     assert seen == [default, tmp_path / "file"]
 
 
+@pytest.mark.parametrize("on", ["big", ""])
+def test_a_heavy_pr_is_wide_its_batch_taking_no_other_lean_member_while_heavy_on_names_machines(env, on):
+    """`--heavy-file` (`World.heavy`) is read into `Snapshot.wide` each tick beside the wide file, so a heavy PR's batch takes
+    no other Lean member; with no `--heavy-on` it is no heavy PR, and the `lean` cap alone makes the batch."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(2, {"security/Definitions/D.lean": "-- d\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [], lean=3)
+    (heavy := env.tmp / "heavy").write_text("1\n")
+    loop.world.heavy_file, loop.world.heavy_on = heavy, on
+    loop.tick()
+    assert seen[-1].wide == ({1} if on else frozenset())
+    assert vqueue.decide(seen[-1]) == [Build((1,) if on else (1, 2), seen[-1].main, L.DEPTH)]
+
+
+def test_heavy_file_and_heavy_on_name_what_the_world_reads_by_default_none_but_the_live_loop_s_file(monkeypatch, tmp_path):
+    seen: list[tuple] = []
+
+    class Built(Exception):
+        pass
+
+    def loop(world, *args, **kw):
+        seen.append((world.heavy_file, world.heavy_on))
+        raise Built
+
+    monkeypatch.setattr(L, "Loop", loop)
+    monkeypatch.setattr(Q, "remote_and_repo", lambda *a: ("origin", "owner/repo"))
+    monkeypatch.setattr(Q, "credential_args", lambda *a: ())
+    monkeypatch.setattr(Q, "GitHub", lambda slug: None)
+    common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
+              "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
+    for extra in ([], ["--heavy-file", str(tmp_path / "file"), "--heavy-on", "big1,big2"]):
+        with pytest.raises(Built):
+            L.main([*common, *extra])
+    assert seen == [(Path("/data/vqueue/live/heavy"), ""), (tmp_path / "file", "big1,big2")]
+
+
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy, state=(state := env.tmp / "vqueue" / "state.json"))
@@ -3019,9 +3057,12 @@ class Records:
         self.dated: str | None = None
         self.told: tuple[str, tuple[str, ...]] | None = None
         self.launching, self.registered = False, {}
+        #: each start's keywords
+        self.kw: list[dict] = []
 
-    def start(self, driver, sha: str) -> dict:
+    def start(self, driver, sha: str, **kw) -> dict:
         self.started.append((driver, sha))
+        self.kw.append(kw)
         launch = {"ids": [], "launch": {"dir": f"records-{len(self.started)}", "pid": 1}} if self.launching else {
             "ids": [f"regen-{len(self.started)}"]}
         return {**launch, "tip": sha}
@@ -3193,6 +3234,28 @@ def test_a_records_run_that_failed_drops_its_candidate_and_ejects_its_lean_membe
     again = env.put(1, {**LEAN, "pkg/B.lean": "theorem b : True := trivial\n"})
     built, started = loop.tick()
     assert (built["members"], built["heads"], built["records_first"], started["why"]) == ([1], [again], True, "started")
+
+
+@pytest.mark.parametrize("heavy, on, want", [
+    ("1\n", "big", {"on": "big"}), (None, "big", {}), ("2\n", "big", {}), ("1\n", "", {}),
+], ids=["heavy", "no-file", "another-pr", "no-machines"])
+def test_a_heavy_pr_s_records_run_and_its_start_again_after_infra_take_heavy_on_and_any_other_s_the_queue_s(env, heavy, on,
+                                                                                                         want):
+    """A candidate holding a PR the heavy file names starts its records run on `--heavy-on`'s machines (`Loop._heavy_on`), and
+    so does its start again after infra; with no heavy file, a file naming another PR, or no `--heavy-on`, the start is as
+    before, given no machines."""
+    env.put(1, LEAN)
+    records = Records(env.tmp / "clone")
+    loop = env.loop(vqueue.decide, records=records)
+    loop.world.slim_driver = lambda: "drive"
+    if heavy is not None:
+        (env.tmp / "heavy").write_text(heavy)
+    loop.world.heavy_file, loop.world.heavy_on = env.tmp / "heavy", on
+    built, started = loop.tick()
+    assert (built["records_first"], started["action"], records.kw) == (True, "regenerate", [want])
+    records.verdicts["regen-1"] = RecordsRun(INFRA, "it never ran or was stopped (regen-1)")
+    judged, again = loop.tick()
+    assert (judged["why"], again["why"], records.kw) == (f"judged {INFRA}", "started again", [want, want])
 
 
 def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_ringing_infra(env):
@@ -4184,6 +4247,33 @@ def test_under_gate_check_a_step_off_the_gate_or_a_killed_shard_fails_nothing_wh
     runs.fail(sha, 2, rows=(_row(NEW),))
     logged = loop.tick()
     assert _acts(logged) == ["slim", "eject", "drop"] and [f["task"] for f in logged[2]["failed"]] == ["step pytest"]
+
+
+@pytest.mark.parametrize("on", ["big", ""])
+def test_under_gate_check_a_heavy_candidate_s_shard_auditing_security_proofs_and_its_start_again_take_heavy_on(
+        env, monkeypatch, on):
+    """A candidate holding a heavy PR launches the shard its own ci.toml's plan gives security/Proofs' audit (here the second)
+    on `--heavy-on`'s machines alone, its other shards and `main`'s check on their usual ones, and its check started again
+    after infra (a shard killed) does the same; with no `--heavy-on`, every shard launches as before."""
+    from test_landing import CI_TOML
+
+    plan = [["pytest"], ["lean-audit:security/Proofs", "lean-audit:security/Properties"], ["lean-audit:*"]]
+    main = _main_to(env, {"tools/verity/check/ci.toml": CI_TOML + f"[[plan]]\nshards = {json.dumps(plan)}\n"})
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    (heavy := env.tmp / "heavy").write_text("1\n")
+    loop.world.heavy_file, loop.world.heavy_on = heavy, on
+    _, built, started = loop.tick()
+    sha, usual = built["sha"], ["m1", "m2", "m3"]
+    want = ["m1", "big", "m3"] if on else usual
+    assert [(c, m) for c, m, _, _ in runs.launches] == [(main, m) for m in usual] + [(sha, m) for m in want]
+    assert started["record"].get("heavy_on") == (on or None)
+    runs.end(main)
+    runs.end(sha, 2, "pytest", "error: no\n")
+    runs.state["c-5"] = ("done", 137, None)
+    logged = loop.tick()
+    assert [r["why"] for r in logged if r["action"] == "slim" and r["sha"] == sha] == ["judged infra", "started again"]
+    assert [(c, m) for c, m, _, _ in runs.launches[6:]] == [(sha, m) for m in want]
 
 
 def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_the_check(env, monkeypatch):
