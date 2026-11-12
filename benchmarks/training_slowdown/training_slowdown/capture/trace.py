@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import inspect
 import linecache
 import os
 import re
@@ -147,7 +148,8 @@ def _resized(leaves: list, dims: list[tuple[int, ...]], axis: int, size: int) ->
 
 def _fake_copy(model: torch.nn.Module, optimizers: Sequence[torch.optim.Optimizer], mode: FakeTensorMode, device):
     """The model with every parameter and buffer a fake of its shape, dtype and requires_grad (tied ones stay tied), and a
-    fresh optimizer of each one's class over the copied parameters with the same param-group settings. A tensor an
+    fresh optimizer of each one's class over the copied parameters with the same param-group settings and the defaults
+    its constructor takes (a loaded optimizer's `defaults` also hold torch's ``differentiable``). A tensor an
     optimizer holds that the model doesn't own (a latent kept beside the model) is copied as a fake too, before the
     model is, so an attribute of the model that names it names the same fake as the optimizer does; it is returned by
     the name of its place, ``optimizers.I.params.J``. Also returned: the model's and the optimizers' own tensors by
@@ -179,10 +181,18 @@ def _fake_copy(model: torch.nn.Module, optimizers: Sequence[torch.optim.Optimize
         groups = [{**{k: v for k, v in g.items() if k != "params"}, "params": [memo[id(p)] for p in g["params"]]}
                   for g in opt.param_groups]
         try:
-            fake_opts.append(type(opt)(groups, **dict(opt.defaults)))
+            fake_opts.append(type(opt)(groups, **_taken(type(opt), opt.defaults)))
         except TypeError:
             fake_opts.append(type(opt)(groups))
     return fake_model, fake_opts, held, originals
+
+
+def _taken(cls: type, defaults: dict) -> dict:
+    params = inspect.signature(cls).parameters.values()
+    if any(p.kind is p.VAR_KEYWORD for p in params):
+        return dict(defaults)
+    names = {p.name for p in params}
+    return {k: v for k, v in defaults.items() if k in names}
 
 
 def _dev(t: torch.Tensor):

@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
 from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products
+from training_slowdown.routes._optimizers import Muon
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -492,6 +493,21 @@ def test_a_step_that_reads_the_runs_own_tensor_around_its_arguments_is_refused_w
     assert "hold it on the model as a parameter" in str(e.value) and "param_groups" in str(e.value)
     with pytest.raises(CaptureRefused, match="the run's own emb.weight and not the copy"):
         capture_steps([lambda m, batch, opts: lm_loss(model, batch).backward()], model, lm_batch(), measured=0)
+
+
+def test_an_optimizer_whose_state_was_loaded_is_copied_and_its_step_traced_as_before_the_load():
+    """torch's `load_state_dict` adds a key of its own to an optimizer's `defaults` (``differentiable``), which a
+    constructor that names its keywords refuses: the copy passes the class only the defaults it takes, so the step of
+    a job continued from a kept state is traced as the unbroken job's is."""
+    model = mlp()
+    opt = Muon([p for p in model.parameters() if p.dim() == 2], lr=0.02)
+    loss, batch = (lambda m, b: F.mse_loss(m(b[0]), b[1])), (torch.empty(6, 8), torch.empty(6, 4))
+    before = capture_step(model, opt, loss, batch, token_dims=[(0,), (0,)])
+    opt.load_state_dict(opt.state_dict())
+    assert "differentiable" in opt.defaults
+    after = capture_step(model, opt, loss, batch, token_dims=[(0,), (0,)])
+    assert roles(after) == roles(before) and after.trained == before.trained
+    assert products.raw_on_dial(after) == products.raw_on_dial(before)
 
 
 # --- refusals ----------------------------------------------------------------------------------------------------------
