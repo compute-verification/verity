@@ -46,6 +46,20 @@ AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
 #: the tree's own lease script, which the wrapper takes where the node has no `gpu-lease`
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
+ROOT = Path(__file__).resolve().parents[3]
+#: the Lean judge's package, `wipe-protocol`'s
+JUDGE = "verity/protocols/pous/device/lean"
+LAKE = """#!/usr/bin/env bash
+echo "$PWD $*" >> "$FAKE_LAKE_LOG"
+python3 - << 'EOF' || exit 1
+import json, pathlib, sys
+for p in json.loads(pathlib.Path("lake-manifest.json").read_text())["packages"]:
+    if not pathlib.Path(p["dir"]).is_dir():
+        sys.exit(f"error: {p['name']}: package directory not found: {pathlib.Path.cwd() / p['dir']}")
+EOF
+mkdir -p .lake/build/bin && printf '#!/bin/sh\\nexit 9\\n' > ".lake/build/bin/$2" && chmod +x ".lake/build/bin/$2"
+"""
+"""A stand-in `lake build EXE` that, like lake, fails where a package the manifest in its directory requires is absent."""
 
 SMI = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_SMI_LOG"
@@ -201,6 +215,29 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 
+def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
+    """With no judge built already the wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
+    judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
+    demo.sh. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
+    one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    (built,) = (tmp_path / "lake.log").read_text().splitlines()
+    package, command = built.split(" ", 1)
+    assert command == "build wipe-protocol" and package.endswith("/" + JUDGE) and ROOT not in Path(package).parents
+    demo = json.loads((d / "demo-argv.json").read_text())
+    assert demo["argv"][-2:] == ["--wipe-protocol", f"{package}/.lake/build/bin/wipe-protocol"]
+    assert _stamps(d) == ["start", "built wipe-protocol", "asked for the card", "leased the card", "the wipe exit 0",
+                          "exit 0"]
+    assert not Path(package).exists() and (d / "lake-build.log").exists()
+    for p in json.loads((ROOT / JUDGE / "lake-manifest.json").read_text())["packages"]:
+        assert p["type"] == "path", f"the judge requires {p['name']} from {p.get('url')}, which no copy holds"
+        assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
+
+
 def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     """Where no `gpu-lease` is installed the wipe takes its card by the tree's own lease script, with the same request
     as memory-accounting, and wipes the card that hands out: it no longer refuses. The wrapper is a copy in a tree
@@ -212,7 +249,7 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     wrapper.write_text(WRAPPER.read_text())
     (tree / TREE_LEASE).parent.mkdir(parents=True)
     (tree / TREE_LEASE).write_text(LEASE.replace("GPU-own0", "GPU-tree0"))
-    assert (Path(__file__).resolve().parents[3] / TREE_LEASE).is_file()
+    assert (ROOT / TREE_LEASE).is_file()
     bin_ = tmp_path / "bin-no-lease"
     bin_.mkdir()
     _exe(bin_ / "nvidia-smi", SMI)
