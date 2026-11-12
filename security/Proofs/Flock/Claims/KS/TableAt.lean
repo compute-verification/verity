@@ -71,9 +71,10 @@ over table `j`'s positions alone:
   of weight `k_j ≤ D.k` (`Escapes.FitsForkR.mono`), where table `j`'s word is no longer than `N₀`.
 * **Extraction** (`assemblesAt_of_extractsAt`): on `ExtractsAt` the decoder lists table `j`'s trace, `assembleAt`
   returns a witness and `checkAt` accepts it. No splitting of the relation by table is read.
-* **Assembly** (`ks_at_of_oneWait`, `KSAt_of_tableBoundJR`): `ERep_trunc` at `rate = N_j/(e·k_j) ≤ 1/4`
-  (`rateAt_le`) and `Escapes.le`, as `KS_of_oneWait`. At a table with an empty word (`k_j = 0`, every table past the
-  statement's) the error is at least `1`.
+* **Assembly** (`ks_at_of_oneWait`, `KSAt_of_tableBoundAtR`, `KSAt_of_tableBoundJR`): `ERep_trunc` at
+  `rate = N_j/(e·k_j) ≤ 1/4` (`rateAt_le`) and `Escapes.le`, as `KS_of_oneWait`, at an error for each table
+  (`TableBoundAtR`; `TableBoundJR` is its instance at the tables' errors summed). At a table with an empty word
+  (`k_j = 0`, every table past the statement's) the error is at least `1`.
 -/
 
 @[expose] public section
@@ -308,7 +309,8 @@ theorem oneWait_le_at (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ
       rw [seenOf, List.flatMap_map] at hl
       obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun r => D.cols (run H P D.V x ω r).seen j) p.val u bs hl
       exact hok x Ω P ω b j p.val u (hall b hb') hj p.isLt hu
-  refine (hb ω (firstTable (opAt H D N P x j ω) (fun _ => 0) bs) hOk hgood).trans (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne⟩ => ?_))
+  refine (hb ω (firstTable (opAt H D N P x j ω) (fun _ => 0) bs) hOk hgood).trans
+    (add_le_add le_rfl (Pr_mono fun r ⟨ha, p, u, hu, hne⟩ => ?_))
   have e : opAt H D N P x j ω r p = some u := by
     unfold opAt
     rw [ite_eq_left ha]
@@ -359,20 +361,33 @@ theorem ks_at_of_oneWait (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → 
       Real.sqrt (γ D x * PrB H D.V P x)
   linarith
 
-/-- **Flock: KS at each table of a session, from every table's bound counted per round**, at the tables' errors
-summed (`D.εtable`): when each of the statement's tables' words is no longer than `N₀`, `ε_table ≥ 0`, the verifier
-takes a round, `K > 0`, at each table of the statement `k_j ≥ 8` or the verifier accepts no run, a table past the
-statement's has an empty word, and `Ok` admits `0` and every column an accepted run opens. -/
-theorem KSAt_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
-    (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
+/-- **`TableBoundJR` at an error for each table** (`ε x j` for `D.εtable x`): at a table `j` and a word at its
+positions that is not `GoodTableAt`, a run accepts with probability at most `ε x j + escapes(ω)` beyond that of
+accepting and opening a position of table `j`'s word off the word. `TableBoundJR` is its instance at the tables'
+errors summed. -/
+def TableBoundAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop)
+    (ε : Msg → ℕ → ℝ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω), ∃ e : Escapes H D.V P x,
+    e.FitsForkR (D.weight x) (D.k x) ∧ ∀ (ω : Ω) (j : ℕ), j < nTab D x → ∀ C : Fin (N x j) → Col,
+      (∀ p, Ok x j (C p)) → ¬ GoodTableAt D N x j C →
+      accPr H D.V P x ω ≤ ε x j + e.term ω +
+        Pr fun r : Fin (D.V.k x) → Coin => (run H P D.V x ω r).out = .acc ∧
+          ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols (run H P D.V x ω r).seen j) p.val = some u ∧ u ≠ C p
+
+/-- **Flock: KS at each table of a session, at an error for each table, from each table's bound at its error**
+(`TableBoundAtR`): when each of the statement's tables' words is no longer than `N₀`, the errors are nonnegative, the
+verifier takes a round, `K > 0`, at each table of the statement `k_j ≥ 8` or the verifier accepts no run, a table past
+the statement's has an empty word, and `Ok` admits `0` and every column an accepted run opens. -/
+theorem KSAt_of_tableBoundAtR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ)
+    (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x j, 0 ≤ ε x j) (hVk : ∀ x, 0 < D.V.k x)
     (hK : ∀ x, 0 < D.cap x)
     (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kAt N j x) ∨ kAt N j x = 0 ∨ NoAcc H D.V x)
     (Ok : Msg → ℕ → Col → Prop) (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N)
-    (htab : TableBoundJR H D N Ok) :
-    KSAt H D N (fun x _ => D.εtable x) := by
+    (htab : TableBoundAtR H D N Ok ε) :
+    KSAt H D N ε := by
   intro decode hlw j x Ω _ _ P
   show PrBad H D.V (RAt D.table j) (EAt D N decode j) x P ≤
-    κAt D N (fun x _ => D.εtable x) j x + Real.sqrt (γ D x * PrB H D.V P x)
+    κAt D N ε j x + Real.sqrt (γ D x * PrB H D.V P x)
   rcases hk x j with ⟨hj, hk8⟩ | hk0 | hno
   · obtain ⟨e₀, hfit, hb⟩ := htab x Ω P
     have hkle : kAt N j x ≤ D.k x :=
@@ -380,7 +395,7 @@ theorem KSAt_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg 
         (Real.exp_pos 1).le)
     have hfit' : e₀.FitsForkR (D.weight x) (kAt N j x) := hfit.mono (Nat.cast_le.2 hkle)
     unfold κAt
-    refine ks_at_of_oneWait H D N decode hlw j x P (hK x) hk8 (D.εtable x) (hεt x)
+    refine ks_at_of_oneWait H D N decode hlw j x P (hK x) hk8 (ε x j) (hεt x j)
       (e₀.addFork (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
         (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
         (opAt_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).mergeR
@@ -390,19 +405,29 @@ theorem KSAt_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg 
     have hm := (e₀.addFork (kAt N j x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
       (fun ω r r' => ∃ p, ConflictAt (opAt H D N P x j ω) (r, r') p)
       (opAt_tied H D N hconf P x j hj ⟨0, hVk x⟩ rfl)).term_le_mergeR ω
-    have := oneWait_le_at H D N Ok hz hok hconf x j hj (hVk x) (D.εtable x) (hεt x) (by omega) P e₀
+    have := oneWait_le_at H D N Ok hz hok hconf x j hj (hVk x) (ε x j) (hεt x j) (by omega) P e₀
       (fun ω C hC hg => hb ω j hj C hC hg) ω hε
     linarith
   · have h1 : PrBad H D.V (RAt D.table j) (EAt D N decode j) x P ≤ 1 := by
       unfold PrBad
       exact Pr_le_one _
-    exact h1.trans ((one_le_κAt D N (fun x _ => D.εtable x) j x (hεt x) hk0).trans
-      (le_add_of_nonneg_right (Real.sqrt_nonneg _)))
+    exact h1.trans ((one_le_κAt D N ε j x (hεt x j) hk0).trans (le_add_of_nonneg_right (Real.sqrt_nonneg _)))
   · have h0 : PrBad H D.V (RAt D.table j) (EAt D N decode j) x P = 0 := by
       unfold PrBad
       rw [Pr_congr (q := fun _ => False) fun s => ⟨fun hs => hno Ω P s.1 s.2.1 hs.1, False.elim⟩, Pr_false]
     rw [h0]
-    exact add_nonneg (κAt_pos D N (fun x _ => D.εtable x) j x (hεt x)).le (Real.sqrt_nonneg _)
+    exact add_nonneg (κAt_pos D N ε j x (hεt x j)).le (Real.sqrt_nonneg _)
+
+/-- **Flock: KS at each table of a session, from every table's bound counted per round**, at the tables' errors
+summed (`D.εtable`): `KSAt_of_tableBoundAtR` at `TableBoundJR`, which is `TableBoundAtR` at that error. -/
+theorem KSAt_of_tableBoundJR (H : Msg → Msg) (D : Deploy Coin Col T) (N : Msg → ℕ → ℕ)
+    (hN : ∀ x j, j < nTab D x → (N x j : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
+    (hK : ∀ x, 0 < D.cap x)
+    (hk : ∀ x j, (j < nTab D x ∧ 8 ≤ kAt N j x) ∨ kAt N j x = 0 ∨ NoAcc H D.V x)
+    (Ok : Msg → ℕ → Col → Prop) (hz : ∀ x j, Ok x j 0) (hok : ColsOkJ H D N Ok) (hconf : ConflictTiedJ H D N)
+    (htab : TableBoundJR H D N Ok) :
+    KSAt H D N (fun x _ => D.εtable x) :=
+  KSAt_of_tableBoundAtR H D N (fun x _ => D.εtable x) hN (fun x _ => hεt x) hVk hK hk Ok hz hok hconf htab
 
 end TableAt
 
