@@ -90406,3 +90406,93 @@ Tags: [run] a command I ran this turn and read; [read] a place I read, named; [r
 **Yours to choose.** (1) Whether the rule may rest on the answer to `REGISTER` being the auditor's (item 4). (2) The trees compared after `REGISTER` has left, or a request before it at the cost of the recorded loop definitions (item 1). (3) Whether a wider `Events` is a hypothesis reading differently (item 2).
 
 **Not established.** Nothing was built or run. Whether the stop count's proofs pass a new constructor, and which function records move. How the public file reaches the auditor in a deployment: in the prototype the prover's process writes the verifier's copy [read: `lean_public`]. Whether any check holds a published domain to its binding. The shape of network's other ports. Every size above.
+
+## RELAX, Thu 12 Nov 13:59Z: LEAN-238 step 2: "no day" stands as the refusal's key, with no exemption: no onsite case uses the component with no day by design (its four Lean cases are refused before a day could be read, and the certifier scan's tied audit never calls the component), and nothing in the decoded parameters says "served"; on lean's merge no writer puts a day into a case yet, and the day's own window has no v2 case
+
+**Read at.** `origin/main` `3498d4ad6546bed9289878c1b4cf19f218d7478e`, fetched 13:32Z [run]. At 13:51Z `origin/main` is `3d8530f5268a14bec17c9716e4b25eec17b53b8c`, and `git diff --stat` between the two over every directory named below is empty [run]. Lean's merge: `cursor/lean-remote-merge-trial-fc8d` at `44d0bf03d49e57caa6cf0769a747caf812d9e0bf`, committed 12:30:19Z, the newest `lean-remote-merge-*` branch at 13:51Z [run]. Below, M is that `main` and L is that head; a line number with no letter holds on M. No code, no branch, no `research run`. A [run] below is a `git`, `grep`, `rg` or `ls` on my checkout; every "refused at" is read off the decoders' order, not seen in a Lean run.
+
+**3. My reading, in one line.** "No day" stands, placed in the one-stage arm of `Sampled.paramsOfJson` after the no-proofs refusal: every use of the component that decodes past `proofs` is either a hand-made case whose author can give it a day, or a window of a `serve-openai` run, which on L can declare one; none has no day by design, and no key in the decoded parameters could stand in for it. [derived from the rows]
+
+### 1. Every place, onsite's first
+
+"The component" is `VStar.Recursive.Sampled.protocol`, id `verity/sampled-proofs/v1`. "Who writes it" is the file's owner by `.agents/skills/using-slack/registry.json` [read]. Its `paramsOfJson` (`VStarRecursive/Sampled.lean` 57-63) splits off `form`, refuses one-stage parameters with no `proofs`, then hands the rest to `OneStageZk.paramsOfJson` [read].
+
+**Onsite**
+
+| | Place | Who writes it | Parameters it gives | Window | A day's served window? |
+|---|---|---|---|---|---|
+| A1 | `CoreOnsite.lean` `refused` 87-88, in `allRefused` 102 and the guards 103-122 | soundness | `{}` | none: empty commitment and evidence | no window; refused at the form split [read] |
+| A2 | `CoreOnsite.lean` `v1` 125-127, the hand-written one | soundness | `{"form":"one-stage","law":{}}` | none | no window; refused at "the parameters name no proofs", and the guard at 128-130 pins that reason [read] |
+| A3 | `CoreOnsite.lean` `committed` 138-142 | soundness | `{}`, with a hand-made record as commitment | none | no window; as A1 [read] |
+| A4 | `CoreOnsite.lean` `windowsOn` 162-167 | soundness | `{}` | none | no window; as A1 [read] |
+| A5 | the composition difftest's onsite tests (704, 748; L 881, 932): `SAMPLED_CASES` 178 over `_sessionless_audit` 88-108 | soundness's file | whole v2 parameters: `proofs`, `challenger`, `window_root`; no `day` | a made-up record, `window` = `{"kind": "served", "row": 101, "run": "r-test"}` (`spot/verifier/lean/tests/test_difftest.py` 151) | synthetic. "Sampled proofs' cases all reject" (docstring 16-18), in the check, at `oneSession` [read] |
+| A6 | a served run's onsite composite, on M | nobody | none | none | on M no served window reaches the component (below) [run] |
+| A7 | a served run's onsite composite, on L: `served_composite.sh` 74, 99-105 → `served_cases.py` `sampled_case` 238-240 → `vstar-recursive sampled check` → `composite.py onsite` | proofs (`benchmarks/one_stage/`) | the records audit's `case-v2.json` plus `form` | window K of a `serve-openai` run, audited by V3c's records audit or, with no V3c audit and no H1 log, step 3's (`served_cases.py` 505-510) | a served window, composed as development; a day only under `DAY=N` (below) [read] |
+| A8 | the certifier scan's tied audit: `NetworkCheck/Period.lean` | network-accounting | none for the component | V3c's audit of the same window, as a one-stage v1 answer | not through the component (below) [read] |
+| A9 | `verity run`: `served_table.py` `onsite_check` 383-411, `parties.py` `_decide` 538-563, `tools/verity/cli/tests/step0.py` 170-172, `test_run.py` 241-272 | memory-accounting, proofs, ci | `{}` or none | none | no window reaches the decode (below) [read] |
+| A10 | `demos/lifecycle` (`lifecycle.py` `spot` 912-919, `compose` 1009-1025; `onsite.py`) | top | none | a tiny model's declaration | a demo whose proofs are a stand-in; a Python answer under the component's id, never decoded by it [read] |
+
+- **A1 to A4.** `CoreOnsite.lean` is the same file on M and L [run: empty diff]. No onsite Lean case hands the component a v2 parameter object, and none accepts. A refusal after the no-proofs one changes none of its guards [derived].
+- **A6.** M's `served_composite.sh` makes sampled proofs' case only "where the tree has `served_cases.py`" (9-12); M has no such file [run: `ls`]; nothing in M's Python or shell runs `vstar-recursive` [run: `rg`]; M's `served_verdicts.py` has no `--sampled-lean` [run: `grep`].
+- **A7.** Onsite's composite of a served run is always a development check. The preflight refuses onsite's composite off the served node (L `served_verdicts.sh` 1485-1486), so it runs only under `COMPOSE_OFF_NODE=0`, on the node the prover controls, as "a development check that claims no record" (134; `composite.py --development`). "Their verdicts gate nothing" (86-87) [read].
+- **A8.** `Period.lean` reads each audit as an answer whose protocol must be `verity/sampled-proofs/one-stage/v1` (`oneStage` 250, L 270; `answered` 856-866). It imports neither `VStarRecursive` nor `Spot` (3-18). Its own docstring says it does not check "that the audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind" (228-229). The answers are Python's: `served_integrity.answer` on V3c's audit (L `records_audit.py` `period` 771-797) and `scan_zk.window_answer` for the scan's own (L 1648) [read]. So the refusal does not catch the tied audit, and does not hold it to a day either.
+- **A9.** `onsite_check` runs `served_verdicts.py record` with no `--sampled-lean`: it reads the audit's rows as written. `parties.py`'s core verifier takes `(answer, case)` from the machine's `audit` and builds none; an absent case is `NO_CASE`, `{"params": {}}` (162). `step0.py`'s `audit` raises `Unavailable`, and `test_run.py`'s case is `{"params": {}}` to a Python stand-in product [read].
+
+**Remote, the difftest, and the Python**
+
+| | Place | Who writes it | Parameters it gives | Window | A day's served window? |
+|---|---|---|---|---|---|
+| B1 | `CoreRemote.lean` `refused`, `committing`, `recordsOf` (73-77, 116-120; L 104-107, 145-147) and every guard of L's `Core.Remote.V1` (L 449-563) | soundness | `{}` | none | no window; refused at the form split [read] |
+| B2 | `CoreRemote.lean` `sampledParams` 239-247 (L 270-277) → `sampledOn` 267-269 (L 298-299) | soundness | whole v2 parameters, no `day` | `recW` and `recR`, hand-made "in the form a served window writes" | synthetic, served in form [read] |
+| B3 | the difftest's remote tests: `SAMPLED_CASES`; `reusing_audit` 650-670; L only, `_empty_audit` L 766-786 | soundness's file | whole v2 parameters, no `day` | made-up W and R; L's `_empty_audit` chains a made-up R after a dress rehearsal's W, "development, never the record" | synthetic; one is development [read] |
+| B4 | the record's row, L only: `served_verdicts.sh` `compose` 1328-1334 (`record --off-node --sampled-lean`) → `served_verdicts.py` `lean_sampled_row` 1580-1602 → `sampled_case` → `vstar-recursive sampled check` | proofs | as A7 | the record's audit (`sampled_of_record` 1226-1228): V3c's where it wrote a summary, else step 3's | **the one use that is the record's**; a served window; a day only under `DAY=N` [read] |
+| B5 | a served run's remote composite, L: `served_composite.sh` → `composite.py remote` or `remote-v1` | proofs | as A7 | as A7 | off the node from the hand-off it is the record's; on the node, development [read] |
+| C1 | `a5.py` `write_case` → `case_v2` → `case_with_form` (1118, 1164, 1216; L 1180, 1226, 1278) | proofs | v1's parameters plus `proofs` and `form`; no `day` on either tree | whatever a5 audits: a served window's records audit, a deferred or TP Commit's `served` or `stand-in` window, the benchmarks' stand-ins | written for every `--zk` audit of one member; **read by nothing** (below) [read, run] |
+| C2 | `v2_case.py` and `kept_composite.sh`, both trees | proofs | bare v2's, no `form` | a kept served window | not the component's parameters: the composites refuse bare v2 by id (`CoreOnsite.lean` 120-122) [read; the refusal derived from that guard] |
+| C3 | tests: `one_stage/tests/test_composite.py` 63-110 (L 64-162), `test_a5_case_v2.py` 123-125 (L 212-215); L `test_served_cases.py` 493-505, `test_served_verdicts.py` 837-952, `prove_path/tests/test_remotetie.py` 483-512 | proofs; network-accounting for the last | `{}`, `{"delta":"1/100"}`, or a toy v2 case | none, or a toy | synthetic; only `test_served_cases.py` reaches the real Lean [read] |
+| C4 | pass-throughs: `composite.py` (`piece`, `compose`), `parties.py`, `served_table.py`, `pouw_piece.py` | proofs, memory-accounting | none: each hands a case on | none | build nothing [read] |
+| C5 | `security/`: `Properties/Remote.lean` and eight files under `Proofs/Properties/` name `Sampled.paramsOfJson` | lean's tree | none | none | statements about it; no `#guard` builds a case [run: `rg -l`, both trees] |
+
+- **B2.** These are the only cases anywhere that reach an acceptance through `Sampled.paramsOfJson`: `proved` (312-327, L 343-358) is a private protocol with `params := VStar.Recursive.Sampled.paramsOfJson`, the one direct caller outside `security/`, and its guards accept at 349 and 411 (L 380 and 442) [read].
+- **C1.** `case-sampled.json` is read by a5's own test and nothing else, on M and on L [run: `rg`]. L's `served_cases.py` rebuilds the same case from `case-v2.json`. So of everything a5 audits, only a served run's records audits reach the component, through A7, B4 and B5. The benchmarks' stand-in windows (`a5.sh`, `a5_tp.sh`, `a5_warden.py`, `a5_sparse_mla.py`, `two_stage/audit.py`, `prove_path.py audit` [run: `rg` of a5's callers]) get their Lean answer from bare v2 or v1, never from the component [derived].
+
+### 2. Each that is not a day's served window by design
+
+None must be let through.
+
+- **No window (A1 to A4, A9, B1).** Refused before a day is read, so long as the new refusal comes after the form split and after the no-proofs refusal. A2's guard and `Sampled.lean`'s own at 99-101 keep their reason only in that order [derived].
+- **Synthetic (A5, B2, B3, C3's toy).** Each can carry a day: its author adds `day` and one declaration `{blocks, day, program}` of the case's own program, the form one-stage's parameters already take (`OneStage.lean` 30-32, 243, 375-383, the same on L) [read]. They have to, in the same pull request [derived]:
+  - B2's accept guards turn red without it.
+  - B3's `reusing` test asserts the reason `oneSession` word for word (674, 699), and L's `_empty_audit` test asserts `[ACCEPT, ACCEPT, UNDECIDED]`; both become a rejection at the parameters.
+  - A5's `V2_BREAKS` (136-148: no challenger, another window, a session, no coins) would all stop at "no day" and test nothing behind it.
+  - The reference's `_form_params` (`reference.py` 255-261) gains the same refusal.
+- **Onsite's development composite (A7), and remote's on the node (B5).** It is the same window and the same case as the record's; "development" is a label `composite.py` writes into `composite.json`, outside every case. It has no day because `DAY` is "off by default" (L `served_verdicts.sh` 231), not by design: the same run can declare one (`DAY=N`, the serve declares before the model loads, 231-236) [read]. With `DAY` unset its sampled proofs would be refused, in a verdict that gates nothing. I would not let it through [guess: soundness's call].
+- **The dress rehearsal (B3).** Development, but its parameters are made in the test and can name a day [derived].
+- **Stand-in and benchmark windows (C1).** They do not reach the component. As placed, the refusal leaves bare `OneStageZk.paramsOfJson` and `OneStage.paramsOfJson` alone, which is where they are answered [derived]. Were one ever composed, it would be refused for no day, and a stand-in, "a fresh commitment to values captured from its run" (`registration.py` 46), is no day's served window.
+- **A8, A10, C2.** Not through the component.
+
+**If an exemption were wanted anyway, what could key it.** Nothing in the decoded parameters says served, stand-in or development.
+- `window.kind` is in the commitment, the record, which `paramsOfJson` never sees. The registration check holds it to `["served", "stand-in"]` and treats the two alike (`Registration.lean` 102, 536, 609); nothing in `OneStage`, `OneStageZk` or `Sampled` reads it [run: `grep`].
+- It is the prover's word: the committer's caller sets it, default `served` (L `rows.py` 839, `interface.py` 2545). A refusal keyed on it is dodged by writing `stand-in`.
+- The parameters are the auditor's ("The auditor fixes the form with the rest of its params, before any coin", `Sampled.lean` 9-10). `challenger` and `window_root` are in every v2 case (`NO_CHALLENGER`), a development session's as much as the gate's, so they tell nothing.
+- So an exemption would have to be a new parameter the auditor sets, for instance an explicit `"day": null` in step 1's three-state form, and never the record's kind. I recommend none.
+
+### What the key does on the served path, on lean's merge
+
+These decide when step 2 can be marked, not whether the key stands. My 13:17Z entry said step 2 is "not to be marked before a served run can carry a day"; this is what that takes.
+
+1. **No writer carries a day into a case.** `replay.params` has no `day` (L 505-518), and `a5.write_case` hands it `tie(a)` alone (L 1199), while a5's own Python check does take `declared(a)` (L 819). So under `DAY=N` V3c's audit holds R2 to the day in Python and writes a case with none [read]. The writer is `benchmarks/one_stage/`, ours. M has no day in any driver [run: `grep`].
+2. **The day's own window has no case.** Under `DAY` it is V3c's audit that runs R2 (L `served_verdicts.sh` 236-238, 1584). "a served window of several members has none: under H1's tie its audit's law is `stratified:1`" (L `served_cases.py` 34-35; L `served_composite.sh` 12-13), and v2 still refuses the per-member form on L (`MULTI_REFUSED`, `OneStageZk.lean` 772) [read]. Step 3's audit, the one that gets a v2 case today, takes no `--day` at all: `run.sh` has none [run: `grep -c`, 0]. So a served case that carries a day and decodes also waits on the per-member form (PRF-371, PRF-585) or on a declared window of one member [derived].
+3. **A refusal at the parameters names no commitment** (`CoreProtocol/Protocol.lean` 99). L's `served_cases.tie` (473-479) writes no case whose answer does not name R's digest. So a no-day window's sampled proofs case is `NOT_WRITTEN`, the composite says "is missing" rather than "refused: no day", and `lean_sampled_row` gives the record's row `error`. `test_served_cases.py` 493-505 asserts the digest [read]. `served_cases.py` should carry a parameters refusal's reason through; that is ours, in the same pull request [guess].
+4. **The day's source is the prover's log.** The served driver passes `--day N --day-log LOG` (L 718, 878), which `records_audit.py` itself names "development: --day and the prover's --day-log, not device-bound" (L 626-629). The device's source, `--day-ledger` over the challenger's signed ledger (L 632-645; `challenger.declared_day` 1552-1572), has no caller [run: `rg`]. A case's `day` is the auditor's parameter by the contract and the prover's log's by today's driver.
+
+### Not established
+
+- No Lean and no test was run. Each "refused at" is from reading the decoders.
+- Whether soundness counts onsite's development composite (A7) as a run with no day by design. By the code it is a served window with `DAY` off by default.
+- Whether step 3's record names the same `program` as the day's declared circuit [guess: no].
+- Whether V3c's window under no tie has one member or several.
+- Whether a `local` challenger session's ledger gives a day: `declared_day` needs a v2 open with `started_utc`, and I did not read the local session.
+- L's `served_table.py` beyond its one changed hunk (the `DEVELOPMENT` hook), and `test_onsite_served.py`.
+
+For the table: LEAN-238 step 2's key, read done, no code and no run. "No day" stands, no exemption: onsite's Lean cases are refused before the day, the certifier scan's tied audit does not go through the component, the benchmarks' stand-ins never reach it. Same pull request: `CoreRemote.lean`'s two accept guards, the difftest's generators and reference, `served_cases.py`'s tie. The mark waits on a writer that carries the day (ours) and on the per-member form, since the day's own window has no v2 case.
