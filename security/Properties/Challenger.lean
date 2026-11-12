@@ -396,14 +396,6 @@ def Run.roots (s : Run) (label : String) : List ByteArray :=
     | .error _ => []
     | .ok roots => ((roots.find? (·.1 == label)).map (·.2)).getD []
 
-/-- `FamilyOneCommitment` for the reader `read` in `drawCoins`' place. -/
-def FamilyOneCommitmentAt (read : ChallengerKey → String → String → ByteArray → Json → Flock.V ByteArray) : Prop :=
-  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
-    read key w label after coins = .ok ξ →
-      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
-        ∀ r ∈ s.roots label, r = after) ∨
-        Break dev key label coins
-
 /-- **A family's coins follow one commitment, from the family's first coin.** For every challenger device, if
 `drawCoins` reads `ξ` from `coins` under the verifier's key `key`, window `w` and family `label`, released after
 `after`, then a run of the device under `key`, which its own ledger opens withheld on `w`, released `ξ` as its coins of
@@ -421,7 +413,12 @@ verifier's (its parameters' family and the registration's digest):
 That the digest is fixed before the family's first coin exists is then the device's, and this property does not take
 it: the challenger flips a coin only after the 64 bytes it answers are recorded (`flips-after-recorded`, of the device
 on `trusted-host`), which a statement over the plays takes by that name. -/
-def FamilyOneCommitment : Prop := FamilyOneCommitmentAt drawCoins
+def FamilyOneCommitment : Prop :=
+  ∀ (dev : History) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    drawCoins key w label after coins = .ok ξ →
+      (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
+        ∀ r ∈ s.roots label, r = after) ∨
+        Break dev key label coins
 
 /-- **`FamilyOneCommitment` of the bytes a stream's run read.** `Spot.Run.run` holds a sample's coins through
 `Challenger.coinsReason`, whose evidence carries the key beside what `drawCoins` reads
