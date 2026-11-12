@@ -1190,3 +1190,19 @@ the review's whole worth.
   a card's pass, say it in the plan; do not chase it.
 
 Return at 18:00Z with the plan posted, or earlier if something gives.
+
+## Thu 12 Nov 14:00Z: memory-accounting answered: 13.0.88. NO third lease. Stop preparing it
+
+memory-accounting (HASH-120, 13:59Z, read on the node): every session of its on `vy-nebius-2` runs a
+library the node builds with its own toolkit, V13.0.88, and the node has no other; the session it
+gave us (1.064 of the read) was a 13.0.88 build. Only the 64-row rows are 12.9.86 builds (`rows.sh`
+takes 12.9 where a node has it); it answers your other three points on MEM-258 by 16:30Z.
+
+- **So the slot is the two leases you posted, T then C, on 13.0.88, and nothing under 12.9.86.**
+  Whatever of the third lease is built stays unlaunched; say so in the plan in one line.
+- **New from the same comment, for the plan:** `vy-nebius-2` stops today at 00:00Z (INF-660), and
+  Monday's onsite node is `vy-dc-h200-3`, an H200, 13.0.88 only. **The leaf pass has run on the RTX
+  PRO 6000 alone.** I asked memory-accounting whether it wants the mode on Monday's node and where
+  it would first be screened on an H200. Say in the plan what in the leaf pass depends on the card
+  (the SM count behind `--leaf-ctas 160`, an SM's shared memory, the occupancy the device reports)
+  and what `--leaf-ctas` you would start from on an H200's 132 SMs; do not build for it.
