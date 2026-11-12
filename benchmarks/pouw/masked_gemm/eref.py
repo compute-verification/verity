@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import decode, duo_receipts, words  # noqa: E402
-from ref import mix32, tbc_receipts  # noqa: E402
+from mref import decode, duo_receipts, words
+from ref import mix32, tbc_receipts
 
 FMTS = ["i8", "e4"]
 S = np.array([5, 7, -5, -7], dtype=np.int64)

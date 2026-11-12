@@ -68,8 +68,8 @@ def write_table(gate: Path) -> list[Path]:
     out = []
     for binary, rs in rows.items():
         f = HERE / "probes" / f"{binary}.cu"
-        f.write_text(re.sub(r"(PROBES\[\] = \{\n).*?(\n\};)", lambda m: m[1] + "\n".join(rs) + m[2], f.read_text(),
-                            count=1, flags=re.S))
+        f.write_text(re.sub(r"(PROBES\[\] = \{\n).*?(\n\};)", lambda m, rs=rs: m[1] + "\n".join(rs) + m[2],
+                            f.read_text(), count=1, flags=re.S))
         out.append(f)
     return out
 
@@ -274,8 +274,8 @@ def analyze(outs: list[Path], fam: str, census: Path, rows_csv: Path) -> dict:
 
 
 def text(res: dict) -> str:
-    L = [f"{res['family']}: UP {res['up']['rate']:.4f} uniform instructions a SMSP-cycle ({res['up']['by']}), "
-         f"{res['up']['cycles']:.4f} SMSP-cycles each with the 2% margin"]
+    L = [(f"{res['family']}: UP {res['up']['rate']:.4f} uniform instructions a SMSP-cycle ({res['up']['by']}), "
+          f"{res['up']['cycles']:.4f} SMSP-cycles each with the 2% margin")]
     L.append("alone: " + ", ".join(f"{k} {v:.3f}" for k, v in sorted(res["uniform_alone"].items())))
     L.append("UNI on each row, SMSP-cycles (the largest every point allows, and the point that sets it): " +
              ", ".join(f"{r} {v['c']:.4f}" + (f" ({v['limit']:.4f} {v['set_by']})" if "limit" in v else "")

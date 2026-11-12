@@ -16,11 +16,10 @@ for the 32-bit filter; n = 10 is the smallest width that can.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import fold_kernel_check as fk
 from exact_kit.checks import Checks
@@ -33,12 +32,13 @@ N10, R1_10, R2_10 = 10, 4, 6
 BIG10 = (321, 411), (827, 208, 250, 366)
 
 
-def fixes(word, other, key, rounds, n=N, r1=R1, r2=R2):
+def fixes(word: Sequence[int], other: Sequence[int], key: tuple[int, int], rounds: int, n: int = N, r1: int = R1,
+          r2: int = R2) -> bool:
     xs = np.arange(1 << n, dtype=np.uint64)
     return bool(np.array_equal(fk.fold(xs, word, *key, n, r1, r2, rounds), fk.fold(xs, other, *key, n, r1, r2, rounds)))
 
 
-def kj19_scaled(a, e=R1):
+def kj19_scaled(a: int, e: int = R1) -> bool:
     return a % (1 << e) in (1, (1 << e) - 1)
 
 

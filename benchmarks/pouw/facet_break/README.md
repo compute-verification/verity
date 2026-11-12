@@ -14,6 +14,18 @@ any other probe's or tensor_kinds' records) on every facet.
 | `generate.py` | The seeded grid. `--family mix` (default): the targeted part (each lane class beside IMMA.16832 at the vertices of Π's (x_MMA, x_X) section and around them, two-lane pairs, warps a SMSP, each form alone, the JI3n family) and `--n` sampled programs. `--family mem`: each load alone, load pairs at 1:1, 3:1 and 1:3, each load beside IMMA.16832 (and HMMA.16816.F16) at 2-32 loads a 8 MMAs, and `--n` sampled. `--family fine`: a fine q grid of each lane beside IMMA.16832 where the joint rows were beaten or tight, and every form beside FFMA at 64-192 a 8 MMAs. `--family l2`: the L2 loads at 2-8 warps a SMSP and the 256-bit load from L1. `--emit` writes the probe source with each program's exact SASS counts, `--only` keeps the gate's passes |
 | `run.sh` | One batch under `research run`: generate, build, gate, drop the refusals by name, rebuild in chunks of 64, time under one `gpu-lease`, then `loads.py table` and `summary` into `$OUT` |
 
+`run.sh` is the runner, the command of a `research run` from a pushed commit on a node with an RTX PRO 6000 (sm_120),
+MACHINE below; its arguments are `generate.py`'s. The run's `out/` gets the sources timed (`fb_*.cu`), `kept.txt`, the
+first gate with its refusals (`gate0.txt`), `sass/`, each chunk's `gate.json`, `times.jsonl` and `rows.jsonl` under
+`chunks/`, every chunk's rows in `rows.jsonl`, and `loads.jsonl` and `summary.txt`. The `loads.py` commands after it
+read any runs' `rows.jsonl` on a CPU. The tests are `../tests/test_facet_break.py`.
+
+`loads.py` is the one module other code loads, by file: `generate.py`, `../sass_census/diff_menu.py` (a SASS
+opcode's census class, `class_of`), the census-cover fixtures' generator and the tests, which load `generate.py`
+too. Its `__all__` lists what they read.
+It reads the machine model and never writes it: a refit or a refitted family is printed, as the lines to add by
+hand under `--emit`. No Python here starts a process or touches a GPU; `run.sh` does.
+
 ~~~bash
 research run --on MACHINE --project verity --source . --cwd source --custody-ttl 12h \
   --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300
