@@ -324,7 +324,7 @@ def test_gumbel_top_p_shared_greedy_v2_equals_v1(V):
         _same(new, old, row, TOP_P[i % 4], seed, pos, TEMPS[(i // 4) % 4], SPLITS[(i // 16) % 4])
 
 
-@pytest.mark.parametrize("V,S,dead", [(2, 1, 561), (3, 2, 1013), (16, 32, 3787)])
+@pytest.mark.parametrize("V,S,dead", [(2, 1, 561), (3, 2, 1013), pytest.param(16, 32, 3787, marks=pytest.mark.slow)])
 def test_topp_keep_word_v2_equals_v1(V, S, dead):
     """v1's dead gates are lanes of its vector operations that nothing reads after them."""
     new, old = bind(DF.TopPKeepWordV2, V=V, S=S), bind(TW.TopPKeepWord, V=V, S=S)
@@ -351,7 +351,7 @@ def test_gumbel_select_f32_v3_equals_v1(V):
         _same(new, old, row, seed, pos, TEMPS[i % 4])
 
 
-@pytest.mark.parametrize("V,S,dead", [(3, 2, 1016), (16, 32, 3790)])
+@pytest.mark.parametrize("V,S,dead", [(3, 2, 1016), pytest.param(16, 32, 3790, marks=pytest.mark.slow)])
 def test_gumbel_top_p_v3_equals_v2(V, S, dead):
     """The registered compiler's sampler (`prune.dead_free_versions`): v2's dead gates are its keep word's and the Gumbel scan's
     last 3."""
