@@ -2622,22 +2622,33 @@ pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], ou
 
 /// [`unit_ab_into`] at `n` lane groups a pass.
 pub fn unit_ab_into_wide(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64], n: usize) -> bool {
+    unit_ab_into_at(net, ni, uw, ins, out, n, crate::ir_block::unit_ahead())
+}
+
+/// [`unit_ab_into_wide`] with each pass asking the cache for a row's z `ahead` column indices before it reads it (0: never;
+/// [`IrUnitNet::eval_wide_ahead`]). `out` is the same at every `ahead`.
+pub fn unit_ab_into_at(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64], n: usize, ahead: usize) -> bool {
     assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_into: out is not 4 * uw words per slot");
     let t0 = Instant::now();
     let one_pass = unit_flat() && net.one_pass();
     let flat_s = t0.elapsed().as_secs_f64();
-    let prof = GroupProf::new(n);
+    let prof = GroupProf::new(n, ahead);
     let ok = out.par_chunks_mut(n * 64 * 4 * uw).zip(ins.par_chunks(n * 64)).enumerate().all(|(ti, (dst, slots))| {
         let mut dst = dst.chunks_mut(64 * 4 * uw);
         prof.each_group(net, ni, n * ti, slots, |_, grp, (zz, aa, bq)| {
             let dst = dst.next().expect("out holds 64 slots a group");
             let tw = Instant::now();
             let used = u64::MAX >> (64 - grp.len());
-            let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+            let ok = if one_pass {
+                net.one_pass_z_is_ab(&zz, used)
+            } else {
+                zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0)
+            };
             if ok {
                 lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
                 lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
             }
+            [zz, aa, bq].into_iter().for_each(u64::give);
             prof.out(tw);
             ok
         }).into_iter().all(|ok| ok)
@@ -2653,11 +2664,12 @@ fn unit_zab(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], n: usize) 
     let t0 = Instant::now();
     let one_pass = unit_flat() && net.one_pass();
     let flat_s = t0.elapsed().as_secs_f64();
-    let prof = GroupProf::new(n);
+    let prof = GroupProf::new(n, crate::ir_block::unit_ahead());
     let items = ins.par_chunks(n * 64).enumerate().flat_map_iter(|(ti, slots)| {
         prof.each_group(net, ni, n * ti, slots, |gi, grp, (zz, aa, bq)| {
             let tl = Instant::now();
             let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+            [zz, aa, bq].into_iter().for_each(u64::give);
             prof.out(tl);
             z.into_iter().zip(a).zip(b).enumerate().map(|(l, ((z, a), b))| (64 * gi + l, z, a, b)).collect::<Vec<_>>()
         }).into_iter().flatten()
@@ -2674,6 +2686,7 @@ type Zab = (Vec<u64>, Vec<u64>, Vec<u64>);
 #[derive(Default)]
 struct GroupProf {
     wide: usize,
+    ahead: usize,
     passes: AtomicU64,
     eval_ns: AtomicU64,
     eval_max: AtomicU64,
@@ -2685,7 +2698,7 @@ struct GroupProf {
 
 /// The first `n` groups' words of `v`'s rows, each group's in its own vector, `v` read once.
 fn by_group<W: RowWord>(v: &[W], n: usize) -> Vec<Vec<u64>> {
-    let mut out: Vec<Vec<u64>> = (0..n).map(|_| Vec::with_capacity(v.len())).collect();
+    let mut out: Vec<Vec<u64>> = (0..n).map(|_| u64::take(v.len())).collect();
     for w in v {
         for (g, o) in out.iter_mut().enumerate() {
             o.push(w.word(g));
@@ -2700,17 +2713,17 @@ fn lane_bits(grp: &[Vec<F128>], col: usize) -> u64 {
 }
 
 impl GroupProf {
-    /// At most `wide` lane groups a pass.
-    fn new(wide: usize) -> Self {
+    /// At most `wide` lane groups a pass, each read of z asked of the cache `ahead` column indices before it.
+    fn new(wide: usize, ahead: usize) -> Self {
         assert!((1..=8).contains(&wide), "{wide} lane groups a pass: 1 to 8");
-        GroupProf { wide, ..Default::default() }
+        GroupProf { wide, ahead, ..Default::default() }
     }
 
     fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> Zab {
         let te = Instant::now();
         let got = if unit_flat() {
             let cols = bit_rows(grp, net.in_words);
-            net.eval64_flat(|col| cols[col])
+            net.eval_wide_ahead(|col| cols[col], self.ahead).unwrap_or_else(|| net.eval64(|col| cols[col]))
         } else {
             net.eval64(|col| lane_bits(grp, col))
         };
@@ -2742,7 +2755,7 @@ impl GroupProf {
                 c.set(g, x);
             }
         }
-        let (z, a, b) = net.eval_wide(|col| cols[col]).expect("a one-pass net");
+        let (z, a, b) = net.eval_wide_ahead(|col| cols[col], self.ahead).expect("a one-pass net");
         self.walked(te);
         let td = Instant::now();
         let [z, a, b] = [z, a, b].map(|v| by_group(&v, grps.len()));
@@ -2785,7 +2798,7 @@ impl GroupProf {
         if unit_profile() {
             let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
             eprintln!("UNITPROF\t{}", serde_json::json!({"part": part, "circuit": ni, "rows": rows, "slots": slots,
-                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wide": self.wide,
+                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wide": self.wide, "ahead": self.ahead,
                 "passes": self.passes.load(Ordering::Relaxed), "wall_s": t0.elapsed().as_secs_f64(),
                 "eval_sum_s": s(&self.eval_ns), "eval_max_s": s(&self.eval_max), "out_sum_s": s(&self.out_ns),
                 "check": self.check.get().copied().unwrap_or(false), "eval64_sum_s": s(&self.ref_ns), "eval64_max_s": s(&self.ref_max)}));
@@ -3853,6 +3866,32 @@ mod tests {
             assert!(got == want, "{threads} threads, {wide} groups a pass: width 1's words");
         }
     }
+
+    /// The device reads a statement's host units as the a, b words `unit_ab_into` packs. Their digest (SHA-512's first 16
+    /// bytes) on a fixed net and fixed inputs, four lane groups with the last partial, at every width: a walk that writes
+    /// another word fails here, even where every evaluator changed with it.
+    #[test]
+    fn the_packed_unit_words_are_pinned() {
+        let mut s = 0x9e37_79b9_0bad_cafeu64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        assert!(net.one_pass(), "a one-pass net, so several groups take one wide pass");
+        let uw = 1usize << (net.unit_log - 7);
+        let slots = 64 * 3 + 5;
+        let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+        // asking ahead never, at the next index, at the walk's own distance, past a row and past the net
+        for (wide, ahead) in [1, 2, 4, 8].into_iter().flat_map(|w| [0, 1, crate::ir_block::AHEAD, 4096, usize::MAX].map(|d| (w, d))) {
+            let mut out = vec![!0u64; 4 * uw * slots];
+            assert!(unit_ab_into_at(&net, 0, uw, &ins, &mut out, wide, ahead), "{wide} groups a pass, asking {ahead} ahead: z = a & b");
+            let mut h = Sha512::new();
+            out.iter().for_each(|w| h.update(w.to_le_bytes()));
+            assert_eq!(crate::hex(&h.finalize()[..16]), PACKED_PIN, "{wide} groups a pass, asking {ahead} ahead: the packed a, b words");
+        }
+    }
+
+    const PACKED_PIN: &str = "7fd2c142f9e5764c788769940b6b3ce8";
 
     #[test]
     fn the_width_leaves_every_thread_a_pass_and_holds_no_more_than_8() {

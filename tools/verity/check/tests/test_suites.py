@@ -1001,6 +1001,28 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact_cache_off(tmp_path):
+    """`--fresh` compiles what it tests (`UNCACHED_ENV`): its `lake build` of the verifier and the tests of a suite that runs
+    Lake get Lake's local artifact cache off, where Lake would unpack what an earlier build on the node left there instead of
+    compiling it. Without `--fresh` both keep the caller's."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
+                                          "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
+    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / ".gitignore").write_text(".lake/\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "verifier")
+    lake, said = tmp_path / "home" / ".elan" / "bin" / "lake", tmp_path / "lake-said"   # ELAN puts $HOME/.elan/bin first
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f'#!/bin/sh\necho "$1 ${{LAKE_ARTIFACT_CACHE-unset}}" >> {said}\n')
+    lake.chmod(0o755)
+    for args, want in (((), "true"), (("--fresh",), "false")):
+        p = _run_suite(root, tmp_path, *args, extra={"HOME": str(tmp_path / "home"), "LAKE_ARTIFACT_CACHE": "true", "WANT": want})
+        assert p.returncode == 0 and "passed  verity-flock" in p.stdout, p.stdout + p.stderr
+    assert said.read_text().splitlines() == ["build true", "build false"]
+
+
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
     """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
     reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, the
@@ -1077,6 +1099,31 @@ def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_p
     p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": ""})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
     p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "3", **{v: "3" for v in S.THREAD_VARS}})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+
+
+def test_each_test_process_starts_with_onednn_held_off_amx_unless_the_caller_names_the_variable(tmp_path, monkeypatch):
+    """oneDNN reads its ISA cap once, at a process's first primitive, so a cap set by a suite's own code comes too late for
+    whatever ran a primitive before it. The runner puts it in the environment the suite's process starts with: the suite's
+    conftest sees it as it is imported, ahead of every test module, and a test sees the same. A value the caller's environment
+    names stays, and `research run` gives its jobs the same name and value."""
+    from research import result
+
+    S = _suites(monkeypatch, tmp_path)
+    name, cap = S.ONEDNN_ISA
+    assert (name, cap) == result.ONEDNN_ISA == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+    root = tmp_path / "tree"
+    _env_workspace(root, {"pkg": f"import os\n\nAT_IMPORT = os.environ.get({name!r})\n\n\ndef test_env(conftest_saw):\n"
+                                 f"    now, want = os.environ.get({name!r}), os.environ['WANT']\n"
+                                 "    assert conftest_saw == AT_IMPORT == now == want\n"})
+    (root / "pkg" / "tests" / "conftest.py").write_text(f"import os\n\nimport pytest\n\nAT_IMPORT = os.environ.get({name!r})\n\n\n"
+                                                        "@pytest.fixture\ndef conftest_saw():\n    return AT_IMPORT\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "conftest")
+    monkeypatch.delenv(name, raising=False)
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": cap})
+    assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
+    p = _run_suite(root, tmp_path, "--fresh", extra={"WANT": "AVX2", name: "AVX2"})
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
