@@ -46,7 +46,9 @@ as its inputs, and `result.py table` prints the round a session a line.
 from the instant before Register to the start of the repetitions, so they add up to their `total` and leave none of
 it unnamed. `result.py table` prints them a session a line under the round, with what the session's ZK server says
 of its own thread in its `serve.log`'s `SESSION` record beside them. They are in the document a session (`steps`,
-`server`) and are no measurement.
+`server`) and are no measurement. Their `total` is a little more than the stage: the prover reads `tp_s` after the
+session's verdict and `e2e_s` before it sends its proofs, so `e2e_s` − `tp_s` leaves out the seconds between the
+two, which the tail holds.
 
 | Step | What the prover does in it |
 | --- | --- |

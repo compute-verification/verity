@@ -37,7 +37,9 @@ and the session's checks (the session's line less the setup, which it includes).
 clock from the instant before Register to the start of the repetitions, `STEPS`, and their `total`), and beside them
 what the session's ZK server says of its own thread in its `serve.log`'s `SESSION` line (`SERVER`): its busy seconds,
 with its build's, its record's, `handle_s` and `verify_s` inside them, and the seconds it waited for the prover's
-frames. A session whose lines name neither has neither, and `table` then prints no such lines.
+frames. A session whose lines name neither has neither, and `table` then prints no such lines. The steps' `total` is
+the stage's seconds and those from the repetitions' end to the session's verdict: the prover reads `tp_s` after the
+verdict and `e2e_s` before it sends its proofs, so the stage's difference leaves them out and the tail holds them.
 
 **The identity** is what two results must share to compare (`IDENTITY`): the class, the sample (how many of the
 round's units its answers say were proved), T and the tick, the traffic, the cores the job was pinned to and the Lean

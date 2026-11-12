@@ -40,9 +40,10 @@ def members(ticks: int, group: int) -> list[tuple[str, int]]:
     return [("first", 1), *scans, ("last", 1), *((f"egress-{g}", ticks) for g in range(group))]
 
 
-#: a session's 4 s from Register to the repetitions by step, and its ZK server's seconds, as `kept` writes them with `steps`
-STEPS_S = {**dict.fromkeys(R.STEPS, 0.0), "register": 0.5, "tables": 0.25, "lean_finish": 2.5, "config": 0.25, "witness": 0.5,
-           "total": 4.0}
+#: a session's seconds from Register to the repetitions by step, and its ZK server's seconds, as `kept` writes them with
+#: `steps`: 4.25 s, the stage's 4 s and the 0.25 s between the prover's readings of `e2e_s` and `tp_s`
+STEPS_S = {**dict.fromkeys(R.STEPS, 0.0), "register": 0.5, "tables": 0.25, "lean_finish": 2.75, "config": 0.25, "witness": 0.5,
+           "total": 4.25}
 SESSION = {"accepted": True, "handle_s": 0.125, "verify_s": 0.25, "build_s": 0.5, "record_s": 0.125, "prover_wait_s": 9.0,
            "busy_s": 1.5}
 
@@ -149,17 +150,17 @@ def test_register_to_the_repetitions_is_split_by_step_where_the_sessions_lines_n
     doc = doc_of(tmp_path, "a", steps=True)
     for s in doc["sessions"]:
         assert s["steps"] == STEPS_S and list(s["steps"]) == [*R.STEPS, "total"]
-        assert sum(s["steps"][k] for k in R.STEPS) == s["steps"]["total"] == s["prover"]["register_to_reps_s"]
+        assert sum(s["steps"][k] for k in R.STEPS) == s["steps"]["total"] == s["prover"]["register_to_reps_s"] + 0.25
         assert s["server"] == {k: SESSION[k] for k in R.SERVER}
     text = R.table(doc).splitlines()
     at = text.index("  Register to the repetitions by step, in seconds (the prover's steps, then its ZK server's thread):")
     assert text[at + 1].split() == ["member", "register", "tables", "lean", "finish", "config", "witness", "level0", "wait",
                                     "zk", "pads", "wait", "level0", "next", "device", "wait", "total", "server", "busy",
                                     "its", "build", "its", "wait"]
-    steps = ["0.50", "0.25", "2.50", "0.25", "0.50", "0.00", "0.00", "0.00", "0.00", "4.00"]
+    steps = ["0.50", "0.25", "2.75", "0.25", "0.50", "0.00", "0.00", "0.00", "0.00", "4.25"]
     assert [x.split() for x in text[at + 2:]] == [
         *([name, *steps, "1.50", "0.50", "9.00"] for name in ("first", "ingress-0", "last", "egress-0")),
-        ["the", "round", "2.00", "1.00", "10.00", "1.00", "2.00", "0.00", "0.00", "0.00", "0.00", "16.00", "6.00", "2.00",
+        ["the", "round", "2.00", "1.00", "11.00", "1.00", "2.00", "0.00", "0.00", "0.00", "0.00", "17.00", "6.00", "2.00",
          "36.00"]]
     # the numbers and the round's stages are what they are without the steps
     plain = doc_of(tmp_path, "b")
