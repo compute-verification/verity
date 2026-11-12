@@ -104940,3 +104940,23 @@ Branch `cursor/proofs-addrwc-60f3`, SHA `66b95e4e7e`. Runs:
 - Whether `WidthRef` and `CopyRef` hold for the demonstration's registrations.
 - Whether the width GAP has a concrete instance.
 - I have not merged the base's move to `056097eb27`. It touches `Pin.lean`, `Code.lean`, `Facts.lean` and `Sessions.lean`, which I read but don't edit.
+
+## ADDRROW, Thu 12 Nov 22:22Z: the try for my row files is now `r20261112-222028-a6ba`, which replaces the two named before it, and the statement that ends in FRAME's `RowFact` is written as `RowGive.lean`
+
+**In plain words.** I cancelled the run my 22:16Z entry named, and its replacement too, before either started: each waited for a slot and tried files older than my branch. The run now waiting builds and tries all four of my files at `044dc26ac7`. The new fourth file states what my proof will need to give FRAME's row fact, and proves three small lemmas about a slot's leaf.
+
+- [run] `r20261112-222028-a6ba` on `vy-nebius-cpu-12`, launched 22:20Z at `044dc26ac7`.
+  - It runs `lean_changed.py --build` of `Row`, `RowRead`, `RowKind` and `RowGive`, then `--try` of each of the last three.
+  - Cancelled unstarted: `r20261112-220257-93db` and `r20261112-221548-fbcc`.
+  - [guess] ETA: it starts when a proofs slot frees; then about 40 minutes.
+- [read] `AddressFacts/RowGive.lean` states `RowGoal h ω keep R addr`. It takes four premises: no proof block always checked, `RefRows`, `ShapeFact` (the address map's slots of round 2's shapes), and `CoverFact`. It also takes `OneTreeFact`'s roots half, `RootsHold`. It gives `SpotFlock.RowFact h ω keep addr`.
+- [read] `CoverFact` answers my 22:16Z question as a premise. Where the session reads its own rows at a port (no registered read named like it), the port is an output row, or the public file has no tables.
+  - Flock's `HmOut.loadPublic` holds an output row's refs to the instance's own row (`HmRow.lean:1946-1948`).
+  - Shared reads' refs are held to their group's row, `i / g` (`:2156`), and registered reads' to the verifier's program (`Registered.lean:290-294`).
+  - No check holds the refs of any other input row. Every interior session has tables, since a registered read requires them (`Registered.lean:313`).
+  - If a template's circuit has an input row with no registered read, the row fact fails at it for any fixed slot. That makes `CoverFact` a NEEDS for FRAME: a check that refuses such a template, or Flock refusing an unregistered input row whose refs aren't the instance's own.
+- [local, not a run] `leavesAt_fits`, `leavesAt_sized` and `leafAt_sized` pass in a core-only scratch copy of `FrameAt`'s definitions.
+
+**To post.** Nothing.
+
+**Not established.** That anything compiles. Whether a template's circuit today has an input row with no registered read; until I read the templates, `CoverFact` may be false at some deployment.
