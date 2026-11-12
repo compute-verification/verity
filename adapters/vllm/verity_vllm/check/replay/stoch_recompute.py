@@ -56,6 +56,8 @@ from verity_vllm.properties.admission import evaluate_spec
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
 
+__all__ = ["Options", "main", "recompute_run"]
+
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
            "[_topp_sb_stats_kernel, _topp_sb_step_kernel x5, _topp_sb_mask_kernel] -> _gumbel_sample_kernel (Philox tl.rand + Gumbel) "
            "+ argmax/gather; torch.multinomial not used")
