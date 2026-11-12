@@ -128,22 +128,22 @@ def engine():
 
 _ENGINE_VARS = ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS",
                 "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS", "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE", "VLLM_DISABLE_COMPILE_CACHE", "RUNPOD_POD_ID",
-                "TORCHINDUCTOR_CACHE_DIR", "VERITY_INDUCTOR_DIR_PER_PROCESS", "HF_HOME", "VERITY_FAULT")
+                "TORCHINDUCTOR_CACHE_DIR", "VERITY_INDUCTOR_DIR_PER_PROCESS", "HF_HOME")
 
 
 @pytest.mark.parametrize(("values", "digest"), [
-    ({}, "d43ddca387e48b9f037005834832ba17"),
+    ({}, "f3e0b8f1bac96c25de9a7ea75a4b6c18"),
     ({"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8", "CUBLASLT_WORKSPACE_SIZE": "0", "NCCL_ALGO": "Ring",
       "NCCL_PROTO": "Simple", "NCCL_MIN_NCHANNELS": "4", "NCCL_MAX_NCHANNELS": "8", "NCCL_NTHREADS": "512", "NCCL_BUFFSIZE": "4194304",
       "NCCL_LAUNCH_MODE": "GROUP", "VLLM_DISABLE_COMPILE_CACHE": "1", "RUNPOD_POD_ID": "pod-a", "TORCHINDUCTOR_CACHE_DIR": "/no/inductor",
-      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "HF_HOME": "/hf", "VERITY_FAULT": " skip_copy:3 "}, "6cbbab0e6f0be08fca8b082a0bd226cc"),
-    (dict.fromkeys(_ENGINE_VARS, ""), "b32b5b554142c2adc24aa3c97868d7ea"),
+      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "HF_HOME": "/hf"}, "bfdf3bd35c114e4c1b1d13445f050b3a"),
+    (dict.fromkeys(_ENGINE_VARS, ""), "20b5d424ebbea51fb5d837f7125d6609"),
     ({"VLLM_BATCH_INVARIANT": " 1", "VLLM_DISABLE_COMPILE_CACHE": "true", "VERITY_INDUCTOR_DIR_PER_PROCESS": "true", "NCCL_ALGO": " Tree ",
-      "RUNPOD_POD_ID": " p "}, "346629f5207b0967e546ab33645f6704"),
+      "RUNPOD_POD_ID": " p "}, "1cf6b670f3e07e0322f4a3e4e18e2048"),
 ])
 def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.MonkeyPatch, values: dict[str, str], digest: str) -> None:
     """The fields of the engine's records that the environment fills: the replay's engine facts, the engine profile's linear backend,
-    NCCL settings and pod, the compilation facts' compile cache, the compiled source's fault, the generated kernels' Inductor
+    NCCL settings and pod, the compilation facts' compile cache, the generated kernels' Inductor
     directory, and the hub paths.  vLLM, CUDA and nvidia-smi are faked; the rest of each record is the machine's."""
     import torch
 
@@ -174,7 +174,6 @@ def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.Mo
            "pod": "<node>" if pod == os.uname().nodename else pod,
            "compile_cache": engine.build.compilation_facts(llm)["compile_cache"],
            "compile_cache_disabled": engine.compiled_source.compile_settings(llm)["compile_cache_disabled"],
-           "fault": engine.compiled_source.CompiledGraphSource().fault,
            "inductor": [gk["inductor_cache_dir"], gk["per_process_cache_dir"]],
            "hub": [str(engine.dense_generic.hf_snapshot("org/m", "abc")), engine.fold_compare.hf_safetensors_glob("org/m")]}
     assert _digest(doc) == digest, doc

@@ -414,23 +414,124 @@ def test_nothing_the_developers_node_reports_of_what_it_served_is_read(store, tm
     assert doc["credited_macs"] == CREDITED
 
 
-def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp_path, capsys, monkeypatch):
-    out = tmp_path / "run" / "out"
-    monkeypatch.setenv("OUT", str(out))
+#: the bench run's own id and host stamp, which the kit's writer stamps each measurement with
+BENCH = "r20000101-000001-bbbb"
+STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
+
+
+@pytest.fixture
+def stamped(monkeypatch):
+    """The kit's writer under a `research run` of its own, stamping with `STAMP` rather than asking the host, and with
+    no run directory, so it writes `$OUT/result.json` and never the result of a run the suite itself runs under."""
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
+    monkeypatch.setattr(C.kit, "host_stamp", lambda: dict(STAMP))
+
+
+def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp_path, capsys, monkeypatch, stamped):
     store.add(RUN, a_record(tmp_path))
     assert bench(store, "--from", RUN) == 0
-    _, doc, _ = printed(capsys)
+    alone = capsys.readouterr()
+    out = tmp_path / "run" / "out"
+    monkeypatch.setenv("OUT", str(out))
+    assert bench(store, "--from", RUN) == 0
+    # what it prints is the same to the byte with the shared result written beside it
+    assert capsys.readouterr() == alone
+    doc = json.loads(alone.out.splitlines()[-1])
     assert json.loads((out / "compute.json").read_text()) == doc
+    assert list(doc) == ["value", "unit", "commit", "run", "target", "met", "credited_macs", "model_macs", "macs",
+                         "linears_share", "passes_macs", "scheme", "epsilon_s", "delta_s", "lean", "record", "withdrawn",
+                         "model", "class", "policy_agrees", "tokens", "tokens_from", "wall_s", "capacity_share"]
+    written = (out / "result.json").read_bytes()
     store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
     (out / "compute.json").unlink()
     assert bench(store, "--from", RUN) == 1 and not (out / "compute.json").exists()
+    assert (out / "result.json").read_bytes() == written
+
+
+def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_free_absent(store, tmp_path, capsys,
+                                                                                         monkeypatch, stamped):
+    """The record holds no registration of the run's hardware and no span the verifier holds its passes to, so
+    capacity and free are written with no value, each with why, and no reading is named."""
+    out = tmp_path / "out"
+    monkeypatch.setenv("OUT", str(out))
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN) == 0
+    result = json.loads((out / "result.json").read_text())
+    assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
+    got = {m["name"]: m for m in result["measurements"]}
+    assert list(got) == ["metric", "verified", "capacity", "free", "error"]
+    assert (got["metric"]["value"], got["metric"]["unit"], got["metric"]["target"], got["metric"]["verdict"]) == (
+        0.75, C.UNIT, 0.97, "below target")
+    assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
+    why = f"absent: {C.NO_SITE}; and {C.NO_SPAN}"
+    for name in ("capacity", "free"):
+        assert (got[name]["value"], got[name]["unit"], got[name]["why"]) == (None, "MAC", why)
+    # the error is the answer's δ_s, named in its inputs, and its unit says it is sampling's alone
+    assert (got["error"]["value"], got["error"]["unit"]) == (0.01, C.DELTA_S) and "why" not in got["error"]
+    assert "the answer's δ_s, sampling's alone" in C.DELTA_S
+    for m in got.values():
+        assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
+        assert m["inputs"] == ([RUN, "delta_s"] if m["name"] == "error" else [RUN])
+    assert C.NO_SPAN == ("a Pearl+ answer holds its passes to no seconds, and the seconds the run served in stay on the "
+                         "developer's node")
+
+
+def h200_site(devices: int):
+    """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
+    from verity.hardware import site as S
+    sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
+    locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
+    locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
+    return S.Site((sheet,), tuple(locs))
+
+
+def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_times_the_span(store, tmp_path):
+    """The H200's card file gives two readings, its tensor clock (1830 MHz) and its SM clock (1980 MHz): two devices
+    over 600 s are 2 x 132 SMs x 4,096 e4m3 MACs a clock at each, free is capacity less the credit, and a span that
+    leaves a fraction of a MAC rounds capacity up."""
+    store.add(RUN, a_record(tmp_path))
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    tensor, sm = 2 * 132 * 4096 * 1_830_000_000 * 600, 2 * 132 * 4096 * 1_980_000_000 * 600
+    assert C.capacity(h200_site(2), Fraction(600)) == {"tensor": tensor, "sm": sm}
+    assert C.capacity(h200_site(1), Fraction(1, 10 ** 9)) == {"tensor": 989_430, "sm": 1_070_531}
+    got = {m["name"]: m for m in C.amounts(doc, h200_site(2), Fraction(600))}
+    assert list(got) == ["metric", "verified", "capacity at clock.tensor", "free at clock.tensor", "capacity at clock.sm",
+                         "free at clock.sm", "error"]
+    assert [got[n]["value"] for n in got if n.startswith(("capacity", "free"))] == [
+        tensor, tensor - CREDITED, sm, sm - CREDITED]
+    assert not any("why" in m for m in got.values())
+    # with either missing, capacity and free are absent and say which
+    assert {m["name"]: m.get("why") for m in C.amounts(doc, h200_site(2))}["capacity"] == f"absent: {C.NO_SPAN}"
+    assert {m["name"]: m.get("why") for m in C.amounts(doc, None, Fraction(600))}["free"] == f"absent: {C.NO_SITE}"
+
+
+def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
+    from verity.hardware import site as S
+    with pytest.raises(C.Unreadable, match="the registered hardware holds no device"):
+        C.capacity(S.Site(), Fraction(1))
+    one = h200_site(1)
+    unnamed = S.Site(one.sheets, (*one.locs[:2], S.Loc("gpu0", "device", "host", sheet="00" * 64)))
+    with pytest.raises(C.Unreadable, match="the registered device gpu0 names no registered sheet"):
+        C.capacity(unnamed, Fraction(1))
+    other = S.Sheet(S.DeviceFigures("no-such-card", Fraction(1), Fraction(1)), 1, 1, 1)
+    unknown = S.Site((other,), (*one.locs[:2], S.Loc("gpu0", "device", "host", sheet=other.digest())))
+    with pytest.raises(C.Unreadable, match="the registered device gpu0's SKU has no card file"):
+        C.capacity(unknown, Fraction(1))
+
+
+def test_an_answer_with_no_delta_writes_the_error_absent_and_says_why(store, tmp_path):
+    store.add(RUN, a_record(tmp_path, ANSWER=lambda d: d.pop("profile")))
+    doc = C.from_run(C.EvidenceStore(store, store.pull, Refused, "withdrawn"), RUN)
+    got = {m["name"]: m for m in C.amounts(doc)}["error"]
+    assert (got["value"], got["why"], got["inputs"]) == (None, "the answer states no δ_s", [RUN, "delta_s"])
 
 
 #: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split puts 4 excluded A rows in call 6
 #: and 1 in call 70, ε's deduction on calls 2 and 71, and holds 120,150,994,944 of the linears' MACs
 GIVE_UP = {"lm_head": 4_202_692_608, "attention": 165_150_720, "outside": 16_079_998_976, "excluded_a": 150_994_944,
            "excluded_b": 0, "voluntary": 0, "kept_width": 0, "epsilon_macs": Fraction(5_700_348_825_400, 399),
-           "over_cap_macs": 0, "rho_macs": Fraction(210_898_255_873, 798), "floor": Fraction(1, 2)}
+           "over_bound_macs": 0, "rho_macs": Fraction(210_898_255_873, 798), "floor": Fraction(1, 2)}
 
 
 def resum(doc: dict) -> None:
@@ -445,7 +546,7 @@ def resum(doc: dict) -> None:
 
 
 def moved(n: Fraction) -> Callable[[dict], None]:
-    """An edit that moves `n` MACs of call 71's ε deduction to its credit, ρ taking its share, and restates the totals."""
+    """An edit that moves `n` MACs of call 71's ε deduction to its credit, ι taking its share, and restates the totals."""
     def edit(doc: dict) -> None:
         c = doc["uncredited"]["calls"][3]
         c["epsilon_macs"] = str(Fraction(c["epsilon_macs"]) - n)
@@ -474,24 +575,24 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert text[7:] == [
         "  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of its 4 "
         "calls (out/pieces/pouw/verify.json):",
-        "    LM head, which Pearl+ doesn't credit        4,202,692,608 MACs   11.96%",
-        "    attention, which Pearl+ doesn't credit        165,150,720 MACs    0.47%",
-        "    linears outside the passes                 16,079,998,976 MACs   45.75%",
-        "    excluded A rows                               150,994,944 MACs    0.43%",
-        "    excluded B rows' column blocks                          0 MACs    0.00%",
-        "    voluntary rows' bands and blocks                        0 MACs    0.00%",
-        "    side channels (k beyond |K|)                            0 MACs    0.00%",
-        "    ε's deduction                              14,286,588,535 MACs   40.64%",
-        "    draws over the inert-work bound                         0 MACs    0.00%",
-        "    ρ, the scheme's cap                           264,283,529 MACs    0.75%",
-        "    the credit's floor                                      0 MACs    0.00%",
-        "  ε's deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most MACs "
+        "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   11.96%",
+        "    attention, which Pearl+ doesn't credit         165,150,720 MACs    0.47%",
+        "    linears outside the passes                  16,079,998,976 MACs   45.75%",
+        "    excluded A rows                                150,994,944 MACs    0.43%",
+        "    excluded B rows' column blocks                           0 MACs    0.00%",
+        "    voluntary rows' bands and blocks                         0 MACs    0.00%",
+        "    side channels (k beyond |K|)                             0 MACs    0.00%",
+        "    ε's deduction                               14,286,588,535 MACs   40.64%",
+        "    sampled tiles over the inert-work bound                  0 MACs    0.00%",
+        "    ι, the inert-work share                        264,283,529 MACs    0.75%",
+        "    the credit's floor                                       0 MACs    0.00%",
+        "  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most MACs "
         "a ticket, so the calls it lands on carry it for the whole run",
         "  the 2 calls that give up the most:",
         "    pass 1 call 71, weight 1000 1x1, 111493951488x1x1 with 111493951488 real rows: 13,532,106,942 MACs "
-        "(ε's deduction 13,286,588,535, ρ 245,518,407)",
+        "(ε's deduction 13,286,588,535, ι 245,518,407)",
         "    pass 0 call 2, weight 2 gate_up, 128x2048x16384 with 128 real rows: 1,008,237,419 MACs "
-        "(ε's deduction 1,000,000,000, ρ 8,237,418)",
+        "(ε's deduction 1,000,000,000, ι 8,237,418)",
     ]
     assert bench(store, "--from", RUN, "--per-call") == 0
     top = printed(capsys)[1]["per_call"]["top"]
@@ -500,9 +601,9 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
 
 
 @pytest.mark.parametrize("edits, why", [
-    ({"VERIFY": None}, "the record's verify document holds no per-call split (it predates it): `served_passes.py "
-                       "uncredited` writes one from the run's passes, and --uncredited reads it"),
-    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record's verify document holds no per-call split (it predates it)"),
+    ({"VERIFY": None}, "the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
+                       "verifier side of the per-call give-up is on main"),
+    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
     ({"VERIFY": lambda d: (d["uncredited"]["calls"][1].update(macs=d["uncredited"]["calls"][1]["macs"] + 1), resum(d))},
@@ -530,9 +631,9 @@ def test_a_per_call_split_that_is_not_the_answers_is_refused(store, tmp_path, ca
                                                             "share": float(Fraction(799, 800) / (TOTAL - CREDITED))}
 
 
-def test_per_call_reads_served_passes_split_for_a_record_that_predates_it(store, tmp_path, capsys):
-    """``--uncredited F`` reads ``served_passes.py uncredited``'s file in place of the verify document, which isn't
-    fetched, and holds its passes' records to the answer's where the answer names them."""
+def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):
+    """``--uncredited F`` reads a split in a file of its own, with its commitment and its passes' records, in place of
+    the verify document, which isn't fetched, and holds those records to the answer's where the answer names them."""
     split = json.loads((RECORD / "pieces/pouw/verify.json").read_text())["uncredited"]
     given = tmp_path / "uncredited.json"
     given.write_text(json.dumps({"schema": split["schema"], "verify": "verify.json", "commitment": "c0" * 64,

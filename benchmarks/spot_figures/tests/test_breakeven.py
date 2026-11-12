@@ -5,18 +5,46 @@ from math import isfinite
 import pytest
 
 
+def test_a_cases_serve_tax_is_the_sum_of_the_cards_named_parts():
+    """The planner's serve tax is the serve_tax card's (A), part by part: a case with no lever pays every part and so
+    the card's total; one whose replay reads the edge's state live pays every part but the edge snapshot; one with its
+    own replay-block length pays the edge's pause over that length; and the planner reads every part the card names,
+    so a part added to the card can't be left out of a case's tax."""
+    from breakeven import sweep
+
+    parts, tc = sweep.PARTS, sweep.tc
+    assert set(parts) == {*sweep.SERVED, tc.EDGE} and len(sweep.SERVED) == len(set(sweep.SERVED))
+    assert {"step record", "two-stage boundary commitment", "history tables"} <= set(sweep.SERVED)
+    assert sweep.Case().tax() == pytest.approx(sum(parts.values()), rel=1e-12)
+    assert sweep.Case().tax() == pytest.approx(sweep.TAXES["tokens"]["tax"], rel=1e-12)
+    served = sum(parts[p] for p in sweep.SERVED)
+    assert sweep.Case(live=True).tax() == pytest.approx(served, rel=1e-12)
+    assert parts[tc.EDGE] == pytest.approx(sweep.EDGE_PAUSE / sweep.WINDOW, rel=1e-12)
+    assert sweep.Case(edge_s=60.0).tax() == pytest.approx(served + sweep.EDGE_PAUSE / 60.0, rel=1e-12)
+    assert sweep.Case(form="one-stage").tax() == sweep.TAX_ONE_STAGE
+    for name, case in sweep.cases().items():
+        if case.form != "one-stage":
+            assert case.tax() >= served, name
+
+
 @pytest.mark.slow
 def test_the_proof_servers_line_prices_on_figure_1s_path():
     """`P5+poolwin600`, the proof server's line at its last step, builds from the cards (fused per-expert reads, the
-    server's per-type prices, the column blocks, the 128k workload) and its world-year bound is finite, positive and
-    smaller at 10% of compute than at 1%: a change to figure1, total_cost or the cards that breaks the planner fails
-    here rather than when a plan is next regenerated.  Importing the planner builds every Figure 1 line, so it is slow."""
+    server's per-type prices, the 128k workload) and its world-year bound at a datacenter's
+    verification phase is finite, positive and smaller at 10% of compute than at 1%: a change to figure1, total_cost
+    or the cards that breaks the planner fails here rather than when a plan is next regenerated.  At one machine's
+    verification phase 10% of compute pays for no sampled request, one proof block of each block type proved, so
+    there the bound is everything the scope serves.  Importing the planner builds every Figure 1 line, so it is slow."""
+    from dataclasses import replace
+
     from breakeven import sweep
 
     case = sweep.cases()["P5+poolwin600"]
-    line = sweep.build(case)
+    line = sweep.build(replace(case, registration="datacenter"))
     at1, at10 = (sweep.bound(line, beta, "world year", case.scale) for beta in (0.01, 0.10))
     assert isfinite(at1) and isfinite(at10) and 0 < at10 < at1
+    y, pt = sweep.bound(sweep.build(case), 0.10, "world year", case.scale, full=True)
+    assert pt["registration_sample"] == 0 and pt["plan"] is None and pt["sample_budgets"] > 1 and y > at1
 
 
 @pytest.mark.slow
@@ -31,7 +59,8 @@ def test_a_steady_state_row_prices_its_type_and_no_other(tmp_path):
 
     reprice, case = sweep.reprice, sweep.cases()["P5+poolwin600"]
     strata = reprice.price_fused(sweep.fuse_reads(sweep.priced_strata(case.line), fixed="sum"), case.fused)
-    block = next(x["block"] for x in strata if x["block"].startswith("SparseMlaSplitPart_v1{T=64,"))
+    block = next(x["block"] for x in strata
+                 if x["block"].startswith("SparseMlaHeadBlock_v1{") and "NVIS=64,FIRST=false" in x["block"])
     row = {"block": block, "statement_seconds": 3.2, "blocks": 128, "provers": 1, "record": "the-run"}
     path = tmp_path / "steady.json"
     path.write_text(json.dumps({"rows": [row]}))
@@ -74,9 +103,9 @@ OLD_LINEARS = ("Fused[", "MoeExpertFp8BlockGemm", "FlashInferFp8Linear", "Scaled
 @pytest.mark.slow
 def test_the_served_cuts_128k_indexer_is_stated_against_every_linear(monkeypatch):
     """The served cut's line (`tokens`) is the per-expert line's model cut another way, so at the 128k mix its indexer
-    factor and served MACs a token are the per-expert line's: k = 283.53 and 79.25e9 MACs.  With `LINEARS` missing the
-    served cut's MoE GEMMs (`MoeExpertFp8CoordinateChunk_v1`, `MoeExpertFp8GemmW_v1`) it read k = 156.0 and 66.6e9
-    MACs, and so 19% more requests; such a list is refused by those blocks' names.  Slow for the planner's import."""
+    factor and served MACs a token are the per-expert line's: k = 283.53 and 79.25e9 MACs.  With `LINEARS` missing a
+    MoE GEMM of the served cut (`MoeExpertFp8GemmW_v1`) the indexer would be stated without its MACs, and the line
+    would plan more requests; such a list is refused by the block's name.  Slow for the planner's import."""
     from breakeven import levers, reprice
 
     served, per_expert = (reprice.workload(levers.make_line(name))[7] for name in ("tokens", "per_expert"))
@@ -84,5 +113,5 @@ def test_the_served_cuts_128k_indexer_is_stated_against_every_linear(monkeypatch
     assert served["indexer_factor"] == pytest.approx(per_expert["indexer_factor"], rel=1e-12)
     assert served["served_macs"] == pytest.approx(per_expert["served_macs"], rel=1e-12)
     monkeypatch.setattr(reprice, "LINEARS", OLD_LINEARS)
-    with pytest.raises(ValueError, match="MoE expert blocks MoeExpertFp8CoordinateChunk_v1, MoeExpertFp8GemmW_v1 match no"):
+    with pytest.raises(ValueError, match="MoE expert blocks MoeExpertFp8GemmW_v1 match no"):
         reprice.workload(levers.make_line("tokens"))
