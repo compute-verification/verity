@@ -156,7 +156,8 @@ def _chunk(pairs: np.ndarray) -> np.ndarray:
 
 
 def _changed(p: np.ndarray) -> np.ndarray:
-    d = np.zeros(p.shape[:-1] + (XM + 1,)); d[..., 0] = 1.0
+    d = np.zeros(p.shape[:-1] + (XM + 1,))
+    d[..., 0] = 1.0
     for t in range(p.shape[-1]):
         q = p[..., t:t + 1]
         nd = d * (1 - q)
@@ -172,9 +173,11 @@ def window_charges(p: np.ndarray, kappa: np.ndarray, block: int = 16) -> np.ndar
     s = np.sort(p.reshape(W, -1, block), axis=-1)
     pairs = s.reshape(W, s.shape[1], block // 2, 2)
     n = block // 8
-    d = np.zeros((W, XM + 1)); d[:, 0] = 1.0
+    d = np.zeros((W, XM + 1))
+    d[:, 0] = 1.0
     for b in range(s.shape[1]):
-        blk = np.zeros((W, XM + 1)); blk[:, 0] = 1.0
+        blk = np.zeros((W, XM + 1))
+        blk[:, 0] = 1.0
         for ch in range(n):
             blk = _conv(blk, _chunk(pairs[:, b, ch::n]))
         d = _conv(d, blk)
