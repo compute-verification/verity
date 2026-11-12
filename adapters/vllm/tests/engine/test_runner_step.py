@@ -3,7 +3,7 @@ parts added and removed between steps and during one."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, suppress
 from types import SimpleNamespace
 from typing import Any
 
@@ -218,10 +218,8 @@ def test_an_around_that_swallows_vllms_error_is_refused() -> None:
 
         @contextmanager
         def around_forward(self, step: Step) -> Iterator[None]:
-            try:
+            with suppress(OSError):
                 yield
-            except OSError:
-                pass
 
     remove = runner_step.add(runner, Swallows())
     runner.fails = "execute_model"
