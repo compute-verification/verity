@@ -1,0 +1,117 @@
+@proofs (112):
+  PRF-163 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-163 "Full proofs: protocol soundness" --milestone M`)
+  PRF-164 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-164 "Full proofs: protocol soundness" --milestone M`)
+  PRF-164 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-199 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-199 "Full proofs: protocol soundness" --milestone M`)
+  PRF-199 quiet: no comment or start for 49 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-201 quiet: no comment or start for 49 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-209 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-209 "Full proofs: protocol soundness" --milestone M`)
+  PRF-210 lapsed: its milestone F3 · Tue 3 Nov 18:00Z · Verity.Soundness and its composites on main was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F3 · Tue 3 Nov 18:00Z · Verity.Soundness and its composites on main" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-210 "Full proofs: protocol soundness" --milestone M`)
+  PRF-224 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-224 "Full proofs: protocol soundness" --milestone M`)
+  PRF-246 stray: filed by training in PRF, not taken up (a project and a date) and untouched for 59 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-269 overdue: due 2026-11-10: land it, or set the date it will land (`research msg linear edit PRF-269 --due YYYY-MM-DD`) and comment why it moved
+  PRF-282 quiet: no comment or start for 49 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-310 landed: every attached PR is merged or closed (#7537, #7185, #7154, #7142, #7130, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-310 TEXT`)
+  PRF-328 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-328 "Full proofs: protocol soundness" --milestone M`)
+  PRF-329 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-329 "Full proofs: protocol soundness" --milestone M`)
+  PRF-331 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-331 "Full proofs: protocol soundness" --milestone M`)
+  PRF-332 stale: not updated or commented on for 7 days: plan it (a date and milestone) or cancel it with a one-line reason
+  PRF-335 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-343 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-343 "Full proofs: protocol soundness" --milestone M`)
+  PRF-351 stray: filed by lean in PRF, not taken up (a project and a date) and untouched for 59 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-356 stray: filed by soundness in PRF, not taken up (a project and a date) and untouched for 59 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-361 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-367 overdue: due 2026-11-10: land it, or set the date it will land (`research msg linear edit PRF-367 --due YYYY-MM-DD`) and comment why it moved
+  PRF-367 stale: not updated or commented on for 9 days: plan it (a date and milestone) or cancel it with a one-line reason
+  PRF-384 lapsed: its milestone O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused was due 2026-11-10: re-date the milestone (`research msg linear milestone edit "Onsite demo: the remote run with network accounting" "O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-384 "Onsite demo: the remote run with network accounting" --milestone M`)
+  PRF-384 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-386 lapsed: its milestone O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused was due 2026-11-10: re-date the milestone (`research msg linear milestone edit "Onsite demo: the remote run with network accounting" "O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-386 "Onsite demo: the remote run with network accounting" --milestone M`)
+  PRF-386 stray: filed by network-accounting in PRF, not taken up (a project and a date) and untouched for 60 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-390 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-390 "Full proofs: protocol soundness" --milestone M`)
+  PRF-391 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-391 "Full proofs: protocol soundness" --milestone M`)
+  PRF-392 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-392 "Full proofs: protocol soundness" --milestone M`)
+  PRF-395 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-395 "Full proofs: protocol soundness" --milestone M`)
+  PRF-397 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-404 lapsed: its milestone O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused was due 2026-11-10: re-date the milestone (`research msg linear milestone edit "Onsite demo: the remote run with network accounting" "O4 · Tue 10 Nov 6 PM PST · advice private, Lean verdict, attacks refused" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-404 "Onsite demo: the remote run with network accounting" --milestone M`)
+  PRF-404 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-404 --due YYYY-MM-DD`) and comment why it moved
+  PRF-404 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-409 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-409 --due YYYY-MM-DD`) and comment why it moved
+  PRF-409 quiet: no comment or start for 58 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-410 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-413 quiet: no comment or start for 44 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-413 landed: every attached PR is merged or closed (#8400, #8311, #8301, #8226, #8224, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-413 TEXT`)
+  PRF-419 quiet: no comment or start for 59 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-428 lapsed: its milestone F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked was due 2026-11-03: re-date the milestone (`research msg linear milestone edit "Full proofs: protocol soundness" "F2 · Tue 3 Nov 18:00Z · every subprotocol proved, marked" --date YYYY-MM-DD`) and comment what moved it, or move it on to a later milestone (`research msg linear place PRF-428 "Full proofs: protocol soundness" --milestone M`)
+  PRF-454 quiet: no comment or start for 59 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-458 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-459 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-459 landed: every attached PR is merged or closed (#8319, #8294, #8278, #8266, #8256, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-459 TEXT`)
+  PRF-460 quiet: no comment or start for 42 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-461 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-461 --due YYYY-MM-DD`) and comment why it moved
+  PRF-461 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-462 overdue: due 2026-11-10: land it, or set the date it will land (`research msg linear edit PRF-462 --due YYYY-MM-DD`) and comment why it moved
+  PRF-463 stray: filed by top in PRF, not taken up (a project and a date) and untouched for 106 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-464 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-464 landed: every attached PR is merged or closed (#8453, #8425, #8404, #8358, #8326, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-464 TEXT`)
+  PRF-466 quiet: no comment or start for 61 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-468 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-472 quiet: no comment or start for 60 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-475 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-484 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-484 --due YYYY-MM-DD`) and comment why it moved
+  PRF-484 quiet: no comment or start for 54 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-485 stray: filed by lean in PRF, not taken up (a project and a date) and untouched for 52 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-489 stray: filed by circuits in PRF, not taken up (a project and a date) and untouched for 57 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-492 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-492 --due YYYY-MM-DD`) and comment why it moved
+  PRF-492 quiet: no comment or start for 44 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-492 landed: every attached PR is merged or closed (#8553, #8523, #8517): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-492 TEXT`)
+  PRF-498 stray: filed by network-accounting in PRF, not taken up (a project and a date) and untouched for 56 h: take it up, or `research msg linear audit --close-strays` cancels it with a comment naming this rule
+  PRF-499 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-502 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-502 --due YYYY-MM-DD`) and comment why it moved
+  PRF-502 quiet: no comment or start for 26 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-502 landed: every attached PR is merged or closed (#8933, #8891, #8859, #8771, #8741): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-502 TEXT`)
+  PRF-503 overdue: due 2026-11-10: land it, or set the date it will land (`research msg linear edit PRF-503 --due YYYY-MM-DD`) and comment why it moved
+  PRF-503 quiet: no comment or start for 45 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-505 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-505 --due YYYY-MM-DD`) and comment why it moved
+  PRF-505 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-506 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-506 --due YYYY-MM-DD`) and comment why it moved
+  PRF-506 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-507 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-507 --due YYYY-MM-DD`) and comment why it moved
+  PRF-507 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-508 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-508 --due YYYY-MM-DD`) and comment why it moved
+  PRF-508 quiet: no comment or start for 37 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-513 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-513 --due YYYY-MM-DD`) and comment why it moved
+  PRF-513 quiet: no comment or start for 44 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-514 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-514 --due YYYY-MM-DD`) and comment why it moved
+  PRF-514 quiet: no comment or start for 43 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-523 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-523 --due YYYY-MM-DD`) and comment why it moved
+  PRF-524 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-524 --due YYYY-MM-DD`) and comment why it moved
+  PRF-524 quiet: no comment or start for 31 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-528 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-528 --due YYYY-MM-DD`) and comment why it moved
+  PRF-528 quiet: no comment or start for 27 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-533 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-533 --due YYYY-MM-DD`) and comment why it moved
+  PRF-533 quiet: no comment or start for 31 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-533 landed: every attached PR is merged or closed (#8990, #8919, #8892, #8889, #8874, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-533 TEXT`)
+  PRF-534 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-534 --due YYYY-MM-DD`) and comment why it moved
+  PRF-534 quiet: no comment or start for 28 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-534 landed: every attached PR is merged or closed (#8885): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-534 TEXT`)
+  PRF-539 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-539 --due YYYY-MM-DD`) and comment why it moved
+  PRF-539 quiet: no comment or start for 29 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-539 landed: every attached PR is merged or closed (#8867): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-539 TEXT`)
+  PRF-540 overdue: due 2026-11-11: land it, or set the date it will land (`research msg linear edit PRF-540 --due YYYY-MM-DD`) and comment why it moved
+  PRF-540 landed: every attached PR is merged or closed (#8946, #8940, #8934, #8914, #8896, ...): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-540 TEXT`)
+  PRF-547 quiet: no comment or start for 29 h: comment one line (what changed, the next step and its date), or move it back to Todo
+  PRF-547 landed: every attached PR is merged or closed (#8841): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-547 TEXT`)
+  PRF-550 undated: set the date it lands, its milestone's at the latest (`research msg linear edit PRF-550 --due YYYY-MM-DD`), or move it to Backlog
+  PRF-550 landed: every attached PR is merged or closed (#9005): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-550 TEXT`)
+  PRF-553 undated: set the date it lands, its milestone's at the latest (`research msg linear edit PRF-553 --due YYYY-MM-DD`), or move it to Backlog
+  PRF-553 landed: every attached PR is merged or closed (#9047, #9027, #8999): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-553 TEXT`)
+  PRF-555 undated: set the date it lands, its milestone's at the latest (`research msg linear edit PRF-555 --due YYYY-MM-DD`), or move it to Backlog
+  PRF-555 title: retitle it to the deliverable, with no handle, sender, time or trailing … (`research msg linear edit PRF-555 --title T`)
+  PRF-555 landed: every attached PR is merged or closed (#9024, #8984): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-555 TEXT`)
+  PRF-561 undated: set the date it lands, its milestone's at the latest (`research msg linear edit PRF-561 --due YYYY-MM-DD`), or move it to Backlog
+  PRF-573 landed: every attached PR is merged or closed (#9144): move it to Done if its done-condition holds, else to In Progress with a comment naming the piece left (`research msg linear comment PRF-573 TEXT`)
+  PRF-577 undated: set the date it lands, its milestone's at the latest (`research msg linear edit PRF-577 --due YYYY-MM-DD`), or move it to Backlog
+112 finding(s), by lane and kind:
+  lane                      lapsed   undated   overdue     quiet     stale     title    landed     stray     total
+  @proofs                       18         5        23        40         2         1        15         8       112
+  total                         18         5        23        40         2         1        15         8       112
