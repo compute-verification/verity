@@ -55,7 +55,7 @@ from verity.definitions.registry.fp8 import E4M3
 from verity.definitions.registry.prims import BF16, F32
 
 _CONF = ("model-untested: read from vLLM d9105ea80's cp_gather_and_upconvert_fp8_kv_cache (the module docstring's lines) and its "
-         "sm_90 SASS; tests/properties/fp8_read_back_capture_gpu.py is its hardware check")
+         "cc 9.0 SASS; tests/properties/fp8_read_back_capture_gpu.py is its hardware check")
 
 #: NoPE values a scale covers: the kernel's 8-value chunks, 16 to a scale (`scales[chunk >> 4]`)
 QT = 128
