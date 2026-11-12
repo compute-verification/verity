@@ -7,8 +7,9 @@ a class after them. Every table of the same connections is under the one signatu
 of them under any other head.
 
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
-the releases the network certifier hands at execution phase w + 1's close (`warden.Released`, by slot stride:
-`warden`'s "The lengths rows"). The certifier writes them from the cells it cut and released itself, never from the
+the releases the network certifier hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
+run's last close for its last execution phase (`warden.Released`, by slot stride: `warden`'s "The lengths rows").
+The certifier writes them from the cells it cut and released itself, never from the
 server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
 that reading of the records in the clear): that the two agree rests on the network certifier's own code
 (`trusted-host`), and no proof ties them. Each table is T / `every` rows,
@@ -62,6 +63,30 @@ holds, though it is signed an execution phase later. A record's, a clock's and a
 same execution phase sign other digests, so none verifies as it (each would need a SHA-512 preimage). `parameters` is
 the schedule's digest, which holds the connection rows' form.
 
+**The word that no head comes** (`no_head_digest`, `no_head`, `check_no_head`; the lengths rows' form 2 only,
+`WardenParams.closes`). Under form 2 the network certifier ends every execution phase of a run in exactly one of two
+certificates of the link's egress in that execution phase: its head's, or this word's, which it signs where it
+doesn't hand the execution phase (`warden`'s "The lengths rows": it, the one before it or the one after it wasn't
+published complete, or the run ended early):
+
+    digest = tagged_sha512(NO_HEAD_TAG, u16be len(link) ‖ link ‖ u64be window ‖ parameters (64 bytes))
+
+a head's first three fields under a tag of its own. So the word is of one link's execution phase under one schedule,
+whose digest holds the form, and, as every certificate is, of one session and one key
+(`certificate.certificate_message`). Its public record is
+
+    {"format": NO_HEAD, "link", "window", "parameters", "certificate": {"key", "digest", "signature"}}
+
+A reader tells a head, the word and silence apart with public values alone. The word's digest is a function of the
+link, the execution phase and the schedule's digest, so a certificate that signs it is the word, and no head's
+certificate is (`check_registration` refuses the word's and `check_no_head` a head's: each would need a SHA-512
+collision across the two tags). An execution phase with neither has not ended yet, or its signer refused the leaf:
+it has no certificate, and fails closed as a record without one does. Which of the two an execution phase ends in
+is a function of which execution phases' records were published complete, which their certificates already say, so
+the word makes nothing else public. That an execution phase gets one of the two and never both rests on the network
+certifier's own code (`trusted-host`): its signer signs the digest it is asked to. Under form 1 an execution phase
+that isn't handed has no certificate of either kind.
+
 **The registration** (`registration`) is the head and its certificate as one public JSON object:
 
     {"format": REGISTRATION, "link", "window", "parameters", "word_bits", "row_schema",
@@ -113,6 +138,8 @@ from verity.protocols.spot.verifier.one_stage import registered as G
 DOMAIN_TAG = "verity-network-certifier/connection-rows-domain/v1"
 HEAD_TAG = "verity-network-certifier/connection-rows/v1"
 REGISTRATION = "verity-network-certifier/connection-rows-registration/v1"
+NO_HEAD_TAG = "verity-network-certifier/connection-rows-no-head/v1"
+NO_HEAD = "verity-network-certifier/connection-rows-no-head-word/v1"
 LENGTHS, FAILS = "lengths", "fails"
 #: a slot of each table: u32 N + 1 ‖ u32 bytes ‖ u32 n, and u16 class ‖ u16 at
 SLOT = {LENGTHS: struct.Struct("<III"), FAILS: struct.Struct("<HH")}
@@ -203,17 +230,21 @@ def releases(params: WardenParams, lengths: Sequence[bytes], fails: Sequence[byt
     return out
 
 
-def of_records(params: WardenParams, ingress: Sequence[Record],
-               egress: Sequence[Record]) -> dict[int, tuple[tuple[Released, ...], ...]]:
+def of_records(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record],
+               order: Mapping[int, int] | None = None) -> dict[int, tuple[tuple[Released, ...], ...]]:
     """The releases a run's records hold, read in the clear (a rehearsal's reading, as `warden.audit` is, and
     nothing a verifier runs): each execution phase's by slot stride, as the network certifier hands them and `tables`
     takes them. A release is an `END` in the ingress record, in its bucket's slot stride; N is its place among the
     run's, by bucket and then by connection; its request is its connection's ingress `DATA` and `END` payloads; its
     outputs are its connection's egress `DATA` cells, with content rows each one's id; and it failed where its
     egress ends in a `FAIL`. `ingress` and `egress` are each direction's records from the run's first execution
-    phase, one each and in order, since N counts from the run's first release. An execution phase with a release
-    whose connection hasn't ended in the records has no entry. ValueError for a schedule without connection rows,
-    records that aren't a run's from its first, or a cell that isn't the schedule's."""
+    phase, one each and in order, since N counts from the run's first release. The records count N only while every
+    ingress record so far is complete: one that isn't has lost its cells from its fault on, and the releases among
+    them. `order`, each released connection's place by its ordinal as the network certifier's log of the run has
+    it (`Warden.log`'s `release`), gives N past such a record, and is held to the records' count before it; without
+    it an execution phase past such a record has no entry. Nor has one with a release whose connection hasn't ended
+    in the records. ValueError for a schedule without connection rows, records that aren't a run's from its first, a
+    cell that isn't the schedule's, or an `order` that isn't the records'."""
     if params.lengths is None:
         raise ValueError("the schedule has no connection rows (WardenParams.lengths)")
     windows = list(range(len(ingress)))
@@ -223,16 +254,22 @@ def of_records(params: WardenParams, ingress: Sequence[Record],
     cut: dict[int, bytearray] = {}
     live: dict[int, list] = {}  # by connection, a release that hasn't ended: [N, its request, its ids, how it ended]
     out: dict[int, list[list[list]]] = {}
+    counted = True  # whether the records still count N
     for w, (a, b) in enumerate(zip(ingress, egress)):
-        out[w] = [[] for _ in range(strides_of(params))]
+        if counted or order is not None:
+            out[w] = [[] for _ in range(strides_of(params))]
         for t, (row_in, row_out) in enumerate(zip(a.grid, b.grid)):
             for f in row_in[:row_count(row_in)]:
                 kind, o, payload = read_cell(f, B)
                 if kind in (DATA, END):
                     cut.setdefault(o, bytearray()).extend(payload)
                 if kind == END:
-                    live[o] = [n, bytes(cut.pop(o)), bytearray(), None]
-                    out[w][t // params.every].append(live[o])
+                    place = n if order is None else order.get(o)
+                    if place is None or (counted and place != n):
+                        raise ValueError(f"connection {o} is release {n} of the records, and {place} of the run's log")
+                    live[o] = [place, bytes(cut.pop(o)), bytearray(), None]
+                    if w in out:
+                        out[w][t // params.every].append(live[o])
                     n += 1
             for f in row_out[:row_count(row_out)]:
                 kind, o, _ = read_cell(f, B)
@@ -246,6 +283,7 @@ def of_records(params: WardenParams, ingress: Sequence[Record],
                     live[o][2] += read.id.to_bytes(CT.U32_BYTES, "little")
                 else:
                     live.pop(o)[3] = kind == FAIL
+        counted = counted and a.status.complete
     return {w: tuple(tuple(Released(order, len(request), len(ids) // CT.U32_BYTES, failed,
                                     *((request, bytes(ids)) if content else ()))
                            for order, request, ids, failed in stride) for stride in strides)
@@ -473,6 +511,52 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
         raise ValueError("the registration's certificate doesn't verify under the network certifier's key in the "
                          "session")
     return head, domains
+
+
+def no_head_digest(link: str, window: int, params: WardenParams) -> bytes:
+    """The 64 bytes the network certifier signs to say that an execution phase of a link has no head (the module
+    docstring's "The word that no head comes"). ValueError for a schedule whose execution phases don't each end in
+    one of the two (`WardenParams.closes`)."""
+    if not params.closes:
+        raise ValueError("the schedule's execution phases don't each end in a head or in the word that none comes "
+                         "(WardenParams.lengths is 2 where they do)")
+    return tagged_sha512(NO_HEAD_TAG, b"".join([_text(link, "link"), _u(window, 8, "window"), params.digest]))
+
+
+def attest_no_head(issuer: Issuer, link: str, window: int, params: WardenParams) -> Certificate | None:
+    """The word that execution phase `window` of `link` has no head, signed by `issuer` (None when its signer
+    refuses)."""
+    return issuer.sign(link, Direction.EGRESS, window, no_head_digest(link, window, params))
+
+
+def no_head(certificate: Certificate, params: WardenParams) -> dict[str, Any]:
+    """The public record of the word that an execution phase has no head: what it is of, and its certificate."""
+    return {"format": NO_HEAD, "link": certificate.link, "window": certificate.window,
+            "parameters": params.digest.hex(),
+            "certificate": {"key": certificate.key_id.hex(), "digest": certificate.digest.hex(),
+                            "signature": certificate.signature.hex()}}
+
+
+def check_no_head(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
+                  window: int) -> None:
+    """The verifier's read of the word that an execution phase has no head, under the network certifier's key and
+    session and the schedule's parameters: ValueError naming what fails."""
+    want = {"format": NO_HEAD, "link": link, "window": window, "parameters": params.digest.hex()}
+    for k, v in want.items():
+        if doc.get(k) != v:
+            raise ValueError(f"the word's {k} is {doc.get(k)!r}, and the schedule's {v!r}")
+    if set(doc) != set(want) | {"certificate"}:
+        raise ValueError(f"the word holds the keys {sorted(set(want) | {'certificate'})} and no other")
+    try:
+        c = doc["certificate"]
+        cert = Certificate(bytes.fromhex(c["key"]), link, Direction.EGRESS, window, bytes.fromhex(c["digest"]),
+                           bytes.fromhex(c["signature"]))
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"the word's certificate doesn't read: {e}") from None
+    if cert.digest != no_head_digest(link, window, params):
+        raise ValueError("the word's certificate doesn't sign that the execution phase has no head")
+    if not cert.verify(key, session):
+        raise ValueError("the word's certificate doesn't verify under the network certifier's key in the session")
 
 
 def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:

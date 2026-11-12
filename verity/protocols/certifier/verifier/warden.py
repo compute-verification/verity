@@ -27,7 +27,8 @@ until its last bucket. Nothing admitted is dropped or reordered. A refusal is tr
 can hold (`every`: a slot stride of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
 `ingress_scan.Class`), so the network certifier certifies no record of a window in which it refused a connection:
 `withhold` gets that window's three records in place of `publish`, and the period check refuses an execution phase
-missing any record's certificate.
+missing any record's certificate. Under the lengths rows' form 2 the queue's head is admitted only at a bucket from
+which it ends inside the run ("The lengths rows").
 
 **The schedule.** Connection q, admitted at bucket s on the network certifier's own schedule, carries r = `slots` cells
 a bucket each way from s on:
@@ -68,8 +69,8 @@ holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTimi
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
 neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
-**The lengths rows** (`WardenParams.lengths`, none by default; 1 is their form): a schedule may have its network
-certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
+**The lengths rows** (`WardenParams.lengths`, none by default; 1 and 2 are their forms, `LENGTHS_FORMS`): a schedule
+may have its network certifier keep, of each request it releases, its place in the release order, its request's bytes, its response's
 outputs and whether it failed, a row of K = `WardenParams.stride_releases` slots a slot stride. Such a schedule has the
 id egress form, `ingress_buckets` ≤ D, a cell that holds an id request's head and first prompt field
 (`io_request.layout`), at most 2^16 egress cells, D + ⌊(`egress_cells` − 1)/r⌋ ≤ `window`, so that a connection ends
@@ -95,7 +96,24 @@ With lengths rows the network certifier:
   their connections has ended, and only where both windows' three records were published complete: a window whose
   cells have no certificate, or whose responses may reach into one that has none, has no lengths rows, and neither has
   the run's last window. `connection_rows` lays them out as the lengths and fails tables, commits them and signs
-  their one head.
+  their one head. That is form 1, which says nothing of an execution phase it doesn't hand.
+
+Form 2 ends every execution phase of a run (a window here), once and in their order: in its hand, or in the same
+call without releases, on which the network certifier signs that the execution phase has no head
+(`connection_rows`' "The word that no head comes"). Under it the network certifier:
+- hands execution phase w where the one before it (if there is one), w itself and the one after it (if there is one)
+  were each published complete, their three records, none withheld. Every cell of a release of w is in those three:
+  its request's cells begin at most `ingress_buckets` − 1 buckets before its `END`, and its connection ends at most
+  `WardenParams.span` buckets after its admission, each at most a window. So no hand holds a byte that left in an
+  execution phase without a certificate, which form 1's can: a request whose first cells left in the one before;
+- ends execution phase w once execution phase w + 1's records are published, and the run's last with its own
+  records, so the run's last close ends two;
+- admits a connection only at a bucket s with s + `span` inside the run, so that every release of the run's last
+  execution phase has ended by its close: that execution phase admits in its first T − `span` buckets and no later.
+  A connection that arrives after them waits in the queue and is cut at the run's end, as one still queued then
+  always is. The queue's bound holds as it does (Admission): a load that keeps arriving through those last `span`
+  buckets fills the queue, its next connection is refused, and the last execution phase's records are withheld;
+- ends each execution phase it has not ended without releases when the run ends early, whatever ended it.
 
 **The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
 (P, O, rows), `content_rows`' "The classes"): the network certifier also keeps, of each request it releases, the
@@ -104,8 +122,8 @@ with the release (`Released.request`, `Released.ids`), so that `connection_rows`
 the same head. The hand copies an execution phase's ids and makes nothing else: the tables are laid, committed and
 signed by whoever takes the hand, never on the tick.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
-it, or to where that hand would have been for a release it never hands (the last point above), and no longer; of a
-connection it never released it keeps nothing. The classes enter the parameters' digest; a schedule without content
+it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
+and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a schedule without content
 rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands what it did.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
@@ -209,7 +227,7 @@ class WardenParams:
     every: int = 1  # a slot stride's buckets: the Programs' boundaries are every `every` buckets of a window
     egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
-    lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1, or none
+    lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1 or 2, or none
     content: tuple[tuple[int, int, int], ...] | None = None  # the content rows' classes, each (P, O, rows), or none
 
 
@@ -235,18 +253,17 @@ class WardenParams:
                 raise ValueError(f"a {self.cell_bytes}-byte cell doesn't hold an id request's max_tokens: "
                                  f"under a response cap a cell is at least {HEADER.size + MAX_TOKENS_AT + ID_DIGITS} bytes")
         if self.lengths is not None:
-            if type(self.lengths) is not int or self.lengths != 1:
-                raise ValueError(f"lengths is 1, the lengths rows' form, or unset, not {self.lengths!r}")
+            if type(self.lengths) is not int or self.lengths not in LENGTHS_FORMS:
+                raise ValueError(f"lengths is 1 or 2, the lengths rows' forms, or unset, not {self.lengths!r}")
             if self.egress != "id":
                 raise ValueError("the lengths rows count id events, so their egress form is id")
             if self.ingress_buckets > self.delay:
                 raise ValueError(f"with lengths rows ingress_buckets ({self.ingress_buckets}) is at most the delay "
                                  f"({self.delay}): a released connection holds its lane from its release")
-            last = self.delay + (self.egress_cells - 1) // self.slots
-            if last > self.window or self.egress_cells > 1 << 16:
+            if self.span > self.window or self.egress_cells > 1 << 16:
                 raise ValueError(f"with lengths rows a connection ends within a window of its admission and its "
-                                 f"egress cells count in a u16: delay + (egress_cells − 1) // slots ({last}) is at "
-                                 f"most the window ({self.window}) and egress_cells at most {1 << 16}")
+                                 f"egress cells count in a u16: delay + (egress_cells − 1) // slots ({self.span}) is "
+                                 f"at most the window ({self.window}) and egress_cells at most {1 << 16}")
             _request_form().layout(self.cell_bytes)
             _connection_rows().check_slots(self.stride_releases, self._stride_that_fits)
         if self.content is not None:
@@ -282,6 +299,17 @@ class WardenParams:
         return _stride_releases(self.lanes, self.every, self.delay, self.ingress_buckets)
 
     @property
+    def span(self) -> int:
+        """The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
+        (the module docstring's schedule). With lengths rows a connection ends by then, and it is at most `window`."""
+        return self.delay + (self.egress_cells - 1) // self.slots
+
+    @property
+    def closes(self) -> bool:
+        """Whether the lengths rows end every execution phase of a run, its last included: their form 2."""
+        return self.lengths == 2
+
+    @property
     def reasons(self) -> tuple[str, ...]:
         """The `fails` record's reasons under this schedule: `REASONS`, without `cap` when it has no response cap."""
         return REASONS if self.max_tokens_cap is not None else REASONS[:-1]
@@ -313,6 +341,9 @@ class WardenParams:
 
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
 OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content")
+#: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
+#: one that isn't is ended without releases
+LENGTHS_FORMS = (1, 2)
 #: `WardenParams`' integer fields, every one but `egress` and the optional ones: the schedule the period check reads
 #: (`scheduleOf`) beside its `max_tokens_cap` when it has one, whose egress form is the id form and which has no lengths
 #: rows
@@ -513,7 +544,8 @@ class Warden:
       the server's side;
     - with lengths rows (`WardenParams.lengths`; the module docstring's "The lengths rows"), `lengths(window,
       strides)` receives each window's releases by slot stride, a window later (by default they are kept in
-      `lengths`);
+      `lengths`); under form 2 it is called once for every execution phase of the run, in their order, the last one
+      at the run's last close, with `strides` None for an execution phase that is not handed;
     - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
@@ -532,7 +564,7 @@ class Warden:
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
                  watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
-                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
+                 lengths: Callable[[int, tuple[tuple[Released, ...], ...] | None], None] | None = None) -> None:
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")
@@ -562,10 +594,13 @@ class Warden:
         self.withheld: list[Record] = []
         self.withhold = withhold or (lambda record, grid: self.withheld.append(record))
         self.release = release
-        self.lengths: list[tuple[int, tuple[tuple[Released, ...], ...]]] = []
+        self.lengths: list[tuple[int, tuple[tuple[Released, ...], ...] | None]] = []
         self.hand_lengths = lengths or (lambda window, strides: self.lengths.append((window, strides)))
         self._released: dict[int, list[list[_Connection]]] = {}  # each open window's releases, by slot stride
         self._whole: dict[int, bool] = {}  # whether a closed window's three records were published complete
+        self._ended = 0  # under form 2, the windows whose lengths rows are ended: 0 … _ended − 1
+        #: the first bucket that admits nothing: under form 2, the first from which a connection may end past the run
+        self._admits = windows * params.window - (params.span if params.closes else 0)
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -636,6 +671,9 @@ class Warden:
                 await self._pacer.kill()
                 for w in sorted(self._held):
                     self._emit(w, Reason.MONITOR_UNAVAILABLE)
+            if self.params.closes:
+                for w in range(self._ended, self.windows):
+                    self._end_lengths(w, False)
             self._changed.set()
 
     def _tick(self, t: int) -> None:
@@ -644,7 +682,7 @@ class Warden:
             self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
         if t % T == 0 and self.params.lengths is not None:
             self._released[t // T] = [[] for _ in range(T // self.params.every)]
-        while self.queue and len(self.active) < self.params.lanes:
+        while self.queue and len(self.active) < self.params.lanes and t < self._admits:
             self._admit(self.queue.popleft(), t)
         parts, released = [], []
         for c in self.active:
@@ -703,18 +741,39 @@ class Warden:
             self._emit_lengths(w, whole)
 
     def _emit_lengths(self, w: int, whole: bool) -> None:
-        """Window w − 1's releases by slot stride, handed once window w's records are, when each has ended
-        (`WardenParams`: with lengths rows a connection ends within a window of its admission), and only where both
-        windows' records were published complete: a window whose cells have no certificate, or whose releases'
-        responses reach into one that has none, gets no lengths rows."""
-        strides, before = self._released.pop(w - 1, None), self._whole.pop(w - 1, False)
+        """The lengths rows that window w's records, just published (`whole`: complete, and none withheld), were the
+        last to wait on (the module docstring's "The lengths rows"). Form 1: window w − 1's, handed where it and
+        window w were published complete: a window whose cells have no certificate, or whose releases' responses
+        reach into one that has none, gets no lengths rows. Form 2: window w − 1's, handed where window w − 2 (if
+        any), it and window w were, and at the run's last window that window's own, handed where the window before
+        it (if any) and it were; each one ended without releases where it isn't handed."""
+        if not self.params.closes:
+            before = self._whole.pop(w - 1, False)
+            self._whole[w] = whole
+            self._end_lengths(w - 1, whole and before)
+            return
+        earlier = self._whole.pop(w - 2) if w >= 2 else True
         self._whole[w] = whole
-        if strides is None or not (whole and before):
+        if w:
+            self._end_lengths(w - 1, whole and self._whole[w - 1] and earlier)
+        if w == self.windows - 1:
+            self._end_lengths(w, whole and (not w or self._whole[w - 1]))
+
+    def _end_lengths(self, w: int, handed: bool) -> None:
+        """Window w's releases by slot stride to `hand_lengths` when `handed`, each of them ended (`WardenParams`:
+        with lengths rows a connection ends within a window of its admission, and under form 2 inside the run).
+        Otherwise form 1 drops them, and form 2 ends the window with the same call and no releases."""
+        strides = self._released.pop(w, None)
+        if strides is None or not handed:
+            if self.params.closes:
+                self._ended = w + 1
+                self.hand_lengths(w, None)
             return
         if any(c.ended is None or c.failed in CLIENT_REASONS for stride in strides for c in stride):
-            raise RuntimeError(f"window {w - 1} released a request whose connection is live, or failed as its "
-                               f"client's, at window {w}'s close")
-        self.hand_lengths(w - 1, tuple(tuple(
+            raise RuntimeError(f"window {w} released a request whose connection is live, or failed as its client's, "
+                               f"when its lengths rows are handed")
+        self._ended = w + 1
+        self.hand_lengths(w, tuple(tuple(
             Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None, c.request,
                      bytes(c.ids)) for c in stride) for stride in strides))
 

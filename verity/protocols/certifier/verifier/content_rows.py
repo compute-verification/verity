@@ -218,7 +218,7 @@ def classes(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
     schedule holds classes of another form."""
     if params.lengths is None:
         raise ValueError("the content rows' tables are listed in the connection rows' head, so a schedule with "
-                         "content has lengths rows (lengths=1)")
+                         "content has lengths rows (lengths is 1 or 2)")
     got = params.content
     if not isinstance(got, (tuple, list)) or not 0 < len(got) <= MOST_CLASSES:
         raise ValueError(f"content is 1 to {MOST_CLASSES} classes, each (P, O, rows), or unset, not {got!r}")
