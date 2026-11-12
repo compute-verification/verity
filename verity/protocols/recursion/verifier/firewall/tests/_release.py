@@ -45,7 +45,7 @@ def _op(fw: FW.Firewall, op: list):
         if name == "register":
             return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(args[0]))[0]
         if name == "registrations":
-            return fw.admit_reads(*args)
+            return fw.admit_reads(*args[:3], [bytes.fromhex(t) for t in args[3]] if len(args) > 3 else ())
         return getattr(fw, name)(*args)
     except FW.Refused as e:
         return {"refused": str(e).removeprefix(REFUSED)}
@@ -144,10 +144,13 @@ HEX = st.binary(max_size=3).map(bytes.hex)
 #: the registrations a statement reads, by number, or why its value commitments are none of the server's
 READS = st.one_of(st.lists(st.integers(0, 4), max_size=3), st.lists(st.integers(0, 4), max_size=3),
                   st.lists(NAT, max_size=2), TEXT)
+#: a statement's known trees, each its entry in the verifier's list (`Firewall.Record.KNOWN_TREE_BYTES`), in hex
+KNOWN = st.lists(st.binary(min_size=137, max_size=137).map(bytes.hex), min_size=1, max_size=2)
 #: rule 5's ops, sampled only by `op_input`, so `outer_input`'s samples stay those `fixtures/release-outer.jsonl.gz` was frozen on
 REG_OP = st.one_of(
     st.builds(lambda h: ["register", h], HEX),
     st.builds(lambda s, p, r: ["registrations", s, p, r], SESSION, PART, READS),
+    st.builds(lambda s, p, r, k: ["registrations", s, p, r, k], SESSION, PART, READS, KNOWN),
 )
 
 
@@ -184,7 +187,8 @@ def scene(draw, kinds=("served", "budget", "unended", "served", "budget", "unend
         ops += [again, ["finish", "r0000"]] + [["register", draw(HEX)] for _ in range(draw(st.integers(0, 4)))]
         k = draw(st.integers(0, len(parts) - 1))
         for p in parts[:k]:
-            ops += [["admit", "r0000", p], ["registrations", "r0000", p, draw(READS)], ["release", "r0000", p]]
+            known = draw(st.one_of(st.just([]), st.just([]), KNOWN.map(lambda ts: [ts])))
+            ops += [["admit", "r0000", p], ["registrations", "r0000", p, draw(READS), *known], ["release", "r0000", p]]
         ask = ("r0000", parts[k])
         ops.append(["admit", *ask])
     elif kind == "served":
