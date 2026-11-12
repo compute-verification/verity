@@ -418,7 +418,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                                        "family": getattr(a, "family", None)})
         if a.phase == "cpu" and not (plan.run / "spec.json").exists():
             spec["reconstructed_after_execution"] = True
-            spec["digest"] = EXP._digest_doc({k: v for k, v in spec.items() if k != "digest"})
+            spec["digest"] = EXP.digest_doc({k: v for k, v in spec.items() if k != "digest"})
         note = EXP.write_spec(plan.run, spec)
         logger.info("[spec] %s digest=%s%s", "written" if note.get("written") else "kept",
                     (note.get("digest") or note.get("existing_digest") or "")[:12],
