@@ -1,5 +1,5 @@
-# The served window under 3 of onsite's seven subprotocols, each party on its machine:
-# sampled-proofs, certifier, wipe. The deploy bindings hold every host and address, this file none
+# The served window under 3 of onsite's seven subprotocols, the ones `protocols` lists, each
+# party on its machine. The deploy bindings hold every host and address, this file none
 # (demos/onsite_served/README.md). The set is no composite's, so `verity run THIS` refuses it by name
 # (`composite`): protocol soundness covers onsite's seven and remote's three alone.
 format = "verity/config/v0"

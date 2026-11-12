@@ -103,7 +103,7 @@ places them on, the hosts and addresses only in the deploy bindings.
 
 | File | Subprotocols | `verity run demos/FILE` |
 | --- | --- | --- |
-| `onsite_network.toml` | sampled proofs, the network certifier, the wipe | refused `composite` |
+| `onsite_network.toml` | SPOT, the network certifier, the wipe | refused `composite` |
 | `onsite_compute.toml` | those three, PoUW (`pouw`, onsite's work subprotocol), the inference-only policy | refused `composite` |
 
 Neither set is a composite's (`verity.configuration.deploy.config.COMPOSITES`, `Core.Composites.ofIds`): protocol

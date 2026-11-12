@@ -151,8 +151,8 @@ PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, C
 HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
           "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
           "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
-#: the smaller sets of onsite's subprotocols, each the file `demos/NAME.toml`: the network certifier with sampled proofs
-#: and the wipe, and those three with PoUW and the inference-only policy. Neither set is a composite's
+#: the smaller sets of onsite's subprotocols, each the file `demos/NAME.toml`: the network certifier with SPOT and the
+#: wipe, and those three with PoUW and the inference-only policy. Neither set is a composite's
 #: (`K.COMPOSITES`), so `verity run` refuses each file by name (``composite``)
 SETS: dict[str, tuple[str, ...]] = {
     "onsite_network": ("sampled-proofs", "certifier", "wipe"),
@@ -162,8 +162,8 @@ SETS: dict[str, tuple[str, ...]] = {
 
 def header(name: str) -> tuple[str, ...]:
     """The comment `demos/NAME.toml` opens with, for ``name`` of `SETS`."""
-    return (f"The served window under {len(SETS[name])} of onsite's seven subprotocols, each party on its machine:",
-            f"{', '.join(SETS[name])}. The deploy bindings hold every host and address, this file none",
+    return (f"The served window under {len(SETS[name])} of onsite's seven subprotocols, the ones `protocols` lists, each",
+            "party on its machine. The deploy bindings hold every host and address, this file none",
             "(demos/onsite_served/README.md). The set is no composite's, so `verity run THIS` refuses it by name",
             "(`composite`): protocol soundness covers onsite's seven and remote's three alone.")
 
