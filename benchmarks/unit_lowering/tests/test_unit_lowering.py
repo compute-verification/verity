@@ -43,11 +43,11 @@ def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
     assert got["ands"] == 10 and got["sections"] == {"unit": want, "again": want}
 
 
-def test_scan_refuses_a_section_whose_line_count_is_not_its_netlist(tmp_path):
+def test_scan_refuses_a_section_whose_line_count_is_not_its_rows(tmp_path):
     text = IL.netlist(small(), "unit")
     path = tmp_path / "short.circuit.txt"
     path.write_bytes(b'flock-circuit short\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
-    with pytest.raises(ValueError, match="holds a netlist of"):
+    with pytest.raises(ValueError, match="whose first line counts"):
         run.scan(path)
 
 
@@ -55,7 +55,7 @@ def test_scan_refuses_a_section_whose_line_count_is_not_its_netlist(tmp_path):
 def test_the_guard_passes_at_the_smallest_shape(tmp_path):
     """The flat file at K = 64 on the 4 x 8 tile, the smallest the H1 tile takes (32 | K, K >= 64; 4 | R, 8 | C), is
     byte for byte reference.json's (d40fe21d26's lowering). About 2 min and 5 GiB on that lowering: nothing cheaper catches a
-    change to the flat file's bytes, since the unit's netlist, sha512x3's, hm96's and META all come out of the whole
+    change to the flat file's bytes, since the unit's rows, sha512x3's, hm96's and META all come out of the whole
     lowering."""
     g = run.guard(tmp_path, shapes=[("tile", 64, 4, 8)])
     (shape,) = g["shapes"]
