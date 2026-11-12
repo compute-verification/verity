@@ -127,7 +127,8 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     desc = {**r.desc, "annotations": annotations if annotations else {}}   # a trace without annotations: predicted under empty ones
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
-        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {str(got[1])[:16]}…), "
+        own: Any = got[1]   # None under annotations that hold no correspondence, which the message cannot cut: its TypeError
+        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {own[:16]}…), "
                          f"the trace's {str(traced.get('descriptor_sha256'))[:16]}… ({str(traced.get('correspondence_digest'))[:16]}…)")
     names, params = traced_names(r.program, desc, trace)
     os.makedirs(out, exist_ok=True)
@@ -225,12 +226,11 @@ def _manifest_facts(path: Path) -> dict[str, Any]:
     return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
 
 
-def _request_shape(name: str, where: str) -> tuple[int, int]:
+def _request_shape(name: str) -> tuple[int, int]:
     """(LP, T) of a predicted request Program's name, `build_request_LP<n>_T<n>` as `write_row` names it."""
-    m = REQUEST.fullmatch(name)
-    if m is None:
-        raise UsageError(f"{where}: {name!r} is no predicted request Program's name (build_request_LP<n>_T<n>)")
-    return int(m[1]), int(m[2])
+    named: Any = REQUEST.fullmatch(name)   # None for a name of another form, which has no groups: its AttributeError
+    lp, t = named.groups()
+    return int(lp), int(t)
 
 
 def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
@@ -243,7 +243,7 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     p, rec = traced["0"], PredictedRow.of(json.loads((path := Path(predicted, FILE)).read_text()), str(path))
     by_shape = {s: p["requests"][n] for n, s in _traced_shapes(row_dir, "0", p).items()}
     parts = {"workload": (p["workload"], rec.workload_digest),
-             **{n: (by_shape.get(_request_shape(n, str(path))), d) for n, d in rec.requests.items()}}
+             **{n: (by_shape.get(_request_shape(n)), d) for n, d in rec.requests.items()}}
     out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
     t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
     out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
