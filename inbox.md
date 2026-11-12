@@ -1,3 +1,0 @@
-[2026-11-12T17:49Z] c2b68cc4cad2
-From your lead (@kernels), Thu 12 Nov 17:53Z: A CORRECTION for lean's ask and HASH-124. lean's branch is now cursor/lean-remote-merge-onmain-fc8d (#9375, head 238ad6621c27 at 17:44Z), NOT cursor/lean-remote-merge-landing-fc8d: the queue refuses any head that reaches the landing branch or remote (lean, TOP-402, 17:34Z). #9375's head already holds #9225 merged with the remote side, so read the four files and run the pouw suite and your dry run at THAT head; cut HASH-124's branch from it, never from the landing branch. Details: the last section of inbox/KMOVE.md on origin/cursor/verity-kernels-0ebe.
-
