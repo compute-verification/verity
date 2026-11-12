@@ -442,7 +442,7 @@ def _period(name: str, seed: int):
 def test_a_draw_at_the_record_k():
     """At a committed K = `plan.RECORD_K` (the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰) over a larger
     population, the work sampling design samples K units, each stratum's k_s rounded up, so at most one more a stratum."""
-    assert cases.PLAN_K == plan.RECORD_K == plan.record_k(Fraction(1, 1000), Fraction(1, 2 ** 40))
+    assert cases.PLAN_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
     for seed in range(2):
         got, refused = _drawn("budget", seed)
         ss, _ = Cr.strata(cases.drawn_instance(random.Random(f"budget/{seed}"), "budget")["layout"])
