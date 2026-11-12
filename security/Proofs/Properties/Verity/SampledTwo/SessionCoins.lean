@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Reading
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.Sampled.Moves
+public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
 /-!
 # The second stage's sessions' coins are the device's
@@ -377,18 +378,403 @@ def sessionRecords (C : CaseOf) (o : Exchange) : Option (List Json) := do
   (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs)
 
 /-- **Each session's coins are its own tree's** (piece: the sessions' coins, with the members' order): on a play the
-form accepts, in the log the check read, the session-round locator puts at most one release on each round `j` of session
-`t`, and that one is an opening whose coins are the ones session `t`'s record gives the round's stream's round
-(`slotStream`, `Verity.Sampled.recordRound`). The trees open in the sessions' order and
-each closes after its session's evidence (`Verity.Sampled.MemberForm.members_read`), which is what makes the tree the
-locator counts `t`-th session `t`'s. -/
+form accepts, in the log the check read, each release the session-round locator puts on round `j` of session `t` is an
+opening whose coins are the ones session `t`'s record gives the round's stream's round (`slotStream`,
+`Verity.Sampled.recordRound`). The trees open in the sessions' order (`Verity.Sampled.MemberForm.members_read`), which
+is what makes the tree the locator counts `t`-th session `t`'s. -/
 def LocatedOwn (A : Live₂) (C : CaseOf) (tab : ℕ → String) : Prop :=
   ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ t j, t < A.h.ms.length → j < SpotFlock.k₀ A.h t →
-    (located (locOf A tab) (SpotFlock.off A.h t + j) [] l).length ≤ 1 ∧
     ∀ x ∈ located (locOf A tab) (SpotFlock.off A.h t + j) [] l, ∃ recs rec,
       sessionRecords C o = some recs ∧ recs[t]? = some rec ∧
       (∃ i s n, x.1 = .opening i s n) ∧
       x.2 = ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
         Verity.bitsOfBytes).getD []
+
+/-- **The members' check held of the log the check read** (the form's acceptance, unpacked as the two-stage steps
+unpack it): on a play the form accepts, the interior's release log's lines are ones `coinTreesOf` reads as trees, the
+read is `readLog`'s of those lines at the sessions' records, `membersTreeReason` accepts the records against the trees,
+and those records are the second stage's sessions' records (`sessionRecords`). -/
+def MembersAccepted (C : CaseOf) : Prop :=
+  ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
+    ∃ (label : String) (after : ByteArray) (ξ : ByteArray) (lines : List String)
+      (trees : Array Spot.Challenger.LoggedTree) (records : Array (String × Array (String × Option ℕ) × Json × String)),
+      Spot.Challenger.coinTreesOf lines = .ok trees ∧
+      Verity.Sampled.readLog label after (records.toList.map (·.2.2.1)) ξ lines = some l ∧
+      Spot.Challenger.membersTreeReason trees lines records = none ∧
+      sessionRecords C o = some (records.toList.map (·.2.2.1))
+
+/-! ## The trees open in the sessions' order -/
+
+theorem off_mono {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {a b : ℕ} (h : a ≤ b) : off a ≤ off b := by
+  induction b, h using Nat.le_induction with
+  | base => exact le_rfl
+  | succ b _ ih => rw [hs]; omega
+
+/-- Sessions' rounds don't overlap: round `j` of session `t` is one run's round only. -/
+theorem off_sep {off K : ℕ → ℕ} (hs : ∀ t, off (t + 1) = off t + K t) {t t' j j' : ℕ} (hj : j < K t)
+    (hj' : j' < K t') (h : off t + j = off t' + j') : t = t' ∧ j = j' := by
+  have lt : ∀ {a b ja jb : ℕ}, a < b → ja < K a → off a + ja < off b + jb := by
+    intro a b ja jb hab hja
+    have := off_mono hs (show a + 1 ≤ b from hab)
+    rw [hs] at this
+    omega
+  rcases Nat.lt_trichotomy t t' with h1 | rfl | h1
+  · exact absurd h (Nat.ne_of_lt (lt h1 hj))
+  · exact ⟨rfl, by omega⟩
+  · exact absurd h.symm (Nat.ne_of_lt (lt h1 hj'))
+
+/-- The stream and its round a session's round is. -/
+theorem roundOf_slot {tab : String} {name : Option String} {k j : ℕ} (h : roundOf tab name k = some j) :
+    name = some (slotStream tab j).1 ∧ k = (slotStream tab j).2 := by
+  unfold roundOf at h
+  split_ifs at h with h1 h2 h3
+  · obtain ⟨rfl, rfl⟩ := h1
+    cases h
+    simp [slotStream]
+  · cases h
+    rw [h2]
+    have e1 : 2 * k + 1 - 1 = 2 * k := by omega
+    have e2 : 2 * k % 2 = 0 := by omega
+    have e3 : 2 * k / 2 = k := by omega
+    simp [slotStream, e1, e2, e3]
+  · cases h
+    rw [h3]
+    have e1 : 2 * k + 2 - 1 = 2 * k + 1 := by omega
+    have e2 : (2 * k + 1) % 2 = 1 := by omega
+    have e3 : (2 * k + 1) / 2 = k := by omega
+    simp [slotStream, e1, e2, e3]
+  · cases h
+
+theorem mem_firstsOf {x : ℕ} : ∀ (acc xs : List ℕ), x ∈ acc ∨ x ∈ xs → x ∈ firstsOf acc xs
+  | acc, [], h => by simpa [firstsOf] using h
+  | acc, i :: is, h => by
+    simp only [firstsOf]
+    apply mem_firstsOf
+    rcases h with h | h
+    · left
+      split_ifs <;> simp [h]
+    · rcases List.mem_cons.1 h with rfl | h
+      · left
+        split_ifs with hi <;> simp [hi]
+      · exact Or.inr h
+
+theorem mem_treesOpened {pre : List Release} {q : Release} (hq : q ∈ pre) {i s n : ℕ}
+    (hf : q.frame = .opening i s n) : i ∈ treesOpened pre := by
+  unfold treesOpened
+  exact mem_firstsOf [] _ (Or.inr (List.mem_filterMap.2 ⟨q, hq, by simp [hf, openTree]⟩))
+
+theorem treesOpened_snoc_open {pre : List Release} {r : Release} {i s n : ℕ} (hr : r.frame = .opening i s n) :
+    treesOpened (pre ++ [r]) = if i ∈ treesOpened pre then treesOpened pre else treesOpened pre ++ [i] := by
+  rw [treesOpened_append]
+  simp only [List.filterMap_cons, List.filterMap_nil, hr, openTree]
+  rfl
+
+theorem treesOpened_snoc_none {pre : List Release} {r : Release} (hr : openTree r.frame = none) :
+    treesOpened (pre ++ [r]) = treesOpened pre := by
+  rw [treesOpened_append]
+  simp only [List.filterMap_cons, List.filterMap_nil, hr]
+  rfl
+
+theorem idxOf_map_range {f : ℕ → ℕ} {N : ℕ} (hf : ∀ a b, a < N → b < N → f a = f b → a = b) :
+    ∀ {m : ℕ}, m ≤ N → ∀ {j : ℕ}, j < m → ((List.range m).map f).idxOf (f j) = j := by
+  intro m
+  induction m with
+  | zero => intro _ j hj; omega
+  | succ m ih =>
+    intro hm j hj
+    rw [show List.range (m + 1) = List.range m ++ [m] from List.range_succ, List.map_append, List.idxOf_append]
+    by_cases hjm : j < m
+    · rw [if_pos (List.mem_map.2 ⟨j, List.mem_range.2 hjm, rfl⟩)]
+      exact ih (by omega) hjm
+    · have hj' : j = m := by omega
+      subst hj'
+      have hn : f j ∉ (List.range j).map f := by
+        intro hmem
+        obtain ⟨a, ha, hfa⟩ := List.mem_map.1 hmem
+        have ha' := List.mem_range.1 ha
+        have := hf a j (by omega) (by omega) hfa
+        omega
+      rw [if_neg hn, List.map_singleton, List.idxOf_cons_self, List.length_map, List.length_range, Nat.zero_add]
+
+theorem find?_of_first {α : Type} {p : α → Bool} : ∀ {l : List α} {t : ℕ} {a : α}, l[t]? = some a → p a = true →
+    (∀ u b, u < t → l[u]? = some b → p b = false) → l.find? p = some a
+  | [], _, _, h, _, _ => by simp at h
+  | x :: l, 0, a, h, hp, _ => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at h
+    subst h
+    simp [List.find?_cons, hp]
+  | x :: l, t + 1, a, h, hp, hb => by
+    have hx : p x = false := hb 0 x (Nat.succ_pos _) (by simp)
+    rw [List.find?_cons, hx]
+    exact find?_of_first (by simpa using h) hp fun u b hu hub => hb (u + 1) b (by omega) (by simpa using hub)
+
+/-- **What the members' check gives of the read `log`**, at a numbering `tree` of the sessions' trees as the read
+numbers trees (`Verity.Sampled.MemberForm.members_read`): no tree two sessions', the lines' rounds in the sessions'
+order, each session's tree the `tree j`-th, each record naming its tree's root, each session's tree opened, and an
+opening of session `j`'s tree after openings of the trees of sessions at or before `j` only. -/
+structure MembersHeld (lines : List String) (trees : Array Spot.Challenger.LoggedTree) (log : List Release)
+    (records : Array (String × Array (String × Option ℕ) × Json × String)) (tree : ℕ → ℕ) : Prop where
+  nodup : (Verity.Sampled.MemberForm.usedOf records).toList.Nodup
+  order : Spot.Challenger.membersOrder lines = some (Verity.Sampled.MemberForm.usedOf records)
+  idx : ∀ j ρ, (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ →
+    (Verity.Sampled.heldTrees trees).findIdx? (·.1 == ρ) = some (tree j)
+  roots : ∀ j x, records[j]? = some x → ∃ ρ, Spot.getD (Spot.getD x.2.2.1 "coin_tree") "root" = Json.str ρ ∧
+    (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ
+  closes : ∀ j, j < records.size → ∃ Lc c L₂ s n, log = Lc ++ c :: L₂ ∧ c.frame = .opening (tree j) s n
+  before : ∀ pre r post, log = pre ++ r :: post → ∀ j, j < records.size → ∀ s n, r.frame = .opening (tree j) s n →
+    ∀ q ∈ pre, ∀ j', j' < records.size → ∀ s' n', q.frame = .opening (tree j') s' n' → j' ≤ j
+
+section Held
+
+variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray} {lines : List String}
+  {log : List Release} {trees : Array Spot.Challenger.LoggedTree}
+  {records : Array (String × Array (String × Option ℕ) × Json × String)} {tree : ℕ → ℕ}
+
+theorem membersHeld_of (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
+    (hM : Spot.Challenger.membersTreeReason trees lines records = none) :
+    ∃ tree, MembersHeld lines trees log records tree := by
+  obtain ⟨-, hnod, hO⟩ := Verity.Sampled.MemberForm.membersTreeReason_none hM
+  obtain ⟨tree, h1, h2, -⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
+  refine ⟨tree, hnod, hO, fun j ρ hρ => ?_, fun j x hx => ?_, fun j hj => ?_, h2⟩
+  · have hj : j < records.size := by
+      have := (Array.getElem?_eq_some_iff.1 hρ).1
+      rwa [Verity.Sampled.MemberForm.usedOf_size] at this
+    obtain ⟨t, -, hroot, hfi, -⟩ := h1 j _ (Array.getElem?_eq_getElem hj)
+    have hu := Verity.Sampled.MemberForm.usedOf_getElem? (Array.getElem?_eq_getElem hj)
+    rw [hroot, Verity.Sampled.MemberForm.strOf_str, hρ] at hu
+    rw [Option.some.inj hu]
+    exact hfi
+  · obtain ⟨t, -, hroot, -⟩ := h1 j x hx
+    refine ⟨t.root, hroot, ?_⟩
+    rw [Verity.Sampled.MemberForm.usedOf_getElem? hx, hroot, Verity.Sampled.MemberForm.strOf_str]
+  · obtain ⟨t, -, -, -, -, Lc, c, L₂, s, n, he, hc, -⟩ := h1 j _ (Array.getElem?_eq_getElem hj)
+    exact ⟨Lc, c, L₂, s, n, he, hc⟩
+
+theorem MembersHeld.inj (H : MembersHeld lines trees log records tree) {a b : ℕ} (ha : a < records.size)
+    (hb : b < records.size) (h : tree a = tree b) : a = b :=
+  Verity.Sampled.MemberForm.tree_inj H.nodup H.idx (by rw [Verity.Sampled.MemberForm.usedOf_size]; exact ha)
+    (by rw [Verity.Sampled.MemberForm.usedOf_size]; exact hb) h
+
+/-- Every tree the read opens is a session's. -/
+theorem MembersHeld.opening (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {pre : List Release} {r : Release}
+    {post : List Release} (he : log = pre ++ r :: post) {i s n : ℕ} (hr : r.frame = .opening i s n) :
+    ∃ j, j < records.size ∧ i = tree j := by
+  obtain ⟨l, ρ, name, k, hl, hro, hkey, -, -⟩ := Verity.Sampled.readLog_round hT hR he hr
+  obtain ⟨a, b, hls⟩ := List.append_of_mem hl
+  obtain ⟨A, B, hused, -⟩ := Verity.Sampled.MemberForm.membersOrder_order H.order hls
+    (Verity.Sampled.MemberForm.openOf_opensRound hro.1)
+  have hmem : ρ ∈ (Verity.Sampled.MemberForm.usedOf records).toList := by
+    rw [hused]
+    simp
+  obtain ⟨j, hj, hjρ⟩ := List.getElem_of_mem hmem
+  have hρ : (Verity.Sampled.MemberForm.usedOf records)[j]? = some ρ := by
+    rw [← Array.getElem?_toList, List.getElem?_eq_getElem hj, hjρ]
+  have hj' : j < records.size := by
+    rw [Array.length_toList, Verity.Sampled.MemberForm.usedOf_size] at hj
+    exact hj
+  exact ⟨j, hj', Option.some.inj ((Verity.Sampled.MemberForm.keyAt_idx hkey).symm.trans (H.idx j ρ hρ))⟩
+
+/-- An opening of session `j`'s tree comes after an opening of each earlier session's tree. -/
+theorem MembersHeld.earlier (H : MembersHeld lines trees log records tree) {pre : List Release} {r : Release}
+    {post : List Release} (he : log = pre ++ r :: post) {j s n : ℕ} (hj : j < records.size)
+    (hr : r.frame = .opening (tree j) s n) {j' : ℕ} (hlt : j' < j) :
+    ∃ q ∈ pre, ∃ s' n', q.frame = .opening (tree j') s' n' := by
+  have hj' : j' < records.size := by omega
+  obtain ⟨Lc, c, L₂, sc, nc, hec, hcf⟩ := H.closes j' hj'
+  have hne : c ≠ r := by
+    intro e
+    rw [e, hr] at hcf
+    have := H.inj hj hj' (Verity.Frame.opening.inj hcf).1
+    omega
+  rcases List.append_eq_append_iff.1 (hec.symm.trans he) with ⟨a', hpre, ha⟩ | ⟨c', hLc, hc⟩
+  · cases a' with
+    | nil => exact absurd (List.cons.inj ha).1 hne
+    | cons y a'' =>
+      rw [List.cons_append] at ha
+      obtain ⟨rfl, -⟩ := List.cons.inj ha
+      exact ⟨_, by rw [hpre]; simp, sc, nc, hcf⟩
+  · cases c' with
+    | nil => exact absurd (List.cons.inj hc).1.symm hne
+    | cons y c'' =>
+      rw [List.cons_append] at hc
+      obtain ⟨rfl, -⟩ := List.cons.inj hc
+      have := H.before Lc c L₂ hec j' hj' sc nc hcf _ (by rw [hLc]; simp) j hj s n hr
+      omega
+
+/-- A tree first opened is the next session's. -/
+theorem MembersHeld.le (H : MembersHeld lines trees log records tree) {pre : List Release} {r : Release}
+    {post : List Release} (he : log = pre ++ r :: post) {j s n m : ℕ} (hj : j < records.size)
+    (hr : r.frame = .opening (tree j) s n) (hm : treesOpened pre = (List.range m).map tree) : j ≤ m := by
+  by_contra hlt
+  obtain ⟨q, hq, s', n', hqf⟩ := H.earlier he hj hr (j' := m) (by omega)
+  have hmem := mem_treesOpened hq hqf
+  rw [hm] at hmem
+  obtain ⟨a, ha, hfa⟩ := List.mem_map.1 hmem
+  have ha' := List.mem_range.1 ha
+  have := H.inj (by omega) (by omega) hfa
+  omega
+
+/-- **The trees the read opens, in the order first opened, are the sessions' first `m`**, before every release. -/
+theorem MembersHeld.prefix (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log) :
+    ∀ pre post, log = pre ++ post → ∃ m, m ≤ records.size ∧ treesOpened pre = (List.range m).map tree := by
+  intro pre
+  induction pre using List.reverseRecOn with
+  | nil => intro _ _; exact ⟨0, Nat.zero_le _, rfl⟩
+  | append_singleton pre r ih =>
+    intro post he
+    have he' : log = pre ++ r :: post := by simp [he]
+    obtain ⟨m, hm, hpre⟩ := ih (r :: post) he'
+    cases hf : openTree r.frame with
+    | none => exact ⟨m, hm, by rw [treesOpened_snoc_none hf, hpre]⟩
+    | some i =>
+      obtain ⟨s, n, hr⟩ : ∃ s n, r.frame = .opening i s n := by
+        cases hfr : r.frame with
+        | opening i' s n =>
+          rw [hfr] at hf
+          simp only [openTree, Option.some.injEq] at hf
+          subst hf
+          exact ⟨s, n, rfl⟩
+        | fresh _ => rw [hfr] at hf; simp [openTree] at hf
+        | hello _ => rw [hfr] at hf; simp [openTree] at hf
+      obtain ⟨j, hj, rfl⟩ := H.opening hT hR he' hr
+      rw [treesOpened_snoc_open hr, hpre]
+      by_cases hin : tree j ∈ (List.range m).map tree
+      · exact ⟨m, hm, by rw [if_pos hin]⟩
+      · have hjm : j = m := by
+          have h1 := H.le he' hj hr hpre
+          rcases Nat.lt_or_ge j m with h2 | h2
+          · exact absurd (List.mem_map.2 ⟨j, List.mem_range.2 h2, rfl⟩) hin
+          · omega
+        subst hjm
+        refine ⟨j + 1, by omega, ?_⟩
+        rw [if_neg hin, show List.range (j + 1) = List.range j ++ [j] from List.range_succ, List.map_append,
+          List.map_singleton]
+
+/-- **The tree an opening opens is the session its place among the trees opened says.** -/
+theorem MembersHeld.place (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {pre : List Release} {r : Release}
+    {post : List Release} (he : log = pre ++ r :: post) {j s n : ℕ} (hj : j < records.size)
+    (hr : r.frame = .opening (tree j) s n) : (treesOpened pre).idxOf (tree j) = j := by
+  obtain ⟨m, hm, hpre⟩ := H.prefix hT hR pre (r :: post) he
+  have hle := H.le he hj hr hpre
+  rw [hpre]
+  rcases Nat.lt_or_ge j m with h | h
+  · exact idxOf_map_range (fun a b ha hb => H.inj ha hb) hm h
+  · have hjm : j = m := by omega
+    subst hjm
+    have hn : tree j ∉ (List.range j).map tree := by
+      intro hmem
+      obtain ⟨a, ha, hfa⟩ := List.mem_map.1 hmem
+      have ha' := List.mem_range.1 ha
+      have := H.inj (by omega) hj hfa
+      omega
+    rw [List.idxOf_eq_length hn, List.length_map, List.length_range]
+
+/-- The first record of session `t`'s tree's root is session `t`'s. -/
+theorem MembersHeld.find (H : MembersHeld lines trees log records tree)
+    (hrecs : records.toList.map (·.2.2.1) = recs) {t : ℕ} {x : String × Array (String × Option ℕ) × Json × String}
+    (hx : records[t]? = some x) {ρ : String} (hρ : (Verity.Sampled.MemberForm.usedOf records)[t]? = some ρ) :
+    recs[t]? = some x.2.2.1 ∧ recs.find? (Verity.Sampled.recordTree · == ρ) = some x.2.2.1 := by
+  have hrec : ∀ u b, recs[u]? = some b → ∃ y, records[u]? = some y ∧ y.2.2.1 = b := by
+    intro u b h
+    rw [← hrecs, List.getElem?_map, Array.getElem?_toList] at h
+    cases hy : records[u]? with
+    | none => rw [hy] at h; simp at h
+    | some y => rw [hy] at h; exact ⟨y, rfl, Option.some.inj h⟩
+  have hroot : ∀ u y, records[u]? = some y →
+      (Verity.Sampled.MemberForm.usedOf records)[u]? = some (Verity.Sampled.recordTree y.2.2.1) := by
+    intro u y hy
+    obtain ⟨ρu, hr, hu⟩ := H.roots u y hy
+    rw [hu]
+    unfold Verity.Sampled.recordTree
+    rw [hr]
+  have hget : recs[t]? = some x.2.2.1 := by simp [← hrecs, hx]
+  refine ⟨hget, find?_of_first hget ?_ fun u b hu hub => ?_⟩
+  · have := hroot t x hx
+    rw [hρ] at this
+    simp [← Option.some.inj this]
+  · obtain ⟨y, hy, rfl⟩ := hrec u b hub
+    have h1 := hroot u y hy
+    simp only [beq_eq_false_iff_ne, ne_eq]
+    intro hEq
+    rw [hEq] at h1
+    have := Verity.Sampled.MemberForm.nodup_idx H.nodup (by rw [Array.getElem?_toList]; exact h1)
+      (by rw [Array.getElem?_toList]; exact hρ)
+    omega
+
+/-- **A release the session-round locator puts on a round is its session's own record's coins for it**: an opening of
+session `t`'s tree, whose coins are those session `t`'s record gives the round's stream's round. -/
+theorem MembersHeld.own (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
+    (hrecs : records.toList.map (·.2.2.1) = recs) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
+    {pre : List Release} {x : Release} {post : List Release} (he : log = pre ++ x :: post) {n₀ : ℕ}
+    (hloc : sessLoc off K M tab pre x.frame = some n₀) :
+    ∃ t j i s c rec, t < M ∧ j < K t ∧ n₀ = off t + j ∧ x.frame = .opening i s c ∧ recs[t]? = some rec ∧
+      x.coins = ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+        Verity.bitsOfBytes).getD [] := by
+  cases hx : x.frame with
+  | fresh _ => rw [hx] at hloc; simp [sessLoc] at hloc
+  | hello _ => rw [hx] at hloc; simp [sessLoc] at hloc
+  | opening i s c =>
+    rw [hx] at hloc
+    simp only [sessLoc] at hloc
+    obtain ⟨j, hj, hif⟩ := Option.bind_eq_some_iff.1 hloc
+    have hc : (treesOpened pre).idxOf i < M ∧ j < K ((treesOpened pre).idxOf i) := by
+      by_contra hc
+      rw [if_neg hc] at hif
+      cases hif
+    rw [if_pos hc] at hif
+    obtain ⟨htM, hjK⟩ := hc
+    obtain ⟨t, ht, rfl⟩ := H.opening hT hR he hx
+    have hplace := H.place hT hR he ht hx
+    rw [hplace] at htM hjK hif hj
+    obtain ⟨l, ρ, name, k, -, hro, hkey, hname, hk⟩ := Verity.Sampled.readLog_round hT hR he hx
+    rw [hname] at hj
+    obtain ⟨hn, hkk⟩ := roundOf_slot hj
+    obtain ⟨y, hy⟩ : ∃ y, records[t]? = some y := ⟨_, Array.getElem?_eq_getElem ht⟩
+    obtain ⟨ρt, -, hut⟩ := H.roots t y hy
+    obtain ⟨sp, hsp⟩ := Verity.Sampled.MemberForm.keyAt_root hkey
+    have eρ : ρ = ρt := Verity.Sampled.MemberForm.findIdx_fst (H.idx t ρt hut) hsp
+    subst eρ
+    obtain ⟨hget, hfind⟩ := H.find hrecs hy hut
+    refine ⟨t, j, tree t, s, c, y.2.2.1, htM, hjK, (Option.some.inj hif).symm, rfl, hget, ?_⟩
+    rw [hro.2.1, hk, hkk, ← Option.some.inj hn]
+    unfold Verity.Sampled.Lines.openCoins
+    simp only [hfind]
+
+end Held
+
+theorem mem_located {loc : List Release → Frame → Option ℕ} {n : ℕ} :
+    ∀ {pre l : List Release} {x : Frame × List Bool}, x ∈ located loc n pre l →
+      ∃ a r b, l = a ++ r :: b ∧ loc (pre ++ a) r.frame = some n ∧ x = (r.frame, r.coins)
+  | _, [], _, h => by simp [located] at h
+  | pre, r :: l, x, h => by
+    simp only [located, List.mem_append] at h
+    rcases h with h | h
+    · split_ifs at h with hl
+      · exact ⟨[], r, l, rfl, by simpa using hl, by simpa using h⟩
+      · simp at h
+    · obtain ⟨a, r', b, rfl, hl, rfl⟩ := mem_located h
+      exact ⟨r :: a, r', b, rfl, by simpa using hl, rfl⟩
+
+/-- **Each session's coins are its own tree's**, where the form's acceptance gives the members' check on the log the
+check read (`MembersAccepted`). -/
+theorem located_own (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : MembersAccepted C) : LocatedOwn A C tab := by
+  intro o hacc l hl t j _ hj x hx
+  obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, hS⟩ := hM o hacc l hl
+  obtain ⟨tree, H⟩ := membersHeld_of hT hR hMR
+  obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located hx
+  rw [List.nil_append] at hloc
+  unfold locOf at hloc
+  obtain ⟨t', j', i, s, c, rec, -, hj', hn, hrf, hrec, hcoins⟩ := H.own hT hR rfl he hloc
+  obtain ⟨rfl, rfl⟩ := off_sep (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (fun u => rfl) hj hj' hn
+  exact ⟨_, rec, hS, hrec, ⟨i, s, c, hrf⟩, hcoins⟩
 
 end Verity.SampledTwo.SessionCoins
