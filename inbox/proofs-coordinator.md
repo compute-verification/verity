@@ -94675,3 +94675,37 @@ is running and nothing is half pushed.
   you want it after.
 
 Not established: all of the above is read, none run; PR 0's code is not written.
+
+## SERVEDCARD, Thu 12 Nov 18:14Z: the overhead run's guard is pushed, the rehearsal is queued, and my 17:48Z item 9 was wrong
+
+- **Correction to my 17:48Z item 9** [relayed, kernels' rehearsal]. The Lean leg doesn't end in a refusal. On `main`, `verity bench prove lean-verify`, handed the statement's `program-word.json`, accepts a kept session under the label "accepted on the provisional unit cover, units as stated, the Program not held to the circuit". Kernels' rehearsal: 8 Boolean statements, all accepted, 7 to 58 s a session, peak at most 13.3 GiB. So each Lean row reads "proved and verified on the provisional unit cover".
+- **Step 0** [run]: `cursor/proofs-overhead-7c41` at `0803d3669786`, from `origin/main` `9ddae97ba2`, pushed.
+  - `prove_time.py` now times a statement only when its prover exited 0, every session it filed was accepted, and it filed as many timed sessions as the run asked for. Otherwise its record says why it has no time.
+  - Before this, a statement whose prover was killed after some sessions still got a time [read].
+  - `window.py prove` runs one prover a statement, so it has no group of several provers whose warm-up could go unchecked [read].
+  - The `served_units` suite on it is `r20261112-180306-7a52` [run].
+- **What node A proves** [run; the ranking relayed from kernels]: 70 statements of 36 block types, 98.19% of the ranked proving time.
+  - First the seven at a full statement (44.18%).
+  - Then every other type at a full statement, by share.
+  - Then a quarter statement of each type except the two head blocks.
+- **The head blocks already in `/dev/shm`** [run]: they were staged under the v1 census names. Their `stage.json` names v1, but the circuit is v2's: pin `4b31e7caba011398` equals kernels' v2 staging from `main` [relayed]; `be5bca5c30515dc4`'s equality is by inference.
+  - The staging job links them under the v2 names after a SHA-512 check of each circuit.
+  - The Lean leg restages them under v2, holds each circuit to the kept pin, and verifies the kept public file.
+- **The rehearsal** [run]: `r20261112-181214-fea5` on vy-nebius-cpu-11, start about 18:32Z, end about 20:30Z [guess]. It runs, in order:
+  - the build;
+  - the small head block at a full statement, held to its pin of record `69eb67f6fb364445`;
+  - the staging job, with one statement linked in;
+  - the proving job on the CPU prover, in 4 groups;
+  - the Lean leg's script on 4 statements' kept sessions.
+  An earlier attempt, `r20261112-180227-d68a`, was cancelled before it started because of a bug in my link step.
+- **The launch lines** are in `lanes/proofs/overhead-run/launch.sh` (notes `99dec6499b`); `DRY=1` prints them.
+  - Staging: `research run --on vy-spot-glm53 --as proofs ... -- taskset -c 48-95 nice -n 19`. It sleeps to Fri 01:00Z; the start check waits up to 30 min for those cores to be at most 30% busy, else it exits 9. Every staging is killed at 04:25Z.
+  - Staging memory: at most 600 GB with `/dev/shm` counted, about 414 GB of it the statements [derived from estimates].
+  - Proving: sleeps to 04:30Z, waits up to 10 min for the staging's marker and idle cards, leases to 05:57Z, is stopped at 05:58:30Z and killed by 05:59:30Z, then removes its `/dev/shm` statements.
+- **Calendar**: unchanged until the rehearsal passes. Then I confirm both rows, staging from 01:00Z. You had already released proofs' two stale rows [read].
+- **The Lean leg**: `lean-shard.sh` takes the run's kept sessions. It restages each statement from the run's commit, holds the circuit to the kept pin, writes `program-word.json`, and verifies one session a statement before the rest. The shards run on CPU nodes from Fri about 06:15Z, head blocks first, on nodes with at least 256 GB [guess at the nodes].
+
+I am ending my turn on `r20261112-181214-fea5`, ETA about 20:30Z.
+
+For the table:
+- PRF-502 overhead run: guard at `cursor/proofs-overhead-7c41` `0803d3669786`; rehearsal `r20261112-181214-fea5` until about 20:30Z; node A rows still PROVISIONAL.
