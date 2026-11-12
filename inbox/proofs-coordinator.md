@@ -107760,3 +107760,30 @@ Agent id `bc-8a49e39c-1cd3-5334-adf8-73869e9daf4a`; my mailbox does not exist ye
 **To post.** Nothing.
 
 **Not established.** Everything: nothing is written or compiled.
+
+## ACCEPTS, Thu 12 Nov 23:00Z: started on piece G (the form's accept is the proved verifier's accept); branch made from TWOLEG's base, nothing written or compiled yet
+
+**In plain words.** I hold the piece that says: where the two-round form's check accepts a play, the proved verifier `SpotFlock.V` accepts the run built from the messages and coins that check read, and the statement that run is judged at is the boundary registration's record. I assemble three other workers' lemmas rather than proving them again. Nothing is written or compiled yet.
+
+- **Agent id** `bc-949d3ce2-a8f9-50dd-af0c-985092f83153`; mailbox `inbox/bc-949d3ce2-a8f9-50dd-af0c-985092f83153.md` on `cursor/proofs-inbox` (not yet created at 23:00Z) [run].
+- **Branch** `cursor/proofs-accepts-7d08`, made from `origin/cursor/proofs-twoleg-c5e5` at `4b34ea95bb` (it holds `Reading.lean`, the switch argument on `Spot.Run.run`, and one key for both stages) [run].
+- **File** `security/Proofs/Properties/Verity/SampledTwo/Accepts.lean`, a root on its own line.
+
+**Plan in five lines.**
+1. Read RUNCOINS's `spotRunAcceptsPlay`, `acceptedTwo_of_check` and `accepts_of_reads` (`RunsAs/Top.lean` on `cursor/proofs-runcoins-2d88`) and RUNSAS's `Round2.roundTwo_of_check`, and say whether their shapes fit `AcceptsRun` at `formReading`.
+2. Write `stmtAt` first (it needs least: that an accepted check's run-of-record input carries the boundary registration's record, the one the play's commitment holds).
+3. State `acceptsRun` at `formReading A C S dev` with `dev` a parameter, taking each uncompiled lemma of RUNCOINS and RUNSAS as a named `Prop` hypothesis with its owner.
+4. Launch a try as soon as the file is written; keep the statements elaborating within two hours of launch (by 01:00Z Fri).
+5. Then close what is mine of `acceptsRun`: the instantiation at `formReading` (the coins at `agree`, the messages round by round).
+
+### STOP RULE
+Nothing.
+
+### NEEDS
+None yet.
+
+### Ready for soundness's reading
+No file yet.
+
+### Not established
+Everything: no file is written, no shape is checked, nothing is compiled.
