@@ -540,7 +540,8 @@ def _main_to(env: Env, files: dict[str, str]) -> str:
 
 
 def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_as_any_pr(env):
-    """A move PR's head is merged onto `main` as it is, no move regenerated: the loop builds it as it builds any PR."""
+    """A move PR with a land verdict whose move can't be regenerated (its map isn't on `main`) has its head merged onto `main`
+    as it is: the loop builds it as it builds any PR."""
     main = env.main()
     head = _move(env, 1, {"c.txt": None, "moved/c.txt": "c\n", "a.txt": "moved/c\n"})
     loop = env.loop(policy)
@@ -582,14 +583,16 @@ def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_r
     recs = (loop := env.loop(policy)).tick()
     assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if lowrisk else []), recs
     assert loop.world.left == {**({} if lowrisk else {1: (one, "no land verdict, and it isn't low-risk")}),
-                               2: (two, "no land verdict, and a move lands only with one")}, loop.world.left
+                               2: (two, "no land verdict, and a move lands on its mark alone only once its map "
+                                       "tools/move/x_map.toml is on `main`")}, loop.world.left
 
 
 @pytest.mark.parametrize("shadow", [False, True])
 def test_a_ready_pr_that_doesnt_merge_onto_main_is_told_its_files_once_a_head_keeping_its_mark_and_with_shadow_only_logged(
         env, shadow):
-    """A ready PR whose head doesn't merge onto `main` (`Ready.conflict`), a move's as any other's, is in no build: its owner is
-    told the files and to rebase it, once a head and again at a new head that doesn't merge either."""
+    """A ready PR whose head doesn't merge onto `main` (`Ready.conflict`), a move's as any other's while its move isn't
+    regenerated, is in no build: its owner is told the files and to rebase it, once a head and again at a new head that
+    doesn't merge either."""
     base = env.main()
     _main_to(env, {"a.txt": "main\n"})
     one = env.o.change({"a.txt": "one\n"}, base=base)
@@ -3750,10 +3753,10 @@ def test_the_loops_landings_post_through_it_on_its_clock_and_the_one_beside_each
 
 #: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are
 #: split over the last two
-PLAN = (("lean-changed", "flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN = (("flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
         ("pytest", "flock-rust-tests"), ("pytest", "circuit-check", "ratchet-gate"))
 #: an auto plan's six shards of the same steps, pytest's suites split over three of them
-PLAN6 = (("lean-changed", "flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
+PLAN6 = (("flock-circuit-build", "lean-build"), ("lean-unit-cut", "lean-audit", "lean-suites"),
          ("pytest", "flock-rust-tests"), ("pytest",), ("pytest", "circuit-check"), ("ratchet-gate",))
 OLD, NEW = "tests/test_x.py::test_old", "tests/test_x.py::test_new"
 
@@ -3769,6 +3772,7 @@ class Runs:
 
     def __init__(self, env: Env, loop: Loop, monkeypatch, on: str = "m1,m2,m3"):
         monkeypatch.setattr(M, "required_steps", lambda *a, **k: {})
+        monkeypatch.setattr(vqueue_slim, "left", lambda d, rid: self.state.get(rid, ("running",))[0] == "done")
         self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
         loop.world.on = on
         d = loop.world.slim_driver()
@@ -4567,6 +4571,53 @@ def test_under_gate_check_a_red_ratchet_gate_rings_the_lane_of_each_member_whose
         sha, "#1 #2 #3", "ratchet-gate", main, "#1 (000000000001): grows p01.json", "#2 (000000000002): grows p01.json")]
     assert loop.tick() == [] and len(env.posts) == 1
     assert [r["posting"] for r in env.lines() if r["action"] == "posting"] == ["ring"]
+
+
+def test_under_gate_check_with_the_graph2_shadow_off_no_graph2_verdict_is_read_and_the_check_alone_judges(env, monkeypatch):
+    """--no-graph2-shadow: the check gates as before, and no tick reads graph2's verdict of a candidate or of a followed
+    drop (`World.verdict`, `World._verdict_of`), each of which lists every task of a check and pulls each pending task's
+    results; no compare line comes of it."""
+    loop, runs, main, sha = _off(env, monkeypatch, OTHER, graph2_shadow=False)
+
+    def read(*_a, **_k):
+        raise AssertionError("graph2's verdict was read in shadow")
+
+    monkeypatch.setattr(loop.world, "verdict", read)
+    monkeypatch.setattr(loop.world, "_verdict_of", read)
+    runs.end(main)
+    runs.end(sha)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim"] and logged[1]["record"]["verdict"]["state"] == PASS
+    assert loop.tick() == [] and not [r for r in env.lines() if r["action"] in ("compare", "graph2")]
+
+
+@pytest.mark.parametrize("check", [PASS, FAIL])
+def test_under_gate_check_with_the_graph2_shadow_off_a_candidate_dropped_after_its_check_ended_has_its_graph2_check_cancelled(
+        env, monkeypatch, check):
+    """--no-graph2-shadow follows nothing (`_followed`), so a drop follows nothing either: a candidate dropped once its check
+    passed (`main` advanced to it) or failed (its member ejected) has its graph2 check cancelled at the drop, which keeps no
+    `follow`, and no later tick follows it, however long graph2's check would have run."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"} if check == FAIL else {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, policy if check == FAIL else vqueue.decide, graph2_shadow=False)
+    script = env.graph2_script(loop, {"state": PENDING, "pending": 1})
+    cancelled: list[str] = []
+    cancel = loop.world.cancel
+    monkeypatch.setattr(loop.world, "cancel", lambda sha, *a, **k: cancelled.append(sha) or cancel(sha, *a, **k))
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    runs.end(sha, *((3, "pytest") if check == FAIL else ()), **({"rows": (_row(NEW),)} if check == FAIL else {}))
+    logged = loop.tick()
+    assert _acts(logged)[-2:] == (["eject", "drop"] if check == FAIL else ["on_main", "drop"]) and env.main() == (
+        main if check == FAIL else sha)
+    drop = logged[-1]
+    assert (drop["sha"], drop["cancel"], "follow" in drop, cancelled) == (sha, "cancelled", False, [sha])
+    assert Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+    for at in (T0 + 600, T0 + L.FOLLOW_S):
+        env.clock = at
+        assert loop.tick() == [] and cancelled == [sha]
+    assert not L.Past.read(env.log, 0).followed() and not [r for r in env.lines() if r["action"] == "compare"]
 
 
 @pytest.mark.parametrize("base", ["passed", "failed"])

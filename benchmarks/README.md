@@ -52,8 +52,8 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `verity-bench` is the harness's own command. `judge.py` and `latency_compare.py`, beside the directories,
-compare recorded runs' results.
+README. `verity-bench` is the harness's own command. `judge.py`, beside the directories, compares recorded runs'
+results.
 
 ## The harness
 
@@ -142,7 +142,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
 | `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
 | `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`), the decoder's non-matmul ops (`units`), attention (`attn_bf16`), the exact W8A8 linear (`s8_linear`) and J10-R's units on the H200 (`j10r_sm90`) | maintained |
-| `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, the served vLLM path and its audits, and the ACCEL model (`machine_model/`); `contents.py` lists the rest | maintained |
+| `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
 | `native_peak/` | a card's measured dense-GEMM throughput for one datatype (`native-peak/v1`) | maintained |
@@ -188,6 +188,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record | maintained |
+| `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 
 ### Network
 

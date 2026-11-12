@@ -374,8 +374,10 @@ neither.
 
 It is open on main, where `δin = 1` is the only bound: the window's tile Program (`Pc8TileSide`) reads
 `[ac, bc, pa, pb, ia, jb]` and passes neither `ia` nor `jb` on, its side ports' regions are empty, nothing outside
-`window.py` calls `tile_read`, and `window_problem` is Python only, so no Program reads the `-h3` leaf. It is discharged
-when the window's Program reads the `-h3` leaf in gates (`tile_read`) and `window_problem` is a Program: then the
+`window.py` calls `tile_read`, and `window_problem` has a Program only for its part on the entry rows
+(`PouwWindowStatement`), whose proof no verifier requires, so no Program reads the `-h3` leaf. It is discharged
+when the window's Program reads the `-h3` leaf in gates (`tile_read`) and `window_problem` is a Program the verifier
+requires: then the
 outputs' half is that Program's opening of the `-h3` root, and the inputs' half is Flock's `AnchorsSound` (`δ_in`,
 `Proofs/Flock/Soundness/Audit/OneStage.lean`), each a binding term at the window's state. -/
 def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)

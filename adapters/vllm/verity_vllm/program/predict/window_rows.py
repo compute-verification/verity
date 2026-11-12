@@ -54,6 +54,7 @@ from verity.definitions.numerics.rows import ROWS
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry import io_shell as IO
 from verity.commitments.windows import interface as IF
+from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
@@ -329,11 +330,16 @@ class Served:
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:
         """Request ``rid``'s served values from its `ProgramIndex` and the record's `CommittedStore`, arrived at engine step
-        ``arrive``."""
+        ``arrive``. A check of its Program (its instances header's ``checks``: the length rule, the seed rule) computes the
+        Program's verdict from committed values; the engine never runs it and the record binds no member of it, so it is no
+        served op and is left out. Any other row with no committed member is refused by name."""
+        checks = {i for _what, i, _lo, _hi in check_rows(pi)}
         rows = []
         for r in pi.rows:
             d = pi.describe(r)
             if d is None or not d["members"]:
+                if int(r["i"]) in checks:
+                    continue
                 raise ValueError(f"{rid}: row {r['i']} ({r['spec']}) has no committed member")
             rows.append({**d, "spec": r["spec"]})
 
