@@ -81,6 +81,12 @@ sys.path.insert(0, str(HERE.parent / "harness"))
 import arms as A  # noqa: E402
 import scoring as S  # noqa: E402
 
+#: what the arms' runners read
+__all__ = [
+    "A", "LIBS", "NVCC", "NVFLAGS", "REPO", "S", "arm_doc", "build", "control", "fmt", "record", "report", "rows", "sh",
+    "show", "smi",
+]
+
 NVCC = os.environ.get("NVCC", "/usr/local/cuda-13.0/bin/nvcc")
 os.environ["PATH"] = f"{Path(NVCC).parent}:{os.environ.get('PATH', '')}"  # cuobjdump and ncu beside nvcc, as dfill.sh
 NVFLAGS = ["-O3", "-std=c++17", "-gencode", "arch=compute_120a,code=sm_120a", "-Xptxas", "-v"]

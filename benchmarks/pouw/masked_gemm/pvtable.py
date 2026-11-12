@@ -5,6 +5,8 @@ less the noise-free producer's), with no receipts and with duo at L = 32, and ga
 python3 pvtable.py BENCH.jsonl GATE.jsonl > table.md
 """
 
+from __future__ import annotations
+
 import json
 import re
 import sys
@@ -28,16 +30,19 @@ NONE = ["sepS", "fusS", "fovS", "prodSlt", "prodUlt"]
 DUO = ["sepSd", "fusSd", "prodSd", "prodUd"]
 
 
-def gate_verdicts(path):
+def gate_verdicts(path: str) -> dict[str, list[bool]]:
+    """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok",):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok",):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
-def arm_gate(name, checks):
+def arm_gate(name: str, checks: dict[str, list[bool]]) -> str:
+    """The gate's verdict for one arm: pass, FAIL or unchecked, over every check the arm rests on, at every gate shape."""
     keys = [k for k in checks if re.fullmatch(rf"(U|R|XA|XB|E|G)_{re.escape(name)}", k)]
     if name.startswith("prod") and name not in ("prodN", "prodmax"):
         keys += [f"XA_prod{name[4]}_{name.rsplit('_', 1)[1]}"]
@@ -52,7 +57,9 @@ def arm_gate(name, checks):
     return "pass" if all(k in checks and all(checks[k]) for k in keys) else "FAIL"
 
 
-def value(arms, parts, al):
+def value(arms: dict[str, dict], parts: list[tuple[str, int]], al: str) -> float | None:
+    """The signed sum of the parts' times at alphabet ``al`` over plain P V's, the noise-free producer's time taken off a
+    producer's arm; None when a part was not timed."""
     t = 0.0
     for a, sign in parts:
         name = f"{a}_{al}"
@@ -64,8 +71,10 @@ def value(arms, parts, al):
     return t / arms["plain"]["ms"]
 
 
-def main(bench, gate):
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+def main(bench: str, gate: str) -> None:
+    """Print the table of one bench file and one gate file."""
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})
     verdict = {a: arm_gate(a, checks) for a in names}
@@ -78,9 +87,10 @@ def main(bench, gate):
                   else ", ".join(f"{a} {v}" for a, v in verdict.items() if v != "pass")) + ".")
     for j in rows:
         arms = j["arms"]
-        out += ["", f"## s = {j['s']} (plain P V {arms['plain']['ms']:.4f} ms; noise-free producer prodN {arms['prodN']['ms']:.4f} ms "
-                f"= {arms['prodN']['ms'] / arms['plain']['ms']:.2f}, its row-max pass {arms['prodmax']['ms'] / arms['plain']['ms']:.2f}; "
-                f"duo 32 alone {arms['cduo']['ms'] / arms['plain']['ms']:.2f})", "",
+        out += ["", (f"## s = {j['s']} (plain P V {arms['plain']['ms']:.4f} ms; "
+                     f"noise-free producer prodN {arms['prodN']['ms']:.4f} ms = {arms['prodN']['ms'] / arms['plain']['ms']:.2f}, "
+                     f"its row-max pass {arms['prodmax']['ms'] / arms['plain']['ms']:.2f}; "
+                     f"duo 32 alone {arms['cduo']['ms'] / arms['plain']['ms']:.2f})"), "",
                 "| method | " + " | ".join(ALS) + " |", "|---|" + "---|" * len(ALS)]
         for label, parts in ROWS:
             cells = []
