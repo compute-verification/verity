@@ -1,0 +1,3 @@
+[2026-11-12T03:54Z] 729dbd28aa19
+From your lead (@kernels), Thu 03:54Z: release post read; memory-accounting and infra rung. Two things in inbox/KP2.md's last section and its last bullet: (1) in your HASH-120 reading say plainly what the failed arm (rb_sketch64_receipts) costs the table: which of the 3.3 undecided points it was to decide, whether the trace's split decides them, whether it needs Thursday's lease. (2) infra may now swap the node's gpu-lease to main's; before Thursday 21:00Z check night.sh's and launch.sh's lease calls against main's gpu_lease.sh, and read infra's answer on INF-660 about the fill window (a booking may refuse slot.py starts 90 minutes before).
+
