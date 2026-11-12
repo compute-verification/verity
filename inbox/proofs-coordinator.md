@@ -82068,3 +82068,34 @@ I changed nothing to avoid it.
 - The 15 tracebacks of `r20261112-074755-a921` (the suite at `09430dfbd2`, 15 failed, 240 passed) are one error: `CoinError: every other coin of the epoch is open`, raised in the difftest's own helper `Drawn.__init__` (`test_challenger_difftest.py:1777`, through `_step` at `:1789`) [run: read from its `out/logs`; all 15 pass through those two frames]. The helper gave its other family 2 coins, and the family cases record its roots on both sides of the sample. `dc7066ceef` makes it 4, one line; the suite passes after it (`r20261112-061500-5aa8`, rc 0, at `4599be5623`) [run]. No verifier code was wrong in them.
 
 **8. What I do when you resume me.** Read `0553`; commit the two locks as it kept them and push; fill the body's two open lines from its `audit.json` (the `reads` records by name, and that no statement or premise moves, if that is so; if one would, I stop and write to you first); run the records once more at that commit, where it should only pass; redo 6; then the ready line, with the line for `round2`: every record whose sample read a challenger's coins, made by `main`'s drivers, is refused by the mended verifier, not read.
+
+## CROSSCLOSE, Thu 12 Nov 09:57Z: `main` moved to `33faab2be81c` (32 more pull requests, #9027 and #9047 among them) and now stops against lean's tip in 23 files, six of them ours; all six are closed, and rows 1 and the `population` fix are needed today
+
+**Tips** [run: `git fetch`, 09:56Z]: merge branch `f3837f57d113` (unchanged), `main` `33faab2be81c` (was `19fb19a21e40`). `git merge-tree` of the two: 23 stops (14 before).
+
+**Ours, six files; the new closed merge is trial `e7343acc7c0d`** (local) [run]
+| file | close | what changed | tried |
+|---|---|---|---|
+| `benchmarks/verifier_cost/whole_run.py` | `d22d1644ce14` (row 1, as it was) | #9027 and #9047 are on `main` now; `main`'s file is byte for byte both heads' (`048fce575464`), which the close was made from | `aa34`, waiting |
+| `benchmarks/verifier_cost/population.sh`, `population/Main.lean` | `199bb09f8a3c` on `cursor/proofs-cross-main-closes-51ee` | no stop: #9047's `test_mains.py` is on `main` now and elaborates the crossed line's `population` main, which still names the old package | `aa34`, waiting (before: `2754`, the suite 9 passed) |
+| `verity/protocols/spot/verifier/tests/test_optimize.py` | **`43aee125f46c`** (replaces row 3's `5d88d49103d6`) | the stop is the same import line; #9055 changed the pin test on `main`, so the file whole is new | local: 55 passed; `aa34` |
+| `verity/protocols/spot/verifier/README.md` | **`5a04c87c6ee8`** (new) | #9175 on `main` renames the words, the crossed line changes the facts, in one paragraph | `aa34` (`repository`) |
+| spot's `test_difftest.py`, `a5.py`, `test_a5_wiring.py` | `6248c84064e7`, as posted | neither side changed them | hold |
+
+The README's stop, both sides [read]. Crossed line: "is a subprotocol of both composite protocols: remote (`verity/remote/v1`, …) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable `verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) … with the other subprotocols. Each composite's verifier runs". `main`: "is a protocol of both configurations: remote (`verity/remote/v0`, …) composes it with PoUW (`verity/pouw/period/v1`) … with the other protocols. Each configuration's verifier runs". The close keeps the crossed line's paragraph and changes only `main`'s three renamed words. No verifier code, no pinned value.
+
+**Rows for pull requests not on `main`, against the new closed merge** [run: `git merge-tree`]
+- Row 4 (#9112 `366a6ece9985`, #9185 `5a4b6dc7102b`): redone as **`f58b4a3ef6e9`**. `optimize.py` is byte for byte `f012fd5887e6`'s; `test_optimize.py` is `f012fd5887e6`'s plus #9055's change. Local: `test_optimize.py` not-slow 57 passed on trial `1ffc5b8ae1c7`. `fc27` (both heads in, trial `422eea4040d5`), waiting. I cancelled `aaf2` (old tips, 7 of 59 suites after 50 min, selections all exit 0) for it.
+- Rows 5 and 6 (#9116 `3a580254f8bf`): `494bd85fb553` holds, neither side changed the file. `7348` (old closed merge): the difftest's selection 20 passed, `test_two_stage.py` 98 passed; suites 45 passed, 1 failed so far, the failed one @memory-accounting's `test_pous_wipe_monitoring.py` again.
+- Row 8 (#9091 `d8afb6b2724c`): `01dea4d2566f` holds: the pin's command on the new closed merge with the head writes the same blob `42fdc26ab089`; `pins.py --stale` exit 0 and `test_pous_trusted.py` 9 passed there (local, trial `203657d69ff7`). `684b` ended, exit 0 (old closed merge): the four Lean tries exit 0 (`SpotFlock/Facts.lean`, `Code.lean`, `Claims/Sampling/Reg.lean`, `Claims/Sampling.lean`), no axiom beyond the three.
+- Row 9 (#9190 `f6d1341b8529`): `a8c9ac795709` holds, `FlockVerify.lean` unchanged on both sides. `d64d`: suites 57 of 62 passed, none failed, running.
+- No stop, as before: #8950 (new head `787faa474cbf`), #9173, #9075, #9081, #9178, #9149, #9196. #9084 and #9174 are on `main`.
+
+**Other owners' new stops, one line each** [run]. In my trial each is a stand-in, never pushed.
+- @vllm: `adapters/vllm/tests/pipeline/test_llm.py` (#9150), `adapters/vllm/verity_vllm/engine/build.py` (#9045 deletes `Engine.environ`, the crossed line adds two fields beside it), `benchmarks/prove_path/tests/test_prove_path.py` (#8961; both sides add tests at one place).
+- @top: `demos/README.md` (#8795), `demos/lifecycle/README.md` (#9175), `archive/examples/dither_full_util/README.md` (#8795 deletes `archive/`, the crossed line edits the file).
+- lean: `tools/verity/check/check.py` (`OPT_IN`: #8908 adds vLLM's entries where the crossed line deletes one test's name).
+- @memory-accounting: `verity/protocols/poub/verifier/tests/test_opening.py` (#9055), `tools/verity/check/public_boundary.toml` (#9055's `verity/{circuits,definitions}` against the crossed line's longer list).
+- The eight from before still stop.
+
+**Runs** [run]: `r20261112-094921-aa34` (the new closed merge: `test_optimize.py`, `test_a5_wiring.py`, `test_mains.py`, the difftest's selection, then the quick suites since `f3837f57d113`), waiting for a slot on cpu-4; about 60 min once it starts. `r20261112-095455-fc27`, waiting on cpu-2. `12e3` (#9173), `09dc` (#9075), `b52d` (#9185, 4 of 5 suites passed) run on the old closed merge.
