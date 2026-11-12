@@ -35,3 +35,65 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:36 PM PST. **Your t
 
 TIMER: none
 
+[2026-11-12T21:33Z] 684772a004b7
+WATERLINE to the network-accounting lead, Thu 12 Nov 1:33 PM PST, to your order of 1:03 PM PST.
+
+**The change is written, checked on the agent's machine and pushed. The pull request is not open: #9428 is not on
+`main` yet, and your order opens it after that.**
+
+- **Branch** `cursor/na-capture-reader-refusal-a989`, head `d12c0bc24144a408188a52709bdce83d531ed86a`, from #9428's
+  head `aa6ab30cb5a8`. Two commits, two files: `capture_flows.py` and its test file [ran].
+- **#9428** is open and admitted in the queue. `main` is `5f0c008aa040` and last moved at 10:48 AM PST [read]. A
+  trial merge of `main` into the branch is clean; I did not keep it [ran].
+
+**What the refusal says now** [ran, on built files, exit 2]:
+
+- Where the bytes kept say it: `…'s packet 1 is kept too short for its headers: this reads its first 56 bytes (14 of
+  its frame header, 28 of its IP header and TCP's first 14) and 54 are kept. Capture again keeping at least that many
+  of each packet; a packet with longer headers needs more. No one length suits every capture, since a length past a
+  packet's headers keeps the first bytes of its content: see "Taking the capture" (a link) and "On the server's
+  loopback" in benchmarks/network_traces/README.md`
+- Where they end before the header that says so is whole: `… the 30 bytes kept of it end before its IPv4 header is
+  whole, so this can't tell how many it reads. Capture again keeping more of each packet. No one length suits …`
+- The three cases hold 48, 68 and 56. The name, "kept too short for its headers", is as it was, so the README has no
+  diff. `SNAPSHOT` is 130; its comment gains one sentence, since the refusal was the only thing in the reader that
+  read it.
+
+**Checks** [ran]:
+
+- The reader's two test files at the head: 53 passed. Ruff, the wall-clock scan and the ratchet gate (from #9428's
+  head): nothing. Retired-term sites: 12 and 14, as before.
+- **What the reader reads and refuses is as it was**: the marked head's reader and this one gave the same verdict on
+  49,762 built packets (362 frames, each kept at every length) and 480,000 changed or random ones. Where a length is
+  named, it is the least at which the marked reader stops refusing the packet as too short.
+- **The length broken by hand** (one byte more named): 12 tests failed, the three refusal cases and the nine packets
+  of a new test that keeps one packet of each kind of header at every length under its own. Put back.
+- **Not run: the changed suites.** Your order asks for them once, at the head with `main` merged in.
+
+**Beyond your five points**, so you can strike them: a fourth refusal case (cut at 30, which names the IPv4 header);
+the least-length test above; the sentence in `SNAPSHOT`'s comment.
+
+**For you to decide; I changed neither:**
+
+1. A packet that is whole in the file and still shorter than the headers it states (42 bytes on the wire, IPv4,
+   protocol TCP) is refused with these words, and no capture length helps it. The old words were wrong for it too
+   [ran]. Naming it apart would change the name.
+2. Nothing holds the two headings the refusal names to the README. See the slip.
+
+**Slips:**
+
+1. My first commit held a test that opened the README. A suite's tests open Markdown only where the suite lists one
+   among its inputs, and then every prose edit re-runs it. I found that by reading `suites.py` after the push and
+   before any run; the second commit takes the test out. No run was spent.
+2. I broke the length by hand twice, not once: the first log named tests by ids the commit doesn't have.
+
+**Least sure of:** the wording. "Capture again keeping at least that many of each packet" gives a length for this
+capture; I took your "no single length for every capture" to allow that, since it is this packet's and the next
+clause says another packet may need more.
+
+**Next, when #9428 is on `main`:** merge `main` in, the changed suites once by `research run`, open the pull request
+unmarked, report by inbox. I hold no timer, so that starts with a message from you, or at Fri 10 AM PST with your
+fallback. The body's draft and the logs are in the artifacts (`net389-refusal-*`).
+
+TIMER: none
+
