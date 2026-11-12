@@ -501,7 +501,7 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
 
 @pytest.mark.parametrize("edits, why", [
     ({"VERIFY": None}, "the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
-                       "verifier is on main (#9030)"),
+                       "verifier side of the per-call give-up is on main"),
     ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
