@@ -305,7 +305,7 @@ theorem law_set {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β
         avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
     _ ≤ avg fun c => (avg fun r : R => B c r) + G c := avg_mono fun c => h c H hH
     _ = (avg fun c => avg fun r : R => B c r) + avg G := avg_add _ _
-    _ = (avg fun r : R => B (v r) r) + avg G := by rw [hv B hB]
+    _ = (avg fun r : R => B (v r) r) + avg G := congrArg (· + avg G) (hv B hB).symm
     _ = (avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
           H (Tape.out _ s (placeCoin k (fun _ => v r) (f r) s t))) + avg G :=
         congrArg (· + avg G) (congrArg avg (funext fun r => (e r).symm))
@@ -336,23 +336,28 @@ theorem law_write {C P : Type} {iF : Fintype C} {iN : Nonempty C} [Fintype P] [N
   calc avg (fun t : Tape (@Game.coin β C iF iN k) s => H (Tape.out _ s t))
       = avg A := avg_tape_coin s fun c τ => H (Tape.out (k c) (s c) τ)
     _ ≤ avg (fun p : P => avg fun c : C => A (W p c)) + shortfall W := avg_le_write1 W A hA
-    _ ≤ avg (fun p : P => avg fun c : C => (avg fun r : R => B (W p c) r) + G (W p c)) + shortfall W := by
-        gcongr with p c
-        exact h (W p c) H hH
+    _ ≤ avg (fun p : P => avg fun c : C => (avg fun r : R => B (W p c) r) + G (W p c)) + shortfall W :=
+        add_le_add_right (avg_mono fun p => avg_mono fun c => h (W p c) H hH) _
     _ = (avg fun p : P => avg fun c : C => avg fun r : R => B (W p c) r) +
           (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
         simp only [avg_add]
     _ = (avg fun p : P => avg fun r : R => avg fun c : C => B (W p c) r) +
-          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
-        simp only [avg_swap (fun (c : C) (r : R) => B _ r)]
+          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W :=
+        congrArg (fun z => z + (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W)
+          (congrArg avg (funext fun p => avg_swap fun (c : C) (r : R) => B (W p c) r))
     _ = (avg fun r : R => avg fun c : C => B (W (e r) c) r) +
-          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W := by
-        rw [he (fun p r => avg fun c => B (W p c) r) hB]
+          (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W :=
+        congrArg (fun z => z + (avg fun p : P => avg fun c : C => G (W p c)) + shortfall W)
+          (he (fun p r => avg fun c => B (W p c) r) hB).symm
     _ = (avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
           H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t))) +
           (shortfall W + avg fun p => avg fun c => G (W p c)) := by
-        rw [add_assoc, add_comm (avg fun p : P => avg fun c : C => G (W p c)) (shortfall W)]
-        exact congrArg (· + _) (congrArg avg (funext fun r => (e₁ r).symm))
+        have hX : (avg fun r : R => avg fun c : C => B (W (e r) c) r) =
+            avg fun r : R => avg fun t : Tape (@Game.coin β C iF iN k) s =>
+              H (Tape.out _ s (placeCoin k (W (e r)) (f r) s t)) :=
+          congrArg avg (funext fun r => (e₁ r).symm)
+        rw [hX]
+        ring
 
 theorem law_congr {g : Game β} {s : Strategy g} {P P' : R → Tape g s → Tape g s} {G : ℝ≥0∞}
     (hP : ∀ r t, P r t = P' r t) (h : LawHolds g s P' G) : LawHolds g s P G := by
