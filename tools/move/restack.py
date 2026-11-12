@@ -118,6 +118,8 @@ CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", 
 #: (`research.clone.set_drivers`): without them a lock, a Lean import list or a test list merges as text, and a branch stops
 #: at a merge its owner's clone would make clean
 DRIVERS = "import pathlib, research.clone as c; c.set_drivers(pathlib.Path.cwd())"
+#: git's own merge drivers, which no clone defines: `.gitattributes` gives every `.gitignore` `merge=union`
+GIT_OWN = frozenset({"text", "binary", "union"})
 
 
 class ScriptFailed(Exception):
@@ -185,11 +187,11 @@ def out(*args: str, cwd: str | None = None) -> str:
 
 def missing_drivers(cwd: str | None = None) -> list[str]:
     """The merge drivers the checkout's `.gitattributes` names (`merge=NAME`) that its clone's config defines no
-    `merge.NAME.driver` for."""
+    `merge.NAME.driver` for. Git's own (`GIT_OWN`) need none."""
     attrs, names = os.path.join(out("rev-parse", "--show-toplevel", cwd=cwd), ".gitattributes"), []
     if os.path.isfile(attrs):
         with open(attrs) as f:
-            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())))
+            names = sorted(set(re.findall(r"\bmerge=([\w.-]+)", f.read())) - GIT_OWN)
     have = git("config", "--get-regexp", r"^merge\..*\.driver$", cwd=cwd, ok=(0, 1)).stdout.decode().splitlines()
     got = {key.split(".")[1] for key, _, _ in (line.partition(" ") for line in have) if key.count(".") == 2}
     return [n for n in names if n not in got]
