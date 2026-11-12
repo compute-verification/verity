@@ -24,7 +24,12 @@ from tests.acquire.dsv4_model import CMAP, ENV
 from tests.acquire.test_glm53_sources import Committer, T, fake_vllm
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta, hazard_of_record
+from verity_vllm.commit.committer.native_host import (
+    GPU_CHUNK_BYTES,
+    NativeHostCommitter,
+    TensorMeta,
+    hazard_of_record,
+)
 from verity_vllm.query.manifest.bind import Binder
 
 L, HASH, E, K, MIL, H = ENV["L"], ENV["HASH"], ENV["E"], ENV["K"], ENV["MIL"], ENV["H"]

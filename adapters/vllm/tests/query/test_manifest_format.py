@@ -9,11 +9,17 @@ import json
 
 import pytest
 
+from tests.check.test_sampled_replay import _program, v2_manifest
 from verity_vllm.commit import binding as B
+from verity_vllm.program.instances_file import write_instances_file
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import coverage_check
-from verity_vllm.query.manifest.format import canonical_identity, manifest_digest, spec_statics, split_name
-from tests.check.test_sampled_replay import _program, v2_manifest
+from verity_vllm.query.manifest.format import (
+    canonical_identity,
+    manifest_digest,
+    spec_statics,
+    split_name,
+)
 
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
 
@@ -177,3 +183,46 @@ def test_fresh_b1_manifest_loads_in_binding_and_composition_skips(tmp_path):
     pb.write_text(json.dumps(bad))
     with pytest.raises(ValueError, match="engine_steps mixes"):
         B.load_required_manifest(str(pb), man["program_digest"], requests=["r0"], steps=2, ranks=[0], arrivals={"r0": 0})
+
+
+def test_program_dirs_for_passes_over_a_result_it_cannot_read(tmp_path):
+    """The lookup by a derive's result.json skips a candidate whose result.json is not JSON or cannot be opened, and takes the
+    next one that declares the request's shape; with no such candidate left it refuses by the request's name."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}]}
+    (tmp_path / "build_request_a").mkdir()
+    (tmp_path / "build_request_a" / "result.json").write_text('{"ok": true, "LP": 168')
+    (tmp_path / "build_request_b").mkdir()
+    (tmp_path / "build_request_b" / "result.json").mkdir()
+    (tmp_path / "build_request_c").mkdir()
+    (tmp_path / "build_request_c" / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9}))
+    assert MF.program_dirs_for(fx, str(tmp_path)) == {"r0": str(tmp_path / "build_request_c")}
+    (tmp_path / "build_request_c" / "result.json").write_bytes(b"\xff\xfe{}")
+    with pytest.raises(SystemExit, match="r0 .*168,9"):
+        MF.program_dirs_for(fx, str(tmp_path))
+
+
+def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(tmp_path):
+    """`load_program` returns the Program dir's result.json and artifact.json as the files hold them, and None for an artifact
+    the dir does not have."""
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    write_instances_file(str(tmp_path / "instances.json.gz"), head, iter([]))
+    (tmp_path / "result.json").write_text(json.dumps({"ok": True, "LP": 3}))
+    got = MF.load_program(str(tmp_path))
+    assert (got["result"], got["artifact"], got["dir"]) == ({"ok": True, "LP": 3}, None, str(tmp_path))
+    assert got["instances"] == {**head, "rows": []}
+    (tmp_path / "artifact.json").write_text(json.dumps({"program": {"digest": "d" * 64}}))
+    assert MF.load_program(str(tmp_path))["artifact"] == {"program": {"digest": "d" * 64}}
+
+
+def test_a_manifests_rows_are_read_under_the_name_its_layout_gives_them():
+    a, b = {"op_path": "a"}, {"op_path": "b"}
+    assert MF.manifest_rows({"identities": [a], "entries": [b]}) == [a], "the identity key first"
+    assert MF.manifest_rows({"identities": [], "entries": [b]}) == [b] and MF.manifest_rows({"rows": [a, b]}) == [a, b]
+    assert MF.manifest_rows({"identities": None}) == () and MF.manifest_rows({}) == ()
+    assert MF.identity_rows({"identities": [a]}) == [a] and MF.identity_rows({"entries": [b]}) == () and MF.identity_rows(None) == ()
+
+
+def test_a_workloads_sweep_and_requests_are_empty_where_it_holds_none():
+    assert MF.sweep_and_requests(None) == ({}, ()) and MF.sweep_and_requests({"sweep": None}) == ({}, ())
+    w = {"sweep": {"batch": 2, "arrive_steps": [0, 3]}, "requests": [{"request_id": "r0"}, {"request_id": "r1"}]}
+    assert MF.sweep_and_requests(w) == (w["sweep"], w["requests"])

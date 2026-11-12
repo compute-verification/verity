@@ -33,10 +33,20 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+
 from verity_vllm.program.inputs import check_params
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows
+from .build import BUILDER_ID, I32, I64, WRAPPERS, BuildResult, _Model, decoder
+from .common import (
+    Unexpressible,
+    _arr_shape,
+    _Peers,
+    _Stochastic,
+    drive,
+    in_launch,
+    launch_batch,
+    launch_rows,
+)
 from .phi import Phi
 
 
@@ -59,25 +69,6 @@ class NodeResult(BuildResult):
         for r, lo, hi in self.spans:
             out[lo:hi] = [r] * (hi - lo)
         return out
-
-
-def check_ranks(phi: Phi, node: NodeResult, **shape) -> list[dict]:
-    """Each rank's run of `node`'s body against its own rank Program's body (`build.build_program`, built one rank at a time):
-    node for node, the same form and Definition. Raises on the first rank that differs."""
-    from .build import build_program
-    rank_of, nodes, out = node.rank_of(), node.node_fn.body.nodes, []
-    for r in range(node.world):
-        t0 = time.time()
-        own = build_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}), node.wrapper, with_desc=False, **shape)
-        mine = [(n.form, n.fn.id) for n, q in zip(nodes, rank_of) if q == r]
-        theirs = [(n.form, n.fn.id) for n in own.program.fn.body.nodes]
-        if mine != theirs:
-            at = next((i for i, (a, b) in enumerate(zip(mine, theirs)) if a != b), min(len(mine), len(theirs)))
-            raise AssertionError(f"rank {r}: the node's run of {len(mine)} nodes differs from its Program's {len(theirs)} at node {at}")
-        out.append({"rank": r, "nodes": len(theirs), "gates": sum(n.gates for n in own.program.fn.body.nodes),
-                    "secs": round(time.time() - t0, 1)})
-        del own
-    return out
 
 
 class _Abort(Exception):

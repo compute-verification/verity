@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check.c2_rules import _complete_replay_population_gap, _form_b_complete_over_values
+from verity_vllm.check.c2_rules import (
+    _complete_replay_population_gap,
+    _form_b_complete_over_values,
+)
 from verity_vllm.check.commit_pass import commit_verdict
 
 

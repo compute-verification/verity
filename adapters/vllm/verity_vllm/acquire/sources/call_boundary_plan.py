@@ -26,13 +26,15 @@ template (in the forward pre-hook); otherwise each request's rows are evaluated 
 """
 from __future__ import annotations
 
+import base64
 import bisect
 import glob
 import json
 import os
 from collections import defaultdict
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
@@ -251,6 +253,7 @@ def _plan_request(p: Plan, manifest: Mapping[str, Any], rid: str, ids: Sequence[
         if why:
             p.uncovered.append(f"{_label(r)}: {why}")
             continue
+        assert g is not None
         port, cids = g
         wanted[(int(r["engine_step"]), int(r["step"]), corr.module_of(cids[0]))].append(
             (f"{r['op_path']}/{r['output_member']}", tuple(cids), port.lo, port.hi, str(r["dtype"])))
@@ -283,6 +286,7 @@ def _definition(spec: str) -> tuple[Any, list[Any]]:
     """The registered Definition a Call's spec names and its parameters."""
     from verity.circuits.evaluation.reference import signature_of
     from verity.definitions.call_scope import specialization
+
     from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
 
@@ -392,7 +396,8 @@ class _Context:
 
     def part(self, rid: str, m: str, s: int, calls: list[int], targets: list[tuple]) -> Part:
         pop, corr, lits = self.pop, self.corr, self.pop.literals
-        inside, memo, stack = set(calls), {}, list(calls)
+        inside, stack = set(calls), list(calls)
+        memo: dict[int, bool] = {}
         while stack:                                   # M's weight-only Calls of another step (a norm's `weight + 1`, made once): its own
             for g in self.raw[stack.pop()].get("args") or ():
                 for kind, a, _lo, _hi in g:
@@ -417,7 +422,8 @@ class _Context:
                             raise Uncovered(f"Call {c} reads a Value of {corr.implementation_path(pm)}, a module under the body's")
                         q = self.port_at(a, int(lo), int(hi))
                         keys.setdefault((pm, n.node, n.hint, q.name), (q, set()))[1].add(a)
-        operands, feeds = [], {}
+        operands: list[tuple] = []
+        feeds: dict[tuple[int, str], tuple[int, int]] = {}
         for (pm, node, hint, pname), (q, rows) in keys.items():
             feeds.update({(a, pname): (len(operands), i) for i, a in enumerate(sorted(rows))})
             operands.append((f"{corr.implementation_path(pm)}/{node}{'/' + hint if hint else ''}:{pname}", len(rows), q.elems, int(q.width or 0)))
@@ -433,15 +439,15 @@ class _Context:
         order = sorted(need)
         recipes = {c: self.recipe(c, inside, feeds) for c in order}
         specs = {c: self.definition(c) for c in order}
-        tpl, rows = _template(order, recipes, specs, operands, targets)
-        return Part(rid, tpl, rows)
+        tpl, n_rows = _template(order, recipes, specs, operands, targets)
+        return Part(rid, tpl, n_rows)
 
     def recipe(self, c: int, inside: set[int], feeds: dict[tuple[int, str], tuple[int, int]]) -> list[list[tuple]]:
         """Per argument group of Call `c`, its slices: ("v", Call, lo, hi) a Value of the body, ("l", spec, lo, hi) a literal, ("o",
         operand, row, lo, hi) a forward argument's words, ("w", field, lo, hi) a weight field's."""
         out = []
         for g in self.raw[c].get("args") or ():
-            sl = []
+            sl: list[tuple] = []
             for kind, a, lo, hi in g:
                 a, lo, hi = int(a), int(lo), int(hi)
                 if kind == "p":
@@ -460,6 +466,10 @@ class _Context:
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ template
+#: a group's Calls canonical, as `Template` holds them: (specs, recipes)
+Form = tuple[tuple[str, ...], tuple[tuple[tuple[tuple, ...], ...], ...]]
+
+
 def _template(order: list[int], recipes: dict[int, list[list[tuple]]], specs: dict[int, str], operands: list[tuple],
               targets: list[tuple]) -> tuple[Template, int]:
     """The body's row template and its rows R (module docstring): the step-shared Calls once, then R groups of one form, else the rest of
@@ -514,7 +524,7 @@ def _step_shared(order: list[int], recipes: dict[int, list[list[tuple]]], target
 
 
 def _row_template(rows: list[list[int]], recipes: dict[int, list[list[tuple]]], specs: dict[int, str], operands: list[tuple],
-                  targets: list[tuple]) -> tuple[tuple, list[int], list[tuple[int, ...]]] | None:
+                  targets: list[tuple]) -> tuple[Form, list[int], list[tuple[int, ...]]] | None:
     """(form, operand rows per template row, target positions) of R = len(rows) groups of one form, or None."""
     R = len(rows)
     if any(n % R for _w, n, _e, _b in operands) or any(len(t[1]) % R for t in targets):
@@ -528,17 +538,18 @@ def _row_template(rows: list[list[int]], recipes: dict[int, list[list[tuple]]], 
         if f is None or (form is not None and (f != form or at != ats)) or any(-1 in a for a in at):
             return None
         form, ats = f, at
+    assert form is not None and ats is not None
     return form, per, ats
 
 
-def _form(cs: list[int], j: int, per: list[int], recipes: dict[int, list[list[tuple]]], specs: dict[int, str]) -> tuple | None:
+def _form(cs: list[int], j: int, per: list[int], recipes: dict[int, list[list[tuple]]], specs: dict[int, str]) -> Form | None:
     """Group j's Calls `cs` canonical: positions for its own Values, operand rows relative to block j (None: a read outside it)."""
     pos = {c: i for i, c in enumerate(cs)}
     rec = []
     for c in cs:
         gs = []
         for g in recipes[c]:
-            sl = []
+            sl: list[tuple] = []
             for x in g:
                 if x[0] == "v":
                     sl.append(("v", pos[x[1]], x[2], x[3]))
@@ -554,7 +565,7 @@ def _form(cs: list[int], j: int, per: list[int], recipes: dict[int, list[list[tu
     return tuple(specs[c] for c in cs), tuple(rec)
 
 
-def _levels(form: tuple) -> tuple[tuple[tuple[str, tuple[int, ...]], ...], ...]:
+def _levels(form: Form) -> tuple[tuple[tuple[str, tuple[int, ...]], ...], ...]:
     specs, recipes = form
     lv: list[int] = []
     for rec in recipes:
@@ -565,7 +576,7 @@ def _levels(form: tuple) -> tuple[tuple[tuple[str, tuple[int, ...]], ...], ...]:
     return tuple(tuple((s, tuple(ps)) for s, ps in d.items()) for d in levels)
 
 
-def _assemble(form: tuple, sform: tuple, operands: list[tuple], per: list[int], at: Mapping[str, tuple[int, ...]], shared: set[str],
+def _assemble(form: Form, sform: Form, operands: list[tuple], per: list[int], at: Mapping[str, tuple[int, ...]], shared: set[str],
               targets: list[tuple]) -> Template:
     return Template(*form, _levels(form), tuple(Operand(w, k, e, b) for (w, _n, e, b), k in zip(operands, per)),
                     tuple(Target(t[0], at[t[0]], t[2], t[3], t[4], t[0] in shared) for t in targets), *sform, _levels(sform))
@@ -592,8 +603,6 @@ def _arena_bound(manifest: Mapping[str, Any], plan: Plan) -> tuple[int, int]:
 def to_json(p: Plan) -> dict[str, Any]:
     """`p` as JSON: each distinct template once (the bodies' parts index them), the literals' words as little-endian u64 in base64, each
     Definition by its spec and arity (`of_json` resolves it again)."""
-    import base64
-
     index: dict[tuple, int] = {}
     templates: list[dict[str, Any]] = []
 
@@ -622,8 +631,6 @@ def _tuples(x: Any) -> Any:
 
 def of_json(doc: Mapping[str, Any]) -> Plan:
     """The Plan `to_json` wrote; each Definition resolved from its spec (ValueError when one resolves to another arity)."""
-    import base64
-
     templates = [Template(_tuples(t["specs"]), _tuples(t["recipes"]), _tuples(t["levels"]),
                           tuple(Operand(str(w), int(k), int(e), int(b)) for w, k, e, b in t["operands"]),
                           tuple(Target(str(n), _tuples(at), int(lo), int(hi), str(dt), bool(sh)) for n, at, lo, hi, dt, sh in t["targets"]),

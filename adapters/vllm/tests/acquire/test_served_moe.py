@@ -7,16 +7,16 @@ from __future__ import annotations
 import copy
 
 import pytest
-
 from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.definitions.registry import act
+from verity.definitions.registry import moe as M
+
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity.definitions.registry import act
-from verity.definitions.registry import moe as M
 
-H, E, TOPK, VPT, I = 32, 8, 2, 4, 16
+H, E, TOPK, VPT, INTER = 32, 8, 2, 4, 16
 OP = "torch.ops.vllm.moe_forward.default"
 LAYER = "model.layers.0.mlp.experts"
 
@@ -101,14 +101,14 @@ def test_another_form_of_the_op_is_refused(old: str, new: str, why: str) -> None
 # ------------------------------------------------------------------------------------------------------------- the expansion
 X, OUT = "c01.add_rms_norm/buf3", "c01.moe_forward/buf4"
 FACTS = {"gate": {"weight": "model.layers.0.mlp.gate.weight", "shape": [E, H]},
-         "w13": {"weight": f"{LAYER}.w13_weight", "shape": [E, 2 * I, H]}, "w2": {"weight": f"{LAYER}.w2_weight", "shape": [E, H, I]},
+         "w13": {"weight": f"{LAYER}.w13_weight", "shape": [E, 2 * INTER, H]}, "w2": {"weight": f"{LAYER}.w2_weight", "shape": [E, H, INTER]},
          "E": E, "top_k": TOPK, "renormalize": True, "VPT": VPT, **SM.REQUIRED}
 #: launch configs Triton lowers to MMA v2 (BLOCK_SIZE_M 16) and to wgmma (64, 64, 4 warps)
 SMALL = {"BLOCK_SIZE_K": 64, "BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 WIDE = {"BLOCK_SIZE_K": 32, "BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 RECORD = {"layers": {LAYER: FACTS}, "pieces": {"1": LAYER}, "cc": [9, 0],
           "configs": {"8": {"False": SMALL, "True": SMALL}, "256": {"False": WIDE, "True": SMALL}}}
-UP, DOWN = f"{E},{H},{2 * I},0", f"{E},{I},{H},1"
+UP, DOWN = f"{E},{H},{2 * INTER},0", f"{E},{INTER},{H},1"
 
 
 def _wired(layer: dict | None = None) -> dict:
@@ -135,12 +135,12 @@ def test_the_op_expands_into_the_eager_blocks_calls() -> None:
     assert (router["base"], router["statics"]) == (M.MoeRouterTopKNorm.id, {"E": E, "TOPK": TOPK, "VPT": VPT})
     assert router["reads"] == [{"value": lg, "width": E}] and router["writes"] == [rw, ri]
     assert ups["moe"] == UP and ups["reads"] == [{"value": X, "width": H}, {"value": ri, "width": TOPK}, FACTS["w13"]]
-    assert (acts["base"], acts["statics"], acts["writes"]) == (act.SiluMul.id, {"I": I}, [ac])
-    assert downs["moe"] == DOWN and downs["reads"] == [{"value": ac, "width": TOPK * I}, {"value": ri, "width": TOPK},
+    assert (acts["base"], acts["statics"], acts["writes"]) == (act.SiluMul.id, {"I": INTER}, [ac])
+    assert downs["moe"] == DOWN and downs["reads"] == [{"value": ac, "width": TOPK * INTER}, {"value": ri, "width": TOPK},
                                                      {"value": rw, "width": TOPK}, FACTS["w2"]]
     assert (total["base"], total["statics"], total["writes"]) == (M.MoeSum.id, {"TOPK": TOPK, "H": H}, [OUT])
     assert list(w["values"]) == ["c00.mm/buf0", X, *_planes(), OUT]
-    assert [w["values"][n]["width"] for n in _planes()] == [E, TOPK, TOPK, TOPK * 2 * I, TOPK * I, TOPK * H]
+    assert [w["values"][n]["width"] for n in _planes()] == [E, TOPK, TOPK, TOPK * 2 * INTER, TOPK * INTER, TOPK * H]
     assert plan is not None and w["attention"] == []
 
 
@@ -160,8 +160,8 @@ def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> No
     plan = SM.expand(_wired(), RECORD)[1]
     small, wide = plan(8), plan(256)
     assert small == wide and set(small) == {UP, DOWN}
-    assert (small[UP]["base"], small[UP]["statics"]) == (M.MoeExpertGemmV2.id, {"E": E, "K": H, "N": 2 * I, "DOT": HopperBF16WgmmaDot16.id})
-    assert (small[DOWN]["base"], small[DOWN]["statics"]) == (M.MoeExpertGemmWV2.id, {"E": E, "K": I, "N": H, "DOT": HopperBF16WgmmaDot16.id})
+    assert (small[UP]["base"], small[UP]["statics"]) == (M.MoeExpertGemmV2.id, {"E": E, "K": H, "N": 2 * INTER, "DOT": HopperBF16WgmmaDot16.id})
+    assert (small[DOWN]["base"], small[DOWN]["statics"]) == (M.MoeExpertGemmWV2.id, {"E": E, "K": INTER, "N": H, "DOT": HopperBF16WgmmaDot16.id})
     with pytest.raises(Unmodelled, match="no fused_moe_kernel launch at 16 rows"):
         plan(16)
 
@@ -192,7 +192,7 @@ def _flag(k: str, v):
     *[(_flag(k, not v), k) for k, v in SM.REQUIRED.items()],
     (_flag("silu", None), "silu"),
     (_flag("renormalize", None), "renormalize"),
-    (_flag("w2", {"weight": f"{LAYER}.w2_weight", "shape": [E, H, 2 * I]}), "w2"),
+    (_flag("w2", {"weight": f"{LAYER}.w2_weight", "shape": [E, H, 2 * INTER]}), "w2"),
     (_flag("gate", {"weight": None, "shape": [E, H]}), "gate"),
     (_flag("E", 2 * E), "gate"),
     (lambda rec: rec.update(cc=[8, 9]), "compute capability"),

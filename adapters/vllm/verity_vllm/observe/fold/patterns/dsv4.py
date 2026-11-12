@@ -13,31 +13,60 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 
-from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
-from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
-from verity_vllm.observe.fold.patterns.dsv4_cache import _is, _module, _slots, _weights, block_runs, state_block, swa_block
-from verity_vllm.observe.fold.patterns.dsv4_flashmla import SparseDecode, SparsePrefill
-from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
-from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
-from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args, op_name, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
-from verity_vllm.observe.fold.patterns.rotary import step_positions
-from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
-from verity_vllm.observe.fold.tree import TreeNode
-from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
-from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
-from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
-from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 from verity.definitions.numerics.mhc_twin import tf32_num_split
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry.dsa_norm import check_block
 from verity.definitions.registry.fp8 import weight_blocks
+
+from verity_vllm.observe.events import TritonLaunch, ViewDesc
+from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP
+from verity_vllm.observe.fold.patterns.cublas import CublasLinear, CublasMmF32Out
+from verity_vllm.observe.fold.patterns.dsv4_cache import (
+    _is,
+    _module,
+    _slots,
+    _weights,
+    block_runs,
+    state_block,
+    swa_block,
+)
+from verity_vllm.observe.fold.patterns.dsv4_flashmla import SparseDecode, SparsePrefill
+from verity_vllm.observe.fold.patterns.fp8 import DynamicDeepGemmFp8Linear
+from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
+from verity_vllm.observe.fold.patterns.norms import CudaRmsNorm
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    base_op,
+    bound_args,
+    op_name,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import attribution_for, unsupported
+from verity_vllm.observe.fold.patterns.rotary import step_positions
+from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
+from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
+from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
+from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import (
+    QKV_ARGS,
+    TRITON_DIVISIBILITY,
+    qkv_rms_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"
@@ -175,7 +204,7 @@ class QKvRmsNorm:
     name = "dsv4.fused_q_kv_rmsnorm"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if not node.is_triton or node.enter.fn != QKV_RMS_PINS["kernel"]:
+        if not isinstance(node.enter, TritonLaunch) or node.enter.fn != QKV_RMS_PINS["kernel"]:
             return None
         if node.enter.src_sha != QKV_RMS_PINS["src_sha256"]:
             return unsupported(node, "the kernel's source differs from the pin", src_sha=node.enter.src_sha, pinned=QKV_RMS_PINS["src_sha256"])
@@ -192,10 +221,11 @@ class QKvRmsNorm:
                 check_block(N, block, warps, eps)
         except ValueError as e:
             return unsupported(node, str(e))
+        parts: list[Compute]
         mod, parts, outs = _module(node), [], set()
         for side, x_arg, out_arg, w_arg, in_stride, out_stride, size_key in QKV_ARGS:
             x, out, w, N = a.get(x_arg), a.get(out_arg), a.get(w_arg), a[size_key]
-            if not all(isinstance(v, ViewDesc) and v.dtype == "bfloat16" for v in (x, out, w)):
+            if not (isinstance(x, ViewDesc) and isinstance(out, ViewDesc) and isinstance(w, ViewDesc) and x.dtype == out.dtype == w.dtype == "bfloat16"):
                 return unsupported(node, f"the {side} arguments are not bf16 views", x=repr(x), out=repr(out), w=repr(w))
             M = x.shape[0]
             if x.shape != (M, N) or x.strides != (a.get(in_stride), 1) or out.shape != (M, N) or out.strides != (N, 1) or a.get(out_stride) != N \
@@ -234,7 +264,7 @@ class QNormRopeKvInsert:
         a, outs = bound_args(node), node.output_views()
         q, kv, cache, sm, cs = (a.get(k) for k in ("q_in", "kv", "k_cache", "slot_mapping", "cos_sin_cache"))
         NHP, bs, eps = a.get("q_head_padded"), a.get("cache_block_size"), as_float(a.get("eps"))
-        if not all(isinstance(v, ViewDesc) for v in (q, kv, cache, sm, cs)) or len(outs) != 1 or not isinstance(NHP, int) \
+        if not (isinstance(q, ViewDesc) and isinstance(kv, ViewDesc) and isinstance(cache, ViewDesc) and isinstance(sm, ViewDesc) and isinstance(cs, ViewDesc)) or len(outs) != 1 or not isinstance(NHP, int) \
                 or not isinstance(bs, int) or eps is None:
             return unsupported(node, "the insert's arguments are not bound as (q, kv, cache, slots, positions, cos_sin, padded heads, eps, block size)")
         qo, rows = outs[0], tuple(ctx.start.rows)
@@ -266,6 +296,7 @@ class QNormRopeKvInsert:
         if not croots:
             return unsupported(node, "the rotary table is no root of the capture", cs=repr(cs))
         ctx.scratch.setdefault("dsv4_cos_sin", {})[_module(node)] = (cs, croots[0].name)
+        parts: list[Compute]
         spec, parts = vocab_kind(ctx, "dsv4_qnorm_rope_kv_insert", **S), []
         for b, lo, hi in block_runs(slots, bs):
             try:
@@ -302,7 +333,7 @@ class SavePartialStates:
     name = "dsv4.save_partial_states"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if triton_name(node) != SAVE_STATES_KERNEL:
+        if not isinstance(node.enter, TritonLaunch) or triton_name(node) != SAVE_STATES_KERNEL:
             return None
         if node.enter.src_sha != SAVE_STATES_SRC_SHA or node.enter.num_warps != 4:
             return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=node.enter.src_sha, num_warps=node.enter.num_warps)
@@ -313,7 +344,7 @@ class SavePartialStates:
         W, R, bs = a.get("HEAD_SIZE"), a.get("COMPRESS_RATIO"), a.get("block_size")
         rows = tuple(ctx.start.rows)
         T = len(rows)
-        if not all(isinstance(v, ViewDesc) for v in (kv, score, ape, cache, sm)) or not all(isinstance(n, int) and n > 0 for n in (W, R, bs)):
+        if not (isinstance(kv, ViewDesc) and isinstance(score, ViewDesc) and isinstance(ape, ViewDesc) and isinstance(cache, ViewDesc) and isinstance(sm, ViewDesc)) or not (isinstance(W, int) and isinstance(R, int) and isinstance(bs, int) and W > 0 and R > 0 and bs > 0):
             return unsupported(node, "the arguments are not bound as (kv, score, ape, positions, state cache, slots, block size) with static sizes")
         if a.get("STATE_WIDTH") != W or a.get("TRITON_BLOCK_SIZE") != W or node.enter.grid != [T]:
             return unsupported(node, "the launch is not one program per token over state rows of two HEAD_SIZE halves", grid=node.enter.grid,
@@ -334,6 +365,7 @@ class SavePartialStates:
         aroots = ctx.roots_of(ape)
         if not aroots:
             return unsupported(node, "ape is no root of the capture", ape=repr(ape))
+        parts: list[Compute | Transparent]
         spec, hint, parts = vocab_kind(ctx, "dsv4_compressor_score", W=W), f"{_module(node)}/state", []
         for b, lo, hi in block_runs(slots, bs):
             try:
@@ -360,7 +392,7 @@ class IndexerCompress:
     name = "dsv4.indexer_compress"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        if triton_name(node) != INDEXER_COMPRESS_KERNEL:
+        if not isinstance(node.enter, TritonLaunch) or triton_name(node) != INDEXER_COMPRESS_KERNEL:
             return None
         e = node.enter
         if e.src_sha != INDEXER_COMPRESS_SRC_SHA or e.num_warps != 1 or not _module(node).endswith(INDEXER_COMPRESSOR):
@@ -385,14 +417,15 @@ class InvRopeQuant:
         if len(node.children) != 1 or triton_name(node.children[0]) != INV_ROPE_KERNEL:
             return unsupported(node, "the op launched other than its one per-head kernel", children=[c.op for c in node.children])
         kid = node.children[0]
-        if kid.enter.src_sha != INV_ROPE_SRC_SHA or kid.enter.num_warps != 1:
+        if not isinstance(kid.enter, TritonLaunch) or kid.enter.src_sha != INV_ROPE_SRC_SHA or kid.enter.num_warps != 1:
             return unsupported(node, "the kernel's source or warps differ from the pin", src_sha=kid.enter.src_sha, num_warps=kid.enter.num_warps)
         a, ka, outs = bound_args(node), bound_args(kid), node.output_views()
         sizes = ("heads_per_group", "quant_group_size", "chunks_per_head", "rope_start", "half_rope", "num_tokens", "n_groups", "d",
                  "scale_inner", "tma_aligned_T")
         o, pos_v, cs = (a.get(k) for k in ("o", "positions", "cos_sin_cache"))
         if not all(isinstance(a.get(k), int) for k in sizes) or not isinstance(a.get("tma_aligned_scales"), bool) \
-                or as_float(a.get("fp8_max")) is None or not all(isinstance(v, ViewDesc) for v in (o, pos_v, cs, *outs)) or len(outs) != 2:
+                or as_float(a.get("fp8_max")) is None or not (isinstance(o, ViewDesc) and isinstance(pos_v, ViewDesc) and isinstance(cs, ViewDesc)) \
+                or not all(isinstance(v, ViewDesc) for v in outs) or len(outs) != 2:
             return unsupported(node, "the launch's sizes, tma_aligned_scales and fp8_max are not statics over (o, positions, cos_sin) "
                                "into (bytes, scales)")
         if target_of(ctx)[0].compute_capability != (9, 0) or a["tma_aligned_scales"] or as_float(a["fp8_max"]) != INV_ROPE_FP8_MAX:
@@ -432,6 +465,7 @@ class InvRopeQuant:
         croots = ctx.roots_of(cs)
         if not croots:
             return unsupported(node, "the rotary table is no root of the capture", cs=repr(cs))
+        parts: list[Compute]
         spec, hint, parts = vocab_kind(ctx, "dsv4_inv_rope_quant_head", CHUNKS=CH, QG=QG, ROPE=ROPE), f"{_module(node)}/inv_rope_quant", []
         for k in range(G * HPG):
             g, j = divmod(k, HPG)

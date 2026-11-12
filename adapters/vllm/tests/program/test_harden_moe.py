@@ -35,10 +35,10 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend import derive_examples as ex
 from verity.definitions.numerics.serve3_reference import materialize
+
+from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend.derive import derive_report
 
 REF = dict(mode="reference")
 T, H, I, E, K = 4, 8, 16, 4, 2
@@ -56,7 +56,8 @@ def _dump_results():
     out = os.environ.get("HARDEN_OUT")
     if out:
         os.makedirs(out, exist_ok=True)
-        json.dump(RESULTS, open(os.path.join(out, "moe_results.json"), "w"), indent=1)
+        with open(os.path.join(out, "moe_results.json"), "w") as f:
+            json.dump(RESULTS, f, indent=1)
 
 
 def _reason(rep) -> str:
@@ -87,7 +88,7 @@ def _routes(m, x) -> list[list[int]]:
 
 def _inputs_with_different_routing(m) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Three inputs whose top-k routes differ pairwise for at least one token (searched, then asserted)."""
-    xs = []
+    xs: list[torch.Tensor] = []
     for seed in range(50):
         x = torch.randn(T, H, generator=torch.Generator().manual_seed(100 + seed)) * 1.5
         if all(_routes(m, x) != _routes(m, y) for y in xs):

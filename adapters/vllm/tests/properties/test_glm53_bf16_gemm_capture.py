@@ -8,20 +8,23 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
+import contextlib
 import copy
 import json
 import os
+import sys
+import types
 from typing import Any
 
 import numpy as np
 import pytest
 import torch
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry import mla_check as MK
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import mla_check as MK
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
 SPLITK = {"kind": "splitk", "SPLIT_K": 2, "TILE_K": 128, "WARPS": 2}
@@ -508,9 +511,6 @@ def test_the_absorb_weights_are_the_served_views() -> None:
 
 
 def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
-    import sys
-    import types
-
     envs = types.ModuleType("vllm.envs")
     vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
     monkeypatch.setitem(sys.modules, "vllm", sys.modules.get("vllm") or types.ModuleType("vllm"))
@@ -571,9 +571,6 @@ def test_the_configuration_read_back_is_the_served_default_or_the_variant(monkey
 
 
 def test_the_process_groups_are_vllms_own_at_world_size_one(tmp_path, monkeypatch) -> None:
-    import sys
-    import types
-
     seen = []
     vd = types.ModuleType("vllm.distributed")
     vars(vd).update(init_distributed_environment=lambda **kw: seen.append(kw),
@@ -633,7 +630,8 @@ def _doc() -> dict:
              {**g, "phase": "linear", "case": "lm_head.shard", "M": 1, **NONE, "words": 6, "reference_coords": 1},
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
-    doc: dict[str, Any] = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
+    doc: dict[str, Any]
+    doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
            "switch": {"ok": True, "cublas_version": 120900}, "switch_after": {"ok": True},
            "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True}, "scan": {"enabled": False, "cases": {}, "ok": True},
            "launches": launches,
@@ -722,10 +720,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     and vLLM's config module stubbed: the comparison jobs through the spawned worker pool, the decided fma, the per-case and
     per-model verdicts, `--models`, the sealed record and the exit status, so a slip in the orchestration shows here and not in the
     H200's hour."""
-    import contextlib
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -797,10 +791,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
 def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
     """The scan's boundary Ms join the expected cases, each extended launch gets the scan's fitted split for its regime (None
     past the reduce regime), and the scan record is sealed into the document."""
-    import contextlib
-    import sys
-    import types
-
     vc = types.ModuleType("vllm.config")
     vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
                     set_current_vllm_config=lambda cfg: contextlib.nullcontext())
@@ -888,7 +878,5 @@ def test_the_scan_targets_cover_every_gemm_case() -> None:
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["glm53_bf16_gemm_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
