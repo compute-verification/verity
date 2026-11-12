@@ -56,7 +56,7 @@ untraced = [
 # world fleet and its machine's GPUs, a scope's requests are the census's request and GPU peak at the workload card's
 # MACs a token, and the weights are that card's parameters. `verity bench certifier_term`'s runner runs it.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
-          "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
+          "verity/protocols/inference_only/slowdown/data/reference.toml", "verity/protocols/inference_only/slowdown/data/hardware.toml",
           "benchmarks/spot_figures/cards/workload.glm-5.3.json", "benchmarks/certifier_term/run.py",
           "adapters/vllm/workloads",
           "adapters/vllm/verity_vllm/__init__.py",

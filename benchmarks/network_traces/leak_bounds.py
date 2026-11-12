@@ -98,7 +98,7 @@ CENSUS = ROOT / "benchmarks" / "census"
 #: machine's GPUs, and the served model's workload card
 ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
-RHO, RHO_HARDWARE = "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml"
+RHO, RHO_HARDWARE = "verity/protocols/inference_only/slowdown/data/reference.toml", "verity/protocols/inference_only/slowdown/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: the served model, rho's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"

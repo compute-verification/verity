@@ -57,7 +57,7 @@ rollout) reads an enormous amount, say 1 TB of new parameters, so training that 
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/rho`](../../rho/README.md), whose
+the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/slowdown`](../../slowdown/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean

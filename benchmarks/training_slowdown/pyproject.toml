@@ -11,7 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_job_shell.py"]
 # `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price;
 # `adapters/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
-# (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator (`verity/protocols/inference_only/rho`), whose
+# (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator (`verity/protocols/inference_only/slowdown`), whose
 # registry, fleets and periods `calculator.py` reads and whose min-cut module and rows of β(k) test_min_cut holds
 # formalism's copy to; the inference-only policy's calibrations, which the calculator's registry loads from outside its
 # directory; and the census's deployments, whose reference window `calculator.py` reads
@@ -19,5 +19,5 @@ untraced = ["tests/test_job_shell.py"]
 # may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
-          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
+          "verity/protocols/inference_only/slowdown", "benchmarks/census/deployments.json",
           "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]

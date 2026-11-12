@@ -69,7 +69,7 @@ ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "re
 #: what `prove.HOST_CORES` is, as the table says it of the default
 HOST_CORES_ARE = ", node A's share: the cores its provider gives a card"
 #: each fleet's assumed serving MFU
-FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
+FLEETS = Path("verity/protocols/inference_only/slowdown/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8

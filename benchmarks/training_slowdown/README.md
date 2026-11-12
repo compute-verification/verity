@@ -27,7 +27,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
-| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
+| `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/slowdown`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
 | `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it; `parts_read`, the parts of the stream its start.json names as read by its own training |
@@ -87,7 +87,7 @@ python -m training_slowdown.gates [--check]             # gates per multiply-add
 
 An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the
 budget, the seeds, the windows it asks for where it asks, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
-`[policy.*]` table of `verity/protocols/inference_only/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
+`[policy.*]` table of `verity/protocols/inference_only/slowdown/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
 or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
@@ -237,7 +237,7 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
 
 A config's `policy` is a name, and `policy.named` resolves it: `console` is the rule relative to the start (c one
 session of the reference model of the start's size, k the session's input ids), and any other name is a fixed policy
-of the calculator's registry (`verity/protocols/inference_only/rho/data`, its `[policy.*]` tables). The block says which kind it was, and a
+of the calculator's registry (`verity/protocols/inference_only/slowdown/data`, its `[policy.*]` tables). The block says which kind it was, and a
 name that is neither is refused. p is read on the final set where the attack and its honest config each have a final
 record, else on the search split, and the block says which. A search record with no trace, with one the capture
 refused, or with one of a capture version the tree's `priced` doesn't read has no ρ, and then there is no S: the
@@ -285,7 +285,7 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
   `grader/pyproject.toml`). From `verity`: the circuits' Definitions the gate prices compile, and the codec, the
   census and the Boolean prices the grader reads with. From `adapters/vllm/verity_vllm`: the frontend's training-step
   module, which derives the steps the grader reads. From the frontend's tests, by path: the lf model. From the
-  slowdown calculator (`verity/protocols/inference_only/rho`), its directory put first on `sys.path`: its fleets and
+  slowdown calculator (`verity/protocols/inference_only/slowdown`), its directory put first on `sys.path`: its fleets and
   periods, its registry and its min-cut bound, which `calculator.py` reads, and with the registry the inference-only
   policy's calibrations (`verity/protocols/inference_only/nci/calibrations.json`), which the registry loads. From the
   census (`benchmarks/census/deployments.json`), by path: the reference deployment's window. A run also reads the

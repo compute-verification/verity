@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import catalog  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho import instances
+from slowdown import instances
 
 KIMI_ROWS = ("pretrain-full", "pretrain-full-subspace-arch", "sft-full-weights")
 SHAPES = instances.models()
@@ -21,7 +21,7 @@ def rows() -> dict:
 
 @pytest.mark.parametrize("name", sorted(K.MODELS))
 def test_every_shape_is_rhos(name):
-    """A model's shape is verity/protocols/inference_only/rho's (`models.toml`), read through its loader: a recipe states none, and the
+    """A model's shape is verity/protocols/inference_only/slowdown's (`models.toml`), read through its loader: a recipe states none, and the
     weight matrices priced here are the model's rows there, shape by shape (its MTP modules apart, which rho's rows
     leave out), with its width, depth, vocabulary and attention."""
     recipe, m = K.RECIPES[name], K.MODELS[name]
