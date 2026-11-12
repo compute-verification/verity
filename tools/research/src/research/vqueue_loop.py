@@ -127,7 +127,10 @@ The actions.  Build merges its members in order onto its base (`Queue._merge`), 
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
 out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
 naming them where it merges onto `main`;
-nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
+nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), exports to the public export the
+fetched fixtures its members' merges register that its base doesn't (`--export-fixtures`, on the control pod, holding
+`--export-lock` as the pod's own export pass does; logged `fixtures`), leaving out, the rest built again, a member whose fixture's export failed (its owner told once a head and its
+fixtures; the next build exports again: `Loop._exported`), so no check starts that preflight-fixtures refuses, pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
@@ -222,12 +225,29 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
 from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
+from .store.fixtures import UNSOURCED
+from .store.fixtures import entries as fixture_entries
+from .store.local import REPLICA_MAP
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
                      Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
 from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
+#: `research data export` on the control pod, its argv before the loop's flags, as infra/control/fixtures_export.sh runs it there:
+#: main's code from that script's checkout, its store, r2.env's key (it reads the private store and writes the public bucket)
+#: and the bucket the script names, read from it as its own pass over `next` reads it
+EXPORT = ("sh", "-c", "set -a; . /root/.config/verity/r2.env; set +a; "
+          "export RESEARCH_EXPORT_BUCKET=\"$(grep -o 'RESEARCH_EXPORT_BUCKET=[^ ]*' /data/infra/fixtures_export.sh | head -1 "
+          "| cut -d= -f2)\" PYTHONPATH=/data/infra/fixtures-export-repo/tools/research/src; "
+          "exec python3.12 -m research data export --store /data/infra/fixtures-export-store \"$@\"", "export")
+#: how long an export of a candidate's fixtures may take before it counts as failed (`World.export_fixtures`)
+EXPORT_S = 600
+#: how `research data export` starts each error's line on stdout (`store.cli.cmd_export`)
+EXPORT_ERROR = "ERROR  "
+#: the lock that makes this export and each pass of infra's (infra/control/fixtures_export.sh) over the checkout and store
+#: `EXPORT` shares take turns, and how long an export waits for it before it is left to the next tick (`World.export_fixtures`)
+EXPORT_LOCK, EXPORT_LOCK_S = "/root/fixtures-export-pass.lock", 5
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
@@ -345,6 +365,11 @@ def unstamp(s: object) -> float | None:
 
 def branch(sha: str) -> str:
     return f"refs/heads/queue/{sha[:12]}"
+
+
+def _told_at(base: object, fixtures: Iterable[str] | None) -> str:
+    """What a skip's notice is told once by beside its head (`Past.told`): its base, or the fixtures whose export failed."""
+    return ",".join(fixtures) if fixtures else f"{base}"
 
 
 def kept_runs(path: Path | None) -> frozenset[str]:
@@ -649,10 +674,10 @@ class Past:
             "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
     def told(self, kind: str = "skip") -> set[str]:
-        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), or a move a head lacks
-        (`lacks`, `Loop._lacking`)."""
+        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`; for a fixtures' failed export,
+        `head@ids`, told once whatever the base), or a move a head lacks (`lacks`, `Loop._lacking`)."""
         def heads(r: dict) -> set[str]:
-            return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
+            return {f"{h}@{_told_at(r.get('base'), r.get('fixtures'))}" for h in r.get("heads") or ()}
 
         return {k for r in self.of(kind) if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting(kind, heads)
 
@@ -689,6 +714,10 @@ class Past:
 
     def built(self, sha: str) -> dict | None:
         return next(reversed(self.of("build", sha)), None)
+
+    def exported(self) -> set[str]:
+        """The fixtures a build's export put in the public export (`Loop._exported`)."""
+        return {x for r in self.of("fixtures") for x in r.get("exported") or ()}
 
     def moved(self) -> list[tuple[dict, list[str], dict | None]]:
         """Each advance that pushed `main` and logged drive's steps after it as their own (`on_main`) with no record of them
@@ -810,13 +839,15 @@ def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
 @dataclass(frozen=True)
 class Skip:
     """A PR a build left out (`World.build`) and why: ``held`` names what of the build holds its head already (the member
-    whose head does, else the candidate it is built on), and ``by`` the members above `main` it conflicts with where it merges
-    onto `main` alone.  A move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or
-    has ``fix``, what its owner is told to do."""
+    whose head does, else the candidate it is built on), ``by`` the members above `main` it conflicts with where it merges
+    onto `main` alone, and ``fixtures`` the fetched fixtures its merge registers whose export failed (`Loop._exported`).  A
+    move PR's (`World._move`) ``waits`` for the members below it to land, its owner told nothing, or has ``fix``, what its
+    owner is told to do."""
     pr: PR
     why: str
     held: str = ""
     by: tuple[int, ...] = ()
+    fixtures: tuple[str, ...] = ()
     waits: bool = False
     fix: str = ""
 
@@ -896,8 +927,16 @@ class World:
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
                  frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None,
                  pins_file: Path | None = None, keep_file: Path | None = None, heavy_file: Path | None = None,
-                 heavy_on: str = "", clock: Callable[[], float] = time.monotonic):
+                 heavy_on: str = "", clock: Callable[[], float] = time.monotonic, export: tuple[str, ...] = (),
+                 export_lock: str = "", export_lock_s: int = EXPORT_LOCK_S):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
+        #: `research data export`'s argv before its flags (`export_fixtures`); none: a build exports nothing
+        self.export = tuple(export)
+        #: the lock an export holds, on this host ('': none), and the seconds it waits for it
+        self.export_lock, self.export_lock_s = export_lock, export_lock_s
+        self.sleep: Callable[[float], None] = time.sleep
+        #: `fixtures/artifacts.json`'s entries at each commit read (`_registry`)
+        self._registries: dict[str, dict[str, str]] = {}
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
         #: graph2's readings kept between ticks where the check gates (`Shadow`, which `Loop` sets), and this tick's reads of
         #: graph2's `verdict`: how many, their bytes and seconds on ``clock``
@@ -1830,6 +1869,77 @@ class World:
             out.update(dict.fromkeys(got, sha))
             want -= got
         return out
+
+    def fixtures_added(self, base: str, merged: list[Member]) -> list[tuple[Member, tuple[str, ...]]]:
+        """Each of ``merged``, merged in order onto ``base``, with the fetched fixtures its merge registers that what it merged
+        onto doesn't: the ids `fixtures/artifacts.json` gains whose path its tree doesn't hold (gitignored, so a check fetches
+        it: `research data fetch-fixtures`), read from git."""
+        out, below = [], self._registry(base)
+        for m in merged:
+            now = self._registry(m.commit)
+            new = {a: p for a, p in now.items() if a not in below}
+            held = set(_git(self.repo, "ls-tree", "--name-only", "-z", m.commit, "--", *new.values()).stdout.split("\0")) \
+                if new else set()
+            out.append((m, tuple(a for a, p in new.items() if p not in held)))
+            below = now
+        return out
+
+    def _registry(self, sha: str) -> dict[str, str]:
+        if sha not in self._registries:
+            r = _git(self.repo, "show", f"{sha}:{REPLICA_MAP.as_posix()}", check=False)
+            try:
+                doc = json.loads(r.stdout) if not r.returncode else {}
+            except ValueError as e:
+                self.log(f"research queue vqueue: {sha[:12]}'s {REPLICA_MAP} isn't JSON ({e}): none of its fixtures is "
+                         "exported, and its check reads the registry and fails")
+                doc = {}
+            self._registries[sha] = fixture_entries(doc) if isinstance(doc, dict) else {}
+        return self._registries[sha]
+
+    def export_fixtures(self, ids: list[str]) -> dict[str, str] | None:
+        """`research data export` of fixtures ``ids`` alone (``export``, then `--no-registry` and an `--id` each), stopped after
+        `EXPORT_S`: {id: why} of each whose own export failed, {} once all were sent.  The export sends every id it can and
+        prints an error naming each one no source holds, so when those are all its errors only they failed; a multi-id export
+        failing otherwise (an upload, a crash) is done again an id at a time, and one that never ended or started fails each.
+        Only its error lines are read, never logged: the rest names the export's bucket and endpoint.
+
+        It runs holding `export_lock`, which the pod's own export pass holds while it checks out the code this export runs
+        and rewrites the store's ledger of landed keys.  None, nothing run, when the lock stays held for `export_lock_s`: that
+        pass can hold it for its whole run, up to 3,000 s, and a tick must stay short (every advance and drop waits on it), so
+        a busy lock is waited on only seconds and the export is left to the next tick, no id failing."""
+        if not self.export_lock:
+            return self._export(ids)
+        try:
+            f = open(self.export_lock, "a")
+        except OSError as e:
+            return dict.fromkeys(ids, f"the export's lock {self.export_lock} didn't open ({type(e).__name__})")
+        with f:
+            waited = 0
+            while not _flocked(f):
+                if waited >= self.export_lock_s:
+                    return None
+                self.sleep(1)
+                waited += 1
+            return self._export(ids)
+
+    def _export(self, ids: list[str]) -> dict[str, str]:
+        try:
+            r = subprocess.run([*self.export, "--no-registry", *(f"--id={x}" for x in ids)], stdin=subprocess.DEVNULL,
+                               capture_output=True, text=True, errors="replace", timeout=EXPORT_S)
+        except subprocess.TimeoutExpired:
+            return dict.fromkeys(ids, f"`research data export` still running after {EXPORT_S} s")
+        except OSError as e:
+            return dict.fromkeys(ids, f"`research data export` didn't start ({type(e).__name__})")
+        if not r.returncode:
+            return {}
+        why = f"`research data export` exited {r.returncode}"
+        errors = [x[len(EXPORT_ERROR):] for x in r.stdout.splitlines() if x.startswith(EXPORT_ERROR)]
+        lost = [x for x in ids if f"{UNSOURCED}: {x}" in errors]
+        if errors and len(lost) == len(errors):
+            return dict.fromkeys(lost, f"{why}; the store holds none of it")
+        if len(ids) > 1:
+            return {x: w for one in ids for x, w in self._export([one]).items()}
+        return dict.fromkeys(ids, why)
 
     def main_now(self) -> str:
         """origin's `main` fetched again (into `MAIN_NOW`)."""
@@ -2846,7 +2956,9 @@ class Loop:
         if not merged:
             if a.replaces is not None:
                 t.rebuilds[a.replaces] = base
-            recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
+            held = any(r.get("fixtures") if r.get("action") == "skip" else r.get("deferred") for r in recs)
+            recs.append(self.record(t, "build", base=base, priority=a.priority, **again,
+                                    why="no member merges onto its base" + (" with its fixtures exported" if held else "")))
             return recs
         tip, adopted = self._pushed(t, tip, base, merged)
         if a.replaces is not None:
@@ -2858,16 +2970,17 @@ class Loop:
         return self._enqueue(t, recs, line)
 
     def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
-        """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
-        those left out, each owner told once a head and base)."""
+        """PRs ``members`` merged in order onto ``base`` once the fetched fixtures they register are exported (`_exported`):
+        (the tip, the members merged, the export's lines and the skip records of those left out, each owner told once a head
+        and base, or a head and its fixtures)."""
         w = self.world
         if unknown := [n for n in members if n not in w.prs]:
             raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
-        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main)
-        recs = []
+        tip, merged, left, recs = self._exported(t, base, [w.prs[n] for n in members], t.advanced or t.main)
         for s in left:
-            p, key = s.pr, f"{s.pr.head}@{base}"
-            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
+            p, key = s.pr, f"{s.pr.head}@{_told_at(base, s.fixtures)}"
+            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number,
+                        **({"fixtures": list(s.fixtures)} if s.fixtures else {}))
             if s.held or s.waits:                           # it reaches `main` with what holds it, or is built once that has
                 recs.append(self.record(t, "skip", **line, why=s.why, **({"held": True} if s.held else {"waits": True}),
                                         done=False))
@@ -2879,12 +2992,16 @@ class Loop:
             names = ", ".join(f"#{n}" for n in s.by)
             fix = f"merge `main` into it once {names} {'is' if len(s.by) == 1 else 'are'} on it" if s.by else "merge `main` into it"
             text = None if key in t.told else (
+                f"#{p.number} at {p.head[:12]} is left out of the verified queue's candidate on {base[:12]}: {s.why}, so its "
+                "check would refuse at preflight-fixtures. Each tick exports them again; one the store holds none of needs "
+                "`research data put --kind fixture/v1 --file|--tree PATH --preserve`" if s.fixtures else
                 f"#{p.number} at {p.head[:12]} isn't built on the verified queue's candidate on {base[:12]}: {s.why}. {s.fix}"
                 if s.fix else
                 f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {base[:12]}: {s.why}. "
                 f"It is left out until it merges: {fix}")
             posts = text is not None and not self.shadow
-            done = posts and self._say(t, "skip", text, self.owner(p.number), base=base, heads=[p.head], number=p.number)
+            done = posts and self._say(t, "skip", text, self.owner(p.number), base=base, heads=[p.head], number=p.number,
+                                       **({"fixtures": list(s.fixtures)} if s.fixtures else {}))
             if done or (text and self.shadow):
                 t.told.add(key)
             recs.append(self.record(t, "skip", **line, why=s.why, text=text, done=done, **({"by": list(s.by)} if s.by else {}),
@@ -2911,6 +3028,48 @@ class Loop:
         started and its check not, so the planner builds nothing on it (`vqueue.decide`)."""
         return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
                 *self._regenerate(t, line)]
+
+    def _exported(self, t: Tick, base: str, prs: list[PR], main: str) -> tuple[str, list[Member], list[Skip], list[dict]]:
+        """``prs`` built onto ``base`` (`World.build`) once the fetched fixtures its members' merges register, which ``base``
+        doesn't, are in the public export, before anything is pushed: a check's preflight-fixtures refuses a fixture in neither
+        its machine's store nor the export, and the control pod's export loop reads `main`'s and `next`'s registries, not a
+        candidate's.  Each id no `fixtures` line logged exported (`Past.exported`) is exported (`World.export_fixtures`) and
+        logged (`fixtures`); a member whose merge registers one whose export failed is left out (`Skip.fixtures`) and the rest
+        built again, so no check starts that would refuse, and the next tick, building it again, exports again.  One whose
+        export another export's lock deferred is left out of this build alone, its owner told nothing (the line logged says
+        `deferred`).  (the tip, the members merged, each left out to tell of, the lines logged)."""
+        w, recs = self.world, []
+        tip, merged, left = w.build(prs, base, main)
+        if not w.export:
+            return tip, merged, left, recs
+        done, failed, waiting, out, later = t.past.exported(), {}, set(), {}, set()
+        by = {p.number: p for p in prs}
+        while added := [(m, ids) for m, ids in w.fixtures_added(base, merged) if ids]:
+            if todo := list(dict.fromkeys(x for _, ids in added for x in ids
+                                          if x not in done and x not in waiting and x not in failed)):
+                fails = w.export_fixtures(todo)
+                who = [m for m, ids in added if set(ids) & set(todo)]
+                line = dict(base=base, members=[m.pr for m in who], heads=[m.head for m in who], ids=todo)
+                if fails is None:
+                    recs.append(self.record(t, "fixtures", **line, exported=[], deferred=True, done=False,
+                                            why=f"another export holds {w.export_lock}: exported next tick"))
+                    waiting.update(todo)
+                else:
+                    sent = [x for x in todo if x not in fails]
+                    recs.append(self.record(t, "fixtures", **line, exported=sent, unsent=fails, done=not fails,
+                                            why=f"{len(fails)} of {len(todo)} failed" if fails else "exported"))
+                    done.update(sent)
+                    failed.update(fails)
+            held = {m.pr: Skip(by[m.pr], f"it registers {', '.join(bad)}, which the public export doesn't hold and whose "
+                                         f"export failed: {failed[bad[0]]}", fixtures=tuple(bad))
+                    for m, ids in added if (bad := [x for x in ids if x in failed])}
+            wait = {m.pr for m, ids in added if set(ids) & waiting} - held.keys()
+            if not held and not wait:
+                break
+            out |= held
+            later |= wait
+            tip, merged, left = w.build([p for p in prs if p.number not in out and p.number not in later], base, main)
+        return tip, merged, [*left, *out.values()], recs
 
     def _enqueue(self, t: Tick, recs: list[dict], line: dict) -> list[dict]:
         """Start pushed candidate ``line["sha"]``'s check: enqueued, its build line (``line``) logged after ``recs``, and the run
@@ -3820,6 +3979,15 @@ def _sharded(slim, shards: int | str) -> bool:
         return False
 
 
+def _flocked(f) -> bool:
+    """Whether ``f``'s lock is now held here, False while another holds it."""
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
 def _locked(path: Path, wait: bool = False):
     """Hold ``path``'s lock, or None when another tick holds it; with ``wait``, once whoever holds it lets it go."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -3877,6 +4045,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--keep-runs", type=Path, default=KEEP_RUNS, help=f"the runs a cancel leaves running, one run id a line, read "
                                                                       f"at each cancel (default {KEEP_RUNS})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
+    ap.add_argument("--export-fixtures", default=shlex.join(EXPORT), metavar="ARGV",
+                    help="`research data export`'s argv before its flags, run with --no-registry and an --id for each fetched "
+                         "fixture a candidate registers that its base doesn't, before it is pushed; where the export's key "
+                         "works, the control pod (on another host, ssh there, as with --graph2). '' exports nothing "
+                         "(default the control pod's: fixtures_export.sh's code, store, key and bucket)")
+    ap.add_argument("--export-lock", default=EXPORT_LOCK, metavar="PATH",
+                    help=f"the lock each export holds, the one infra's export pass holds over the same checkout and store; "
+                         f"held for {EXPORT_LOCK_S} s, the export waits for the next tick. It is taken on the host the loop runs "
+                         f"on: a loop off the control pod puts it inside its --export-fixtures command (flock -w N "
+                         f"{EXPORT_LOCK} ...) and passes --export-lock ''. '' takes none (default {EXPORT_LOCK})")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
                                                              f"its check (default {DEPTH})")
@@ -3996,7 +4174,8 @@ def main(argv: list[str]) -> int:
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
                       frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file,
-                      keep_file=a.keep_runs, heavy_file=a.heavy_file, heavy_on=a.heavy_on)
+                      keep_file=a.keep_runs, heavy_file=a.heavy_file, heavy_on=a.heavy_on,
+                      export=tuple(shlex.split(a.export_fixtures)), export_lock=a.export_lock)
         if a.after_landing:
             return _after_landing(world, a.after_landing)
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]

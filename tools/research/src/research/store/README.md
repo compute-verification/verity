@@ -21,7 +21,7 @@ Stdlib only (the `research` rule); the S3 client is hand-rolled SigV4.
 ## 1. Canonical JSON and identity (`canon.py`, `ids.py`)
 
 `canon.dumps(obj) -> bytes`: `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)`
-encoded UTF-8. Floats render by Python `repr` (shortest round-trip); `-0.0` is rejected (use `0.0`); NaN/Inf are rejected;
+encoded UTF-8. Floats render by Python `repr` (shortest round-trip); `-0.0` (use `0.0`), NaN and Inf are rejected;
 ints are unbounded; keys must be `str`. `canon.sha256(obj) -> hex`.
 
 ~~~text
@@ -35,9 +35,8 @@ task:<sha512 hex of a task's key>                       a check's task: the exec
 commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
 ~~~
 
-Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
-and `query` are part of the content, keys absent when not given). Two attempts producing byte-identical outputs produce the
-same artifact id; provenance lives on the Attempt (§4), not inside the artifact.
+One member set frozen twice is one snapshot id (members sorted and de-duplicated; `name`, `note` and `query` are content,
+absent keys omitted). Byte-identical outputs are one artifact id; provenance lives on the Attempt (§4).
 
 ## 2. Artifact manifest — `research/artifact/v0.1`
 
@@ -62,8 +61,7 @@ same artifact id; provenance lives on the Attempt (§4), not inside the artifact
 Tree `files` are sorted by `path`; paths are relative with `/` separators, no `..`, `.` or empty segments, no absolute, no
 duplicates, and no path that is both a file and a directory of another (`a` and `a/b`); `bytes` is the sum; an empty tree is
 legal. A file payload's `name` is a bare file name. Every file (and a file payload) is one blob at `objects/sha256/<hex>`.
-`refs` values are `art:` ids or lists of them (the store checks the syntax, not existence — a ref may point at an artifact that
-lives only remotely). `meta` may contain `art:` strings too; only `refs` is indexed as edges.
+`refs` values are `art:` ids or lists of them (syntax checked, not existence: a ref may name an artifact only the remote holds). `meta` may contain `art:` strings too; only `refs` is indexed as edges.
 
 Manifest identity excludes producer, time, labels. The manifest file is `manifests/<sha256 hex>.json` (canonical bytes).
 
@@ -136,8 +134,8 @@ derivation by content as the key param `input.<name> = sha256:<hex>` (`inputs` h
 
 Without a Tool declaration (`research run -- CMD` with no `--tool`): `tool = {"name": "<argv[0] basename>", "version": null}`,
 `key_params = ["argv"]`, `key_conditions = []`, so `derivation = drv(H(tool name, inputs, {"argv": redacted argv}, {}))`: the
-whole command line is the request, and `reuse_key` is `null` whatever the tree (argv cannot name the files, environment or data
-the command reads, so nothing may be served as its reuse). `params` then holds `{"argv": argv}`.
+whole command line is the request, and `reuse_key` is `null` whatever the tree (argv can't name what the command reads, so
+nothing is served as its reuse). `params` then holds `{"argv": argv}`.
 Publishing applies the rule to a record written by an older runner (or with no `store` section): it is re-derived.
 
 `research run` writes everything it computed before launch into job.json's optional `store` section (`tool {name, version, spec}`,
@@ -146,8 +144,8 @@ Publishing applies the rule to a record written by an older runner (or with no `
 For a run that predates the store, `conditions` are reconstructed from what job.json recorded (SKU, driver, hostname, commit) and
 everything else is `null`.
 
-`attempts/<id>.json` is written once. Publishing an id that exists with different content is an error (`AttemptExists`), never an
-overwrite; the same canonical content again is a no-op. The store validates the envelope only (`model.validate_attempt_doc`):
+`attempts/<id>.json` is written once: publishing an existing id with other content is `AttemptExists`, never an overwrite,
+and the same content again a no-op. The store validates the envelope only (`model.validate_attempt_doc`):
 schema, id syntax, every top-level key above present (`reuse_key`, `closure`, `cost`, `telemetry` may be `null`), `tool.name` a
 string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whole document canonicalisable.
 
@@ -155,9 +153,9 @@ string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whol
 
 `research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
 from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
-file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; the file is
-disposable, but every worktree on the machine writes it, older code included, so no shipped table gains a column; a new column
-goes in a side table keyed like its table, as `replica_checks` is for `replicas`):
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; every worktree
+on the machine writes the file, older code included, so a shipped table gains no column: a new one goes in a side table keyed
+like it, as `replica_checks` is for `replicas`):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
@@ -175,9 +173,8 @@ replica_checks(id, location, verified)                  which check (§7): etag-
 ~~~
 
 Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
-tested). A write holds the file's lock until it commits and every process on the machine writes this one file, so a write that
-scanned a table would hold all the others off for the pass, and a refresh's run of writes (`research queue ready`'s records
-gate) would starve them until it ended.
+tested): a write holds the file's lock until it commits and every process on the machine writes this file, so a scanning write
+would hold the rest off, and a run of writes (`research queue ready`'s records gate) would starve them.
 
 Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
@@ -212,8 +209,8 @@ private=db)` rebuilds the public tables: the artifacts whose manifests are in th
 it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/store_index.sh`). Displays read it via `reader`
 (Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
 records only here. `select` names its source and that time on stderr in every output form (`--json` stays a list), and exits 1
-when there is no index that ever listed the bucket and the catalog holds no artifact: a `research run` job's store, where an empty
-answer would read as "none".
+when no index ever listed the bucket and the catalog holds no artifact (a `research run` job's store), where an empty answer
+would read as "none".
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -234,24 +231,23 @@ TC_PROBE = Tool(
 )
 ~~~
 
-Declarations live next to the tool they describe (`benchmarks/tc_probe/tool.py`; the example above is
-illustrative, the files follow the scripts' argparse) and are found by `research run --tool <dotted.module:NAME>` or
-`--tool <name>` via the registry in `research/store/tools_registry.py` (name -> dotted path; keep it tiny; in a tree from before a
-layout move, at the path `moves.json` gives). A declaration
-imports nothing but `research.store.tool`: it must load on the control machine and in a shipped source tree alike (`load` falls
-back to executing `<source root>/<module path>.py` by file when the module is not on sys.path).
+Declarations live beside their tool (`benchmarks/tc_probe/tool.py`; the example is illustrative) and are found by
+`research run --tool <dotted.module:NAME>` or `--tool <name>` via `research/store/tools_registry.py` (name -> dotted path,
+kept tiny; in a tree from before a layout move, at the path `moves.json` gives). A declaration imports only
+`research.store.tool`, so it loads on the control machine and in a shipped tree alike (`load` executes
+`<source root>/<module path>.py` by file when the module isn't on sys.path).
 
 ### 6.2 Params
 
 `research run` records the **full parsed argv** (`params.argv`) plus, when the Tool provides `parse(argv) -> dict`, every
 parsed parameter. `key_params` selects the subset entering the derivation. A path-valued key param is replaced by the
 content identity of what it points at: an existing artifact id if the path is a fetched artifact, else `sha256:<hex>` of the
-file (or tree) — never the pathname. Non-key params are still recorded and queryable.
+file (or tree), never the pathname. Non-key params are recorded and queryable too.
 
 ### 6.3 Conditions — `research.env.conditions()`
 
-One canonical baseline collected by the runner for every attempt; lanes never hand-write it. Dotted keys, scalar values,
-`null` when unknown (never omitted, never guessed):
+The runner collects one baseline for every attempt; lanes never hand-write it. Dotted keys, scalar values, `null` when
+unknown (never omitted or guessed):
 
 ~~~text
 source.commit  source.tree  source.dirty  source.dirty_digest  source.lockfiles.<name>
@@ -282,16 +278,16 @@ reuse_key = canon.sha256({"derivation": drv_id, "source": {"tree": source.tree, 
 ~~~
 
 `lookup` matches on `reuse_key` (exact source + exact request: conservative, false misses not false hits).
-`select --derivation drv:…` and `diff` group on `drv_id` across revisions. Closure-scoped reuse (a third key from the recorded
-closure manifest) is a later, explicit optimisation once a Tool's closure has earned trust — it must not be the default.
+`select --derivation drv:…` and `diff` group on `drv_id` across revisions. Closure-scoped reuse (a key from the recorded
+closure manifest) may come later, opted into per Tool, never as the default.
 
 ### 6.5 Scratch / caches
 
 `d.scratch(name)` -> `<store>/scratch/<reuse_key>/<name>/` (no reuse key -- a dirty tree, or no declared Tool:
 `<store>/scratch/run-<run id>/<name>/`).
 `research run --scratch triton` exports `TRITON_CACHE_DIR` there; `--scratch <name>` exports `RESEARCH_SCRATCH_<NAME>`.
-Keyed by reuse_key ON PURPOSE: every commit gets a cold cache; the recompile cost is the price of the safe bias. Do not
-"fix" this to derivation_id or a source-independent key without a measured reason and a per-tool `cache_scope` declaration.
+Keyed by reuse_key on purpose: every commit gets a cold cache, the price of the safe bias. Don't key it by derivation or
+anything source-independent without a measured reason and a per-tool `cache_scope` declaration.
 
 ## 7. Remote and replicas
 
@@ -329,8 +325,8 @@ session_token_env = "AWS_SESSION_TOKEN"                # optional (this is the d
 Without that file (and with `$RESEARCH_STORE_CONFIG` unset) the environment stands in: `R2_ENDPOINT`, `R2_BUCKET` (must equal
 the bucket `tools/research/store.pod.toml` names), `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. A file that exists wins.
 
-A temporary credential (R2 temp-access credentials, STS-style) is a key pair plus a session token; when the named env var is set
-the token is sent as `x-amz-security-token` inside the SigV4 signed headers on every request, when unset nothing changes.
+A temporary credential (R2's, STS-style) is a key pair plus a session token: while the named env var is set, every request
+signs it as `x-amz-security-token`.
 
 ### 7.1 Temporary credentials for pods — `research data mint-credential`
 
@@ -449,14 +445,12 @@ prints the table; the groups are:
   `abandoned` (text: the line of work the evidence belongs to was given up, in a few words; `label` refuses it unless `--ref`
   names the note that says why, as `note:<lane>/<file name without .md>` or the notes README's `note:<campaign>/<lane>/<name>`, which
   stay valid when the file moves into a month folder); `memory-line-of-record` (text `lean conditional on NAMES`, on a gate run's
-  verifier run: its line of record is the `auditor_line.json` of the run `--ref` names by id, which `label` requires, computed by the
-  Lean, that file's `line_by`, and conditional on what that file's `conditional_on` names, in its order, which must include
-  `NoOutsideCompute` or `ProviderLockdown`; `label` reads the file from the ref run's record and refuses a value that isn't its).
+  verifier run, with a required `--ref` naming a run: `label` reads that run's `auditor_line.json` and refuses any value but its
+  `line_by` conditional on its `conditional_on`, in order, which must include `NoOutsideCompute` or `ProviderLockdown`).
 - **verification** — an independent verifier, never the producer: `verified` (enum: accepted | rejected | not-transferable |
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
-  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
-  spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
-  carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
+  so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool), the back-fill's
+  spelling of `verified`, is read and deprecated for new writes; `verified_by`, a ledger row's free text, carries no verdict and is ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
   `verity-graph/v2` graph it listed on a worker) and `ready_verdict` (its `ready:` verdict), by the executor;
   `executor_shadow`, by drive (`research.executor`); `nightly_check`, by the control pod's nightly check;
@@ -503,8 +497,9 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
-                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
+research data export [--repo DIR | --no-registry] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+                                              copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3);
+                                              --no-registry: each --id alone
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
@@ -518,7 +513,7 @@ research data mint-credential --job push|fetch [--ttl 6h] [--env]   a cluster jo
 
 No query DSL: flags for common facets + `sql`. Every command takes `--store ROOT`. `--ref name=a,b` or a repeated name makes a
 list. `--members` repeats or comma-separates; `--select` takes the rest of the line as select flags and records them as
-`meta.query` (so a snapshot frozen by query and one frozen by an explicit member list differ). `put --preserve` exits 1 unless
+`meta.query` (so a query's snapshot and an explicit list's differ). `put --preserve` exits 1 unless
 PRESERVED (the id is still printed). `research/store/cli.py` exposes `COMMANDS: dict[str, fn(argv) -> int]` and `main(argv)`;
 `cli_prov.py` (lookup / pull / attempt) is merged into `COMMANDS` when importable. `research/cli.py` dispatches `data`.
 
@@ -597,9 +592,9 @@ trust-dossier/v1         the computed trust level of one numerical target (`pyth
 2. **Immutable objects only.** Blobs, manifests, attempts, labels are write-once, never rewritten; the index is disposable. The
    one deletion is §7.4's: blobs of uncited artifacts past their kind's TTL.
 3. **Labels are assertions, not fields.** Keep every assertion; policy chooses. A label's `by` is whatever its writer says.
-4. **Verify uploads.** Size + a content check before anything is called PRESERVED, and the record says which check: a single-part
-   ETag is the object's MD5 (`etag-md5`) and a multipart one the MD5 of its parts' MD5s (`etag-multipart`); the manifest's
-   sha256 stays the identity and read-back (`sha256-readback`) stays available.
+4. **Verify uploads.** Size + a content check, recorded by name, before anything is called PRESERVED: a single-part ETag is
+   the object's MD5 (`etag-md5`), a multipart one the MD5 of its parts' MD5s (`etag-multipart`); the manifest's sha256 stays
+   the identity, and read-back (`sha256-readback`) stays available.
 5. **Producers never carry verifier truth.** A proof artifact may hold proof bytes, the claimed statement, prover metadata;
    the verifier's chain/spec/keys come from its own closure or an explicit trusted input artifact.
 6. **Content, not pathname**, is the identity of every input.

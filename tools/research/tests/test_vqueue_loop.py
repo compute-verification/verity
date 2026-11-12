@@ -3,6 +3,7 @@ listings and results as `FileTransport` files, a fake GitHub and fake labels, an
 Every test reads the clock it injects."""
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import subprocess
@@ -951,6 +952,177 @@ def test_a_build_whose_enqueue_failed_is_logged_stops_the_tick_and_is_enqueued_b
     assert [(r["action"], r["sha"], r["why"]) for r in started] == ([("slim", built["sha"], "started")] if slim else [])
     assert (retry["action"], retry["enqueued"], retry["mark"], retry["priority"]) == ("retry", True, "not enqueued", 5)
     assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and loop.tick() == []
+
+
+#: `research data export` as a script: each call's arguments appended to `<script>.calls`.  It sends every id it is named
+#: but those `<script>.fail` lists, each printed as one no source holds, and those `<script>.upload` lists, each an upload's
+#: error naming no id, as the export prints them; it exits 1 if any failed.  Whether another held `<script>.lock` while it ran
+#: is appended to `<script>.held`
+EXPORT = '''
+import fcntl, json, os, sys
+with open(sys.argv[0] + ".calls", "a") as f:
+    f.write(json.dumps(sys.argv[1:]) + "\\n")
+with open(sys.argv[0] + ".lock", "a") as lock, open(sys.argv[0] + ".held", "a") as f:
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        f.write("0\\n")
+    except BlockingIOError:
+        f.write("1\\n")
+def listed(kind):
+    p = sys.argv[0] + "." + kind
+    return open(p).read().split() if os.path.exists(p) else []
+ids = [a[5:] for a in sys.argv[1:] if a.startswith("--id=")]
+bad = [("ERROR  not local and not on any source: " + x) for x in ids if x in listed("fail")]
+bad += [("ERROR  objects/sha256/" + x[4:] + ": error: AccessDenied") for x in ids if x in listed("upload")]
+print("\\n".join(bad))
+sys.exit(1 if bad else 0)
+'''
+#: fetched fixtures (their paths in no tree) and a tracked one (`small.json`, committed beside the registry)
+BASE_FX, NEW_FX, TRACKED_FX, OTHER_FX = (f"art:{c * 64}" for c in "bcde")
+
+
+def _registry(entries: dict[str, str], **files: str) -> dict[str, str]:
+    return {"fixtures/artifacts.json": json.dumps(entries, indent=1) + "\n", **files}
+
+
+def _exports(env: Env, loop: Loop) -> Path:
+    """``loop``'s export as `EXPORT`, holding `<script>.lock` with no wait, returns the script."""
+    (script := env.tmp / "export.py").write_text(EXPORT)
+    loop.world.export, loop.world.export_lock, loop.world.export_lock_s = (sys.executable, str(script)), f"{script}.lock", 0
+    return script
+
+
+def _calls(script: Path) -> list[list[str]]:
+    p = Path(f"{script}.calls")
+    return [json.loads(x) for x in p.read_text().splitlines()] if p.is_file() else []
+
+
+def test_a_build_exports_each_fetched_fixture_its_merge_registers_that_its_base_doesn_t_once_before_it_is_pushed(env):
+    """#1 registers `NEW_FX`, fetched, and `TRACKED_FX`, tracked, beside `main`'s `BASE_FX`: the build exports `NEW_FX` alone, with
+    `--no-registry`, before it pushes the candidate or enqueues its check, and logs it.  Built again from the same log, it
+    doesn't export it again."""
+    _main_to(env, _registry({BASE_FX: "data/old.bin"}))
+    one = env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/big.bin", TRACKED_FX: "small.json"}, **{"small.json": "{}\n"}))
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(lambda s: [Drop(c.sha, "rebuilt") for c in s.candidates] or [Build((1, 2), s.main, 5)])
+    script, pushed = _exports(env, loop), []
+    real = loop.world.push
+    loop.world.push = lambda sha, ref, lease=None: pushed.append(len(_calls(script))) or real(sha, ref, lease)
+    exported, built = loop.tick()
+    assert _calls(script) == [["--no-registry", f"--id={NEW_FX}"]] and pushed == [1]
+    assert (exported["action"], exported["ids"], exported["members"], exported["heads"], exported["done"]) \
+        == ("fixtures", [NEW_FX], [1], [one], True), exported
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [1, 2], True)
+    assert env.graph2.enqueued()[0]["check"] == f"ready:{built['sha']}"
+    assert _acts(loop.tick()) == ["drop"]
+    assert _acts(loop.tick()) == ["build"] and len(_calls(script)) == 1 and env.posts == []
+
+
+def test_a_build_registering_no_new_fetched_fixture_exports_nothing(env):
+    """A member that changes no registry, and one that registers only a tracked fixture: no export, no `fixtures` line."""
+    _main_to(env, _registry({BASE_FX: "data/old.bin"}))
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, _registry({BASE_FX: "data/old.bin", TRACKED_FX: "small.json"}, **{"small.json": "{}\n"}))
+    loop = env.loop(policy)
+    script = _exports(env, loop)
+    (built,) = loop.tick()
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [1, 2], True)
+    assert _calls(script) == [] and "fixtures" not in _acts(env.lines())
+
+
+def test_a_member_whose_fixture_s_export_failed_is_left_out_its_owner_told_once_and_exported_again_each_tick(env):
+    """The export of #1's `NEW_FX` fails: the build pushes and enqueues nothing with it, logs why and tells #1's owner once,
+    naming `NEW_FX`; the rest (#2) is built and checked without it.  Each later build of #1 exports again, telling nobody, and
+    once the export passes #1 is built."""
+    _main_to(env, _registry({BASE_FX: "data/old.bin"}))
+    one = env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/big.bin"}))
+    env.put(2, {"b.txt": "2\n"})
+    def stack(s: Snapshot) -> list:
+        taken = {m for c in s.candidates for m in c.members}
+        rest = tuple(x.number for x in s.ready if x.number not in taken)
+        return [Build(rest, s.candidates[-1].sha if s.candidates else s.main, 5)] if rest else []
+
+    loop = env.loop(stack)
+    script = _exports(env, loop)
+    Path(f"{script}.fail").write_text(NEW_FX)
+    exported, skip, built = loop.tick()
+    assert (exported["action"], exported["ids"], exported["members"], exported["done"]) == ("fixtures", [NEW_FX], [1], False)
+    assert exported["unsent"] == {NEW_FX: "`research data export` exited 1; the store holds none of it"}, exported
+    assert (skip["action"], skip["number"], skip["heads"], skip["fixtures"], skip["done"]) == ("skip", 1, [one], [NEW_FX], True)
+    (post,) = env.posts
+    assert f"#1 at {one[:12]} is left out" in post and NEW_FX in post and "preflight-fixtures" in post, post
+    assert (built["action"], built["members"], built["enqueued"]) == ("build", [2], True), built
+    assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] and list(env.queued().values()) == [built["sha"]]
+    assert NEW_FX not in loop.world._registry(built["sha"])
+    again, told, none = loop.tick()                             # on #2's candidate: #1 alone, its export failing again
+    assert (again["action"], again["done"], told["action"], told["text"], told["done"]) == ("fixtures", False, "skip", None, False)
+    assert (none["action"], none["sha"], none["why"]) == ("build", None, "no member merges onto its base with its fixtures exported")
+    assert len(env.posts) == 1 and len(env.graph2.enqueued()) == 1 and len(_calls(script)) == 2
+    Path(f"{script}.fail").unlink()
+    exported, last = loop.tick()
+    assert (exported["done"], last["members"], last["base"], last["enqueued"]) == (True, [1], built["sha"], True), last
+    assert len(_calls(script)) == 3 and len(env.posts) == 1 and len(env.graph2.enqueued()) == 2
+
+
+@pytest.mark.parametrize("how", ["fail", "upload"])
+def test_of_two_members_exported_at_once_only_the_one_whose_own_fixture_failed_is_left_out_and_its_owner_alone_told(env, how):
+    """#1 registers `NEW_FX`, whose export fails, and #2 `OTHER_FX`, whose export passes, in one call: #2 is built and
+    enqueued, #1 left out, and only #1's owner told, naming `NEW_FX` alone.  An export that names the id no source holds
+    (``fail``) is read in that one call; one whose error names no id (``upload``) is done again an id at a time."""
+    filler = {f"art:{c * 64}": f"data/{c}.bin" for c in "0123"}
+    _main_to(env, _registry({BASE_FX: "data/old.bin", **filler}))
+    one = env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/new.bin", **filler}))
+    two = env.put(2, _registry({BASE_FX: "data/old.bin", **filler, OTHER_FX: "data/other.bin"}))
+    loop = env.loop(policy)
+    loop.world.handle = lambda n: f"lane-{n}"
+    script = _exports(env, loop)
+    Path(f"{script}.{how}").write_text(NEW_FX)
+    exported, skip, built = loop.tick()
+    assert _calls(script) == [["--no-registry", f"--id={NEW_FX}", f"--id={OTHER_FX}"]] + (
+        [["--no-registry", f"--id={NEW_FX}"], ["--no-registry", f"--id={OTHER_FX}"]] if how == "upload" else [])
+    assert (exported["ids"], exported["exported"], list(exported["unsent"]), exported["members"]) \
+        == ([NEW_FX, OTHER_FX], [OTHER_FX], [NEW_FX], [1, 2]), exported
+    assert (skip["action"], skip["number"], skip["heads"], skip["fixtures"]) == ("skip", 1, [one], [NEW_FX]), skip
+    (post,) = env.posts
+    assert post.startswith("@lane-1 ") and NEW_FX in post and OTHER_FX not in post, post
+    assert (built["action"], built["members"], built["heads"], built["enqueued"]) == ("build", [2], [two], True), built
+    assert OTHER_FX in loop.world._registry(built["sha"]) and [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"]
+
+
+def test_an_export_runs_holding_the_export_lock_and_a_busy_lock_defers_it_to_the_next_tick_telling_no_one(env):
+    """Each export runs while the loop holds `export_lock`, the lock the pod's own export pass holds over the same checkout
+    and store.  While another holds it nothing is exported and nothing fails: the member is left out of this build alone,
+    with one `fixtures` line saying `deferred`, no skip line and no owner told; once it is free the next tick exports the
+    fixture and builds the member."""
+    _main_to(env, _registry({BASE_FX: "data/old.bin"}))
+    env.put(1, _registry({BASE_FX: "data/old.bin", NEW_FX: "data/new.bin"}))
+    loop = env.loop(policy)
+    script = _exports(env, loop)
+    with open(loop.world.export_lock, "a") as other:
+        fcntl.flock(other, fcntl.LOCK_EX)
+        deferred, none = loop.tick()
+    assert _calls(script) == [] and env.posts == [] and "skip" not in _acts(env.lines())
+    assert (deferred["action"], deferred["ids"], deferred["members"], deferred["deferred"], deferred["done"]) \
+        == ("fixtures", [NEW_FX], [1], True, False), deferred
+    assert (none["action"], none["sha"], none["why"]) == ("build", None, "no member merges onto its base with its fixtures exported")
+    exported, built = loop.tick()
+    assert _calls(script) == [["--no-registry", f"--id={NEW_FX}"]] and Path(f"{script}.held").read_text() == "1\n"
+    assert (exported["exported"], built["members"], built["enqueued"]) == ([NEW_FX], [1], True), built
+    assert env.posts == []
+
+
+def test_a_busy_export_lock_is_waited_on_only_its_short_bound(env):
+    """A tick waits on another export's lock at most `export_lock_s`, a few seconds, then runs no export (None): that
+    export's pass holds it for its whole run, and every advance and drop of the tick waits behind the build."""
+    loop = env.loop(policy)
+    script = _exports(env, loop)
+    slept: list[float] = []
+    loop.world.sleep, loop.world.export_lock_s = slept.append, 3
+    with open(loop.world.export_lock, "a") as other:
+        fcntl.flock(other, fcntl.LOCK_EX)
+        assert loop.world.export_fixtures([NEW_FX]) is None
+    assert _calls(script) == [] and sum(slept) == 3 and L.EXPORT_LOCK_S <= 10
+    assert loop.world.export_fixtures([NEW_FX]) == {} and _calls(script) == [["--no-registry", f"--id={NEW_FX}"]]
 
 
 GRAPH2 = '''
