@@ -108,9 +108,7 @@ EXPECT = {
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
     "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
     "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
-    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den",
-    "answer-public-bernoulli-long": f"draw: bernoulli:{vectors.LONG_P} over",
-    "answer-public-bernoulli-long-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
     "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
@@ -156,6 +154,7 @@ EXPECT = {
     "salt-opening": "salt: the salt's coin does not open against", "salt-value": f"salt: {CC.WINDOW_SALT}",
     "salt-session": f"salt: {CC.WINDOW_SESSION}", "salt-secret": f"salt: {CC.WINDOW_SESSION}",
 }
+EXPECT |= {long: EXPECT[short].replace("1/2", vectors.LONG_P) for long, short in vectors.LONG.items()}
 
 
 def _instance(seed: int, name: str = "honest") -> dict:
