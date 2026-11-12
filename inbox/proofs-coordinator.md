@@ -86561,3 +86561,25 @@ theorem Compiled.event_le_of_off {H : Msg → Msg} {L : Compiled Coin A} (hS : L
 At 16, 64 and 200 tables every line is 4, 6 and 7.64 bits worse. The one-wait bound has the fork term twice (one bit worse). The first hash line is a theorem's expression at numbers no theorem takes, times the phases; I state none of these as reached.
 
 **Not done, not known.** I built nothing and ran no Lean; ask 1's text is unelaborated. `N_s`, `K_s`, `K_m` and `c` at the served sizes or at a scan are not read: 2^26 and 2^38 are the theorem's hypotheses. The fork term's figures take a session's most rounds (`2 + 4400·tables`) and weight (`tables·2^33`) and sessions of one shape. I do not know which session sizes the cost model wants, so the tables are at the four you named. The script and its output are in the notes: `lanes/proofs/tools/net329/finder-net329-item4.py` and `.txt`.
+
+## HEADSPLIT, Thu 12 Nov 11:46Z: the row-tables audit at #9254's head is accepted with all 21 negatives refused, so its change to `a5.py`'s shared negatives breaks no audit I could run beside `sparse-mla:units`; after the merge the trial stops against lean's branch in one more file, `verity/protocols/spot/optimize.py`, which is #9112's and not #9087's; the quick tier on the trial tree is still running
+
+Follows my 11:35Z entry (`b398a4fdd5c0`). Nothing is pushed to #9087's branch (`0cb0d8dbb679`); the trial is `cursor/proofs-headsplit-trial-8038` at `19a4dbf152e4`.
+
+**1. The row-tables audit at circuits' #9254's head (`aa394f635390`), run `r20261112-113402-dade`, vy-nebius-cpu-13, exit 0.**
+- [run] `STANDIN=row-tables A5_CHALLENGER=local bash benchmarks/one_stage/a5_tp.sh` from a detached worktree at #9254's head: the audit is accepted and complete with registered reads, and the three verdicts (`lean-draw/m1`, `lean-verify/m1`, `m0-verifier/m1`) are true; the draw was units 7 and 11 of 40.
+- [run] All 21 negatives are refused. The one #9254 rewrote, `registered-reads-another-row`, is refused with "port o0: unit 7 reads position 0, and the verifier's program reads 1"; `registered-read-against-another-root` and `registered-reads-leaving-a-port-committed-afresh` are refused too.
+- [derived] Why I ran it: #9254's body cites the changed negatives only on `sparse-mla:units`, and the change in `a5.py` reaches every audit with registered reads. This is one such audit on other blocks; it is not the two-stage interior, which I did not run.
+- [read] My 11:35Z read of the seven files stands as written: all fine, with the one stale comment at `a5.py` line 850.
+
+**2. Merge-tree, ahead of the real merge (for the ready line later; `main` is `33866d93e66e`, lean's branch `f3837f57d113`).**
+- [run] `git merge-tree --write-tree --name-only origin/main 19a4dbf152e4` exits 0: the trial merges onto `main`'s tip with no stop. #9087's head as it is does too.
+- [run] Against lean's branch `cursor/lean-remote-merge-landing-fc8d` the trial stops in two files of `benchmarks/one_stage/` (`a5.py`, `tests/test_a5_wiring.py`), which are `main`'s own stops, and in `verity/protocols/spot/optimize.py` and `verity/protocols/spot/verifier/tests/test_optimize.py`. The second is `main`'s own stop already.
+- [run] `verity/protocols/spot/optimize.py` is the one stop that is not `main`'s today. #9087 does not change that file (its diff against its merge base names it nowhere), and #9112's head alone and #9185's head alone each stop there against lean's branch. [derived] So once #9112 is on `main` it is `main`'s own stop, and the ready line will say so. I change nothing to avoid it, as lean's rule says.
+
+**3. Still open.**
+- [run] `r20261112-112538-beae` (vy-nebius-cpu-14, launched 11:25Z): the quick tier on the trial tree against #9185's head, running at my 11:45Z read. [guess] About 12:45Z.
+- [run] At 11:45Z neither #9112 nor #9185 is on `main`: `git log origin/main --oneline --grep '#9112' -1` and the same for `#9185` print nothing.
+- [read] Both mailbox files read at 11:45Z: nothing newer than 05:31Z and 07:40Z.
+
+Resume me on `beae`'s end, or on the two landings. The three asks of my 11:35Z entry stand.
