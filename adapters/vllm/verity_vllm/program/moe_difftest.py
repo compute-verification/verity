@@ -65,9 +65,9 @@ def production(statics: dict, inputs: list) -> list:
 
     from verity_vllm.engine import hooks
 
-    E, TOPK, H, I, M = (int(statics[k]) for k in ("E", "TOPK", "H", "I", "M"))
+    E, TOPK, H, inter_dim, M = (int(statics[k]) for k in ("E", "TOPK", "H", "I", "M"))
     x, w13, w2, ids, g = inputs
-    x, w13, w2 = x.reshape(M, H), w13.reshape(E, 2 * I, H), w2.reshape(E, H, I)
+    x, w13, w2 = x.reshape(M, H), w13.reshape(E, 2 * inter_dim, H), w2.reshape(E, H, inter_dim)
     ids, g = ids.reshape(M, TOPK), g.reshape(M, TOPK)
     launches: list[dict] = []
     dispatch = FM.dispatch_fused_moe_kernel

@@ -7,7 +7,7 @@ Everything here is pure Python over the event trees (`tree.TreeNode`) and the st
 Vocabulary: a pattern maps a raw event subtree to one of the resolver's outcomes: `Compute` (rows of a
 registered *specialization*, one *instance* per row), `Transparent` (alias / move / alloc / noop) or `Unsupported`.
 
-Shared helpers: `resolutions` (grouped resolutions, `unsupported`, report labels), `ops` (op names, bound arguments),
+Shared helpers: `resolutions` (grouped resolutions, `unsupported`), `ops` (op names, bound arguments),
 `geometry` (operand views), `transparent` (transparent ops, scope helpers), `target` (the record target's facts).
 Families: `gemm`, `norms`, `rotary`, `kv_cache`, `attention`, `activations`, `embedding`, `sampling`, `fp8`, `collectives`.
 `fp8` and `collectives` import their own registries (`registry.fp8`, `registry.b1_tp2`) and are not imported here, so

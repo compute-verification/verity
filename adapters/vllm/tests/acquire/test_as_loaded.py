@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import pickle
-import sys
 import types
 
 import numpy as np
@@ -16,6 +15,7 @@ import pytest
 import torch
 from torch import nn
 
+from tests import fake_vllm
 from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
     EX,
     RANK,
@@ -50,11 +50,9 @@ def repack(layer, w13, w2, s13, s2):
 
 @pytest.fixture
 def vllm_mxfp4(monkeypatch):
-    mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
-    mxfp4.__dict__.update(Mxfp4MoEMethod=_Mxfp4Method)
-    oracle.__dict__.update(Mxfp4MoeBackend=types.SimpleNamespace(MARLIN="marlin"))
-    for module in (mxfp4, oracle):
-        monkeypatch.setitem(sys.modules, module.__name__, module)
+    fake = fake_vllm.install(monkeypatch, extra=[f"{mml._MXFP4}:Mxfp4MoEMethod", f"{mml._ORACLE}:Mxfp4MoeBackend"])   # reached by name
+    fake[mml._MXFP4].Mxfp4MoEMethod = _Mxfp4Method
+    fake[mml._ORACLE].Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
 
 
 @pytest.fixture
