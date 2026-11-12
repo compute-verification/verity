@@ -4977,7 +4977,7 @@
     {"file": "verity/protocols/remote/verifier/lakefile.toml", "count": 6},
     {"file": "verity/protocols/poub/verifier/PROTOCOL.md", "count": 90},
     {"file": "verity/protocols/poub/verifier/README.md", "count": 3},
-    {"file": "verity/protocols/poub/verifier/audit.py", "count": 142},
+    {"file": "verity/protocols/poub/verifier/audit.py", "count": 141},
     {"file": "verity/protocols/poub/verifier/lean/RemoteAudit/Basic.lean", "count": 1},
     {"file": "verity/protocols/poub/verifier/lean/RemoteAudit/Difftest.lean", "count": 28},
     {"file": "verity/protocols/poub/verifier/lean/RemoteAudit/Line.lean", "count": 33},

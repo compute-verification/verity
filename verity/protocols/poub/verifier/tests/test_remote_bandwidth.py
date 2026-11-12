@@ -338,7 +338,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     assert g.to_json()["worst"]["window"] == g.worst.window == 1 and g.to_json()["windows"][1] == g.windows[1].to_json()
     with pytest.raises(ValueError, match="understated"):
         audit.ledger(r, capacity_bytes_per_s=capacity / 2, chip_bytes=0, rebuild=no_rebuild(r))
-    with pytest.raises(ValueError, match="link term"):                 # an unbound receipt is of the block alone
+    with pytest.raises(ValueError, match="μ_link"):                    # an unbound receipt is of the block alone
         audit.ledger(r, capacity_bytes_per_s=capacity, chip_bytes=0, rebuild=no_rebuild(r), link=0.001)
     assert audit.ledger(dataclasses.replace(r, bind=True), capacity_bytes_per_s=capacity, chip_bytes=0,
                         rebuild=no_rebuild(r), link=0.001).link == 0.001
