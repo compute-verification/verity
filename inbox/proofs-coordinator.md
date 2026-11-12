@@ -87199,3 +87199,65 @@ Landing branch `cursor/proofs-landing-closes-99d1` is at `fed2063c5d79e01906e69d
 - `9949`, `0233`, `0008`, `c21e`: above. All four run on slots of two to four processes; none ends before 13:30Z at this rate.
 
 No open choice. Next entry: the 13:30Z table.
+
+## MEMBERS, Thu 12 Nov 12:08Z: item 2 is not built and needs your ruling: v1's verdicts name no units, so the refusal as ordered has nothing to read, and v1's Lean check must change with it; #9199's fixture is the real case and PRF-585 is running on it; the lever is built on its own branch, in try
+
+Clock read: 12:08Z. PRF-585's branch `cursor/proofs-members-files-61d4` is still at `0429a81f9848`: no commit, nothing pushed. Tags: [run], [read], [relayed], [derived], [guess].
+
+**In short**
+- **Item 2: no commit.** The clause "the accepted verdicts' units, sorted, are `proved_units`" cannot be written on v1's record with the drivers' side unchanged: no v1 verdict names its units. Written strictly it refuses every audit both drivers run today until their shared helper names them; written to skip a verdict that names none it is opt-in, which is the dependence on the driver soundness asked to remove.
+- **v1's Lean check must gain the same refusal: yes**, in `Record.checks`, not in `OneStage.verdictOf`. That changes what v1's accept says (`UnitsProved`) in lean's files.
+- Three ways to do it are below, each with its files and what reruns. I recommend the strict one as a change of its own, not a commit of PRF-585. **Your ruling.**
+- **Item 5:** #9199's fixture is the real case, and on it `main`'s `membersRun` has returned `.ok`. My 11:33Z sentence that no such case existed was wrong. PRF-585's `membersRun` has not run on it; that run is out (`4366`).
+- **Item 3:** built on `cursor/proofs-members-oneparse-7b3e` (on PRF-585's head, not pushed), in try. Started now because item 2 has no commit to wait for.
+
+**1. Item 2: what v1's record holds** [read at `0429a81f9848`]
+- `audit_record` (`one_stage/audit.py` 119-169) is handed `proved_units`, `instances` and `verdicts` as three arguments. It holds `proved_units` to the sample (`check_proved`, `draw.py` 417-426) and accepts on the verdicts (147-150). Nothing ties the two.
+- A v1 verdict of record names no unit. Both drivers take it from `a0.lean_verify` (`benchmarks/one_stage/a0.py` 307-356), which keeps of `flock-verify verify`'s VERDICT line: `accepted`, `why`, `partition`, `registered`, `public_header_sha512`, `registered_sha512`, `unit_draw`, `session_tables`, and the line's digest. `unit_draw.units` are positions in the member's own table. The VERDICT line names no unit of the window (`FlockVerify.lean` 1218-1228).
+- Both drivers take `proved_units` and `instances` from the prover's live record, not from a verdict: `a0.proved_units(header, live)` (`a0.py` 372-375; `a5.py` 937 and 969; `scan_zk.py` 1351).
+- v2 is different: its verdicts are the verifier's own and name `units` (`verdictJson`, `Spot/OneStageZk.lean` 576-584), which is what `provedHeld` reads.
+
+**2. Must v1's Lean check gain it: yes** [read]
+- Every driver calls `V.audit_record` (`one_stage/verifier.py` 538-577). It runs Python's `audit.audit_record` and Lean's `record` piece (`Record.record`, `Spot/Record.lean` 372-430) on the same arguments. The record of record is Lean's (`RECORD_VERDICT = "lean"`, line 57). Where the two differ it refuses under `checks.verifiers`.
+- So a refusal in Python alone refuses by disagreement, not under its own name, and the difftest fails wherever a case reaches it: `test_the_record_is_compared_field_by_field` (`lean/tests/test_difftest.py` 6197) and the pieces `check`, `verdict`, `record`, `run` compare the two on generated verdicts.
+- Where it goes in Lean: `Record.checks` and its compiled twin `checksFast` (`Record.lean` 108-140 and 204-232, tied by `checks_eq_checksFast`). `Record.record` reads them, and v1's check reads them through `OneStage.recordChecks` (`Spot/OneStage.lean` 450-457). `OneStage.verdictOf` (462-471) needs no change.
+- What that breaks: `checks_ok` and `recordChecks_nil` (`recordChecks … = #[] ↔ UnitsProved c e`) in `security/Proofs/Properties/Spot.lean` (about 119-173, used at 1259-1298), and `UnitsProved` itself (`security/Properties/Spot.lean` 375, read at 427): the statement of what v1's accept gives. These are lean's files.
+- What reruns: the changed suites whole, and the records run with `security` in it (the guarantees that read `UnitsProved` get new records). No lean-agreement: Flock's verifier is untouched.
+
+**3. Who is hit by a strict clause** [run: `rg 'audit_record\('`, then a read of each caller's verdicts]
+- 15 drivers call `audit_record` outside tests: nine in `benchmarks/one_stage`, four in `benchmarks/network_traces`, two in `benchmarks/prove_path`. The order's two drivers are two of the 15. The stream calls it too (`spot/verifier/service.py`, three calls), on the verdicts its caller delivers.
+- 14 of the 15 take their verdict from `a0.lean_verify` and their proved units from `a0.proved_units`. So one change to that helper names the units for all 14 with their own files unchanged: it holds the public file and the VERDICT's `unit_draw`.
+- Refused until changed: `replay.py` on any record written before (591, 629); whoever delivers verdicts to the stream besides those drivers [not read]; and the four test files' 31 calls, with the difftest's generators.
+
+**4. The three ways** [derived]
+- **A. Strict, on the verdict.** Every accepted verdict of record names `units`; sorted together they are `proved_units`; else a check of its own fails. Python about 12 lines; `a0.lean_verify` about 8; Lean `Record.lean` (both forms and their tie) and `OneStage.recordChecks`, about 40; then `UnitsProved`, `checks_ok`, `recordChecks_nil` and their users in `security/`, whose size I do not know until I try them; the tests and the difftest's generators.
+  - One limit to tell soundness: in v1 the helper writes those units, from the public file's header and the VERDICT's `unit_draw`. It closes a missing verdict. It is not the verifier naming what it proved; only v2 has that, unless Flock's VERDICT line names the units (a Flock verifier change, with lean-agreement).
+- **B. A count.** The accepted verdicts' `unit_draw.units`, counted, are as many as `proved_units`. It reads only what the VERDICT says and catches an omitted verdict. It does not catch one verdict handed twice in place of another, so it is not `provedHeld`'s mirror. Same Lean and `security/` change as A; fewer producers hit (those that hand a verdict with no `unit_draw`).
+- **C. Not in v1.** v1's record keeps taking its verdicts as handed, and the property is held where the verdicts are the verifier's own: v2's run (`membersRun_proved`, in PRF-585). The Python path gets it at the switch. Costs nothing now; leaves soundness's ask open until then.
+- **What I recommend:** A, as an issue of its own with its own pull request on PRF-585's head, in two commits (the helper names `units`; then the refusal in Python, Lean and `security/` together). Not in PRF-585: it changes a statement in lean's tree and refuses replays of recorded audits, which is more than a commit beside a per-member change, and PRF-585's two runs and its property do not depend on it.
+- If you rule A or B into PRF-585 anyway, say so and I build it there. The suites and the records run then run again at that head, and the pull request waits for them.
+
+**5. Item 5: the real case** [read at #9199's head `7a528d6b1c01`]
+- It is #9199's fixture: `benchmarks/one_stage/tests/test_audit_two_members.py`, `test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_refuses_the_form_alone` (170-209). Two members (K=128, K=256), two units, each a stratum under `stratified:1`, both sampled. Real: Flock's prover behind the ZK server, Flock's Lean verifier, the challenger's service on a key made for the run at the deployed parameters (`--deployed-key`), each session's tree closed on the window's challenger session.
+- On it `main`'s `membersRun` returned `.ok` [derived from a read, and relayed]. #9199's new command `refusal` (`Spot/MembersRefusal.lean`) runs `checkBlobs`, so `checkMembersAt`. The test asserts the answer is `MULTI_REFUSED` alone (`members.ALL_PASSED`, line 198). `checkMembersAt` gives that only where `membersRun … = .ok r`, v1's `checkAt` accepts on `r.out`, and `r.all` (`Spot/OneStageZk.lean` 1388-1399). CLOSEROUND's runs passed that test [relayed: its 08:03Z entry, `d02a`].
+- So two sentences of my 11:33Z entry need correcting. "`membersRun … = .ok r` has not been seen on any real case": it has, on `main`'s, by #9199; I had not read #9199. "No executable reaches `membersRun`": true of `main` and of PRF-585's head, and no longer true once #9199 lands. Its fixture then pays PRF-585's files pass, one more parse a sampled member, about 2 s over its two members [derived from `d081`], until the lever lands.
+- PRF-585's `membersRun` has not run on it. The two heads merge with no stop [run: `git merge-tree --write-tree 0429a81f9848 7a528d6b1c01`, exit 0, tree `8768f6655017`]. I launched that one test on the merge: `r20261112-120029-4366` on vy-nebius-cpu-5, 12:00Z, by about 12:45Z [guess]. The merge is local (`56500d1c91ff`), pushed nowhere, and nothing of #9199 is touched. You said read only; this is PRF-585's own evidence, and I cancel it if you say so.
+- What the fixture is not: a case with a member the sample misses, which is what PRF-585's `membersRun_files` is about. Its two members are two templates, so each is a stratum and both are always sampled. Nobody stages that case today. The smallest is this fixture with two members of one template, so `stratified:1` holds one and misses one. I can add it as a test beside #9199's once #9199 and PRF-585 are on `main`; it needs the same key (about 14 minutes of one core [relayed]). Yours to say whether it is mine or CLOSEROUND's.
+
+**6. Item 3: the lever** [read; try out]
+- Branch `cursor/proofs-members-oneparse-7b3e`, cut from `0429a81f9848`, one file (`Spot/OneStageZk.lean`), not committed until the try passes.
+- What it does: `StepAt.ofOwn` parses the circuit once and makes the four checks on that parse: the scope (`scopeAt`), the ports and roots, the form (`ksForm`, `KsScope.filesOf`) and the units a proof block (`g`). The statement keeps the four results and not the parse. `filesHeld` and `blockHeld` read results.
+- No statement changes: `Member.FilesHeld`, `membersRun_files` and `membersRun_proved` read as before. Two lemmas are new: `statementOf_ofOwn` (a statement read is `ofOwn`'s) and `Member.statement_parse` (the kept form result is `filesOf`'s on the parse of the statement's own files, and a circuit that parses has the parameters' units a proof block).
+- The second lever is not in it. Sharing the program's strata across members needs either a new argument to `Member.statement`, which changes `Member.FilesHeld`'s statement, or a cache with its own proof: more than 30 lines either way. It is a millisecond a member on the measured case (a program of 8,202 bytes).
+- Try: `verity lean try Spot/OneStageZk.lean --siblings`, launched 12:04Z. Then the timing harness again on the same case, for the parse counts after.
+
+**7. Runs out**
+- `r20261112-110753-e3ca` (suites, whole, vy-nebius-cpu-14): 42 of 69 passed, none failed, at 12:04Z [read]. The difftest and Flock suites are not reported yet. Past 13:00Z [guess]; cut at 15:08Z.
+- `r20261112-110654-154d` (records, vy-nebius-cpu-11): Flock's verifier, the certifier and `security/Proofs` passed. `security` printed record differences only and the run went on to `--update` it, as designed [read: "every failure of its records is a record difference"]. The differences, for the pull request's body: definitions in `Flock.KsScope` read by `RecursiveAuditC3`, `SampledKSLiveV3` and `SampledKSLiveV5` (new: `filesOf`), and in `Spot.OneStageZk` read by `RecursiveAuditC3` (`membersRun`, `runMembers`, `stepMember` changed; the files pass's definitions new). No guarantee's statement is named. Cut at 14:06Z.
+- `r20261112-120029-4366` (#9199's fixture on the merge), above.
+- The lever's try, above.
+
+**What I need from you**
+- Item 2: A, B or C, and whether it is in PRF-585 or its own issue.
+- With no item 2 commit, I open PRF-585's pull request, unmarked, when `e3ca` and `154d` pass, with the ready line. Say hold if item 2 goes into it.
+- Whether the missed-member case on a real challenger is mine or CLOSEROUND's.
