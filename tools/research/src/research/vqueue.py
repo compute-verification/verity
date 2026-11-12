@@ -310,7 +310,8 @@ def decide(s: Snapshot) -> list[Action]:
     what its records run calls for (`_first`), and nothing is built on it.  Once its run passed it goes onto the chain's top
     (`Commit`) as soon as the chain has room, in place of that tick's batch; one whose member isn't marked at the head it was
     staged at goes only onto its own base, as built, and is dropped, its members built again, when that is no longer the top.
-    While one is staged the batch takes no Lean PR, so one is staged at a time."""
+    While one is staged the batch takes no Lean PR, so one is staged at a time, nor a lone PR set aside (`_aside`), which goes
+    behind it as behind any PR waiting."""
     ready = {r.number: r for r in s.ready}
     built = {**ready, **{r.number: r for r in s.flying}}
     acts: list[Action] = []
@@ -397,7 +398,9 @@ def decide(s: Snapshot) -> list[Action]:
                                             "built again"))
             kept.remove(passed[0])
         pool = _pool(ready, landed | ejected | {m for c in chain for m in c.members}, kept)
-        members, why = _next(s, pool, _outcomes(s, acts), chain, built)
+        members, why = _next(s, pool, outcomes := _outcomes(s, acts), chain, built)
+        if kept and _aside(members, ready, outcomes):
+            members = ()
         staging = s.records and any(ready[m].lean for m in members)
         if members and (room or staging):
             acts.append(Build(members, base, max(s.depth - len(chain), 0), staging))
@@ -413,6 +416,13 @@ def _pool(ready: dict[int, Ready], busy: set[int], staged: list[Candidate]) -> l
     busy = busy | {m for c in staged for m in c.members}
     return sorted((r for r in ready.values() if r.number not in busy and not r.conflict and not (staged and r.lean)),
                   key=lambda r: (r.rank, r.number))
+
+
+def _aside(members: tuple[int, ...], ready: dict[int, Ready], outcomes: list[Outcome]) -> bool:
+    """Whether ``members`` is a lone PR set aside at its head (an `infra` outcome), which goes behind the PRs waiting, a staged
+    batch's among them."""
+    newest = _newest(outcomes, {m: ready[m].head for m in members})
+    return len(members) == 1 and (o := newest.get(members[0])) is not None and o.state == INFRA
 
 
 def _unmarked(c: Candidate, ready: dict[int, Ready]) -> int | None:

@@ -663,6 +663,17 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == decide(replace(s, depth=2)) == []
 
 
+def test_a_pr_set_aside_waits_behind_a_staged_batch_as_behind_any_pr_waiting():
+    """A lone PR whose check kept erring goes behind the PRs waiting: with a staged batch, it isn't built until that batch is
+    on main's chain, so the batch never goes onto a candidate the next erring check drops."""
+    aside = Outcome((5,), heads(5), INFRA, (5,), MAIN)
+    s = snap(waiting("c1", MAIN, 1), ready=[lean(1), pr(5)], history=[aside], records=True)
+    assert decide(s) == []
+    assert decide(replace(s, ready=(*s.ready, pr(2)))) == [Build((2,), MAIN, 2)]
+    assert decide(replace(s, candidates=())) == [Build((1,), MAIN, 2, records=True)]
+    assert decide(replace(s, candidates=(), ready=(pr(5),))) == [Build((5,), MAIN, 2)]
+
+
 def test_a_staged_batch_whose_base_left_main_s_chain_stays_staged_and_a_candidate_on_it_is_dropped():
     """Its records were regenerated on its tree, whatever becomes of its base: `main` moving elsewhere or its base failing
     drops the chain and leaves it staged.  None is built on it, but should a log hold one, it is off main's chain."""
@@ -1354,10 +1365,19 @@ class World:
     graph2 answers late, sends the cached inherited failures before the rest, flakes on a first run, errs on a first
     enqueue, errs or fails to list at every enqueue until infra, rung, reruns the check, or wedges until retried; someone
     else moves `main`, the loop stops a tick early, and a merged PR stays marked for a while; `step` checks every invariant
-    on the way."""
+    on the way.
+
+    With ``records``, a Lean batch's records run comes first (`Snapshot.records`): it takes a few ticks, ends in infra now and
+    then on a first start, and fails only a batch of bad PRs alone.  A tree's Lean inputs are its Lean members and the PRs
+    with no Lean change that touch a Lean input (`touch`); its lock records are a function of them (`lock`, which only some
+    Lean PRs change), and are what the tree below it holds until a records run regenerates them.  Commit is applied as the
+    loop applies it: on the staged batch's own base, its records commit or the batch as built; on another, its members merged
+    again there, its records carried onto the merge only when the two trees' Lean inputs are the same, else the merge staged
+    again.  No check reads stale records, so only the invariants catch them."""
 
     def __init__(self, seed: int, red: bool | None = None, bad: bool = True,
-                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False):
+                 policy: Callable[[Snapshot], list] = decide, wide: bool = False, pinned: bool = False,
+                 records: bool = False):
         self.seed, self.policy, self.tree_ejects = seed, policy, seed % 2 == 0
         rng = self.rng = random.Random(seed)
         numbers = sorted(rng.sample(range(10, 90), rng.randint(3, 12)))
@@ -1415,6 +1435,25 @@ class World:
         self.owned: set[tuple[int, str]] = set()      # (number, head) whose owner was rung
         self.again: set[tuple[str, str]] = set()      # rung by a tick that stopped before its outcome was recorded
         self.seen: Counter[str] = Counter()
+        self.records = records
+        self.touch = frozenset(m for m in numbers if not self.marks[m].lean and rng.random() < 0.2) if records else frozenset()
+        self.lockers = frozenset(m for m in numbers if self.marks[m].lean and rng.random() < 0.7) if records else frozenset()
+        self.locks: dict[str, frozenset[int]] = {MAIN: frozenset()}      # sha -> the lock records its tree holds
+        self.regenerated_on: dict[str, frozenset[int]] = {}             # sha -> the Lean inputs its records were regenerated on
+        self.records_due: dict[str, int] = {}
+
+    @staticmethod
+    def same(a: frozenset[int], b: frozenset[int]) -> bool:
+        """Whether records regenerated on Lean inputs ``b`` are carried onto a tree with ``a`` (`vqueue_records.same_inputs`)."""
+        return a == b
+
+    def lean_in(self, sha: str) -> frozenset[int]:
+        """The Lean inputs of ``sha``'s tree, as the PRs that brought them."""
+        return frozenset(m for m in self.tree[sha] if self.marks[m].lean or m in self.touch)
+
+    def lock(self, inputs: frozenset[int]) -> frozenset[int]:
+        """The lock records a records run regenerates on a tree with Lean inputs ``inputs``."""
+        return inputs & self.lockers
 
     def ready(self) -> tuple[Ready, ...]:
         return tuple(r for m, r in self.marks.items() if self.arrive[m] <= self.tick and m not in self.ejected
@@ -1429,7 +1468,7 @@ class World:
         flying = {(m, h): replace(self.marks[m], head=h) for c in cands for m, h in zip(c.members, c.heads) if (m, h) not in at}
         return Snapshot(self.main, ready, tuple(cands), tuple(self.history), self.batch, self.depth, self.rings, self.lean,
                         self.tick * TICK_S, PENDING_S, self.tree_ejects, wide=self.wide, pinned=self.pinned,
-                        pulled=frozenset(self.held), flying=tuple(flying.values()))
+                        pulled=frozenset(self.held), flying=tuple(flying.values()), records=self.records)
 
     def done(self) -> bool:
         if self.tree_ejects:
@@ -1509,7 +1548,7 @@ class World:
         moved = None
         if self.tick in self.elsewhere:
             moved = f"x{self.tick}"
-            self.tree[moved], self.main = self.tree[self.main], moved
+            self.tree[moved], self.locks[moved], self.main = self.tree[self.main], self.locks[self.main], moved
             self.seen["main moved elsewhere"] += 1
         for m in self.pushes.get(self.tick, ()):
             if m not in self.merged and m not in self.ejected:
@@ -1528,6 +1567,12 @@ class World:
             v = c.verdict
             if (v.state == PENDING or v.state == FAIL and not v.ended) and self.due[sha] is not None and self.due[sha] <= self.tick:
                 self.cands[sha] = replace(c, verdict=self.verdict(c))
+            r = c.records
+            if c.waits and r is not None and r.state == PENDING and self.records_due[sha] <= self.tick:
+                state = INFRA if r.starts == 1 and self.rng.random() < 0.1 else FAIL if all(
+                    m in self.bad for m in c.members) and self.rng.random() < 0.5 else PASS
+                self.cands[sha] = replace(c, records=replace(r, state=state, why="" if state == PASS else f"it {state}ed"))
+                self.seen[f"a records run ended in {state}"] += 1
         return moved
 
     def step(self) -> None:
@@ -1545,7 +1590,8 @@ class World:
             self.apply(a)
         recorded = {a.sha for a in acts[:n] if isinstance(a, Drop) and a.outcome is not None}
         self.again |= {(f.task, f.key) for a in acts[:n] if isinstance(a, Red) and a.sha not in recorded for f in a.failed}
-        live = [m for c in self.cands.values() for m in c.members]
+        repaired = {c.repairs for c in self.cands.values()}
+        live = [m for c in self.cands.values() if c.sha not in repaired for m in c.members]
         assert len(live) == len(set(live)), f"seed {self.seed} tick {self.tick}: a PR in two live candidates: {self.cands}"
         again = self.policy(self.snapshot())
         dropped = {a.sha for a in acts[:n] if isinstance(a, Drop)}
@@ -1559,6 +1605,13 @@ class World:
         ready = {r.number: r for r in s.ready}
         built = {**ready, **{r.number: r for r in s.flying}}
         decided = {a.sha for a in acts if isinstance(a, Drop) and a.outcome is not None}
+        staged, repaired = {c.sha for c in s.candidates if c.waits}, {c.repairs for c in s.candidates if c.repairs}
+        assert not [c for c in s.candidates if c.base in staged | repaired], f"{where}: a candidate on a staged batch"
+        assert not [a for a in acts if isinstance(a, (Build, Commit)) and a.base in staged | repaired], (
+            f"{where}: built on a staged batch")
+        assert not [a for a in acts if isinstance(a, Drop) and a.outcome is None and a.sha in by
+                    and by[a.sha].base in repaired], f"{where}: dropped as its records commit replaced the candidate below it"
+        self.beside(s, acts, where)
         for a in acts:
             if isinstance(a, Advance):
                 c = by[a.sha]
@@ -1612,6 +1665,9 @@ class World:
                 self.seen["a PR the wide file names with no Lean change built"] += any(
                     m in s.wide and not ready[m].lean for m in a.members)
                 self.seen["built on a red main"] += bool(self.reds(s.main))
+            elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == FAIL and by[a.sha].waits:
+                r = by[a.sha].records
+                assert r is not None and (r.state == FAIL or r.state == INFRA and r.starts >= 2), where
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == FAIL:
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
@@ -1657,7 +1713,7 @@ class World:
                 self.seen["nothing built while a pinned Lean PR waited"] += 1
         for c in by.values():
             stale = any(isinstance(a, Drop) and a.sha == c.sha and a.outcome is None for a in acts)
-            if c.base != s.main or set(c.members) & s.pulled or stale:
+            if c.base != s.main or set(c.members) & s.pulled or stale or c.waits:
                 continue
             if reads(c.verdict) == INFRA:
                 tree = s.tree_ejects and any(f.tree for f in c.verdict.infra)
@@ -1683,9 +1739,38 @@ class World:
                 self.seen["waited for the rest of a check"] += c.verdict.state == FAIL
         if moved:
             drops = [a for a in acts if isinstance(a, Drop)]
-            assert sorted(d.sha for d in drops) == sorted(by) and all(d.outcome is None for d in drops), where
+            assert {d.sha for d in drops} >= {c for c in by if c not in staged} and all(d.outcome is None for d in drops), where
             pool = [r for r in s.ready if not r.conflict and r.number not in self.merged]
-            assert [a.base for a in acts if isinstance(a, Build)] == ([moved] if pool else []), where
+            bases = [a.base for a in acts if isinstance(a, (Build, Commit))]
+            if staged - {d.sha for d in drops}:                 # beside a staged batch: what `beside` holds it to
+                assert set(bases) <= {moved}, where
+            else:
+                assert bases == ([moved] if pool else []), where
+
+    def beside(self, s: Snapshot, acts: list, where: str) -> None:
+        """While every staged batch's records run is pending, and none is dropped, the builds are the plain ones `decide` makes
+        with no staged batch and none of their members: plain batches up to the depth, and no Lean batch beside them, nor a
+        PR set aside, which goes behind the staged batch as behind any PR waiting."""
+        staged = [c for c in s.candidates if c.waits]
+        if not staged or any(c.records is None or c.records.state != PENDING for c in staged) or any(
+                isinstance(a, (Drop, Commit)) and a.sha in {c.sha for c in staged} for a in acts):
+            return
+        out = {m for c in staged for m in c.members}
+        alone = replace(s, candidates=tuple(c for c in s.candidates if not c.waits), ready=tuple(
+            replace(r, conflict=r.conflict or r.lean or r.number in out) for r in s.ready))
+        now = [a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None]
+        aside = {(m, h) for o in [*s.history, *now] for m, h in zip(o.members, o.heads)
+                 if o is [p for p in [*s.history, *now] if (m, h) in zip(p.members, p.heads)][-1] and o.state == INFRA}
+        heads = {r.number: r.head for r in s.ready}
+        builds = [a for a in acts if isinstance(a, Build)]
+        assert builds == [a for a in decide(alone) if isinstance(a, Build) and not a.records
+                          and not (len(a.members) == 1 and (a.members[0], heads[a.members[0]]) in aside)], (
+            f"{where}: built otherwise beside a staged batch than with none")
+        self.seen["a PR set aside waited behind a staged batch"] += any(
+            isinstance(a, Build) and len(a.members) == 1 and (a.members[0], heads[a.members[0]]) in aside
+            for a in decide(alone))
+        self.seen["a plain batch built beside a staged batch"] += bool(builds)
+        self.seen["a plain batch built beside a staged batch, the chain above one"] += bool(builds) and builds[0].base != s.main
 
     def pool(self, s: Snapshot, acts: list) -> list[Ready]:
         """The ready PRs a build in ``acts`` may take: in no candidate left on main's chain or on `main`, not ejected, not
@@ -1716,7 +1801,7 @@ class World:
     def chain_top(self, s: Snapshot, acts: list) -> str:
         """What a build in ``acts`` would sit on: the top of main's chain once ``acts`` drops and advances what it does."""
         dropped = {a.sha for a in acts if isinstance(a, Drop)}
-        on = {c.base: c.sha for c in s.candidates if c.sha not in dropped}
+        on = {c.base: c.sha for c in s.candidates if c.sha not in dropped and not c.waits}
         sha = next((a.sha for a in reversed(acts) if isinstance(a, Advance)), s.main)
         while sha in on:
             sha = on[sha]
@@ -1727,20 +1812,29 @@ class World:
         rng = self.rng
         if isinstance(a, Build):
             assert a.base == self.main or a.base in self.cands, where
-            sha, self.made = f"q{self.made}", self.made + 1
-            self.cands[sha] = Candidate(sha, a.base, a.members, tuple(self.marks[m].head for m in a.members),
-                                        enqueued=self.tick * TICK_S)
-            self.tree[sha] = self.tree[a.base] | set(a.members)
-            self.due[sha] = None if rng.random() < 0.06 else self.tick + rng.randint(1, 3)
-            self.seen["wedged"] += self.due[sha] is None
-            if rng.random() < 0.04:
+            assert not a.records or self.records, where
+            sha = self._built(a.base, a.members, tuple(self.marks[m].head for m in a.members), staged=a.records)
+            if not a.records and rng.random() < 0.04:
                 self.outage[sha] = rng.choice((INFRA, LIST_FAILED))
+        elif isinstance(a, Regenerate):
+            c = self.cands[a.sha]
+            assert c.waits, where
+            self.cands[a.sha] = replace(c, records=RecordsRun(starts=c.records.starts + 1 if c.records else 1))
+            self.records_due[a.sha] = self.tick + rng.randint(1, 4)
+        elif isinstance(a, Commit):
+            self._commit(a, where)
         elif isinstance(a, Advance):
             c = self.cands[a.sha]
-            assert c.base == self.main and reads(c.verdict) == PASS, where
+            assert c.base == self.main and reads(c.verdict) == PASS and not c.waits, where
             assert not set(zip(c.members, c.heads)) & self.landed, f"{where}: a PR reaches main twice at one head"
             assert not set(c.members) & (set(self.bad) | set(self.erring)), f"{where}: a bad PR reaches main"
             assert self.reds(a.sha) <= self.reds(self.main), f"{where}: main advances to a new failure"
+            if self.records:
+                inputs = self.lean_in(a.sha)
+                assert self.locks[a.sha] == self.lock(inputs), f"{where}: main advances to stale lock records"
+                assert not any(self.marks[m].lean for m in c.members) or self.regenerated_on.get(a.sha) == inputs, (
+                    f"{where}: a Lean batch lands with records not regenerated on its tree's Lean inputs")
+                self.seen["a Lean batch landed"] += any(self.marks[m].lean for m in c.members)
             self.seen["a fix cleared a red"] += self.reds(a.sha) < self.reds(self.main)
             self.main = a.sha
             self.merged |= dict.fromkeys(c.members, self.tick)
@@ -1773,6 +1867,45 @@ class World:
                 self.cands[a.sha] = replace(c, verdict=Verdict())
                 self.due[a.sha] = self.tick + rng.randint(2, 5)
                 self.seen["rung, and infra reran it"] += 1
+
+    def _built(self, base: str, members: tuple[int, ...], heads: tuple[str, ...], staged: bool = False,
+               repairs: str | None = None, locks: frozenset[int] | None = None) -> str:
+        """A new candidate of ``members`` merged onto ``base``: its check enqueued, or ``staged``, its records run first; its
+        tree's lock records ``locks``, else ``base``'s."""
+        sha, self.made = f"q{self.made}", self.made + 1
+        self.tree[sha] = self.tree[base] | set(members)
+        self.locks[sha] = self.locks[base] if locks is None else locks
+        if staged:
+            self.cands[sha] = Candidate(sha, base, members, heads, tries=0, records=RecordsRun(), waits=True, repairs=repairs)
+            self.due[sha], self.records_due[sha] = None, self.tick + self.rng.randint(1, 8)
+            return sha
+        self.cands[sha] = Candidate(sha, base, members, heads, enqueued=self.tick * TICK_S, repairs=repairs)
+        self.due[sha] = None if self.rng.random() < 0.06 else self.tick + self.rng.randint(1, 3)
+        self.seen["wedged"] += self.due[sha] is None
+        return sha
+
+    def _commit(self, a: Commit, where: str) -> None:
+        """Staged batch ``a.sha`` onto ``a.base``, as `vqueue_loop.Loop._commit` puts it there."""
+        c = self.cands[a.sha]
+        assert c.waits and c.records is not None and c.records.state == PASS, f"{where}: committed before its records passed"
+        assert a.base == self.main or a.base in self.cands and not self.cands[a.base].waits, where
+        inputs = self.lean_in(a.sha)
+        regenerated = self.lock(inputs)
+        same = regenerated == self.locks[a.sha]
+        if a.base == c.base and same:
+            self.cands[a.sha] = replace(c, waits=False, tries=1, enqueued=self.tick * TICK_S)
+            self.due[a.sha], self.regenerated_on[a.sha] = self.tick + self.rng.randint(1, 3), inputs
+            self.seen["a staged batch checked as built"] += 1
+            return
+        if a.base != c.base and not self.same(frozenset(m for m in self.tree[a.base] | set(c.members)
+                                                        if self.marks[m].lean or m in self.touch), inputs):
+            self._built(a.base, c.members, c.heads, staged=True, repairs=a.sha)
+            self.seen["a staged batch staged again on other Lean inputs"] += 1
+            return
+        sha = self._built(a.base, c.members, c.heads, repairs=a.sha, locks=None if same else regenerated)
+        self.regenerated_on[sha] = inputs
+        self.seen["its records committed on it" if a.base == c.base else "its records carried onto another base" if not same
+                  else "checked as built on another base"] += 1
 
 
 SEEDS = range(500)
@@ -1848,6 +1981,54 @@ def _settle(w: World) -> World:
         assert w.tick < ticks(w), f"seed {w.seed}: not settled after {ticks(w)} ticks"
         w.step()
     return w
+
+
+def test_the_simulated_queue_with_records_runs_builds_plain_batches_beside_a_staged_one_and_lands_only_fresh_records():
+    """With each Lean batch's records run first (`Snapshot.records`), wide PRs in every third seed and pins in every fourth:
+    every invariant holds, among them that while every staged batch's records run is pending the builds are those `decide`
+    makes with no staged batch and no Lean PR, plain batches up to the depth; that nothing is built on a staged batch, so no
+    candidate is dropped because a records commit replaced the one below it; and that every tree `main` advances to holds
+    the lock records of its Lean inputs, a Lean batch's regenerated on that tree's Lean inputs.  Every scenario settles
+    within `ticks`."""
+    seen: Counter[str] = Counter()
+    for seed in SEEDS:
+        seen.update(_settle(World(seed, wide=seed % 3 == 0, pinned=seed % 4 == 0, records=True)).seen)
+    for what in ("a plain batch built beside a staged batch", "a plain batch built beside a staged batch, the chain above one",
+                 "a staged batch checked as built", "its records committed on it", "its records carried onto another base",
+                 "checked as built on another base", "a staged batch staged again on other Lean inputs", "a Lean batch landed",
+                 "a records run ended in infra", "a records run ended in fail", "main moved elsewhere",
+                 "the loop stopped early", "two lean PRs built together"):
+        assert seen[what], f"no seed exercised: {what}"
+
+
+RECORDS_MISREADS: dict[str, Callable[[Snapshot], Snapshot]] = {
+    "no records runs": lambda s: replace(s, records=False),
+    "nothing staged": lambda s: _candidates(s, lambda c: replace(c, waits=False)),
+    "every records run as passed": lambda s: _candidates(
+        s, lambda c: replace(c, records=replace(c.records, state=PASS)) if c.records else c),
+    "no records run as passed": lambda s: _candidates(
+        s, lambda c: replace(c, records=replace(c.records, state=PENDING)) if c.records else c),
+    "nothing repaired": lambda s: _candidates(s, lambda c: replace(c, repairs=None)),
+}
+
+
+def test_records_carried_onto_other_lean_inputs_land_stale_in_the_simulated_queue():
+    """The records invariant holds the loop's carry to `vqueue_records.same_inputs`: a world carrying a staged batch's records
+    onto any tree lands stale records in some seed, though no check reads them."""
+    with pytest.raises(AssertionError, match="stale lock records|records not regenerated on its tree's Lean inputs"):
+        for seed in SEEDS:
+            w = World(seed, records=True)
+            w.same = lambda a, b: True
+            _settle(w)
+
+
+@pytest.mark.parametrize("misread", RECORDS_MISREADS)
+def test_decide_misreading_the_records_fields_breaks_an_invariant_of_the_simulated_queue_with_records_runs(misread):
+    """The records invariants hold `decide` to the fields staging reads: handed snapshots with one misread, it lands stale
+    records, builds on a staged batch, commits one before its records passed, or doesn't settle, in some seed."""
+    with pytest.raises(AssertionError):
+        for seed in SEEDS:
+            _settle(World(seed, records=True, policy=lambda s: decide(RECORDS_MISREADS[misread](s))))
 
 
 def test_the_simulated_queue_with_wide_prs_builds_none_beside_or_above_another_lean_pr_and_settles():
