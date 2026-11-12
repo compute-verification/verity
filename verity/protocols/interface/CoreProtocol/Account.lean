@@ -42,7 +42,8 @@ and the other, which follows.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
   the least verified (or the most free) of its sessions at their errors summed and counts them (`Row.sessions`).
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
-* What no accepted answer covers is `Status.notAudited`: charged at capacity.
+* What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
+  that none of its leaves holds.
 
 The comparison of the rows with what an auditor states it accepts is not here.
 -/
@@ -518,17 +519,27 @@ def unaudited (S : Site) (digest : Sheet → String) (A : Site.Registration.Audi
       { metric := "not audited", part := p, place := ", ".intercalate rest, reading, status := .notAudited,
         capacity := total, verified := some 0, free := total }
 
+/-- The rows of the device memory no leaf holds: a device's sheet states its memory, its memory leaves hold at most
+that (`Site.Entry.Capacity`), and an answer names leaves, so the bytes of the sheet beyond the leaves' are charged at
+capacity. -/
+def unregistered (S : Site) (digest : Sheet → String) : List Row :=
+  S.units.filterMap fun d => (S.sheetOf digest d).bind fun k =>
+    let rest : Nat := 8 * (k.mem - S.held d)
+    if rest = 0 then none
+    else some { metric := "not audited", part := .memory [.hbm], place := d, reading := "registered",
+                status := .notAudited, capacity := some rest, verified := some 0, free := some rest }
+
 /-- **The accounting rows** of the site `S` registered at `head`, over a period of `ticks` ticks of `tick` seconds, from
 the protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows
-of what none covers. `digest` and `A` are the registration's: the sheets' digest and the auditor, whose estimate
-compute's `bound` reading reads. -/
+of what none covers and of the device memory no leaf holds. `digest` and `A` are the registration's: the sheets' digest
+and the auditor, whose estimate compute's `bound` reading reads. -/
 def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (head : String) (tick : Figure)
     (ticks : Nat) (accounts : List Account) (answers : List Answer) : List Row :=
   let cs := readings head tick accounts answers
   let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
   (groups.flatMap fun g =>
       g.1.rows S digest A tick ticks g.2 ((cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2)) ++
-    unaudited S digest A tick ticks cs
+    unaudited S digest A tick ticks cs ++ unregistered S digest
 
 /-- A row as JSON, under the shared column names: `metric`, `verified`, `capacity`, `free` and `error`, with the part,
 its unit, the place, the reading, the session, the count of answers, the standing and the terms not priced. An amount
@@ -689,13 +700,18 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 -- the example protocol's own answer reads by its account: two units at its profile's error
 #guard (account.amounts.map fun m => (m.read tick passed).map fun r => (r.amount, r.error.toString)) ==
   [some (2, "1/1000000")]
--- it names no registration, so it is held to none: nothing is certified, and every part of the site is charged
+-- it names no registration, so it is held to none: nothing is certified, and every part of the site is charged, the
+-- 63 GiB of the device's sheet that its one leaf does not hold among them
 #guard cells (table [account] [passed]) ==
   [("not audited", "gpu0", "stated", some 4000000000, some 0, some 4000000000, "0"),
    ("not audited", "gpu0", "bound", some 4000000000, some 0, some 4000000000, "0"),
    ("not audited", "hbm0", "registered", some 8589934592, some 0, some 8589934592, "0"),
    ("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
-   ("not audited", "up0", "registered", some 100000, some 0, some 100000, "0")]
+   ("not audited", "up0", "registered", some 100000, some 0, some 100000, "0"),
+   ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
+-- a device whose leaves hold all of its sheet's memory has no such row
+#guard unregistered ⟨[{ sheet with mem := 1 <<< 30 }], locs.map (fun x =>
+    if x.id = "gpu0" then { x with sheet := digest { sheet with mem := 1 <<< 30 } } else x), links⟩ digest == []
 #guard (table [account] [passed]).all fun r => r.status = .notAudited
 -- compute's capacity at each reading: the sheet's own figures, and the larger of those and the auditor's estimate
 #guard ((table [] [] { auditor with sheet := fun _ => some (rated .zero 4200000000000000) }).take 2).map
@@ -761,7 +777,8 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 #guard ((table [worked] [credit, credit]).take 1).map (fun r => r.status) == [.noBound]
 -- what the answers cover is not charged again
 #guard cells ((table [held, sent, worked] [session 6000000000 "1/100", check 3000 1000 "1/1000", credit]).drop 5) ==
-  [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0")]
+  [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
+   ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
   ["{\"capacity\":100000,\"error\":\"1/1000\",\"free\":63000,\"metric\":\"sent\",\"part\":\"link\"," ++
    "\"place\":\"up0\",\"reading\":\"registered\",\"session\":null,\"sessions\":1,\"status\":\"certified\"," ++
