@@ -584,16 +584,21 @@ def sessionRegistered (j : Json) : V Json := do
 def record (j : Json) : V Json := do
   return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
 
-/-- One read across streams from `{"window", "log", "audit", "later", "coins", "read"}`: the window's open root, the
-earlier stream's log (a list of registrations), its audit record or null, the later stream's registration, and the later
-sample's coin evidence and the bytes it read, in lowercase hex. -/
+/-- One read across streams from `{"window", "log", "audit", "later", "coins", "family", "read"}`: the window's open
+root, the earlier stream's log (a list of registrations), its audit record or null, the later stream's registration,
+the later sample's coin evidence, the challenger's family the later stream read those coins from (a string, or null
+for a sample that read none) and the bytes it read, in lowercase hex. -/
 def acrossOf (j : Json) : V Record.Across := do
-  if keys? j != some #["audit", "coins", "later", "log", "read", "window"] then
-    throw "exactly {window, log, audit, later, coins, read}"
+  if keys? j != some #["audit", "coins", "family", "later", "log", "read", "window"] then
+    throw "exactly {window, log, audit, later, coins, family, read}"
   let .str window := getD j "window" | throw "window is not a string"
   let .arr log := getD j "log" | throw "log is not a list"
   let .str read := getD j "read" | throw "read is not lowercase hex"
-  return { window, log, audit := getD j "audit", later := getD j "later", coins := getD j "coins",
+  let family ← match getD j "family" with
+    | .null => pure none
+    | .str f => pure (some f)
+    | _ => throw "family is not a string"
+  return { window, log, audit := getD j "audit", later := getD j "later", coins := getD j "coins", family,
            read := ← Flock.unhex read }
 
 /-- One read across streams (`acrossOf`) to `Record.across`'s verdicts on it. -/
