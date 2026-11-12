@@ -1333,6 +1333,39 @@ def test_two_runs_that_differ_only_in_where_they_list_their_records_make_the_sam
 
 
 @pytest.mark.slow
+def test_a_record_a_session_built_under_the_suite_s_read_tracer_counts_in_a_run_without_it(tmp_path):
+    """The suite's runner puts its read tracer's directory, which is in the tree, on its tests' PYTHONPATH, and every Python
+    started with it loads that directory's `sitecustomize`.  A binding whose build looks for its loaded modules' sources
+    (`inspect.getmodule`, as torch does) then holds that module by its name, which resolves in no process without the
+    directory on its path: a ``--records-only`` run with it stores a record of that binding no run without it takes, as the
+    rule has it.  The session's build runs without it, with the path's other entries: every record it stores counts in a
+    ``--records-only`` run that has no tracer, and in the next session, which starts no build."""
+    tracer = {"guard/child/sitecustomize.py": "\n", "guard/child/verity_suite_reads.py": "\n"}
+    looks = ("def xor():\n    from syn import xdef\n", "def xor():\n    from syn import xdef\n    import inspect\n"
+             "    inspect.getmodule(inspect.currentframe())\n")
+
+    def tree(name: str) -> tuple[Path, dict[str, str]]:
+        root = _tree(tmp_path / name, tracer)
+        _bindings(root, *BINDINGS)
+        _edit(root, "syn/catalog.py", *looks)
+        return root, {"PYTHONPATH": os.pathsep.join([str(root / "guard" / "child"), str(tmp_path / "elsewhere")]),
+                      "VERITY_SUITE_READS": str(tmp_path / f"{name}.reads"), "VERITY_SUITE_ROOT": str(root)}
+
+    root, traced = tree("with")
+    assert _records_main(root, tmp_path / "out.json", env=traced)[0]["stored"] == 5
+    without, _ = _records_main(root, tmp_path / "out.json")
+    assert without["rebuilt"] == without["skipped"] == ["_xor_roots"] and without["reused"] == 4, without
+
+    root, traced = tree("session")
+    out = _session(root, env=traced)
+    assert out["builds"] == 1 and out["how"].startswith("from records: 0 of 5 bindings reused, 5 built and stored in "), out
+    step, line = _records_main(root, tmp_path / "out.json")
+    assert step["reused"] == 5 and step["rebuilt"] == [] and step["stored"] == 0, line
+    again = _session(root, env=traced)
+    assert again["builds"] == 0 and again["how"] == "from records: 5 of 5 bindings reused, 0 built", again
+
+
+@pytest.mark.slow
 def test_a_run_that_takes_none_of_the_records_there_names_the_variables_its_keys_hold_and_no_value(tmp_path, capsys):
     """A process with one keyed variable more than the one that stored the records finds none of them under its keys and
     builds every binding: its report and its line then name the variables its keys hold, never what they are set to, and so

@@ -270,16 +270,30 @@ def _records_argv(cache: Path, jobs: int, mem_gb: int, out: Path, listed: str | 
             "--mem-gb", str(mem_gb), "--out", str(out), *(["--records-manifest", listed] if listed else [])]
 
 
+def _untraced(env: Mapping[str, str]) -> dict[str, str]:
+    """``env`` without the suite's read tracer on its PYTHONPATH: each directory there that holds `verity_suite_reads.py`
+    (tools/verity/check/guard/child, whose `sitecustomize` every Python started with it loads).  That directory is in the
+    tree, so a build that looks for its loaded modules' sources (`inspect`, as torch's do) holds that `sitecustomize` by its
+    name, which resolves in no process without the directory on its path: `check`'s circuit-check would take no record such a
+    build stored.  The records are built as it builds them."""
+    env = dict(env)
+    kept = [d for d in env.get("PYTHONPATH", "").split(os.pathsep) if d and not (Path(d) / "verity_suite_reads.py").is_file()]
+    if kept:
+        env["PYTHONPATH"] = os.pathsep.join(kept)
+    else:
+        env.pop("PYTHONPATH", None)
+    return env
+
+
 def _recorded(cache: Path, jobs: int) -> dict:
     """Build every binding whose record in ``cache`` doesn't count, and store its record there: `_records_argv`'s program, in
     a process of its own, which traces what each build reads (this one, which imported its modules before any tracer, could
     not), within `_budget`.  Its report (`cli.records`: the bindings ``reused`` and ``rebuilt``, those of them ``skipped``, the
-    records ``stored``, its ``seconds``), with ``why`` when it stored none or not all, or failed.  Under the suite's read
-    guard it is a session fixture's process (``VERITY_SUITE_MODULE`` ``*``), so the guard traces what it reads, as it traces
-    what this process's own builds read."""
-    env = dict(os.environ)
-    if env.get("VERITY_SUITE_READS") and not env.get("VERITY_SUITE_MODULE"):
-        env["VERITY_SUITE_MODULE"] = "*"
+    records ``stored``, its ``seconds``), with ``why`` when it stored none or not all, or failed.  It runs without the suite's
+    read tracer (`_untraced`), so the suite's guard lists it as a program it does not see into, as it lists the `git` every
+    process that takes a record starts; each read a record holds is read again by the process that takes it, which the
+    guard does trace."""
+    env = _untraced(os.environ)
     with tempfile.TemporaryDirectory(prefix="circuit-check-records-") as tmp:
         out = Path(tmp) / "records.json"
         r = subprocess.run(_records_argv(cache, jobs, max(1, int(_budget(os.environ))), out, LISTED), cwd=cli.REPO, env=env,
