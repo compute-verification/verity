@@ -141,6 +141,13 @@
    "at_list_binding": false
   },
   {
+   "run": "r20261112-191841-86b4",
+   "issue": "CIR-271",
+   "lean": "60 of 60 member verdicts true; audit accepted False, its Lean failed ['registered']",
+   "what": "20 statements (['GreedyChunk_v2', 'GreedyCombine_v2']), 4 instances each, 2 drawn; outcome reject on ['two-stage-form']",
+   "at_list_binding": false
+  },
+  {
    "run": "r20261112-155548-66b2",
    "issue": "CIR-251",
    "lean": null,

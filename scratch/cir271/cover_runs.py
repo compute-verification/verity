@@ -36,6 +36,14 @@ for u in ("positions", "whole"):
                  "what": f"{d['block']['definition']}, {d['block']['blocks']} unit, k_log {d['block']['k_log']}: {d['label']}; "
                          f"Program held {d['statement']['bound']['program_sha512'] == d['statement']['program']['sha512']}",
                  "at_list_binding": False})
+fd = WORK / "86b4" / "out" / "second"
+fst, fau, fout = J(fd / "statements.json"), J(fd / "audit" / "audit.json"), J(fd / "summary.json")["outcome"]
+read.append({"run": "r20261112-191841-86b4", "issue": "CIR-271", "lean": f"{sum(1 for v in fau['verdicts'].values() if v)} of "
+             f"{len(fau['verdicts'])} member verdicts true; audit accepted {fau['accepted']}, its Lean failed "
+             f"{fau['verifiers']['lean']['failed']}",
+             "what": f"{len(fst)} statements ({sorted({s['template'].split('{')[0] for s in fst})}), "
+                     f"{fst[0]['header']['instances']} instances each, {fst[0]['draw']['k']} drawn; outcome {fout['symbol']} on {fout['statements']}",
+             "at_list_binding": False})
 read.append({"run": "r20261112-155548-66b2", "issue": "CIR-251", "lean": None,
              "what": "accepted by the proof server's session verifier only; no Lean verdict in its files", "at_list_binding": False})
 acc = J(Path(sys.argv[5])) if len(sys.argv) > 5 else []

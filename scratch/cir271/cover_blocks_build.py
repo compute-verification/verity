@@ -1,4 +1,4 @@
-"""cover_blocks_build.py BLOCKS.json CUTS.json ACCEPTED.json: `cover.json` v2, the v1 record (`cover_build.py`) with the
+"""cover_blocks_build.py BLOCKS.json CUTS.json ACCEPTED.json FRIDAY_RUN_DIR: `cover.json` v2, the v1 record (`cover_build.py`) with the
 table by block type beside its rows.
 
 BLOCKS.json is `cover_blocks.sh`'s blocks.json, CUTS.json `cover_list.sh`'s cuts.json, ACCEPTED.json `cover_accepted.py`'s.
@@ -88,11 +88,12 @@ def staging_runs(b: str) -> list[dict]:
         w = s["word"] or (s["name"].removeprefix("census:") if s["name"].startswith("census:") else None)
         if w == b:
             out.append({"run": s["run"], "tag": s["tag"], "rc": s["rc"], "peak_gib": s["peak_gib"], "units": s["n"],
-                        "tree": tree_of(s["run"])})
+                        "definition": s["definition"], "tree": tree_of(s["run"])})
     for k in ksteady:
         if k["word"] == b and k["stage"]:
             out.append({"run": k["archive"][:16] + "… (" + k["run"] + "'s archive)", "tag": "stage", "rc": k["stage"]["rc"],
-                        "peak_gib": k["stage"]["peak_gib"], "units": k["stage"].get("n"), "tree": TREES["ksteady_stage"]})
+                        "peak_gib": k["stage"]["peak_gib"], "units": k["stage"].get("n"), "definition": k["stage"].get("definition"),
+                        "tree": TREES["ksteady_stage"]})
     return out
 
 
@@ -202,11 +203,43 @@ for t in uncut:
                  "card_blocks": sum(card[k]["prefill"] + card[k]["decode"] for k in card_has),
                  "registered_cuts": units, "whole_would_add": 8 * inst[t]})
 
+FRIDAY_RUN, FRIDAY_TREE, FRIDAY_BRANCH = "r20261112-191841-86b4", "7c2636e740e0", "cursor/proofs-stops-premortem-greedy-7a2e"
+fdir = Path(sys.argv[4]) / "out" / "second"
+f_st, f_au = J(fdir / "statements.json"), J(fdir / "audit" / "audit.json")
+f_out = J(fdir / "summary.json")["outcome"]
+#: every member's lean-draw and lean-verify are true, so no map from member to statement is needed (none is read here)
+f_all = all(f_au["verdicts"].values()) and len(f_au["verdicts"]) == 3 * len(f_st)
+f_ok = {s["template"]: f_all and s["template"] in f_au["statement"] for s in f_st}
+f_limits = [f"not main: {FRIDAY_TREE} on {FRIDAY_BRANCH}", "the serve it proved is not checked here (proofs: a stand-in serve of 2 outputs)",
+            f"the audit's verdict: accepted {f_au['accepted']}, its verifier of record {f_au['verifiers']['of_record']} failed "
+            f"{f_au['verifiers'][f_au['verifiers']['of_record']]['failed']}; outcome {f_out['symbol']} on {f_out['statements']}"]
+for r in cover["rows"]:
+    if r["in_list"]:
+        continue
+    t = r["template"]
+    if t in f_ok:
+        s = next(x for x in f_st if x["template"] == t)
+        r["notes"]["friday_run"] = {"run": FRIDAY_RUN, "tree": FRIDAY_TREE, "lean_draw_and_verify": f_ok[t],
+                                    "instances": s["header"]["instances"], "drawn": s["draw"]["k"], "limits": f_limits}
+        if f_ok[t]:
+            r.update(accepted="yes", accepted_definition=None, run=FRIDAY_RUN, source="read")
+    elif r["cut"] and all(u in f_ok for u in r["cut"]):
+        r["notes"]["friday_run"] = {"run": FRIDAY_RUN, "tree": FRIDAY_TREE, "cut_units_accepted": sum(f_ok[u] for u in r["cut"]),
+                                    "cut_units": len(r["cut"]), "limits": f_limits,
+                                    "relation": "the registry at the run's tree (greedy_stages.py, the same blob as at the Friday commit) "
+                                                "holds GreedySelect_v1 to its body's units (CUTS): 19 GreedyChunk_v2 and GreedyCombine_v2"}
 cover["schema"] = "circuits/request-cover/v2"
 cover["block_run"] = Path(sys.argv[1]).resolve().parent.parent.name
 cover["block_totals"] = totals
 cover["first_cut"] = {"totals": FIRST_CUT, "own_definition": FIRST_OWN, "boolean_version": FIRST_BOOL, "differs": vs_first}
 cover["runs"] = J(HERE / "cover_runs.json")
+fam = lambda t: t.partition("{")[0]  # noqa: E731
+OFF_BINDING = {"r20261112-191822-3496": ["DsaMaskPositions_v2{N=40960,AT=0,K=2048}", "DsaTopKMaskWhole_v2{N=40960,TOPK=2048}"],
+               "r20261112-195705-2196": ["GreedyChunk_v2{N=128,OFF=0}", "GreedyCombine_v2{V=2560,N=128}"],
+               "r20261112-191810-df04": ["GreedyChunk_v2{N=128,OFF=0}", "GreedyCombine_v2{V=2560,N=128}"]}
+cover["off_binding"] = [{"run": run, "definition": d, "in_list": d in inst, "family_in_list": sorted(t for t in inst if fam(t) == fam(d))[:5] or None,
+                         "on_card": d in card, "family_on_card": sorted(k for k in card if fam(k) == fam(d))[:5] or None}
+                        for run, ds in OFF_BINDING.items() for d in ds]
 proofs_card = json.loads(subprocess.check_output(["git", "-C", str(ROOT), "show", f"{cover['sources']['friday_at']}:benchmarks/sampling_plan/glm53_blocks.json"]))["definitions"]
 cover["proofs_count"] = {
     "card_at": cover["sources"]["friday_at"], "types": len(proofs_card),
