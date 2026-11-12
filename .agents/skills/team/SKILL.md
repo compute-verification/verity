@@ -124,14 +124,13 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: the strongest
-  only where a weaker one would err and no check would catch it. Tier 1, `claude-fable-5-2-xhigh`: no check decides it
-  and an error is expensive (what a guarantee says, protocol or attack design, a proof with no known route, an open root
-  cause, a ruling, review of a verifier, lock or statement, soundness-path code, a claim to Daniel). Tier 2,
-  `claude-opus-5-5-high`: skilled work a check decides (a specified change with tests, a swarm seat, a proof of a fixed
-  statement, a merge resolving code, ordinary review). Tier 3, `claude-sonnet-5-5-medium`: procedure and reading (clean
-  merges, renames, counts, docs-only review). The brief names the tier: the lowest that fits, one up after two failed
-  checks.
+- **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: name it on every
+  launch, never `inherit` or left out. `claude-opus-5-5-high` is the default: moving files, reading code, a count or a
+  sweep, a specified change with its tests, a merge, a review, a swarm seat, a proof of a fixed statement.
+  `claude-fable-5-2-xhigh` only to plan, design or decide where no check catches an error: what a guarantee says, a
+  protocol or an attack, an open root cause, a ruling, review of a verifier, a lock or a statement, a claim to Daniel.
+  Leads run Fable: they plan and launch. A resume keeps its model, so a Fable worker whose task is Opus's is not
+  resumed: it tells its launcher, who briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
