@@ -134,8 +134,8 @@ replay that differs, the first token that does and the first step.
   decoded to its recorded length, past any end-of-text token, in the benchmark's own words (vLLM's client sends each
   with its length and `ignore_eos`, in every arm); the benchmark's line counting the requests that served an
   end-of-text token before their end and went on, for a side whose server kept the served ids and whose record names
-  the checkpoint's end-of-text ids (stock keeps none); each
-  lifetime's cost and the spread between lifetimes and between a lifetime's passes; the same cost under the
+  the checkpoint's end-of-text ids (stock keeps none), or that they are not counted where no side's passes hold the
+  count; each lifetime's cost and the spread between lifetimes and between a lifetime's passes; the same cost under the
   benchmark's other readings of a pass (by the seconds its GPUs were busy, by its users' seconds summed, by the sum
   of its users' own rates), in no verdict; each side's engine steps a pass and the share of its draft tokens
   accepted, which the cost is adjusted for neither of; the cost over the passes taken

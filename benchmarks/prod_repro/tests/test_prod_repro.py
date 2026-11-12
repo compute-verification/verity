@@ -618,12 +618,14 @@ def test_a_sessions_loads_cost_is_the_benchmarks_own_and_its_verdict_reads_the_i
     assert c["lifetimes"]["pairs"] == 3 and c["lifetimes"]["ci95"][1] < 0.01
     assert [round(100 * x["value"], 2) for x in c["lifetimes"]["each"]] == [x["value"] for x in own["by_lifetime"]] == [0.5, 0.6, 0.45]
     # the line that says how the cost is taken ends with the benchmark's own words on each request's length; no arm
-    # here kept its served ids, so there is no line on the requests that went on past an end-of-text token
+    # here kept its served ids, so the benchmark has no line on the requests that went on past an end-of-text token
+    # and the report says they are not counted
     assert c["lifetimes"]["past_end"] == {"said": [], "sides": {"prod": None, "prod-record": None}}
     assert P._lifetimes(c) == [
         "  the cost is the mean of the lifetimes' costs, a lifetime's being ours's seconds for the passes both arms counted "
         "in it over stock's, less one, a pass's seconds from its users' first send to the last one's last answer "
         "(serve_tax.session_cost); each request decoded to its recorded length, past any end-of-text token",
+        "  past an end-of-text token: not counted, no arm's passes hold a count of the requests that went on past one",
         "  by lifetime: +0.50% (2 passes), +0.60% (2 passes), +0.45% (2 passes)",
         f"  the cost's spread (standard deviations): {own['spread']['between']:.2f} points between lifetimes, 0.00 points "
         "between a lifetime's passes"]
