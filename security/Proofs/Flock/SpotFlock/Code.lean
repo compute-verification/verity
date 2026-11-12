@@ -55,8 +55,10 @@ roots the boundary values are committed under (`portRoots`).
   registration check holds them (`recordsOk`); and template `t`'s statement sets up as a masked Flock statement with
   `k₀ t` rounds, in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and
   with `xS₀ t`'s table shapes
-  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`) and registers
-  no value of a name the statement's record has (`SecondStage.namesOk`); round 2's
+  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`), registers
+  no value of a name the statement's record has (`SecondStage.namesOk`) and none a replay block's input may not
+  read (`SecondStage.inputsFailure`); the design's links and wires are derived over the parts
+  (`SecondStage.designOk`); round 2's
   statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
   file's header is `xS₀ t`'s placed in the run (`SecondStage.atRun`) but for the run's fields, names the part's slots
   and the interior record's roots, its sample is the second stage's draw within the part, each registered read is one it
@@ -515,7 +517,10 @@ def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) :
 0's coin and the second stage's coins: round 1's record lists the replay sample in its order
 (`SecondStage.interiorOrderOk`, round 2's `second-interior-order`) and registers no value of a name the statement's
 record has, a port or a registered value (`SecondStage.namesOk`, round 2's `second-interior-names`), so each name a
-session reads is one record's; round 2's statement check passes the statement against template `t`'s part
+session reads is one record's; it registers no value a replay block's input may not read
+(`SecondStage.inputsFailure`, round 2's `second-inputs`, at what this verifier holds: no value of its own and no
+read, so no value at all); the design's links and wires are derived over the parts (`SecondStage.designOk`, round
+2's `second-links` and `second-wires`); round 2's statement check passes the statement against template `t`'s part
 (`codesOk`: its public file's header is `xS₀ t`'s placed in the run but for the run's
 fields, names the part's slots and the interior record's roots, its sample is the second stage's draw within the part,
 and each registered read is one it may read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
@@ -524,6 +529,8 @@ def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage 
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
     Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      (Spot.SecondStage.inputsFailure own).isNone &&
+      Spot.SecondStage.designOk (partsAt h own.sample.size) own &&
       ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
