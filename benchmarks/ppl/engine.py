@@ -89,7 +89,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                         H[key] = H[key] + h if key in H else h
 
                     for arm in gptq_arms:
-                        def collect_h(name, x, arm=arm):
+                        def collect_h(name, x, arm=arm, layer=layer, cache=cache, calib=calib):
                             if name == "keys":
                                 return
                             run = Run(arm, 0, -1, layer, gates, cache, rotations, calib, hessian=hess)
