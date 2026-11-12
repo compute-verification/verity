@@ -5,6 +5,10 @@ public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.NonVacuousJ
+public import Proofs.Properties.Verity.Sampled.Deployed
+public import Proofs.Properties.Verity.Sampled.Held
+public import Proofs.Properties.Verity.Sampled.Moves
 import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Flock.Soundness.Refine.Setup
 
@@ -13,11 +17,13 @@ import Proofs.Flock.Soundness.Refine.Setup
 
 `sessionOf` builds the session from the parameters and the registered files under `SessionChecks`. Where v2's
 sampled verdict accepts a play whose blobs are the registered files, then the evidence's, `SessionChecks` holds of those
-files (`sessionChecks_of_verdict`), but for three facts about the parameters, which a play does not check:
+files (`sessionChecks_of_verdict`), but for two facts about the parameters, which a play does not check:
 
 * the descriptor of the verifier's program (`hdesc`);
-* the registration's law gives a plain subset sampling design wherever `lawAt` reads one (`hsub`);
-* `verify --zk` sets a table up at some reference sample (`hset`).
+* the registration's law gives a plain subset sampling design wherever `lawAt` reads one (`hsub`).
+
+The reference table is the play's own first table: the record's sample file is the subset print of the units v2
+drew (`drawHeld`), and `verify --zk` sets every table up there (`drawHypsZHJ`).
 
 The pieces:
 
@@ -31,6 +37,7 @@ The pieces:
   the pinned tables the blobs hold and each is its registered file, the two lists are equal, not only one extending
   the other.
 * **v2's inputs on the blobs are `inputsAt`'s** (`inputsOf_eq`) at those tables.
+* **A `DrawSetupZHJ` is a `DrawSetupZHJP` at `none`** (`setupZHJP`).
 * **`Accepted` passes the checks** (`Accepted.checksWitness`).
 -/
 
@@ -161,20 +168,35 @@ theorem inputsOf_eq {p : _root_.Spot.OneStageZk.Params} {cf pf : ByteArray} {bs 
 
 theorem statement_circuit : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit := rfl
 
+/-- **A table `verify --zk` sets up is one it sets up at no recomputed public input words**: `DrawSetupZHJ` is
+`DrawSetupZHJP` at `own = none`, `Stmt.setupHidden`'s default. -/
+def setupZHJP {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
+    (y : DrawSetupZHJ I' mPts S d) : DrawSetupZHJP I' none mPts S d where
+  x :=
+    { st := y.x.st, h := y.x.h, D := y.x.D, hD := y.x.hD, hS := y.x.hS, hg := y.x.hg, hblk := y.x.hblk, m := y.x.m,
+      k0 := y.x.k0, l₀ := y.x.l₀, l₁ := y.x.l₁, rest := y.x.rest, ext := y.x.ext, hsch := y.x.hsch, hm := y.x.hm,
+      hmPts := y.x.hmPts, wf := y.x.wf }
+  sch := y.sch
+  tPad := y.tPad
+  hz := y.hz
+  hshape := y.hshape
+  hmsch := y.hmsch
+  hpad := y.hpad
+  hN := y.hN
+  hL := y.hL
+  hpos := y.hpos
+  hzk := y.hzk
+
 /-- **An accepted session on `inputsAt`'s inputs passes the checks** at its parse, its public file at the circuit's
-empty input ports and at its outputs, and its population, given the three facts about the parameters a play does not
-check: a descriptor of the verifier's program, the subset sampling design and a table set up at a reference sample. -/
+empty input ports and at its outputs, its population, and its first table, set up at the record's sample
+(`drawHypsZHJ`), given what a play does not check of the parameters: a descriptor of the verifier's program, and the
+record's sample file being the verifier's `subset kd` sample at the law `lawAt` reads. -/
 theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {cf pf : ByteArray}
     {t : Exec.Transcript} {n : ℕ} (hA : Accepted (inputsAt p cf pf) t p.base.verifier n) (hθ : ParamsAt θ p)
     (hch : ∃ key label, p.base.challenger = some (key, label)) {desc : Claims.Msg}
-    (hdesc : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program)
-    (hsub : ∃ kd, lawAt p.base.verifier n = .ok (.subset kd))
-    (hset : ∀ D : Flock.Desc, Flock.Desc.parse (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).circuitFile
-        (inputsAt p cf pf).tables = .ok D →
-      ∃ (S₀ : Finset (Fin n)) (d₀ : Lean.Json), Nonempty (DrawSetupZHJP (inputsJ (inputsAt p cf pf) 0) none
-        (mPtsOf D.unroll.g (Flock.Bridge.lawK
-          (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) /
-            nTab (inputsAt p cf pf))) S₀ d₀)) :
+    (hdesc : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program) {kd : ℕ}
+    (hlaw : lawAt p.base.verifier n = .ok (.subset kd)) {S : Finset (Fin n)}
+    (hd : Exec.recordDraw t.record = some (printedDraw (.subset kd) S)) :
     Nonempty (ChecksWitness θ cf pf) := by
   have hflat : (zkTags (inputsAt p cf pf)).hiddenOutputs = true ∧ (zkTags (inputsAt p cf pf)).isTmpl = false :=
     statement_zkTags statement_circuit _ _
@@ -184,15 +206,40 @@ theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Para
   obtain ⟨hpi, pub, hpub⟩ := noInputs_of_accepts hA.accepts hflat rfl hc
   have hnO : pubO.n = n := hA.loads hO
   have hn : pub.n = n := (Flock.Bridge.loadPublic_inOut hpub hO).1.symm.trans hnO
-  obtain ⟨S₀, d₀, ⟨y⟩⟩ := hset _ hD
+  have hform : Flock.KsScope.check (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).circuitFile
+      (inputsAt p cf pf).publicFile (inputsAt p cf pf).tables (inputsAt p cf pf).count
+      (Exec.recordDraw t.record) = .ok () := by
+    show Flock.KsScope.checkOf (Flock.HmOut.parse (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).circuitFile
+      (inputsAt p cf pf).tables) (zkTags (inputsAt p cf pf)) (inputsAt p cf pf).publicFile (inputsAt p cf pf).count
+      (Exec.recordDraw t.record) = .ok ()
+    rw [← circuitOf_parse hflat.1 hflat.2]
+    exact hA.form
+  obtain ⟨ht, hU, hscope, hTags, -⟩ := Flock.Bridge.ksScoped_files hD hO hform
+  have hdiv : kd % nTab (inputsAt p cf pf) = 0 := by
+    show kd % 1 = 0
+    exact Nat.mod_one kd
+  obtain ⟨-, hy⟩ := drawHypsZHJ (inputsAt p cf pf) ht hTags hc hU hscope kd hdiv (printedDraw (.subset kd))
+    (drawFileZK_printedDraw kd) hA.accepts hd
+  obtain ⟨y⟩ := hy ⟨0, nTab_pos _⟩
+  have hk : Flock.Bridge.lawK
+      (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) = kd := by
+    rw [designAt_of_lawAt hdesc hlaw] <;> rfl
+  have hy' : Nonempty (DrawSetupZHJP (inputsJ (inputsAt p cf pf) 0) none
+      (mPtsOf c.g (Flock.Bridge.lawK
+        (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) /
+          nTab (inputsAt p cf pf)))
+      (partS (inputsAt p cf pf) (printedDraw (.subset kd) S) S ⟨0, nTab_pos _⟩)
+      (drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) ⟨0, nTab_pos _⟩)) := by
+    rw [hk]
+    exact ⟨setupZHJP y⟩
   exact ⟨{ p := p
            D := .single c
            pub := pub
            pubO := pubO
            n := n
            desc := desc
-           S₀ := S₀
-           d₀ := d₀
+           S₀ := partS (inputsAt p cf pf) (printedDraw (.subset kd) S) S ⟨0, nTab_pos _⟩
+           d₀ := drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) ⟨0, nTab_pos _⟩
            checks :=
             { params := hθ
               challenger := hch
@@ -206,8 +253,8 @@ theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Para
               popOut := hnO
               pop := hA.pop
               program := hdesc
-              subset := hsub
-              setup := ⟨y⟩ } }⟩
+              subset := ⟨kd, hlaw⟩
+              setup := hy' } }⟩
 
 variable {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -215,9 +262,9 @@ variable {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
 accepts a play on the parameters `θ` whose blobs are the registered files `F`, then the evidence's `B`, at a
 vocabulary whose digests are v2's (`programDigestOf`, `publicDigestOf`) and whose parameters name them (`DigestsAt`),
 each pinned table the blobs hold being its registered file (`TablesSent`), `SessionChecks θ F` holds; given, of v2's
-parameters `p₀` in `θ`, a descriptor of the verifier's program, that the registration's law gives a plain subset
-sampling design wherever `lawAt` reads one, and that `verify --zk` sets a table up at some reference sample on the
-registered files. -/
+parameters `p₀` in `θ`, a descriptor of the verifier's program and that the registration's law gives a plain subset
+sampling design wherever `lawAt` reads one. The record's sample file is then the subset print of the units v2 drew
+(`drawHeld`, `drawOf_filter`), at which `verify --zk` sets the first table up (`Accepted.checksWitness`). -/
 theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     {θ : ByteArray} {F B : Array ByteArray}
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
@@ -225,32 +272,39 @@ theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Comp
     (hs : o.sent.blobs = F ++ B) (ht : TablesSent o.sent) {p₀ : _root_.Spot.OneStageZk.Params}
     (hp₀ : ParamsAt θ p₀) {desc : Claims.Msg}
     (hdesc : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p₀.base.verifier.program)
-    (hsub : ∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd)
-    (hset : ∀ (n : ℕ) (D : Flock.Desc), Flock.Desc.parse (zkTags (inputsAt p₀ (circuitAt θ F) (publicAt θ F)))
-        (circuitAt θ F) (pinnedTables (circuitAt θ F)) = .ok D →
-      ∃ (S₀ : Finset (Fin n)) (d₀ : Lean.Json), Nonempty (DrawSetupZHJP
-        (inputsJ (inputsAt p₀ (circuitAt θ F) (publicAt θ F)) 0) none
-        (mPtsOf D.unroll.g (Flock.Bridge.lawK
-          (Flock.Bridge.designAt desc p₀.base.verifier.query p₀.base.verifier.law p₀.base.verifier.workTable n) /
-            nTab (inputsAt p₀ (circuitAt θ F) (publicAt θ F)))) S₀ d₀)) :
+    (hsub : ∀ n L, lawAt p₀.base.verifier n = .ok L → ∃ kd, L = .subset kd) :
     SessionChecks θ F := by
   subst hθ
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀ (verdict_case hv)
   have hpp : p₀ = p := paramsAt_case hv.2.1 hcase hacc hp₀
   subst hpp
-  obtain ⟨-, -, -, -, hsrc, pub, prof, hck⟩ := hacc
+  obtain ⟨-, -, -, -, hsrc, pub, prof, hck⟩ := id hacc
   obtain ⟨key, hkey, -⟩ := source_of hsrc
-  obtain ⟨tags0, circuitB, pubB, record, proofs, n, htags, hcirc, hpubB, -, -, hn, hA⟩ := checkBlobsAt_event hck
+  obtain ⟨tags0, circuitB, pubB, record, proofs, n, htags, hcirc, hpubB, hrec, -, hn, hA⟩ := checkBlobsAt_event hck
   obtain rfl : tags0 = Flock.Tags.circuit := Option.some.inj (htags.symm.trans statement_circuit)
   obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
   obtain ⟨law, n', read, hd, hn', hdf⟩ := checkAt_drew hat
-  obtain ⟨derived, fl, hder, hfl, -⟩ := drawnFrom_ok hdf
+  obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
   have hnn : n' = n := Option.some.inj (hn'.symm.trans hn)
-  rw [hnn] at hfl
+  rw [hnn] at hfl hdu
   have hlaw : lawAt p₀.base.verifier n = .ok (derived.getD fl) :=
     lawAt_of_lawOf (c := c) ⟨law, derived, fl, hd, hn, hder, hfl, rfl⟩
   obtain ⟨kd, hkd⟩ := hsub _ _ hlaw
-  rw [hkd] at hlaw
+  rw [hkd] at hlaw hdu
+  have hsz : (drawnUnits ev.base.draw).size = kd := Flock.Bridge.drawUnits_size (law := .subset kd) (ns := [kd]) (kd := kd)
+    ⟨rfl, by simp⟩ hdu
+  obtain ⟨-, -, -, -, -, hcs, -, -, -⟩ := sent_verified hv.2.1 hcase hacc
+  have hsr : sentRecord o.sent = some record := by
+    unfold sentRecord
+    rw [hcs]
+    exact hrec
+  obtain ⟨hasc, hrd⟩ := drawHeld k o.sent dr (.subset kd) n ξ (drawnUnits ev.base.draw) record hv.2.1
+    ⟨a, b, e, p₀, c, ev, hcase, hacc, ⟨law, derived, fl, hd, hn, hder, hfl, hkd.symm⟩, rfl, read, hdu⟩ hsr
+  have hrd' : Exec.recordDraw record =
+      some (printedDraw (n := n) (.subset kd) (Finset.univ.filter fun u : Fin n => u.val ∈ drawnUnits ev.base.draw)) := by
+    rw [exec_recordDraw, hrd]
+    show _ = some (ZkLink.drawOf (.subset kd) n _).toJson
+    rw [drawOf_filter hasc, hsz]
   obtain ⟨cB', hg', hl⟩ := tables_registered hp₀ hv
   obtain rfl : circuitB = cB' := Except.ok.inj (hcirc.symm.trans hg')
   have htab := pinnedTables_eq hl rfl ht
@@ -264,6 +318,6 @@ theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Comp
     have h := get_named (hD.publicFile p₀ hp₀) hreg.2 hpubB
     rwa [hp] at h
   subst hcf hpf
-  exact hA.checksWitness hp₀ ⟨key, dr.label, hkey⟩ hdesc ⟨kd, hlaw⟩ (hset n)
+  exact hA.checksWitness hp₀ ⟨key, dr.label, hkey⟩ hdesc hlaw hrd'
 
 end Verity.Sampled
