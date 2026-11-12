@@ -107145,3 +107145,28 @@ Not established:
 - The outer `acceptedTwo_of_check` is unwritten until TWOLEG's `SampledTwo.lean` is on my base.
 - FRAME's five clauses are unwritten.
 - The replayed earlier-period signature counts as a forgery under `Break`, as in my 22:52Z entry.
+
+## NEEDEDBITS, Thu 12 Nov 22:55Z: started on `NeededBits h`; I will prove `SideBySide h` rather than go round it, since it holds at every held code with no hypothesis; the fact itself needs two conditions on each member's circuit that I will take from the accepted session's scope check
+
+**In plain words.** I am the worker that proves the fact under all five address facts: a gate that a checked proof block needs is one of that block's own input bits or one of its own returned output bits. FRAME's route goes through `SideBySide h` (each proof block reads only its own gates and constants), which is stated on the base and proved nowhere. I will prove it: by my reading it is a fact of how a member's program is laid out, true for every held code, with no premise. The rest of the fact needs two things of each member's circuit that the program's layout alone does not give: every input bit a unit's rows read is a bit of a registered row, and every returned output bit sits in a registered output row. Both are what the session's scope check decides, so at an accepted run they should follow from the check; nothing is written or compiled yet.
+
+- **Agent id** `bc-86459fd4-85aa-549a-ae94-c08e1cbf5726`; mailbox `inbox/bc-86459fd4-85aa-549a-ae94-c08e1cbf5726.md` on `cursor/proofs-inbox`, not there when read at 22:53Z [run].
+- **Branch** `cursor/proofs-neededbits-2597`, made from `origin/cursor/proofs-two-round-base-84b5` at `b8ca16854990` and pushed equal to it [run].
+- **My word on `SideBySide`: I prove it.** [read: `Spot/Bits.lean` `keyProg` (`:237`), `consts` (`:597`), `owner`, `insOf`, `blockOf` (`:296-307`), at `b8ca16854990`] Unit `u`'s rows read, through `keyProg`'s `wire`, only the source gates `2 + u·B + b` with `b < B` (`keyIdx` searches `range B`), the zero (gate 1), the constant (gate 0) and its own computed rows. `consts` fixes gates 0 and 1, so their lowered gates are constants. A source gate `2 + u·B + b` is read by unit `u` alone, so its owner is `u`, and where `consts` leaves it free it is in `insOf … u`, so in `u`'s block. A block holds only lowered rows (XOR, XOR, AND) and free inputs, never a constant. Side by side, each member's gates are shifted by `Bits.base`, and `shiftGate` keeps constants and inputs. [derived] So `BlocksClosed (bitsProgs ms) (membersPart ms)` for every `ms`, and `SideBySide h` at every `h`.
+
+**Plan, five lines.**
+1. `SpotFlock/NeededBitsOf.lean` (new, a root on its own line): `blocksClosed_bitsProgs : BlocksClosed (bitsProgs ms) (membersPart ms)`, so `sideBySide : SideBySide h` with no hypothesis.
+2. From `needs_committed_of_closed`: a needed gate is in the unit's own block and is an input (then a free source gate `2 + k·B + b` of member `t`'s unit `k`) or a returned output (then an `outGate` of unit `k`).
+3. Input case: `rowBit` is `some` with leaf `k` where the source key is a message bit (FRAME's condition (d)); output case: `outRowBit` is `some` with leaf `k` where the leaf word lies in a rowed output port (no pinned output). Then `find?` in `sourceBits` / `writtenBits` returns an entry of member `t` at leaf `k`, whichever entry it is, because a position fixes its member (the `Bits.base` ranges) and its unit.
+4. The two circuit conditions, stated as one named `Prop` on each member, `MemberRowed`, first as a hypothesis of the theorem; then derived from the accepted session (Flock's scope check: one input group and `portReadsB` give `KeysRow` by `keysRow_of_parse`; `unpinned` gives the output rows), at the session's circuit being `stmtOf (h.xS₀ t)`.
+5. Signatures that elaborate, with their try launched, by 00:45Z Fri; each step goes to a try as soon as it is written.
+
+**One thing that would make the fact false** [guess, to be checked before 00:45Z]: a member circuit with a pinned output (META `pinned_outputs`). Its returned leaf words past the rowed output ports have no `outRowBit` (`outPos` finds no output row), yet their gates are in `bitsProgs`' outputs, so a checked block that returns one needs a gate that is no written bit. The scope checks I read (`v1Ports`, `bitRows`) refuse a pinned output; whether the check the two-round session runs is one of them, I have not read. Likewise a unit row reading input padding or a wired input port would give a source gate with no commitment position; `portReadsB` with one input group refuses both.
+
+**STOP RULE.** Nothing: one new file, no lock touched.
+
+**NEEDS.** None yet.
+
+**To post.** Nothing.
+
+**Not established.** Everything above: nothing written or compiled. That the session's circuit at an accepted run is `stmtOf (h.xS₀ t)` (the member's) is not read yet; if no lemma on the base says it, it is the one premise I would name.
