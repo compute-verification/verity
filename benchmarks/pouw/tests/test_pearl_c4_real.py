@@ -4,40 +4,14 @@ checkpoints, and the next run finishes the tile's replayed inert work under its 
 
 from __future__ import annotations
 
-import functools
 import hashlib
-import importlib.util
 import json
-import multiprocessing
-import sys
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pytest
-
-def _load(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "pearl_c4" / file)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-R = _load("pearl_c4_real", "real.py")
-RT = _load("pearl_c4_real_table", "real_table.py")
-
-
-def _fork(monkeypatch) -> None:
-    fork = multiprocessing.get_context("fork")
-    monkeypatch.setattr(R, "ProcessPoolExecutor", functools.partial(ProcessPoolExecutor, mp_context=fork))
-
-
-@pytest.fixture(autouse=True)
-def forked_workers(monkeypatch):
-    """real.py's pool with forked workers, which inherit `pearl_c4_real` from this process.  A forkserver's workers (Python
-    3.14's default on Linux) import the pool's callable by module name, and this module's name is importable only here."""
-    _fork(monkeypatch)
+import real as R
+import real_table as RT
 
 NAME, K, M, N = "model.layers.0.self_attn.q_proj", 1024, 128, 128
 
@@ -74,12 +48,10 @@ def replayed(tmp_path_factory):
     root = tmp_path_factory.mktemp("replayed")
     captured, out = capture(root), root / "out"
     args = [str(captured), str(out), "--tiles", "1", "--workers", "2"]
-    with pytest.MonkeyPatch.context() as mp:
-        _fork(mp)
-        rc = R.main(args + ["--budget-min", "0"])
-        first = {"rc": rc, "tasks": len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))),
-                 "split": json.loads((out / "split-L000-attn.json").read_text())}
-        assert R.main(args) == 0
+    rc = R.main(args + ["--budget-min", "0"])
+    first = {"rc": rc, "tasks": len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))),
+             "split": json.loads((out / "split-L000-attn.json").read_text())}
+    assert R.main(args) == 0
     return captured, out, first
 
 
