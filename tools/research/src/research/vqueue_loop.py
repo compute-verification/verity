@@ -2695,11 +2695,13 @@ class Loop:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
         (`vqueue_slim.start`'s ``audit_from``), where the check gates and its base is a candidate in flight, not `main`
         (``below``, its record), when no member's own change, against its merge base with ``main`` (`World._changed`, as
-        `World._judge` reads it), meets a Lean input of the candidate's tree (`vqueue_slim.lean_inputs`): that base, whose
-        check is judged on lean-audit (`vqueue_slim.audits`), else the candidate its base's check took it from
-        (``lean_audit_from``), the one whose check ran it, while that check is judged on it, or, once that candidate has
-        landed, while the run beside `main` keeps a verdict on it (`vqueue_slim.answers`; where each is read: ``lent``,
-        `_lent`).  None else, and when git can't list that tree or say what a member changes: the check audits."""
+        `World._judge` reads it), meets a Lean input of the candidate's tree with the paths its members change in it, so that
+        one a member deletes is judged as a file there (`vqueue_slim.lean_inputs`): that base, whose check is judged on
+        lean-audit (`vqueue_slim.audits`), else the candidate its base's check took it from (``lean_audit_from``), the one
+        whose check ran it, while that check is judged on it, or, once that candidate has landed, while the run beside `main`
+        keeps a verdict on it (`vqueue_slim.answers`; where each is read: ``lent``, `_lent`).  None else, and when the Lean
+        inputs can't be read (git can't list that tree or say what a member changes, or the audit's declaration doesn't
+        load): the check audits."""
         if self.gate != CHECK_GATE or below is None or lent is None or not line.get("heads"):
             return None
         if self.slim.audits(d, below):
@@ -2709,13 +2711,13 @@ class Loop:
             if not ran or not (self.slim.answers(rec) if landed else self.slim.audits(d, rec)):
                 return None
         try:
-            inputs = self.slim.lean_inputs(self.world._tree(line["sha"]))
-            if any(vqueue.meets(self.world._changed(main, h), inputs) for h in line["heads"]):
+            changed = frozenset().union(*(self.world._changed(main, h) for h in line["heads"]))
+            if vqueue.meets(changed, self.slim.lean_inputs({*self.world._tree(line["sha"]), *changed})):
                 return None
         except QueueError as e:
             # safe: a check that audits itself never takes a verdict it shouldn't, it only costs the audit
             d.q.log(f"research queue vqueue: candidate {line['sha'][:12]}'s check runs lean-audit itself, not taking "
-                    f"{ran[:12]}'s: git can't list its tree or say what a member changes: {e}")
+                    f"{ran[:12]}'s: its Lean inputs can't be read: {e}")
             return None
         return ran
 
