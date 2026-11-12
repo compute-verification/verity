@@ -9,6 +9,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
   reads the stop block;
 - nothing a check counts by capacity scales with the requests;
 - the world, the datacenter, the requests and the weights are read from the files, each input marked with its source;
+- the set-time card is an input marked simulated, the one input so marked, its source the clause a figure under the
+  label rests on, and the document's figure at D_j = 1 carries that mark;
 - the world's requests are by default the sampling plan's, the break-even planner's own count; the census's where
   asked; a given count in place of either; and every row names which;
 - the term of record is the one at D_j = 2: the document's value is the scan's over the world's year at D_j = 2, and
@@ -44,7 +46,7 @@ PHASES = {"week": 4_725, "month": 20_250, "year": 246_375}
 NO_STOP = "design, no stop block"
 NAMES = ("scan", "N2", "lengths", "timing", "entries", "all three", NO_STOP, "design")
 #: the label's short form, as a column's header at D_j = 1 and a row's printed name carry it
-CARD = "set-time card (not yet tested)"
+CARD = "simulated set-time card"
 
 
 def clog2(x: int) -> int:
@@ -289,6 +291,29 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     assert "--syncs" in given["syncs"].source and "--lanes" in given["lanes"].source
 
 
+def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure_carries_its_mark():
+    """The card every figure under the label rests on is simulated: a fourth mark, which the card's input alone
+    carries, with the clause the figure rests on as its source. The document's figure at D_j = 1 carries that mark
+    beside its label, whatever the command asks, and the term of record carries none: it rests on no card."""
+    assert LB.MARKS == ("measured", "modeled", "assumed", "simulated") and LB.SIMULATED == "simulated"
+    clause = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the tick its "
+              "record names, whatever the host and the server send it. It holds only of a calibrated hardware card; no "
+              "such card is deployed, and the software pacer that stands in for it does not meet it.")
+    assert LB.SET_TIME_CLAUSE == clause and LB.SET_TIME == "with a simulated set-time card"
+    for inp in (LB.inputs(), LB.inputs(requests="census"), LB.inputs(world_requests=1e16, lanes=512), small()):
+        assert inp["set_time_card"] == LB.Input("simulated", "", "simulated", clause)
+        assert [k for k, i in inp.items() if i.mark == "simulated"] == ["set_time_card"]
+        doc = LB.document(inp)
+        assert doc["inputs"]["set_time_card"] == {"value": "simulated", "unit": "", "mark": "simulated",
+                                                  "source": clause}
+        assert doc["with_set_time_card"]["mark"] == "simulated" and "mark" not in doc
+        text = LB.render(doc)
+        assert f"| set_time_card | simulated | | simulated | {clause} |" in " ".join(text.split())
+    # the mark is the input's own: the figure of a document whose card is marked otherwise says so
+    other = small() | {"set_time_card": LB.Input("simulated", "", "assumed", clause)}
+    assert LB.document(other)["with_set_time_card"]["mark"] == "assumed"
+
+
 def test_the_worlds_requests_are_the_sampling_plans_by_default(monkeypatch):
     """The default count is the planner's own: its case's world year at the 128k serving plan's request, with that
     request's tokens and served MACs a token as the inputs beside it, from which the count follows by the scopes'
@@ -388,7 +413,7 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert doc["value"] == 171_477_000 / LB.GB and "world's year" in doc["name"]
     assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
     assert doc["with_set_time_card"] == {"value": 147_825_000 / LB.GB, "unit": "GB",
-                                         "label": "with a set-time card (not yet tested)"}
+                                         "label": "with a simulated set-time card", "mark": "simulated"}
     assert doc["target"] == {"value": 300.0, "unit": "GB", "bits_a_phase": 300 * LB.GB / 739_125,
                              "bits_a_request": 300 * LB.GB / 7_391_250}
     assert doc["weights"]["value"] == LB.WEIGHTS.bits / LB.GB
@@ -441,12 +466,13 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     """The term of record is the one at D_j = 2. On a hand-worked world the scan's year is 2 × 73,912,500 bits of
     schedules and fail cells and 739,125 execution phases × 32 bits of jitter: the document's value is all of it, and
     the term without the jitter is beside it only under the label, in the document and in each table's headers."""
-    label = "with a set-time card (not yet tested)"
+    label = "with a simulated set-time card"
     assert (LB.OF_RECORD, LB.SET_TIME) == (2, label) and LB.OF_RECORD in LB.JITTERS
     for given in ({}, {"failure_rate": Fraction(1, 100), "lanes": 4}):
         for doc in (LB.document(small(**given)), LB.document(small(**given), only=["node"], periods=["week"])):
             assert (doc["value"], doc["unit"]) == ((2 * 73_912_500 + 739_125 * 32) / LB.GB, "GB")
-            assert doc["with_set_time_card"] == {"value": 2 * 73_912_500 / LB.GB, "unit": "GB", "label": label}
+            assert doc["with_set_time_card"] == {"value": 2 * 73_912_500 / LB.GB, "unit": "GB", "label": label,
+                                                 "mark": "simulated"}
             assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
     for inp in (small(), LB.inputs(), LB.inputs(requests="census")):
         doc = LB.document(inp)
@@ -458,10 +484,11 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
         assert jitter == by["world", "year", "design"]["term"]["2"]["GB"] and scan["jitter"]["1"]["GB"] == 0
     text = LB.render(doc).splitlines()
     assert ("The term of record is the one at D_j = 2, two release schedules. The term at D_j = 1 is what a network "
-            "certifier whose network card releases at a set time would be charged; no timing test has shown one, so "
-            f"it is printed as \"{label}\".") in text
+            "certifier whose network card releases at a set time would be charged. That card is simulated, the input "
+            "set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
+            f"\"{label}\".") in text
     held = next(line for line in text if line.startswith("With the lengths held by a stop block and the release "))
-    assert "taken once by a network certifier whose network card releases at a set time (not yet tested)" in held
+    assert "taken once by a network certifier whose network card releases at a set time (simulated)" in held
     assert held.endswith(f" Without that card the jitter alone, at D_j = 2, is {LB._n(jitter)} GB over the world's "
                          f"year, {LB._n(jitter / 300)} times the target.")
     heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]
@@ -476,7 +503,7 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     assert "Without that card the jitter alone, at D_j = 2, is " in few and f"it is printed as \"{label}\"." in few
     zeroed = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
     assert zeroed == {"timing", "all three"} == {name for name, k in LB.ROWS.items() if "set-time card" in k.counts}
-    assert "no timing test has shown one" in LB.CHANGES["timing"]
+    assert "the card is simulated, and none is deployed" in LB.CHANGES["timing"]
 
 
 def test_the_term_of_record_comes_first_in_both_tables():

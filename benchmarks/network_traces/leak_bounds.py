@@ -50,11 +50,13 @@ rule, and never by requests what a check counts by capacity:
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
   ⌈log2 D_j^T⌉ an execution phase of each link, which is a bit a bucket at D_j = 2 and 0 at D_j = 1. The term of
   record is the one at D_j = 2 (`OF_RECORD`), two release schedules, and it is printed first. The term at D_j = 1 is
-  what a network certifier with a set-time card, a network card that releases at a set time, would be charged; no
-  timing test has shown one, so a figure at D_j = 1 is printed only under its label (`SET_TIME`). The entries, the
-  tied compute audits' free inputs, are the compute side's. The check charges every slot's entry at its whole width
-  (`ingress_scan.entry_bits`), lanes × T / EVERY of them a link's execution phase, a count by capacity that needs the
-  class's lanes; with none given the entries are one a request, the least the check can charge;
+  what a network certifier with a set-time card, a network card that releases at a set time, would be charged. The
+  card is simulated, an input of its own (`inputs`' ``set_time_card``, marked ``simulated``, its source the clause
+  it rests on, `SET_TIME_CLAUSE`): none is deployed, so a figure at D_j = 1 is printed only under its label
+  (`SET_TIME`). The entries, the tied compute audits' free inputs, are the compute side's. The check charges every
+  slot's entry at its whole width (`ingress_scan.entry_bits`), lanes × T / EVERY of them a link's execution phase, a
+  count by capacity that needs the class's lanes; with none given the entries are one a request, the least the check
+  can charge;
 * N2, the clock form's terms (`clock_terms`): the schedules are ⌈log2 #Σ_sync^m⌉ over a link's m execution phases,
   counted by link whatever it serves; its parameters list no connection, so it has no fail cell; and the jitter is
   the scan's, a step a bucket;
@@ -62,9 +64,9 @@ rule, and never by requests what a check counts by capacity:
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
   over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0 at
-  either D_j, which rests on the set-time card no timing test has shown, so a row under this change carries the
-  label at either D_j, in the document and in its printed name; and the entries charged through the compute audit,
-  whose own bound then stands in their place and is not counted here;
+  either D_j, which rests on the simulated set-time card, so a row under this change carries the label at either
+  D_j, in the document and in its printed name; and the entries charged through the compute audit, whose own bound
+  then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
   block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
   stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
@@ -73,8 +75,8 @@ rule, and never by requests what a check counts by capacity:
   output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
   charges it. Its failed connections, jitter and entries are the design's.
 
-`inputs` marks each input measured, modeled or assumed (`MARKS`) with its source, and `main` prints the table and
-its JSON.
+`inputs` marks each input measured, modeled, assumed or simulated (`MARKS`) with its source, and `main` prints the
+table and its JSON.
 """
 from __future__ import annotations
 
@@ -152,8 +154,8 @@ CHANGES = {"lengths": "a response's length held to its Program's output count, a
                       "audit: the schedules are 0, and the connections that fail are charged pooled over the "
                       "period, which of them failed and where each one's stream ended",
            "timing": "the release times taken once, by the compute side's tick: the jitter is 0, which rests on a "
-                     "set-time card, a network card of the network certifier that releases at a set time, and no "
-                     "timing test has shown one",
+                     "set-time card, a network card of the network certifier that releases at a set time; the card "
+                     "is simulated, and none is deployed",
            "entries": "the entries charged through the compute audit: the compute side's own bound stands in their "
                       "place, and is not counted here"}
 
@@ -437,8 +439,9 @@ def at_link_rate(one: LinkLoad, links: int, period: str | float | Fraction, read
 
 # --- at a scope's load: the network certifier's term, scaled by requests ---------------------------------------------
 
-#: what an input is: measured by a run, modeled from other figures, or assumed
-MARKS = ("measured", "modeled", "assumed")
+#: what an input is: measured by a run, modeled from other figures, assumed, or simulated, where a stand-in runs in
+#: place of a device that is not deployed and the figure is what that device would be charged
+MARKS = ("measured", "modeled", "assumed", "simulated")
 #: a file's status for a figure, as its mark
 _MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "datasheet": "assumed",
          "assumed": "assumed", "ruled": "assumed"}
@@ -448,8 +451,15 @@ JITTERS = (1, 2)
 OF_RECORD = 2
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
 #: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
-#: release times are taken once (`CHANGES`' timing). No timing test has shown such a card
-SET_TIME = "with a set-time card (not yet tested)"
+#: release times are taken once (`CHANGES`' timing). The card is simulated (`SET_TIME_CLAUSE`)
+SET_TIME = "with a simulated set-time card"
+#: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
+SIMULATED = "simulated"
+#: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
+SET_TIME_CLAUSE = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the "
+                   "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
+                   "hardware card; no such card is deployed, and the software pacer that stands in for it does not "
+                   "meet it.")
 SCOPES = ("node", "datacenter", "world")
 #: the assumed class's defaults: the most ids a response holds, an id's bits and an execution phase's buckets
 RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
@@ -491,8 +501,8 @@ ROWS = {
                "link's execution phase"),
     **{name: Kind("a change to the scan", (name,), what) for name, what in CHANGES.items()},
     "all three": Kind("a change to the scan", tuple(CHANGES),
-                      "the three changes together, with the stop block the lengths' change rests on and the set-time "
-                      "card the timing's change rests on"),
+                      "the three changes together, with the stop block the lengths' change rests on and the "
+                      "simulated set-time card the timing's change rests on"),
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
@@ -591,7 +601,8 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     machine, and ``lanes``, the connections a link holds at once, which only the entries read: with None they are
     counted one a request. ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
     the share of connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each
-    execution phase's scan's δ."""
+    execution phase's scan's δ. ``set_time_card`` is the card every figure under `SET_TIME` rests on: it is
+    simulated, the one input so marked (`SIMULATED`), and its source is the clause it rests on (`SET_TIME_CLAUSE`)."""
     if requests not in REQUESTS:
         raise ValueError(f"the request counted is one of {', '.join(REQUESTS)}, not {requests!r}")
     counted = "given" if world_requests is not None else requests
@@ -662,6 +673,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                               "none measured: the share of connections that fail, which the rows with the lengths "
                               "held charge pooled (--failure-rate)"),
         "scan_delta": Input(scan_delta, "", "assumed", "each execution phase's scan's δ: `scan_zk --delta`'s default"),
+        "set_time_card": Input(SIMULATED, "", SIMULATED, SET_TIME_CLAUSE),
     }
     if off := sorted(k for k, i in out.items() if i.mark not in MARKS or not i.source):
         raise ValueError(f"an input is marked one of {', '.join(MARKS)}, with its source: {', '.join(off)}")
@@ -758,11 +770,12 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     and where it stands (`ROWS`); the inputs; and at the top the term of record, the term over the world's year as
     the scan's check charges it today at two release schedules (D_j = `OF_RECORD`), as ``value`` in ``unit``, with
     the ``commit`` and the ``run`` that computed it. Beside it ``with_set_time_card`` holds the same term at D_j = 1,
-    its unit and the label it is printed under (`SET_TIME`). A row's own ``with_set_time_card`` is that label where
-    its changes include the timing's, so that its jitter is 0 at either D_j and every figure of it rests on the
-    card, and None on every other row. ``only`` and ``periods`` keep the rows of those scopes and monitoring periods;
-    ``covers`` is the share of its scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests
-    are, the document's one."""
+    its unit, the label it is printed under (`SET_TIME`) and its ``mark``, the card's own (``inp``'s
+    ``set_time_card``: simulated). A row's own ``with_set_time_card`` is that label where its changes include the
+    timing's, so that its jitter is 0 at either D_j and every figure of it rests on the card, and None on every
+    other row. ``only`` and ``periods`` keep the rows of those scopes and monitoring periods; ``covers`` is the share
+    of its scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests are, the document's
+    one."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
@@ -788,7 +801,8 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
                     f"it today at two release schedules (D_j = {OF_RECORD})",
             "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
-            "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME},
+            "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME,
+                                   "mark": inp["set_time_card"].mark},
             "commit": commit, "run": run, "model": MODEL, "request_count": counted,
             "target": {"value": float(target_gb), "unit": "GB", "bits_a_phase": float(target) / head["phases"],
                        "bits_a_request": float(target) / head["requests"] if head["requests"] else None},
@@ -865,8 +879,9 @@ def render(doc: dict) -> str:
         "Each row counts all its scope serves over the monitoring period, by its check's own rule. The term is the "
         "schedules, the fail cells and the jitter. The entries are the compute side's.",
         f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
-        "network certifier whose network card releases at a set time would be charged; no timing test has shown "
-        f"one, so it is printed as \"{card['label']}\".",
+        f"network certifier whose network card releases at a set time would be charged. That card is {card['mark']}, "
+        "the input set_time_card, whose source is what the term rests on: none is deployed, so it is printed as "
+        f"\"{card['label']}\".",
         "A row whose release times are taken once has a jitter of 0 at either D_j, which rests on the same card, so "
         "its name carries the label.",
         f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
@@ -882,7 +897,7 @@ def render(doc: dict) -> str:
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",
         "With the lengths held by a stop block and the release times taken once by a network certifier whose network "
-        "card releases at a set time (not yet tested), the world's year meets the target at a failure rate of at "
+        f"card releases at a set time ({card['mark']}), the world's year meets the target at a failure rate of at "
         f"most {_n(doc['failure_rate_at_target'])}. Without that card the jitter alone, at D_j = {OF_RECORD}, is "
         f"{_n(jitter)} {doc['unit']} over the world's year, {_n(jitter / tg['value'])} times the target.",
         "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing.", "",
