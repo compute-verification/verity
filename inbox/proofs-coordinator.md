@@ -77450,3 +77450,69 @@ Tags: [run] a command of this hour; [read]; [relayed]; [derived]; [guess].
 - **What stays for after the move:** the stale `"protocols/remote"`, in the ordinary change that follows; the body says so.
 - **Lean's landing head moved** to `1ab0a942376e` from `de28a691126b` [read: `git rev-parse` after a fetch, 07:50Z]. I restage on it after the mover's fix, not before: a certificate from the mover as it is says nothing about the Lake path (my 07:46Z entry).
 - **The mover's fix is written and tried** [run, local, `--no-lock`, on `main`'s tip with the maps]: the same two maps now give `path = "../../compose"` in remote's lakefile after the first commit and `"../../../protocols/compose"` after the second, and the manifest's `dir` the same; every Lake path requirement resolves after each commit (35 lakefiles, 361 entries, 0 unresolved, twice) [run: `/tmp/maps/lake_paths.py` on each scratch commit]. Its tests and pull request are next; nothing of it is pushed yet.
+
+## 07:56Z WIDELEAF: `a59f` failed in one suite and it is my change: two tests of the prover's package that list the verifier's statements; mended at `a2944cf078`, and that suite passes there (`e8c4`, exit 0). The records run `ad5b` FAILED too, in a proof file of mine that no build had reached; mended at `8428b506e6`, not built yet; the build of the twenty unreached modules is `r20261112-075044-00fa`, verdict about 09:00Z. There is no records commit, so the fast-forward waits. TOP-402: none
+
+Mailbox read at 07:28Z and again at 07:52Z: the newest section is yours of 06:34Z [read]. Taken: the lint is mended in the third pull request and the head does not move for it; one fast-forward, at the records commit; `padTableError_le_scheduleWide` and the templated repetition domain go to the third pull request; the kernels lane's line is in #9108's body.
+
+**1. `r20261112-062252-a59f`, read by me: one suite, two tests, my change**
+
+- [run: its `stdout.log`] 64 suites at `f3a84fd990`: 63 passed, 4 of them from the cache; 1 failed, `verity-flock` (the prover's package): 1,444 passed, 2 failed, 27 skipped. Every test ran; the script and the node did nothing wrong.
+- [run: the same log] `tests/test_vectors_coverage.py::test_every_form_of_the_verifier_has_a_vector`: the forms with no vector and no entry in `UNCOVERED` were `statement verity/flock-circuit+wide-leaf` and `statement verity/flock-circuit/tmpl+wide-leaf`.
+- [run: the same log] `tests/test_lean_plain_leaves.py::test_the_plain_leaf_statement_is_the_default_one_by_name`, at `tests/test_lean_plain_leaves.py:92`: `assert "circuitPlainLeaves]" in _lean_def("all")`, against `def all : List Tags := […, circuitPlainLeaves, circuitWideLeaf]`.
+- [run on my VM: the two test files at `main`'s tip `bcaf58a45d`, 3 passed, 6 deselected, 1.34 s] Both pass on `main`. [read] So it is my change: `Flock/Tags.lean` adds the two wide-leaf statements to `Tags.all` and `Tags.templated`, which both tests read as text. No landed pull request explains it and neither test flakes.
+
+**2. The mend and the rerun**
+
+- [run: `git push`] `a2944cf078` on #9108's branch, two test files and no Lean. The coverage test names the two wide-leaf statements in `UNCOVERED`: the verifier takes them under `--zk` alone, and the test's own docstring says no pinned upstream build has `--zk` sessions, so no vector can be recorded for them. The plain-leaf test asks that the name is in `Tags.all`, not that it is last.
+- [run: `r20261112-073206-e8c4`, its `stdout.log`] Rerun of the one suite the fix reaches, `suites.py --quick verity-flock` at `a2944cf078`: exit 0, `verity-flock` passed, 1,446 passed and 27 skipped in 332 s. The other 63 suites were not rerun; the root suite and the suites that read a lock run again at the records commit.
+- [run] One run of mine cancelled before it took a slot: `r20261112-073018-0523`. I had asked for `--changed e39cc8aa6e`, which selected 50 suites because a suite's key covers its dependencies' directories; I cancelled it and launched the one suite instead.
+- [run: `research status`] `--on auto` placed `e8c4` on vy-nebius-cpu-9. It is a suites run (it runs `lake build` in the verifier's package before the suite), not a Lean audit; I named no node. Say if your rule about that node covers it and I pass it on.
+
+**3. `r20261112-060033-ad5b` (the second branch's records run at `f3a84fd990`) failed, read by me at 07:35Z: one file of mine**
+
+- [run: `research status`, its `stdout.log`] Failed, exit 1. The verifier's package and the network certifier's Lean each passed (exit 0 in 177 s and 64 s). `security` with `security/Proofs`: exit 1 in 2,831 s, the build of `security/Proofs` failed. `security/Properties`: failed only because that build did not pass. No records were written.
+- [run: its `lean-audit/requirer-security/audit-Proofs/build.log:19509`] One module failed, the log's only error: `Proofs.Flock.Claims.Recursion.NumsFixedR`, `security/Proofs/Flock/Claims/Recursion/NumsFixedR.lean:359:49: unsolved goals`. The goal left is the two tables' numbers, equal but for `t.wideLeaf` on one side and `t'.wideLeaf` on the other.
+- [read] Whose: mine. The file is not in #9108's diff and not under the second branch's two directories. The numbers of a table (its error, level-0 length, weight and rounds) read the statement's version since my change, and this proof, that two setups of one staged part have the same numbers, had no equality of the two tables' versions.
+- [read: `lean_changed.py`] Why no build saw it: `--build` builds the changed files and their imports, not an unchanged file that reads a changed definition. `bec0` and `8ffd` are both such builds. The records run is the first build of every module.
+- [derived: the import graph of `security/Proofs` against the two build logs] The failure left 19 modules that import it unbuilt. Every other module at or behind a changed one was compiled in `ad5b` (2,659 named in its log) or in `bec0` (10, restored from the cache). So the unknown is those 19.
+
+**4. The mend, `8428b506e6`, pushed, not built yet**
+
+- [run: `git push`] Four files under `security/Proofs/`: `Flock/Claims/Recursion/NumsFixedR.lean`, `Properties/Verity/Recursive/Numbers.lean`, `Properties/Verity/Sampled/Record/Nums.lean`, `Properties/Verity/Sampled/Record/Pass.lean`. None is under `SessionLoop/` or `ZkAny/`.
+- [read] Each proof takes the missing equality from the tags: a table `Stmt.setupHidden` sets up has the tags it was set up at (`Hidden.setupHidden_tagsP`, already proved), and the two setups are at the same tags. No premise, no new definition.
+- [read] Two of the 19 hold a proof of the same kind that would have failed next, so I mended them in the same commit: `numsT_congr` (`Properties/Verity/Recursive/Numbers.lean`) and `nums_congr` (`Properties/Verity/Sampled/Record/Nums.lean`). `Pass.lean` changes one pattern, because `shape_sess` concludes one more equality.
+- [read] Four lemmas change their statements: `hidden_same`, `staged_same` and `shape_sess` each conclude one more equality, and `numsT_congr` takes one more hypothesis. [run: `rg` over the tree's JSON] No lock names any of them.
+- [read] The other places in the 19 that name what #9108 changed fit the present statements (`Sampled/Record/Inner.lean:53` and `:90`, `Sampled/Record/Opens.lean:369` to `:383`). [guess] That is by read; only the build says.
+- [run on my VM: the lint's counter on the four files] It adds no retired-term site: 23, 21, 64 and 151 before and after.
+
+**5. Launched: the build of the twenty**
+
+- [run: its launch] `r20261112-075044-00fa`, 07:50Z, `lean_changed.py --build` of the failed module and the 19 that import it, at `8428b506e6`; limit 90 min; `--on auto` put it in vy-nebius-cpu-14's research pool, waiting for a slot at 07:56Z.
+- [guess] Verdict about 09:00Z: the launcher expected a slot about 08:02Z, and the build compiles most of the package's imports first.
+- [derived: the import graph] Of the twenty only the package's root, `Proofs/Flock.lean`, imports any of the second branch's 17 files. So the other nineteen build the same on the merged tree, and I did not build a merge.
+
+**6. What this does to the plan**
+
+- [read] There is no records commit to fast-forward to. #9108's head moved twice this turn, `e39cc8aa6e` to `a2944cf078` to `8428b506e6`: six files, none under the second branch's two directories. [run: `git merge-tree --write-tree --name-only`] The second branch's head `f3a84fd990` and `8428b506e6` merge with no file named.
+- [read] The next records run must be at a head that holds `8428b506e6`, and by your rule not before `00fa`'s verdict. For you to pass on: `ad5b` failed in a file of mine, the second branch's 17 files are not at fault, it merges `8428b506e6`, and the records run goes again after `00fa` passes. Say who launches it.
+- [guess] The ready line moves by about three hours: `00fa` about 09:00Z, then the records run, about 50 min in its slot when the cache holds.
+
+**7. Before any ready line (LEAN-249)**
+
+- [run at 07:53Z: `git fetch`, `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d HEAD`] At `8428b506e6` against lean's branch at `1ab0a942376e`: rc 0, one line, the tree; no file named. The same at `a2944cf078` against `de28a691126b` at 07:31Z.
+- [run: `git merge-tree --write-tree --name-only origin/main HEAD`] Onto `main` `bcaf58a45d`: no conflict.
+
+**8. TOP-402**
+
+- [read] None. My work is Lean on the CPU nodes; I need no card-hours on node A before Saturday.
+
+**9. #9108's body, replaced at 07:54Z**
+
+- [run: `research queue edit 9108`] Still opens "Not ready: do not mark", now with three missing things: the build of the twenty, the ZK server's proofs by the one fast-forward, and a records run that passes. Checks say what the changed-files builds do not cover, `ad5b`'s failure and its mend, `a59f` and `e8c4`, the kernels lane's two runs as relayed, the two merges, and the lint as ruled.
+
+**Waits on whom**
+
+- On `00fa`: me. If it fails I mend and build again, and say so here.
+- On you: the word to the second branch's owner (item 6), who launches the next records run, and the node question in item 2.
+- Nothing from me is for Daniel.
