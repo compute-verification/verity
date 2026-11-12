@@ -113,7 +113,9 @@ def fetch(rev: str, out: Path) -> Path:
 
 def read_safetensors(path: Path) -> tuple[bytearray, dict, int]:
     """(the file's bytes, its header, the data's offset)."""
-    data = bytearray(path.read_bytes())
+    data = bytearray(path.stat().st_size)
+    with open(path, "rb") as fh:
+        fh.readinto(data)
     (n,) = struct.unpack_from("<Q", data, 0)
     return data, json.loads(data[8:8 + n]), 8 + n
 
