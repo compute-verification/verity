@@ -420,6 +420,29 @@ def test_run_sh_pins_the_job_runs_the_scan_at_the_identity_and_writes_the_result
     assert "scan_cost: pinned to 1 cores" in r.stdout and "guard: holds" in r.stdout
 
 
+def test_run_sh_removes_the_verifiers_circuit_text_and_nothing_else_the_scan_kept(tree, tmp_path):
+    """The scan keeps the verifier's copy of each session's circuit with its other files, and those are most of a run's
+    bytes. The runner removes them once the scan has ended, whatever the scan's exit, and every other kept file stays:
+    the session's logs, the verifier's other files, and a circuit's text outside a verifier's directory."""
+    files = kept(tmp_path / "kept", cls="w63k4")
+    stays = [f"sczk/{R.ROUND}/verifier/program.json", f"sczk/{R.ROUND}/verifier/first-session-l0-circuit.rep0.bin",
+             f"sczk/{R.ROUND}/stage-first/first-circuit.txt", "sczk/chain/verifier/notes.txt"]
+    goes = [f"sczk/{R.ROUND}/verifier/first-circuit.txt", f"sczk/{R.ROUND}/verifier/ingress-0-circuit.txt",
+            "sczk/chain/verifier/egress-0-circuit.txt"]
+    for rel in stays + goes:
+        (files / rel).parent.mkdir(parents=True, exist_ok=True)
+        (files / rel).write_text("x" * 64, encoding="utf-8")
+    before = {p.relative_to(files).as_posix() for p in files.rglob("*") if p.is_file()}
+    for name, exit_ in (("held", 0), ("failed", 7)):
+        r = run_sh(tree, tmp_path / name, KEPT=str(files), SC_CORES="1", SCAN_EXIT=str(exit_))
+        assert r.returncode == exit_, r.stdout + r.stderr
+        out = tmp_path / name / "out"
+        after = {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()}
+        assert before - after == set(goes) and all((out / rel).is_file() for rel in stays)
+        assert "scan_cost: removed the verifier's copies of the circuits from the kept files" in r.stdout
+    assert json.loads((tmp_path / "held" / "result.json").read_text(encoding="utf-8"))["validation"]["status"] == "passed"
+
+
 def test_run_sh_exits_as_the_scan_did_and_refuses_a_job_with_too_few_cores(tree, tmp_path):
     files = kept(tmp_path / "kept", cls="w63k4")
     r = run_sh(tree, tmp_path / "failed", KEPT=str(files), SC_CORES="1", SCAN_EXIT="7")
