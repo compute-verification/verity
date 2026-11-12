@@ -119,7 +119,7 @@ def vm(tmp_path):
     tmux = bin_ / "tmux"
     tmux.write_text(STAND_IN)
     tmux.chmod(0o755)
-    env = {"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "HOME": str(tmp_path), "TMUX_TMPDIR": str(tmp_path),
+    env = {"PATH": f"{bin_}{os.pathsep}{os.defpath}", "HOME": str(tmp_path), "TMUX_TMPDIR": str(tmp_path),
            "AGENT_GUARD_EVENT_LOG": str(tmp_path / "events.jsonl"), "AGENT_INBOX": str(tmp_path / "inbox"),
            "AGENT_INBOX_POLL_S": "off", "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0"}
 
@@ -289,7 +289,8 @@ def test_start_starts_the_kept_session_once_and_only_on_a_server_that_would_hold
     show is that the server `start` starts holds the environment it was started from, that a later session takes its agent's
     id from the shell that starts it, and that the hook's rule reads a real tmux's answers."""
     tmp = tmp_path_factory.mktemp("s")                          # a short path: a socket's is capped near 100 bytes
-    base = {"PATH": os.environ["PATH"], "HOME": str(tmp), "LANG": "C.UTF-8", "SHELL": "/bin/sh", "TMUX_TMPDIR": str(tmp),
+    path = f"{os.path.dirname(shutil.which('tmux'))}{os.pathsep}{os.defpath}"
+    base = {"PATH": path, "HOME": str(tmp), "LANG": "C.UTF-8", "SHELL": "/bin/sh", "TMUX_TMPDIR": str(tmp),
             "AGENT_GUARD_EVENT_LOG": str(tmp / "events.jsonl"), "AGENT_INBOX": str(tmp / "inbox"), "AGENT_INBOX_POLL_S": "off",
             "AGENT_GUARD_STATE": str(tmp / "state"), "AGENT_GUARD_MIN_AVAIL": "0"}
     injected = {"CLOUD_AGENT_INJECTED_SECRET_NAMES": "JOBS_TOKEN,STORE_KEY", "JOBS_TOKEN": "dummy-a", "STORE_KEY": "dummy-b"}
