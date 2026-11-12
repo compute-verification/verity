@@ -107361,3 +107361,26 @@ Branch `cursor/proofs-addrwc-60f3`, SHA `d73e6afe1c`, with the base merged at `b
 - Nothing in `Copy.lean` is compiled yet. 8 of its 9 theorems elaborated with no error in `r20261112-221841-8986`, but that file failed, so no axioms were shown.
 - The bridges and the merged base are untested.
 - Whether `WidthRef` and `CopyRef` hold at `addressOf` for the demonstration's registrations.
+
+## RELAX, Thu 12 Nov 22:59Z: your 22:41Z word is read and acted on. R7's branch is at `77ee4e226019` (the README's bullet is one line); the records run is building, the tries and the quick tier wait on cpu-8. Ready line still by Fri 06:00Z
+
+**Head** [run: `git push`, `git rev-parse`]: `cursor/proofs-r7-certified-b6a0` at `77ee4e226019431e72190e425d0d589168dea1b7`. It is `6388939bcb9b` (the merge of #9458's head, my 22:35Z entry) plus one commit that changes only `verity/protocols/spot/verifier/README.md`: five lines to one, 114 bytes added in place of 492. No Lean, Python or test differs between the two commits.
+
+**Your decisions, as I hold them** [read: the hook's 22:41Z message]
+- The mark in the registered Program, the reader from the description alone, one refusal in the record check; `checkPort` and `Registered.check` untouched. No entries-first half.
+- The pull request's body says under "not established": the rows (a reversed file and an `o1` shifted by one are accepted) and the member with no unit drawn. Both are in the draft now.
+- The design entry by Fri 16:00Z, saying plainly whether the Program format needs a new field. LEAN-238's step 1 keeps Mon 16 Nov; the mark's build after it.
+- One correction to "as it stands at `8b4ce503e1a7`": the branch has since merged #9458's head, by your 20:16Z word (whoever opens second merges the first). Say if you would rather it had not.
+
+**Runs** [run: `research status`, `research cancel`, each run's `stderr.log`]
+- Records `r20261112-223453-2b16` (vy-nebius-cpu-8, at `6388939bcb9b`): running since 22:43Z, building. 40 to 70 minutes from its start [guess, from Wednesday's 59].
+- Tries `r20261112-224822-5048` (vy-nebius-cpu-8, at `77ee4e226019`, the nine changed Lean files with `--siblings`, 12 GB asked): waiting, two ahead.
+- Quick tier `r20261112-225918-b980` (vy-nebius-cpu-8, at `77ee4e226019`): `suites.py --changed bafae2eaec2e --quick`, the suites that this branch's 56 files beyond lean's merge head touch (mine and #9458's). It holds the SPOT verifier's two suites, so it is also the first run of the new tests against the real Lean.
+- Cancelled before they started: `22bf` (tries, 13 minutes in cpu-12's line behind runs waiting an hour) and `8d3d` (two suites, 24 minutes in cpu-10's line behind runs waiting 45). I moved both to cpu-8, where the line moves; nothing ran twice.
+- For infra's note [run: `remote.json` of `b740` and `e3a2`]: six tries peaked at 7.3 GB and two at 2.1 GB, so I ask 12 GB for tries now, not 32. A smaller ask passes the waiters that only memory holds (`slot.py`, `BACKFILL_MAX_GB`).
+
+**What the ready line will name, so you can say no now:** the records run at `6388939bcb9b` with its lock records committed unedited on top of `77ee4e226019`; the tries at `77ee4e226019`; the quick tier rerun at the final head (only the suites whose inputs the lock commit changes should run again, the rest read their passes if cpu-8 keeps its cache).
+
+**Not established:** as at 22:35Z.
+
+For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `77ee4e226019` | records `2b16` running, tries `5048` and quick tier `b980` waiting, all on cpu-8 | ready line by Fri 06:00Z | nothing needed.
