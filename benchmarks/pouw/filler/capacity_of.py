@@ -27,6 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 
+#: what the tests read
+__all__ = ["E", "dfill_rows", "fstep_rows", "lfill_rows", "main"]
+
 F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
 SMS = 188
 MACS_A_MMA = 4096
