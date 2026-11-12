@@ -1,20 +1,27 @@
 """The hardware cards: one TOML file per SKU (``<sku>.toml``, beside this file), the one source of each card's numbers.
 
 A card is a GPU's (``kind = "gpu"``), a host's (``kind = "host"``: a server's CPUs and DRAM, apart from the GPUs it
-carries) or a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs). Every
-number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU and
-firmware exceeds it: what the model's premises need), ``measurement`` (a measured value, so only a lower bound on the
-ceiling) or ``placeholder`` (neither: open). ``source`` names a data sheet, a document or an ``art:`` id (a run's
-record), and a node by its kind, never its host name. The Lean card tables (``security/Definitions/Core/Accel``) are
-held to the GPU cards that name one (``lean``), number by number (``verity/hardware/tests/test_lean.py``). Stdlib only,
-and it imports no other unit.
+carries), a server's (``kind = "server"``: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time
+base's (``kind = "timebase"``: the clock an auditor's device reads, apart from the host it runs in; its one section is
+``drift``: ``max``, the most the clock's rate may differ from the SI second's (``s/s``), and ``read``, the largest
+reading of it on record, a ``measurement``). Every
+number in a card file is an entry ``{value, unit, mark, source}``. ``mark`` is ``ceiling`` (no program on that SKU
+exceeds it, whatever firmware it runs: what the model's premises need), ``measurement`` (a measured value, so only a
+lower bound on the ceiling), ``premise`` (no page and no run bounds the number; it is assumed under the premise its
+source states, of whom it names. A row that uses it prints the premise for its device's host, and no figure of record
+uses it) or ``placeholder`` (none of these: open). ``source`` names a data sheet, a document or an
+``art:`` id (a run's record), and a node by its kind, never its host name. The Lean card tables
+(``security/Definitions/Core/Accel``) are held to the GPU cards that name one (``lean``), number by number
+(``verity/hardware/tests/test_lean.py``). Stdlib only, and it imports no other unit.
 
 ``rate`` is the one calculator of a GPU's peak rates, Lean's ``card.ρ``: a reader that needs the tensor peak at some
 clock calls it rather than multiplying the card's numbers itself.
 
 ~~~python
-from verity.hardware.cards import load, rate, skus
+from verity.hardware.cards import load, number, rate, skus
 skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+drift = load("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
 card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
@@ -33,9 +40,11 @@ from pathlib import Path
 
 from verity.errors import InvalidArtifact
 
+__all__ = ["CARDS", "ENTRY", "KINDS", "MARKS", "WORD", "load", "number", "rate", "skus"]
+
 CARDS = Path(__file__).parent
-KINDS = ("gpu", "host", "server")
-MARKS = ("ceiling", "measurement", "placeholder")
+KINDS = ("gpu", "host", "server", "timebase")
+MARKS = ("ceiling", "measurement", "premise", "placeholder")
 ENTRY = frozenset({"value", "unit", "mark", "source"})
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 
