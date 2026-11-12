@@ -305,7 +305,8 @@ A spec-level reference for network accounting's timing channel:
   makes public), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
-  that an execution phase has no head (`check_no_head`);
+  that an execution phase has no head (`check_no_head`), and an arrival in a run's last `span` buckets is turned
+  away with one constant `REFUSED` cell on the next tick, which is no refusal;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
