@@ -140,10 +140,12 @@ the record and never from the code reading it (`read_as`): a record written on v
 before the label included. It holds K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
-the public's ``scans[j]``), ℓ_{a,j} (``free`` and ``entries``, the scan's slot entries charged once where every proof
-block of it is drawn, in place of its tied audits' free inputs and its faulty entries; a public of a period check
-that charges none so states no ``entries``, read as 0), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and
-``faulty_entries``) and the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, the count
+the public's ``scans[j]``), ℓ_{a,j} (``free``, ``entries`` and ``view``: the scan's view rows wherever the check holds
+no view tie, as it holds none; its tied audits' free inputs where it is sampled in part; and its slot entries once only
+where every proof block of it is drawn and its view tie is held, so in no accepted period's; a public of a period check
+that charges no entries once, or no view rows, states neither, each read as 0), k_{skip,j} (``faulty_sets``,
+``faulty_bits`` and ``faulty_entries``) and the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to
+K, the count
 `NetTiming.Guarantees.PeriodLeakAccepted` states (``statement``) of what the serving node sends past its committed
 program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets of τ (the certifier's
 case's ``schedule``); no Lean statement covers a K whose answers the check read as given. ``delta_net`` gives it term by term, each with its source: the answer's
@@ -158,28 +160,40 @@ connections k_sched and k_fail count, every one the schedule can carry (`CONNECT
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is its
 ``error``. ``of_record`` is the figure of record (`OPEN`), on the same answers (``answers``): that K, the check's,
-with nothing added to it, proved only
+with nothing added to it, over the period's execution phases (``phases``). It bounds a count expression, the product
+RowsKBoundsCount states at the check's numbers, which no statement yet ties to the secrets, and the record calls it no
+leak bound (``bounds``, `COUNT`). It is proved only
 where none of its premises is open (``premises``, `DISCHARGE`: each of `PREMISES` discharged by theorems in
 Security's locks, each at the statement `DISCHARGES` pins, taking no named assumption but a standing one (`STANDING`)
 or one its pin names and no premise that is open, or, where a guarantee it rests on states it of the auditor's
 inputs, closed by that guarantee's pin and the run's check (`CHECKED`); and each guarantee it rests on in the lock at
 the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts, `COUNTS`), the coins are live
-(``coins``) and, where the public charges a phase its tied audits (``tie_charged``, the phases whose term states no
-slot entries; `TIE`, the premises of that charge alone, as `ENTRIES` are of the slot entries'), the verdict's public
-holds every check that charge rests on (``held``, `CHECKS`). While any is ``open`` it is the same K, each open by
+(``coins``) and, where the public charges a phase its tied audits (``tie_charged``, the phases whose scan is sampled
+in part, among each phase's ``charges``, `charges`; `TIE`, the premises of that charge, as `VIEW` are of the view
+rows' and `ENTRIES` of the slot entries' once), the verdict's public
+holds every check that charge rests on (``held``, `CHECKS`). Charged its view rows, a phase rests on neither of the
+scan's ties (`TIES`, `TIES_UNDER`): on the view rows' cut and the period's statement, each open till the lock lists
+its theorem, and on every answer the check reads being verified, each by name (`view-cut`, `period-checked`,
+`answers-verified`). While any is ``open`` it is the same K, each open by
 name, with how it tightens (``tight``, `TIGHT`), conditional on the coins and on each open premise of `UNCHARGED`
-while they are open (``conditional_on``); ``advice`` says that the link figure charges the advice through the entries
-(`ADVICE_LINK`). Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit tied to
+while they are open (``conditional_on``); ``advice`` says that the link figure charges the advice through the scan's
+inputs (`ADVICE_LINK`). Beside it and never in its place, ``with_ties`` (`with_ties`, `WITH_TIES`) is the figure with
+both of the scan's ties: K less each phase's view rows, plus its scan's slot entries once where every proof block of
+it is drawn, given only as conditional on the two ties (``conditional_on``), each stated at the network certifier's
+run and neither checked, with what is open under it; it bounds a count expression too, and no period's figure is made
+from it. Its ``state_charge`` (`state_charge`, `STATE_CHARGE`) says which charge K applied each audit tied to
 the scan of a phase charged its tied audits: stateFree, its free inputs with its reads of the scan's state held, only
 where RowsStateHeld is in the lock at the statement and definitions `STATE_PINS` pins, so that its proof stands over
 the entry a window's activations commit, else free; where it is free and a tied audit's parameters state a circuit
-record, there is no figure (`STATE_UNCOVERED`); and ``entries``, no audit's, where no phase is charged so. Beside K,
+record, there is no figure (`STATE_UNCOVERED`); and ``view`` or ``entries``, no audit's, where no phase is charged
+so. Beside K,
 ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
-ℓ_{a,j} as K charges each execution phase, with its share of K and its source (`CHARGED`: the scan's slot
-entries, or the tied compute audits' unregistered inputs, read off the period's parameters, with no advice length and
-no cap in them); ``cap`` is each audit's ℓ_a, the cap of the advice the run registered (its published advice
-registration's, `REGISTRATION`), stated as a cap, in no term of K and in no figure (`CAP`), ``missing`` where the run
+ℓ_{a,j} as K charges each execution phase, with its share of K and its source (`CHARGED`: the scan's view rows, and
+where it is sampled in part the tied compute audits' unregistered inputs, read off the period's parameters, with no
+advice length and no cap in them); ``cap`` is each audit's ℓ_a, the cap of the advice the run registered (its published
+advice registration's, `REGISTRATION`), stated as a cap, in no term of K and in no figure (`CAP`), ``missing`` where the
+run
 published none; and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
@@ -298,18 +312,45 @@ TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 PHASE_TERMS = {"\\ell_{a,j}": ("free", "entries", "view"),
                "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"), "T_j \\log_2 d_{jit}": ("jitter",)}
 #: a scan's public fields that a period check charging no slot entries once, or no view rows, doesn't state, each read
-#: as 0 where absent
+#: as 0 where absent: its slot entries charged once, and its view rows
 UNSTATED = ("entries", "view")
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
           "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
-ADVICE_LINK = ("the link figure charges the advice through the entries: the advice reaches the link only through the "
-               "compute audit tied to a phase's scan, and that audit reaches the scan only as its slot entries, the "
-               "scan's only input gates beside its rows and its state (NetworkCheck.Period's scanOf refuses any "
-               "other). K charges every bit of them once (``entries``) where every proof block of the scan is drawn, "
-               "whatever the advice and the tied audit's units computed, so K has no term of the advice's own: no "
-               "ℓ_a, no ℓ_a + 1 and no |a_j| (`CAP`)")
+ADVICE_LINK = ("the link figure charges the advice through the scan's inputs: the advice reaches the link only through "
+               "the compute audit tied to a phase's scan, that audit reaches the scan only as its slot entries, the "
+               "scan's only input gates beside its rows, its state and its view rows (NetworkCheck.Period's scanOf "
+               "refuses any other), and the entries reach the egress rows only through the view rows. Where every "
+               "proof block of the scan is drawn K charges every bit of the view rows (``view``), no view tie being "
+               "held, whatever the advice, the entries and the tied audit's units computed, and with both ties it "
+               "would charge every bit of the entries once (``entries``, `WITH_TIES`); so K has no term of the "
+               "advice's own: no ℓ_a, no ℓ_a + 1 and no |a_j| (`CAP`)")
+#: what each figure of the record is, K and the one with both ties (`WITH_TIES`) alike
+COUNT = ("each figure bounds a count expression: the product NetworkCheck.Period's rows form charges, the schedules' "
+         "and the cells' factors and each execution phase's free inputs, incorrect sets and jitter, is at most 2^K at "
+         "the check's numbers, at the terms of either view tie (RowsKBoundsCount, the arithmetic alone: "
+         "`count-arithmetic`). No statement yet ties that count to the secrets a covert sender can send (`view-cut`, "
+         "`period-checked`), so neither figure is a leak bound, and the record calls neither one")
+#: the scan's two ties, by their premises' names (`PREMISES`)
+TIES = ("state-tied", "view-tied")
+#: the charges the two ties are premises of: the slot entries' once alone, so neither is under the check's K, charged
+#: the view rows, and both are under the figure with both ties (`WITH_TIES`). The one place that says so
+TIES_UNDER = ("entries",)
+WITH_TIES = ("the figure with both of the scan's ties, given only as conditional on them (``conditional_on``: `TIES`) "
+             "and never as the check's: K less each execution phase's view rows, plus its scan's slot entries once "
+             "where every proof block of that scan is drawn (the public's ``scan_bits``), the terms "
+             "NetworkCheck.Period's Scan.terms gives at a held view tie, which no accepted period's are at. Each tie "
+             "is stated at the network certifier's run, the run its signed records fix, never at an extracted "
+             "trace's, and each adds its own error to the period's. Neither is checked: the period check holds a "
+             "scan's registration to stating its state's chain and compares its state's root and domain "
+             "(stateRead, stateTied), which holds no run to the first, and it reads nothing of the second "
+             "(viewTieHeld). It bounds a count expression as K does (`COUNT`), on the same answers (``answers``), "
+             "open on every premise of its own charges beside the ties (``open``), and no period's figure is made "
+             "from it")
+#: why a public whose scans state view rows gives no figure with both ties
+NO_SCAN_BITS = ("the period's public states no scan_bits.entries, the slot entries a scan with every proof block drawn "
+                "would be charged once with both ties, so the record states no figure with them")
 #: beside K wherever the record or one of its lines states it
 ANSWERS = "answers read as given"
 GIVEN = ("K, on one-stage answers the driver verified; the check read them as given: the period's check, which states "
@@ -365,8 +406,9 @@ DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-sta
          "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
          "composite's error; where it lists none, δ_i is the audit's answer's δ, and the charged part is what eps holds "
          "beyond m · δ_scan. A scan with every proof block drawn holds no incorrect proof block at any δ, so a smaller "
-         "δ_scan costs neither proving nor bits, and K charges its slot entries once (entries) whatever its tied "
-         "audits' draws, none of which is read at δ_i. Sampled in part, its bound grows as δ falls (faulty_sets, "
+         "δ_scan costs neither proving nor bits, and K charges its view rows (view), or with the view tie held its "
+         "slot entries once (entries), whatever its tied audits' draws, none of which is read at δ_i. Sampled in "
+         "part, its bound grows as δ falls (faulty_sets, "
          "faulty_bits), and a tied audit drawn in part charges every slot-entry bit of its phase (faulty_entries) once "
          "its bound at δ_i is at least one incorrect proof block, as at any small δ_i it is, so a smaller δ_i costs K "
          "nothing; drawn whole, that audit leaves eps and its entries leave K, at the cost of proving each of its "
@@ -521,15 +563,18 @@ CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its perio
                f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
                "the coins")
 NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's law"
-CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs K charges execution phase j. Where every proof block of j's scan "
-           "is drawn, its slot entries, every bit of them once (``entries``, NetworkCheck.Period's Scan.terms), in "
-           "place of its tied audits' free inputs and its faulty entries together, and no smaller count the tie to "
-           "those audits might give: the scan's only input gates beside its rows and its state, so whatever its tied "
-           "audits compute reaches the link only through them (`ADVICE_LINK`). Where j's scan is sampled in part "
-           "(``free``), the free inputs of each compute audit tied to it, those its Program neither registers at a "
-           "pinned root nor ties (NetworkCheck.Period's tiedAudits sums the parameters' audits[].free, "
-           "#(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). Either way it reads no cap "
-           "and no advice length: the advice is the compile unit's input, not the window Program's "
+CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs K charges execution phase j (NetworkCheck.Period's "
+           "Scan.terms). Its scan's view rows (``view``), each egress unit's state, every bit of them, wherever the "
+           "check holds no view tie, as it holds none: they are input gates of the scan that nothing holds to what "
+           "its ingress units computed. Beside them, where every proof block of j's scan is drawn, nothing more: "
+           "neither its slot entries nor its tied audits' free inputs, which reach the egress rows only through "
+           "the view rows (`ADVICE_LINK`); with the view tie held it would be the slot entries, every bit of them "
+           "once (``entries``), in place of the view rows, and no smaller count the tie to those audits might "
+           "give. Where j's scan is sampled in part "
+           "(``free``), the free inputs of each compute audit tied to it too, those its Program neither registers "
+           "at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the parameters' audits[].free, "
+           "#(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). Whichever it is, it reads "
+           "no cap and no advice length: the advice is the compile unit's input, not the window Program's "
            "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
            "cap_bits) nor |a_j| is in it. It is the figure of record's term, proved only once none of its premises is "
            "open (`DISCHARGE`, `OPEN`)")
@@ -537,8 +582,8 @@ SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't 
         "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
         "``faulty_entries``, every slot-entry bit E_w of a scan sampled in part to which an audit drawn in part is "
         "tied (charged, NetworkCheck.Period's chargedOf) with a bound of at least one incorrect proof block. A scan "
-        "with every proof block drawn has none: its entries are charged once in ℓ_{a,j} (`CHARGED`) whatever its tied "
-        "audits' draws, and no tied audit's δ is in eps for it")
+        "with every proof block drawn has none: its view rows, or with the view tie held its entries once, are "
+        "charged in ℓ_{a,j} (`CHARGED`) whatever its tied audits' draws, and no tied audit's δ is in eps for it")
 #: the checks the charge of a phase's tied audits rests on (a phase whose scan is sampled in part, `TIE`), each by the
 #: name the period's public lists it under in ``held`` once its Lean check performs it
 CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
@@ -665,33 +710,70 @@ RESTS_ON: dict[str, dict[str, Any]] = {
 #: the deployed code by their names in `LOCKS`' guarantees, only ones a lock of this tree lists (none named leaves it
 #: open, and what would discharge it is said in words), or, for one a guarantee of `RESTS_ON` states of the auditor's
 #: inputs, that guarantee (``stated_by``) and the run's check of them (``checked``, `CHECKED`). ``charge`` marks a
-#: premise of one charge of a phase alone: its tied audits' (``tied``, `TIE`) or its scan's slot entries' once
-#: (``entries``, `ENTRIES`)
+#: premise of some charges of a phase alone (`charges`): its scan's view rows' (``view``, `VIEW`), its scan's slot
+#: entries' once (``entries``, `ENTRIES`) or its tied audits' (``tied``, `TIE`). ``verified`` marks the one that is
+#: open while the period's check reads its answers as given (`ANSWERS_VERIFIED`), whatever discharge it names
 PREMISES: dict[str, dict[str, Any]] = {
-    "entries-cut": {"is": "that on the period check's acceptance the count PeriodLeakRegistered bounds is at most 2^K "
-                          "at the K the check publishes, each scan with every proof block drawn charged its slot "
-                          "entries once: PeriodLeakRegistered read at the scans' statements alone, their slot-entry "
-                          "gates free. Three conditions, each carried by that statement: every unit of such a scan is "
-                          "in the accepted statement, proved and none sampled (the check's Facts.whole), since a "
-                          "sampled scan with a wrong unit leaks its egress rows, not its entries; an accepted scan's "
-                          "only input gates are its rows, its state and its slot entries (scanOf's refusal); and its "
-                          "state rows are no free input, each ingress unit's state read being the unit before's "
-                          "output (the state chain, which the scan's registration states and the check reads, by "
-                          "checked inputs whose outputs are unique). With the egress units' views tied too "
-                          "(`view-tied`), egress is a function of ingress, which the wire fixes, the initial state "
-                          "and the entries, so the audits tied to the scan move at most the entries' bits to the "
-                          "link, whatever their units computed. RowsKBoundsCount, in the lock, is its arithmetic "
-                          "alone: the product at the check's numbers is at most 2^K. Not yet stated: open, by this "
-                          "name, until the statement is in the lock and named here",
-                    "discharged_by": (), "charge": "entries"},
-    "view-tied": {"is": "that each egress unit's view of the scan's state is its ingress unit's output: the scan's "
-                        "second state tie, beside the state chain. The scan's registration states the chain alone and "
-                        "the period check reads nothing of the view, so no check of this run holds a prover to it: "
-                        "untied, the view rows are free inputs of the scan that the count reads and K charges nothing "
-                        "for, and the figure of a phase is then those rows' width in place of its slot entries. Open "
-                        "until the registration states the tie and the period check reads it as it reads the chain, "
-                        "or a statement in the lock gives it of the scan's Program",
-                  "discharged_by": (), "charge": "entries"},
+    "count-arithmetic": {"is": "that the product the rows form charges is at most 2^K at the numbers the period's "
+                               "check read, at the terms of either view tie: RowsKBoundsCount, the arithmetic alone, "
+                               "which says nothing of what a period's count is (`COUNT`)",
+                         "discharged_by": ("Properties.NetworkPeriod.rowsKBoundsCount",)},
+    "view-cut": {"is": "the view rows' cut: that at a scan the period check accepts each egress unit's output is a "
+                       "function of its view row alone, so that with every egress unit verified an execution phase's "
+                       "egress rows are a function of its T view rows, and the count is at that phase at most 2 to "
+                       "their bits, whatever its ingress units, its slot entries and its tied audits computed. It "
+                       "takes neither of the scan's ties (`TIES`). scanOf accepts a scan only where the egress "
+                       "template's one parameter is its state, each of its arguments is one input node's leaves and "
+                       "none an ingress row's, and every input gate is a template's parameter or a slot entry; the "
+                       "proof must show too that the template's body reads only its parameters. Open, by this name, "
+                       "until the lock lists a theorem stating it of scanOf's acceptance and it is named here",
+                 "discharged_by": (), "charge": ("view",)},
+    "period-checked": {"is": "the period's statement that carries either figure: PeriodLeakAccepted's bound on the "
+                             "period check's acceptance, with each execution phase's checked inputs, those whose "
+                             "outputs are unique, left out of its free ones; and the step from that statement's "
+                             "count, the registered schedules' number times the phases' count, to the product K "
+                             "bounds (`COUNT`), at the scans' instance. Until both are proved each figure bounds a "
+                             "count expression that no statement ties to the secrets: open, by this name, until the "
+                             "lock lists both and they are named here",
+                       "discharged_by": (), "charge": ("view", "entries")},
+    "answers-verified": {"is": "that each one-stage answer the period's check reads is verified for its registration "
+                               "and design, so that every proof block of a scan being drawn and proved, each egress "
+                               "unit among them, and each tied audit's bound are the check's own conclusions and "
+                               "never the evidence's word. The check reads its answers as given (`GIVEN`): open, by "
+                               "this name, while it does (`ANSWERS_VERIFIED`), and after that until the Property "
+                               "that gives it of the check's acceptance is in the lock and named here",
+                         "discharged_by": (), "verified": True},
+    "entries-cut": {"is": "that with both of a scan's ties held (`TIES`) and every proof block of it drawn, the count "
+                          "is at that phase at most 2 to its slot entries' bits: egress is then a function of "
+                          "ingress, which the wire fixes, the initial state and the entries, so the audits tied to "
+                          "the scan move at most the entries' bits to the link, whatever their units computed. Three "
+                          "conditions, each carried by that statement: every unit of the scan is in the accepted "
+                          "statement, proved and none sampled (the check's Facts.whole); an accepted scan's only "
+                          "input gates are its rows, its state, its view rows and its slot entries (scanOf's "
+                          "refusal); and its state rows and view rows are no free input, each a checked input whose "
+                          "output is unique under its tie. A premise of the figure with both ties alone "
+                          "(`WITH_TIES`): no accepted period's term charges the entries once. Open, by this name, "
+                          "until the lock lists a theorem stating it and it is named here",
+                    "discharged_by": (), "charge": ("entries",)},
+    "state-tied": {"is": "the scan's first tie: that at the network certifier's run each ingress unit's state read is "
+                         "the state the unit before it returned, from the empty state at bucket 0. Stated at that "
+                         "run, the one the network certifier's signed records fix, never at an extracted trace's, "
+                         "with its own error in the period's. Not checked there: the period check holds the scan's "
+                         "registration to stating the chain and its state's root and domain to its wired audit's "
+                         "(stateRead, stateTied; RowsStateTied, in the lock, says that much), which is of the "
+                         "registration and holds no run to the tie. A premise of the figure with both ties alone "
+                         "(`WITH_TIES`, `TIES_UNDER`). Open, by this name, until the tie is a refusal of the period "
+                         "check and a statement in the lock gives it at that run",
+                   "discharged_by": (), "charge": TIES_UNDER},
+    "view-tied": {"is": "the scan's second tie: that at the network certifier's run each egress unit's state, its "
+                        "view row, is the view its ingress unit returned. Stated at that run, never at an extracted "
+                        "trace's, with its own error in the period's. Not checked: no registration states it and the "
+                        "period check reads nothing of it (viewTieHeld), so the check charges every view row and its "
+                        "K takes neither tie. A premise of the figure with both ties alone (`WITH_TIES`, "
+                        "`TIES_UNDER`). Open, by this name, until the scan's registration states the tie before the "
+                        "coins, the period check refuses a period without it, and a statement in the lock gives it "
+                        "at that run",
+                  "discharged_by": (), "charge": TIES_UNDER},
     "wires-fit": {"is": "ScopeAcc at each statement the count reads: the sampling scope (Scope, the sampled verifier's, "
                         "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
                         "(BoundaryGates.Fits, every clause). At a scan's statement, at the layout the count reads it "
@@ -714,13 +796,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "statement needs a scope premise for the tie, and its count over the frames view, not the "
                          "stripped view of the network certifier's cells. Open, by this name, until it is stated so, "
                          "proved, in the lock and named in `RESTS_ON`",
-                   "discharged_by": (), "charge": "tied"},
+                   "discharged_by": (), "charge": ("tied",)},
     "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout. The "
                          "registered gates are read at a template's first unit, so it holds only of templates of one "
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other. "
                          "Open until that theorem is in the lock and named here",
-                   "discharged_by": (), "charge": "tied"},
+                   "discharged_by": (), "charge": ("tied",)},
     "tied-padding-reads": {"is": "CircuitCounts' tied-audit half: that no unit of a tied audit's circuit file reads "
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
@@ -731,13 +813,13 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "once a pass over each tied audit's whole file computes its unit reads and a proved "
                                  "Property, never a difftest, gives that they are the parsed file's unitReads, in the "
                                  "lock as CircuitCountsAt's tied-audit premise",
-                           "discharged_by": (), "charge": "tied"},
+                           "discharged_by": (), "charge": ("tied",)},
     "padding-out-of-free": {"is": "that no padding column of a tied audit's units is a free input it charges: the "
                                   "period check refuses a tied audit whose units read into their padding, and the "
                                   "lemma that a column no unit reads adds no free input is in the lock. Open, by this "
                                   "name, until both are: till then a tied audit's free count must hold its padding "
                                   "columns, which no honest unit reads, or `tied-padding-reads` is open",
-                            "discharged_by": (), "charge": "tied"},
+                            "discharged_by": (), "charge": ("tied",)},
     "session-tags": {"is": "the read bitmap's bridge to the sampled sessions' tags: the period check counts each tied "
                            "audit's free inputs off the inputs its circuit reads as the reader parses it (circuitOf at "
                            "Tags.circuit, whole_circuit), where the bridge is definitional, while each session proves "
@@ -745,34 +827,34 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "is an identity lemma, not a definition. Open, by this name, until the lemma that circuitOf "
                            "at t.withCoins c is circuitOf at t, by definition once circuitOf reads its tags with their "
                            "identity dropped, is in the lock beside whole_circuit",
-                     "discharged_by": (), "charge": "tied"},
+                     "discharged_by": (), "charge": ("tied",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it. "
                              "Open until the Property that gives it of the check's acceptance is in the lock and named "
                              "here",
-                       "discharged_by": (), "charge": "tied"},
+                       "discharged_by": (), "charge": ("tied",)},
     "rows-state-held": {"is": "RowsStateHeld: each tied audit's state read at row a ≥ 1 committed where the scan's o1 of "
                               "unit a − 1 is, under the scan's state root, and so the scan's own state read at unit a. "
                               "Open until the theorem that gives it of a phase the check accepts is in the lock and "
                               "named here",
-                        "discharged_by": (), "charge": "tied"},
+                        "discharged_by": (), "charge": ("tied",)},
     "rows-prog-wired": {"is": "RowsProgWired: the scan's prog read at lane l, leaf b committed where its tied audit's slot "
                               "entry of chunk l, leaf b is, under that audit's entries root. Open until the theorem "
                               "that gives it of a phase the check accepts is in the lock and named here",
-                        "discharged_by": (), "charge": "tied"},
+                        "discharged_by": (), "charge": ("tied",)},
     "rows-ties-ordered": {"is": "RowsTiesOrdered: the phase's layout, each statement's wires and the ties, fits its joint "
                                 "Program (BoundaryGates.Fits): acyclic, and no step's egress depending on a later step's "
                                 "ingress. Open until the theorem that gives it of a phase the check accepts is in the "
                                 "lock and named here",
-                          "discharged_by": (), "charge": "tied"},
+                          "discharged_by": (), "charge": ("tied",)},
     "shared-roots-parsed": {"is": "SharedRootsParsed: at the deployment, two gates the registrations commit at one "
                                   "position under one root open to one value, or their H calls collide; the sampled "
                                   "leg's bridge proves it of the deployed parse. Open until that theorem is named",
-                            "discharged_by": (), "charge": "tied"},
+                            "discharged_by": (), "charge": ("tied",)},
     "tied-exposed": {"is": "TiedExposed: in each phase, each tied audit that can be wrong at its partition and δ shows "
                            "the rest of the phase at most the gates βt the period charges it (Phase.exposed); the "
                            "scan's half is `windows-placed`. Open until it is stated of the period check's acceptance "
                            "and a theorem gives it",
-                     "discharged_by": (), "charge": "tied"},
+                     "discharged_by": (), "charge": ("tied",)},
     "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
                            "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
                            "window's tied activations and the scan's state) and pinned ones (the weights, at their "
@@ -860,12 +942,16 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "the lock",
                            "discharged_by": ()},
 }
-#: the premises of the charge of a phase's tied audits alone: a figure rests on them only where the period's public
+#: the premises of the charge of a phase's tied audits: a figure rests on them only where the period's public
 #: charges a phase so, its scan sampled in part (`tie_charged`)
-TIE = tuple(n for n, p in PREMISES.items() if p.get("charge") == "tied")
-#: the premises of the charge of a scan's slot entries once alone: a figure rests on them only where the period's
-#: public charges a phase so, every proof block of its scan drawn
-ENTRIES = tuple(n for n, p in PREMISES.items() if p.get("charge") == "entries")
+TIE = tuple(n for n, p in PREMISES.items() if "tied" in p.get("charge", ()))
+#: the premises of the charge of a scan's slot entries once: a figure rests on them only where a phase is charged so,
+#: every proof block of its scan drawn and its view tie held, as no accepted period's is: the figure with both ties
+#: (`WITH_TIES`)
+ENTRIES = tuple(n for n, p in PREMISES.items() if "entries" in p.get("charge", ()))
+#: the premises of the charge of a scan's view rows: a figure rests on them only where the period's public charges a
+#: phase so, as the check does every phase while it holds no view tie
+VIEW = tuple(n for n, p in PREMISES.items() if "view" in p.get("charge", ()))
 #: the premises no charge covers: while one is open the bound, the figure of record, its periods and the composite's
 #: error are conditional on it by name, never charged for it
 UNCHARGED = ("certifier-key",)
@@ -899,7 +985,10 @@ NOT_CHECKED = "no run's inputs were checked"
 #: counts that names it. A Property's statement may take a deployment's premise inline, where the lock records no
 #: assumption (`ScanScopeAcc` takes `StmtFlattens` and `ScopeMatches` of the deployment it quantifies), so a discharge
 #: counts only at the statement pinned here
-DISCHARGES: dict[str, dict[str, Any]] = {}
+DISCHARGES: dict[str, dict[str, Any]] = {
+    "Properties.NetworkPeriod.rowsKBoundsCount": {
+        "statement": "aec09c0ca578ec1f00d172f655b9bed7cd83f22335ef75440b623d3469025084", "takes": {}},
+}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
 STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
@@ -930,9 +1019,10 @@ DISCHARGE = ("the figure's premises (`PREMISES`), each open until every theorem 
              "`CHECKED`) and that check holds (``unchecked`` where it doesn't). Open too: "
              "each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
              "whose hypotheses and antecedents it names (``takes``); and each named assumption the lock gives such a "
-             "guarantee that is neither standing nor named there, by its own name. The premises of one charge of a "
-             "phase alone (``charge``; `TIE`, `ENTRIES`) are a figure's only where the period's public charges a "
-             "phase so. "
+             "guarantee that is neither standing nor named there, by its own name. The premises of some charges of a "
+             "phase alone (``charge``; `VIEW`, `ENTRIES`, `TIE`) are a figure's only where a phase of it is charged "
+             "so, and the one on the answers (``verified``) is open while the period's check reads them as given "
+             "(``answers``), whatever the lock lists. "
              "What K counts (`COUNTS`) is no "
              "premise. No premise about our own Python stands: soundness is in Lean or rests on an auditor-trusted "
              "device")
@@ -944,27 +1034,37 @@ UNLISTED = ("no lock of this tree lists it as a guarantee, so the Lean check rep
 #: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
-OPEN = ("the figure of record: K as the period's check states it, and nothing added to it. It is proved only where no "
-        "premise of it is open (`DISCHARGE`), the run's COINS line names the live challenger (`COINS`) and, where the "
-        "public charges a phase its tied audits (`TIE`), its Lean verdict performed every check of `CHECKS` (the "
+OPEN = ("the figure of record: K as the period's check states it over the period's execution phases (``phases``), "
+        "and nothing added to it. It bounds a count expression and is no leak bound (``bounds``, `COUNT`). Each "
+        "phase is charged as its scan's term states (``charges``, `charges`): its scan's view rows wherever the "
+        "check holds no view tie, so K rests on neither of the scan's ties (`TIES`, `TIES_UNDER`), on the view "
+        "rows' cut and the period's statement, each open till the lock lists its theorem (`view-cut`, "
+        "`period-checked`), and on "
+        "every answer the check reads being verified (`answers-verified`). It is proved only where no "
+        "premise of it is open (`DISCHARGE`), the run's COINS line names the live challenger (`COINS`) and, where "
+        "the public charges a phase its tied audits (`TIE`), its Lean verdict performed every check of `CHECKS` (the "
         "public's held). While any is open it is the same K, open, each by name (``open``), and so is each cell of "
         "it that would read proved (``how``, with what is open). No bits are added for what is open: no statement "
         "gives such a charge, the advice's cap included (`CAP`), so the record states the check's count and what it "
         "rests on. While the coins or a premise of `UNCHARGED` are open, the figure of record and its cells are also "
         "conditional on them (conditional_on), since no charge here covers a draw on known coins or a key the auditor "
-        "didn't record")
-TIGHT = ("how the figure tightens, each in place of the figure of record and never beside it: a phase whose scan is "
-         "sampled in part, to its slot entries once in place of its tied audits' free inputs and its faulty entries, by "
-         "proving every proof block of its scan, which the period's check then charges so with no tied audit read at "
-         "δ_i (`CHARGED`); k_sched and k_fail, a known overcount (`OVERCOUNT`), to the registered schedules' number, "
-         "#Θ in PeriodLeakRegistered's count, once the period's check charges that in their place; and the entries, "
+        "didn't record. Beside it, and never in its place, the figure with both ties (``with_ties``, `WITH_TIES`)")
+TIGHT = ("how the figure tightens, each in place of the figure of record and never beside it: a phase's view rows, to "
+         "its scan's slot entries once, only with both of the scan's ties checked at the network certifier's run "
+         "(`WITH_TIES`: the scan's registration stating the view tie and the period check refusing a period without "
+         "either); a phase whose scan is sampled in part, to its view rows alone in place of its tied audits' free "
+         "inputs and its faulty entries beside them, by proving every proof block of its scan, which the period's "
+         "check then charges so with no tied audit read at δ_i (`CHARGED`); k_sched and k_fail, a known overcount "
+         "(`OVERCOUNT`), which leave K only with the network certifier's admission rule as a Lean definition shown of "
+         "its code, since until then they pay for the admissions its records state; and the entries, "
          "to fewer than every bit of them, only by a statement bounding how many a tied audit's draw leaves wrong, "
-         "which none gives (`tied-count`). The record states no figure of any")
+         "which none gives (`tied-count`). The record states no figure of any but the one with both ties, as "
+         "conditional on them")
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
        "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
        "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
        "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of PeriodLeakAccepted's K "
-       "and in no figure here, open premise or not: the link figure charges the advice through the entries "
+       "and in no figure here, open premise or not: the link figure charges the advice through the scan's inputs "
        "(`ADVICE_LINK`)")
 NO_REGISTRATION = (f"the run published no advice registration ({REGISTRATION}), whose compiler's cap is the ℓ_a the "
                    "record states beside the bound")
@@ -978,8 +1078,10 @@ STATE_PINS: dict[str, str | None] = {
     "NetworkCheck.Period.auditStateEntries": "e3e53a0ba614ba12360f3cf8e073412a146c1ba7eb144be53810be7027644996",
     "NetworkCheck.Period.stateEntries": "a7c8123beed3f6e036818652a4c5bca16f9b8a994fb5b074d052d5a8f55469e4"}
 STATE_CHARGE = ("which charge the rows form's K applied to each audit tied to an execution phase's scan that is sampled "
-                "in part (`NetworkCheck.Period.chargeOf`; ``tied``: those of the phases whose terms charge no slot "
-                "entries once, none where every phase's does, the charge then ``entries`` and no audit's): its free "
+                "in part (`NetworkCheck.Period.chargeOf`; ``tied``: those of the phases charged their tied audits, "
+                "`tie_charged`, none where every phase's scan has every proof block drawn, the charge then no "
+                "audit's: ``view``, the scans' view rows, or ``entries``, their slot entries once, where the "
+                "public charges no view row): its free "
                 "inputs with its reads of the scan's state held (stateFree) "
                 "where its SCAN_STATE is the scan's state in every phase tied to it (stateHeldIn, over the entries "
                 "auditStateEntries reads: its registered ones and its window's activations entry), else its free inputs "
@@ -1086,7 +1188,9 @@ BESIDE_IS = ("each run's figures from its own record, beside the others', each l
              "(`SERVING`), ℓ_a, its composite of record by id (`WITHOUT_POUW`) and the verified compute it credits, "
              "none (`NO_COMPUTE_CLAIM`), what its figures are conditional on "
              "(`COINS`), what it doesn't claim (`DAY`, `POUW`) and the drawn members it doesn't credit (`CREDIT`): its "
-             "figure of record beside the answers it is on (`ANSWERS`), what is open under it, "
+             "figure of record beside the answers it is on (`ANSWERS`), the execution phases it is over "
+             "and what is open under it, the figure with both ties as conditional on them where its record states one "
+             "(`WITH_TIES`), "
              "each period's cells (bits and share of the weights), and sampled proofs' guarantee per window and "
              "pooled (`SAMPLED`). No figure is carried from one run's settings to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
@@ -1270,9 +1374,9 @@ def sampled_verdict(found: Found, refused: Refused, composite: str, rows: Mappin
 def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     """K and its terms (module docstring) from a rows-form public, with what K is on (`ANSWERS`, `GIVEN`); ValueError
     naming why for any other. m is its scans'
-    count, held to its ``windows`` where the public keeps it (a run's published form drops it), and
-    ``entries_per_phase`` the slot entries each phase's term charges once (``entries``, 0 where it states none:
-    `UNSTATED`)."""
+    count, held to its ``windows`` where the public keeps it (a run's published form drops it),
+    ``entries_per_phase`` the slot entries each phase's term charges once and ``view_per_phase`` the view rows it
+    charges (``entries`` and ``view``, each 0 where it states none: `UNSTATED`)."""
     if not isinstance(public, Mapping) or not isinstance(public.get("scans"), list):
         raise ValueError("not NetworkCheck.Period's rows form, whose public has scans: the demo's network verdict is "
                          "the rows form's")
@@ -1282,7 +1386,7 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
             stated = {s: [f for f in fs if f not in UNSTATED or f in scan] for s, fs in PHASE_TERMS.items()}
             terms += [{"symbol": s, "phase": i, "bits": sum(int(scan[f]) for f in fs),
                        "lean": [f"scans[{i}].{f}" for f in fs]} for s, fs in stated.items()]
-        entries = [int(scan.get("entries", 0)) for scan in public["scans"]]
+        entries, view = ([int(scan.get(f, 0)) for scan in public["scans"]] for f in UNSTATED)
         K, eps = int(public["K"]), Fraction(public["eps"])
         deltas = {Fraction(s["delta"]) for s in public["scans"]}
         readings = [{"delta": str(Fraction(c["delta"])), **{f: int(c[f]) for f in ("drawn", "units", "wrong_units")}}
@@ -1308,7 +1412,7 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
             "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
     return given() | ({} if ANSWERS_VERIFIED else {"is": GIVEN}) | {
             "statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
-            "entries_per_phase": entries,
+            "entries_per_phase": entries, "view_per_phase": view,
             "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
             "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA,
                       "charged_audits": {"missing": NO_READINGS} if readings is None else readings},
@@ -1643,13 +1747,13 @@ def chain_draws(out: Path) -> dict[str, Any]:
 
 
 def charged(b: Mapping[str, Any]) -> dict[str, Any]:
-    """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), the slot entries it charges once among them
-    (``entries_per_phase``), through which the link figure charges the advice (``link``, `ADVICE_LINK`), and their
-    share of K."""
+    """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), the view rows and the slot entries it charges
+    among them (``view_per_phase``, ``entries_per_phase``), through which the link figure charges the advice
+    (``link``, `ADVICE_LINK`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
     return {"is": CHARGED, "bits_per_phase": free, "entries_per_phase": b["entries_per_phase"],
-            "share": float(Fraction(sum(free), b["K"])), "lean": "scans[j].free + scans[j].entries",
-            "link": ADVICE_LINK}
+            "view_per_phase": b["view_per_phase"], "share": float(Fraction(sum(free), b["K"])),
+            "lean": "scans[j].free + scans[j].entries + scans[j].view", "link": ADVICE_LINK}
 
 
 def advice_cap(reg: Any) -> int:
@@ -1692,8 +1796,9 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
     lock's digest), the named assumptions of those one lists that don't stand and their pins don't take (``assumes``)
     and the premises their pins take (``takes``), and for one a guarantee states, that guarantee (``stated_by``), the
     run's check it reads (``checked``, by its name in ``checked``, the run's `CHECKED` checks) and why that check
-    doesn't hold (``unchecked``, `NOT_CHECKED` where ``checked`` has none), and its ``charge`` where it is one charge's
-    alone (`TIE`, `ENTRIES`); each guarantee
+    doesn't hold (``unchecked``, `NOT_CHECKED` where ``checked`` has none), its ``charge`` where it is some charges'
+    alone (`VIEW`, `ENTRIES`, `TIE`), and ``answers`` (`ANSWERS`) where it is open because the period's check reads
+    its answers as given (``verified``, `ANSWERS_VERIFIED`); each guarantee
     of `RESTS_ON` with its named assumptions, its statement's digest and what it takes (``restated`` where that digest
     isn't the one `RESTS_ON` read, `RESTATED`), what K counts (``counts``, `COUNTS`), and ``open``: each premise not
     closed, then each named assumption of a guarantee of `RESTS_ON` neither standing nor taken by name, and each such
@@ -1728,9 +1833,10 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
         assumes = sorted({a for t, pin in pins.items() if t in listed for a in listed[t]["assumptions"]
                           if a not in pin["takes"]} - set(STANDING))
         takes = sorted({v for pin in pins.values() for v in pin["takes"].values()} & set(PREMISES))
+        as_given = bool(p.get("verified")) and not ANSWERS_VERIFIED
         found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing,
                        "unpinned": unpinned, "assumes": assumes, "takes": takes} | (
-            {"charge": p["charge"]} if "charge" in p else {})
+            {"charge": list(p["charge"])} if "charge" in p else {}) | ({"answers": ANSWERS} if as_given else {})
         if g := p.get("stated_by"):
             run = (checked or {}).get(p["checked"]) or {"holds": False, "why": NOT_CHECKED}
             found[name] |= {"stated_by": g, "checked": p["checked"]} | (
@@ -1738,7 +1844,7 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
             if run["holds"] and not {"missing", "restated"} & set(rests[g]) \
                     and p["checked"] in RESTS_ON[g]["takes"].values():
                 ready[name] = set()
-        elif not (missing or unpinned or assumes or not p["discharged_by"]):
+        elif not (missing or unpinned or assumes or not p["discharged_by"] or as_given):
             ready[name] = set(takes)
     done: set[str] = set()
     while new := {n for n, t in ready.items() if n not in done and t <= done}:
@@ -2057,26 +2163,44 @@ def registered_files(found: Found, case: Path | None,
     return res | {"holds": True}
 
 
+def whole(scan: Mapping[str, Any]) -> bool:
+    """Whether the period's public states every proof block of ``scan`` drawn: its ``whole``, and for a public of a
+    period check that states none, whether it charges the scan's slot entries once."""
+    return bool(scan["whole"]) if "whole" in scan else bool(int(scan.get("entries", 0)))
+
+
+def charges(public: Mapping[str, Any], ties: bool = False) -> list[list[str]]:
+    """Each execution phase's charges as its scan's term in the period's public states them (`CHARGED`): ``tied``, its
+    tied audits' free inputs, where its scan is sampled in part; ``view``, its scan's view rows, where the term
+    charges any (a period check that holds no view tie charges every phase's); else, every proof block of its scan
+    drawn, ``entries``, its slot entries once. With ``ties``, as both of the scan's ties would have it charged
+    (`WITH_TIES`): no view rows."""
+    return [([] if whole(s) else ["tied"])
+            + (["view"] if int(s.get("view", 0)) and not ties else ["entries"] if whole(s) else [])
+            for s in public["scans"]]
+
+
 def tie_charged(public: Mapping[str, Any]) -> list[int]:
-    """The execution phases the period's public charges their tied audits: those whose scan's term states no slot
-    entries charged once (`UNSTATED`), a scan sampled in part, or one of a period check that charges none so. A scan
-    with every proof block drawn and no slot entry reads as one of them, its premises a superset."""
-    return [j for j, s in enumerate(public["scans"]) if not int(s.get("entries", 0))]
+    """The execution phases the period's public charges their tied audits (`charges`): those whose scan is sampled in
+    part, or is one of a period check that charges no scan otherwise."""
+    return [j for j, c in enumerate(charges(public)) if "tied" in c]
 
 
-def resting(prem: Mapping[str, Any], public: Mapping[str, Any]) -> dict[str, Any]:
-    """``prem`` (`premises`) less the premises of a charge the period's ``public`` applies to no phase (`TIE`,
-    `ENTRIES`): what its figure rests on."""
-    tie = tie_charged(public)
-    drop = (() if tie else TIE) + (() if len(tie) < len(public["scans"]) else ENTRIES)
+def resting(prem: Mapping[str, Any], public: Mapping[str, Any], ties: bool = False) -> dict[str, Any]:
+    """``prem`` (`premises`) less the premises of charges the period's ``public`` applies to no phase (``charge``:
+    `VIEW`, `ENTRIES`, `TIE`): what its figure rests on, or with ``ties`` what the figure with both ties does
+    (`charges`)."""
+    applied = {c for phase in charges(public, ties) for c in phase}
+    drop = {n for n, p in PREMISES.items() if "charge" in p and not applied & set(p["charge"])}
     return dict(prem) | {"premises": {n: p for n, p in prem["premises"].items() if n not in drop},
                          "open": [n for n in prem["open"] if n not in drop]}
 
 
 def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int,
                  locks: Sequence[Path]) -> dict[str, Any]:
-    """Which charge the rows form's K applied to the audits tied to its phases' scans (`STATE_CHARGE`): ``entries``,
-    and no audit's, where it charges no phase its tied audits (`tie_charged`); else ``stateFree``
+    """Which charge the rows form's K applied to the audits tied to its phases' scans (`STATE_CHARGE`): no audit's
+    where it charges no phase its tied audits (`tie_charged`), ``view`` where it charges a phase its scan's view rows
+    and else ``entries``; else ``stateFree``
     where ``locks`` list `STATE_HELD` at each of `STATE_PINS`, its statement's digest and those of the definitions it
     reads, else ``free`` with ``unpinned``, each such the locks don't give as pinned, by the digest they give (None for
     none); ``tied``, the audits tied to the phases charged so (the public's ``scans[j].tied``, else each of the
@@ -2085,7 +2209,8 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
     lock that can't be read gives none, and ``unread`` names it, by its path under the tree where it is one, with why."""
     scans = [public["scans"][j] for j in tie_charged(public)]
     if not scans:
-        return {"charge": "entries", "is": STATE_CHARGE, "tied": [], "with_record": []}
+        charge = "view" if any("view" in c for c in charges(public)) else "entries"
+        return {"charge": charge, "is": STATE_CHARGE, "tied": [], "with_record": []}
     seen: dict[str, str | None] = {}
     unread: list[str] = []
     for lock in locks:
@@ -2106,22 +2231,53 @@ def state_charge(case: Mapping[str, Any], public: Mapping[str, Any], audits: int
         {"missing": STATE_UNCOVERED} if unpinned and with_record else {})
 
 
+def with_ties(public: Mapping[str, Any], K: int, prem: Mapping[str, Any], checks: Sequence[str] = (),
+              conditional: Sequence[str] = ()) -> dict[str, Any] | None:
+    """The figure with both of the scan's ties (`WITH_TIES`) from the period's public and its K: K less each phase's
+    view rows, plus the scan's slot entries once (the public's ``scan_bits``) for each phase whose scan has every
+    proof block drawn; ``conditional_on``, the two ties (`TIES`) and the ``conditional`` the figure of record is on;
+    ``open``, the ``checks`` open under the figure of record and each premise open under these charges (`resting`),
+    the ties among them; and the answers it is on (`given`). None where the public charges no phase its view rows, so
+    K is no other figure with the ties, and ``missing`` (`NO_SCAN_BITS`) where it states no ``scan_bits``."""
+    view = [int(s.get("view", 0)) for s in public["scans"]]
+    if not any(view):
+        return None
+    try:
+        entries = int(public["scan_bits"]["entries"])
+    except (KeyError, TypeError, ValueError):
+        return {"missing": NO_SCAN_BITS}
+    once = sum(entries for s in public["scans"] if whole(s))
+    rests = resting(prem, public, ties=True)
+    return given() | {"K": K - sum(view) + once,
+                      "conditional_on": [*TIES, *(c for c in conditional if c not in TIES)],
+                      "charges": charges(public, ties=True), "view_rows_less": sum(view), "entries_once": once,
+                      "open": [*checks, *rests["open"], *(c for c in conditional if c not in rests["open"])],
+                      "is": WITH_TIES, "bounds": COUNT}
+
+
 def of_record(public: Mapping[str, Any], K: int, prem: Mapping[str, Any],
               conditional: Sequence[str] = ()) -> dict[str, Any]:
     """The figure of record (`OPEN`) from the period's public, its K, the premises ``prem`` (`premises`) and the
     conditions no charge covers (``conditional``: live-coins while the coins are open, `COINS`): ``K``, the check's and
-    nothing added, beside it the answers it is on (`ANSWERS`); ``tie_charged``, the phases charged their tied audits
+    nothing added, over its ``phases``, beside it the answers it is on (`ANSWERS`) and what it bounds (``bounds``,
+    `COUNT`); each phase's charges (``charges``, `charges`) and ``tie_charged``, the phases charged their tied audits
     (`tie_charged`); the checks the public holds;
     what the figure rests on (``premises``: `resting`); what is open (those checks where a phase is charged its tied
-    audits, the premises and the conditions); ``advice``, that the link figure charges the advice through the entries
-    (`ADVICE_LINK`); how it tightens (``tight``); and ``conditional_on``, the conditions, where any is open."""
+    audits, the premises and the conditions); ``advice``, that the link figure charges the advice through the scan's
+    inputs
+    (`ADVICE_LINK`); how it tightens (``tight``); ``conditional_on``, the conditions, where any is open; and, where the
+    public charges a phase its view rows, the figure with both ties beside it (``with_ties``, `with_ties`)."""
     tie, rests = tie_charged(public), resting(prem, public)
     held = [c for c in CHECKS if c in (public.get("held") or ())]
-    open_ = ([c for c in CHECKS if c not in held] if tie else []) + list(rests["open"])
+    checks = [c for c in CHECKS if c not in held] if tie else []
+    open_ = checks + list(rests["open"])
     open_ += [c for c in conditional if c not in open_]
-    return given() | {"K": K, "tie_charged": tie, "held": held, "open": open_, "is": OPEN, "premises": rests,
+    tied = with_ties(public, K, prem, checks, conditional)
+    return given() | {"K": K, "phases": len(public["scans"]), "bounds": COUNT, "charges": charges(public),
+                      "tie_charged": tie, "held": held, "open": open_, "is": OPEN, "premises": rests,
                       "advice": {"is": ADVICE_LINK}, "tight": TIGHT} | (
-        {"conditional_on": list(conditional)} if conditional else {})
+        {"conditional_on": list(conditional)} if conditional else {}) | (
+        {} if tied is None else {"with_ties": tied})
 
 
 def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int, prem: Mapping[str, Any],
@@ -2361,7 +2517,9 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     (`COINS`; open for a record that read no coins), what is open in Lean (`MEMBER_OPEN`), what the record doesn't
     claim (`DAY`, `POUW`), the drawn members it
     doesn't credit (`CREDIT`), K of record with what the record is read as (``answers``, `read_as`: beside K wherever
-    the line states one, None where it states none) and what is open under it, its δ_net's terms, eps's split and connections,
+    the line states one, None where it states none), the execution phases it is over and what is open
+    under it, the figure with both ties and what it is conditional on (``with_ties``, `WITH_TIES`; None where the
+    record states none), its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
     composite's stated error, the year's datacenter cell (both None where the record holds no periods' cells,
     `NOT_SCALED`), sampled proofs' guarantee per window and pooled
@@ -2369,6 +2527,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
+    tied = fig.get("with_ties") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()},
             "inference_only_alpha_gamma": rec["verdicts"]["inference-only"].get("alpha_gamma"),
@@ -2380,7 +2539,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
             "K": fig.get("K"), "answers": None if fig.get("K") is None else read_as(rec),
-            "open": fig.get("open"),
+            "phases": fig.get("phases"), "open": fig.get("open"),
+            "with_ties": {k: tied[k] for k in ("K", "conditional_on")} if "K" in tied else None,
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "eps_pooled": None if "eps" not in p else {
@@ -2442,7 +2602,8 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
                      **{k: line[k] for k in ("composite", "verified_compute", "compute")},
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "answers": line["answers"],
-                     "open": line["open"],
+                     "phases": line["phases"], "open": line["open"],
+                     "with_ties": line["with_ties"],
                      "periods": cells(rec.get("periods"), read_as(rec)), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 

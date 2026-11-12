@@ -7,15 +7,19 @@ each monitoring period's node proved where the run's period covers it and else s
 datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
 by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or in
 the clock form, is the bound's error. The served run's advice charge stays out of the record, ℓ_{a,j} is stated with
-its source (a scan's slot entries, charged once where every proof block of it is drawn, else its tied audits' free
-inputs; no advice length and no cap), and a test run's measurement is stated beside the bound as that run's. The
+its source (a scan's view rows wherever the check holds no view tie, its tied audits' free inputs where it is sampled
+in part, and its slot entries once only under a held view tie; no advice length and no cap), and a test run's
+measurement is stated beside the bound as that run's. The
 figure of record, every period's cells included, is that K, the check's, and nothing added to it. It is proved only
 where the lock (a toy one in Security's lock's place) lists every premise's discharge, taking no assumption but a
 standing one, the coins are live and, where a phase is charged its tied audits, the verdict held both checks that
 charge rests on; otherwise it is the same K, open, with what is open named in the figure and in each cell, none of
-which then reads proved. A phase charged its scan's slot entries once rests on none of the tied charge's premises or
-checks. ℓ_a, the cap of the run's published advice registration, is stated beside the bound and charged nowhere
-(missing where the run published none; an audit's own registration binding an advice is the figure's error). The
+which then reads proved. A phase charged its scan's view rows rests on neither of the scan's ties and, with every proof
+block of its scan drawn, on none of the tied charge's premises or checks; each figure bounds a count expression and is
+called no leak bound; and the figure with both ties stands beside K only as conditional on them, on the same answers.
+While the check reads its answers as given, K is open on that by name whatever the lock lists. ℓ_a, the cap of the run's
+published advice registration, is stated beside the bound and charged nowhere (missing where the run published none; an
+audit's own registration binding an advice is the figure's error). The
 record names no guarantee or discharge the tree's locks don't list. A scan's slot entries are charged in k_{skip,j}
 only by a period check that charges none once; each cell states its share of the schedule's egress capacity,
 and the served egress is missing. Sampled proofs' coins are live only where
@@ -97,9 +101,17 @@ NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64
 PUBLISHED = SV.public_registration({"row_bits": 256, "rows": 2 ** 23 // 256,
                                     "binding": {"advice": {"root": "ab" * 64, "bits": 2 ** 23}},
                                     "compiler": {"name": "c", "digest": "d", "cap_bits": 2 ** 23}})
-#: the public of a period check that charges a scan with every proof block drawn its slot entries once: the one
-#: phase's 9088 bits as its scan's entries, no tied audit charged
+#: the public of a period check that charges a scan with every proof block drawn its slot entries once, as one that
+#: held the scan's view tie would: the one phase's 9088 bits as its scan's entries, no tied audit charged
 ONCE = dict(PUBLIC, scans=[dict(SCAN, free=0, entries=9088, tied=[0])])
+#: the public of the period check as it is, holding no view tie, at a scan with every proof block drawn: the one phase
+#: charged its scan's view rows, 25,600 bits, and neither its slot entries nor its tied audit's free inputs
+VIEW_ROWS = 25600
+VIEWED = dict(PUBLIC, K=756 + 756 + VIEW_ROWS + 63, scan_bits={"entries": 9088, "view": VIEW_ROWS},
+              scans=[dict(SCAN, free=0, entries=0, view=VIEW_ROWS, whole=True, tied=[0])])
+#: the same check at a scan sampled in part: its tied audit's free inputs, and its view rows beside them
+PART = dict(PUBLIC, K=K + VIEW_ROWS, scan_bits={"entries": 9088, "view": VIEW_ROWS},
+            scans=[dict(SCAN, entries=0, view=VIEW_ROWS, whole=False, tied=[0])])
 #: T = 63 buckets of 20 ms: an execution phase of 63/50 s
 SCHEDULE = {"bucket_ms": 20, "cell_bytes": 512, "delay": 4, "egress_cells": 4, "every": 63, "ingress_buckets": 63,
             "ingress_cells": 4, "lanes": 4, "queue": 16, "slots": 8, "window": 63}
@@ -230,16 +242,23 @@ UNNAMED = {n: OR.PREMISES[n] for n in TOY}
 RESTS_ON = {g: dict(r) for g, r in OR.RESTS_ON.items()}
 UNPINNED = [g for g, r in OR.RESTS_ON.items() if r["statement"] is None]
 ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
+#: the premise the tree's lock discharges: the count's arithmetic, RowsKBoundsCount
+ARITHMETIC = "count-arithmetic"
 #: the stand-ins that discharge the free-input count's premise, schedules-covered, held-performed and wires-fit
 COUNTED, COVERED, HELD, WIRED = (TOY[n] for n in ("free-count", "schedules-covered", "held-performed", "wires-fit"))
 
 
-def discharged(drop: tuple[str, ...] = OR.ENTRIES) -> dict:
+#: the premises of charges `PUBLIC` applies to no phase: it charges its one phase its tied audits and nothing else,
+#: as a period check that charges no view row and no entry once does
+NOT_TIED = tuple(n for n, p in OR.PREMISES.items() if "charge" in p and "tied" not in p["charge"])
+
+
+def discharged(drop: tuple[str, ...] = NOT_TIED) -> dict:
     """``premises`` of a lock listing every discharge and each guarantee the figure rests on at the statement it
-    names, none with an assumption, less the premises ``drop`` of a charge the public applies to no phase (the slot
-    entries' unless given: `PUBLIC` charges its phase its tied audits)."""
+    names, none with an assumption, less the premises ``drop`` of charges the public applies to no phase (the view
+    rows' and the slot entries' unless given: `PUBLIC` charges its phase its tied audits)."""
     found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "unpinned": {}, "assumes": [],
-                 "takes": []} | ({"charge": p["charge"]} if "charge" in p else {})
+                 "takes": []} | ({"charge": list(p["charge"])} if "charge" in p else {})
              | ({"stated_by": p["stated_by"], "checked": p["checked"]} if "stated_by" in p else {})
              for n, p in OR.PREMISES.items() if n not in drop}
     return {"is": OR.DISCHARGE,
@@ -644,10 +663,11 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
     assert rec["advice_charge"]["charged"] == {
-        "is": OR.CHARGED, "bits_per_phase": [9088], "entries_per_phase": [0], "share": 9088 / K,
-        "lean": "scans[j].free + scans[j].entries", "link": OR.ADVICE_LINK}
+        "is": OR.CHARGED, "bits_per_phase": [9088], "entries_per_phase": [0], "view_per_phase": [0],
+        "share": 9088 / K, "lean": "scans[j].free + scans[j].entries + scans[j].view", "link": OR.ADVICE_LINK}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": K, "tie_charged": [0], "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
+    assert b["of_record"] == {"K": K, "phases": 1, "bounds": OR.COUNT, "charges": [["tied"]], "tie_charged": [0],
+                              "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
                               "premises": discharged(), "advice": {"is": OR.ADVICE_LINK}, "tight": OR.TIGHT,
                               "state_charge": FREE_CHARGE}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
@@ -665,7 +685,8 @@ def test_the_served_audits_cap_is_stated_and_charged_nowhere_whatever_is_open(tm
     advice registration published padded to its compiler's cap ℓ_a = 2^23. With neither check held, the figure of
     record is still the check's K, open on both by name, and every cell is that figure's: no ℓ_a + 1 is added for the
     tied audit, in the record or its line, the cap is stated beside the bound, and the record says the link figure
-    charges the advice through the entries and how the figure tightens in its place (`TIGHT`)."""
+    charges the advice through the scan's inputs, its view rows or with both ties its slot entries, and how the figure
+    tightens in its place (`TIGHT`)."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
@@ -675,7 +696,8 @@ def test_the_served_audits_cap_is_stated_and_charged_nowhere_whatever_is_open(tm
     assert rec["advice_charge"]["charged"]["bits_per_phase"] == [9088]
     assert rec["bound"]["K"] == K and of["tight"] == OR.TIGHT and "periods_tight" not in rec
     assert not {2 ** 23 + 1, K + 2 ** 23 + 1} & set(numbers(rec)) and rec["periods"]["run"]["bits"] == K
-    assert all(x in OR.ADVICE_LINK for x in ("charges the advice through the entries", "scanOf refuses any other",
+    assert all(x in OR.ADVICE_LINK for x in ("charges the advice through the scan's inputs", "scanOf refuses any other",
+                                             "every bit of the view rows", "`WITH_TIES`",
                                              "no ℓ_a, no ℓ_a + 1 and no |a_j|"))
     assert all(x in OR.TIGHT for x in ("in place of the figure of record and never beside it",
                                        "proving every proof block of its scan", "`OVERCOUNT`", "`tied-count`",
@@ -707,20 +729,26 @@ def held_both(out: Path) -> dict:
 @pytest.mark.usefixtures("verified")
 def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both_checks_are_held(
         tmp_path, lock, monkeypatch):
-    """A lock listing the guarantees the figure rests on and none of the theorems that discharge its premises, and
-    the premises with no discharge named, as the tree's are: every premise of a tied charge is open, by name, so the
+    """A lock listing the guarantees the figure rests on and, of the theorems that discharge its premises, the count's
+    arithmetic alone, and the other premises with no discharge named, as the tree's are: every other premise of a tied
+    charge is open, by name, so the
     figure of record is the check's K, open, with nothing added, and no cell of it reads proved: the run's and its
-    figure over one phase are open, naming each, and a scaled one names them beside its rule. certifier-key alone
+    figure over one phase are open, naming each, and a scaled one names them beside its rule. certifier-key
     closes, by PeriodLeakRegistered's pin taking the auditor's record and the run's check of it, though
     PeriodLeakRegistered's other premises stay open: the network certifier's verdict is accepted, and the figure and
-    its cells are conditional on nothing."""
+    its cells are conditional on nothing. The premises' words say what each figure rests on: the check's K, charged
+    the view rows, on their cut, the period's statement and verified answers, neither tie; the figure with both ties
+    on each tie at the network certifier's run, neither checked."""
     for name, premise in UNNAMED.items():
         monkeypatch.setitem(OR.PREMISES, name, premise)
-    lock.write_text(json.dumps(lock_doc({g: [] for g in OR.RESTS_ON})))
+    lock.write_text(json.dumps(lock_doc({g: [] for g in (*OR.RESTS_ON, *OR.PREMISES[ARITHMETIC]["discharged_by"])})))
     rec = held_both(tmp_path)
     of = rec["bound"]["of_record"]
-    want = [n for n in OR.PREMISES if n != OR.CERTIFIER_KEY and n not in OR.ENTRIES]
-    assert UNPINNED == [] and OR.CERTIFIER_KEY not in UNNAMED and set(OR.PREMISES) == {*UNNAMED, OR.CERTIFIER_KEY}
+    closed = (OR.CERTIFIER_KEY, ARITHMETIC)
+    want = [n for n in OR.PREMISES if n not in closed and n not in NOT_TIED]
+    assert UNPINNED == [] and not set(closed) & set(UNNAMED) and set(OR.PREMISES) == {*UNNAMED, *closed}
+    assert OR.PREMISES[ARITHMETIC]["discharged_by"] == ("Properties.NetworkPeriod.rowsKBoundsCount",)
+    assert of["premises"]["premises"][ARITHMETIC]["missing"] == []
     assert (of["held"], of["open"], of["K"]) == (["free", "circuit"], want, K)
     assert {"sampled-leg-bridge", "reg-opens-at", "tied-count", "commitment-binds", "list-within"} <= set(of["open"])
     assert all(p["missing"] == [] and p["discharged_by"] == [] for n, p in of["premises"]["premises"].items()
@@ -753,9 +781,18 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",
                                                             "an obligation on the auditor's configuration"))
-    cut_ = OR.PREMISES["entries-cut"]["is"]
-    assert all(x in cut_ for x in ("proved and none sampled", "scanOf's refusal", "the state chain",
-                                   "RowsKBoundsCount, in the lock, is its arithmetic alone", "Not yet stated"))
+    said = {n: OR.PREMISES[n]["is"] for n in OR.PREMISES}
+    assert all(x in said["entries-cut"] for x in ("proved and none sampled", "scanOf's refusal", "unique under its tie",
+                                                  "`WITH_TIES`", "until the lock lists a theorem stating it"))
+    assert all(x in said["view-cut"] for x in ("a function of its view row alone", "takes neither of the scan's ties",
+                                               "every egress unit verified", "reads only its parameters",
+                                               "until the lock lists a theorem stating it"))
+    assert all(x in said["period-checked"] for x in ("carries either figure", "bounds a count expression",
+                                                     "until the lock lists both"))
+    assert all(x in said["answers-verified"] for x in ("reads its answers as given", "`ANSWERS_VERIFIED`"))
+    assert all(x in said[tie] for tie in OR.TIES for x in ("at the network certifier's run", "Not checked",
+                                                           "never at an extracted trace's", "`TIES_UNDER`"))
+    assert "RowsKBoundsCount, the arithmetic alone" in said[ARITHMETIC]
     assert all(x in OR.PREMISES["certifiers-open"]["is"] for x in ("to leave the statement rather than be discharged",
                                                                    "refused by the period check"))
     binds = OR.PREMISES["commitment-binds"]["is"]
@@ -879,6 +916,7 @@ NO_B = ("ADVICE-LINE: FAIL: no advice_registration.json: the server registered n
         "--advice)")
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("days", [["0"], ["3", "3"], [None], []])
 def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each_advice_line_says(tmp_path, capsys,
                                                                                                     days):
@@ -898,6 +936,7 @@ def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each
                                      "(duplicate-declaration)", "(R2-declared)", "which no verdict here does"))
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
     """The Properties' lock holds the theorems that discharge premises at the deployed code and PeriodLeakRegistered,
     which states certifier-key, the guarantees' lock the other guarantees the figure rests on: the record reads both,
@@ -910,9 +949,10 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
     assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [
-        *(n for n in OR.PREMISES if n not in OR.ENTRIES), OR.PERIOD_REGISTERED]
+        *(n for n in OR.PREMISES if n not in NOT_TIED), OR.PERIOD_REGISTERED]
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])
 def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it_would_discharge_is_open(
         tmp_path, lock, monkeypatch, text, error):
@@ -934,6 +974,7 @@ def test_a_lock_that_cant_be_read_lists_nothing_and_is_named_so_every_premise_it
     assert why.startswith(f"Security/Properties/lean-audit.json: {error}: ") and str(tmp_path) not in why
 
 
+@pytest.mark.usefixtures("verified")
 def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(tmp_path, lock, monkeypatch):
     """A guarantee the figure rests on takes the wires premise as a named hypothesis, which the lock lists: named in
     what it takes, by the wires premise, nothing is open while that is discharged; with one of its discharges missing,
@@ -949,6 +990,7 @@ def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(t
     assert held_both(tmp_path / "c")["bound"]["of_record"]["open"] == ["NetTiming.WiresFit"]
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_discharge_counts_only_at_the_statement_its_pin_names(tmp_path, lock, monkeypatch):
     """The lock records no antecedent, and a Property may take a deployment's premise inline (`ScanScopeAcc` takes
     `StmtFlattens` and `ScopeMatches`): a discharge the lock lists but `DISCHARGES` doesn't pin, or pins at another
@@ -965,6 +1007,7 @@ def test_a_discharge_counts_only_at_the_statement_its_pin_names(tmp_path, lock, 
     assert held_both(tmp_path / "pinned")["bound"]["of_record"]["open"] == []
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_and_two_never_each_other(
         tmp_path, lock, monkeypatch):
     """The wires premise's discharge takes the deployment's scope check, a named assumption of its, by the sampled
@@ -985,6 +1028,7 @@ def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_a
     assert of["premises"]["premises"]["sampled-leg-bridge"]["assumes"] == []
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("stated", ["ff" * 32, None])
 def test_a_guarantee_the_figure_rests_on_is_open_by_name_where_the_lock_states_it_otherwise(tmp_path, lock, stated):
     """The lock records a guarantee's named assumptions, never its antecedents, so a statement other than the one whose
@@ -999,6 +1043,7 @@ def test_a_guarantee_the_figure_rests_on_is_open_by_name_where_the_lock_states_i
     assert of["tight"] == OR.TIGHT and "conditional_on" not in of
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_guarantee_the_figure_rests_on_with_no_statement_pinned_is_open_even_where_the_lock_lists_it(
         tmp_path, lock, monkeypatch):
     """A guarantee named before what it takes was read at its statement: open by its name, whatever the lock states it
@@ -1010,28 +1055,114 @@ def test_a_guarantee_the_figure_rests_on_with_no_statement_pinned_is_open_even_w
 
 
 @pytest.mark.usefixtures("verified")
-def test_no_guarantee_counts_a_phases_tied_audits_so_that_count_is_a_premise_of_a_tied_charge_alone(
-        tmp_path, monkeypatch):
+def test_each_charge_of_a_phase_rests_on_its_own_premises_and_the_view_rows_on_neither_tie(tmp_path, monkeypatch):
     """The record rests on no guarantee that counts a phase's tied audits with its scan: none is in `RESTS_ON`, and
     what one would give is the premise tied-count, with no discharge named. A phase charged its tied audits is open
-    on it, by name, with every check held and every other premise discharged. A phase charged its scan's slot entries
-    once doesn't rest on it, or on any premise or check of the tied charge: it rests on entries-cut, open by name till
-    its statement is in the lock, on view-tied, the scan's second state tie, which no check of the run reads, and on
-    the premises of both charges."""
-    for name in ("tied-count", *OR.ENTRIES):
+    on it, by name, with every check held and every other premise discharged. A phase charged its scan's view rows,
+    as the check charges every phase, rests on no premise or check of the tied charge and on neither of the scan's
+    ties: on the view rows' cut and the period's statement, each open by name till the lock lists it. The two ties
+    are premises of the slot entries' charge alone, by the one constant `TIES_UNDER`, so they are open under the
+    figure with both ties, which the record gives beside the check's K as conditional on them, and under a public
+    that charges a phase its entries once. A scan sampled in part and charged its view rows too rests on the tied
+    charge's premises and the view rows', and with the ties it is K less those rows."""
+    named = ("tied-count", *OR.VIEW, *OR.ENTRIES)
+    for name in named:
         monkeypatch.setitem(OR.PREMISES, name, UNNAMED[name])
     assert not any("TiedCount" in g for g in (*OR.RESTS_ON, *OR.DISCHARGES))
-    assert all(UNNAMED[name]["discharged_by"] == () for name in ("tied-count", *OR.ENTRIES))
-    assert ("tied-count" in OR.TIE, OR.ENTRIES) == (True, ("entries-cut", "view-tied"))
+    assert all(UNNAMED[name]["discharged_by"] == () and "stated_by" not in UNNAMED[name] for name in named)
+    assert (OR.VIEW, OR.ENTRIES) == (("view-cut", "period-checked"),
+                                     ("period-checked", "entries-cut", "state-tied", "view-tied"))
+    assert ("tied-count" in OR.TIE, OR.TIES, OR.TIES_UNDER) == (True, ("state-tied", "view-tied"), ("entries",))
+    assert all(OR.PREMISES[t]["charge"] is OR.TIES_UNDER for t in OR.TIES)
     of = held_both(tmp_path / "tied")["bound"]["of_record"]
-    assert (of["tie_charged"], of["open"], of["K"]) == ([0], ["tied-count"], K)
-    assert not set(OR.ENTRIES) & set(of["premises"]["premises"]) and set(OR.TIE) <= set(of["premises"]["premises"])
+    assert (of["charges"], of["tie_charged"], of["open"], of["K"]) == ([["tied"]], [0], ["tied-count"], K)
+    assert not set(NOT_TIED) & set(of["premises"]["premises"]) and set(OR.TIE) <= set(of["premises"]["premises"])
+    assert "with_ties" not in of
+    rec = record(accepted(tmp_path / "view", VIEWED))
+    of, run = rec["bound"]["of_record"], rec["periods"]["run"]
+    assert (of["charges"], of["tie_charged"], of["held"], of["open"], of["K"], of["phases"]) == (
+        [["view"]], [], [], ["view-cut", "period-checked"], VIEWED["K"], 1)
+    assert set(of["premises"]["premises"]) == set(OR.PREMISES) - set(OR.TIE) - {"entries-cut", *OR.TIES}
+    assert of["with_ties"] == {
+        "K": VIEWED["K"] - VIEW_ROWS + 9088, "conditional_on": ["state-tied", "view-tied"], "charges": [["entries"]],
+        "view_rows_less": VIEW_ROWS, "entries_once": 9088,
+        "open": ["period-checked", "entries-cut", "state-tied", "view-tied"], "is": OR.WITH_TIES, "bounds": OR.COUNT}
+    assert (run["bits"], run["how"], run["open"]) == (VIEWED["K"], "open", ["view-cut", "period-checked"])
+    assert rec["bound"]["of_record"]["state_charge"] == {"charge": "view", "is": OR.STATE_CHARGE, "tied": [],
+                                                         "with_record": []}
+    assert (rec["advice_charge"]["charged"]["view_per_phase"], rec["bound"]["view_per_phase"]) == (
+        [VIEW_ROWS], [VIEW_ROWS])
     rec = record(accepted(tmp_path / "once", ONCE))
     of = rec["bound"]["of_record"]
-    assert (of["tie_charged"], of["held"], of["open"], of["K"]) == ([], [], ["entries-cut", "view-tied"], K)
-    assert not set(OR.TIE) & set(of["premises"]["premises"]) and set(OR.ENTRIES) <= set(of["premises"]["premises"])
-    assert set(of["premises"]["premises"]) == set(OR.PREMISES) - set(OR.TIE)
-    assert (rec["periods"]["run"]["how"], rec["periods"]["run"]["open"]) == ("open", ["entries-cut", "view-tied"])
+    assert (of["charges"], of["tie_charged"], of["held"], of["open"], of["K"]) == (
+        [["entries"]], [], [], list(OR.ENTRIES), K)
+    assert set(of["premises"]["premises"]) == set(OR.PREMISES) - set(OR.TIE) - {"view-cut"} and "with_ties" not in of
+    assert (rec["periods"]["run"]["how"], rec["periods"]["run"]["open"]) == ("open", list(OR.ENTRIES))
+    of = record(accepted(tmp_path / "part", dict(PART, held=["free", "circuit"])))["bound"]["of_record"]
+    assert (of["charges"], of["tie_charged"], of["open"], of["K"]) == (
+        [["tied", "view"]], [0], ["view-cut", "period-checked", "tied-count"], K + VIEW_ROWS)
+    assert set(of["premises"]["premises"]) == set(OR.PREMISES) - {"entries-cut", *OR.TIES}
+    assert (of["with_ties"]["K"], of["with_ties"]["charges"], of["with_ties"]["open"]) == (K, [["tied"]], ["tied-count"])
+    assert of["state_charge"]["tied"] == [0]
+
+
+def test_the_figures_words_call_neither_a_leak_bound_and_put_both_ties_under_the_conditional_one_alone():
+    """What the record says of its two figures: each bounds a count expression, by the arithmetic the lock lists, and
+    neither is a leak bound; the check's K rests on neither tie; the figure with both ties is given only as
+    conditional on them, each stated at the network certifier's run and neither checked; and no word of it names a
+    statement that no Lean file of the tree holds."""
+    assert all(x in OR.COUNT for x in ("each figure bounds a count expression", "RowsKBoundsCount, the arithmetic alone",
+                                       "No statement yet ties that count to the secrets", "neither figure is a leak "
+                                       "bound"))
+    assert all(x in OR.WITH_TIES for x in ("given only as conditional on them", "never as the check's",
+                                           "stated at the network certifier's run", "Neither is checked",
+                                           "no period's figure is made from it"))
+    assert all(x in OR.OPEN for x in ("rests on neither of the scan's ties", "`view-cut`", "`period-checked`",
+                                      "`answers-verified`", "is no leak bound", "never in its place"))
+    assert all(x in OR.TIGHT for x in ("only with both of the scan's ties checked at the network certifier's run",
+                                       "admission rule as a Lean definition"))
+    words = json.dumps([OR.COUNT, OR.WITH_TIES, OR.OPEN, OR.TIGHT, OR.CHARGED, OR.ADVICE_LINK, OR.STATE_CHARGE,
+                        *(OR.PREMISES[n]["is"] for n in ("count-arithmetic", "answers-verified", *OR.VIEW, *OR.ENTRIES))])
+    assert not re.search(r"ScanViewCut|PeriodLeakChecked|ScanCountBounded|StateTieHeld|ViewTieHeld|leak bound of", words)
+    assert "is a leak bound" not in words.replace("neither figure is a leak bound", "")
+
+
+def test_on_answers_read_as_given_the_checks_K_is_open_on_them_and_the_figure_with_both_ties_is_labelled_too(
+        tmp_path, lock, capsys):
+    """The check as it is, on answers it reads as given, at w63k4's numbers with every proof block of the scan drawn:
+    K = 384 + 384 + 25,600 + 32 = 26,400 over its one execution phase, charged the view rows, with every lock's
+    discharge listed still open on answers-verified, by name and with why, and on nothing else; the figure with both
+    ties is 26,400 - 25,600 + 896 = 1,696, conditional on the two ties, on the same answers, open on them too. No
+    period's figure is made from either, and the record's line states both, each with what it is."""
+    scan = dict(SCAN, delta=f"1/{2 ** 64}", drawn=64, units=64, free=0, jitter=32, entries=0, view=25600, whole=True,
+                tied=[0])
+    public = dict(PUBLIC, K=26400, cells=384, schedules=384, scans=[scan], eps=f"1/{2 ** 64}",
+                  scan_bits={"entries": 896, "view": 25600})
+    out = accepted(tmp_path, public)
+    assert main([str(out), "--window-steps", "4", "--max-tokens", "8"]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    of = rec["bound"]["of_record"]
+    assert [t["bits"] for t in rec["bound"]["terms"]] == [384, 384, 25600, 0, 32]
+    assert (of["K"], of["phases"], of["answers"], of["charges"], of["open"]) == (
+        26400, 1, OR.ANSWERS, [["view"]], ["answers-verified"])
+    verified = of["premises"]["premises"]["answers-verified"]
+    assert (verified["answers"], verified["missing"], verified["discharged_by"]) == (
+        OR.ANSWERS, [], [TOY["answers-verified"]])
+    assert not set(OR.TIES) & set(of["premises"]["premises"])
+    tied = of["with_ties"]
+    assert (tied["K"], tied["answers"], tied["conditional_on"], tied["open"], tied["is"]) == (
+        1696, OR.ANSWERS, ["state-tied", "view-tied"], ["answers-verified"], OR.WITH_TIES)
+    assert rec["periods"] == {"missing": OR.NOT_SCALED} and '"how"' not in json.dumps(rec["bound"])
+    assert (line["K"], line["answers"], line["phases"], line["open"], line["with_ties"], line["year_datacenter"]) == (
+        26400, OR.ANSWERS, 1, ["answers-verified"], {"K": 1696, "conditional_on": ["state-tied", "view-tied"]}, None)
+    to = tmp_path / "beside.json"
+    assert main(["--beside", str(out / "record" / "onsite.json"), "--to", str(to)]) == 0
+    (run,) = json.loads(to.read_text())["runs"]
+    assert (run["K"], run["answers"], run["phases"], run["with_ties"], run["periods"]) == (
+        26400, OR.ANSWERS, 1, line["with_ties"], {"missing": OR.NOT_SCALED})
+    assert OR.with_ties(dict(public, scan_bits=None), 26400, of["premises"]) == {"missing": OR.NO_SCAN_BITS}
+    assert OR.with_ties(PUBLIC, K, of["premises"]) is None
 
 
 def test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list(monkeypatch, tmp_path):
@@ -1183,7 +1314,7 @@ def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_it
     """A tied audit whose parameters state its circuit record may be charged its stateFree, less than its free. Where
     RowsStateHeld stands over the activations entry, that charge is the figure's; where it doesn't, the public doesn't
     separate the two, so there is no figure of record and no period cells, the bound's K still stated. A phase charged
-    its scan's slot entries once charges no tied audit either way, and has its figure."""
+    its scan's slot entries once, as under a held view tie, charges no tied audit either way, and has its figure."""
     monkeypatch.setattr(OR, "STATE_PINS", STATE_TOY)
     if stands:
         with_state_held(lock, STATE_TOY)
@@ -1316,14 +1447,14 @@ def test_a_scans_view_rows_are_among_its_phases_free_inputs():
 def test_w63k4s_slot_entries_are_charged_once_under_its_scan_proved_whole_and_else_in_k_skip(tmp_path, once):
     """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's scan with
     every proof block drawn, its tied audit one of 16 proof blocks (V3c's registration has millions) drawn subset:1.
-    The period check charges each phase its scan's E_w = 896 slot-entry bits once, as ℓ_{a,j}'s ``entries``, with
-    k_{skip,j} 0 and no audit read at δ_i: 1,696 bits a phase with the schedule's and the jitter's 800, the figure of
-    record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase; eps is each
-    phase's scan's 2^-64. It rests on no check of the tied charge, so it is proved with every premise discharged
-    whatever the public holds. A period check that charges none once states the same 896 bits in k_{skip,j}, the tied
-    audit charged, its draw read at δ_i = 2^-64 with a bound of 15 beside its answer's 8 at 1/2: the same 1,696 a
-    phase, on the tied charge's checks and premises, open on a check the verdict didn't hold. Neither adds the run's
-    advice cap."""
+    A period check that held the scan's view tie, as none does, charges each phase its scan's E_w = 896 slot-entry bits
+    once, as ℓ_{a,j}'s ``entries``, with k_{skip,j} 0 and no audit read at δ_i: 1,696 bits a phase with the schedule's
+    and the jitter's 800, that public's figure of record, of the schedule's egress capacity of 4 lanes · 4 slots · 32
+    buckets of 512-byte cells a phase; eps is each phase's scan's 2^-64. It rests on no check of the tied charge, so it
+    is proved with every premise discharged whatever the public holds. A period check that charges none once states the
+    same 896 bits in k_{skip,j}, the tied audit charged, its draw read at δ_i = 2^-64 with a bound of 15 beside its
+    answer's 8 at 1/2: the same 1,696 a phase, on the tied charge's checks and premises, open on a check the verdict
+    didn't hold. Neither adds the run's advice cap."""
     sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
     import scan_zk as SZ
     schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}

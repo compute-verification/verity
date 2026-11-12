@@ -299,7 +299,8 @@ negatives.
   phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
   charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a
   scan sampled in part to which a tied audit sampled in part is tied; a scan with every proof block drawn is charged
-  its slot entries once in ℓ_{a,j} instead, whatever its tied audits' draws), the composite of record's
+  its view rows in ℓ_{a,j} instead, whatever its tied audits' draws, as every scan is while the check holds no view
+  tie), the composite of record's
   error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named. While the period's check reads its answers as given the record
   makes no period's figure from K (`periods` is missing, with why: nothing scaled, pooled or summed, no cell called
@@ -327,10 +328,18 @@ negatives.
   discharge only where one of those locks lists it (`onsite_record.unlisted`, which a test holds empty), so a premise
   whose discharge isn't there is open. While anything is open the figure is the same K, open, each by name, and so is
   each cell that would read proved: no bits are added for what is open, the advice's cap included, since the link
-  figure charges the advice through the entries, a scan's slot entries, which the check charges once where every proof
-  block of the scan is drawn. A phase charged so rests on that cut (`entries-cut`, open till its statement is in the
-  lock), on the scan's second state tie (`view-tied`: each egress unit's view is its ingress unit's output, which the
-  registration doesn't state and the period check doesn't read) and on none of the tied charge's premises or checks. The record says how the figure tightens, in its place and
+  figure charges the advice through the scan's inputs: its view rows, each egress unit's state, which the check
+  charges every bit of while it holds no view tie. Each figure of the record bounds a count expression (the product the
+  check's rows form charges is at most 2^K, the one premise the lock discharges, `count-arithmetic`), which no
+  statement yet ties to the secrets, so the record calls neither a leak bound. A phase charged its view rows rests on
+  neither of the scan's ties: on the view rows' cut (`view-cut`) and the period's statement (`period-checked`), each
+  open till the lock lists it, on every answer the check reads being verified (`answers-verified`, open while it reads
+  them as given), and, where every proof block of its scan is drawn, on none of the tied charge's premises or checks.
+  Beside K and never in its place the record gives the figure with both ties (`with_ties`): K less each phase's view
+  rows, plus its scan's slot entries once, only as conditional on the two ties (`state-tied`: each ingress unit's state
+  read is the unit before's output; `view-tied`: each egress unit's view is its ingress unit's output), each stated at
+  the network certifier's run and neither checked, and no period's figure is made from it. Which charge each tie is a
+  premise of is one constant (`TIES_UNDER`). The record says how the figure tightens, in its place and
   never beside it. For a phase charged its tied audits, the figure says which charge K applied each (`state_charge`):
   its free inputs with its reads of
   the scan's state held (`stateFree`) only where the lock holds RowsStateHeld at its pinned statement reading
@@ -342,7 +351,8 @@ negatives.
   on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
   record and its cells), never as a live draw's.
   The realized advice charge is private: the record states ℓ_{a,j} with its source,
-  the scan's slot entries or the tied compute audits' free inputs (no advice length and no cap is in them), beside it
+  the scan's view rows and, where it is sampled in part, the tied compute audits' free inputs (no advice length and no
+  cap is in them), beside it
   ℓ_a, the cap of the advice the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap,
   in no term of K and in no figure, and
   `--advice-charge` states a test
