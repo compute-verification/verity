@@ -600,15 +600,16 @@ def test_only_a_pr_crossing_a_move_in_flight_is_built_above_it_marked_or_not(env
     assert (loop.world.left[3][0], loop.world.left[4][0]) == (three, four)
 
 
-@pytest.mark.parametrize("why", ["it doesn't parse", "it's missing", "the change can't be read"])
+@pytest.mark.parametrize("why", ["it doesn't parse", "its words_in is no array", "it's missing", "the change can't be read"])
 def test_a_pr_waits_above_a_move_whose_map_can_t_be_read_at_its_head_or_while_its_own_change_can_t_be_read(
         env, monkeypatch, why):
-    """Fail closed: a move whose map doesn't parse at its head or is missing there is crossed by nothing, whatever `main`'s
-    copy says, so nothing is built above it; and a PR whose own change can't be read crosses no move, while another is built
-    above it."""
+    """Fail closed: a move whose map doesn't parse at its head, holds a `words_in` that is no array of tables, or is missing
+    there is crossed by nothing, whatever `main`'s copy says, so nothing is built above it and the tick goes on; and a PR whose
+    own change can't be read crosses no move, while another is built above it."""
     Moved(env)
     files = {"old/a.txt": None, "new/a.txt": "newword in new/a.txt\n"}
-    _move(env, 1, {**files, MAP: {"it doesn't parse": "[words\n", "it's missing": None}.get(why, MAP_ROWS)})
+    _move(env, 1, {**files, MAP: {"it doesn't parse": "[words\n", "its words_in is no array": "words_in = 1\n" + MAP_ROWS,
+                                  "it's missing": None}.get(why, MAP_ROWS)})
     loop = env.loop(decide)
     (first,) = _builds(loop.tick())
     assert first["members"] == [1] and Q.move_of(env.o.origin, first["sha"]) == MAP, first
