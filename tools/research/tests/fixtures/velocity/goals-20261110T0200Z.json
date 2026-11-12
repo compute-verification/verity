@@ -1,0 +1,138 @@
+[
+ {
+  "id": "top/alpha",
+  "title": "Alpha",
+  "status": "on-track",
+  "due": "2026-11-11T18:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T22:00:00.000Z",
+  "priority": 1,
+  "prioritySet": true,
+  "waitingOn": [
+   {
+    "goal": "top/alpha-step"
+   }
+  ]
+ },
+ {
+  "id": "top/beta",
+  "title": "Beta",
+  "status": "off-track",
+  "due": "2026-11-14T12:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T23:00:00.000Z",
+  "priority": 1,
+  "prioritySet": true,
+  "waitingOn": [
+   {
+    "goal": "top/beta-piece"
+   }
+  ]
+ },
+ {
+  "id": "top/gamma",
+  "title": "Gamma",
+  "status": "on-track",
+  "due": "2026-11-20T18:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T18:00:00.000Z",
+  "priority": 1,
+  "prioritySet": true
+ },
+ {
+  "id": "top/delta",
+  "title": "Delta",
+  "status": "done",
+  "due": "2026-11-09T18:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-10T01:00:00.000Z",
+  "priority": 1,
+  "prioritySet": true
+ },
+ {
+  "id": "top/epsilon",
+  "title": "Epsilon",
+  "status": "done",
+  "due": "2026-11-09T16:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-10T00:10:00.000Z",
+  "priority": 1,
+  "prioritySet": true
+ },
+ {
+  "id": "top/alpha-step",
+  "title": "Alpha step",
+  "status": "on-track",
+  "due": "2026-11-09T17:30-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T18:00:00.000Z",
+  "priority": 1,
+  "prioritySet": false
+ },
+ {
+  "id": "top/beta-piece",
+  "title": "Beta piece",
+  "status": "on-track",
+  "due": "2026-11-10T18:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T18:00:00.000Z",
+  "priority": 1,
+  "prioritySet": false,
+  "waitingOn": [
+   {
+    "goal": "top/beta-step"
+   }
+  ]
+ },
+ {
+  "id": "top/beta-step",
+  "title": "Beta step",
+  "status": "on-track",
+  "due": "2026-11-09T15:00-08:00",
+  "tags": [],
+  "owner": "top",
+  "updatedAt": "2026-11-09T20:30:00.000Z",
+  "priority": 1,
+  "prioritySet": false
+ },
+ {
+  "id": "ci/zeta",
+  "title": "Zeta",
+  "status": "done",
+  "due": "2026-11-10T12:00-08:00",
+  "tags": [],
+  "owner": "ci",
+  "updatedAt": "2026-11-10T01:30:00.000Z",
+  "priority": 1,
+  "prioritySet": false
+ },
+ {
+  "id": "ci/eta",
+  "title": "Eta",
+  "status": "on-track",
+  "due": "2026-11-13T10:00-08:00",
+  "tags": [],
+  "owner": "ci",
+  "updatedAt": "2026-11-09T21:00:00.000Z",
+  "priority": 2,
+  "prioritySet": false
+ },
+ {
+  "id": "ci/iota",
+  "title": "Iota",
+  "status": "done",
+  "due": "2026-11-08T10:00-08:00",
+  "tags": [],
+  "owner": "ci",
+  "updatedAt": "2026-11-08T17:00:00.000Z",
+  "priority": 2,
+  "prioritySet": false
+ }
+]

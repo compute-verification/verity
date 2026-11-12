@@ -26,7 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_bench.py", "tests/test_steady_point.py"]
+untraced = ["tests/test_bench.py", "tests/test_steady_point.py", "tests/test_steady_specs.py"]
 # The harness is a user of the vLLM integration. Its fake-engine tests import
 # the public hook set and exercise the integration-facing arm contract, and
 # `build_bound` reads the protocol options' `requires_build` to refuse CUDA
@@ -41,9 +41,11 @@ untraced = ["tests/test_bench.py", "tests/test_steady_point.py"]
 # driver's phases, batches and gate are tested on recorded shapes. A Pearl-C protocol arm's own gate is the
 # experimental Pearl-C arm's call check, which a test runs on a fake device run. The served table reads each result's
 # labels through from the store's remote (research's labels_sync, which research doesn't export), which a test checks on a
-# directory remote.
+# directory remote. A steady-state point refuses a node that can't run `gpu-lease` and names the lease tool's script to
+# put on its path, which a test checks is that script of the tree.
 inputs = [
     "tools/research/src/research/store/labels_sync.py",
+    "tools/research/src/research/pods/sh/gpu_lease.sh",
     "benchmarks/pouw/pearl_c_vllm/bench_arm.py",
     "benchmarks/pouw/settings.py",
     "benchmarks/harness/README.md",
@@ -114,9 +116,10 @@ inputs = [
     # door's runner, which a test runs
     "verity/protocols/inference_only/rho/data/reference.toml",
     "benchmarks/prove/run.py",
-    # `verity bench exfiltration` composes two other benchmarks' calculators, which its tests run on fixture rows: the
-    # break-even planner's plan (its modules, with the figure's model, the cost model and the cards they read, and rho's
-    # world fleet) for the requests, and the network certifier's calculator of K for its term; a test runs its runner
+    # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
+    # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
+    # modules, with the figure's model, the cost model and the cards they read, and rho's world fleet); a test runs its
+    # runner
     "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",
     "benchmarks/exfiltration/run.py",

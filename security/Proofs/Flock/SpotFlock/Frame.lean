@@ -84,9 +84,9 @@ holds it, and is checked by the frame either
 A session of more than one table needs only the first: round 2 refuses a session split across Flock tables
 (`second-tables`). -/
 def FrameIs (L : Layout) : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) →

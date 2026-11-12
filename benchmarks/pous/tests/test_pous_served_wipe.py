@@ -215,29 +215,6 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 
-def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
-    """With no judge built already the wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
-    judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
-    demo.sh. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
-    one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
-    d, home = tmp_path / "wipe", tmp_path / "home"
-    home.mkdir()
-    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
-    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
-    assert r.returncode == 0, r.stdout + r.stderr
-    (built,) = (tmp_path / "lake.log").read_text().splitlines()
-    package, command = built.split(" ", 1)
-    assert command == "build wipe-protocol" and package.endswith("/" + JUDGE) and ROOT not in Path(package).parents
-    demo = json.loads((d / "demo-argv.json").read_text())
-    assert demo["argv"][-2:] == ["--wipe-protocol", f"{package}/.lake/build/bin/wipe-protocol"]
-    assert _stamps(d) == ["start", "built wipe-protocol", "asked for the card", "leased the card", "the wipe exit 0",
-                          "exit 0"]
-    assert not Path(package).exists() and (d / "lake-build.log").exists()
-    for p in json.loads((ROOT / JUDGE / "lake-manifest.json").read_text())["packages"]:
-        assert p["type"] == "path", f"the judge requires {p['name']} from {p.get('url')}, which no copy holds"
-        assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
-
-
 def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     """Where no `gpu-lease` is installed the wipe takes its card by the tree's own lease script, with the same request
     as memory-accounting, and wipes the card that hands out: it no longer refuses. The wrapper is a copy in a tree
@@ -265,6 +242,39 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     assert (d / "card.txt").read_text() == "GPU-tree0\n" and not (d / "refused.txt").exists()
     assert json.loads((d / "served.json").read_text())["card"] == "GPU-tree0"
     assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
+
+
+def test_the_lean_judge_is_built_in_a_copy_that_holds_every_package_it_requires(node, tmp_path) -> None:
+    """With no judge built already the wrapper builds `wipe-protocol` before it asks for a card: `lake build` in the
+    judge's package of a copy of ``verity/`` outside the tree, removed when the piece ends, and the built judge goes to
+    demo.sh. The stand-in `lake` fails as lake does when the copy lacks a package the judge's manifest requires; each
+    one is a path requirement inside ``verity/``, so the copy needs no network and nothing else of the tree."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    (built,) = (tmp_path / "lake.log").read_text().splitlines()
+    package, command = built.split(" ", 1)
+    assert command == "build wipe-protocol" and package.endswith("/" + JUDGE) and ROOT not in Path(package).parents
+    demo = json.loads((d / "demo-argv.json").read_text())
+    assert demo["argv"][-2:] == ["--wipe-protocol", f"{package}/.lake/build/bin/wipe-protocol"]
+    assert len((tmp_path / "lease.log").read_text().splitlines()) == 1
+    assert not Path(package).exists() and (d / "lake-build.log").exists()
+    for p in json.loads((ROOT / JUDGE / "lake-manifest.json").read_text())["packages"]:
+        assert p["type"] == "path", f"the judge requires {p['name']} from {p.get('url')}, which no copy holds"
+        assert ROOT / "verity" in (ROOT / JUDGE / p["dir"]).resolve().parents, (p["name"], p["dir"])
+
+
+def test_a_piece_that_builds_its_judge_stamps_the_build(node, tmp_path) -> None:
+    """The build of `wipe-protocol` is on the piece's timeline: after its start, before it asks for the card."""
+    d, home = tmp_path / "wipe", tmp_path / "home"
+    home.mkdir()
+    _exe(Path(node["FAKE_BIN"]) / "lake", LAKE)
+    r = _wipe(node | {"HOME": str(home), "FAKE_LAKE_LOG": str(tmp_path / "lake.log")}, d)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _stamps(d) == ["start", "built wipe-protocol", "asked for the card", "leased the card", "the wipe exit 0",
+                          "exit 0"]
 
 
 @pytest.mark.parametrize("apps, used", [("4242, 70212 MiB", "70300"), ("", "2048")])

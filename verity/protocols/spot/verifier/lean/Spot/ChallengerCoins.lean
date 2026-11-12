@@ -125,7 +125,7 @@ def MAX_LEDGER_LINES : Nat := 2 ^ 20
 /-- The most lines a host's pins log holds. -/
 def MAX_PINS : Nat := 2 ^ 20
 /-- The longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins. -/
-def MAX_PATH : Nat := 20
+def MAX_PATH : Nat := 24
 
 /-- Bounds on the sizes of a sample's coin evidence (module docstring, `withinAt`). -/
 structure Limits where
