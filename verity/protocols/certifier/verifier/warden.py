@@ -806,6 +806,11 @@ class Warden:
         self._changed.set()
         return True
 
+    @property
+    def awaited(self) -> list[int]:
+        """The execution phases whose head is due and not handed back."""
+        return sorted(w for w in self._due if w not in self._back)
+
     def _leave(self, t: int) -> None:
         """Tick t's heads (the module docstring's "The head's tick"): each one due by t and back leaves, to `leave`,
         if t is at most `head_wait` ticks past its due tick; one not back by then never leaves, and `leave` is told
