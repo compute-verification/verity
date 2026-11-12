@@ -116,11 +116,11 @@ ticks (`Shadow`, kept beside the log), and a tick reads `G2_FRESH` candidates' a
 while the check runs: one is read again at once once the candidate's check ended, at its drop, and after an enqueue, a
 rerun or a cancel of it.  `--no-graph2-shadow` reads none.  The steps the
 check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run, and hold no pass: a check passes once every
-step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and no drop, its landing's among them,
-cancels the runs still running one.  Once a candidate's verdict is pass or fail and its runs ended, what it failed of one
-that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of each member
-whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its drop while
-they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
+step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and its landing's drop leaves the runs
+still running one, which any other drop cancels.  Once a candidate's verdict is pass or fail and its runs ended, what it
+failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of
+each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its
+drop while they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
 rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
@@ -216,8 +216,8 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
 from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
-from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
-                     Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
+from .vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject,
+                     Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
 from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
@@ -1980,7 +1980,7 @@ class World:
 def _running(j: Judged | None) -> dict:
     """The record of the run beside a judged candidate's check while that runs: pending, or a check that gates failed before
     it ended, a fail `vqueue_slim.judge` doesn't keep; {} once it ended or its verdict is kept, as a pass is while its runs
-    still run steps off the gate (`vqueue_slim._passed_early`), which no drop stops."""
+    still run steps off the gate (`vqueue_slim._passed_early`), which only its drop on `main` leaves running (`Loop._drop`)."""
     if j is None or j.slim is None or "verdict" in (j.record or {}) or j.slim.state not in (PENDING, FAIL):
         return {}
     return j.record or {}
@@ -3152,7 +3152,8 @@ class Loop:
         line says how graph2's check, in shadow, read (``graph2``), and one `_follow` keeps is left running (``follow``).
         One decided on a check that gates failed while it ran (an early red) logs when its first failure was written and
         when it was dropped (``early_red``).  One whose check passed while its runs still run steps off the gate
-        (`vqueue_slim._passed_early`) leaves them running; its line keeps their record (``off_gate_running``) while it keeps
+        (`vqueue_slim._passed_early`) leaves them running where it is dropped on `main`, and cancels them otherwise, as
+        nothing will land on what they find; its line keeps their record (``off_gate_running``) while it keeps
         a verdict and those runs or the run beside its base's check haven't ended, which `_off_gate` reads until both did."""
         w, j = self.world, self._reread(t, c)
         shadow = j.shadow if j is not None else None
@@ -3160,8 +3161,10 @@ class Loop:
         cancel = w.cancel(c.sha) if follow is None else "left running, in shadow"
         why = f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}"
         rec, kept = _running(j), (j.record if j is not None else None) or {}
+        if stop := a.why != ON_MAIN and bool(kept.get("still_running")):
+            rec = kept
         base = t.below if c.base == t.main else t.past.slim(c.base)[1]
-        unread = "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
+        unread = not stop and "verdict" in kept and (kept.get("still_running") or isinstance(base, dict) and (
             "verdict" not in base or base.get("still_running")))
         if "plan" in rec:
             self.slim.abandon(rec)

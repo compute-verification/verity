@@ -4836,6 +4836,23 @@ def test_under_gate_check_a_candidate_that_landed_early_on_a_main_whose_check_st
     assert len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
 
 
+def test_under_gate_check_a_candidate_that_passed_early_and_is_dropped_off_main_has_the_runs_still_running_cancelled(
+        env, monkeypatch):
+    """Only a landing leaves a check's runs running steps off the gate: a candidate whose check passed while a shard still runs
+    circuit-check, dropped for any other cause, has its runs cancelled as any dropped candidate's, and its line keeps no
+    record for `_off_gate` to read."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS)
+    runs.end(main)
+    runs.end(sha)
+    runs.runs_on(sha, 3, "circuit-check")
+    assert _acts(loop.tick()) == ["slim", "slim"]
+    loop.decide = lambda s: [Drop(sha, "its base failed")] if s.candidates else []
+    (drop,) = [r for r in loop.tick() if r["action"] == "drop"]
+    ids = [r for r in runs.state if r.startswith("c-")][-len(PLAN):]
+    assert (drop["sha"], drop["beside_cancelled"], "off_gate_running" in drop) == (sha, ids, False)
+    assert [got for got, _ in env.cancelled] == [ids] and not L.Past.read(env.log, 0).off_gate_running()
+
+
 def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):
     """The run beside `main`'s check that ended in infra errors runs again, and what a candidate fails off the gate is compared
     with that run once it ends, not with the one that ended so."""
