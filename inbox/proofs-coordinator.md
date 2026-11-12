@@ -78403,3 +78403,214 @@ Read at `origin/main` = `1a3eadc9c5b4` [read 08:20Z]; it moved twice since the b
 - **The twelve headers that are not ours**: the three lines to paste are in section 4 of my 07:48Z entry, unchanged.
 
 Done unless you write otherwise in the mailbox.
+
+## FOLD, Thu 12 Nov 08:22Z: the size, and it is built: one function and one equation, pushed at `a62f144764`, and no entry allocates; a session's check at the runners' allocator setting goes 118.8 to 38.9 s on the head, 20.2 to 11.8 s on MoE and 3.65 to 3.20 s on GEMM, with the same verdict bytes and the same peak memory; the layout kept is `Array F128` with the sum written into the column's own cell, which beat every flat layout on all three statements; the full check has started and is not back
+
+Tags: [run] a command I ran, with its run id; [read] a file or a run's output I read now, with its place; [relayed]
+another lane's statement I did not check; [derived] my arithmetic or reasoning, with its steps; [guess]. Times are from
+`date -u`. Mailbox read at 08:20Z: one section (06:55Z, the merge branch's name), none newer. Every timing below is
+on an AMD EPYC-Genoa CPU node, the job under `nice -n 19` inside a check slot and pinned with `taskset` to the slot's
+last core; "idle" means that core was 0 to 3% busy in the 2 s samples the job took before and after, with the node's
+load average between 33 and 95 [read: each run's `job.log`]. The timings are the Lean verifier alone, on kept sessions
+and staged statements; nothing here ran on the served engine.
+
+### What you can act on
+
+1. **It is one function and one equation, and it is written and pushed** [run]; how far "proved" goes is item 2. Branch
+   `cursor/proofs-fold-7540`, one commit `a62f144764` on `main` at `d6075b75d2`, one file,
+   `verity/protocols/flock/verifier/Flock/Comp.lean` (+53 lines, none removed). `Sparse.foldTFast` beside `Sparse.foldT`,
+   and `@[csimp] theorem Sparse.foldT_eq_fast : @foldT = @foldTFast`, so compiled code runs the fast fold and the kernel,
+   every proof and every record read `foldT` as before. `foldRow`, `foldRows` and `foldT` are byte for byte what they
+   were. No caller is edited: the only callers of `foldT` are `Stmt.baseOf` and `Stmt.baseOfFast`
+   (`Flock/Statement.lean:294-297`, `:302-305`), and `@[csimp]` switches them in compiled code.
+2. **It elaborates and rests on the three allowed axioms; it has not been through a full `check.py`** [run
+   `r20261112-075527-b934`, `verity lean try … --siblings --on auto`, `vy-nebius-cpu-3`, exit 0]: "none of its 16
+   theorems uses an axiom beyond propext, Classical.choice and Quot.sound", and no sibling module declares a name it
+   does (2 modules unchecked there for want of a build: `Flock.Annot`, `Flock.Sizes`). The verifier's package builds
+   with it (`lake build flock-verify` inside runs `c2e0`, `c560`, `c19c`) [run]. The recorded check of the commit
+   (`check.py --record`: the Lean check, Flock's suites, lean-agreement) is run `r20261112-073043-f29b`: launched 07:30Z,
+   it waited 45 minutes for a check slot on `vy-nebius-cpu-5` and **is running, not back**, at 08:21Z [run]. Nobody but
+   me has read the statement, so of the four checks of "proved" two hold.
+3. **What it does to the fold and to a session's check** (tables in sections C and E):
+
+   | block type | the unit's two folds, before to after, s | factor | a session's check, before to after, s (default allocator) | the same at `MIMALLOC_PURGE_DELAY=-1` | peak memory |
+   |---|---|---|---|---|---|
+   | GEMM K=512 | 0.054 and 0.075 to 0.016 and 0.019 | 3.3 and 3.9 | 3.847 to 3.371, 1.14 times | 3.650 to 3.202, 1.14 times | 0.547 GiB both (0.567 at `-1`) |
+   | MoE read and GEMM K=6144 | 2.55 and 1.71 to 0.61 and 0.50 | 4.2 and 3.4 | 22.64 to 14.47, 1.57 times | 20.19 to 11.84, 1.71 times | 7.08 GiB both (7.79 at `-1`) |
+   | head block | 43.9 and 68.5 to 4.65 and 6.18 | 9.4 and 11.1 (default allocator; the fold alone at `-1` is not back) | 268.3 to 45.5, 5.9 times | 118.8 to 38.9, 3.05 times | 40.90 GiB both (45.58 at `-1`) |
+
+   The folds' "after" is layout R timed beside the present fold in one process; R is the code that was built. The
+   built package's own fold, timed in later runs on other nodes, is 0.018 and 0.020 s (GEMM, run `a1a1`) and 0.75 and
+   0.55 s (MoE, run `11c8`) [run].
+   Every "after" call printed the same verdict lines as its "before", byte for byte [run `c19c`, `c560`, `28dd`:
+   "every call's verdict lines are the same bytes"]. The sessions carry no Program, so each verify ends refused for want
+   of it after every check has run (exit 1), as FIXEDCOST's do; the seconds are the checks'.
+4. **A lock: I expect none moves** [derived: the three definitions the records hash, `Flock.Sparse.foldRow`,
+   `foldRows`, `foldT` (`security/lean-audit.json:41930-41932`, `security/Properties/lean-audit.json:15716-15718`), are
+   untouched; the fast fold reaches no `@[extern]` or `@[implemented_by]` constant the present path does not
+   (`Array.modify`, `rowFoldU`, both there today); no lock lists a `@[csimp]` twin, by a search for `baseOf_eq_fast` in
+   the verifier's and `security/`'s `lean-audit.json` files]. Run `f29b` decides, and the pull request's first
+   paragraph will say what it found.
+5. **Lean's remote-merge branch: nothing meets** [run]. `git merge-tree --write-tree a62f144764
+   origin/cursor/lean-remote-merge-landing-fc8d` exits 0 with no conflict, at that branch's head `1ab0a942376e` (it
+   contains `ded7d80c415b`); `Flock/Comp.lean` and `Flock/Statement.lean` there are `main`'s. Against `main` at
+   `0c0efe136ad8` the merge is clean too, and nothing under `verity/protocols/flock/verifier/` or `verity/circuits/base/`
+   changed on `main` since `d6075b75d2`. I touched nothing of `FlockVerify.lean`, so I do not meet PROGHELD or KEPT.
+6. **I need from you:** the Linear issue the pull request names (`research queue open --issue`); without one by the
+   time `f29b` ends I open it with `none:` and the reason, and you can correct it.
+
+### A. Which functions the two folds are
+
+All three statements are flat (`structured: true, templated: false` in the bench's `setupHiddenOf` line) [run `4f48`,
+`2c9a`, `279e`], which agrees with FIXEDCOST's 07:31Z entry [relayed].
+
+| | function | place at `d6075b75d2` | replaces an `Array F128` element an entry? |
+|---|---|---|---|
+| the entry loop | `Sparse.foldRow` | `Flock/Comp.lean:204-206`: `acc.modify (m.col i t) (· + ei)` | **yes: the one** |
+| its rows | `Sparse.foldRows` | `Comp.lean:209-213` | no (one `e[i]!` a row) |
+| the fold | `Sparse.foldT` | `Comp.lean:216` | no |
+| the two folds of a check | `a.foldT eLo` and `b.foldT eLo`, the A side and the B side of the net | `Stmt.baseOf`, `Flock/Statement.lean:294-297`; compiled as `Stmt.baseOfFast`, `:302-305` (`baseOf_eq_fast`) | no: one new cell a column, in its map |
+| above it, flat | `Stmt.slotBase` `:317`, `unitShare` `:433`, `partialRangesT` `:445`, `foldedPartial` `:468`, `Stmt.folded` `:483`; the unstructured path `foldRanges` `:365`, `Stmt.fold` `:385` | `Flock/Statement.lean` | no |
+| above it, templated | `Tmpl.foldUnit` `Flock/TmplSplit.lean:576`, `foldSplit` `:560`, `walk` `:532` | not mine; it reads no `Sparse` | its own tables (`addAt`, `Flock/TmplFold.lean:97`) |
+| callers of `folded` | `Flock/Zk.lean:199`, `Flock/With/Zk.lean:80`, `Flock/With/Verify.lean:70`, `Flock/Piop.lean:177`, `Flock/RecCoins.lean:207` | | |
+
+Other loops of the verifier with the same shape, `x.modify k (· + v)` on an `Array F128` [read, `git grep` at
+`d6075b75d2`]: `Lookup.foldBLow` (`Flock/Lookup.lean:129`, one update a table word of a lookup net; none of the three
+statements has a lookup net: `"lookup": false` on every net [run `4f48`, `2c9a`, `279e`]); `Stmt.addDelta`
+(`Statement.lean:380`) and `foldedPartial`'s two (`:478`, `:480`), on 64 elements or one update a pair, too few to
+show. The tree already has this change's pattern once: `Flock.addTo` (`Flock/Firewall/FinishProver.lean:191-193`).
+
+### B. What an `F128` is at run time, and what an entry costs
+
+- [read] `structure F128 where lo : UInt64; hi : UInt64` (`verity/circuits/base/Base/Field.lean:13`). [run: `lean -c`
+  on one file holding a copy of `Comp.lean`'s fold, toolchain v4.34.0, on my VM; a compile of one file, no run id] its
+  constructor compiles to `lean_alloc_ctor(0, 0, 16)`: a heap object, 8 bytes of header and 16 of words, and an
+  `Array F128` is an array of 8-byte pointers to such cells. A column is 32 bytes and a pointer away; C's is 16 bytes in
+  place [derived].
+- **The present loop, an entry** [run: the same generated C]: `lean_array_fget` takes the cell and counts a second
+  reference; the cell is tested for a sole owner **while the array still holds it**, so the test always fails; only
+  then is the array's slot cleared; a new cell is allocated (`lean_alloc_ctor`), the old one loses its two references
+  and is freed. One allocation, one free and a reference counted up and down, every entry. The built verifier agrees:
+  `Sparse.foldRow` calls `mi_malloc_small` [read: run `c560`, `foldsym-before.txt`], and under `perf` it,
+  `lean_dec_ref_cold`, `mi_free` and `mi_malloc_small` are 9.8%, 7.1%, 3.8% and 3.2% of a whole MoE verify before and
+  5.2% (the new loop), 2.8%, 2.8% and 1.8% after, at the default setting, each of its own total (42.7 and 34.1 CPU
+  seconds) [read: run `c560`, `perf-before-symbols.txt`, `perf-after-symbols.txt`].
+- **What else the entry does, none of it allocating** [run: the same C]: `m.start[i]!` is a borrowed read of a small
+  `Nat` with a bounds check; `m.col` reads four bytes, each bounds-checked, and makes a `Nat` of the 32-bit column;
+  `t + 1`, `fuel - 1` and `start + 4·t` are `Nat` arithmetic on the scalar path. `e[i]!` is read once a row, not an
+  entry. **No `Nat` leaves the small range** [derived: each is a row or entry index, a byte offset inside `data`, or a
+  column below 2^32, all far below 2^63].
+- **Why the fix is small** [run: the generated C of the new loop, and `Array.modify`'s source]. `Array.modify` clears
+  the array's slot **before** it calls its function. Given an out-of-line function that owns the cell
+  (`addCell lo hi v`), the sole-owner test now passes and the sum is written into the cell. Written inline, `(· + ei)`,
+  the compiler tests before the slot is cleared. The first touch of a column still allocates, once: the start array
+  shares one zero cell.
+
+### C. The layouts, each on the same folds
+
+Seconds a fold and µs an entry, best of the repeats, the unit net's A side and B side. Every layout's result compared
+equal to the present fold's, and C's by checksum [run: "every layout's result equals the present fold's"]. Default
+allocator setting unless the row says `-1`.
+
+| layout | what an entry does | GEMM, 3.73 M and 4.60 M entries | MoE, 124.3 M and 90.3 M | head, 606.5 M and 761.9 M |
+|---|---|---|---|---|
+| present | a new cell | 0.054, 0.075 s; 0.0144, 0.0162 µs | 2.545, 1.705 s; 0.0205, 0.0189 µs | 43.90, 68.50 s; 0.0724, 0.0899 µs |
+| P: present's update, entries read in place | a new cell | 0.0114, 0.0128 µs | 0.0167, 0.0152 µs | 0.0660, 0.0925 µs |
+| **R (built): `Array F128`, the sum into the cell** | **nothing** | **0.016, 0.019 s; 0.0044, 0.0041 µs** | **0.609, 0.501 s; 0.0049, 0.0055 µs** | **4.651, 6.175 s; 0.0077, 0.0081 µs** |
+| R2: R on cells allocated up front in column order | nothing | 0.0045, 0.0043 µs (R in that run: 0.0041, 0.0040) | 0.0052, 0.0060 µs (R in that run: 0.0045, 0.0052) | not run |
+| H: two `Array UInt64`, the halves | two boxes | 0.0252, 0.0267 µs | 0.0402, 0.0420 µs | not run |
+| Q: four `Array UInt32` | nothing | 0.0087, 0.0081 µs | 0.0109, 0.0113 µs | 6.400, 7.460 s; 0.0106, 0.0098 µs |
+| B: a `ByteArray`, 16 bytes an element, XORed in place, then unpacked to an `Array F128` | nothing | 0.0124, 0.0114 µs | 0.0143, 0.0164 µs | 7.405, 9.179 s; 0.0122, 0.0120 µs |
+| of B, the bytes alone | nothing | 0.0093, 0.0091 µs | 0.0095, 0.0098 µs | 0.0104, 0.0104 µs |
+| C, `cc` 13.3 `-O2` | nothing | 0.003, 0.004 s; 0.0008, 0.0008 µs | 0.258, 0.234 s; 0.0021, 0.0026 µs | 1.282, 1.440 s; 0.0021, 0.0019 µs |
+| present at `-1` | a new cell | 0.0140, 0.0149 µs | 0.0156, 0.0153 µs | run `9160`, running |
+| R at `-1` | nothing | 0.0038, 0.0038 µs | 0.0046, 0.0048 µs | the same |
+
+- Runs [run]: GEMM `r20261112-070825-4f48` (`vy-nebius-cpu-1`, core 19 idle, 3 repeats); MoE `r20261112-071108-2c9a`
+  (`cpu-1`, core 117 idle, 3 repeats); head `r20261112-071119-279e` (`cpu-1`, core 191 idle, 2 repeats, layouts
+  present, P, R, Q, B; 21.6 min of bench, peak 48.3 GiB). R2: `r20261112-072707-a1a1` (GEMM, `cpu-7`, core 99 idle) and
+  `r20261112-072632-11c8` (MoE, `cpu-9`, core 143 idle), both built on the changed package, so their "present" row is
+  already the fast fold and I quote only R2 against R from them (R2 is 6 to 16% slower on the unit net). At `-1`:
+  GEMM `r20261112-074921-2fef` (`cpu-9`, core 165 idle, 3 repeats); MoE `r20261112-074857-f6c4` (`cpu-13`, core 119,
+  **not idle: 40% busy before, 100% after**, 3 repeats), both against the verifier with `main`'s `Comp.lean` put back.
+- **R is the fastest Lean layout on all three, and the only one that needs no second pass, no new compiled primitive
+  and no change to what the fold returns** [derived from the table]. The flat layouts lose because this toolchain gives
+  no word access to flat memory: a `ByteArray` is read and written a byte at a time (16 reads and 16 writes an entry),
+  `Array UInt32` holds unboxed scalars but costs four checked reads and writes an entry, and `Array UInt64` boxes every
+  element (H allocates twice an entry, and is slower than the present fold) [run: each layout's generated C, by
+  `cinspect.py`, in the runs' `FoldCands.c`]. B would also add `ByteArray.uset` to `verifier.allow` in the verifier's
+  lock (it lists `Array.uget`, `Array.uset` and `Array.modifyM` today, not `ByteArray.uset`) [read:
+  `verity/protocols/flock/verifier/lean-audit.json`].
+- **The head's 9 to 11 times is against the default allocator**, where the present fold pays the purge FLOCKPKG and
+  FIXEDCOST measured (453 s of system time in that bench [read: run `279e`, `job.log`]); against `-1` the fold alone is not back (run `9160`), and the head's session check at `-1`, 3.05
+  times, is the figure to use (section E).
+
+### D. A C compiler's figure, and how far R is from it
+
+- `fold_ref.c` does the same fold on the same matrices and coins, dumped by the bench, into a flat array of 16-byte
+  elements; `cc` 13.3.0, `-O2` (`-O3 -march=native` gives the same) [run `4f48`, `2c9a`, `279e`]: **0.0008 µs an entry
+  on GEMM, 0.0021 to 0.0026 on MoE, 0.0019 to 0.0021 on the head.**
+- **R is 5 times C on GEMM, 2.1 to 2.4 times on MoE and 3.6 to 4.3 times on the head** [derived: 0.0044/0.0008;
+  0.0049/0.0021 and 0.0055/0.0026; 0.0077/0.0021 and 0.0081/0.0019].
+- Why [derived from the new loop's generated C]: an entry still makes a `Nat` of the column and bounds-checks it,
+  clears and rewrites the array's slot, tests the cell's owner count, and tests on each write that the array itself has
+  one owner; and a column is a pointer and a 24-byte cell (32 bytes, a dependent load) where C has 16 bytes in place, so
+  at 2^24 and 2^25 columns the fold is bound by memory with twice C's working set. What would close it is a flat
+  accumulator with 64-bit access, which this toolchain has only through an `@[extern]`; the package takes none.
+
+### E. A session's check, before and after
+
+The same kept session, the two binaries alternating on one pinned core, each call a fresh process
+(`flock-verify verify --statement verity/flock-circuit … --zk --session DIR` under `/usr/bin/time -v`); "session" is
+the verifier's own line for the session, "read" its line for the inputs. Medians.
+
+| block type, session | setting | read before, after, s | session before, s | session after, s | factor | process CPU, s | peak before, after, GiB | run, machine, core, rounds |
+|---|---|---|---|---|---|---|---|---|
+| GEMM K=512, `fe31` | default | 2.68, 2.67 | 3.847 | 3.371 | 1.141 | 6.58 to 6.10 | 0.547, 0.547 | `r20261112-074701-c19c`, `cpu-2`, core 67 idle, 5 |
+| | `-1` | 2.60, 2.59 | 3.650 | 3.202 | 1.140 | 6.30 to 5.84 | 0.567, 0.567 | the same |
+| GEMM K=512, `fe31` | default | 2.81, 2.85 | 4.308 | 3.657 | 1.178 | 7.19 to 6.59 | 0.534, 0.533 | `r20261112-072012-c2e0`, `cpu-5`, core 19 idle, 3 |
+| MoE, `bb7c-a` | default | 19.9, 19.5 | 22.643 | 14.468 | 1.565 | 42.65 to 34.07 | 7.083, 7.083 | `r20261112-072824-c560`, `cpu-3`, core 63 idle at three samples of four (58% busy at one), 3 |
+| | `-1` | 19.5, 19.0 | 20.190 | 11.838 | 1.706 | 39.57 to 30.94 | 7.792, 7.793 | the same |
+| head, `38d6` | default | 107.4, 104.8 | 268.25 (255.6 and 280.9) | 45.48 (45.29 and 45.67) | 5.90 | 375.8 to 150.5 | 40.901, 40.901 | `r20261112-072850-28dd`, `cpu-14`, core 95 idle (0 to 3% busy), 2 | |
+| | `-1` | 105.6, 103.1 | 118.76 (119.6 and 117.9) | 38.89 (39.30 and 38.48) | 3.05 | 224.6 to 142.3 | 45.576, 45.576 | the same | |
+
+- The MoE check drops by more than the fold's own seconds [derived: the two folds save 3.1 s a repetition (4.25 s to
+  1.11 s), 6.3 s a check of two repetitions (two a check: FIXEDCOST [relayed]), and the check drops 8.2 to 8.4 s]. The rest is downstream of the fold: `baseOf` as a whole
+  went 6.48 s to 2.44 s in the bench (runs `2c9a` and `11c8`, different nodes, so indicative) [run], and
+  `lean_dec_ref_cold` 7.1% to 2.8% of the verify [read: run `c560`]. The present fold leaves its cells scattered by
+  its allocate-and-free an entry, and the map and the free that follow walk them [guess].
+- **This is more than FIXEDCOST's bounds for this lever at `-1`** ("at most 36%" of the head's check and "at most
+  11%" of MoE's [relayed]; measured 67% of the head's, 118.76 to 38.89 s, and 41% of MoE's, 20.19 to 11.84 s
+  [derived]), for the reason above: a bound read off the walk's allocator share misses what the scattered cells cost
+  after the walk. Its table of what the levers add up to (head 122.6 to 67 s after levers 1 and 4) can be redrawn from
+  38.9 s with lever 4 still to come.
+- **The head after the change, at the default setting, is within 17% of the head at `-1`** (45.5 against 38.9 s)
+  [derived]: with no allocation an entry the purge has little left to do, so a verifier started without
+  `MIMALLOC_PURGE_DELAY=-1` (FIXEDCOST lists such callers [relayed]) no longer pays double.
+- Failed run, nothing rests on it: `r20261112-071600-11c0` (exit 2, my job's `tar` line; fixed, rerun as `c2e0`) [run].
+
+### F. What is left after it, for task 4
+
+One repetition's `Stmt.folded` on the MoE statement with the change, 4.98 s (it was 9.32 s) [run `11c8`; before:
+`2c9a`]: the tensor 1.15 s, the two folds 0.75 and 0.55 s, `baseOf`'s map 0.59 s, `Stmt.project` 1.44 s, and about
+0.5 s I did not split (`baseOf` whole is 2.44 s) [derived]. On GEMM: `folded` 0.37 s (it was 0.61 s), `baseOf` 0.072 s
+(0.172 s) [run `a1a1`; before: `4f48`]. So after this change the loops that still build one cell a value are, in order
+of seconds on MoE: `Stmt.project` (`Statement.lean:406`), `tensorFast` (`:274`) and `baseOfFast`'s map (`:301`),
+which is FIXEDCOST's lever 4 [relayed]; each is one allocation a column, not an entry, and one field multiplication a
+column in `project`. I have not sized how much of each is allocation. On the whole MoE verify after the change the top
+symbols are SHA-512's compression 21.7% (the circuit's read, KEPT's), `tensorFast` 7.4%, `F128.mulW` 7.1%, the new
+fold loop 5.2% [read: run `c560`, `perf-after-symbols.txt`]. On the whole head verify after the change: SHA-512's
+compression 31.5%, **the new fold loop 11.7%**, `F128.mulW` 2.5%, `baseOfFast`'s map 1.9%, `tensorFast` 1.8% [read: run
+`28dd`, `perf-after-symbols.txt`, default setting]; so on the head the walk itself is still the largest part of the
+check that is not the read, and what would cut it further is FIXEDCOST's lever 2 (one pass for both repetitions), not
+another layout [derived].
+
+### What I could not establish, and what I wait on
+
+- The head's fold alone at `-1`: run `r20261112-075439-9160`, running at 08:21Z; the head's session check at `-1` is in section E, so nothing waits on it.
+- The full check and what a lock does: run `r20261112-073043-f29b`, running since 08:15Z; I expect it past 09:30Z [guess].
+- Whether the remaining distance to C on the head is memory or the checks: not split.
+- Next: the pull request when `f29b` is back (13:00Z at the latest), with this entry's tables; then task 4
+  only if you say so, since FIXEDCOST offered to build lever 4 in the same pattern and one of us should.
+- Kit, so anyone can rerun: `lanes/proofs/20261112T0650Z-fold/` in the notes (`launch_fold.sh`, `launch_check.sh`,
+  `FoldCands.lean`, `fold_ref.c`).
