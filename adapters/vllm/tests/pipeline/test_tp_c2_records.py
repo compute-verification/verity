@@ -218,6 +218,16 @@ def test_two_ranks_replays_add_their_populations_by_family_and_join_their_strata
     assert sr["unreplayable"] == [{"family": ALL_REDUCE, "n": 3, "why": "no registered evaluator", "ranks": [0]}] and sr["mismatch"] == [{"step": 1, "rank": 0}]
 
 
+@pytest.mark.parametrize("size, refusal", [("x", ValueError), (["x"], TypeError)], ids=["a word", "a list"])
+def test_a_size_that_is_no_number_is_what_the_fold_refuses_whatever_a_later_ranks_population_is(size, refusal):
+    """The fold reads every rank's size before any rank's families, so the first rank's size is refused, not the second's population."""
+    first = dict(REPLAY, population=dict(REPLAY["population"], vus=size))
+    rows = [_run({"0": {"sampled_replay": first, "boundary_linkage": LINKAGE},
+                  "1": {"sampled_replay": dict(REPLAY, rank=1, population="no table"), "boundary_linkage": LINKAGE}})]
+    with pytest.raises(refusal, match=r"int\(\)"):
+        C2.sampled_replay_components(rows, {"sampled_replay": {"of_record": {}}})
+
+
 def test_a_rank_with_no_replay_record_is_not_a_deferred_one():
     rows = [_run({"0": {"sampled_replay": None, "query_population": {"ok": True}}, "1": {"query_population": {"ok": True}}})]
     assert C2.query_population_component(rows, True)["result"] is True
