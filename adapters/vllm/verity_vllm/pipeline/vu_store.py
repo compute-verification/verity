@@ -323,7 +323,8 @@ def verify_store(store: str | Path) -> dict[str, Any]:
     missing = 0
     for p in (root / "programs").glob("*/units.jsonl"):
         for line in p.read_text().splitlines():
-            for ev in json.loads(line).get("evaluations") or []:
+            evaluations = json.loads(line).get("evaluations")   # a unit that states none names no value
+            for ev in evaluations if evaluations else ():
                 for a in [*ev["args"], *ev["outs"].values()]:
                     a = a.get("sample", a)
                     missing += f"{a['value']}.{a['dtype']}" not in have
@@ -355,7 +356,8 @@ def memory_headroom() -> float | None:
 
 def _limits_for(out: Path, sr: dict[str, Any], headroom: float | None = None) -> VX.Limits:
     lim = VX.Limits.from_dir(out)
-    if (sr.get("evaluator") or {}).get("retention") == "device":
+    evaluator = sr.get("evaluator")   # how the replay evaluated; a record without it kept no block on the device
+    if evaluator and evaluator.get("retention") == "device":
         lim.workers = 1                                                      # forked children cannot read device-retained blocks
     free = memory_headroom() if headroom is None else headroom
     if free is not None and free < HEADROOM_MIN:
@@ -374,11 +376,12 @@ def after_replay(out_dir: str | None, sr: dict[str, Any], pair: int, run_root: b
     out = Path(out_dir)
     extra = json.loads((out / "provenance.json").read_text()) if (out / "provenance.json").is_file() else {}
     man = manifest if isinstance(manifest, dict) else None
+    weights_of_record = sr.get("weights")   # the replay's weights check; a record without it states no committed root
     prov = dict(extra, model=(getattr(eng, "cp", None) or {}).get("repo"), revision=(getattr(eng, "cp", None) or {}).get("revision"),
                 program_digests=program_digests, manifest_digest=(man or {}).get("manifest_digest"), pair=pair,
                 versions={k: v for k, v in versions.items() if isinstance(v, (str, int, float))},
                 weights={"checkpoint": {"repo": (getattr(eng, "cp", None) or {}).get("repo"), "revision": (getattr(eng, "cp", None) or {}).get("revision"),
-                                        "weights_of_record_root": (sr.get("weights") or {}).get("committed_root")}})
+                                        "weights_of_record_root": weights_of_record.get("committed_root") if weights_of_record else None}})
     try:
         s = export_vus(programs, bmap, reader, weights, out_dir=out, run_root=run_root, arrivals=arrivals, manifest=man,
                        executed_prefix=replay_kw.get("executed_prefix"), program_dirs={k: v["dir"] for k, v in loaded.items() if v.get("dir")},

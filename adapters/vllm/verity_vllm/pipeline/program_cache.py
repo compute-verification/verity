@@ -30,8 +30,9 @@ DERIVE_INPUTS = ("sampling", "sampling_params", "batch", "sampling_seeds")
 
 def derive_inputs(workload: str | Path) -> dict[str, Any]:
     wl = json.loads(workload_file(workload).read_text())
-    sw = wl.get("sweep") or {}
-    return {**{k: sw.get(k) for k in DERIVE_INPUTS}, "requests": len(wl.get("requests") or [])}
+    sw = wl.get("sweep")          # the generator's parameters; a workload written by hand states none, and keys by nulls
+    requests = wl.get("requests")
+    return {**{k: sw.get(k) if sw else None for k in DERIVE_INPUTS}, "requests": len(requests) if requests else 0}
 
 
 def key(argv: list[str], *, workload: str | Path, tree: str | None, device: dict[str, Any] | None) -> str | None:
