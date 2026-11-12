@@ -247,11 +247,12 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   pure (c₂, ξ₂, r, inputOf p c ξ ξ₂ e received₂ vs)
 
-/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output. -/
-def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its round 2 at the
+switch `form`. -/
+def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
-  let run ← Spot.Run.run i
+  let run ← Spot.Run.run i form
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -274,7 +275,7 @@ def finish : Core.Outcome OneStage.Public Core.Integrity → Json → Core.Outco
 an accepted two-stage audit read it at `form = true`, so that nothing they prove rests on the switch being off. -/
 def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
-  match prepare p c ξ e bs with
+  match prepare form p c ξ e bs with
   | .error err => .reject s!"two-stage: {err}"
   | .ok (two, run) => finishWith form two run
 
