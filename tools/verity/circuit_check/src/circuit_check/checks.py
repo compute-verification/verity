@@ -1,10 +1,10 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served workload's request Program.
 
-    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the circuits' evaluator, a composite's run body by body by
+    correspondence   the reference (`verity.circuits.evaluation.evaluate`, the circuits' evaluator, a composite's run body by body by
                      `circuit_check.bodies`; a vLLM Definition's is its registered evaluator) on the edge and random vectors
                      of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
-                     kernel (`verity.ml.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
+                     kernel (`verity.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
                      the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
@@ -12,7 +12,7 @@
                      (`struct_budget`), the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
-                     (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
+                     (`verity.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
                      (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read; an
@@ -24,21 +24,24 @@
                      ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
                      those its own sampler samples in its domain (`_sampled`); a target no realization compared on a random
                      vector is a warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else
-                     ``vectors/none`` (`vector_class`)
-    ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
+                     ``vectors/none`` (`vector_class`).  Each correspondence and word view records how many of its vectors
+                     have every input leaf finite and how many give every output leaf finite (``finite_inputs``,
+                     ``finite_outputs``; `vectors.finite_words`), and fewer finite inputs than `FINITE_FLOOR` and than the
+                     vectors' finite share (`vectors.finite_share`) is a warning, ``vectors/few-finite``
+    ports            a Definition's declared return intervals (`verity.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
+    redundant gates  a value computed twice inside one proof block: the gates `verity.definitions.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
                      Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
                      (primitive @ activation, or the named subcircuit)
-    dead gates       gates no output depends on (`verity.ml.circuits.liveness.dead_gates`, transitive), by primitive @ activation
+    dead gates       gates no output depends on (`verity.circuits.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a workload's
                      Program): every gate certified by exactly one proof block, reads across proof blocks only through
                      committed values, no value computed in two proof blocks, the width rule
-                     (`verity.ml.circuits.partition.validate_unit_cut`'s codes and the word's width classes); recorded: the
+                     (`verity.circuits.partition.validate_unit_cut`'s codes and the word's width classes); recorded: the
                      whole Definition's cut under `Q_word` v2 (its codes, and the values computed in two proof blocks it
                      reports, `recomputed_across`).  A Boolean Call is judged by v2: its `recomputed_across` is recorded,
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
@@ -87,15 +90,15 @@ from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
-from verity.ml.circuits.evaluation import ScalarReference, evaluate, kernels, self_check
-from verity.ml.circuits.evaluation.reference import resolve, signature_of, standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.defs import PrimitiveDefinition, conformance_label
+from verity.circuits.evaluation import ScalarReference, evaluate, kernels, self_check
+from verity.circuits.evaluation.reference import resolve, signature_of, standalone_call
+from verity.circuits import boolean as BL
+from verity.circuits.boolean import is_boolean
+from verity.circuits.defs import PrimitiveDefinition, conformance_label
 
 from . import bodies as BD
 from . import sidecars as SC
-from .vectors import edge_count, flat, instance_args, vectors
+from .vectors import edge_count, finite_args, finite_rows, finite_share, finite_words, flat, instance_args, vectors
 
 SCHEMA = "verity-circuit-check/v1"
 PINS = SC.SHARED_PINS
@@ -247,6 +250,27 @@ def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) ->
     return out, raised
 
 
+#: the vectors with every input leaf finite a comparison is to have, or all of its finite share (`vectors.finite_share`) when
+#: that is fewer: short of it is a warning (``vectors/few-finite``), never a failure
+FINITE_FLOOR = 64
+
+
+def _finite_outputs(t: Any, ref: Sequence[tuple[int, ...] | None]) -> int:
+    """How many of the reference's outputs ``ref`` (None where it raised) are finite in every leaf (`vectors.finite_words`)."""
+    widths = signature_of(t)[1].leaf_widths()
+    rows = [r for r in ref if r is not None]
+    return int(finite_words(np.asarray(rows, dtype=object).reshape(len(rows), len(widths)), widths).sum()) if rows else 0
+
+
+def _finite(rec: dict, t: Any, via: str, inputs: int, outputs: int, share: int, F: Findings) -> None:
+    """``rec`` with its counts of vectors whose inputs and whose outputs are all finite, and the warning when the inputs are
+    fewer than `FINITE_FLOOR` and than the ``share`` sampled finite."""
+    rec["finite_inputs"], rec["finite_outputs"] = int(inputs), int(outputs)
+    if inputs < min(FINITE_FLOOR, share):
+        F.warn("vectors", "few-finite", t.id, 1, f"[{via}]: {inputs} of its {rec.get('vectors', rec.get('compared'))} vectors have "
+               f"every input leaf finite, fewer than {FINITE_FLOOR} and than the {share} sampled finite", via=via)
+
+
 def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, F: Findings) -> tuple[dict, None, list]:
     """The reference on the vectors of a Definition that reads a registered table: its other parameters' edge and random
     vectors and the probes (`vectors.table_instances`), every vector reading the table lazily.  No kernel takes it."""
@@ -266,6 +290,8 @@ def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, 
     other = [pt for j, pt in enumerate(params) if j != probe.param]
     rec: dict[str, Any] = {"vectors": len(instances), "edge_vectors": min(n, edge_count(other)), "reference_raised": len(raised),
                            "realizations": [], "table": table}
+    _finite(rec, t, "correspondence", sum(finite_args(params, a) for a in instances), _finite_outputs(t, ref),
+            len(finite_share(n, rec["edge_vectors"])), F)
     if raised:
         F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {len(instances)} vectors",
                examples=raised[:_EXAMPLES])
@@ -282,7 +308,7 @@ def _wide_holder(name: str) -> PrimitiveDefinition:
     is declared by no Definition."""
     h = _WIDE_HOLDERS.get(name)
     if h is None:
-        from verity.ml.circuits.types import Value
+        from verity.circuits.types import Value
 
         h = _WIDE_HOLDERS[name] = PrimitiveDefinition("CircuitCheckLazyOperand", 1, (("x", Value(64)),), Value(64), lambda x: x,
                                                         register=False, tables=((name, "registered"),))
@@ -306,7 +332,7 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
         if getattr(t, "evaluate_lazy", None) is None:
             return f"{t.id} is a primitive without `evaluate_lazy`, so it reads every leaf of a parameter"
         return None
-    from verity.ml.circuits.refs import Affine
+    from verity.circuits.refs import Affine
 
     prog, _call = standalone_call(t)
     for j in wide:
@@ -321,8 +347,8 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     `_lazy_vectors`): every parameter takes its edge and random words, the wide ones one vector at a time
     (`vectors.wide_words`), each read lazily as a `RegisteredTable`, then one random vector per index probe
     (`targets.OPERAND_PROBES`) with its index parameters set.  An operand no vector reads is a warning.  No kernel takes them."""
-    from verity.ml.circuits.evaluation import RegisteredTable
-    from verity.ml.circuits.types import Value
+    from verity.circuits.evaluation import RegisteredTable
+    from verity.circuits.types import Value
 
     from .targets import operand_probes
     from .vectors import edges, wide_words
@@ -363,13 +389,18 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     total = n + len(probes)
     ref: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
+    finite_in = 0
     for i in range(total):
         args: list[Any] = [None] * len(params)
-        for j, a in zip(rest, small(i)):
+        row = small(i)
+        for j, a in zip(rest, row):
             args[j] = a
+        finite = finite_args(other, row)
         for j in wide:
-            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, wide_words(params[j], i, n_edge, opts.seed, j)),
-                                      params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+            words = wide_words(params[j], i, n_edge, opts.seed, j)
+            finite = finite and words.finite
+            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, words), params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+        finite_in += finite
         try:
             ref.append(tuple(evaluate(t, *args)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
@@ -378,6 +409,7 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     rec: dict[str, Any] = {"vectors": total, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
                            "wide": [{"param": j, "name": names[j], "leaves": params[j].leaves,
                                      "width": params[j].homogeneous_width(), "reads": reads[j]} for j in wide]}
+    _finite(rec, t, "correspondence", finite_in, _finite_outputs(t, ref), len(finite_share(n, n_edge)), F)
     if probes:
         rec["probes"] = probes
     if raised:
@@ -466,6 +498,7 @@ def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = Tr
     arrays = vectors(params, n, opts.seed, edge)
     ref, raised = reference_outputs(t, params, arrays)
     rec: dict[str, Any] = {"vectors": n, "edge_vectors": edge, "reference_raised": len(raised), "realizations": []}
+    _finite(rec, t, "correspondence", finite_rows(params, arrays, n).sum(), _finite_outputs(t, ref), len(finite_share(n, edge)), F)
     if raised:
         if isinstance(t, ScalarReference):
             rec["partial_domain"] = f"{t.id} is a ScalarReference with a declared domain; {len(raised)} of {n} vectors are outside it"
@@ -506,7 +539,7 @@ def _bounds(rs: Sequence, full: Callable) -> list:
 def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
     """`arrays` with each parameter's leaves folded into its sampled interval (`draw[j]`), else each leaf of a bounded parameter
     into its bound: an interval's two ends first, then the vectors' values within it."""
-    from verity.ml.circuits import ports as P
+    from verity.circuits import ports as P
 
     out = list(arrays)
     for j, rs in enumerate(pt.params):
@@ -523,10 +556,10 @@ def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tupl
 
 
 def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
-    """The reference against what `t` declares of its return's intervals (`verity.ml.circuits.ports`): its declared intervals,
+    """The reference against what `t` declares of its return's intervals (`verity.circuits.ports`): its declared intervals,
     on `vectors` with each leaf of a bounded parameter folded into its bound; a primitive's transfer, on `TRANSFER_DRAWS`
     operand intervals (within the bounds), every leaf of an operand folded into its interval. None when it declares neither."""
-    from verity.ml.circuits import ports as P
+    from verity.circuits import ports as P
 
     pt = P.port_types(t)
     outs = [(lo, hi, o.interval, w) for lo, hi, o, w in (pt.ret if pt is not None else ()) if o.interval is not None]
@@ -580,7 +613,7 @@ def port_intervals(t: Any, opts: Options, F: Findings) -> dict | None:
 def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings) -> dict | None:
     """A template evaluated through another Definition (``Subcircuit.target``) against its own Definition's reference, on the
     floored vectors (`floored`); ``random``, the random vectors it compared on."""
-    from verity.ml.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation import evaluate_batch
 
     if target is definition or getattr(target, "id", None) == getattr(definition, "id", None):
         return None
@@ -601,13 +634,13 @@ def target_equivalence(target: Any, definition: Any, opts: Options, F: Findings)
 
 
 def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], arrays: Sequence[np.ndarray], n: int) -> np.ndarray:
-    """`evaluate_words` through the bits (`verity.ml.circuits.evaluation.bits.evaluate_bits`), in Python ints: each argument split
+    """`evaluate_words` through the bits (`verity.circuits.evaluation.bits.evaluate_bits`), in Python ints: each argument split
     into the word Definition's leaves (``words``, ``ret``) and each leaf into its bits, LSB first. For an element wider than its 64
     bits (PoUW's 576-bit sums of squares), and for a port of single bits: `Array<n, Value<1>>` is n one-bit words on the word side
     and, as `boolean.bit_type` leaves it, one n-bit element on bits, so the word view (`Value<n>`) is not the word's signature
     (`DsaWaksmanRows_v2`'s settings)."""
-    from verity.ml.circuits.evaluation.batch import type_shape
-    from verity.ml.circuits.evaluation.bits import evaluate_bits
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.circuits.evaluation.bits import evaluate_bits
 
     ins = []
     for a, wp, p in zip(arrays, words, params):
@@ -626,10 +659,10 @@ def _wide_words(t: Any, words: Sequence[Any], ret: Any, params: Sequence[Any], a
 
 
 def _word_or_none(t: Any) -> Any:
-    """The word Definition a Boolean composite names (`verity.ml.circuits.boolean.trace.word_of`), or None."""
+    """The word Definition a Boolean composite names (`verity.circuits.boolean.trace.word_of`), or None."""
     if isinstance(t, (PrimitiveDefinition, ScalarReference)) or not is_boolean(t):
         return None
-    from verity.ml.circuits.boolean.trace import word_of
+    from verity.circuits.boolean.trace import word_of
 
     try:
         return word_of(t)
@@ -652,14 +685,14 @@ def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
 
 
 def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
-    """The word Definition a Boolean Definition names (`verity.ml.circuits.boolean.trace.word_of`) against the Boolean one, which is
+    """The word Definition a Boolean Definition names (`verity.circuits.boolean.trace.word_of`) against the Boolean one, which is
     the definition: on the word Definition's edge and random vectors (`_word_vectors`), the word Definition must equal the Boolean
-    gates through the word view (`verity.ml.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
+    gates through the word view (`verity.circuits.evaluation.bits.evaluate_words`, which evaluates the gates)."""
     word = _word_or_none(t)
     if word is None:
         return None
-    from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.circuits.evaluation.bits import evaluate_words
+    from verity.circuits.evaluation import evaluate_batch
+    from verity.circuits.evaluation.bits import evaluate_words
 
     pw, rw = signature_of(word)
     n, edge = _word_vectors(word, pw, opts)
@@ -683,8 +716,10 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
                examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
                           "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "random": n - min(n, edge),
-            "mismatches": len(bad)}
+    rec = {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "random": n - min(n, edge), "mismatches": len(bad)}
+    _finite(rec, t, rec["via"], finite_rows(pw, arrays, n).sum(), finite_words(got, rw.leaf_widths()).sum(),
+            len(finite_share(n, rec["edge_vectors"])), F)
+    return rec
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -856,7 +891,7 @@ def _pieces_used(t: Any, pins: dict) -> tuple[Counter, Counter, int]:
 
 def _piece_status(pid: str, opts: Options, pins: dict, memo: dict) -> None:
     """Record in ``memo["pieces"]`` how many vectors the piece of the primitive ``pid`` gets wrong."""
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     prim = REGISTRY.defs[pid]
     params, _ = signature_of(prim)
@@ -954,7 +989,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
     if isinstance(t, PrimitiveDefinition):
         rec["pin"] = _counts_against_pin("pieces", t.id, {"and": counts["ands"], "type": lowering_type(C)}, pins, F, t.id)
     elif is_boolean(t):
-        from verity.ml.circuits.evaluation.bits import compile as compile_bits
+        from verity.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
         commits = rec["commits"] = sum(1 for v in C.live() if is_commit(C, v))
@@ -1050,7 +1085,7 @@ def redundant_gates(fn: Any, opts: Options, F: Findings, rule: dict, graph: tupl
 
 
 def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
-    from verity.ml.circuits.liveness import dead_gates as dead
+    from verity.circuits.liveness import dead_gates as dead
 
     prog, _call = standalone_call(fn)
     rep = dead(prog, limit=opts.dead_ids, transitive=True)
@@ -1075,7 +1110,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -1142,7 +1177,7 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
     """`Q_call{X = cut.CALL_X}` v1 on one Call of ``fn``: its proof blocks, committed gates and bits, and the values two proof blocks compute
     (reported, as `Q_word` v2 does); or why the query refuses it (``inapplicable``: a gate wider than X, a warning).  A code of
     the cut's own check fails by name (``partition/q-call-<code>``); none is expected, since the cut derives what it checks."""
-    from verity.ml.circuits import cut
+    from verity.circuits import cut
 
     X = cut.CALL_X
     if fn.gates > opts.partition_max_gates:
@@ -1168,8 +1203,8 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
     over its own budget that it doesn't (``too-large``)."""
-    from verity.ml.circuits.cut import separable
-    from verity.ml.definitions import word as W
+    from verity.circuits.cut import separable
+    from verity.definitions import word as W
 
     if isinstance(fn, ScalarReference):
         return None
@@ -1244,9 +1279,9 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     primitive callee's `word.unit_rule`'s: its gate's output, none for a constant, which is wired).  None, so the partition stays
     unchecked, where `callee_gap` finds a gap (its record names it).  ``memo`` keeps each callee's record and findings across
     targets."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.cut import separable
-    from verity.ml.definitions import word as W
+    from verity.circuits import boolean as BL
+    from verity.circuits.cut import separable
+    from verity.definitions import word as W
 
     if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
@@ -1272,7 +1307,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
                             "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
     if separable(fn) is not None:
-        from verity.ml.definitions.cross_call import members_check
+        from verity.definitions.cross_call import members_check
 
         with spent("partition-members"):
             across = members_check(fn, word)
@@ -1287,7 +1322,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
 def conformance_of(t: Any) -> str | None:
-    """``t``'s conformance label (`verity.ml.circuits.defs.CONFORMANCE`), which its entry records as ``conformance``; None for a
+    """``t``'s conformance label (`verity.circuits.defs.CONFORMANCE`), which its entry records as ``conformance``; None for a
     `ScalarReference`, which has none."""
     return None if isinstance(t, ScalarReference) else conformance_label(getattr(t, "defn", t).conformance, t.id)
 
@@ -1376,7 +1411,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         with spent("dead-gates"):
             entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
     elif kind == "composite":
-        from verity.ml.circuits import boolean as BL
+        from verity.circuits import boolean as BL
 
         with spent("partition"):
             part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
@@ -1479,11 +1514,11 @@ def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.protocols.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
     over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
-    from verity.ml.circuits.codec import program_digest
-    from verity.ml.circuits.program import Program
+    from verity.circuits.codec import program_digest
+    from verity.circuits.program import Program
 
     return _counts_against_pin("digests", t.id, {"sha512": program_digest(Program(t))}, pins, F, t.id)
 
@@ -1502,6 +1537,18 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
     from verity_flock import boolean_export as BE
 
     return BE.trace(build)
+
+
+def _traced_owner_names(build: Callable[[], Any], n: int) -> Callable[[int], str]:
+    """`_owner_names` of a traced ``build()``, built when a bit's owner is first asked for: a unit circuit the lowering built
+    already is built again only to name where a redundant AND is."""
+    got: list[Callable[[int], str]] = []
+
+    def owner(v: int) -> str:
+        if not got:
+            got.append(_owner_names(_traced(build)[1], n))
+        return got[0](v)
+    return owner
 
 
 def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
@@ -1559,26 +1606,31 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         if pin != digest:
             F.fail("lowering", "digest-mismatch", sub.id, f"[{name}]: {digest[:16]} != pinned {pin[:16]}", pinned=pin, digest=digest)
     if isinstance(low, IL.Lowering):
-        build = low.units.circuit
+        build, C = low.units.circuit, low.circuit
     else:
         from verity_flock import ir_sampling as S
 
         def build():
             return S.lane_circuit(int(sub.params["V"]))
-    C, root = _traced(build)
+        C = None
+    if C is None:
+        C, root = _traced(build)
+        owner = _owner_names(root, len(C.kind))
+    else:
+        owner = _traced_owner_names(build, len(C.kind))
     typ = lowering_type(C)
     counts = _export_counts(build, f"{name} unit", C)
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
     rec["pin"] = _counts_against_pin("units", sub.id, {**{k: counts[k] for k in ("and", "xor", "not")}, "type": typ}, pins, F, sub.id)
-    red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
+    red, by = redundant_ands(C, owner)
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}
     if red:
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = ("verity/ml/flock/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
+        rec["correspondence"] = ("verity/protocols/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)
@@ -1633,24 +1685,17 @@ def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Se
 # --- one served workload ------------------------------------------------------------------------------------------------------
 
 def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None) -> dict:
-    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory): `word.check_query` over its Calls (the
-    cross-Call conditions: every Value a Call reads or returns is committed) and every check on each distinct Definition."""
-    from types import SimpleNamespace
+    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory), as the sidecar of the package
+    that writes it reads it (`targets.request_program`): `word.check_query` over its Calls (the cross-Call conditions: every
+    Value a Call reads or returns is committed) and every check on each distinct Definition."""
+    from verity.definitions import word as W
 
-    from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity.ml.definitions import word as W
-    from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances, iter_instance_rows
-    from verity_vllm.query.required import population
+    from .targets import request_program
 
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     p = Path(path)
-    inst = p / "instances.json.gz" if p.is_dir() else p
-    P = from_instances(str(inst))
-    corr = Correspondence(P)
-    pop = population(P, corr)
-    Q = SimpleNamespace(required=pop.required, literals=literal_calls(P), program_path=corr.module_of)
+    P, Q, rows = request_program(str(p))
     F = Findings()
     r = W.check_query(P, Q, opts.X, opts.W, opts.extras, strict=False)
     for v in r["violations"]:
@@ -1659,11 +1704,11 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity.ml.definitions import cross_call
+        from verity.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree"}
+        out["cross_call"] = {"checked": False, "reason": "verity.definitions.cross_call is not on this tree"}
     else:
-        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
+        x = cross_call.check_program(rows, strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "

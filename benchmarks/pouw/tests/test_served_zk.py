@@ -21,26 +21,26 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.ml.commitments.merkle import tree_levels
-from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
-from verity.ml.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.coins import Challenger as Coins
-from verity.core.protocols.pouw.coins import CoinOpening, coin_reason
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import registration as R
+from verity.commitments.merkle import tree_levels
+from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.active import Proxy
+from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner
+from verity.protocols.certifier.verifier.grid import GridParams
+from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.pouw.verifier.coins import CoinOpening, coin_reason
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import registration as R
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
@@ -167,7 +167,7 @@ def test_rows_are_the_schemes_operands(served):
     none of the call's kept rows."""
     scheme, ctx, noise, words = served
     assert words["a"][M] is None and all(w is not None for w in words["a"][:M] + words["b"])
-    from verity.core.protocols.pouw.protocol import Tile
+    from verity.protocols.pouw.verifier.protocol import Tile
     ops = scheme.encode(ctx, noise, _rows(1, M)[1:2], _rows(2, N)[3:4], Tile((1,), (3,)))
     assert words["a"][1] == L.words_fp8_p(ops.a.codes[0], ops.pa[0])
     assert words["b"][3] == L.words_fp8_p(ops.b.codes[0], ops.pb[0])
@@ -383,6 +383,7 @@ def test_the_challenger_holds_every_item_to_its_own(served):
 
 
 @LEAN
+@pytest.mark.slow
 def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(served):
     """The sample is the sampling design's subset:K′ over the padded population, over the key of the execution phase's sampling coin, which the
     challenger opens after the registration (its digest) and checks against its commitment; Lean's sample on that key's
@@ -512,6 +513,7 @@ def test_a_pass_registered_again_on_another_stream_is_refused(served):
     assert "again" not in ch.regs and list(ch.manifests) == ["honest"] and ch.passes == {"honest": "coin"}
 
 
+@pytest.mark.slow
 def test_a_window_received_after_the_epochs_draw_coin_is_refused(served, tmp_path):
     """The record's order is each execution phase's receipt before the execution phase's sampling coin's release: once the sampling coin is open, an
     execution phase is refused (`late-registration`), even one whose pass and record are honest and within the deadline, and its
@@ -705,6 +707,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
     assert sids["a"] != sids["b"] and asked == [] and len(ledger) == 0
 
 
+@pytest.mark.slow
 def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_a_signed_record_and_registered_once(
         served, tmp_path, monkeypatch, reveals):
     """What a certified execution phase of salted units runs through after `salt.unit_reason`, which no served-zk execution phase passes
@@ -1090,6 +1093,7 @@ def test_lean_is_of_record_and_python_its_witness(served, tmp_path):
 
 
 @LEAN
+@pytest.mark.slow
 def test_r1_r6_of_a_window_are_leans(served):
     """One-stage's R1-R6 of a PoUW registration, honest and with each field changed, through the switch: Lean's codes are
     Python's, none for the honest record and some for each change."""
@@ -1103,9 +1107,11 @@ def test_r1_r6_of_a_window_are_leans(served):
     record = OR.Record()
 
     def codes(r) -> list[str]:
-        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None).codes)
+        return record.registration(p, r, lambda: R.check(r, prog, q, law, S.SCHEME, ports, None, (), [], None, None, None))
 
     assert codes(rec) == []
+    honest = record.witness[0]
+    assert honest["lean"] == honest["python"] and honest["lean"]["fanout"] == 1, honest
     root = rec["roots"][0]
     changes = {"protocol": "verity/other/v1", "program": "00" * 64, "partition": "00" * 64, "query": "00" * 64,
                "population": n + 1, "law": {**law, "k": law["k"] + 1}, "scheme": "frame-v3/hm96", "leaf_layer": "x",
@@ -1271,6 +1277,7 @@ def test_lean_and_rust_verdicts_are_read_from_their_outputs(tmp_path):
 
 
 @LEAN
+@pytest.mark.slow
 def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypatch, capsys):
     """The job's steps through `main`: register (and the refused extra item), then one challenger process's requests,
     as the job sends them a line at a time: its coin commitment, its salt coin opened after the pass's weights' root (as
@@ -1298,7 +1305,7 @@ def test_the_cli_runs_the_window_through_the_service(served, tmp_path, monkeypat
         src = "resalt.json" if case == "resalted" else "manifest.json"
         assert SC.main(["coin-variant", f"{t}/{src}", f"{t}/coins.json", f"{t}/opening.json", f"{t}/coin-{case}.json", case]) == 0
     lean = tmp_path / "lean"
-    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.core.protocols.pouw.core_check import stream_subset\n"
+    lean.write_text(f"#!{sys.executable}\nimport json, sys\nfrom verity.protocols.pouw.verifier.core_check import stream_subset\n"
                     "a = sys.argv\np, k = int(a[a.index('--population') + 1]), int(a[a.index('--k') + 1])\n"
                     "w = (p.bit_length() + 64 + 7) // 8\nsrc = bytes.fromhex(a[a.index('--stream') + 1])\n"
                     "sys.exit(1) if len(src) != 2 * k * w + 64 else None\n"

@@ -1,4 +1,4 @@
-"""`verity config` and `verity run` (`verity_cli.run`, `verity.core.deploy.config`): the configuration's refusals by name,
+"""`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
 a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
@@ -14,11 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.deploy import config as K
-from verity.core.deploy.manifest import Channel, Role
-from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage import registration as RG
-from verity.core.wire import Refused
+from verity.configuration.deploy import config as K
+from verity.configuration.deploy.manifest import Channel, Role
+from verity.protocols.certifier.verifier.warden import WardenParams
+from verity.protocols.spot.verifier import parties as SP
+from verity.protocols.spot.verifier.one_stage import registration as RG
+from verity.configuration.wire import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
@@ -166,8 +167,59 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
+#: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
+#: parameters: a configuration that sets neither keeps it.
+UNCAPPED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
+                   "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
+
+
+def capped(cap):
+    return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(max_tokens_cap=cap))
+
+
+def test_an_uncapped_certifier_configuration_hashes_as_before_the_cap():
+    cfg = K.check(config(), REG.components, REG.workloads)
+    assert not {"max_tokens_cap", "lengths"} & set(cfg["params"]["verity/certifier/v0"])
+    assert K.digest(cfg) == UNCAPPED_ONSITE
+
+
+def test_a_capped_certifier_configuration_round_trips():
+    cfg = K.check(K.parse(K.render(capped(4))), REG.components, REG.workloads)
+    table = cfg["params"]["verity/certifier/v0"]
+    assert table["max_tokens_cap"] == 4
+    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
+    assert K.check(cfg, REG.components, REG.workloads) == cfg
+    assert K.digest(cfg) != UNCAPPED_ONSITE
+
+
+def with_lengths(**schedule):
+    table = {"lengths": 1} | schedule
+    return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(table))
+
+
+def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
+    fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
+    cfg = K.check(K.parse(K.render(with_lengths(**fits))), REG.components, REG.workloads)
+    table = cfg["params"]["verity/certifier/v0"]
+    assert table["lengths"] == 1 and "max_tokens_cap" not in table
+    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == 1
+    assert K.check(cfg, REG.components, REG.workloads) == cfg
+    assert K.digest(cfg) != UNCAPPED_ONSITE
+    for schedule in ({}, fits | {"lengths": 2}, fits | {"egress": "bytes"}):
+        with pytest.raises(Refused) as e:
+            K.check(with_lengths(**schedule), REG.components, REG.workloads)
+        assert e.value.name == "params" and "lengths" in e.value.detail
+
+
+@pytest.mark.parametrize("cap", [0, -1, True, "4", 4096, 1 << 32])
+def test_a_bad_response_cap_is_refused_by_name(cap):
+    with pytest.raises(Refused) as e:
+        K.check(capped(cap), REG.components, REG.workloads)
+    assert e.value.name == "params" and "max_tokens_cap" in e.value.detail
+
+
 def test_the_canonical_form_is_verity_canonical_json():
-    from verity.ml.circuits.codec import canonical_json
+    from verity.circuits.codec import canonical_json
 
     cfg = K.check(config(), REG.components, REG.workloads)
     assert K.canonical(cfg) == canonical_json(cfg)

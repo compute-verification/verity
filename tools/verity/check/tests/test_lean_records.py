@@ -182,6 +182,75 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
+def test_in_a_run_what_its_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
+                                                                                                 monkeypatch):
+    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does after every build,
+    passed or failed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no
+    bundle."""
+    import tarfile
+
+    entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
+
+    def put(self, reports, since=None, log=print):
+        for name in (entry, f"artifacts/{art}"):
+            (self.store / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.store / name).write_text(name)
+        self.added.append((entry, [art]))
+        return 1
+
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", put)
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    for i, rc in enumerate(["0", "1"]):
+        run = tmp_path / f"run-{i}"
+        run.mkdir()
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+        monkeypatch.setenv("AUDIT_RC", rc)
+        assert LC.audit_records("a", tmp_path / "deps", tree) == int(rc)
+        got = sorted(str(f.relative_to(run)) for f in run.rglob("lean-artifacts*"))
+        assert got == ["lean-audit/lean-artifacts.tar.gz"] and LC.LA.BUNDLE_FILE.fullmatch(got[0])
+        with tarfile.open(run / got[0]) as t:
+            assert t.getnames() == [entry, f"artifacts/{art}"] and all(LC.LA.MEMBER.fullmatch(n) for n in t.getnames())
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("AUDIT_RC")
+    assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 0
+    assert not list((tmp_path / "reports").rglob("lean-artifacts*")), "outside a run no one would take it"
+
+
+def test_in_a_run_the_bundles_research_run_sent_go_into_the_artifact_cache_before_its_builds(repo, tmp_path, monkeypatch, capsys):
+    """`research run` sends a records run the presigned URLs of the bundles other nodes' checks and records runs left
+    (`inputs/lean-deps-urls.json`, `research.cli.lean_records_urls`). The run deletes the file before anything else reads its
+    run directory and, on a node whose builds are sandboxed, takes the bundles into the node's artifact cache before its first
+    build, which check.py's `--artifacts` stages from and its sampled recompile checks. Without the sandbox it takes none, as
+    check's lean-audit takes none there."""
+    taken = []
+
+    def take(self, urls, log=print):
+        taken.append((self.store, urls, _calls(tmp_path)))
+        return 3
+
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "take", take)
+    urls = {LC.LA.SHARED + "ab" * 32: "https://r2.example/o?X-Amz-Signature=sent", "deps-key": "https://r2.example/d?sig"}
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    for sandbox in (True, False):
+        run = tmp_path / f"run-{sandbox}"
+        (run / "inputs").mkdir(parents=True)
+        (run / "inputs" / LC.LA.URLS).write_text(json.dumps(urls))
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+        monkeypatch.setattr(LC, "sandboxed", lambda sandbox=sandbox: sandbox)
+        assert LC.audit_records("a", tmp_path / "deps", tree) == 0
+        assert not (run / "inputs" / LC.LA.URLS).exists(), "a URL grants a read until it expires"
+        assert len(_calls(tmp_path)) == 1
+        out = capsys.readouterr().out
+        assert "X-Amz-Signature" not in out
+        if sandbox:
+            assert taken == [((tmp_path / "lean-artifacts").resolve(), urls, [])], "taken before the first build"
+            assert "lean-records: 3 module version(s) taken from other nodes' bundles" in out
+        else:
+            assert len(taken) == 1 and "taken from other nodes' bundles" not in out
+    assert LC.sent_urls(None) == {} and LC.sent_urls(str(tmp_path / "run-True")) == {}
+
+
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
     """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
     for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and
@@ -253,7 +322,7 @@ def test_a_links_file_left_empty_by_a_failed_write_is_no_links(repo, tmp_path, c
 
 
 def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tmp_path, monkeypatch, capsys):
-    """`--records Security` left `Security/Properties`' records, which read `Security`'s build, unchecked, and an unintended
+    """`--records Security` left `security/Properties`' records, which read `security`'s build, unchecked, and an unintended
     change to three of them surfaced only at a train's check. `a` requires `p` by path and lists a guarantee, so
     `--records p` audits `a` after it, never with `--update`; `c`, which doesn't require `p`, and a package that lists no
     guarantee are not audited."""
@@ -465,9 +534,9 @@ def test_the_record_update_wrote_is_kept_so_its_commit_runs_nothing_and_requirer
 
 
 def test_a_package_that_reads_the_same_files_as_one_that_passed_still_runs(reuse, tmp_path, monkeypatch, capsys):
-    """`Security` and `Security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
-    `--records Security`, whose requirer `Security/Properties` failed, is not that requirer's: taken as its, `--records
-    Security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
+    """`security` and `security/Properties` are each in the other's `closure`, so their records read the same files. A pass of
+    `--records Security`, whose requirer `security/Properties` failed, is not that requirer's: taken as its, `--records
+    security/Properties --update` would run nothing and write no record. Here `a` requires `p` by
     path and `p` is proved in `a`."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     (reuse / "a" / "lean-audit.json").write_text('{"guarantees": {"A.t": {}}}')

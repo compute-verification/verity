@@ -427,7 +427,7 @@ def test_subscriptions_name_the_leads_linear_team_and_the_registry_refuses_a_sha
     ("<!subteam^SINFRA|@infra> <@U0DANIEL> @ci,\ntraining 21:00Z:\n\na hand-launched Security check", "A hand-launched Security check"),
     ("Two tools/research gaps from tonight's resubmits (fyi, not blocking): (1) `rese\u2026",
      "Two tools/research gaps from tonight's resubmits (fyi, not blocking): (1) `rese\u2026"),
-    ("A Layout JSON loader in verity.ml.commitments", "A Layout JSON loader in verity.ml.commitments"),
+    ("A Layout JSON loader in verity.commitments", "A Layout JSON loader in verity.commitments"),
     ("vLLM on the H200", "vLLM on the H200"),                     # a lower-case first letter of a name stays
     ("hm96 rows for the store", "hm96 rows for the store"),
     ("@infra top 06:55Z:", "@infra top 06:55Z:"),                 # nothing left: the first line as it was
@@ -1050,6 +1050,28 @@ def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no
     rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "W")
     assert rc == 2 and "INF-1's team DAN has no handle in the registry" in err
     assert len(lin.sent("commentCreate")) == 2 and lin.moved == []
+
+
+def test_a_worker_signs_as_its_own_lane_on_another_lanes_issue_and_its_branch_suffix_holds_it_to_it(
+        fake, registry, routes_dirs, capsys, lin, monkeypatch, tmp_path):
+    """A proofs worker's review on a compute-accounting issue reads as proofs', not as the issue team's."""
+    monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
+    monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
+    monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
+    lin.subscribers["I1"] = []
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
+    rc, out, _ = run(capsys, "linear", "comment", "INF-1", "reviewed", "--worker", "circuits/PROVECUT")
+    assert rc == 0 and out.strip() == "INF-1 commented as circuits/PROVECUT"
+    assert lin.sent("commentCreate")[-1][1]["i"]["createAsUser"] == "circuits/PROVECUT"
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "nobody/W")
+    assert rc == 2 and "@nobody is no handle in the registry" in err
+    reg = json.loads(registry.read_text())
+    next(h for h in reg["handles"] if h["handle"] == "infra")["branch_suffixes"] = ["98f5"]
+    registry.write_text(json.dumps(reg))
+    monkeypatch.setattr(slack, "_branch_suffix", lambda: "98f5")                      # an infra worker's checkout
+    rc, _, err = run(capsys, "linear", "comment", "INF-1", "x", "--worker", "circuits/W")
+    assert rc == 2 and "ends in @infra's suffix, so its worker signs as infra/W" in err
+    assert len(lin.sent("commentCreate")) == 1
 
 
 def stateless(fake: FakeLinear) -> bool:

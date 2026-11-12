@@ -3,8 +3,9 @@ the total parser the kernel can evaluate.
 
 `Lean.Json.parse` is a `partial def`, an opaque constant to the kernel, so no proof can show that a text it reads parses;
 `JsonParse.parse` reads the same language, with the same values and refusal strings (`Flock.Test.JsonParse` holds the
-two to each other). A scan of the Lean under `verity/core/service/flock/`, `verity/core/service/spot/` and
-`Security/Proofs/Properties/Verity/` refuses a call of `Lean.Json.parse`, written `Json.parse` under `open Lean` or in
+two to each other). A scan of the Lean under `verity/protocols/flock/verifier/`, the base packages it requires
+(`verity/circuits/base/`, `circuits/` and `commitments/`), `verity/protocols/spot/verifier/lean/` and
+`security/Proofs/Properties/Verity/` refuses a call of `Lean.Json.parse`, written `Json.parse` under `open Lean` or in
 full, outside the module that mirrors it, the test that compares the two, and the declarations `PENDING` names.
 """
 
@@ -14,10 +15,12 @@ import re
 
 from test_repository import ROOT, _tracked
 
-TREES = ("verity/core/service/flock/", "verity/core/service/spot/", "Security/Proofs/Properties/Verity/")
+TREES = ("verity/protocols/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
+         "verity/commitments/lean/", "verity/protocols/spot/verifier/lean/", "security/Proofs/Properties/Verity/")
+NOT_READ = ("verity/protocols/recursion/verifier/firewall/", "verity/protocols/interface/", "verity/protocols/recursion/verifier/vstar_cli/")  # Lake packages of their own, not held to the total parser yet (proofs)
 ALLOWED = {
-    "verity/core/service/flock/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
-    "verity/core/service/flock/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
+    "verity/circuits/base/Base/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
+    "verity/protocols/flock/verifier/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
 }
 #: (file, declaration) still calling `Lean.Json.parse`, each with the switch that deletes its entry. An entry whose file
 #: is in the tree names a declaration that still calls it; one whose file isn't yet arrives with that file.
@@ -41,7 +44,7 @@ def _calls(path: str) -> list[tuple[int, str]]:
 def test_lean_reads_json_through_the_total_parser() -> None:
     bad = []
     for path in _tracked():
-        if not (path.startswith(TREES) and path.endswith(".lean")) or path in ALLOWED:
+        if not (path.startswith(TREES) and path.endswith(".lean")) or path in ALLOWED or path.startswith(NOT_READ):
             continue
         bad += [f"{path}:{line} ({decl or 'no declaration'})" for line, decl in _calls(path) if (path, decl) not in PENDING]
     assert not bad, ("Lean.Json.parse is partial, so no proof reads through it: call Flock.JsonParse.parse (JsonParse.parse "

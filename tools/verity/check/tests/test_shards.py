@@ -1,6 +1,6 @@
-"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate and
-in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
-packages, lean-suites on its suites), and its result names what it ran."""
+"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's and
+lean-changed's, off the gate and in no plan), each shard holds what its jobs need or runs it beside their parts, a shard runs
+only its parts (lean-audit on its packages, lean-suites on its suites), and its result names what it ran."""
 from __future__ import annotations
 
 import importlib.util
@@ -27,11 +27,22 @@ CHECK = _module("repo_check_for_shards", ROOT / "tools" / "verity" / "check" / "
 D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
-#: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
-SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
-#: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
+#: the packages that build security/Proofs: it, and the specs whose `proved_in` names it
+SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
+#: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
+NAMED = SECURITY[1:]
+#: lean-suites' parts: its suites, the composition and PoUW benchmark suites each in the three parts by test id its pyproject
+#: declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
+POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
+#: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
+BESIDE_AUDIT = (*(f"lean-suites:{s}" for s in ("verity-vllm", "verity/protocols/recursion/verifier/vstar_cli",
+                                               "verity-core-evaluate", "pous-check", "verity/protocols/certifier/verifier",
+                                               "verity-pouw-check-difftest")),
+                COMPOSITION[2], POUW[2])
+BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
+WITH_RUST = (COMPOSITION[1], POUW[0], "lean-suites:*")
 
 
 @pytest.fixture(autouse=True)
@@ -48,34 +59,51 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 
 
 def test_the_plans_are_the_documented_ones():
-    c1, c2, c3 = COMPOSITION
+    build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*SECURITY, "pytest", c3),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed"),
-            ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2)),
-        4: ((*SECURITY, "circuit-check:1/4", c3),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed", "circuit-check:2/4"),
-            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", c2)),
-        5: ((*SECURITY, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
-            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2))}
+        3: ((*NAMED, "pytest", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement"),
+            ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
+        4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
+            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
+        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*",), (*build, *BESIDE_BUILD, "lean-agreement"),
+            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST))}
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
-def test_every_plan_runs_the_composition_suites_three_parts_on_three_shards(n):
-    """verity-core-composition declares three parts by test id: lean-suites' parts are its suites with it as those three, and
-    every plan's shards, gated and after landing, hold one each, so no shard runs the suite whole."""
-    assert CHECK.suite_parts() == {"verity-core-composition": 3}
-    parts = [p.removeprefix("lean-suites:") for p in COMPOSITION]
-    assert SUITES == [x for s in CHECK.AFTER_LEAN for x in (parts if s == "verity-core-composition" else [s])]
+def test_no_shard_runs_lean_changed_of_a_plan_or_an_auto_one_gated_or_after_landing(n):
+    """lean-changed catches nothing the audit doesn't: it is off the gate, so a recorded check skips it, and in no shard, so a
+    candidate's sharded check (`--deferred` naming it, hand plan or auto) doesn't run it either; the job stays declared."""
+    assert CHECK.SHARDS.NO_SHARD == ("lean-changed",) and set(CHECK.SHARDS.NO_SHARD) <= set(CHECK.OFF_GATE)
+    every = ",".join(j.name for j in CHECK.JOBS)
+    assert "lean-changed" in every.split(",")
+    for gated in (True, False):
+        assert not any("lean-changed" in CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1))
+        assert "lean-changed" not in CHECK.auto_parts(gated)
+        plan = CHECK.auto_plan(({}, {}, {}), CHECK.SHARDS.MAX_SHARDS, deferred=None if gated else every, n=n)
+        assert not any("lean-changed" in s["parts"] or "lean-changed" in s["builds"] for s in plan["shards"])
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
+    """verity-core-composition and verity-pouw-benchmarks declare three parts by test id: lean-suites' parts are its suites with
+    each of those as its three, and every plan's shards, gated and after landing, hold one of each, so no shard runs either
+    whole."""
+    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW}
+    assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
+    assert SUITES == [x for s in CHECK.AFTER_LEAN
+                      for x in ([p.removeprefix("lean-suites:") for p in split[s]] if s in split else [s])]
     for gated in (True, False):
         shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
-        held = [[p for p in s if p in COMPOSITION] for s in shards]
-        assert sorted(p for h in held for p in h) == sorted(COMPOSITION) and all(len(h) <= 1 for h in held)
+        for parts in split.values():
+            held = [[p for p in s if p in parts] for s in shards]
+            assert sorted(p for h in held for p in h) == sorted(parts) and all(len(h) <= 1 for h in held)
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_builds_the_security_proofs_once_a_run(n, _provers):
-    """Security and Security/Properties audit Security/Proofs beside them, from one build of it: apart, each shard holding one
+    """Security and security/Properties audit security/Proofs beside them, from one build of it: apart, each shard holding one
     builds the proofs again, cold after any change to them. The static plan's shards (gated, and an after-landing run's) put
     all three on one."""
     assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in _provers.items()}
@@ -103,13 +131,14 @@ def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_the
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
-    """Every part but ratchet-gate's, which is off the gate and in no plan: circuit-check, off the gate too, stays planned."""
+    """Every part but ratchet-gate's and lean-changed's, which are off the gate and in no plan: circuit-check, off the gate too,
+    stays planned."""
     every = D.all_parts(CHECK.JOBS, _parts())
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    planned = [p for p in every if p != "ratchet-gate"]
+    planned = [p for p in every if p not in ("ratchet-gate", "lean-changed")]
     assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"
@@ -119,7 +148,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:verity/core/service/flock" in holder and not set(SECURITY) & set(holder)
+        assert "lean-audit:verity/protocols/flock/verifier" in holder and not set(SECURITY) & set(holder)
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():
@@ -265,7 +294,7 @@ def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
 
 def test_lean_audit_audits_only_the_packages_it_is_given():
     assert LA.select(PACKAGES, None) == PACKAGES
-    assert LA.select(PACKAGES, ["verity/core/protocols/pous/lean", "Security"]) == ["Security", "verity/core/protocols/pous/lean"]
+    assert LA.select(PACKAGES, ["verity/protocols/pous/lean", "security"]) == ["security", "verity/protocols/pous/lean"]
     with pytest.raises(ValueError, match="no audited package nowhere"):
         LA.select(PACKAGES, ["nowhere"])
 
@@ -282,9 +311,9 @@ def test_a_shards_lean_slot_counts_only_its_own_packages(tmp_path, monkeypatch):
     (tmp_path / "lean-audit").mkdir()
     for p in PACKAGES[1:]:
         (tmp_path / "lean-audit" / f"{Audit.key(p, (), ())}.json").write_text("{}")
-    assert "Security/Proofs" in PACKAGES[1:] and CHECK.lean_audit_misses(only=["Security/Proofs"]), \
+    assert "security/Proofs" in PACKAGES[1:] and CHECK.lean_audit_misses(only=["security/Proofs"]), \
         "a pass of a package whose audit writes the ratchet's facts is reused only with them"
-    facts = tmp_path / "lean-audit" / "unread" / f"{Audit.key('Security/Proofs', (), ())}.json"
+    facts = tmp_path / "lean-audit" / "unread" / f"{Audit.key('security/Proofs', (), ())}.json"
     facts.parent.mkdir()
     facts.write_text("{}")
     assert CHECK.lean_audit_misses() and CHECK.lean_audit_misses(only=PACKAGES[:1])
@@ -298,17 +327,17 @@ def test_a_shards_result_names_its_plan_commit_config_and_each_steps_parts(tmp_p
     from research.merge import SHARD_KIND
 
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20260927-010000-abcd")
-    sh = CHECK.shard("2/5")
+    sh = CHECK.shard("3/5")
     done = [{"step": "preflight-lock", "status": "passed", "seconds": 1.0},
-            {"step": "lean-audit", "status": "passed", "rc": 0, "seconds": 2.0},
-            {"step": "lean-changed", "status": "passed", "rc": 0, "seconds": 3.0}]
+            {"step": "lean-build", "status": "passed", "rc": 0, "seconds": 2.0},
+            {"step": "lean-suites", "status": "passed", "rc": 0, "seconds": 3.0}]
     CHECK.write_result(tmp_path, True, done, shard=sh)
     r = RES.check(tmp_path, "r20260927-010000-abcd")
     assert r.valid, r.errors
     assert CHECK.SHARD_KIND == SHARD_KIND == r.doc["kind"] != "check/v1"
     head = subprocess.run(["git", "rev-parse", "HEAD", "HEAD:tools/verity/check"], cwd=ROOT, capture_output=True, text=True).stdout.split()
     assert r.doc["shard"] == {**sh, "commit": head[0], "config": head[1]}
-    assert [s.get("parts") for s in r.doc["steps"]] == [None, [p for p in sh["parts"] if p.startswith("lean-audit:")], ["lean-changed"]]
+    assert [s.get("parts") for s in r.doc["steps"]] == [None, ["lean-build"], [p for p in sh["parts"] if p.startswith("lean-suites:")]]
     CHECK.write_result(tmp_path, True, done[:1])
     assert json.loads((tmp_path / "result.json").read_text())["kind"] == "check/v1", "an unsharded check is as it was"
 
@@ -480,9 +509,7 @@ def test_the_combine_joins_a_split_suites_parts_across_shards_into_its_verdict(t
 
 
 def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch):
-    import research.store.local
-
-    real, launched, urls = subprocess.run, [], []
+    real, launched, urls, signed = subprocess.run, [], [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
@@ -490,28 +517,28 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    class Store:
-        def fetch(self, art):
-            (tmp_path / art[4:]).write_text("")
-            return tmp_path / art[4:]
-
     def url_file(d):
         urls.append(d)
         return None
 
-    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
-    monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    def agreement_url_file(d):
+        signed.append(d)
+        (p := d / CHECK.AGREEMENT_URLS).write_text(json.dumps({k: {"art": f"art:{k[0]}", "bytes": 1} for k in ("upstream", "inputs")}))
+        return p
+
+    monkeypatch.setattr(CHECK, "agreement_url_file", agreement_url_file)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", url_file)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setattr(subprocess, "run", run)
     sent = {}
     for args in (["--shard", "3/5"], ["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
-        launched.clear(), urls.clear()
+        launched.clear(), urls.clear(), signed.clear()
         assert CHECK.record(["--base", "HEAD", "--agreement", *args]) == 0
         [cmd] = launched
         assert cmd[-len(args):] == args if args else True
-        sent[" ".join(args)] = ("flock_upstream=art:u" in cmd, bool(urls))
+        assert ("flock_upstream=art:u" in cmd) == bool(signed), "the run's inputs name the pinned files it was sent URLs of"
+        sent[" ".join(args)] = (bool(signed), bool(urls))
     assert sent == {"--shard 3/5": (True, False), "--shard 1/5": (False, True), "--shard 4/5": (False, False),
                     "--combine r1 r2": (False, False), "": (True, True)}
     assert CHECK.record(["--base", "HEAD", "--shard", "9/5"]) == 2
@@ -519,7 +546,7 @@ def test_record_sends_a_shard_only_what_its_own_steps_read(tmp_path, monkeypatch
 
 def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     """The preflight asks for the Lean dependencies of the packages a shard audits, the only ones it carries URLs for."""
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     real, parts = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -534,7 +561,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[[*SECURITY, COMPOSITION[2]]], [["pytest"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[[*SECURITY, *sorted(BESIDE_AUDIT)]], [["pytest"]], [[]], []], "an unsharded check sends none"
 
 
 def _records_run(tmp_path, monkeypatch, rc: int = 0) -> tuple[Path, list[list[str]]]:
@@ -688,7 +715,7 @@ def test_each_shard_holding_circuit_check_starts_from_the_records_and_one_refuse
 
 def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory(monkeypatch):
     """`--record --cc-records`: recorded without the check tool (no gate reads it), in a train slot's memory as circuit-check
-    takes, with no upstream build, Lean dependencies or gathered verdicts."""
+    takes, with no upstream build, Lean dependencies or verdict packs' URLs."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -700,7 +727,7 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: (_ for _ in ()).throw(AssertionError("verdicts gathered")))
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: (_ for _ in ()).throw(AssertionError("verdict packs' URLs sent")))
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
     assert CHECK.record(["--base", "HEAD", "--agreement", "--on", "vy-x", "--priority", "--keep-going", "--cc-records"]) == 0
     [cmd] = launched

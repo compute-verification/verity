@@ -4,12 +4,13 @@
                                        [--caps FILE [--update-caps]] [--rev REV]
 
 It reads every module of every Lake package under ``--root`` (default this checkout; `modules.packages`, the auditor's
-fixtures aside) from the `.olean` files of one package's build (``--env``, default `Security/Proofs`, whose `lake env`
+fixtures aside) from the `.olean` files of one package's build (``--env``, default `security/Proofs`, whose `lake env`
 reaches the security analysis's three trees and the code packages they require): `Unread.lean`, compiled with that
 package's toolchain, writes each constant with what its type and value mention, and this holds the policy. ``--setup``
-first runs `setup.sh ENV`, and ``--build`` `lake build` there, with `@NAME` for each other analysis package
-(`ANALYSIS`). ``--facts FILE`` reads facts written before instead; given more than once, it joins them (`Facts`), as the
-Lean check's audits of `Security` and `Security/Proofs` each write their own (`check.py`'s `unread_facts`).
+first runs `setup.sh ENV`, and ``--build`` `lake build` there of what the Lean check builds of ENV and of each other
+analysis package (`ANALYSIS`, `@NAME`): its default targets and its lock's `roots` (`build`). ``--facts FILE`` reads
+facts written before instead; given more than once, it joins them (`Facts`), as the Lean check's audits of `security`
+and `security/Proofs` each write their own (`check.py`'s `unread_facts`).
 
 **The closure.** Starting from the seeds, it follows what each reached constant's type and value mention
 (`ConstantInfo.getUsedConstants`, an inductive type's constructors, `@[implemented_by]` and `@[csimp]`), and from any
@@ -33,8 +34,9 @@ constant to the declaration it belongs to. The seeds:
   keeps it. This tool, its test and the Lean tools' fixtures read none (`NOT_READERS`).
 
 The `@[defeq]` theorems, the coercion instances, the lock-listed modules, the names in the locks' texts and their
-documents, and the cited names are seeds to be safe (`CAUTIOUS`): the report counts what each alone keeps
-(`kept_only_by`).
+documents, the cited names and the constants with a `SecurityProofs` component are seeds to be safe (`CAUTIOUS`): the
+report counts what each alone keeps (`kept_only_by`). A lock's guarantee is a seed by its lock, so what the
+`SecurityProofs` seed alone keeps is the constants no lock names and what only they read.
 
 **Declarations.** A constant with a declaration range is a declaration, unless it belongs to a type (a constructor, a
 recursor, a projection) or Lean generated it from another's command (the same first line as a declaration its name
@@ -66,8 +68,8 @@ exits 1 when an area's count rose above its cap (an area the file doesn't list h
 ``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
 changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): drive's landing gate
 (`unread_gate.py`) runs the ratchet on a change to them before it lands, from the facts a check of its Lean left
-(`lean_audit.facts_file`). Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
-`Security/Properties` that `Security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
+(`lean_audit.facts_file`). Those facts come from the builds of `security` and `security/Proofs` alone: a module of
+`security/Properties` that `security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
 definition that only such a module reads counts as unread. None does today (``--build`` builds all three trees). Stdlib
 only.
 """
@@ -102,7 +104,7 @@ MODULES = _load("modules")
 HEADERS = _load("headers")
 
 #: the security analysis's packages: the spec (Definitions), the proofs, the properties. Every other package is code.
-ANALYSIS = ("Security", "Security/Proofs", "Security/Properties")
+ANALYSIS = ("security", "security/Proofs", "security/Properties")
 #: the lock sections that name modules, every declaration of which is a seed
 MODULE_SECTIONS = ("roots", "runs", "exempt", "compile_time")
 #: the lock sections that name no seed: what the guarantees read (reached from them anyway) and the pinned builds
@@ -115,10 +117,11 @@ SEED_FLAGS = ("meta", "unsafe", "partial", "defeq")
 COERCION = frozenset({"Coe", "CoeTail", "CoeHead", "CoeOut", "CoeHTCT", "CoeHTC", "CoeOTC", "CoeTC", "CoeT", "CoeDep",
                       "CoeFun", "CoeSort"})
 #: the seeds taken to be safe rather than because something reads them: each is reported with what it alone keeps
-CAUTIOUS = ("defeq", "coercion", "lock module", "lock text", "lock doc", "cited")
+CAUTIOUS = ("defeq", "coercion", "lock module", "lock text", "lock doc", "cited", "SecurityProofs")
 CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances", "lock module": "the modules locks list",
                  "lock text": "names in the locks' texts", "lock doc": "names in the docs the locks name",
-                 "cited": "names in files outside Lean"}
+                 "cited": "names in files outside Lean",
+                 "SecurityProofs": "constants with a `SecurityProofs` component"}
 #: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
 #: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
 CHECKS = re.compile(r"(?:Checks|Vectors)$")
@@ -200,12 +203,12 @@ class Tree:
         return self.module_package.get(mod) in ANALYSIS
 
     def area(self, mod: str) -> str:
-        """`Proofs/Flock`, `Definitions/Pouw`, `Definitions` for the analysis's modules (the path under `Security/`, two
+        """`Proofs/Flock`, `Definitions/Pouw`, `Definitions` for the analysis's modules (the path under `security/`, two
         parts at most); a code package's path for its own."""
         pkg = self.module_package.get(mod, "?")
         if pkg not in ANALYSIS:
             return pkg
-        rel = Path(self.module_file[mod]).relative_to("Security").with_suffix("").parts
+        rel = Path(self.module_file[mod]).relative_to("security").with_suffix("").parts
         return "/".join(rel[:2])
 
     def lines(self, mod: str) -> int:
@@ -220,14 +223,19 @@ def log(msg: str) -> None:
 
 
 def build(tree: Tree, env: str, setup: bool = True) -> None:
-    """`setup.sh ENV` (``setup``), then `lake build` there of its default targets and every other analysis package's
-    (`@NAME`)."""
+    """`setup.sh ENV` (``setup``), then `lake build` there of what the Lean check builds of ENV and of every other analysis
+    package (`@NAME`): its default targets, then the modules its lock lists under `roots` (`+MODULE`; `check.py`'s `build`
+    and `build-roots`). A root that no default target imports has an `.olean` only by the second, and without one it is
+    `unbuilt`: its declarations seed nothing, and what they alone read counts as unread here and as read on a check's
+    facts."""
     if setup:
         subprocess.run(["bash", str(HERE / "setup.sh"), str(tree.root / env)], check=True)
-    targets = [f"@{tree.names[p]}" for p in ANALYSIS if p in tree.names and p != env]
-    for t in [[], *([t] for t in targets)]:
-        log(f"lake build {' '.join(t)} in {env}")
-        subprocess.run(["lake", "build", *t], cwd=tree.root / env, check=True)
+    for pkg in [env, *(p for p in ANALYSIS if p in tree.names and p != env)]:
+        at = [] if pkg == env else [f"@{tree.names[pkg]}"]
+        roots = [f"{at[0]}/+{r}" if at else f"+{r}" for r in tree.locks.get(pkg, {}).get("roots", [])]
+        for targets in [at, roots] if roots else [at]:
+            log(f"lake build {' '.join(targets)} in {env}")
+            subprocess.run(["lake", "build", *targets], cwd=tree.root / env, check=True)
 
 
 def program(env_dir: Path, work: Path) -> Path:
@@ -980,8 +988,9 @@ def markdown(rep: dict, rev: str | None) -> str:
             "proof, and the Lean check says so.",
             "- `@[defeq]` theorems are seeds (kept), since `dsimp` and `simp only [t]` use them with no trace, as are "
             "coercion instances, which elaboration unfolds where it inserts the coercion, every declaration of a module "
-            "a lock lists, each one (and each module) a lock's text or a document a lock names holds, and each one a "
-            "file outside Lean names; `kept_only_by` counts what each alone keeps.",
+            "a lock lists, each one (and each module) a lock's text or a document a lock names holds, each one a "
+            "file outside Lean names, and every constant with a `SecurityProofs` component, which a lock need not "
+            "name; `kept_only_by` counts what each alone keeps.",
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
             "reported unread, and a module only they use deletable alone; deleting it means deleting them.",
             "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
@@ -989,8 +998,8 @@ def markdown(rep: dict, rev: str | None) -> str:
             "read (`checks`), or when a file outside Lean or a lock names it. A path code builds from string literals "
             "(`LEAN / \"Prims\" / \"Vectors.lean\"`) names it; one it computes otherwise (a glob, a bare file name "
             "under a variable) does not.",
-            "- The ratchet reads the facts the audits of Security and Security/Proofs write: there a module of "
-            "Security/Properties that Security/Proofs doesn't import is `unbuilt`, so a spec definition only such a "
+            "- The ratchet reads the facts the audits of Security and security/Proofs write: there a module of "
+            "security/Properties that security/Proofs doesn't import is `unbuilt`, so a spec definition only such a "
             "module reads counts as unread (none does today). `--build` builds all three trees.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
@@ -1004,10 +1013,11 @@ def markdown(rep: dict, rev: str | None) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=ROOT)
-    ap.add_argument("--env", default="Security/Proofs", help="the package whose `lake env` reads the modules")
+    ap.add_argument("--env", default="security/Proofs", help="the package whose `lake env` reads the modules")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--setup", action="store_true", help="run setup.sh ENV first")
-    ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first")
+    ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first: each one's "
+                                                          "default targets and its lock's `roots`, as the Lean check does")
     ap.add_argument("--facts", type=Path, action="append",
                     help="read these facts instead of running Unread.lean (an audit's `unread-facts.jsonl.gz`; repeat to join)")
     ap.add_argument("--caps", type=Path, help="check the counts against this caps file (`unread-caps.json`): exit 1 when an "

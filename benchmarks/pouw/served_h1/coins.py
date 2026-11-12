@@ -9,7 +9,7 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds its
+  of record is vllm's H1 path, `adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds its
   salt, round-0 request table, R, session S and requests_root rules; serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
@@ -76,14 +76,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.spot import challenger as Ch
-from verity.core.protocols.spot import remote as R
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.device import remote as R
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 PEER_ENV, SSH_KEY_ENV = "POUW_CHALLENGER_PEER", "POUW_CHALLENGER_SSH_KEY"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "configuration" / "config"))
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -152,8 +152,14 @@ def ssh_args(key: str | None = None) -> list[str]:
     return [*SSH, *(["-o", "IdentitiesOnly=yes", "-i", key] if key else [])]
 
 
+#: what a refusal shows of a gate answer it can't read: no run of hex digits long enough to be a session's secret or a root
+HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
+
+
 def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
-    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises."""
+    """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
+    quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
+    holds its session's secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
     try:
         got = json.loads(p.stdout)
@@ -161,8 +167,7 @@ def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callabl
         got = None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
         why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: "
-                           f"{why or p.stderr.strip() or p.stdout.strip() or f'exit {p.returncode}'}")
+        raise Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
     return got
 
 
@@ -474,7 +479,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     `env_draw`), opened on the sample root when the window asks for its sample (`Coins.draw`)."""
     if at is None:
         if entropy is None:
-            from verity.core.protocols.pouw import verifier
+            from verity.protocols.pouw.verifier import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process", epoch=epoch, entropy=entropy)
     client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
@@ -489,7 +494,7 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
 
 
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
-    from verity.ml.crypto import lms
+    from verity.commitments.crypto import lms
     p = lms.Params(64, key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
@@ -605,7 +610,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
     sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
-    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.protocols.pouw.prover.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

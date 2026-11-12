@@ -1,5 +1,5 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
-are the seeded weights' (`e2e_h200.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
+are the seeded weights' (`benchmarks.torch_gpu.p2_stage.served_weights`, interface 1: its fixture's TINY manifest, tensor digests and
 entries, and at H200 its stream's length, head and every tensor's first and last rows); the relayed roots are interface
 1's fixture roots under its salts, for its reader named by digest, whose domains are the verifier's (``tok`` (H, V) in
 row/v2, every tensor 16-bit leaves, an f32 scale two, at H200 a linear's row the 8,192 codes of a FAMILIES ``wrow``
@@ -32,12 +32,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier import transfer_rows as TR
-from verity.core.protocols.certifier.certificate import Direction, Issuer
-from verity.core.protocols.pous.schemes import p2 as P2
-from verity.core.protocols.spot.one_stage import registered as G
+from verity.protocols.certifier.verifier import transfer_rows as TR
+from verity.protocols.certifier.verifier.certificate import Direction, Issuer
+from verity.protocols.pous.verifier.schemes import p2 as P2
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 HERE = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-tiny.json").read_text())
 H200_DIGESTS = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-h200-digests.json").read_text())
 SEED, SALT_KEY = bytes.fromhex(FIXTURE["seed"]), bytes.fromhex(FIXTURE["salt_key"])
@@ -48,7 +49,8 @@ SMALL = (256, 189, 64)
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_load_relay", HERE / "load_relay.py")
+    spec = importlib.util.spec_from_file_location("network_traces_load_relay",
+                                                  ROOT / "benchmarks/network_traces/load_relay.py")
     mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -322,7 +324,8 @@ class Sink:
     outcome `res` and exit status `code`."""
 
     def __init__(self, tmp_path, streams=4):
-        self.proc = subprocess.Popen([sys.executable, str(HERE / "load_relay.py"), "sink", "--listen", "127.0.0.1:0",
+        self.proc = subprocess.Popen([sys.executable, str(ROOT / "benchmarks/network_traces/load_relay.py"), "sink",
+                                      "--listen", "127.0.0.1:0",
                                       "--streams", str(streams), "--weights", str(tmp_path / "weights.bin"),
                                       "--witness", str(tmp_path / "witness.bin")], stdout=subprocess.PIPE, text=True)
         self.port = json.loads(self.proc.stdout.readline())["listening"][1]

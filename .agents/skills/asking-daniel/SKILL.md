@@ -3,7 +3,8 @@ name: asking-daniel
 description: >
   How to ask Daniel for a decision in Verity: one short Notion page per ask in the Asks for Daniel database, written to a
   fixed template with LaTeX for the math, plus a card in #ask-daniel that notifies him and links the page. Covers what
-  needs Daniel (what a guarantee says or rests on, and what only his own accounts can do), the page template, `research msg ask-daniel --page
+  goes to Daniel (what a guarantee says or rests on, decided by the lane ahead of its PR, and what only his own accounts
+  can do; never a PR that changes a lock record), the page template, `research msg ask-daniel --page
   FILE.md` (or a page made with the Notion MCP and `--link`), iterating on his page comments, `research msg ask-daniel
   pages` to see his decisions and comments, recording a decision (`resolve`, the page's Status, the friction skill's
   rulings), and when a default may apply. Use when a lane needs Daniel's decision, writes or revises an ask, is woken by
@@ -24,6 +25,11 @@ an account he holds can make waits, when no other way exists. Keys and access be
 the lanes' call. A recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
+
+A PR that changes a lock record (a guarantee's statement, a definition it reads, a premise, a constant) is not an ask
+(Daniel, 11 Nov: "this should just be like a warning for me, it shouldn't be a gate"). Its owner marks it like any other
+PR, with one line in its body saying what it moves, and the landing DM (`research.spec_alert`) is his notice. Only a
+claim the lane decides ahead of its PR goes on a page, as below.
 
 An ask that isn't a click only he can make goes on its page decided: Status *Decided by lane*, Choose your pick, Decision
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
@@ -113,12 +119,15 @@ recommendation; when it can't be (say, it would change a guarantee unasked), the
 - **A decision** is the Status: **Approved** takes the recommendation, **Decided otherwise** his Decision text; a button
   or thread reply on the card counts the same, and you set Status to match. Record it with `resolve` (only the asker may)
   and as a ruling for its class of case where the next asker reads it (friction skill §3). `status` or `resolve` on a
-  decided card rings @top once for Daniel's decisions log: file no issue to log it.
+  decided card rings @top once for Daniel's decisions log: file no issue to log it. Both follow the page once its Status
+  has left Waiting on Daniel: they print and ring its Status and Decision, and a card that says otherwise (the lane's
+  or the default's choice under Decided otherwise, a letter other than Choose, a card still pending) gets one `differs:`
+  line naming both, never a ring as the decision. Without `$NOTION_API_KEY` they say the page was unreadable and report the card alone.
 - **A default** applies at the deadline only if he hasn't commented since posting and Status isn't Revising; then set
   Default applied. Withdrawn is for an ask that events overtook.
 
 ~~~bash
-research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at"; exit 0 once decided
+research msg ask-daniel status <id> [--wait]                  # the card: "status choice source decided_at", and its answered page; exit 0 once decided
 research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]
 research msg ask-daniel resolve <id> --choice <value> --note '<page url or his reply>'
 ~~~

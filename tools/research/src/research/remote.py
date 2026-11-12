@@ -90,8 +90,8 @@
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
-                    <root>/runs/<id> on `--on NAME`, else on each ssh machine (a pod belongs to the VM that made it), writes the
-                    remote.json launch would have and fetches it as above (`adopt`).
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor hosts (`restricted`; a pod belongs to
+                    the VM that made it), writes the remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
                     verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
@@ -233,6 +233,19 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 #: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
 DEFAULT_ROOT = "/workspace/research"
+#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor hosts
+DEPLOY_MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
+
+
+def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
+    """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
+    (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
+    keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
+    refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
+    `auditor` alone tells."""
+    nodes = tomllib.loads(DEPLOY_MANIFEST.read_text()).get("nodes", {}) if DEPLOY_MANIFEST.is_file() else {}
+    admin = {n for n, c in nodes.items() if isinstance(c, dict) and c.get("admin") is True}
+    return {n for n, m in machines.items() if isinstance(m, dict) and (m.get("auditor") or n in admin)}
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -343,24 +356,24 @@ NEBIUS_KEY_ENV = ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_
 TRUST_UPGRADE = ("ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root' || exit 0; "
                  "sudo -n apt-get -o DPkg::Lock::Timeout=120 update -qq && sudo -n env DEBIAN_FRONTEND=noninteractive "
                  "NEEDRESTART_MODE=l apt-get -o DPkg::Lock::Timeout=120 install -y -qq --only-upgrade ca-certificates 'libnss3*'")
-CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"   # pods/nebius/wake.py
+#: what a control pod with no door yet is sent for a wake (pods/nebius/wake.py); its gate takes `wake INSTANCE` (pods/door.py)
+CONTROL_WAKE = "PYTHONPATH=/data/infra/store-index-src/src python3.12 -m research.pods.nebius.wake start"
 
 
 def wake_on_control(iid: str, *, run=None) -> str | None:
     """Ask the control pod to start instance `iid` (pods/nebius/wake.py there, which starts only an instance the registry names,
-    before its deadline, under a live budget line) over the ssh path `pods create` reads the budgets guard through; -> the state
+    before its deadline, under a live budget line) through the pod's door, as `pods create` reads the budgets guard; -> the state
     it was in. Refused with the pod's reason."""
-    from .pods import budgets
-    from .pods.connect import ssh_base
+    from .pods import budgets, door
 
-    host = os.environ.get("RESEARCH_GUARD_HOST") or budgets.GUARD_HOST
+    host = budgets.guard_host()
     try:
-        r = (run or subprocess.run)([*ssh_base(host), f"{CONTROL_WAKE} {shlex.quote(iid)}"], capture_output=True, text=True, timeout=180)
+        r = door.ask(["wake", iid], f"{CONTROL_WAKE} {shlex.quote(iid)}", host=host, timeout=180, run=run)
     except Exception as e:  # noqa: BLE001  (no RunPod key or API, a timeout: the pod can't be asked)
         raise Refused(f"the control pod {host} can't be reached ({type(e).__name__}: {str(e)[:200]})") from None
     if r.returncode != 0:
         why = (r.stderr or r.stdout).strip().splitlines()
-        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}")
+        raise Refused(f"the control pod {host} refused: {why[-1][:400] if why else f'rc {r.returncode}'}{door.hint(host, r.stderr)}")
     return json.loads(r.stdout.strip().splitlines()[-1]).get("was")
 
 
@@ -631,13 +644,15 @@ def queue_placement(source: Path | None, run_id: str, spec: dict[str, Any], *, n
     return out
 
 
-def knows_job_user(pkg: Path | None) -> bool:
+def knows_job_user(pkg: Path | None, namespaces: bool = False) -> bool:
     """Whether the research package that will run on the machine runs the workload as `--job-user` (one that predates it would
-    run it as the machine's own user)."""
+    run it as the machine's own user) and, with `namespaces`, allows its unit the run's `--job-namespaces` (one that predates
+    them would allow it none)."""
     if pkg is None:
         return True
     try:
-        return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in (Path(pkg) / "remote.py").read_text()
+        text = (Path(pkg) / "remote.py").read_text()
+        return (Path(pkg) / "jobuser.py").is_file() and '"job_user"' in text and (not namespaces or '"job_namespaces"' in text)
     except OSError:
         return False
 
@@ -1552,6 +1567,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             try:
                 jobuser.check_user(req["job_user"])
                 jobuser.check_run_dir(run_dir, run_id)
+                if req.get("job_namespaces"):
+                    remote["job_namespaces"] = list(jobuser.check_namespaces(req["job_namespaces"]))
             except jobuser.Refused as e:
                 raise Refused(str(e)) from None
             remote["job_user"] = req["job_user"]
@@ -1609,6 +1626,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
         argv += ["--store-read-dir", str(request_path.parent / STORE_READ_DIR)]
     if req.get("job_user"):
         argv += ["--job-user", req["job_user"]]
+        if remote.get("job_namespaces"):
+            argv += ["--job-namespaces", ",".join(remote["job_namespaces"])]
     argv += [*(req.get("harness_args") or []), "--", *(req.get(QUEUE_WORKLOAD_WRAP) or []), *gpu_lease_wrap(req), *req["command"]]
     if req.get(QUEUE_WRAP):                        # --queue: the runner, custody included, runs inside the job's CPU allocation
         argv = [*req[QUEUE_WRAP], *argv]
@@ -1951,13 +1970,14 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = ()) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
-    (research.jobuser), and refuses the run when it can't."""
+    (research.jobuser), and refuses the run when it can't; `job_namespaces` (--job-namespaces): the namespace types its unit
+    may make."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
@@ -2020,6 +2040,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if job_user and not knows_job_user(tool_pkg):
             raise Refused(f"--job-user: the research package in {source} predates it, so the machine would run the workload as its "
                           f"own user.  Commit a tree that has it")
+        if job_namespaces and not knows_job_user(tool_pkg, namespaces=True):
+            raise Refused(f"--job-namespaces: the research package in {source} predates it, so the machine's unit would allow the "
+                          f"workload no namespace.  Commit a tree that has it")
         if gpus and not knows_gpus(tool_pkg):
             raise Refused(f"--gpus: the research package in {source} predates it, so the machine would run the workload outside the "
                           f"GPU lease.  Rebase onto a main that has it, or wrap the command in `gpu-lease {gpus} --wait --`")
@@ -2060,6 +2083,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"submitted_by": by} if (by := sender()) else {}),
                    **({"preflight_tool": preflight_tool} if preflight_tool else {}),
                    **({"job_user": job_user} if job_user else {}),
+                   **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
@@ -2132,10 +2156,11 @@ ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
 
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
-    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
-    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
-    machine is asked and an id more than one holds is refused rather than taken from the first."""
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine but the
+    auditor hosts (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
+    fetch its records.  Refused when the id is not a full run id, when no machine holds it (each machine's answer in the reason), or
+    when the local dir already exists; with `unique` (a cancel), every machine is asked and an id more than one holds is refused
+    rather than taken from the first."""
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -2144,7 +2169,11 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     if local.exists():
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
-    names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
+    ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
+    skipped = [] if on else sorted(restricted(ssh))
+    names = [on] if on else sorted(n for n in ssh if n not in skipped)
+    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+                 if skipped else "")
     answers: dict[str, str] = {}
     targets = []
     for name in names:
@@ -2158,8 +2187,9 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         targets.append((name, m, tgt, f"{m['root']}/runs/{run_id}"))
-    if len(targets) > 1:
-        print(f"research: looking for {run_id} on {len(targets)} machines (--on NAME skips this)", file=sys.stderr, flush=True)
+    if len(targets) > 1 or skipped:
+        print(f"research: looking for {run_id} on {len(targets)} machine{'s' if len(targets) != 1 else ''} (--on NAME skips this)"
+              f"{not_asked}", file=sys.stderr, flush=True)
 
     def probe(t: tuple) -> str | None:
         name, _, tgt, rd = t
@@ -2199,8 +2229,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             "remote_run_dir": rd})
         fetch(local)
         return local
-    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers[n] for n in sorted(answers))})" if answers
-                                                       else " (no ssh machine is registered)"))
+    why = "; ".join(answers[n] for n in sorted(answers)) or ("" if skipped else "no ssh machine is registered")
+    raise Refused(f"no machine holds run {run_id}" + (f" ({why})" if why else "") + not_asked)
 
 
 def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:
@@ -2224,6 +2254,17 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 
     if host == env.get("hostname") and alive == "gone":
         return f"its runner (pid {pid}) is gone without recording an end"
     return None
+
+
+def _remote_status(ssh: list[str], rd: str, *, timeout: float = 120) -> dict[str, Any]:
+    """The run's status.json as it is on the machine now; {} when it isn't there, and {"unreadable": why} when it can't be
+    read."""
+    try:
+        probe = ssh_run(ssh, ["sh", "-c", f"cat {shlex.quote(rd)}/status.json"], timeout=timeout)
+        doc = json.loads(probe.stdout.decode(errors="replace")) if probe.returncode == 0 else {}
+    except (subprocess.TimeoutExpired, ValueError) as e:
+        return {"unreadable": f"{type(e).__name__}: {e}"}
+    return doc if isinstance(doc, dict) else {}
 
 
 def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = (), timeout: float | None = None) -> dict[str, Any]:
@@ -2273,7 +2314,14 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     rec.pop("runner_gone", None)
     if st.get("state") not in TERMINAL and isinstance(st.get("pid"), int):
         if why := _runner_gone(ssh, local_dir, st["pid"], timeout=within(120)):
-            rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why}
+            # the run may have ended between the copy above and the probe: its runner exits after writing a terminal status
+            again = _remote_status(ssh, rd, timeout=within(120))
+            if again.get("state") in TERMINAL:
+                write_json_atomic(local_dir / "status.json", again)
+                rec["last_observed"] = {"state": again["state"], "rc": again.get("rc"), "at_utc": rec["observed_utc"]}
+            else:
+                rec["runner_gone"] = {"at_utc": rec["observed_utc"], "runner_pid": st["pid"], "why": why,
+                                      **({"recheck": again["unreadable"]} if "unreadable" in again else {})}
     pid = (_read_json(local_dir / "launch.json") or {}).get("runner_pid")
     if not st and isinstance(pid, int):
         # launched, no status.json: the runner either has not written it yet or exited before it could (an argv it rejected)

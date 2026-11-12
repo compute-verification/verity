@@ -51,10 +51,10 @@ def tree(tmp_path: Path) -> Path:
     (t / "lean" / "P" / "lean-audit.json").write_text("{}\n")
     (t / "lean" / "P" / "P.lean").write_text("theorem t : True := trivial\n")
     # its own `verity`, whose twins (`check.PREBUILD`) build nothing
-    (t / "verity" / "ml" / "definitions" / "numerics").mkdir(parents=True)
-    for d in ("verity", "verity/ml", "verity/ml/definitions", "verity/ml/definitions/numerics"):
+    (t / "verity" / "definitions" / "numerics").mkdir(parents=True)
+    for d in ("verity", "verity/definitions", "verity/definitions/numerics"):
         (t / d / "__init__.py").write_text("")
-    (t / "verity/ml/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
+    (t / "verity/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
     _git(t, "init", "-q")
     _git(t, "add", "-A")
     _git(t, "commit", "-q", "-m", "tree")
@@ -112,9 +112,10 @@ def test_list_is_a_tasks_v1_graph_closed_under_its_deps_and_the_same_each_time(t
 
 
 def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
-    """Only an audit of `Security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
+    """Only an audit of `security` or of a package requiring it (Mathlib, ArkLib) asks 32 cores and 128 GB: the first graph's 26
     others queued for the two large slots while 21 small ones sat idle."""
-    for name, deps in (("Security", []), ("lean/Q", ["../../Security"])):
+    spec = "security"
+    for name, deps in ((spec, []), ("lean/Q", [f"../../{spec}"])):
         (tree / name).mkdir(parents=True)
         (tree / name / "lakefile.toml").write_text(f'name = "{name.rsplit("/", 1)[-1]}"\n')
         (tree / name / "lean-audit.json").write_text("{}\n")
@@ -123,13 +124,13 @@ def test_a_lean_audit_asks_the_large_slot_only_when_it_reads_security(tree):
     _git(tree, "commit", "-q", "-m", "security")
     by = {t["id"]: t["resources"] for t in _graph(tree)[0]["tasks"] if t["kind"] == "lean-package"}
     assert by == {"lean-audit:lean/P": {"cores": 16, "mem_gb": 64, "disk_gb": 60},
-                  "lean-audit:Security": {"cores": 32, "mem_gb": 128, "disk_gb": 60},
+                  f"lean-audit:{spec}": {"cores": 32, "mem_gb": 128, "disk_gb": 60},
                   "lean-audit:lean/Q": {"cores": 32, "mem_gb": 128, "disk_gb": 60}}, by
 
 
 def test_a_lean_audit_fails_on_a_lock_record_difference_as_the_after_landing_run_does(tree, monkeypatch):
     """An audit task never regenerates lock records (`--no-regenerate`, drive's after-landing run), listed or run: with
-    `--regenerate` it passed `Security` on a stale lock that the after-landing run of the same commit failed."""
+    `--regenerate` it passed `security` on a stale lock that the after-landing run of the same commit failed."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("tasks_under_test", tree / "tools" / "verity" / "check" / "tasks.py")
@@ -159,7 +160,7 @@ def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_list
     """A job run whole whose pass check keeps (`check.STEP_KEYS`) lists one key on every slot and host: keyed by its step key,
     which reads the slot's test cache, the kernel release and `rustc -vV`, `flock-rust-tests` passed on a worker's slot under
     another key than the lister's, so its verdict was never labelled."""
-    flock = tree / "verity" / "ml" / "flock"
+    flock = tree / "verity" / "protocols" / "flock" / "prover"
     (flock / "live").mkdir(parents=True)
     (flock / "check_build.sh").write_text("RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.0.0}\n")
     (flock / "live" / "lib.rs").write_text("pub fn f() {}\n")
@@ -191,7 +192,8 @@ def test_changed_keeps_the_tasks_whose_inputs_the_change_touches(tree):
     ids = {t["id"] for t in doc["tasks"]}
     assert doc["changed"]["files"] == 1
     assert "pytest:b" in ids and "pytest:a" not in ids and "lean-audit:lean/P" not in ids
-    assert "lean-changed" in ids, "a job that declares no inputs reads the whole tree, so every change touches it"
+    assert "ratchet-gate" in ids, "a job that declares no inputs reads the whole tree, so every change touches it"
+    assert "lean-changed" not in {t["id"] for t in _graph(tree)[0]["tasks"]}, "no shard runs it, so no task does"
     every = {t["id"]: t for t in _graph(tree)[0]["tasks"]}
     assert all(set(every[i]["deps"]) <= ids for i in ids), "a kept task's deps are kept"
 

@@ -3,8 +3,8 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``SPLITS`` row's split parts and combine, a ``CHAINS`` row's key
-blocks and end and a ``STAGES`` row's stages are a slot each; a
+a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``CHAINS`` row's key blocks, ends, column ends and combines and
+a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
@@ -29,8 +29,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from m1_families import K_MAX
-from verity.core.protocols.spot.optimize import row_ands, unit_class
-from verity.ml.definitions.call_scope import spec_base, spec_statics
+from verity.protocols.spot.optimize import row_ands, unit_class
+from verity.definitions.call_scope import spec_base, spec_statics
 from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
@@ -62,11 +62,15 @@ def misfit(e: dict) -> str | None:
 
 def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
-    list of options coarse to fine, an option the units it takes."""
+    list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
+    has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one)."""
     base = spec_base(spec)
     if base in ST.PARTS:
-        return [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in ST.PARTS[base]]
-    if base in ST.CUT or base in ST.SPLITS or base in ST.CHAINS or base in ST.STAGES:
+        for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
+            got = [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in c]
+            if all(got):
+                return got
+    if base in ST.CUT or base in ST.CHAINS or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)

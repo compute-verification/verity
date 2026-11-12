@@ -8,7 +8,7 @@
 #                         recorded and never refusing: 13.0.1-sm_90a excepts the H200's MUFU.EX2, and no toolkit excepts
 #                         sm_120a's MUFU.EX2 or the sweep's bare MUFU.RSQ (ops 9 and 10) yet
 #   check/                fixture.py's pools, words and sweep digests from the twins (needs verity: run under uv); REPLAY
-#                         names the CPU replay for fixture.py's cross-check (default the tree's examples/h200/replay.py),
+#                         names the CPU replay for fixture.py's cross-check (default the tree's archive/examples/h200/replay.py),
 #                         ROWS an ops/rows.py to load in place of the installed one
 #   the unit modules, lib.py, bench.py, check.py, settings.py (their registry, which they find beside them),
 #   toolchain.txt (nvcc --version and the command lines), source.txt (the commit), MANIFEST.sha256
@@ -25,7 +25,7 @@ ship_toolchain
 ship_stage benchmarks/torch_gpu/units
 for A in 90a 120a; do
   ship_cubin_flags "sm_$A"
-  "$CUDA/bin/nvcc" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$SRC/benchmarks/torch_gpu/units/units.cu" \
+  "$SHIP_NVCC" "${FLAGS[@]}" -o "$OUT/units.sm_$A.cubin" "$SRC/benchmarks/torch_gpu/units/units.cu" \
     2> "$OUT/ptxas.sm_$A.txt" \
     || { cat "$OUT/ptxas.sm_$A.txt" >&2; exit 1; }
   "$CUDA/bin/cuobjdump" -sass "$OUT/units.sm_$A.cubin" > "$OUT/units.sm_$A.sass"
@@ -36,11 +36,11 @@ for A in 90a 120a; do
   echo "harness sass_gate.py rc $?" >> "$OUT/harness-gate.sm_$A.txt"
   set -e
   tail -3 "$OUT/harness-gate.sm_$A.txt"
-  echo "nvcc ${FLAGS[*]} -o units.sm_$A.cubin units.cu" >> "$OUT/toolchain.txt"
+  echo "ship_nvcc ${FLAGS[*]} -o units.sm_$A.cubin units.cu" >> "$OUT/toolchain.txt"
 done
 cp "$HERE"/{words,lib,rmsnorm,quant,softmax,argmax,relu,add,sweep,bench,check,settings}.py "$OUT/"
 ship_source benchmarks/torch_gpu/units verity
-REPLAY=${REPLAY:-$ROOT/examples/h200/replay.py}
+REPLAY=${REPLAY:-$ROOT/archive/examples/h200/replay.py}
 if [ -z "${CUBIN_ONLY:-}" ]; then
   (cd "$ROOT" && uv run python "$HERE/fixture.py" "$OUT/check" --replay "$REPLAY" ${ROWS:+--rows "$ROWS"})
 fi

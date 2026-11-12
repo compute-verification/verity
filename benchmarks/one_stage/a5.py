@@ -19,7 +19,7 @@ from its bundle afterwards (`verity-vllm tp-serving-rows`, `tp.serving_rows.from
 `stand-in`, its `of` the rank's rows-sha512 root under the TP run root and the bundle's manifest digest, made after the Commit and
 before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
         --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
@@ -54,12 +54,15 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   window is the population program and partition over the served Programs, the sampling design and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
-  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's split part or
-  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's key block,
+  end, column end or combine, `CHAINS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  (`serving_rows.leaf_layer`), with a window's history tables (`audit`'s ``history``, `ml.windows.history.params`), each
+  table's root the verifier of record computes from its writers' public bodies, to which it holds the window's registered
+  root, in its check before the draw and in the stream's registrations its run of record reads (a root both its verifiers
+  refuse is `registration.HISTORY`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
@@ -77,7 +80,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   sample: the registration naming another compiler or another advice root, the opening under another salt, the verifier opening
   other advice (``--other-advice-opening``: `source` and R2), and a unit committed under other advice (``--other-windows``: R4
   and its roots). With ``--transfer-gate`` (the templates the compiler lists as holding transfer gates), the window's
-  ``work:K`` law proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
+  work law (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
   trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
@@ -87,14 +90,15 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
   `zk_cost.py`'s `dev` arm, which Figure 1 prices), Lean's verify each session's verdict of record. A templated
-  statement's (`--tmpl-unit`) runs as a process pair of its own (`a0.session`). Under ``--firewall`` (Lean's `flock-firewall`), the
+  statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
-  So a plain audit takes only a stream's sample (``--challenger``) by a ``stratified:K`` law, over a
-  window of one member with no registered reads or shared rows, and refuses any other before the sample (`plain_refusal`).
+  So a plain audit takes only a stream's sample (``--challenger``) by a stratified law, over a window of one member with no
+  registered reads or shared rows, and refuses any other before the sample (`plain_refusal`): a stream's rule is a rate, and
+  the stratified rate (`stratified-rate:NUM/DEN`) is the one whose law is stratified (`service.selection_law`).
   The member's one session is served the stream's sample itself and runs on the keyed coin tree (``FC_COINS=tree``), and
   Lean `verify --coins tree --stratified K` holds it to the stratified sampling design it derives from its own `--program` and
   `--partition`. Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the
@@ -107,8 +111,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
-  them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its sampling design the
-  partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
+  them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one
+  stratified Spec over their mixed population, its sampling design the partition file's rule, a rate such as
+  `stratified-rate:NUM/DEN`), on the session's coins (`coins.ChallengerCoins` over
   `remote.RemoteChallenger`). The stream registers the rank's window at its counts under the TP run root (`register`), the
   coins commit to the registration's digest, and the stream samples once (`select`: Lean's `Select.select` on the bytes it
   read, then `check_draw`). Once the session has ended, the stream takes the proof (`deliver`) and its outcome (`outcome`)
@@ -149,8 +154,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
   sampled chunk's ``acc`` is then the committed output of the chunk that wrote it, sampled or not. A unit whose wired row is
   not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
-  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
-  (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
+  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
+  (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 * **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables) registers them as the values of
@@ -187,16 +192,17 @@ import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
-from verity.ml.commitments import row_table as RT  # noqa: E402
-from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
-from verity.ml.windows import wiring as WI  # noqa: E402
+from verity.commitments import row_table as RT  # noqa: E402
+from verity.protocols.spot.device import coins as CC
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as REG  # noqa: E402
+from verity.commitments.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.commitments.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
 #: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)
@@ -249,9 +255,10 @@ def tie(a: argparse.Namespace) -> dict[str, Any]:
     return dict(getattr(a, "tie", None) or {})
 
 
-def registering(a: argparse.Namespace) -> dict[str, Any]:
-    """`tie` as a stream's `register` takes it: the log is the stream's (`stream_of`)."""
-    return {k: v for k, v in tie(a).items() if k != "log"}
+def registering(a: argparse.Namespace, history: dict | None = None) -> dict[str, Any]:
+    """`tie` as a stream's `register` takes it (the log is the stream's, `stream_of`), with the window's history tables
+    (``history``, `audit`'s), which the run of record holds the window's registered roots to."""
+    return {**{k: v for k, v in tie(a).items() if k != "log"}, **({"history": history} if history is not None else {})}
 
 
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
@@ -299,6 +306,13 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     return stream, None if one else {t: n for t, (_, n) in defs.items()}
 
 
+def rated(w: CS.Binding, rule: str) -> CS.Binding:
+    """``w`` under the rate ``rule`` its stream samples by (`service.Law`): its law and work table the rule's over its
+    population (`service.params_law`), as `serving_rows.population` resolves a partition file's rate."""
+    law, table = S.params_law(rule, w.program, w.query, w.work_table)
+    return replace(w, law=law, work_table=table)
+
+
 def output_units(a: argparse.Namespace) -> list[int]:
     """The verifier's output class: the units whose outputs the window serves out (``a.outputs``, its own ascending
     ``[lo, hi)`` ranges, from the circuit's registered reads of its output ports), ascending; empty without one."""
@@ -325,11 +339,13 @@ def port_refusal(mine: CS.Binding, draw: dict, port: int, ports: int | None) -> 
 
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, members: list[dict], want: dict,
-               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
-                                                dict | None, dict | None, int | None]:
+               leaf_layer: str | None, history: dict | None = None
+               ) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes], dict | None, dict | None,
+                          int | None]:
     """Rank ``rank``'s sample of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
     the window's counts), and samples once (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), on the
-    challenger's coins (``a.coins``): the rank first plans its sample's coins from its window (`a5_coins.need`), which opens
+    challenger's coins (``a.coins``), with the window's history tables (``history``): the rank first plans its sample's
+    coins from its window (`a5_coins.need`), which opens
     the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
     digest and the stream reads them in the rank's turn on the step's one client. -> (the stream, its
     sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it sampled none,
@@ -340,7 +356,7 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                              **registering(a))
+                              **registering(a, history))
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
     except S.Refused as e:
@@ -354,8 +370,10 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
 
 def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, coins: AC.VerifierCoins,
                      rec: dict, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
-                     sessions: list[str], verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record on the verifier's own coins: its proof delivered (`Stream.deliver`) and its outcome
+                     sessions: list[str], verdicts: dict, statement: dict, given: dict, history: dict | None = None
+                     ) -> tuple[dict | None, dict, dict]:
+    """The sample's outcome of record on the verifier's own coins (each stream registering with the window's history
+    tables, ``history``): its proof delivered (`Stream.deliver`) and its outcome
     (`Stream.outcome`, ``given`` its proved units, instances, served units and session roots) with no coins' evidence,
     whose audit record fails `run` unless the Lean verifier's whole run (`Run.run`, `coin_source` verifier, its
     window the TP run root) is the Python's. Then the refusals that apply to the verifier's coins
@@ -373,7 +391,7 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
     neg = AC.verifier_negatives(
         lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
         lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
-                             **registering(a)),
+                             **registering(a, history)),
         stream, coins, draw, outcome, a.window_root)
     checks = (result or {}).get("checks") or {}
     record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
@@ -383,8 +401,9 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
                   members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`): its proof delivered
+                  verdicts: dict, statement: dict, given: dict, history: dict | None = None) -> tuple[dict | None, dict, dict]:
+    """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`), each stream
+    registering with the window's history tables (``history``): its proof delivered
     (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
     roots) with the coins' evidence, whose audit record fails `run` unless the Lean verifier's whole run
     (`Run.run`, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
@@ -426,7 +445,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
-                                    **registering(a)))
+                                    **registering(a, history)))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -631,7 +650,8 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
-          ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None) -> tuple[dict, bool]:
+          ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None,
+          history: Callable[[dict[str, bytes]], dict | None] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -646,7 +666,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
     registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
     place of a5's own; the summary's ``handed`` is then what the audit record took (its verdicts, statement, sessions,
-    proved units, instances, served units and session roots), for the caller's stream's outcome."""
+    proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the verifier
+    of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
+    registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
+    of record; None for a window with none."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -727,7 +750,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
         for p_name in fv["roots"]:
-            name = m.port(p_name)
+            name = mine.held(m, p_name)
             reg = roots.get(name)
             ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
@@ -740,8 +763,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
+    hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     **tie(a)).to_json()
+                                     history=hist, **tie(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -782,7 +806,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
-        stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer)
+        stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer,
+                                                                            hist)
         read = bytes(coins.read)
         (out / "segment.json").write_text(json.dumps({"source": "challenger",
                                                       "segment": segment, "read": read.hex(), "need": need}, sort_keys=True))
@@ -822,7 +847,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    server = proof_server(a, out, [mm for mm, _ in drawn])
+    server = proof_server(a, out)
 
     def staged(mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
@@ -848,7 +873,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if server is not None:
             st = mm["st"]
             h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
-                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin"),
+                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
+                                        tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
                               verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
@@ -899,7 +925,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
-                "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "roots": {mine.held(m, p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
                 "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
                 "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -949,7 +975,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
+                   per_member=members_proof(members, done, not plain(a)))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -960,7 +987,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                  "session_roots": session_roots}
         result, coin_neg, summary["coins"] = coins_outcome(
             a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
-            given)
+            given, hist)
         if result is None:
             summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
                            negatives={x: y["refused"] for x, y in coin_neg.items()})
@@ -972,7 +999,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a),
+                   per_member=members_proof(members, done, not plain(a)))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -1003,6 +1031,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
         v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        if hist is not None:
+            name = min(hist["registered"])
+            root = hist["registered"][name]
+            wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
+            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
+                        **tie(a))
+            neg["history-root-not-its-writers-strings"] = {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(wiring_negatives(mine.members, publics))
@@ -1070,7 +1105,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
-               partition: dict | None = None, tied: dict | None = None) -> None:
+               partition: dict | None = None, tied: dict | None = None, per_member: dict | str | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
@@ -1079,7 +1114,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
     ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
-    proofs case."""
+    proofs case. With ``per_member`` (`members_proof`, a window of several members), the audit in v2's per-member form
+    (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
+    parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
     try:
         import replay as RP
 
@@ -1092,36 +1129,70 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
         return
-    if v2 is None:
-        return
-    try:
-        if isinstance(v2, str):
-            raise ValueError(v2)
-        zk = case_v2(c.case(), sessions, **v2)
-        sampled = case_with_form(zk)
-        (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
-        (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
-    except Exception as x:  # noqa: BLE001 -- as the v1 case's
-        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+    if v2 is not None:
+        try:
+            if isinstance(v2, str):
+                raise ValueError(v2)
+            zk = case_v2(c.case(), sessions, **v2)
+            sampled = case_with_form(zk)
+            (out / "case-v2.json").write_text(json.dumps(zk, sort_keys=True))
+            (out / "case-sampled.json").write_text(json.dumps(sampled, sort_keys=True))
+        except Exception as x:  # noqa: BLE001 -- as the v1 case's
+            (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+    if per_member is not None:
+        try:
+            if isinstance(per_member, str):
+                raise ValueError(per_member)
+            (out / "case-v2-members.json").write_text(json.dumps(case_members(c.case(), **per_member), sort_keys=True))
+        except Exception as x:  # noqa: BLE001 -- as the v1 case's
+            (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path]) -> dict:
     """v1's ``case`` as `Spot.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
-    public file's, taken when it was staged before the sample, and the verifier's registered file), the evidence with its
+    public file's SHA-512 as the caller took it, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
-    the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
-    (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and
-    its ``units.indices`` the population's units in order), so it refuses a windowed registration, whose ports are its
-    members' (``<member>/<port>``)."""
+    the paths of the files those name and of the pinned lookup tables its circuit looks up (`proofs.circuit_lookups`,
+    which v2 holds them to), which onsite reads after the evidence (`compose.onsite_check`). v2 holds the public file's
+    header to the registration (`registration.matches_public`, and its ``units.indices`` the population's units in
+    order), so it refuses a windowed registration, whose ports are its members' (``<member>/<port>``).
+
+    When ``public`` was taken is the caller's to say, and nothing here checks it. `audit`'s is the digest it took when
+    it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that
+    digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
+    after the audit."""
     import replay as RP
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
     return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
             "evidence": RP.DT.canonical(evidence).encode().hex(),
             "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
+
+
+def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> dict:
+    """v1's ``case`` in `Spot.OneStageZk`'s per-member form, for a window of several `members` (`proofs.Member`, every
+    one of the window's): the params with ``proofs`` the members, each with its circuit and public files' digests, taken
+    when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
+    evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
+    (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
+    ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
+    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
+    (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
+    import replay as RP
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
+    pm, pe, blobs = PF.members_v2(members, names)
+    v1 = json.loads(bytes.fromhex(case["evidence"]))
+    if [s["name"] for st in pe["statements"] for s in st["sessions"]] != v1.get("sessions"):
+        raise ValueError("the statements' sessions, in the members' order by first unit, are not the evidence's sessions "
+                         "in order: the sampled members' sessions ran in another order")
+    evidence = {k: v for k, v in v1.items() if k != "verdicts"} | {"proofs": pe}
+    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": pm}}
 
 
 #: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
@@ -1145,7 +1216,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     """`case_v2`'s files from the sampled members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
     one table's one `--zk` session on its circuit and public file."""
-    from verity.core.protocols.spot.one_stage import proofs as PF
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1153,12 +1224,53 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
         return f"v2 verifies one table's session on its circuit and public file; this audit drew {len(done)} members"
     mm, sdir = done[0]["mm"], done[0]["sdir"]
     st, n = mm["st"], mm["m"].n
-    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
     reads = st.get("registered_file")
-    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
-                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
+    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin", session_dirs(sdir)),
             "circuit": mm["pin"], "public": st["public"], "registered": json.loads(reads.read_text()) if reads else None,
-            "tables": tables}
+            "tables": looked_up_tables(st["dir"])}
+
+
+def session_dirs(sdir: Path) -> tuple[Path, ...]:
+    """A sampled member's sessions' directories under its ``sdir``, in the order v1's ``sessions`` names them."""
+    return tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))
+
+
+def looked_up_tables(st_dir: Path) -> list[Path]:
+    """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
+    v2 holds the blobs' tables to exactly those."""
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    tdir = st_dir / "tables"
+    looked_up = PF.circuit_lookups(st_dir / "circuit.txt") if tdir.is_dir() else []
+    return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
+
+
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
+    """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
+    members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
+    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
+    the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
+    statement's (`v2_proof`); or why the audit has no per-member case."""
+    from verity.protocols.spot.verifier.one_stage import proofs as PF
+
+    if len(members) < 2:
+        return None
+    if not zk:
+        return "v2 verifies --zk sessions; this audit's are plain"
+    sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
+    out, tables = [], {}
+    for mm in members:
+        m, st = mm["m"], mm["st"]
+        g = st["meta"].get("vus_per_block")
+        if isinstance(g, bool) or not isinstance(g, int) or g < 1:
+            return f"member {m.key}'s circuit names no vus_per_block (its META's: {g!r})"
+        sessions = session_dirs(sdirs[m.key]) if m.key in sdirs else ()
+        reads = st.get("registered_file")
+        out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
+                             st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
+        if sessions:
+            tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+    return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 
 def streamed(a: argparse.Namespace) -> bool:
@@ -1185,12 +1297,12 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def proof_server(a: argparse.Namespace, out: Path, members: Sequence[dict]) -> ProofServer | None:
+def proof_server(a: argparse.Namespace, out: Path) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1. None where a session is one it doesn't prove (plain, behind the ZK server under ``--firewall``, or a
-    templated statement's, `--tmpl-unit`): each session is then a process pair of its own (`a0.session`)."""
-    if plain(a) or a.firewall or any(mm["st"].get("tmpl_unit") for mm in members):
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. None where a session is one it doesn't
+    prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own (`a0.session`)."""
+    if plain(a) or a.firewall:
         return None
     return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
 
@@ -1390,7 +1502,7 @@ def main() -> int:
     ap.add_argument("--compiler", choices=["traced"], default="traced", help="with --advice-opening: the registered compiler (traced: the "
                     "stand-in, each rank's Programs of record under --build-root, advice_windows.Traced)")
     ap.add_argument("--transfer-gate", action="append", default=[], help="with --advice-opening: a template the registered compiler "
-                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work:K)")
+                    "lists as holding transfer gates, every unit of which is proved (repeatable; the partition's law is work-rate:NUM/DEN)")
     ap.add_argument("--other-advice-opening", help="with --advice-opening: the opening of advice that disagrees with the registered, "
                     "given to the verifier (a negative)")
     ap.add_argument("--other-windows", help="with --advice-opening: the windows committed under the other advice, rank<r>/ each (a "
@@ -1412,7 +1524,7 @@ def main() -> int:
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
-                         "machine, as does composing the 64-key SparseMlaSplitPart_v1 in lookup slots")
+                         "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
     ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
                     "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
                     "infra's gate, with --peer and --challenger-key)")
@@ -1423,7 +1535,7 @@ def main() -> int:
     ap.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history, a commit a line "
                     "(`git rev-list --first-parent origin/main`), never the host's or the prover's")
     ap.add_argument("--plain", action="store_true", help="with --challenger: plain sessions, not --zk, "
-                    "under the partition's stratified:K law, a window of one member with no registered reads or shared rows "
+                    "under the partition's stratified law, a window of one member with no registered reads or shared rows "
                     "(PLAIN_SCOPE)")
     a = ap.parse_args()
     if bool(a.bundle) == bool(a.tp_commit):
@@ -1448,8 +1560,12 @@ def main() -> int:
                      "session's pin")
         a.rule = json.loads(Path(a.partition).read_text()).get("law")
         if not isinstance(a.rule, str):
-            ap.error(f"--challenger draws by the partition file's rule, a law's text (stratified:K, subset:K, ...), not {a.rule!r}")
-        S.Law(a.rule)
+            ap.error(f"--challenger draws by the partition file's rule, a rate's text (rate:NUM/DEN, stratified-rate:NUM/DEN, "
+                     f"work-rate:NUM/DEN), not {a.rule!r}")
+        try:
+            S.Law(a.rule)
+        except ValueError as e:
+            ap.error(f"--challenger draws by the partition file's rule: {e}")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sets = template_sets(Path(a.template_sets))

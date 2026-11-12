@@ -27,7 +27,7 @@ Notes are records, never messages.
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
   research msg pickup --thread TS                                  # 👀 on an ask you own
-  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent (needs SLACK_BOT_TOKEN)
+  research msg retract --as NAME --ts TS [--thread ROOT] [--why W] # blank a post NAME sent
   research msg roster --thread TS [--json]                         # an announcement's status lines; exit 0 when all are done
   research msg handles [--json] | subscriptions --as HANDLE        # the registry, holders from routes; the subscribe calls a holder makes
   research msg owners [PATH...]                                    # who owns each path (stdin: `git diff --name-only main... |`)
@@ -49,6 +49,8 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+                          # status follows the ask's page once its Status has left Waiting on Daniel: the page's Status and
+                          # Decision, and one `differs:` line when the card says otherwise; an unreadable page leaves the card alone
   research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
                           # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
@@ -72,7 +74,8 @@ and it runs as a single file (`python3 slack.py ...`) from any checkout.
 
 Without $SLACK_BOT_TOKEN (or with RESEARCH_SLACK_VIA=broker) every call goes through Verity's Slack broker instead: a POST of
 `{"method", "args"}` to BROKER with this agent's Cursor OIDC token, answered with Slack's response unchanged. The broker holds the
-bot token and allows only BROKER_METHODS; RESEARCH_SLACK_VIA=direct insists on the token.
+bot token and allows only BROKER_METHODS, the BROKER_GUARDED among them only by who asks; RESEARCH_SLACK_VIA=direct
+insists on the token.
 
 The sender rings the doorbells right after posting. A person's typed post in #ask-the-team or a chat channel is rung by the
 Slack events service (`infra/slack-events/`), which imports this file and calls `deliver`; `deliver --channel KEY --event -`
@@ -135,15 +138,21 @@ LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0
 LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
-#: exactly what the broker's route allows: every Web API method this module calls but DIRECT_ONLY (the tests check the split)
-BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
-                  "reactions.add", "usergroups.list")
-#: `chat`: a collaborator's channel, its invites, pin and bookmark, which the broker doesn't relay
+#: `chat`: a collaborator's channel, its invites, pin and bookmark
 CHAT_METHODS = ("bookmarks.add", "conversations.archive", "conversations.create", "conversations.info", "conversations.invite",
                 "conversations.inviteShared", "conversations.list", "conversations.unarchive", "pins.add", "users.list",
                 "users.lookupByEmail")
-DIRECT_ONLY = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
-               *CHAT_METHODS)                             # `retract`, `groups sync --apply`, `chat`: the token itself
+#: the calls the broker allows only by who asks: `retract`'s edit to a post a name the caller holds or posts as sent,
+#: `groups sync --apply`'s user-group writes (@comms' and @top's holders), and `chat`'s channel calls (@top's and @console's)
+BROKER_GUARDED = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
+                  *CHAT_METHODS)
+#: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
+#: who the broker lets make each guarded call, for its refusal
+GUARDED_WHO = {"chat.update": "only an edit to a post made as a name this agent holds or posts as (its route's holder or posters)",
+               **{m: "only @comms' and @top's holders sync the user groups" for m in BROKER_GUARDED if m.startswith("usergroups.")},
+               **{m: "only @top's and @console's holders open and close people's chats" for m in CHAT_METHODS}}
+BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
+                  "reactions.add", "usergroups.list", *BROKER_GUARDED)
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
 ERROR_CODE_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 SCOPES_RE = re.compile(r"^[a-z0-9_.:]{1,64}(,[a-z0-9_.:]{1,64}){0,15}$")      # a not-ok answer's `needed`: chat:write,users:read
@@ -668,8 +677,8 @@ def post(url: str, data: bytes, headers: dict[str, str], timeout: float = 30) ->
         return json.load(r)
 
 
-# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py, sha256
-# 34ea37fb0126e20a22160649e502565d7b443d6bfd9feb438528bff3163a7886) reads it in `oidc_token()`.
+# The Cursor identity socket, as verity-github.py (https://website-docs-sage.vercel.app/agent-tools/verity-github.py) reads it
+# in `oidc_token()`.
 class _UnixHTTP(http.client.HTTPConnection):
     def __init__(self, path: str):
         super().__init__("cursor-agent", timeout=10)
@@ -762,6 +771,8 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
+    if e.code == 403 and method in BROKER_GUARDED:
+        return f"{method}: the Slack broker refused the call ({why}): {GUARDED_WHO[method]}"
     if e.code == 403:
         return f"{method}: the Slack broker refused the call ({why}): it serves compute-verification/verity's agents and BROKER_METHODS only"
     if e.code == 413:
@@ -1295,10 +1306,10 @@ def vercel_oidc_token() -> str | None:
 def notes_token(now: float | None = None) -> str | None:
     """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
     service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
-    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: $RESEARCH_NOTES_TOKEN when set by
-    hand, else on a Cursor agent the one the agents' GitHub broker mints for its Cursor identity.  None when there is none of
-    them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and
-    why."""
+    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: on a Cursor agent the one the
+    agents' GitHub broker mints for its Cursor identity, and $RESEARCH_NOTES_TOKEN where that broker gives none.  None when
+    there is none of them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one
+    it was, and why."""
     _notes_token.pop("why", None)
     oidc = vercel_oidc_token()
     if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
@@ -1912,7 +1923,8 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    warn_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    body = re.sub(rf"^@{re.escape(owner['handle'])}\b[:,]?\s*", "", _body(ns))
+    warn_unrouted(body, reg, h["handle"], (owner["handle"],))
     text = f"{tag(owner)} {linear_ask(ns, owner, h['handle'], body)}"
     check_length(reg, ch, text, POST_WORDS)
     _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
@@ -2031,8 +2043,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     if ns.worker and (ns.verb != "comment" or ns.handle):
         raise SlackError("--worker goes with `comment` alone, never with --as: --as HANDLE is for the handle's holder, "
                          "--worker NAME for a lane's worker, which holds no handle")
-    if ns.worker and not WORKER_RE.fullmatch(ns.worker):
-        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
+    worker_lane, worker_name = (ns.worker.split("/", 1) if ns.worker and "/" in ns.worker else (None, ns.worker))
+    if ns.worker and not WORKER_RE.fullmatch(worker_name):
+        raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS, "
+                         "or proofs/LINTOOLS to sign as your own lane)")
+    if worker_lane:
+        handles = {h["handle"]: h for h in reg["handles"]}
+        if worker_lane.lstrip("@") not in handles:
+            raise SlackError(f"--worker {ns.worker}: @{worker_lane.lstrip('@')} is no handle in the registry")
+        worker_lane = worker_lane.lstrip("@")
+        owner = next((h["handle"] for h in reg["handles"] if (sfx := _branch_suffix()) and sfx in h.get("branch_suffixes", [])),
+                     None)
+        if owner and owner != worker_lane:
+            raise SlackError(f"--worker {ns.worker}: this checkout's branch ends in @{owner}'s suffix, so its worker signs as "
+                             f"{owner}/{worker_name}")
     if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
@@ -2151,11 +2175,11 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
         if ns.worker:
-            lane = linear.owners(reg).get(info["team"]["key"])
+            lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
                 raise SlackError(f"--worker: {issue}'s team {info['team']['key']} has no handle in the registry, so there is "
-                                 "no lane to comment as")
-            author = f"{lane}/{ns.worker}"
+                                 "no lane to comment as: sign as your own, --worker LANE/NAME")
+            author = f"{lane}/{worker_name}"
         if ns.dry_run:
             print(f"dry-run: would comment on {issue} as {author}: {text}")
             return 0
@@ -2532,9 +2556,23 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
     return line
 
 
-def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
+def _given_token_refused() -> bool:
+    """GitHub refused the notes token and it was $RESEARCH_NOTES_TOKEN as given: where `notes_sync` is (never where this file
+    is deployed alone), it says so and asks the agents' GitHub broker (`notes_sync.refused_given`); whether that gave a token to
+    ask GitHub again with."""
+    if _notes_token.get("source") != "env":
+        return False
+    try:
+        from . import notes_sync
+    except ImportError:
+        return False
+    return notes_sync.refused_given()
+
+
+def notes_api(method: str, rel: str, body: dict | None = None, again: bool = True) -> Any:
     """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
-    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there.  A $RESEARCH_NOTES_TOKEN GitHub
+    refuses (401 or 403) is replaced once by the agents' GitHub broker's token, where there is one (`_given_token_refused`)."""
     if not (token := notes_token()):
         raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
                          "without a notes clone, the notes are read and written with it")
@@ -2548,6 +2586,8 @@ def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
     except urllib.error.HTTPError as e:
         if e.code == 404 and method == "GET":
             return None
+        if e.code in (401, 403) and again and _given_token_refused():
+            return notes_api(method, rel, body, again=False)
         raise SlackError(f"notes: GitHub {method} {rel}: HTTP {e.code}") from None
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise SlackError(f"notes: GitHub {method} {rel}: {getattr(e, 'reason', e)}") from None
@@ -2782,6 +2822,8 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
 
 
 PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until a decision (or its deadline) moves it
+PAGE_OTHERWISE = "Decided otherwise"                             # Daniel's own Decision text, not the recommendation
+PAGE_DECISIONS = ("Approved", PAGE_OTHERWISE, "Decided by lane", "Default applied")   # the Statuses that record a decision
 URL_RE = re.compile(r"https://[^\s\"'<>|()\\]+")
 
 
@@ -2827,15 +2869,17 @@ def daniel_cards(api: Slack, reg: dict, since: float, now: float) -> list[dict]:
 
 
 def page_state(notion: "Notion", page: str) -> dict:
-    """An ask's page as its record says: `{status, answered, at}`.  Answered once its Status has left PAGE_WAITING (approved,
-    decided otherwise or sent back for a revision, or its default applied); `at` is then the page's last edit, the latest
-    the Status can have moved, since Notion keeps no history of a property."""
+    """An ask's page as its record says: `{status, answered, at, decision, choose}`.  Answered once its Status has left
+    PAGE_WAITING (approved, decided otherwise or sent back for a revision, or its default applied); `at` is then the page's
+    last edit, the latest the Status can have moved, since Notion keeps no history of a property.  `decision` and `choose`
+    are its Decision text and Choose letter, empty until set."""
     p = notion.call("GET", f"/pages/{page}")
-    status = prop_text((p.get("properties") or {}).get("Status"))
+    props = p.get("properties") or {}
+    status = prop_text(props.get("Status"))
     if not status:
         raise SlackError(f"page {page} has no Status")
     answered = status != PAGE_WAITING
-    return {"status": status, "answered": answered,
+    return {"status": status, "answered": answered, "decision": prop_text(props.get("Decision")), "choose": prop_text(props.get("Choose")),
             "at": _iso_epoch(p["last_edited_time"]) if answered and p.get("last_edited_time") else None}
 
 
@@ -3213,9 +3257,6 @@ def cmd_groups_sync(ns: argparse.Namespace, reg: dict, path: Path) -> int:
     the registry, which the caller commits. Existing groups keep their members."""
     api = client(ns)
     write = ns.apply and not ns.dry_run
-    if write and api.via == "broker":
-        raise SlackError("groups sync --apply needs SLACK_BOT_TOKEN itself (the broker doesn't relay user-group writes): "
-                         "run it on a VM that has the token")
     changed = False
     bot = api.call("auth.test").get("bot_id")
     if bot and reg.get("bot_id") != bot:
@@ -3428,9 +3469,6 @@ def cmd_chat(ns: argparse.Namespace, reg: dict) -> int:
     if ns.verb == "expect":
         return chat_expect(ns, reg, book)
     api = client(ns)
-    if api.via == "broker" and not api.dry_run:
-        raise SlackError("chat needs SLACK_BOT_TOKEN itself (the broker relays no channel or invite calls): run it where the "
-                         "token is")
     prev = book.get_person(ns.name, fresh=True)
     plan = "plan: " if api.dry_run else ""
     if ns.verb == "close":
@@ -3861,6 +3899,12 @@ def notion_error(what: str, e: urllib.error.HTTPError) -> str:
     return f"{what}: Notion answered {why}"
 
 
+class NotionError(SlackError):
+    def __init__(self, message: str, status: int):
+        super().__init__(message)
+        self.status = status
+
+
 class Notion:
     """The Asks for Daniel database through Notion's API, with $NOTION_API_KEY: a Notion connection's token, shared on the
     database. $RESEARCH_NOTION_URL points it at another server (the tests' fake)."""
@@ -3880,7 +3924,7 @@ class Notion:
         try:
             out = http_json(method, self.base + path, data, headers)
         except urllib.error.HTTPError as e:
-            raise SlackError(notion_error(what, e)) from None
+            raise NotionError(notion_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: Notion is unreachable: {getattr(e, 'reason', e)}") from None
         if not isinstance(out, dict):
@@ -3947,14 +3991,25 @@ def cmd_pages(ns: argparse.Namespace, reg: dict) -> int:
         print(f"dry-run: POST {NOTION_API}/data_sources/{db['data_source']}/query {json.dumps(query, sort_keys=True)}", file=sys.stderr)
         return 0
     notion = Notion()
-    rows = []
+    rows, readable = [], True
     for p in notion.call("POST", f"/data_sources/{db['data_source']}/query", query).get("results", []):
         props = p.get("properties", {})
-        comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+        comments: list = []
+        if readable:
+            try:
+                comments = notion.call("GET", f"/comments?block_id={urllib.parse.quote(p['id'])}&page_size=100").get("results", [])
+            except NotionError as e:
+                if e.status != 403:
+                    raise
+                readable = False
+                print(f"ask-daniel pages: {e}: the pages are listed without their comments. The Notion connection behind "
+                      "$NOTION_API_KEY lacks the Read comments capability (Notion's integration settings, the connection, "
+                      "Capabilities); until its owner turns it on, read a page's comments in Notion or with the Notion MCP",
+                      file=sys.stderr)
         newest = comments[-1] if comments else None
         rows.append({"url": p.get("url"), "edited": p.get("last_edited_time"),
                      **{k.lower().replace(" ", "_"): prop_text(props.get(k)) for k in ("Ask", "Lane", "Status", "Decision", "Card ID", "Deadline")},
-                     "comments": len(comments),
+                     "comments": len(comments) if readable else None,
                      "newest_comment": newest and {"at": newest.get("created_time"), "text": prop_text({"type": "rich_text", "rich_text": newest.get("rich_text")})}})
     if ns.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))
@@ -4022,12 +4077,12 @@ class AskDaniel:
 
 def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int,
              max_s: float = math.inf, clock: Callable[[], float] = time.monotonic) -> tuple[dict, bool]:
-    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart, for at
-    most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
+    """GET a card until it leaves `pending` (decided, or a blocking card overdue) or its page is answered, at most `polls` times,
+    `every` s apart, for at most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
     start = clock()
     for i in range(max(1, polls)):
         out = get()
-        if out.get("status") != "pending" or i == polls - 1:
+        if out.get("status") != "pending" or (out.get("page") or {}).get("answered") or i == polls - 1:
             return out, False
         if (left := max_s - (clock() - start)) <= 0:
             return out, True
@@ -4035,10 +4090,65 @@ def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: 
     return out, False
 
 
+def card_page(api: Slack, reg: dict, out: dict) -> str | None:
+    """The page a card links, as `daniel_cards` finds it: in the card, else in its thread (its asker's mention)."""
+    if not out.get("ts") or not (ch := out.get("channel") or channel_id_for(reg, ASK_CHANNEL)):
+        return None
+    return next((u for m in api.paged("conversations.replies", "messages", channel=ch, ts=out["ts"]) if (u := page_link(m))), None)
+
+
+#: the choice that records a decision outside a card's options; the site takes it only with a note this long at most
+OTHERWISE, OTHERWISE_NOTE_MAX = "otherwise", 1000
+
+
+def card_differs(out: dict, page: dict) -> str | None:
+    """What the card says, when its answered page says otherwise: one of the two is decided and the other isn't, the page is
+    Daniel's own Decision while the card's choice is the lane's or the default's, or the card's choice is an option letter
+    other than the page's Choose.  A choice that isn't a letter can't be held against Choose, and passes."""
+    held, decided = out.get("status") in DECIDED, page["status"] in PAGE_DECISIONS
+    choice, choose = str(out.get("choice") or "").lower(), (page.get("choose") or "").lower()
+    if held == decided and not (held and ((page["status"] == PAGE_OTHERWISE and out.get("source") in ("lane", "default"))
+                                          or (choose and re.fullmatch(r"[a-e]", choice) and choice != choose))):
+        return None
+    if not held:
+        return f"the card is {out.get('status') or '-'}"
+    return f"the card records `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+
+
+def page_follower(ns: argparse.Namespace, reg: dict) -> Callable[[dict], dict]:
+    """A reader of a card's page (Notion's record of the ask): the card with `page` (`{url, status, answered, decision, ...}`,
+    or `error` when it can't be read) and, once the page is answered, `differs` (`card_differs`).  A card that links no page
+    is returned as it is.  The link is looked up once, and the page is read at every call."""
+    links: dict = {}
+
+    def read(out: dict) -> dict:
+        ts = out.get("ts")
+        if ts and ts not in links:
+            try:
+                links[ts] = card_page(client(ns), reg, out)
+            except SlackError as e:
+                links[ts] = e
+        url = links.get(ts)
+        if isinstance(url, SlackError):
+            return {**out, "page": {"url": None, "status": None, "answered": False, "error": f"the card's thread wasn't read: {url}"}}
+        if not url:
+            return out
+        page = {"url": url, **Pages().state(notion_page_id(url))}
+        return {**out, "page": page, **({"differs": card_differs(out, page)} if page["answered"] else {})}
+    return read
+
+
+def _decided(out: dict) -> bool:
+    """Whether the ask is decided: by its page once that is answered, else by the card."""
+    page = out.get("page") or {}
+    return page["status"] in PAGE_DECISIONS if page.get("answered") else out.get("status") in DECIDED
+
+
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided, `polls` polls or WAIT_CAP_S run out; a card still pending at
-    the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
-    out, capped = wait_for(lambda: route.call("GET", "/" + urllib.parse.quote(cid, safe="")), sleep=_sleep, every=ns.every,
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
+    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    follow = page_follower(ns, reg)
+    out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
                            polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
@@ -4051,15 +4161,18 @@ def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str,
 
 
 def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
-    """Once a card is decided, ring the admin's inbox with its question, outcome and asker, so the decision reaches the
-    decisions log without an issue filed for it.  Once per card: a ring already in the inbox isn't repeated."""
-    if out.get("status") not in DECIDED or ns.dry_run:
+    """Once an ask is decided, ring the admin's inbox with its question, outcome and asker, so the decision reaches the
+    decisions log without an issue filed for it.  The outcome is the page's Status and Decision once the page is answered
+    (`page_follower`), and the card's choice only until then; a card that differs from its page rings as that, naming both.
+    Once per card and kind of ring: a ring already in the inbox isn't repeated."""
+    if not _decided(out) or ns.dry_run:
         return
     to, r = routes_of(ns).resolve("top")
     if not r or r.get("closed"):
         return
     api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
-    mark = f"card `{cid}` decided"
+    page = out.get("page") or {}
+    mark = f"card `{cid}` differs from its page" if out.get("differs") else f"card `{cid}` decided"
     if any(is_doorbell(m, reg) and (m.get("text") or "").startswith(f"from ask-daniel, {mark}") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
                                                              oldest=f"{_now().timestamp() - 14 * 86400:.6f}")):
         return
@@ -4075,18 +4188,32 @@ def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> Non
             link = permalink(reg, card_ch, out["ts"])
         except SlackError:
             pass
-    text = (f"from ask-daniel, {mark}: `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+    if page.get("answered"):
+        said = f"its page says {page['status']}: {page.get('decision') or '-'} ({page['url']})" + (f"; {out['differs']}" if out.get("differs") else "")
+    else:
+        said = (f"`{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+                + ("; its page was unreadable, so this is the card's choice alone" if page.get("error") else ""))
+    text = (f"from ask-daniel, {mark}: {said}"
             + (f" on: {question}" if question else "") + (f"; asked by {asker}" if asker else "") + (f" {link}" if link else ""))
     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false", text=text)
     print(f"route @{to}: rang with the decision", file=sys.stderr)
 
 
 def _show(out: dict, as_json: bool) -> int:
+    """Print the card, and its page once that is answered: a card that differs from its page is named on one line under the
+    page's, never as the decision.  Exit 0 once the ask is decided."""
+    page = out.get("page") or {}
+    card = " ".join(str(out.get(k) or "-") for k in ("status", "choice", "source", "decided_at"))
     if as_json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
+    elif not page.get("answered"):
+        print(card)
     else:
-        print(" ".join(str(out.get(k) or "-") for k in ("status", "choice", "source", "decided_at")))
-    return 0 if out.get("status") in DECIDED else 1
+        says = f"page {page['status']}: {page.get('decision') or '-'} {page['url']}"
+        print(f"{says}\ndiffers: {out['differs']}; its page says {page['status']}" if out.get("differs") else f"{card}\n{says}")
+    if page.get("error"):
+        print(f"ask-daniel: the ask's page is unreadable ({page['error']}): this is the card alone, unchecked against its page", file=sys.stderr)
+    return 0 if _decided(out) else 1
 
 
 def permalink(reg: dict, ch: str, ts: str) -> str:
@@ -4134,14 +4261,25 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
         path = "/" + urllib.parse.quote(str(ns.id), safe="")
         if ns.verb == "resolve":
             if not ns.choice:
-                raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread")
+                raise SlackError("ask-daniel resolve needs --choice VALUE: the option Daniel chose in the thread, or `otherwise` "
+                                 "with --note saying what he decided instead")
             provisional = ns.provisional or (ns.note or "").startswith("Provisionally accepted")
-            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {})}
+            if ns.choice == OTHERWISE and not 1 <= len((ns.note or "").strip()) <= OTHERWISE_NOTE_MAX:
+                raise SlackError(f"ask-daniel resolve --choice otherwise needs --note: what Daniel decided instead, in 1 to "
+                                 f"{OTHERWISE_NOTE_MAX} characters")
+            if ns.on_page and provisional:
+                raise SlackError("ask-daniel resolve: --on-page records Daniel's word and --provisional the lane's own "
+                                 "decision; a resolve is one or the other")
+            if ns.choice == OTHERWISE and provisional:
+                raise SlackError("ask-daniel resolve --choice otherwise is Daniel's word, never provisional: a lane decides only "
+                                 "among its card's options")
+            body = {"choice": ns.choice, **({"note": ns.note} if ns.note else {}), **({"provisional": True} if provisional else {}),
+                    **({"page": True} if ns.on_page else {})}
             if ns.dry_run:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
             try:
-                out = AskDaniel().call("POST", f"{path}/resolve", body)
+                out = page_follower(ns, reg)(AskDaniel().call("POST", f"{path}/resolve", body))
                 ring_decision(ns, reg, str(ns.id), out)
                 return _show(out, ns.json)
             except RouteError as e:
@@ -4338,8 +4476,9 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                    help="comment: its sender, a handle you hold (or --worker); audit --close-strays: the closing comments' "
                         "sender; check: the test issue's sender (default comms)")
     p.add_argument("--worker", default=None, metavar="NAME",
-                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME, "
-                        "LANE the handle of the issue's team, and rings no one")
+                   help="comment: for a lane's workers, agents that hold no handle (never with --as): it shows as LANE/NAME "
+                        "and rings no one. Give LANE/NAME to sign as your own lane on another lane's issue; with NAME "
+                        "alone, LANE is the handle of the issue's team")
     p.add_argument("--title", default=None, metavar="T", help="edit: the issue's new title")
     p.add_argument("--due", default=None, metavar="YYYY-MM-DD", help="edit: its due date (`none` clears it)")
     p.add_argument("--file", "--body-file", "--description-file", dest="file", default=None, metavar="F.md",
@@ -4399,7 +4538,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--now", default=None, metavar="EPOCH", help="the window's end, in seconds since the epoch (default: now)")
     p.add_argument("--json", action="store_true")
     cmd("pickup", "\U0001f440 on an ask or alert you own", thread=True)
-    p = cmd("retract", "blank a post your name sent (needs SLACK_BOT_TOKEN: the broker allows no edits)", as_=True)
+    p = cmd("retract", "blank a post your name sent", as_=True)
     p.add_argument("--ts", required=True, help="the post's ts")
     p.add_argument("--thread", default=None, metavar="ROOT", help="its thread's root ts, when it is a reply")
     p.add_argument("--why", default=None, help="one line the blanked post keeps")
@@ -4440,7 +4579,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
-            "answer, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
+            "answer and, once its page is answered, the page's Status and Decision, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
             "takes back an ask events overtook, `pages` lists the pages edited lately")
     p.add_argument("verb", nargs="?", choices=("status", "resolve", "extend", "withdraw", "pages"),
                    help="read a card's decision, record Daniel's answer from its page or thread, move its deadline later "
@@ -4452,11 +4591,16 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue); exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
-    p.add_argument("--choice", default=None, metavar="VALUE", help="resolve: the option Daniel chose in the thread")
+    p.add_argument("--choice", default=None, metavar="VALUE",
+                   help="resolve: the option Daniel chose in the thread, or `otherwise` (with --note: what he decided "
+                        "instead), which also replaces a lane's provisional decision")
+    p.add_argument("--on-page", action="store_true",
+                   help="resolve: Daniel said it on the card's page, not in its thread (`status` names a card that differs "
+                        "from its page: record the page with `--choice otherwise --on-page --note ...`)")
     p.add_argument("--note", default=None, help="resolve: his words, or a link to them; extend: why; withdraw: why the ask no longer stands")
     p.add_argument("--provisional", action="store_true",
                    help="resolve: the lane decided it under the standing rule, so the card says the lane decided, not "

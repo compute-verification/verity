@@ -28,7 +28,8 @@ Where it is read (`load`): a file path as given, or a notes clone, from its orig
 a line counts once it is pushed, whatever the clone's working tree holds.
 
 `research pods create NAME ... --max-hours H` passes `gate` against the guard's own state, read from its host with one ssh call
-($RESEARCH_GUARD_HOST, default GUARD_HOST; `local` reads the file here; the file is $RESEARCH_GUARD_STATE, default GUARD_STATE): it
+through the host's door (pods/door.py; $RESEARCH_GUARD_HOST, default GUARD_HOST; `local` reads the file here; the file is
+$RESEARCH_GUARD_STATE, default GUARD_STATE, which the door's gate does not take: it reads the guard's own): it
 refuses when the guard has not completed a poll in STALE_S, when its last read of budgets.toml failed (it enforces the last good
 budgets, but nothing new starts on them), when the guard's budgets have no live, untripped line covering NAME, or when H is over the
 line's max_pod_hours.  The guard's view is the one that counts: a line the guard has not read yet is not a line.
@@ -213,19 +214,26 @@ def default_source() -> Path:
 
 # ---- the create gate ---------------------------------------------------------------------------------------------------------------------
 
+def guard_host() -> str:
+    """The budgets guard's host, the control pod: $RESEARCH_GUARD_HOST, else GUARD_HOST; `local` when this machine is it."""
+    return os.environ.get("RESEARCH_GUARD_HOST") or GUARD_HOST
+
+
 def read_guard_state(host: str | None = None, path: str | None = None) -> tuple[dict[str, Any], float]:
-    """(the guard's state, the host's clock) from the guard's host: one ssh call, `cat STATE; date +%s`.  `local` reads it here."""
-    host = host or os.environ.get("RESEARCH_GUARD_HOST") or GUARD_HOST
+    """(the guard's state, the host's clock) from the guard's host: one ssh call, the gate's `budgets-state` there (pods/door.py;
+    `cat STATE; date +%s` to a pod that has no door yet).  `local` reads it here."""
+    host = host or guard_host()
     path = path or os.environ.get("RESEARCH_GUARD_STATE") or GUARD_STATE
     if host == "local":
         import time
 
         return json.loads(Path(path).read_text()), time.time()
-    from .connect import ssh_base
+    from . import door
 
-    r = subprocess.run([*ssh_base(host), f"cat {path} && echo && date +%s"], capture_output=True, text=True, timeout=90)
+    r = door.ask(["budgets-state"], f"cat {path} && echo && date +%s", host=host, timeout=90)
     if r.returncode != 0:
-        raise OSError(f"reading {path} on {host}: {(r.stderr or r.stdout).strip()[-300:] or f'rc {r.returncode}'}")
+        raise OSError(f"reading {path} on {host}: {(r.stderr or r.stdout).strip()[-300:] or f'rc {r.returncode}'}"
+                      f"{door.hint(host, r.stderr)}")
     body, _, clock = r.stdout.rstrip().rpartition("\n")
     return json.loads(body), float(clock)
 
@@ -268,7 +276,7 @@ def gate(name: str, max_hours: float, state: dict[str, Any], now: float, *, host
 
 def check_create(name: str, max_hours: float, *, reader=read_guard_state) -> tuple[str | None, str | None]:
     """(refusal, covering prefix) for `pods create`: the guard's state read from its host, judged by `gate`."""
-    host = os.environ.get("RESEARCH_GUARD_HOST") or GUARD_HOST
+    host = guard_host()
     try:
         state, now = reader()
     except (OSError, ValueError, subprocess.TimeoutExpired) as e:

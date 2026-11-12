@@ -1,4 +1,4 @@
-"""A window's audit from its records alone: what an integration hands Verity (`verity.ml.windows.interface`), and nothing else.
+"""A window's audit from its records alone: what an integration hands Verity (`verity.commitments.windows.interface`), and nothing else.
 
 The records, every one in the window's directory but the advice's opening:
 
@@ -18,7 +18,8 @@ to the run root the run published (``--run``) and, for a compiled circuit, to th
 opens the registered root under the registered compiler, and that compiler, run as the command the verifier's own table
 names for it (``--compilers``) from a checkout of the registered commit whose code hashes to the registered digest, makes
 this circuit from the advice and charges the registered length. A circuit with no compiler is the one the verifier
-registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
+registered (``--circuit``). Then `a5.audit`, its stream's rule the rate of the window's design in its population (`rule_of`):
+the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the sampled members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
@@ -42,7 +43,10 @@ lists its members (a served window's) declares its reads beside them, as a serve
 (each ``weights/<label>@<words>``, pinned at the root of the committer's weights registration): each read port its
 members' own rows or a shared-row table of them (`interface.listed_reads`), audited and counted as a stated record's
 reads are, and the count names every parameter it reads whose window root is no pin (``unpinned``), whose reads count
-free.
+free. A history table (`interface.History`) is pinned at the root the window's registration records for it
+(`history.pins`), which a5's registration check before the draw and its stream's registrations hold to the root the
+verifier of record computes over its writers' public bodies (a5's ``history``, `history.params` of the same pins as the
+reads); a held run's strings it doesn't hold, so a window with one is refused.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the registration;
@@ -152,11 +156,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
-from verity.ml.circuits.codec import program_digest  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.protocols.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
+from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.circuits.codec import program_digest  # noqa: E402
+from verity.commitments.windows import history as HW, interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
 #: which outbound connections take theirs
@@ -169,7 +173,7 @@ REFUSED = 2
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
 
     _, errors = load()
     try:
@@ -746,7 +750,8 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
     member's circuit and public file: what the verifier refuses, not the prover. Then that public file with one
     bit flipped (``public-bit-*``) under the honest proof."""
     import a0
-    sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
+    # the directory of `zk_mutants.py` and the modules it imports beside it
+    sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/flock/agreement/zk_mutants.py").parent))
     import zk_mutants as ZM
 
     k, honest = next(((k, s.parent) for k in range(len(members))
@@ -779,6 +784,19 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             "cases": cases}
 
 
+def rule_of(law: Mapping[str, Any], population: int) -> str:
+    """The rule the audit's stream states for a window registered under the fixed design ``law`` over ``population`` proof
+    blocks. A selection rule's law is a rate (`service.Law` refuses a fixed count), so the rule is the rate of the
+    design's K in the window's N: ``rate:K/N`` for a subset design, ``stratified-rate:K/N`` for a stratified one (at K = 1,
+    one proof block a stratum) and ``work-rate:K/N`` for a work one. The stream holds the registration to the design its
+    rule names over the window (R1), so a design its rate doesn't reproduce is refused there, by name; a Bernoulli design
+    states its own text."""
+    kind = {"subset": "rate", "stratified": "stratified-rate", "work": "work-rate"}.get(law.get("law"))
+    if kind is None:
+        return f"bernoulli:{law.get('p')}"
+    return f"{kind}:{min(law['k'], population)}/{population}"
+
+
 def audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
@@ -807,6 +825,10 @@ def audit(a: argparse.Namespace) -> int:
         for e in registration.get("registered") or ():
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
+        histories = HW.pins(doc, roots)
+        if twice := sorted(set(histories) & set(pins)):
+            raise ValueError(f"values {twice} are both pinned and the window's history tables")
+        pins |= histories
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -831,7 +853,7 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
+    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, rule_of(mine.law, mine.population)
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie = tied
@@ -842,7 +864,8 @@ def audit(a: argparse.Namespace) -> int:
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
-                         more, rank=0, registered=reads or None, ports=a.ports)
+                         more, rank=0, registered=reads or None, ports=a.ports,
+                         history=(lambda publics: HW.params(doc, mine, publics, pins)) if histories else None)
     finally:
         a.coins.skip(0)
         finisher.join()

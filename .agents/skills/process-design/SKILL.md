@@ -26,7 +26,7 @@ integrations), not of commits: a retracted result costs it. A process costs **lo
 change it touches, and pays in **yield** (results that stay true) and **reuse** (results found, cited, built on) only
 where an error or a reuse happens. It earns its place when that benefit exceeds its cost on all of them.
 
-Price only the scarce resources: the human's attention (the bottleneck); the merge path (`next`, its reviewers, a Lean
+Price only the scarce resources: the human's attention (the bottleneck); the merge path (the verified queue, its reviewers, a Lean
 change's Lean check, the coordinator); files and queues many lanes pass through; the words every agent reads first (the
 root `AGENTS.md`, the lane contract, a subtree's `AGENTS.md`); pods and money. Machine and agent time are cheap. Agents
 follow rules literally and at scale and never push back, so a rule's cost multiplies by the agents and how often it
@@ -66,10 +66,10 @@ A good process makes the right thing easy while exploring, and the wrong thing l
 
    ~~~sh
    git fetch origin main
-   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/core/protocols/pous  # changes by path
+   git log origin/main --since=2.weeks --date=format:'%m-%d %H:%M' --format='%h %ad %s' -- verity/protocols/pous  # changes by path
    git log origin/main --since=1.week --format=%h -- AGENTS.md | wc -l  # how often a file changes
    gh pr list --state merged --limit 300 --json number,createdAt,mergedAt,files --jq '
-     .[] | select(any(.files[]; .path | startswith("verity/core/protocols/")))
+     .[] | select(any(.files[]; .path | startswith("verity/protocols/")))
      | [.number, (((.mergedAt|fromdate) - (.createdAt|fromdate)) / 3600 * 10 | floor / 10)] | @tsv'  # hours to merge
    wc -w AGENTS.md ~/.research/notes/kb/LANE-CONTRACT.md  # always-read words
    ~~~

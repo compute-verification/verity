@@ -1,6 +1,6 @@
 """The recursion bench's environment variables, each declared once in a `verity_config.settings.Registry` and checked by
 its `Registry.check` (``verity/settings.py``): what ``job.sh`` reads (its own, and those of
-``verity/ml/flock/pod/85-rec-reprice.sh``'s it sets a default for), and what ``run.py`` and ``forge_after.py`` read.
+``verity/protocols/flock/pod/85-rec-reprice.sh``'s it sets a default for), and what ``run.py`` and ``forge_after.py`` read.
 
 ``job.sh`` takes its variables as ``KEY=VALUE`` arguments (``run.py``'s ``job_env``) and passes every one on to 85.  It runs
 ``python3 benchmarks/recursion_e2e/settings.py record FILE`` first, which refuses, by name, a variable under the job's own
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "configuration" / "config"))
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
@@ -44,7 +44,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("FORGE_AFTER", csv, ("coef", "dirs", "message"), VALUE, "the forgeries forge-after makes on the honest releases"),
     S("LEAN_JOBS", int, 4, VALUE, "V* releases Lean verifies at once (85's JOBS for the lean step), which its times depend on"),
     S("KEEP_DATA", str, None, WHERE, "1 keeps 85's data/TAG for a later job: retention, not what is measured"),
-    # ---- 85's, which the job sets a default for (verity/ml/flock/pod/85-rec-reprice.sh)
+    # ---- 85's, which the job sets a default for (verity/protocols/flock/pod/85-rec-reprice.sh)
     S("K", int, 4096, VALUE, "the inner statement's GemmCoordinate_v2 K"),
     S("N", int, 2, VALUE, "the inner statement's template instances"),
     S("WARM", int, 1, VALUE, "the inner step's warm runs"),
@@ -62,7 +62,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
       "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
     S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),
-    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget (85's RELEASE_BUDGET); unset, none"),
+    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget, at least 1 (85's RELEASE_BUDGET): "
+      "RELEASE=1 needs it, and --release sets 1"),
     S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),

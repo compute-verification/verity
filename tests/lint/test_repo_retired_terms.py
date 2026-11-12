@@ -23,7 +23,7 @@ config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its
 file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
-(``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
+(``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
 leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
 standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 
@@ -220,9 +220,10 @@ def terms() -> tuple[tuple[Term, ...], dict[str, list[Term]]]:
 
 
 def sites_of(text: str, by: dict[str, list[Term]]) -> list[tuple[int, str]]:
-    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word."""
+    """(line, ``'X' is retired; say Y``) of each site of a retired term in ``text``, ``by`` its terms by word.  Where two
+    terms match one span, the one the table spells longer names it, then the first by spelling."""
     words = {w.lower() for w in set(WORDS.findall(text))}
-    candidates = {t for w in words & by.keys() for t in by[w]}
+    candidates = sorted({t for w in words & by.keys() for t in by[w]}, key=lambda t: (-len(t.old), t.old))
     if not candidates:
         return []
     low = text.lower()
@@ -354,8 +355,49 @@ def test_what_is_a_retired_term() -> None:
     assert sites_of("a\nb C-Flock\n", by) == [(2, "'C-Flock' is retired; say Flock (GLOSSARY.md)")]
 
 
+def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
+    """The ratchet gate compares a base's sites with a head's as strings, each found in its own process, and a set of
+    terms iterates in an order that differs between processes."""
+    alive, said = [], set()
+    for i in range(64):
+        pair = [Term("Dampener*", "the slowdown", code=True), Term("*RemotePeriod", "monitoring period", code=True)]
+        alive.append(pair)
+        by: dict[str, list[Term]] = {}
+        for t in pair[::-1] if i % 2 else pair:
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        said |= set(sites_of("the DampenerRemotePeriod\n", by))
+    assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
+
+
+def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
+    class Placed(Term):
+        """A term whose place in a small set is chosen: such a set gives its members in the order of their hashes."""
+
+        def __init__(self, place: int, old: str, new: str):
+            super().__init__(old, new, code=True)
+            self.place = place
+
+        def __hash__(self) -> int:
+            return self.place
+
+    def said(text: str, *rows: tuple[int, str, str]) -> list[tuple[int, str]]:
+        by: dict[str, list[Term]] = {}
+        for t in (Placed(*row) for row in rows):
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        return sites_of(text, by)
+
+    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]  # second by spelling: the length decides
+    assert said("an OldName", (1, "*Name", "the shorter row's"), (2, "OldNa*", "the longer row's")) == longer
+    assert said("an OldName", (2, "*Name", "the shorter row's"), (1, "OldNa*", "the longer row's")) == longer
+    first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
+    assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
+    assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
+
+
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
-    assert holds("verity/a.py") and holds("Security/A.lean") and holds("README.md") and holds("a/b.toml")
+    assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
     assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []

@@ -19,8 +19,8 @@ from math import log, log2, log10
 from pathlib import Path
 
 import figure1 as f1
-from verity.core.protocols.spot.optimize import Grain, leak_count
-from verity.ml.circuits.partition_v2 import UNIT_CLASSES
+from verity.protocols.spot.optimize import Grain, leak_count
+from verity.circuits.partition_v2 import UNIT_CLASSES
 
 SCHEMA = "spot-figure4/v1"
 #: the evasion threshold the post's sampling argument is stated at
@@ -61,8 +61,9 @@ def largest(rate: float, tokens: float, bits_per_token: float, target: float) ->
 
 
 def run(model: str, one: dict) -> dict:
-    """The figure's JSON from `model`'s cards and Figure 1's (`total_cost.run`'s) configurations and serve taxes."""
-    c = f1.cards(model)
+    """The figure's JSON from `model`'s cards and Figure 1's (`total_cost.run`'s) configurations and serve taxes, each
+    scope's tokens at the reading of serving's rate `one` was planned at."""
+    c = f1.cards(model, serving=one.get("serving", {}).get("reading", f1.SERVING[0]))
     sc = f1.slot_cards(model)
     part = f1.TokenBlocks.of(c["partition"].value["strata"], c["partition"].value.get("served_macs_per_token"))
     per_token = part.blocks * part.bits
@@ -88,7 +89,8 @@ def run(model: str, one: dict) -> dict:
                        "largest_bits": {s: largest(rate, tokens[s], per_token, t) for s in scopes},
                        "leeway": {s: {k: rate / q for k, q in need[s].items()} for s in scopes},
                        "h_for_smallest": {s: (GOAL - tax) / need[s][marks[0]["label"]] for s in scopes}})
-    return {"schema": SCHEMA, "model": model, "delta": DELTA, "goal": GOAL,
+    return ({"serving": one["serving"]} if "serving" in one else {}) | {
+            "schema": SCHEMA, "model": model, "delta": DELTA, "goal": GOAL,
             "target": {"label": target["label"], "bits": t}, "bits_per_token": per_token, "tokens": tokens,
             "bits": list(BITS), "simple": [simple(b, t) for b in BITS],
             "exact": {s: [exact(b, tokens[s], per_token, t) for b in BITS] for s in scopes},

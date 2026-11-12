@@ -1,5 +1,5 @@
 """The serve-time commit's hashes on the GPU (README.md): hm96-sha512 hiding leaves over sha512/row/v2 rows, and
-frame-v3-sha512 leaves, nodes and pads a level at a time, bit for bit the reference's (``verity.ml.commitments``).
+frame-v3-sha512 leaves, nodes and pads a level at a time, bit for bit the reference's (``verity.commitments``).
 
 A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors on a device, uint64 arrays on the host):
 ``digests(words)`` gives the bytes, ``words(digests)`` the words. ::
@@ -40,19 +40,20 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import merkle_depth
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.ml.kernels import ROW_COMMIT, SHA512
 from verity_config.settings import of
+
+from verity.commitments import hm96
+from verity.commitments.merkle import merkle_depth
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
+from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]
 
 HERE = Path(__file__).resolve().parent
 DEVICE_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows.cu")
 HOST_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows_host.cpp")
-NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-lineinfo", "-Xptxas", "-v")
+#: no -lineinfo: nothing reads a line table, and with one the cubin holds the source's path
+NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 settings = of(__file__)
 BUILD_DIR = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "sha512_rows")

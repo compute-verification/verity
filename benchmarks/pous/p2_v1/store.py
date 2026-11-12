@@ -21,7 +21,7 @@ no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
 `--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
-(`Generated`: `e2e_h200.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+(`Generated`: `benchmarks.torch_gpu.p2_stage.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
@@ -30,7 +30,8 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
 
-- `setup.json`: the manifest, the generator's stream, the layout's digest, the commitment, the source and the salt;
+- `setup.json`: the manifest, the generator's stream and its name of the weights (`program`, the generator's
+  `model_id`), the layout's digest, the commitment, the source and the salt;
 - `seg/<s>.c`: segment s, its blocks of 2,056 bytes in order;
 - `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
   `VerifierKey.from_row_digests`);
@@ -100,13 +101,13 @@ if __package__ in (None, ""):
 else:
     from . import reference
 
-from verity.core.protocols.pous import setup, verifier
-from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.layout import Layout
-from verity.core.protocols.pous.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
+from verity.protocols.pous.verifier import setup, verifier
+from verity.protocols.pous.verifier.labels import salt_value, tag
+from verity.protocols.pous.verifier.layout import Layout
+from verity.protocols.pous.verifier.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
                                                     expand_prefix, stream)
-from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.commitments.rowleaf import sha512_row_v2_prefix
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
@@ -122,7 +123,7 @@ STAGING_ALIGN = 256
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 SETUP_FORMAT = "verity-pous/p2/store/v1"
-GENERATOR = "e2e_h200.served_weights"
+GENERATOR = "benchmarks.torch_gpu.p2_stage.served_weights"
 TIE_TAG = "verity-pous/p2/store-tie/v1"
 TIE_FIELDS = ("manifest", "program", "stream_bytes", "layout_sha512", "commitment", "salt", "root", "w_root", "registration")
 SPOTS_PER_SEGMENT = 2
@@ -392,9 +393,10 @@ def git_blob(path: str) -> str | None:
 
 
 class Generated:
-    """`W` from a seeded weights generator (`e2e_h200.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
-    `program`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
-    back to back, each part an s8 tensor of the layout tensor's `K` columns."""
+    """`W` from a seeded weights generator (`benchmarks.torch_gpu.p2_stage.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    `model_id`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
+    back to back, each part an s8 tensor of the layout tensor's `K` columns. `program` is the generator's name of the
+    weights (its `model_id`, its manifest's `"model"`), named as `setup.json` and the tie hold it."""
 
     def __init__(self, generator: str, shape: str, seed: bytes, point: tuple[int, int, int] = POINT) -> None:
         self.generator, self.shape_name, self.seed = generator, shape, seed
@@ -410,7 +412,7 @@ class Generated:
                 raise ValueError(f"{t.name} [{t.n}, {t.k}] is not the generator's s8 {generator_parts(t.name)} at {g.name}")
             self.parts[t.name] = [(p.name, p.nbytes) for p in ps]
         self.size = self.mod.stream_bytes(g)
-        self.program = self.mod.program(g, seed)
+        self.program = self.mod.model_id(g, seed)
 
     def tensor(self, name: str, a: int, b: int) -> bytes:
         """Bytes `[a, b)` of the layout's tensor `name`."""
@@ -428,8 +430,8 @@ class Generated:
     def pieces(self, manifest: dict) -> list[tuple[str, int, int, str]]:
         """Each of the generator's s8 tensors in `W`, in `W`'s order: its name, `W` offset, bytes and the SHA-256 that
         `manifest` (the generator's at this shape and seed) gives it. Every s8 tensor the manifest lists is one."""
-        if (manifest.get("program"), manifest.get("stream_bytes")) != (self.program, self.size):
-            raise ValueError("the manifest is another shape's or seed's: its program or stream_bytes differs")
+        if (manifest.get("model"), manifest.get("stream_bytes")) != (self.program, self.size):
+            raise ValueError("the manifest is another shape's or seed's: its model or stream_bytes differs")
         rows = {r["name"]: r for r in manifest["tensors"]}
         out = []
         for t in self.store.tensors:

@@ -17,9 +17,9 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, clock_commitment
-from verity.core.protocols.certifier.schedule import ClockSync
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.certificate import Certificate, Direction, Issuer, clock_commitment
+from verity.protocols.certifier.verifier.schedule import ClockSync
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8
@@ -28,7 +28,9 @@ SESSION = bytes(range(32))
 
 def _load():
     sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_certifier_serve", HERE / "certifier_serve.py")
+    spec = importlib.util.spec_from_file_location(
+        "network_traces_certifier_serve",
+        Path(__file__).resolve().parents[3] / "benchmarks/network_traces/certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
