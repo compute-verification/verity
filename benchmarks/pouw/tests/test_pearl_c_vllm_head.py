@@ -1,12 +1,13 @@
 """The pass verifier (``benchmarks/pouw/pearl_c_vllm/verify_run.py``) at the LM head's shape on the CPU: one decode call of
-GLM-5.1's head, (16, 2,048, 128,256) with 4 real rows, under the served instance (k_min 1,024, 64 x 64 tiles) of the
+Llama 3.2 1B's head (its tied embedding), (16, 2,048, 128,256) with 4 real rows, under the served instance (k_min 1,024, 64 x 64 tiles) of the
 scheme the H200 runs, its weight's 128,256 vocabulary rows committed as ``pearl-b/64`` and one of them all +0, excluded.
 The call has 2,004 column tiles and its y rows are 501 segments of 256 words.
 
 Only the tiles the verifier opens are proved (the scheme's reference, on `fast_tile`'s batch forms): the draw is fixed to
 the call's first, a middle and its last column tile (``clear_work.draw`` patched), and the exclusion tile of the +0 row
 opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier draws from
-its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``.
+its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``
+(about 2,004 tiles' proofs, ``jobs`` processes at a time).
 
 The module's weight is 525 MB of BF16, built and committed once a module (about 85 s), and the two verdicts take about
 70 s more. What it catches that the
@@ -51,9 +52,32 @@ SOURCE = b"verifier" * 4
 CHUNK = 8_192
 
 
-def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION)) -> Path:
+#: what `_prove` reads, set before `head_pass` forks its workers
+_PROVING: dict = {}
+
+
+def _install() -> None:
+    T.SD.FT.install(_PROVING["s"])
+
+
+def _prove(ts: list[int]) -> list[tuple[int, bytes, np.ndarray]]:
+    """Tiles `ts` proved on the batch forms: each one's id, transcript digest and real rows' y words."""
+    s, ctx, noise, tiles, a_rows, b_rows = (_PROVING[x] for x in ("s", "ctx", "noise", "tiles", "a_rows", "b_rows"))
+    out = []
+    for t in ts:
+        tile = tiles[t]
+        ops = s.encode(ctx, noise, [a_rows[i] for i in tile.rows], [b_rows[j] for j in tile.cols], tile)
+        ch = s.checked(ctx, ops)
+        real = [x for x, i in enumerate(tile.rows) if i < REAL]
+        y = np.array([[T.PCU.y(ch.u[x][z], ops.a.alpha[x], ops.b.alpha[z]) for z in range(len(tile.cols))] for x in real],
+                     "<u2")
+        out.append((t, s.digest(ctx, noise, ch), y))
+    return out
+
+
+def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION), jobs: int = 1) -> Path:
     """The head's pass in the device run's layout under `d`, its manifest's path. Tiles `prove` are proved (every tile
-    with None), the rest of the transcript and of y left +0."""
+    with None), in `jobs` forked processes, the rest of the transcript and of y left +0."""
     s = T.PPD.scheme_of(SCHEME)
     rng = np.random.default_rng(64)
     h = s.commitment_hash
@@ -93,18 +117,24 @@ def head_pass(d: Path, prove: tuple[int, ...] | None = (*DRAWN, EXCLUSION)) -> P
     noise = s.noise(ctx)
     leaves = [bytes(64)] * len(tiles)
     y = np.zeros((REAL, N), "<u2")
-    undo = T.SD.FT.install(s)
+    todo = list(range(len(tiles)) if prove is None else prove)
+    _PROVING.update(s=s, ctx=ctx, noise=noise, tiles=tiles, a_rows=a_rows, b_rows=b_rows)
     try:
-        for t in (range(len(tiles)) if prove is None else prove):
-            tile = tiles[t]
-            ops = s.encode(ctx, noise, [a_rows[i] for i in tile.rows], [b_rows[j] for j in tile.cols], tile)
-            ch = s.checked(ctx, ops)
-            leaves[t] = s.digest(ctx, noise, ch)
-            for x, i in enumerate(tile.rows[:REAL]):
-                for z, j in enumerate(tile.cols):
-                    y[i, j] = T.PCU.y(ch.u[x][z], ops.a.alpha[x], ops.b.alpha[z])
+        if jobs == 1:
+            undo = T.SD.FT.install(s)
+            try:
+                proved = _prove(todo)
+            finally:
+                undo()
+        else:
+            import multiprocessing
+            with multiprocessing.get_context("fork").Pool(jobs, initializer=_install) as pool:
+                proved = [p for part in pool.imap(_prove, [todo[i:i + 8] for i in range(0, len(todo), 8)]) for p in part]
     finally:
-        undo()
+        _PROVING.clear()
+    for t, leaf, block in proved:
+        leaves[t] = leaf
+        y[[i for i in tiles[t].rows if i < REAL], tiles[t].cols[0]:tiles[t].cols[-1] + 1] = block
     splits = {WEIGHT: T.PW.Split(K)}
     records = [T.PW.UnitRecord(mm, REAL, K, (), (ZERO_ROW,), (), ())]
     matmuls = [{"index": INDEX, "m": M16, "k": K, "n": N, "weight": WEIGHT, "real_rows": REAL, "k_kept": K, "excluded_a": [],
