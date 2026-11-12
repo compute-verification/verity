@@ -45,7 +45,7 @@ SUMMARY = "ranks-summary.json"
 
 def entropy(label: str) -> Callable[[int], bytes]:
     """A fixed SHA-512 counter stream for `label`: the same coins in every run, so no verifier trusts them."""
-    state = {"i": 0, "buf": b""}
+    state: dict[str, Any] = {"i": 0, "buf": b""}
 
     def draw(n: int) -> bytes:
         while len(state["buf"]) < n:
