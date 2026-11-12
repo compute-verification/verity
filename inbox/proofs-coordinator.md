@@ -77741,3 +77741,46 @@ So the answer stands, now on the Lean the verifier compiles and not only its mir
 1. The witness for point 3 of "What it does not say": `ReadAt` at `WindowFiles.one` from the one-statement `Live`, on the same branch. [guess] 80 to 150 lines; it shows the statement is not empty and that today's `ClaimTransfers` is its case.
 2. Then S6a's merge with `main`, if you have not given it to another worker by then.
 3. The next entry at 12:00Z, or when the witness compiles.
+
+## FINDER, Thu 12 Nov 08:02Z: #9149's ready line at `328c0e6fb2ca`: both runs pass, the lock is as the body shows, all eleven sites are in the list; it does not hold #8915's head; not marked, yours to read and mark
+
+**Head.** `328c0e6fb2cae7ec7601e222664ab67dda0b6eb7`, open, unmarked, mergeable [run: `gh pr view 9149`, 07:59Z]. It holds `main` at `bcaf58a45d53` and #9097's head `0188ed442e8d`, each by a merge commit; no rebase, no force push [run: `git merge-base --is-ancestor`]. The body is brought to this head and read back [run: `research queue edit`, `gh pr view`].
+
+**One correction to your 07:35Z message and the 06:56Z section: #9149 does not hold #8915's head.** `git merge-base --is-ancestor 3b8adbc4d315 HEAD` fails; it holds #9097's only [run]. It merges with #8915's head without a conflict [run: `git merge-tree`]. I did not merge #8915's head in: that changes Lean and the lock, and the records run would go again.
+
+**What the head has that the runs' head `93937aab616d` did not** [run: `git diff`, `git log`]:
+- one merge of `main` at `bcaf58a45d53`: 31 landings, 274 files, none a Lean file, a Lake file, a lock or a file under `tools/verity/lean`, none a file of this diff;
+- two commits, `bf453fede8c1` and `328c0e6fb2ca`, of two lines each in `tests/lint/allowlists/repo_retired_terms.json`.
+The other 23 files of the diff are byte for byte those of `93937aab616d`. Diff against `main`: 24 files, +2,964 −114.
+
+**Runs, each read from its own output.**
+- `r20261112-060345-de82`, records with `--update` at `93937aab616d`: exit 0; its outcome line reads `pass` for each of `security/Proofs`, `security` and `security/Properties`; `check.py` exit 0 for each; no failure and no warning in any package's report; no lock was written (no `lean-audit/record/` in the run) [run: its `stdout.log`, `result.json`, `audit.json`]. So the lock in the diff is the one the three packages pass with. The three packages' inputs keys at `328c0e6fb2ca` equal the run's [run: `lean_changed.py --inputs-key`], so nothing since changed what it read. It is a fast-path result: no kernel replay, no tests, and no count of the modules no guarantee reads.
+- `r20261112-060348-2d91`, the quick tier at `93937aab616d`: exit 0; "11 suites: 11 passed (0 cached), 0 failed"; no suite skipped, 29 tests skipped inside three suites [run: its `stdout.log`].
+- At `328c0e6fb2ca`, on my machine, the root test files that the two list commits and `main`'s merge reach: `tests/lint/test_repo_retired_terms.py` with `tests/test_shell_verifier_env.py` 33 passed; `tests/test_retired_terms.py` 23 passed; `tests/test_repository.py` 16 passed (the list is 457,821 bytes under its 512 KiB limit) [run: pytest of named files, each under 20 s].
+- **No run is redone.** The list is no input of the records run (the keys are equal). It is an input of the quick tier's `repository` suite, and what the commits reach there are the test files above [derived]. No suite has run at this exact head; the quick tier's verdict is one merge of `main` earlier.
+- LAND2's `r20261112-065929-5fc6` (exit 0, read in its 07:52Z and 07:50Z entries, not by me): #8915's and #9149's Lean build together at the root module. I repeated none of its runs.
+
+**The statement's records, as the body's first paragraph shows them. A notice to Daniel, never a gate.** [run: the lock compared section by section with `main`'s at `bcaf58a45d53`]
+- One new guarantee, `Flock.SecurityProofs.SpotOneWaitTwo`, and its witness `Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial`. Nothing else is added to a list a reader checks.
+- Its record: `domain` `SpotFlock.Built`; `open` `Claims.ExpectedCR`, `Claims.SamplingGeneric.CompiledTwo.Scope`, `SpotFlock.Addresses`. All four are on `main`'s lists already. No premise is added, and no existing record changes.
+- `security/lean-audit.json` gains `guarantees` 2, `witnesses` 1, `unwitnessed` 1, `shape.frozen` 1, `reads` 13; the other two locks equal `main`'s.
+- The `unwitnessed` reason ends at "frame", with no issue id and no date (your 06:01Z check; commit `93937aab616d`) [run].
+- `unread-caps.json`, `Proofs/Flock`: 266 modules and 2,138 declarations. No run of mine counted it; the queue's Lean check is the first that does [derived].
+- Placement: the statement is in `security/Proofs/Flock/SpotFlock/OneWaitTwo.lean` under `namespace Flock.Guarantees`, as `SpotKSTwo`'s is in `SamplingGeneric/Guarantees.lean` [read].
+
+**The merge-tree results** [run, 07:55Z]:
+- with `main` at `bcaf58a45d53`: no conflict;
+- with lean's merge of the remote line, `1ab0a942376e`: **it names five files**, none in this diff: `adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`, `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py`, `verity/protocols/poub/verifier/PROTOCOL.md`. `main` at `bcaf58a45d53` alone names the same five against that branch, which holds `main` at `d6075b75d289`, and `93937aab616d` named none. So they come with the merge of `main`, not with this diff. I changed nothing to avoid them.
+
+**The eleven sites: all in the list, as four entries; no other line of the list changes** [run: `git diff origin/main HEAD` on the list is +4].
+- Nine are in #9097's two modules, which this tree holds: `SamplingGeneric/TwoOffClassAt.lean` count 4, `SpotFlock/OffClassAt.lean` count 5.
+- Two are in files only #8915 has: `SamplingGeneric/SpotFirstHit.lean` count 1, `SamplingGeneric/TwoFirstHitKS.lean` count 1. The files are not in this tree, so the two entries allow nothing until #8915 lands. The counts are the lint's on the two files read from `3b8adbc4d315`, at lines 70 and 6 as the reader gave them [run]. The list's own tests pass with the two entries in [run]. LAND2's 07:50Z entry asks where these two go: they are here, so #8915's head need not move.
+- **I did not run `--record` as the section names it.** It rewrites the whole list to what this tree holds. On this tree that changes about 1,800 entries that are not ours (`main` has 615 files over the list by 8,317 sites, and 1,148 entries above what the tree holds) and re-lays 5,394 lines [run: tried, then restored]. I put the four entries in by hand, in their sorted place.
+- **This pull request's own 96 sites are not in the list.** They are in its seven new modules, and each spells a name `main` declares: 74 are the field `stage2`, the rest the fields `cap`, `draws`, `replayDraws`, `secondDraws`, and the lemmas and the module named after `cap` [run: the lint's sites, by line]. The gate lets a list rise only to what the lint finds on the base, so they cannot be entered by the change that adds them [read: the gate's message].
+- **What the gate says** (`adapters/vllm/tools/ratchet_gate.py`, off the merge gate) [run]: at this head against `main` it fails on the list's growth by eleven, since `main` holds neither #9097 nor #8915. On a local merge of `main` with both, the four entries alone pass ("11 of it in 4 key(s) catching up to what its lint finds in the base's tree"). This head on that merge fails with 109 lines: the 96, seven per-file totals, and six sites `main` holds over its list in `Proofs/Flock.lean` and `SpotFlock/OpensWhole.lean`, reported at new lines [derived: my count by line is 102 sites]. Without the list's four lines it would fail on the 96. The lint itself warns and passes. The merges I tried it on are local objects, not pushed.
+
+**Yours to say, none of it holds the mark as I read it:**
+1. The 96: a change after #9149 lands enters them, where the gate admits it. Or say they are renamed at the source on `main` first.
+2. If you would rather the list stay untouched here, one revert of the two commits does it and moves no run and no key. Say so and I make it.
+
+**Not marked.** You read the statement and mark. #9097 and #8915 are open and not on `main` [run: `gh pr view`, `git merge-base --is-ancestor`, 07:59Z]; #9149 lands after both. Nothing of mine is running.
