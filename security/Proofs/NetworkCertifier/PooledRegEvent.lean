@@ -1,0 +1,233 @@
+module
+
+public import Definitions.NetworkCertifier.PooledReg
+public import Proofs.Flock.Claims.Finder
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.Binding
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Sampling.Wait
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Efficient
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegX
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
+public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
+public import Proofs.NetworkCertifier.TapRows
+
+/-!
+# The pooled bound at the trace with the registered openings: the event
+
+At one execution phase, the event the sample's term is paid against: the run accepts with a sampled proof block of
+`FregR`, the incorrect set of the trace read at the statement with the registered openings.
+
+* `ksRegR_of_masses`: on that event the first such block's session is unfound at its first slot, or the run's
+  extractions disagree with themselves, or open a gate off the trace read at the statement, or open a gate a
+  registered opening names off that opening (`OffOps`). So the event is at most the sessions' bound plus any bounds on
+  those three masses. It splits the event as the committed form at the trace read at the statement does, with the
+  fourth case beside its three; one split of that event at a trace with a list of registered openings would serve
+  both.
+* `pr_offOps_le`: the fourth mass is at most `Pr[B_ops,X]`, by the commitment's binding.
+* `ksRegR_of_sessionKS`: the event is at most `ε_reg,X + Pr[B_ops,X]`, its binding terms in the square-root form.
+* `ksRegR_of_costs`: the event with its binding terms from costs, with no square root of a collision term.
+-/
+
+@[expose] public section
+
+namespace Claims.SamplingGeneric
+
+open Claims Finset
+open Claims.Sampling (AuditStatement InScope Opening ownLog)
+open NetTiming (regValR FregR BopsX)
+
+namespace Compiled
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+/-! ## The registered openings' binding term -/
+
+/-- A run's extractions open a gate a registered opening names at another value than that opening's. -/
+def OffOps (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ops : List (Opening Bool))
+    (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
+  ∃ g, (∃ q ∈ ops, q.pos = g) ∧ ∃ b, L.opensAt H P x ω r c g = some b ∧ b ≠ NetTiming.certifierVal ops g
+
+/-- An event of a tape and a run at it that gives a collision `BopsX`'s output is at most `Pr[BopsX]`. -/
+theorem le_bopsX (H : Msg → Msg) (L : Compiled Coin A) (ops : AuditStatement → List (Opening Bool)) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    {Q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) → Prop}
+    (hQ : ∀ q, Q q → ∃ u v, findColl (ownLog H (run H P L.V x q.1)
+        (L.runExt x s q.2.1 (run H P L.V x q.1 q.2.1).seen q.2.2) ++
+      NetTiming.certifierLog H L.commit s.roots (ops s)) = some (u, v) ∧ Collision H u v) :
+    Pr Q ≤ (BopsX H L ops Ω P x).Pr H := by
+  simp only [BopsX, hs]
+  exact Pr_mono hQ
+
+/-- **A run's extraction off a registered opening**: at most `Pr[BopsX]`. The extraction's opening and the registered
+one pass under the statement's roots at one gate with two values, a collision among the extraction's own calls and the
+checks of the registered openings (`CommitmentScheme.Binds`). -/
+theorem pr_offOps_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
+    (ops : AuditStatement → List (Opening Bool)) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
+    (hpass : ∀ o ∈ ops s, L.commit.Opens H s.roots o = true) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2) ≤
+      (BopsX H L ops Ω P x).Pr H := by
+  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2)
+      = Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffOps H P x (ops s) q.1 q.2.1 q.2.2) :=
+        (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          L.OffOps H P x (ops s) q.1 q.2.1 q.2.2)).symm
+    _ ≤ (BopsX H L ops Ω P x).Pr H :=
+        le_bopsX H L ops hs P fun q hq => by
+          obtain ⟨g, hg, b, hb1, hne⟩ := hq
+          rw [L.opensAt_eq H P x q.1 hs] at hb1
+          obtain ⟨a, ha, har, hap, hav, hao⟩ := val_some_mem hb1
+          obtain ⟨o', ho', ho'p, ho'v⟩ := NetTiming.TapProof.certifierVal_mem hg
+          obtain ⟨-, hl⟩ :=
+            L.passes_runExt H x (run H P L.V x q.1) s q.2.1 (run H P L.V x q.1 q.2.1).seen q.2.2 a ha
+          rw [har] at hl
+          have hc : Sampling.LogColl (ownLog H (run H P L.V x q.1)
+              (L.runExt x s q.2.1 (run H P L.V x q.1 q.2.1).seen q.2.2) ++
+              NetTiming.certifierLog H L.commit s.roots (ops s)) :=
+            Sampling.disagree_collision hbind (hap.trans ho'p.symm) (by rw [hav, ho'v]; exact hne) hao
+              (hpass o' ho') (fun t ht => List.mem_append_left _ (hl t ht))
+              (fun t ht => List.mem_append_right _ (List.mem_flatMap.2 ⟨o', ho', ht⟩))
+          obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (Sampling.findColl_isSome _ hc)
+          refine ⟨u, v, huv, findColl_spec H _ (fun p hp => ?_) u v huv⟩
+          rcases List.mem_append.1 hp with hp | hp
+          · exact Sampling.ownLog_valid H _ _ p hp
+          · exact NetTiming.TapProof.certifierLog_valid H L.commit s.roots (ops s) p hp
+
+set_option synthInstance.maxSize 1024 in
+/-- **The committed form at the trace with the registered openings, from the three masses**: an accepted run that
+samples a proof block of `FregR` has the first such block's session unfound at its first slot, or its extractions
+disagree with themselves, or open a gate off the trace read at the statement, or open a gate a registered opening
+names off that opening (`trace_split` at `regValR`). So the event is at most the sessions' bound plus any bounds
+`cI`, `cO`, `cP` on those three masses. It takes no binding: a caller bounds each mass its own way. -/
+theorem ksRegR_of_masses {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H)
+    (ops : AuditStatement → List (Opening Bool)) {x : Msg} (hsc : L.Scope x)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {cI cO cP : ℝ}
+    (hI : ∀ s, L.parse x = some s →
+      Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤ cI)
+    (hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2) ≤ cO)
+    (hOp : ∀ s, L.parse x = some s →
+      Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2) ≤
+        cP) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ FregR H L P x ops) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + cI + cO + cP := by
+  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
+  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
+  have hpart : L.part s = Pt := by simp only [Compiled.part, hPt, Option.getD_some]
+  have hFlt : ∀ v ∈ FregR H L P x ops, v < L.nPU x := by
+    intro v hv
+    simp only [FregR, hs, mem_filter, mem_range] at hv
+    simp only [Compiled.nPU, hs]
+    exact hv.1
+  have hFno : ∀ v ∈ FregR H L P x ops, ¬ ∃ b, Pt.blocks[v]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+      (∀ g < s.prog.gates.length, val g = regValR H L P x (ops s) g) ∧
+        s.prog.Correct (s.prog.refIn b val ι) b := by
+    intro v hv
+    simp only [FregR, hs, mem_filter, mem_range] at hv
+    rw [hpart] at hv
+    exact hv.2
+  have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ FregR H L P x ops) ≤
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.leadSel x (L.selOf x (FregR H L P x ops)) (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+        (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2) +
+          Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2))) := by
+    intro ω
+    have hOO := Sampling.Pr_union_le
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2)
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2)
+    have hIO' := Sampling.Pr_union_le
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+        L.OffRegX H P x ω rc.1 rc.2 ∨ L.OffOps H P x (ops s) ω rc.1 rc.2)
+    have hIO : Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2 ∨
+        (L.OffRegX H P x ω rc.1 rc.2 ∨ L.OffOps H P x (ops s) ω rc.1 rc.2)) ≤
+        Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+          (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2) +
+            Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffOps H P x (ops s) ω rc.1 rc.2)) := by
+      linarith
+    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+      ∃ u ∈ L.checked x r, u ∈ FregR H L P x ops)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
+    obtain ⟨hacc, v, hvl, hvF⟩ := hrc
+    obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1) hFlt hvl hvF
+    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
+    rcases trace_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu (regValR H L P x (ops s)) (hFno _ huF) i₀ u₀ hlead
+      hu₀ with h | h | h
+    · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
+    · exact Or.inr (Or.inl h)
+    · obtain ⟨g, hg, b, hb1, hne⟩ := h
+      by_cases hany : (ops s).any (fun o => o.pos == g) = true
+      · refine Or.inr (Or.inr (Or.inr ⟨g, ?_, b, hb1, fun hbe => hne ?_⟩))
+        · obtain ⟨o, ho, hp⟩ := List.any_eq_true.1 hany
+          exact ⟨o, ho, by simpa using hp⟩
+        · rw [regValR, if_pos hany, hbe]
+      · refine Or.inr (Or.inr (Or.inl ⟨g, hg, b, hb1, ?_⟩))
+        rw [regValR, if_neg hany] at hne
+        exact hne
+  have hT := L.pr_unfound_le H P β hβ0 hβ (fun _ => L.leadSel x (L.selOf x (FregR H L P x ops)))
+    fun ω r => hκ ω r (L.leadSel x (L.selOf x (FregR H L P x ops)))
+  have hI' := hI s hs
+  have hOp' := hOp s hs
+  refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
+  rw [Ex_add, Ex_add, Ex_add]
+  linarith
+
+/-- **The committed form at the trace with the registered openings, in its square-root form**: `ksRegR_of_masses` at
+`pr_inConfX_le`, `ex_offRegX_le` and `pr_offOps_le`, so at most `ε_reg,X + Pr[B_ops,X]`. -/
+theorem ksRegR_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) (ops : AuditStatement → List (Opening Bool)) {x : Msg} (hsc : L.Scope x)
+    (hops : ∀ s, L.parse x = some s → ∀ o ∈ ops s, L.commit.Opens H s.roots o = true)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ FregR H L P x ops) ≤ L.εregX H x P + (BopsX H L ops Ω P x).Pr H := by
+  have ⟨s, _, hs, _, _⟩ := hsc
+  have h := ksRegR_of_masses hS hSK ops hsc Ω P (fun s' hs' => pr_inConfX_le hbind hs' P)
+    (ex_offRegX_le hbind hs P) (fun s' hs' => pr_offOps_le hbind ops hs' (hops s' hs') P)
+  unfold Compiled.εregX
+  linarith
+
+/-! ## The binding terms from costs -/
+
+/-- **The committed form at the trace with the registered openings, with no square root of a collision term**:
+`ksRegR_of_masses` at `bconfX_le_at` and `pr_offRegX_le_cls_at`. Where a run's extractions open a class of gates whole
+or not at all (`hallX`), every run calls `H` at most `T` times, and `B_conf,X` and the by-class finders meet the
+linear expected-time bound, an accepted run samples a proof block of `FregR` with probability at most
+`κ_s + √(k·γ_s·Pr[B]) + 2·runCost/2^256 + 2·firstHitCost/2^256 + Pr[B_ops,X]`. -/
+theorem ksRegR_of_costs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) (ops : AuditStatement → List (Opening Bool)) {x : Msg}
+    (hsc : L.Scope x) (hops : ∀ s, L.parse x = some s → ∀ o ∈ ops s, L.commit.Opens H s.roots o = true)
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ s, L.parse x = some s → ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u)
+    (cls : Fin (L.nG x) → Fin (L.nG x))
+    (hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
+      (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
+    (T : ℕ) (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ)) ≤ Km)
+    (hB : ExpectedCR H (BconfX H L Ω P x))
+    (hX : ∀ s, L.parse x = some s → ∀ K : ℕ, ExpectedCR H (L.finderXCls H P x s needs cls K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ FregR H L P x ops) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + 2 * L.runCost x T Ns / 2 ^ (256 : ℝ) +
+        2 * L.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ) + (BopsX H L ops Ω P x).Pr H := by
+  have ⟨s, _, hs, _, _⟩ := hsc
+  exact ksRegR_of_masses hS hSK ops hsc Ω P
+    (fun s' hs' => (pr_inConfX_le hbind hs' P).trans (bconfX_le_at hS.toCostContract hopen x P T hT hNs hB))
+    ((Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+        L.OffRegX H P x q.1 q.2.1 q.2.2)).symm.trans_le
+      (pr_offRegX_le_cls_at hbind hS.toCostContract hopen hs P needs (hpos s hs) cls hallX T hT hNs hKs hKm
+        (hX s hs)))
+    (fun s' hs' => pr_offOps_le hbind ops hs' (hops s' hs') P)
+
+end Compiled
+
+end Claims.SamplingGeneric
