@@ -4,7 +4,7 @@ block, then the stager), with the process's memory read at every phase boundary.
 are wrappers set on the modules' functions for this process.
 
     python stage_profile.py one CASE [--trace F] [--cap-gb G] [--fix NAME]   one case: $OUT/CASE.marks.jsonl, CASE.json
-    python stage_profile.py all [-j N] [flags] CASE...                        each case in a process of its own, then figures.json
+    python stage_profile.py all [-j N] [flags] CASE[@FIX]...                  each case in a process of its own, then figures.json
 
 A case is KIND.N[.kK][.atA]: ``positions`` (`DsaMaskPositions_v2{N,AT,K}`), ``block`` (`DsaTopKMaskBlock_v2{N,AT,TOPK}`),
 ``whole`` (`DsaTopKMaskWhole_v2{N,TOPK}`) or ``merge`` (`DsaPositionsMerge_v2{M=N,K}`); K (TOPK) is 2,048 and AT 16,384 unless
@@ -557,11 +557,14 @@ def run_all(argv: list[str]) -> int:
     out = Path(os.environ.get("OUT", "out"))
     (out / "logs").mkdir(parents=True, exist_ok=True)
     tag = flags[flags.index("--tag") + 1] if "--tag" in flags else ""
-    names = [c + (f"+{tag}" if tag else "") for c in cases]
+    # CASE@FIX: that case with --fix FIX, its record named CASE+FIX (commas as underscores)
+    names = [c.split("@")[0] + (f"+{c.split('@')[1].replace(',', '_')}" if "@" in c else f"+{tag}" if tag else "") for c in cases]
 
     def launch(case: str, name: str) -> int:
+        own = ["--fix", case.split("@")[1], "--tag", name.split("+", 1)[1]] if "@" in case else []
         with open(out / "logs" / f"{name}.log", "w") as log:
-            rc = subprocess.run([sys.executable, __file__, "one", case, *flags], stdout=log, stderr=subprocess.STDOUT).returncode
+            rc = subprocess.run([sys.executable, __file__, "one", case.split("@")[0], *flags, *own], stdout=log,
+                                stderr=subprocess.STDOUT).returncode
         print(f"CIR254 rc={rc} {name}", flush=True)
         return rc
 
