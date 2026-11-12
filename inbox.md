@@ -346,3 +346,28 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 1:45 PM PST, to your 1
 - **What I still run, none of which moves `origin/main`** [read: `inbox.py` fetches its own ref only; argued for the rest]: `git ls-remote`, `gh api`, the inbox, `research status` and `research fetch` of my runs, `research notes sync`.
 - **NET-396:** the pull request opens after the tries, once #9375 is on `main`. The changed suites' run is still going: 48 of the 52 suites the change reaches have passed, none failed, at 1:26 PM PST [read: its `stdout.log`].
 
+[2026-11-12T21:43Z] dc5d49332501
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:43 PM PST. **Job 6: run 2 ended, done with exit 0, and the one run at the merged head is launched. Run 2's review is definition by definition, and it corrects one line of the list I gave you at 11:25 AM PST.** My 1:36 PM PST line said run 2 was still running; its status read done the same minute.
+
+**Run 2** `r20261112-192107-f9f9`, tree `4be378c712b9` (on lean's `ca2e80f1edf7`, not the head you asked the list on) [run: `research status`: done, exit 0]
+
+- **Records with `--update`:** the certifier verifier's package passes as committed. `security` and `security/Properties` fail on record differences alone and pass once regenerated. Nothing is committed from it.
+- **Suites** the change from `fcdb33673b07` touches, fresh: 59 of 59 passed.
+
+**What its review says, per definition** [read: the kept `report.json` of each package]
+
+- **Definitions this change changes or adds:** `check` (changed); `okCheck`, `okChecks`, `okChecksAt`, `okRefusal`; `NetworkCheck.ScanOk`'s 23; two of `Identity.Domains` it now reads; `cappedPeriod`, `cappedSchedule` (changed) and six new of `Properties.NetworkPeriod`.
+- **Guarantees that read one of them: 33.**
+  - soundness, 23 `Verity.*`, `Verity.remote_soundness_of_subprotocols` (deployed) first. Each reads `check`.
+  - proofs, 1: `Flock.SecurityProofs.RecursiveAuditC3`. It reads `check`.
+  - ours, 9: `rowsCapPublished`, `rowsCapPublished_honest`, `rowsProgWired`, `rowsStateTied`, `rowsTiedCharged` read `check`; `rowsCapPublished_nontrivial` reads `cappedPeriod` and `cappedSchedule` only; and the three new `rowsOkHeld` records.
+- **The correction:** I wrote that the 11 `Properties.NetworkPeriod` records each read `cappedSchedule` and `cappedPeriod`. That was the module's readers. By definition, two read them: `rowsCapPublished_honest` and `rowsCapPublished_nontrivial`.
+- **Not this change's, at that lock:** the seven `NetworkCheck.Period` names (read by the same 23, the same 1, and 10 of ours), and `NciCheck.Baseline`'s `digest`, `FORMAT`, `FORMAT_V2`. `clockKBoundsCount` and `rowsKBoundsCount` read one of the seven and nothing this change touches. `rowsCapPublished_nontrivial`'s signature moves by the merge (`rowsTerms` gains a field).
+- `scanFits`, `scanScopeAcc` and their nontrivial lemmas read the module and none of its changed definitions.
+
+**The one run at `c299bad61230`:** `r20261112-213845-ddd6`, launched 1:38 PM PST, waiting at 1:43 PM PST: the records with `--update`, then the suites changed against `bafae2eaec2e`, each suite's log kept. The exact list comes from its review, the seven set apart.
+
+**NET-335's run** `r20261112-213538-30f1` waits too at 1:43 PM PST.
+
+TIMER: none
+
