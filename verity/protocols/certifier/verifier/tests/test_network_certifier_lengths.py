@@ -44,7 +44,7 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     assert WardenParams().lengths is None and PLAIN.lengths is None
     assert WardenParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
-    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content")
+    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
     assert LEN.reasons == PLAIN.reasons
     capped = dataclasses.replace(PLAIN, max_tokens_cap=4)

@@ -3,8 +3,8 @@ link, as tables of rows committed as its cells' rows are (`warden_rows`) and lis
 phase, which it signs once. A schedule has them only where its parameters say so (`WardenParams.lengths`): a schedule
 without them has no such head, and its records, cells' heads and certificates are the ones it had. The head lists
 the lengths rows and the fails rows and, where the schedule has content rows (`WardenParams.content`), three tables
-a class after them. Every table of the same connections is under the one signature, and no proof block opens a row
-of them under any other head.
+a class after them, or four where it has request words (`WardenParams.request_words`). Every table of the same
+connections is under the one signature, and no proof block opens a row of them under any other head.
 
 **The lengths and fails tables** (`tables`) of execution phase w (`window` w in the code and the records) are made from
 the releases the network certifier hands at execution phase w + 1's close, or under the lengths rows' form 2 at the
@@ -32,9 +32,11 @@ n and outcome are values. `releases` reads the two tables back and refuses rows 
 its request's bytes and its ids (`content_rows`' "The tables"): `request.i`, `response.i` and `end.i` for each class
 i the schedule lists, a release's rows in the class `content_rows.file` gives it. Under the lengths rows' form 1
 each is of the class's rows, the held ones first and zero rows after them. Under form 2 each is the class's held
-rows and no other, so a class's three tables have one count of rows, the execution phase's releases filed in it,
-at most R = `WardenParams.phase_releases`, and none where none is filed; a hand that files more than R in a class
-is refused (`content_rows.tables`). `tables` is the filing rule's one caller.
+rows and no other, so a class's tables have one count of rows, the execution phase's releases filed in it, at most
+R = `WardenParams.phase_releases`, and none where none is filed; a hand that files more than R in a class is
+refused (`content_rows.tables`). In a schedule with request words a class has a fourth table, `words.i`: at row r
+the three words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
+its `max_tokens`, its `ignore_eos` and the count of its prompt's ids). `tables` is the filing rule's one caller.
 They rest on `trusted-host` as the lengths and fails tables do.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
@@ -62,14 +64,14 @@ leaf: its domain is the one above at rows = 0 and its root is 64 zero bytes (`NO
     digest = tagged_sha512(HEAD_TAG, H)
 
 with the tables in the order the schedule's parameters list them (`tables_of`: `lengths`, then `fails`, then each
-class's `request.i`, `response.i` and `end.i`). Its
+class's `request.i`, `response.i` and `end.i`, and its `words.i` in a schedule with request words). Its
 certificate is `Issuer.sign`'s of the digest for the link's egress in execution phase w, the one whose releases it
 holds, though it is signed an execution phase later. A record's, a clock's and a cells' head's certificates of the
 same execution phase sign other digests, so none verifies as it (each would need a SHA-512 preimage). `parameters` is
 the schedule's digest, which holds the connection rows' form.
 
 An entry's `rows` is the schedule's for the lengths and fails tables and, under form 1, for a class's: there the
-head's every field but its roots is the schedule's whatever the load. Under form 2 a class's three entries hold the
+head's every field but its roots is the schedule's whatever the load. Under form 2 a class's entries hold the
 count of the execution phase's releases filed in the class, and each one's domain binds it. So a form-2 head makes
 that count public, a class an execution phase: one of R + 1 values, at most log₂(R + 1) bits. R is a bound on an
 execution phase's releases, so at a schedule where no load releases R of them that figure is more than a count can
@@ -110,13 +112,14 @@ A table's `value` is its registered value's name (`<link>/<name>/<window>`), `wo
 `{"strides", "every", "first_bucket", "slots", "slot_bytes"}`, row j the releases of buckets first_bucket + j·every …
 first_bucket + (j + 1)·every − 1 in `slots` slots of `slot_bytes`; for a content table
 `{"class", "prompt_ids", "ids", "first_bucket", "buckets"}`, row r the r-th release of buckets first_bucket …
-first_bucket + buckets − 1 filed in the schedule's class `class`. `check_registration` is the verifier's read of it:
-the head is the execution phase's, it lists the schedule's tables and no other, each one's domain, rows and layout
-are the ones the schedule's parameters give, and its one certificate verifies under the network certifier's key in the
-session over the head's digest. Under form 2 a class's rows are the registration's own, and the verifier holds them
-to what a count is: at most R, one for the class's three tables, and with the zero root where it is 0. It derives
-each domain at the count it read. A registration made under another schedule, of either form, has that schedule's
-digest for its parameters and is refused as another schedule's.
+first_bucket + buckets − 1 filed in the schedule's class `class`, a words table's as its class's others.
+`check_registration` is the verifier's read of it: the head is the execution phase's, it lists the schedule's tables
+and no other, each one's domain, rows and layout are the ones the schedule's parameters give, and its one
+certificate verifies under the network certifier's key in the session over the head's digest. Under form 2 a
+class's rows are the registration's own, and the verifier holds them to what a count is: at most R, one for the
+class's tables, and with the zero root where it is 0. It derives each domain at the count it read. A registration
+made under another schedule, of either form, with request words or without, has that schedule's digest for its
+parameters and is refused as another schedule's.
 
 **The port** (`port`) is the verifier's own `--registered` port of the proof blocks that read a table, one a row: proof
 block `reads_from + j` reads row j, so the head the verifier checked fixes every read. The lengths row's proof block
@@ -198,8 +201,8 @@ def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
 
 def _held(params: WardenParams, name: str) -> tuple[bool, bool]:
     """Of the table `name` of `tables_of`: whether its rows are a count of held rows, as a class's are under form 2
-    (`content_rows.counted`), and whether it then has the count of the table listed before it, as a class's
-    response and end tables have its request table's."""
+    (`content_rows.counted`), and whether it then has the count of the table listed before it, as each of a
+    class's tables after its request table has."""
     counted = name not in SLOT and CT.counted(params)
     return counted, counted and not name.startswith(f"{CT.REQUEST}.")
 
@@ -207,7 +210,7 @@ def _held(params: WardenParams, name: str) -> tuple[bool, bool]:
 def tables(params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[str, list[bytes]]:
     """An execution phase's tables, every one its head lists and in the head's order, from its releases by slot
     stride, as the network certifier hands them: the lengths and fails tables (the module docstring's) and, in a
-    schedule with content rows, each class's three, every release in the class the network certifier's rule files it
+    schedule with content rows, each class's own, every release in the class the network certifier's rule files it
     in (`content_rows.file`, of which this is the one caller). ValueError for a schedule without connection rows, or
     releases that aren't one execution phase's of it."""
     (_, T, size), (_, _, fails_size) = tables_of(params)[:2]
@@ -442,7 +445,7 @@ class Rows:
     def commit(cls, link: str, window: int, tables_: Mapping[str, Sequence[bytes]], params: WardenParams,
                session: bytes, salts: Mapping[str, Sequence[bytes]] | None = None) -> Rows:
         """`tables_` (each table's rows by name) as the execution phase's connection rows: every table of the
-        schedule's rows, or under form 2 a class's three of one count of held rows, at most R. `salts`: one a row of
+        schedule's rows, or under form 2 a class's own of one count of held rows, at most R. `salts`: one a row of
         each table, sampled once (default: fresh from the operating system) and never for another row."""
         want = tables_of(params)
         if list(tables_) != [name for name, _, _ in want]:
@@ -455,7 +458,7 @@ class Rows:
             if (len(rows) > count if counted else len(rows) != count) or any(len(r) != size for r in rows):
                 raise ValueError(f"the {name} table is {'at most ' if counted else ''}{count} rows of {size} bytes")
             if shared and len(rows) != len(out[-1].rows):
-                raise ValueError(f"a class's three tables hold a row a release filed in it: the {name} table has "
+                raise ValueError(f"a class's tables hold a row a release filed in it: the {name} table has "
                                  f"{len(rows)} rows, and the {out[-1].name} table {len(out[-1].rows)}")
             mine = tuple(_INST.fresh_salt() for _ in rows) if salts is None else tuple(bytes(s) for s in salts[name])
             if len(mine) != len(rows) or any(len(s) != SALT_BYTES for s in mine):
@@ -537,7 +540,7 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
                                  f"releases (WardenParams.phase_releases)")
             if shared and rows != entries[-1].rows:
                 raise ValueError(f"the registration's {name} table has rows {rows}, and its class's "
-                                 f"{entries[-1].name} table {entries[-1].rows}: a class's three tables hold a row a "
+                                 f"{entries[-1].name} table {entries[-1].rows}: a class's tables hold a row a "
                                  f"release filed in it")
         dom = domain(params, session, link, window, name, rows, size)
         wanted = {"name": name, "value": value_name(link, name, window), "rows": rows, "words": size * 8 // WORD_BITS,
@@ -620,7 +623,8 @@ def port(head: Head, table: str, reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a population of one proof block a row of the head's table `table`:
     proof block `reads_from + j` reads row j, a slot stride's every slot or a class's every row, so the head alone
     fixes its reads. A class's rows are held or not under form 1 and, under form 2, its held rows, as many as the
-    head counts. ValueError for a table the head doesn't list, or one of no row, which no proof block reads."""
+    head counts, its words table's as its other three's. ValueError for a table the head doesn't list, or one of
+    no row, which no proof block reads."""
     if table not in [e.name for e in head.tables]:
         raise ValueError(f"the head lists {[e.name for e in head.tables]}, not a table {table!r}")
     e = head.table(table)

@@ -1,7 +1,9 @@
 """The network certifier's content rows (`content_rows`): each of a connection's three rows is its class's size and
 whole 16-bit words, a decoder gives back what its encoder was given, and bytes that are not a row of the form are
 refused by the field that says so. A request row's room is the canonical id request's length at its class's prompt
-ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class."""
+ids, the end row has a fails slot's layout, and a response row's ids are bounded by the widest public size class.
+A request's words are read from its bytes cell by cell, as the device reads a cell before it releases it, and a
+words row is those three as u32 words."""
 
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ from verity.protocols.certifier.prover import lengths_row as LR
 from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import id_request
+from verity.protocols.certifier.verifier.active import HEADER, id_request
 
 
 def test_a_class_is_two_powers_of_two():
@@ -157,3 +159,55 @@ def test_an_end_row_is_how_the_connection_ended_and_its_cells():
                      (bytes(3), "is 4 bytes, not 3"), (bytes(8), "is 4 bytes, not 8")):
         with pytest.raises(ValueError, match=why):
             CT.end_of(bad)
+
+
+@pytest.mark.parametrize("B", (387, 512, 4096))
+def test_a_requests_words_are_its_max_tokens_zero_and_its_prompts_count_read_cell_by_cell(B):
+    """The rule reads a canonical id request in the network certifier's cells whatever its other fields: its
+    `max_tokens` at its place in the first cell, 0 for `ignore_eos`, which the form has no key for, and the count
+    of its prompt's ids over its cells, from a prompt of one id to one of many cells. Bytes that are not such a
+    request are refused, naming the first cell that doesn't read as the device reads it: a request cut short or
+    with a byte after its end, one with another byte in its head or between two ids, and no byte at all."""
+    rng = random.Random(B)
+    room = B - HEADER.size
+    for prompt in (1, 2, 3, 40, 100, 2048):
+        for max_tokens in (0, 1, 8, 4096, 0xFFFF_FFFF):
+            request = id_request(model="m" * rng.randrange(1, 60), user="u" * rng.randrange(1, 60),
+                                 prompt=[rng.randrange(1 << 32) for _ in range(prompt)], max_tokens=max_tokens,
+                                 seed=rng.randrange(1 << 32), temperature=0.5, top_p=0.25, frame_bytes=B, offset=0)
+            assert CT.request_words(request, B) == (max_tokens, 0, prompt)
+            assert CT.request_words(bytearray(request), B) == (max_tokens, 0, prompt)
+    assert len(request) > 5 * room
+    last = (len(request) - 1) // room
+    for bad, cell in ((request[:-1], last), (request + b" ", last if len(request) % room else last + 1),
+                      (request[:room], 0), (request[:2 * room + 7], 2), (b"x" + request[1:], 0),
+                      (request[:room] + b"x" + request[room + 1:], 1), (bytes(40), 0)):
+        with pytest.raises(ValueError, match=f"cell {cell} of the request's [0-9]+ is not that cell of a canonical id "
+                                             f"request .*fails such a connection as malformed and releases nothing"):
+            CT.request_words(bad, B)
+    for bad in (b"", None, "request"):
+        with pytest.raises(ValueError, match="a released request has a byte"):
+            CT.request_words(bad, B)
+
+
+def test_a_words_row_is_three_u32_words():
+    """The words row is the request's `max_tokens`, its `ignore_eos` and the count of its prompt's ids, a
+    little-endian u32 each: six 16-bit words, a field's low word first. A `max_tokens` or a count that is no u32, a
+    prompt of no id, an `ignore_eos` that is neither 0 nor 1 and a row of another size are each refused."""
+    assert CT.WORDS_BYTES == 12 and CT.WORDS_ROW.format == "<III"
+    row = CT.words_row(0x0001_0002, 0, 0x0003_0004)
+    assert row == b"\x02\0\x01\0" + bytes(4) + b"\x04\0\x03\0" and len(WR.words(row)) == 6
+    assert CT.words_row(8, 0, 3) == struct.pack("<III", 8, 0, 3) and CT.words_of(CT.words_row(8, 1, 3)) == (8, 1, 3)
+    for words in ((0, 0, 1), (0xFFFF_FFFF, 0, 0xFFFF_FFFF), (7, 1, 4096)):
+        assert CT.words_of(CT.words_row(*words)) == words
+    for bad in ((-1, 0, 1), (1 << 32, 0, 1), (8, 2, 1), (8, -1, 1), (8, 0, 0), (8, 0, 1 << 32), (8.0, 0, 1),
+                (True, 0, 1), (8, False, 1), (8, 0, None)):
+        with pytest.raises(ValueError, match="a words row is a u32 max_tokens, an ignore_eos of 0 or 1 and a u32 of "
+                                             "at least 1 prompt id"):
+            CT.words_row(*bad)
+    for bad, why in ((row[:-1], "a words row is 12 bytes, not 11"), (row + b"\0", "a words row is 12 bytes, not 13"),
+                     (struct.pack("<III", 8, 2, 3), "ignore_eos is 2, not 0 or 1"),
+                     (struct.pack("<III", 8, 0x100, 3), "ignore_eos is 256, not 0 or 1"),
+                     (struct.pack("<III", 8, 0, 0), "prompt has no id"), (bytes(12), "prompt has no id")):
+        with pytest.raises(ValueError, match=why):
+            CT.words_of(bad)
