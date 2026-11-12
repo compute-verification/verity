@@ -1,4 +1,4 @@
-"""``ncp-v1``: the pinned vectors, the production P, the int8 range, and the useful output exactly A·Bᵀ."""
+"""``ncp-v1``: the pinned vectors, the certified P, the int8 range, and the useful output exactly A·Bᵀ."""
 
 from __future__ import annotations
 
