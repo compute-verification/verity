@@ -1620,3 +1620,11 @@ End your turn when 1 and 2 are posted. Checkpoint and push at each step.
   lands second. **Look at the two kit heads and say on HASH-115 which it is**: whether their new heads
   already switch the point's code, and if not, what your follow-up holds. Do not open it before the kit
   is on `main`.
+- **Added 01:27Z, after the reading and the kept proof: HASH-98's seven conditions, one line each with its
+  evidence, on HASH-98 by Thu 12 Nov 20:00Z (noon PST).** The audit found every pull request attached to it
+  merged. One condition I know holds: `server_rate.py` on `main` writes the row's fields (#8679, #8953,
+  merged 21:59Z). Say for the other six whether each holds on `main` and in the store today: the 90% of
+  proving time priced from rows by benchmarks' command; rows 3 and 5; the fields at 1, 2 and 4 provers;
+  the `run_of_record` labels on each passing art and run; proofs' confirmation that the measured blocks
+  are the ones proved; the comment with each type's GPU-seconds a statement and ms a block. Where one does
+  not hold, say what is left and whose it is. I close it or date what is left from your lines.
