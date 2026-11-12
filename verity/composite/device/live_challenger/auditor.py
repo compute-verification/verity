@@ -279,8 +279,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its session's start
   (`WARDEN_START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer refuses
   every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the least
-  height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
+  height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples
+  each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger here
+  samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -1518,7 +1519,8 @@ def warden_height(windows: int, heads: int = 0) -> int:
 
 
 def warden_signatures(windows: int, heads: int = 0) -> int:
-    """The one-time signatures a warden rehearsal of `windows` link-windows takes of its key after a load's `heads`."""
+    """The one-time signatures a warden rehearsal of `windows` link-windows takes of its key: a load's `heads`, its
+    session's start and `WARDEN_WINDOW_LEAVES` a link-window."""
     return heads + WARDEN_START_LEAVES + WARDEN_WINDOW_LEAVES * windows
 
 
