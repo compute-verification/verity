@@ -4238,6 +4238,27 @@ def test_a_coordinator_whose_held_run_the_api_wont_cancel_is_relaunched_unless_a
     assert records(tmp_path)[-1]["action"].startswith(action) and len(launched) == (0 if beside else 1)
 
 
+def test_a_sweep_reads_what_an_action_rests_on_before_what_it_only_reports(tmp_path):
+    """A sweep's read time runs out on what it reports (each worker's status, conversations), so it reads what it acts on
+    first: a sweep whose reads end right after those a cancel rests on still frees the held run, and leaves the worker
+    unread."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"ZKS10, {W1_}, for circuits ({CO})")
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-1",
+                                             "updatedAt": W.iso(T0)}], {"run-1": {"status": "RUNNING"}},
+                                 workers={W1_: worker("ACTIVE", W.iso(T0))}, timers=None, notes=notes)
+    w.sweep(lambda r: None)
+    assert api.gets == [f"/v1/agents/{CO}/runs", f"/v1/agents/{W1_}"], "a sweep with nothing to act on reads the worker"
+    held_tool_call(w)
+    clock.t += W.HELD_S
+    api.gets.clear()
+    after(api, 3, spent)
+    w.sweep(lambda r: None)
+    assert api.gets == [f"/v1/agents/{CO}/runs", f"/v1/agents/{CO}", f"/v1/agents/{CO}/runs/run-1"]
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{CO}/runs/run-1/cancel", f"/v1/agents/{CO}/runs"]
+    assert [r["kind"] for r in records(tmp_path)] == ["held"]
+
+
 @pytest.mark.parametrize("by_then, why", [
     ("resumed", "its run run-b reads RUNNING now"),
     ("unread", "its runs could not be read afresh (TimeoutError: this sweep's reads are spent (12 min); the next sweep reads "

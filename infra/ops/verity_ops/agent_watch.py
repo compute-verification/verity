@@ -252,6 +252,12 @@ only when it relaunches, from `launch.env` beside `--log` (root, 0600, one `CURS
 launch's environment; until that file exists every relaunch is recorded as not done. Each failure record names its `owner`
 (`top` for a coordinator, the launcher's handle for a worker or an agent a coordinator launched), whose inbox the relay rings.
 
+A sweep's reads stop `SWEEP_READS_S` after it began (`Api.reads_until`), and no read goes past that, so a sweep reads
+what it acts on first: the agents, each live one's runs, and, as it restarts, continues, wakes and judges, what each of
+those actions rests on. What it only reports (dropped messages, workers, silence, run ends and the resumes they call
+for) is read after, so a sweep short of time leaves reports unread, never an action taken on a view it could not refresh:
+an action whose read fails is not taken.
+
 Each finding is a line of JSON in `--log`; each sweep ends by replacing `status.json` beside it atomically, in the schema
 `verity/agent-watch-status/v1` (`snapshot`: its time `t`, `poll_s`, and per agent read its id, the run the watch judges,
 statuses, watch state, since and restart count, in categories only), so a reader can tell a quiet watch from a dead one; a
@@ -2934,8 +2940,11 @@ class Watch:
             **({"new_agent": new} if new else {}), **({"handle": handle} if handle else {}), **self.owned(agent))
 
     def sweep(self, start_stream: Callable[[Run], None]) -> None:
-        """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
-        start refused continue runs, then judge every followed run."""
+        """One pass. What the watch acts on is read first, and each action reads what it rests on as it is about to be
+        taken: the agents, each live one's runs (recording those stuck in CREATING), then an ERROR run restarted, refused
+        continue runs started, coordinators woken, and every current run followed and judged. What it only reports is read
+        after (dropped messages, workers, pushes, silence, the nodes' ended runs and the resumes they call for), so a sweep
+        whose reads run out (`Api.reads_until`) leaves reports unread, not an action unguarded."""
         t = self.clock()
         self.linear_off, self.linear_refused = "", set()
         live, agents = {}, list(self.api.agents())
@@ -2954,6 +2963,7 @@ class Watch:
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
         judges: dict[str, dict] = {}                    # agent -> the record of the run it is judged by
         errored: list[tuple[dict, str]] = []            # (agent, its latest run) ended in ERROR, restarted after the pass
+        lasts: list[tuple[dict, dict | None]] = []      # (agent, its latest run's record), for `dropped` once the actions are done
         for a in live.values():
             latest = a["latestRunId"]
             if (runs := self.runs_of(a, t, stuck=True)) is None:
@@ -2984,7 +2994,7 @@ class Watch:
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
-            self.dropped(a, last, t)
+            lasts.append((a, last))
         for x in [x for x in self.down if x not in coords]:
             self.down.pop(x)
         for a, latest in errored:                       # after every coordinator is tracked, so `outage` counts them all
@@ -3005,42 +3015,6 @@ class Watch:
                 continue
             if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, info["id"], why, t, info.get("status"))
-        self.watch_workers(coords, listed, t, kids)
-        self.names = {a["id"]: str(a.get("name") or "") for a in agents}
-        self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
-        known, active = {}, {}
-        for a in agents:
-            if a["id"] not in coords or a.get("status") != "ACTIVE" or not a.get("latestRunId"):
-                continue
-            judge, turn = judges.get(a["id"]), self.active.get(a["id"])
-            if judge is not None:           # with its runs unread at this sweep, the turn it was last seen in stands
-                # an ACTIVE agent whose run is not RUNNING is between turns: a background wait, a run queued, or one that ended
-                turn = None if judge.get("status") != "RUNNING" else (
-                    turn if turn and turn["run"] == judge["id"] else {"run": judge["id"], "since": t})
-            if turn is None:
-                continue
-            active[a["id"]], judge = turn, judge or {}
-            with self.lock:
-                r = self.runs.get(turn["run"])
-            acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
-                                     r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
-            known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
-                              "run": turn["run"], "latest": a["latestRunId"], "since": turn["since"],
-                              "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
-        if active != self.active:
-            self.active = active
-            self.save()
-        for agent, w in self.workers.items():
-            if w.get("status") == "ACTIVE" and not w.get("gone") and w.get("since") is not None:
-                known[agent] = {"name": str(w.get("name") or ""), "handle": w.get("handle"), "lane": w.get("lane") or "",
-                                "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
-                                "acted": w.get("updated")}
-        self.read_heads(t)
-        self.read_prs(t)
-        self.watch_silence(known, t)
-        self.run_ends(coords, t)
-        self.watch_resumes({a["id"]: a for a in agents if a.get("status") != "ARCHIVED"}, judges, live, t)
-        self.flush_bursts(t)
         for run, (a, x) in current.items():
             with self.lock:
                 r = self.runs.get(run)
@@ -3077,6 +3051,44 @@ class Watch:
                         self.record(kind, r, status=r.status, since=iso(quiet), minutes=int((t - quiet) // 60))
                 if r.ended:
                     self.runs.pop(r.run, None)
+        for a, last in lasts:
+            self.dropped(a, last, t)
+        self.watch_workers(coords, listed, t, kids)
+        self.names = {a["id"]: str(a.get("name") or "") for a in agents}
+        self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
+        known, active = {}, {}
+        for a in agents:
+            if a["id"] not in coords or a.get("status") != "ACTIVE" or not a.get("latestRunId"):
+                continue
+            judge, turn = judges.get(a["id"]), self.active.get(a["id"])
+            if judge is not None:           # with its runs unread at this sweep, the turn it was last seen in stands
+                # an ACTIVE agent whose run is not RUNNING is between turns: a background wait, a run queued, or one that ended
+                turn = None if judge.get("status") != "RUNNING" else (
+                    turn if turn and turn["run"] == judge["id"] else {"run": judge["id"], "since": t})
+            if turn is None:
+                continue
+            active[a["id"]], judge = turn, judge or {}
+            with self.lock:
+                r = self.runs.get(turn["run"])
+            acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
+                                     r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
+            known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
+                              "run": turn["run"], "latest": a["latestRunId"], "since": turn["since"],
+                              "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
+        if active != self.active:
+            self.active = active
+            self.save()
+        for agent, w in self.workers.items():
+            if w.get("status") == "ACTIVE" and not w.get("gone") and w.get("since") is not None:
+                known[agent] = {"name": str(w.get("name") or ""), "handle": w.get("handle"), "lane": w.get("lane") or "",
+                                "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
+                                "acted": w.get("updated")}
+        self.read_heads(t)
+        self.read_prs(t)
+        self.watch_silence(known, t)
+        self.run_ends(coords, t)
+        self.watch_resumes({a["id"]: a for a in agents if a.get("status") != "ARCHIVED"}, judges, live, t)
+        self.flush_bursts(t)
         with self.lock:
             write_atomic(self.log.with_name("status.json"), body := status_bytes(snapshot(self, judged, t)))
         if self.publish:
