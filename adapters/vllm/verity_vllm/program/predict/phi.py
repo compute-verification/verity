@@ -94,5 +94,5 @@ def _prompt_len(r: dict) -> int:
 
 
 def _cap(r: dict) -> int:
-    params = r.get("sampling_params")   # where a request may carry its cap instead; one that states it nowhere has 0
+    params = r.get("sampling_params")   # where a request may state its `max_tokens` instead; one that states it nowhere has 0
     return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)

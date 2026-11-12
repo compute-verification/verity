@@ -225,7 +225,7 @@ def test_mhc_reads_an_engine_without_env_and_refuses_a_config_without_its_quanti
 
 def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
     """φ read from a document without `engine` or `workload` declares no engine argument and no request, and a model without
-    `hf_config` has an empty one.  A request's cap is its `max_tokens`, else its `sampling_params`' `max_tokens`, else 0."""
+    `hf_config` has an empty one.  A request's `max_tokens` is its own, else its `sampling_params`', else 0."""
     doc = {k: v for k, v in Phi(model={"repo": "org/m"}).to_json().items() if k not in ("engine", "workload")}
     phi = Phi.from_json(doc)
     assert (phi.engine, phi.workload, phi.hf_config, phi.requests, phi.request_shapes()) == ({}, {}, {}, [], [])
