@@ -867,9 +867,10 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     """One run of the network certifier on its host's raw clock (the module docstring's `serve`), its records published
     by a `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
     threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-    (`Warden(paced=…)`, which a warden on the host's clock must have: 0 is no pacer, and is refused there), and the
-    watermark stream sent to `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds,
-    with `process`, what `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file.
+    (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to `upstream` when
+    `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did.
+    The loop's errors are kept, not logged: the ticker writes no file. With `paced_ms` 0 there is no pacer, which the
+    network certifier refuses on a clock of its host's: only a run on a caller's own clock has none.
 
     It starts in this order, and a step that refuses starts nothing after it. The clock is read: a host without the
     raw clock runs no network certifier (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
