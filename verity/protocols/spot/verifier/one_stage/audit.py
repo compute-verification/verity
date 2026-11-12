@@ -123,9 +123,10 @@ COMPLETE = "complete"
 def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     """One-stage's answer of the accepted audit record `record`, as Lean's `OneStage.check` gives it on that record's
     evidence (`Core.Answer.toJson`): the commitment is the registration's digest; the profile is `profile` with `delta`
-    an exact ratio; and the public outputs are the sampled and the proved units, the bound on incorrect proof blocks
-    at `delta` with each template's own under a stratified or work sampling design, and `COMPLETE`, the record's own
-    ``complete``: whether every verdict ran, those that are not of record too. A record without one says it of none."""
+    an exact ratio; and the public outputs are the sampled proof blocks and the proved ones, the bound on incorrect
+    proof blocks at `delta` with each template's own under a stratified or work sampling design, and `COMPLETE`, the
+    record's own ``complete``: whether every verdict ran, those that are not of record too. A record without one says
+    it of none."""
     if record.get("accepted") is not True:
         raise ValueError("only an accepted audit record has an accept's answer")
     registration, draw = record["registration"], record["draw"]

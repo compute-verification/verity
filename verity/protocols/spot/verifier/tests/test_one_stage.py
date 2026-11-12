@@ -448,8 +448,8 @@ def _accepted(verdicts: dict) -> dict:
 
 def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
     """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
-    units, the bound and the record's own ``complete``: true when every verdict ran, false beside one that is not of
-    record and did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
+    proof blocks, the bound and the record's own ``complete``: true when every verdict ran, false beside one not of
+    record that did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     whole = _accepted({"lean": lean, "m0": {"accepted": True}})
     a = audit.answer(whole, Fraction(1, 4))
