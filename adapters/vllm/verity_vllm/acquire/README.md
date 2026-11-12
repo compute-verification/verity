@@ -14,8 +14,8 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
   `h1_commit` gives `tap`, and `RankCommit`, which PoUW's H1 names by its dotted path. `inductor_templates` gives
   `TEMPLATE`, `Template`, `Unmodelled`, `holes`, `instantiate`, `kernel_sources` and `source_sha256`. `install` gives
   `IncompletePlan`, `OccurrenceSink`, `apply_plan_to_committer` and `install_from_plan`. `plan` gives
-  `analytic_table_of_buffer`. `served` gives `assemble`, `build`, `probe_routes`, its constant for the static split
-  count of a step a full graph may hold, and the command `verity-vllm served`. `served_artifact` gives `PARTS`,
+  `analytic_table_of_buffer`. `served` gives `assemble`, `build`, `probe_routes` and its constant for the static
+  split count of a step a full graph may hold. `served_artifact` gives `PARTS`,
   `differences`, `pinned`, `seed`, `winners` and the command `verity-vllm served-pin`. `served_device` gives `card_of`
   and `device_of`. `served_moe` gives `REQUIRED` and `expand`. `stage` gives `MANIFEST_ENV` and `plan_at_stage`. Each
   of these modules but `compiled`, `install` and `served` states an `__all__`, which holds its names here, a command's
@@ -23,5 +23,5 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
 - **Loaded by:** the integration's `pipeline`, `commit`, `program.predict`, `properties` and `protocols` packages,
   `benchmarks/served_commit` and `benchmarks/harness`.
 - **Loads:** torch, and vLLM inside functions; the integration's `engine`, `query`, `commit`, `config`,
-  `settings`, `program`, `protocols`, `correspondence` and `observe`; and `verity.definitions`, `verity.circuits`
-  and `verity.hardware`.
+  `settings`, `program`, `protocols`, `correspondence`, `observe`, `records` and `log`; and `verity.definitions`,
+  `verity.circuits` and `verity.hardware`.

@@ -23,18 +23,36 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import RowConfig, option, workload_arg, workload_file
-from verity_vllm.engine import env as engine_env, hooks
+from verity.definitions.boolean import write_word
+
+from verity_vllm.config import RowConfig, option, workload_arg
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
-from verity.definitions.boolean import write_word
+from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
+    INSTANCES_GZ_LEVEL,
+    _instance_rows,
+    _instance_sequence,
+    _write_instances,
+    _write_instances_file,
+    write_instances,
+)
+from verity_vllm.pipeline.build_sampling import (
+    SAMPLERS_BOUND,
+    sampler_geometry,
+    sampling_policy,
+)
+from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
+    module_in_model_vocabulary,
+    read_tp_links,
+    same_module_path,
+    write_tp_links,
+)
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
-from verity_vllm.program.frontend.seed_rule import rid_entry
 from verity_vllm.program.prune import BATCHED, registered_form
-from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
-                                                 _write_instances, _write_instances_file, write_instances)
-from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
+from verity_vllm.records import schema_ids as SID
 
 __all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
 logger = init_logger(__name__)
@@ -50,7 +68,8 @@ def _spec_histogram(program) -> dict[str, int]:
 #: applicability contract itself.
 _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
                          "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/loader_parity.py",
-                         "verity_vllm/pipeline/build_instances.py", "verity_vllm/program/frontend/triton_capture.py",
+                         "verity_vllm/pipeline/build_instances.py", "verity_vllm/pipeline/build_sampling.py",
+                         "verity_vllm/program/frontend/triton_capture.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/__init__.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/attention.py", "verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/collectives.py", "verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
@@ -104,7 +123,7 @@ def construction_version(rules, root: str | None = None) -> dict:
             b = f.read()
         files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
-    return {"schema": "cb-a/aot-artifact/v1", "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
+    return {"schema": SID.CONSTRUCTION_VERSION_SCHEMA, "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
             "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
 
 
@@ -116,72 +135,6 @@ def engine_dtype(model_config) -> str:
     return str(model_config.dtype).removeprefix("torch.")
 
 
-#: the token-select vocabulary of this builder: sampling policy kind -> the rule family that binds it.  A row whose policy is
-#: not a key here is REFUSED before export (`reason: "sampler"`) — never built as the greedy Program (a fail-open Build).
-SAMPLERS_BOUND = {"greedy": "ArgmaxTokenSelect_v1 (aten.argmax over the bf16 logits row -> TokenSelect_v1{V})",
-                  # temperature > 0 with top-p, an explicit per-request seed and no top-k: the wrapper authors ONE
-                  # `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p, pos, S)` per sampled step; the rule binds it to
-                  # `GumbelTopPTokenSelect_v2{V,S}` (registry.sampling: f32 widening -> div.full.f32 temperature -> the S-split top-p mask
-                  # `_topp_sb_{stats,step,mask}_kernel` -> Gumbel-max keyed `tl.randint(seed, pos)` -> first maximum).  The seed is a runtime
-                  # INPUT of the Program; temperature / top_p / pos and the registered S (`sampler_geometry`) are constants, S the 6th operand.
-                  "stochastic": "GumbelTopPTokenSelect[vllm]_v4 (vllm_iface.gumbel_topp_token_select -> GumbelTopPTokenSelect_v2{V,S} with the seed input and the registered S: its keep word as word gates)"}
-
-
-def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | None = None) -> dict | None:
-    """The launch geometry of the pinned stochastic sampler for this row, or the refusal (`unsupported` dict) when the policy has no
-    Definition, or a split count the session declares that isn't the registered one.  On success `sampling["splits"]` is the registered
-    split count S and `sampling["geometry"]` records it with its rule:
-    nothing of the workload's batch, so every component of every workload on the target declares the same (GP-01 agreement by
-    construction).
-
-    vLLM d9105ea80 `apply_top_k_top_p` for p-only requests and a sampler batch <= 64 runs `_apply_topp_split`, whose keep set depends
-    on its split count S.  vLLM picks S from the live sampler batch, so a request's batch-mates would pick its nucleus at top_p < 1
-    (as `check.batch.check` over `predict.batch.templates` shows).  The served engine runs every launch at the registered S instead
-    (`topp_geometry.registered_splits`, from the target's SM count, never hard-coded; `engine.topp_pin`),
-    so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
-    holds every launch's S to it."""
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
-    kind = sampling.get("kind")
-    if kind != "stochastic":
-        return None
-    def refuse(hint: str, reason: str = "sampler", **detail) -> dict:
-        return {"reason": reason, "phase": "applicability", "node": None, "module_path": None, "hint": hint,
-                "detail": {"sampling": {k: v for k, v in sampling.items() if k != "workload"}, "samplers_bound": SAMPLERS_BOUND, **detail}}
-    if int(sampling.get("top_k", 0) or 0) != 0:
-        return refuse(f"top_k = {sampling.get('top_k')}: vLLM's top-k path (`_topk_topp_kernel` / `_apply_topk_topp`) has no exact Definition; "
-                      f"only the p-only split pipeline (`_apply_topp_split`) is modelled (TopPMask_v1{{V}})", missing=["TopKMask"])
-    if not sampling.get("seeded", False):
-        return refuse("the policy has no explicit per-request seed: vLLM draws a random seed when `SamplingParams.seed` is None "
-                      "(SamplingStates.add_request), so the RNG stream is not a declared input and the sampled token is not reproducible "
-                      "from the manifest — declare `seed` per request (sweep `sampling_seeds`)", missing=["declared seed"])
-    reqs = []
-    wl = sampling.get("workload")
-    if wl:
-        try:
-            w = json.loads(workload_file(wl).read_text())
-            reqs = list(stated) if (stated := w.get("requests")) else []   # a workload that states none: a batch of one
-        except Exception as e:  # noqa: BLE001
-            return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")
-    B = max(1, len(reqs))
-    if B > SPLIT_MAX_BATCH:
-        return refuse(f"sampler batch {B} > _SPLIT_MAX_BATCH {SPLIT_MAX_BATCH}: vLLM runs `_topk_topp_kernel`, not the split pipeline", reason="sampler_geometry")
-    if getattr(target, "num_sms", None) is None:
-        return refuse("the target profile declares no num_sms: the registered split count registered_splits(num_SMs) has no num_SMs",
-                      reason="sampler_geometry")
-    nsm = int(target.num_sms)
-    S = int(registered_splits(nsm))
-    if sampling.get("splits", S) != S or type(sampling.get("splits", S)) is not int:
-        return refuse(f"unregistered split count: the session declares top-p split count {sampling['splits']!r}, not the registered one, "
-                      f"registered_splits({nsm}) = {S}: serving runs every launch at it (engine.topp_pin), and the Program carries it "
-                      f"as Const32[{S}]", reason="sampler_geometry")
-    sampling["splits"] = S
-    sampling["geometry"] = {"num_sms": nsm, "pipeline": "_apply_topp_split", "relation": "registered", "splits": S,
-                            "rule": "S = registered_splits(num_SMs) at every sampling event, whatever the live "
-                                    "batch: the served engine pins vLLM's split count to it (engine.topp_pin)",
-                            "constant": f"Const32[{S}]: the select's 6th operand at every sampling event (no `splits` input)"}
-    return None
-
-
 def workload_engine_args(workload: str | None, tp: int) -> dict:
     """The engine arguments a TP row's Build takes from its workload: ``disable_custom_all_reduce`` as the row's engines run it (its
     ``engine.args``).  None at TP1 or without a workload: `vllm_meta`'s default then."""
@@ -190,78 +143,16 @@ def workload_engine_args(workload: str | None, tp: int) -> dict:
     return {"disable_custom_all_reduce": bool(RowConfig.load(workload).engine.args["disable_custom_all_reduce"])}
 
 
-def sampling_policy(arg: str | None, workload: str | None) -> dict:
-    """The row's sampling policy as a STRUCTURAL INPUT of the construction (as are prompt length and max_tokens).
-
-    Sources, in order: `--workload <manifest>` (the row's manifest: `sweep.sampling` + `sweep.sampling_params` from `sweep/workload.py`,
-    else the legacy `sampling.variant` -> `variants[...]`, else per-request `variant` / `seed` fields), and/or `--sampling <policy>` with
-    `greedy` | `stoch-t<T>-p<P>[-k<K>]` | a JSON object.  Both given -> they must agree (refused otherwise).  Neither given -> greedy,
-    recorded as `source: "default"` (a caller without a manifest declares greedy by omission; the row procedure passes the manifest).
-    Returns {"kind": "greedy"} or {"kind": "stochastic", "temperature", "top_p", "top_k", "seeded", "label"} (+ "source", "mixed", "rid": the id length the seed rule reads, `seed_rule.rid_entry`)."""
-    def _norm(params: dict, label: str | None = None) -> dict:
-        t = float(params.get("temperature", 1.0))
-        if t == 0.0:
-            return {"kind": "greedy"}
-        return {"kind": "stochastic", "temperature": t, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0) or 0),
-                "seeded": bool(params.get("seeded", True)), "label": label or f"stoch-t{t:g}-p{float(params.get('top_p', 1.0)):g}", **({"rid": int(params["rid"])} if params.get("rid") is not None else {})}
-
-    def _parse_arg(s: str) -> dict:
-        s = s.strip()
-        if s.startswith("{"):
-            return _norm(json.loads(s))
-        if s == "greedy":
-            return {"kind": "greedy"}
-        import re
-        m = re.fullmatch(r"stoch-t([0-9.]+)-p([0-9.]+)(?:-k([0-9]+))?", s)
-        if not m:
-            raise ValueError(f"unknown sampling policy {s!r} (greedy | stoch-t<T>-p<P>[-k<K>] | JSON)")
-        return _norm({"temperature": float(m.group(1)), "top_p": float(m.group(2)), "top_k": int(m.group(3) or 0)}, s)
-
-    def _from_manifest(path: str) -> dict:
-        with open(path) as f:
-            w = json.load(f)
-        sw = w.get("sweep")   # a generated workload's block; a row file has none
-        if sw and sw.get("sampling") is not None:
-            pol = _norm(dict(params) if (params := sw.get("sampling_params")) else {}, sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
-            if sw.get("sampling_seeds"):
-                pol["seeded"] = True
-            return pol
-        variants = w.get("variants")   # the legacy form's named policies; None: every request's is its own fields'
-        top = block.get("variant") if (block := w.get("sampling")) else None
-        pols = []
-        for r in w.get("requests", []):
-            v = r.get("variant", top)
-            p = variants.get(v) if variants and v is not None else None
-            if p is None:
-                p = {"temperature": 0.0} if r.get("seed") is None and v in (None, "greedy") else {"temperature": 1.0}
-            pols.append(_norm(dict(p), v))
-        if not pols:
-            return _norm(dict((variants.get(top) if variants else None) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
-        kinds = {json.dumps(p, sort_keys=True) for p in pols}
-        if len(kinds) > 1:
-            return {"kind": "mixed", "policies": [json.loads(k) for k in sorted(kinds)]}
-        return pols[0]
-
-    pol_w = _from_manifest(workload) if workload else None
-    pol_a = _parse_arg(arg) if arg else None
-    if pol_w is not None and pol_a is not None:
-        a, b = ({k: v for k, v in p.items() if k not in ("label", "source")} for p in (pol_w, pol_a))
-        if a != b:
-            raise ValueError(f"--sampling {arg!r} disagrees with the manifest's sampling policy {pol_w} ({workload})")
-    pol = dict(pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"}))
-    pol["source"] = "workload" if pol_w is not None else ("arg" if pol_a is not None else "default")
-    if workload:
-        with open(workload) as f:
-            pol.update(workload=workload, **rid_entry(pol, json.load(f).get("requests", [])))
-    return pol
-
-
 def applicability_conditions(profile, applied: dict, attention_impls: dict, export_facts: dict, sampling: dict | None = None, tp: dict | None = None,
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
-    from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        GEMM_PINS,
+        RMS_PINS,
+        tuned_gemm_table_sha256,
+    )
     # the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
@@ -342,7 +233,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res_target_source = "declared"
     if target.numerics_profile != profile:
         target = target.with_overrides(numerics_profile=profile)  # `--profile` IS the vocabulary field of the target profile (one source)
-    res: dict = {"schema": "cb-a/derive_step/v3", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wrapper": wrapper, "M": M, "pos0": pos0,
+    res: dict = {"schema": SID.DERIVE_STEP_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "wrapper": wrapper, "M": M, "pos0": pos0,
                  "LP": LP, "T": T, "C": cached, "eos": eos, "sampling": sampling, "profile": profile, "target": {"declared": target.to_json(), "declared_source": res_target_source},
                  # the tensor-parallel structural inputs: world size and WHICH rank this Program describes (rank-local computation,
                  # this rank's weight shards as its committed weight inputs, the other rank's collective partials as peer inputs)
@@ -405,7 +296,10 @@ class _Refused(Exception):
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> None:
-    from verity_vllm.program.frontend.target_profile import applied_kernels, profile_mismatches
+    from verity_vllm.program.frontend.target_profile import (
+        applied_kernels,
+        profile_mismatches,
+    )
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
@@ -540,7 +434,9 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             write(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
-                from verity_vllm.program.frontend.export_ops import rank_embedding_shards
+                from verity_vllm.program.frontend.export_ops import (
+                    rank_embedding_shards,
+                )
                 rep = None                                                 # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
@@ -551,8 +447,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
-    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
-    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
+
+    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS
+    from verity_vllm.correspondence.runtime import correspondence_digest
+    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
+    from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
@@ -606,7 +505,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
 def _derive_context(vm, cfg, ntok: int, target, model, *, apply_target: bool = False):
     """The contexts the derive runs in; `apply_target`: with the declared target applied again (a relabel, after the construction's)."""
     import torch
-    from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat
+
+    from verity_vllm.program.frontend.export_compat import (
+        apply_target_profile,
+        export_compat,
+    )
     from verity_vllm.program.frontend.triton_capture import intercept_triton_launches
     with contextlib.ExitStack() as st:
         if apply_target:
@@ -663,7 +566,7 @@ def _write_manifest(out: str, res: dict) -> None:
         tr = json.load(f)
     tp, declared = res.get("tp"), res.get("declared_derived")   # None: a single-GPU Build, and one refused before it declared
     world, rank = (tp.get("world", 1), tp.get("rank", 0)) if tp else (1, 0)
-    m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
+    m = {"schema": SID.CONSTRUCTION_MANIFEST_SCHEMA, "utc": res.get("utc"), "wrapper": res.get("wrapper"),
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
                                "sampling": res.get("sampling"), "tp": world, "rank": rank,
@@ -765,7 +668,7 @@ def _stop_arg(text: str | None) -> dict | None:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     try:
         from verity_vllm.engine.profiles.devices import device_name

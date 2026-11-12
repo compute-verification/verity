@@ -22,8 +22,12 @@ from verity_vllm import settings
 from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
 from verity_vllm.engine.profiles.cases import CASES
+from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
 
 __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
+
+logger = init_logger(__name__)
 
 DECLARED_ENV = env.ENGINE
 
@@ -186,11 +190,14 @@ def gpu_info() -> dict[str, Any]:
 
 def _tuned_gemm_arch_family(major: int, minor: int):
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+        from vllm.model_executor.determinism.batch_invariant_configs import (
+            _get_tuned_matmul_arch_family,
+        )
         from vllm.platforms.interface import DeviceCapability
 
         return _get_tuned_matmul_arch_family(DeviceCapability(int(major), int(minor)))
-    except Exception:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+    except Exception as e:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+        logger.debug("vLLM gave no tuned-GEMM arch family for capability %r.%r: %r", major, minor, e)
         return "<unavailable>"
 
 
@@ -216,7 +223,8 @@ def dist_identity(name: str) -> dict[str, Any]:
             d = {}
         url = d.get("url")
         out["direct_url"] = url
-        h = (d.get("archive_info") or {}).get("hash")
+        info = d.get("archive_info")
+        h = info.get("hash") if info else None
         if isinstance(h, str) and h.startswith("sha256="):
             out["wheel_sha256"] = h.split("=", 1)[1]
         if out["wheel_sha256"] is None and isinstance(url, str) and url.startswith("file://"):
@@ -388,7 +396,7 @@ def build_manifest(
     if engine_overrides:
         kw.update(engine_overrides)
     doc = {
-        "schema": "verity-vllm/profile/v1",
+        "schema": ENGINE_PROFILE_SCHEMA,
         "case": case,
         "model": {
             "repo": cp["repo"],

@@ -12,12 +12,13 @@ from pathlib import Path
 import pytest
 import torch
 
+from verity_vllm import gc_tuning
 from verity_vllm import target_family as tf
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
-from verity_vllm.pipeline import cli, gc_tuning
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row import fa_version

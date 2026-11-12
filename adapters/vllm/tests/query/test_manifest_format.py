@@ -221,12 +221,14 @@ def test_a_manifests_rows_are_read_under_the_name_its_layout_gives_them():
     a, b = {"op_path": "a"}, {"op_path": "b"}
     assert MF.manifest_rows({"identities": [a], "entries": [b]}) == [a], "the identity key first"
     assert MF.manifest_rows({"identities": [], "entries": [b]}) == [b] and MF.manifest_rows({"rows": [a, b]}) == [a, b]
-    assert MF.manifest_rows({"identities": None}) == () and MF.manifest_rows({}) == ()
-    assert MF.identity_rows({"identities": [a]}) == [a] and MF.identity_rows({"entries": [b]}) == () and MF.identity_rows(None) == ()
+    assert MF.manifest_rows({"identities": None}) == [] and MF.manifest_rows({}) == []
+    assert MF.identity_rows({"identities": [a]}) == [a] and MF.identity_rows({"entries": [b]}) == [] and MF.identity_rows(None) == []
+    assert MF.identity_rows({"identities": 0}) == [] and MF.identity_rows({"identities": ""}) == [], "an empty value of any type holds none"
 
 
 def test_a_workloads_sweep_and_requests_are_empty_where_it_holds_none():
-    assert MF.sweep_and_requests(None) == ({}, ()) and MF.sweep_and_requests({"sweep": None}) == ({}, ())
+    assert MF.sweep_and_requests(None) == ({}, []) and MF.sweep_and_requests({"sweep": None}) == ({}, [])
+    assert MF.sweep_and_requests({"sweep": 0, "requests": ""}) == ({}, []), "an empty value of any type holds none"
     w = {"sweep": {"batch": 2, "arrive_steps": [0, 3]}, "requests": [{"request_id": "r0"}, {"request_id": "r1"}]}
     assert MF.sweep_and_requests(w) == (w["sweep"], w["requests"])
 

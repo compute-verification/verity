@@ -14,13 +14,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from verity.commitments.crypto import lms
+from verity.commitments.randomness import derive
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import EPOCH_SALT_DOMAIN
 from verity.protocols.spot.device import challenger as Ch
-from verity.commitments.crypto import lms
-from verity.commitments.randomness import derive
 
 PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases"):

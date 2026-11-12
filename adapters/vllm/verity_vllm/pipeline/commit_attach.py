@@ -26,6 +26,8 @@ from verity_vllm.check.commit_rules import (
 from verity_vllm.commit import binding as BD
 from verity_vllm.log import init_logger
 
+__all__ = ["attach_of_record", "classes_of_record"]
+
 logger = init_logger(__name__)
 
 
@@ -34,6 +36,16 @@ def classes_of_record(required_manifest: dict[str, Any] | None, model: Any, fa_v
     for ``model`` (`hidden_source.attention_hidden`), and that class (None: none)."""
     hidden_family = HS.attention_hidden(required_manifest, model)["family"]
     return HS.with_hidden_class(required_classes_default(fa_version), hidden_family), hidden_family
+
+
+def families_named(required_manifest: dict[str, Any] | None) -> dict[str, Any]:
+    """How many identities a required-value manifest names of each family (its `populations.by_family`): no family where there is
+    no manifest, or it counts none by family."""
+    if required_manifest is None:
+        return {}
+    populations = required_manifest.get("populations")
+    by_family = populations.get("by_family") if populations else None
+    return by_family if by_family else {}
 
 
 def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str, Any] | None, out: Path, *, kind: str,
@@ -47,7 +59,7 @@ def attach_of_record(com: Any, eng: Any, args: Any, required_manifest: dict[str,
     serve-openai's rows-sha512 Commit (`serve_seal.committer`) builds its own here too, over its row's manifest of record.
     Returns the required classes, whether the MoE source attached and whether the manifest requires the hidden class."""
     moe_attached = False
-    families: dict[str, Any] = {} if required_manifest is None else (required_manifest.get("populations") or {}).get("by_family") or {}
+    families = families_named(required_manifest)
     _hidden_required = hidden_classes_required(required_manifest)
     if args.hidden_so and _hidden_required is False:
         # a tap that never fires would fail the identity check and the required classes as an omitted producer

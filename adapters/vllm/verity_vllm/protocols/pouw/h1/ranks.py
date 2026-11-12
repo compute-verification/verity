@@ -225,8 +225,9 @@ class RankExtension:
                 com, tap = commit
                 try:
                     rc = com.finalize()
+                    errors = rc.extra.get("errors")    # None from a committer whose finalize states none
                     out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
-                           "errors": [str(e)[:300] for e in rc.extra.get("errors", [])][:8]}
+                           "errors": [str(e)[:300] for e in errors][:8] if errors else []}
                 finally:
                     com.close()
                     tap.untap()
@@ -281,7 +282,8 @@ class Holder:
             rows += o["rows"]
         tap = None if self.run.served is None else self.run.served.tap
         if tap is not None:
-            got = [o.get("acquired", []) for o in outs]
+            # a rank with no Commit answers with no "acquired" (`h1rank_rows`): nothing of it, and it keeps its place
+            got = [a if (a := o.get("acquired")) else [] for o in outs]
             if len(steps := {int(x[1]) for a in got for x in a}) > 1:
                 tap.refused.append(f"one pull held engine steps {sorted(steps)}: the window's tap keeps one step a site")
             for i, a in enumerate(got):

@@ -33,6 +33,11 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+#: The names the library's other modules read here.  A setting itself is read as an attribute, by its name in `SETTINGS`
+#: (`__getattr__`).
+__all__ = ["UnknownSetting", "environ", "get", "is_secret", "is_set", "put", "raw", "redact", "setdefault", "unset",
+           "validate_environ"]
+
 VALUE, WHERE, DEBUG = "value", "where", "debug"
 ROLES = (VALUE, WHERE, DEBUG)
 RECORD_SCHEMA = "verity-vllm/settings/v1"
@@ -217,6 +222,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_WORD_CHECK", str, None, VALUE, "the strict word check's widths, X/W"),
     S("VERITY_WORKLOADS", paths, (), WHERE, "directories of row files beside workloads/, os.pathsep-separated: a row id resolves to "
       "the one file of its name among them (`config.row_file`), whose path and sha256 the row's effective config records"),
+    S("ACQUIRE_MANIFEST", str, None, WHERE, "the path of the row's required-value manifest, which a stage reads where its command "
+      "line names none (the row sets it)"),
     S("MATCH_IMPL", str, None, VALUE, "the global match's checker, fast or record (the audit); unset, `global_match`'s default, fast, "
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
@@ -242,7 +249,21 @@ SETTINGS: dict[str, Setting] = _declare(
     S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
       "Build records it"),
     S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
+    S("NCCL_ALGO", str, None, VALUE, "the algorithms NCCL may use (its family's role, as the six below); an engine profile's TP "
+      "backends record each of the seven that is set"),
+    S("NCCL_BUFFSIZE", str, None, VALUE, "the bytes of NCCL's buffer between a pair of GPUs"),
+    S("NCCL_LAUNCH_MODE", str, None, VALUE, "how NCCL launches its kernels, PARALLEL or GROUP"),
+    S("NCCL_MAX_NCHANNELS", str, None, VALUE, "the most channels NCCL uses"),
+    S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses"),
+    S("NCCL_NTHREADS", str, None, VALUE, "NCCL's CUDA threads per block, one block a channel"),
+    S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL may use"),
+    S("PYTHONPATH", str, None, WHERE, "the interpreter's module search path, which the source identity records as the environment "
+      "holds it"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
+    S("RESEARCH_SOURCE_SHA", str, None, WHERE, "the commit of the tree the research runner shipped, which the source identity takes "
+      "where `--sha` names none and a row's records carry"),
+    S("RUNPOD_POD_ID", str, None, WHERE, "the RunPod pod this process runs in, which an engine profile's GPU record names as its pod; "
+      "unset, the node's name"),
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),

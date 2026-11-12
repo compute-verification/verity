@@ -584,9 +584,9 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def _params_of(head: Mapping[str, Any]) -> Iterable[tuple[str, Any]]:
-    """An instance sequence's `params`, its Program's (name, type) pairs; none where its head holds no such field."""
+    """An instance sequence's `params`, its Program's (name, type) pairs; none where its head holds none."""
     params = head.get("params")
-    return () if params is None else params
+    return params if params else []
 
 
 def _params_view(params: Iterable[tuple[str, Any]]) -> tuple[InputView, ...]:

@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 from verity.definitions.registry import bf16_gemm_check as BC
 
+from verity_vllm.check import commit_rules as CR
 from verity_vllm.check import verdict as V
 from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.commit_pass import commit_verdict
@@ -286,15 +287,25 @@ def test_decisions_equal_v1_on_one_fault_mutations(label, commit, tokens_equal):
     assert graded and all(c.differences or c.reason for c in graded), f"{label}: a non-PASS check without a named difference"
 
 
-@pytest.mark.parametrize("block,field", [("extra", "errors_n"), ("extra", "committed_tensors"), ("openings", "verified"), (None, "fa2_zero_rows")])
-def test_a_count_that_is_no_number_is_refused_by_the_rules_as_v1_refuses_it(block, field):
+@pytest.mark.parametrize("block,field,failed", [
+    ("extra", "errors_n", {}),
+    ("extra", "committed_tensors", {"runtime_match/reference_integrity": "expected_tensors 572 != committed_tensors many (refused/lost acquisitions -> incomplete root)"}),
+    ("openings", "verified", {"runtime_match/openings": "openings verified 0 != checked 64"}),
+    (None, "fa2_zero_rows", {})])
+def test_a_count_that_is_no_number_reads_as_zero_in_the_rules_where_v1_refuses_it(block, field, failed):
     commit = _base()
     (commit if block is None else commit[block])[field] = "many"
     decl = _decl(commit["classes"])
     with pytest.raises(ValueError, match="many"):
         commit_verdict(commit, True, declaration=decl)
-    with pytest.raises(ValueError, match="many"):
-        V.run_checks(commit, True, declaration=decl, ctx={})
+    checks = V.run_checks(commit, True, declaration=decl, ctx={})
+    assert {c.name: c.reason for c in checks if c.outcome == V.FAIL} == failed
+
+
+@pytest.mark.parametrize("stated", ["many", "", [], {}, [3], {"n": 3}, None])
+def test_a_count_read_by_the_rules_is_zero_or_its_default_where_it_is_no_number(stated):
+    assert (CR._int(stated), CR._int(stated, 64)) == (0, 64)
+    assert (CR._int("7"), CR._int(7.9), CR._int(True), CR._int(0, 64)) == (7, 7, 1, 0)
 
 
 def test_a_count_the_record_does_not_state_reads_as_zero_in_both():
@@ -306,7 +317,7 @@ def test_a_count_the_record_does_not_state_reads_as_zero_in_both():
     assert ok is True and out == V.PASS and {c.name: c.outcome for c in checks}["runtime_match/fa2_zero_rows"] == V.PASS
 
 
-def test_an_openings_setting_that_is_no_number_is_refused_and_a_number_asks_for_at_most_64():
+def test_an_openings_setting_asks_for_at_most_64_and_for_64_where_the_command_states_none():
     run = {"arm": "instrumented", "pair": 0, "tokens_equal_ref": True, "commit": dict(_base(), openings={"n": 8, "verified": 8}, commit_pass=True)}
     doc = {"commit_pass": True, "required_classes": list(CLASSES)}
     by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {"openings": 8}}).checks}
@@ -315,8 +326,13 @@ def test_an_openings_setting_that_is_no_number_is_refused_and_a_number_asks_for_
     assert by["runtime_match/openings"].outcome == V.FAIL and by["runtime_match/openings"].scope["min_openings"] == 64
     by = {c.name: c for c in V.build([run], doc, execution={"engine_settings": {}}).checks}
     assert by["runtime_match/openings"].scope["min_openings"] == 64
-    with pytest.raises(ValueError, match="sixty-four"):
-        V.build([run], doc, execution={"engine_settings": {"openings": "sixty-four"}})
+
+
+@pytest.mark.parametrize("no_number", ["sixty-four", "", [], {}, [8]])
+def test_an_openings_setting_that_is_no_number_is_taken_as_64(no_number):
+    run = {"arm": "instrumented", "pair": 0, "tokens_equal_ref": True, "commit": dict(_base(), openings={"n": 8, "verified": 8}, commit_pass=True)}
+    by = {c.name: c for c in V.build([run], {"commit_pass": True, "required_classes": list(CLASSES)}, execution={"engine_settings": {"openings": no_number}}).checks}
+    assert by["runtime_match/openings"].outcome == V.FAIL and by["runtime_match/openings"].scope["min_openings"] == 64
 
 
 def test_pass_record_passes_in_both_and_names_its_scope():
