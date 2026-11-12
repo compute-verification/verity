@@ -6,7 +6,8 @@ and its Lean.
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, its integer fields: the period check reads the id egress form, and a run in another is refused),
+  and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
+  form, and a run in another is refused),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
@@ -102,10 +103,12 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
+    cap = dep["params"].get("max_tokens_cap")
+    schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
-              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": {k: dep["params"][k] for k in INTEGER_FIELDS},
+              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [

@@ -32,7 +32,6 @@
   "verity_vllm.program.predict.template_counts": "n_t(c), each template's instances in a request unit's Program read off its key, held to the built Programs' template partitions by tests/program/predict/test_template_counts.py ahead of the compile that reads it (LIVE predict.step_needs)",
   "verity_vllm.log": "the logger every library module logs through (init_logger), checked by tests/test_log.py ahead of the first module that converts its prints",
   "verity_vllm.commitments.vllm_v1.vectors": "the generator of the vllm-v1 conformance vectors (vectors.json), run as a module by hand and held to its file by tests/commitments/test_vllm_v1.py",
-  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py",
-  "verity_vllm.commit.history_tables_device": "the history tables on the GPU and their CPU twin (Histories(make=Table)), held to history.HistoryTable by tests/commit/test_history_tables_device.py and timed by benchmarks/commitments/table_read_commit.py ahead of a serving window that takes device tables"
+  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py"
  }
 }

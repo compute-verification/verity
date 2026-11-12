@@ -17,7 +17,9 @@
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc,
                                                  # for at most 20 min (--wait-max S lowers it): then exit 79, the run going on (research/waitcap.py)
-  research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
+  research run --job-user USER [--job-namespaces LIST] [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay
+                                                 # the runner's. LIST (of user, mnt, net): the namespace types the unit may make, where
+                                                 # the workload then holds capabilities; none otherwise (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
@@ -45,10 +47,12 @@
   research merge REF [--into main] [--tool check] [-m MSG] [--dry-run]   # the merge gate: `git merge --no-ff REF` only with a passing
                                                  # attempt of the tool for that exact commit in the store (research/merge.py)
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
-  research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
-                                                 # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
-  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+  research queue status|ready|judge|review|eject|vqueue|... [--shadow]  # the verified queue: candidates of ready PRs merged on `main`,
+                                                 # `main` fast-forwarded only to one with no new failure (research/queue.py, vqueue.py)
+  research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
+  research metrics show [ID ...] [--owner HANDLE] [--json]   # the console's Metrics tab: each declared metric's latest value
+                                                 # (benchmarks/metrics.toml; research/metrics.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -80,6 +84,8 @@
                                                  # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
+  research pods procs TARGET --comm NAME|--pid N ... [--json]   # whose a process on a machine is: each one's run, what names
+                                                 # it (cgroup, runner, session scope), the run's state and who sent it (research/scopemem.py)
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
   research notes bind LANE --branch B --worktree DIR --pod NAME   # where the lane works (successors naming a predecessor's)
   research notes status [--pods] [--stale-min 30] [--json]  # per lane: freshest of report/checkpoint/commit/uncommitted edit/pod; STALE (exit 1)
@@ -240,6 +246,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
+    ap.add_argument("--job-namespaces", default=None, metavar="LIST",
+                    help="with --job-user: the namespace types its unit may make, a comma-separated list of user, mnt and net (default: "
+                         "none), for a workload that sandboxes code of its own. Inside a user namespace it makes, the workload holds "
+                         "capabilities over the mount and network namespaces made there, and so reaches kernel code only root "
+                         "otherwise does; the unit's own limits stay (research.jobuser)")
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
                          "on cores no check slot holds; `proofs`): the run takes a slot there and its cwd is its source, or "
@@ -326,6 +337,19 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
             return 2
+    if ns.job_namespaces is None:
+        ns.job_namespaces = ()
+    else:
+        from . import jobuser
+
+        try:
+            if not ns.job_user:
+                raise jobuser.Refused("--job-namespaces lists what a job user's unit may make (--job-user USER); without one the "
+                                      "workload runs as the runner, in no unit")
+            ns.job_namespaces = jobuser.check_namespaces(ns.job_namespaces)
+        except jobuser.Refused as e:
+            print(f"research run: {e}", file=sys.stderr)
+            return 2
     if ns.wait_max is not None:
         try:
             if not ns.wait:
@@ -373,6 +397,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
+            if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
+                from . import suite_size  # noqa: PLC0415
+
+                command[(at := command.index("--")):at] = [suite_size.BUDGET_OPT, f"{budget:g}"]
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
@@ -390,7 +418,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
-                  "its own mem= and that", file=sys.stderr)
+                  "its own mem= and that" + (f", and gives the run {budget:g} GB to plan its processes on" if budget else ""),
+                  file=sys.stderr)
             ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
@@ -520,6 +549,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
     if ns.job_user:
         job["run"]["job_user"] = ns.job_user
+        if ns.job_namespaces:
+            job["run"]["job_namespaces"] = list(ns.job_namespaces)
     if clone_rec:
         job["run"]["cwd_clone"] = clone_rec
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
@@ -543,6 +574,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.claimed and (remote_info or {}).get("gpus"):
         apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
+    store_toml, key_env = None, ()
+    if ns.job_user and ns.store_read_dir:
+        # --store-read's key, for a unit that sees no launch request: its store.toml is copied into the run's control/
+        # (jobuser.prepare) and named there, and its variables pass like the run's own --env
+        from .store import custody as CU
+
+        store_toml, key_env = Path(ns.store_read_dir) / CU.STORE_TOML, CU.KEY_ENV
+        apply_env = {"RESEARCH_STORE_CONFIG": os.path.join(job_dir, jobuser.STORE_CONFIG), **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     spawn, mode, unsafe = command, None, []
@@ -550,11 +589,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # inside a queued GPU phase's lease (the request's workload wrap), so gpu-lease and its bookkeeping stay the runner's
         wrap = list(_request(ns.remote_json).get(remote.QUEUE_WORKLOAD_WRAP) or []) if ns.claimed else []
         n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
-        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id), list({**clone_env, **env_map}))]
+        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id),
+                                                   list({**clone_env, **env_map, **dict.fromkeys(key_env)}), ns.job_namespaces)]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         if ns.job_user:
-            mode = jobuser.prepare(job_dir)
+            mode = jobuser.prepare(job_dir, store_toml)
         rc = harness_run(a, spawn)
     finally:
         if mode is not None:            # before anything reads the run dir
@@ -1124,7 +1164,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
-    mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
@@ -1161,6 +1202,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
     ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
+    ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     print(f"research run --on auto: {told}", file=sys.stderr)
@@ -1170,7 +1212,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
     """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
     `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
-    --max-min."""
+    --max-min. A run of many suites reserves less than that memory in a pool's slot (`reserve_gb`, which `_auto_spill` hands
+    the slot); on the queue the memory is the job's cap, whole."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1180,8 +1223,8 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
         return
     said = []
     if ns.mem_gb is None and "mem_gb" in shape:
-        ns.mem_gb = shape["mem_gb"]
-        said.append(f"{ns.mem_gb} GB")
+        ns.mem_gb, ns.reserve_gb = shape["mem_gb"], shape.get("reserve_gb")
+        said.append(f"{ns.mem_gb} GB" + (f" ({ns.reserve_gb} of it reserved in a pool's slot)" if ns.reserve_gb else ""))
     if not timed and "max_s" in shape:
         ns.max_min = math.ceil(shape["max_s"] / 60)
         said.append(f"{ns.max_min} min")
@@ -1325,7 +1368,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=source, sends=[*(Path(s).expanduser() for s in ns.send), *([urls] if urls else [])],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
+                            job_user=ns.job_user, job_namespaces=ns.job_namespaces, gpus=None if queue else ns.gpus,
+                            store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
@@ -2030,6 +2074,10 @@ def main(argv: list[str] | None = None) -> int:
         from .goals import main as goals_main
 
         return goals_main(rest)
+    if cmd == "metrics":
+        from .metrics import main as metrics_main
+
+        return metrics_main(rest)
     if cmd == "jobs":
         from .jobs.cli import main as jobs_main
 

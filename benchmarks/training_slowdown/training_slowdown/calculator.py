@@ -7,8 +7,8 @@ What the calculator states is read from it through its public functions, never r
   of its registry, in AND gates a second;
 - the monitoring periods (`periods`): its `PERIODS`, core's, with the window of the census's reference deployment
   before them;
-- the bound of record at a policy (`bound`): the lower bound on a circuit's slowdown that `Nci.Cut.Guarantees.HE`
-  proves, from the calculator's `min_cut.bound`; where the calculator has no such module, why not.
+- the bound of record at a policy (`bound`): the lower bound on a circuit's slowdown that the statement its
+  `min_cut` names proves (`theorem`), from its `min_cut.bound`.
 
 The calculator counts in FLOP and in its own gates (`units.gates_per_flop`); training's slowdown code counts in the
 gates of the circuits' Definitions (`training_slowdown.gates`). A figure crosses in FLOP, two a MAC, never in gates.
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from functools import cache
 from pathlib import Path
 
@@ -27,8 +28,6 @@ CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inf
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
-#: the statement the bound of record instantiates, as the lock names it (`HEShared` where the products share arrays)
-THEOREM = "Nci.Cut.Guarantees.HE"
 
 
 @cache
@@ -44,15 +43,17 @@ def _calculator():
 
 
 def policies() -> list[str]:
-    """The names of the registry's fixed policies."""
-    return list(_calculator()[4].names("policy"))
+    """The names of the registry's fixed policies: the `[policy.*]` tables of its data files, read without importing
+    the calculator, since a job checks its config's policy by name and runs none of the calculator's code."""
+    return sorted({name for f in (CALCULATOR / "data").glob("*.toml")
+                   for name in tomllib.loads(f.read_text()).get("policy", {})})
 
 
 def policy(name: str) -> dict | None:
     """The registry's policy `name`: Γ in FLOP (`gamma_flop`) and K in bits (`k_bits`); None where it has none."""
-    _, envelopes, _, _, registry = _calculator()
-    if name not in registry.names("policy"):
+    if name not in policies():
         return None
+    _, envelopes, _, _, registry = _calculator()
     p = envelopes.policy(registry, name)
     return {"gamma_flop": p.gamma, "k_bits": p.k}
 
@@ -84,13 +85,17 @@ def fleets() -> list[dict]:
 
 
 def _min_cut():
-    """The calculator's module for the bound of record, its `min_cut`; None where its package has no such file."""
+    """The calculator's module for the bound of record, its `min_cut`."""
     _calculator()
-    if not (CALCULATOR / CALCULATOR.name / "min_cut.py").exists():
-        return None
     from rho import min_cut
 
     return min_cut
+
+
+def theorem() -> str:
+    """The statement the bound of record instantiates, by the Lean name the calculator's `min_cut` gives it (its
+    `HE`; `HEShared` where the products share arrays)."""
+    return _min_cut().HE
 
 
 def bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
@@ -98,17 +103,12 @@ def bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
     b_y and F on M, and |C| in gates, as `formalism.he_products` reads them from a traced step): what every partition
     of that circuit into the policy's blocks pays, the `slowdown` of the calculator's `min_cut.bound`, with its least
     `blocks`, its `statement` and what it `rests_on`. A policy here states no output bits a block, so the function's
-    n is None. Not `available`, with exactly what is missing, where the calculator has no such module or the circuit
-    no `work`."""
-    out = {"available": False, "theorem": THEOREM, "c_gates": c_gates, "k_bits": k_bits}
-    mod = _min_cut()
-    if mod is None:
-        return out | {"why": f"not available: {CALCULATOR.name} has no `{CALCULATOR.name}.min_cut`, the module whose "
-                             f"`bound` gives {THEOREM}'s bound at a policy (c, k) on a circuit's N, O and |C|"}
+    n is None. Not `available`, with what is missing, where the circuit has no `work`."""
+    out = {"available": False, "theorem": theorem(), "c_gates": c_gates, "k_bits": k_bits}
     if work is None:
         return out | {"why": "not available: the bound reads a traced step's N and O on M, and the config's search "
                              "record gives none"}
-    b = mod.bound(c_gates, k_bits, None, N=work["N"], O=work["O"], size=work["C_gates"], beta_w=work["beta_w"],
-                  beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
+    b = _min_cut().bound(c_gates, k_bits, None, N=work["N"], O=work["O"], size=work["C_gates"],
+                         beta_w=work["beta_w"], beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
     return out | {"available": True, "theorem": b.statement, "slowdown": b.slowdown, "blocks": b.blocks,
                   "rests_on": b.rests_on, "work": work}

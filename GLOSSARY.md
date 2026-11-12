@@ -396,7 +396,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Ready mark**: an owner's statement that a PR's head may land; it admits that head to the verified queue.
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
-    `main` as candidates, and fast-forwards `main` only to one whose check passed every step on the merge gate.
+    `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
+    base too.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
@@ -405,14 +406,18 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Landing gate**: a script at `main` that a head must pass at its mark's preflight (drive.toml's `landing_gates`).
   - **Warn gate**: a script run as a landing gate is, whose failure only warns (drive.toml's `warn_gates`).
   - **Off-gate step**: a step of the check off the merge gate (policy.toml's `off_gate` and drive.toml's `warn_steps`:
-    circuit-check, ratchet-gate); a candidate's check still runs it, and its red rings its owners and holds nothing.
+    circuit-check, lean-changed, ratchet-gate); a candidate's check still runs it (lean-changed aside, which no shard
+    runs), and its red holds nothing. Under `--gate check`, a red the run beside its base's check doesn't share rings who
+    acts on it.
   - **Low-risk lane**: the verified queue taking a PR on its ready mark alone, when its change touches nothing drive.toml's
     `lowrisk_excludes` names (no Lean, lock or soundness-path change); never a layout move's PR.
   - **Records run**: a candidate's run of `lean-audit` alone before its check, when a PR of it changes Lean, a lock or the
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
-  - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`) as the verified queue runs it, of a
-    candidate and of `main` each time it moves; `main`'s says which failures a candidate inherits.
+  - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
+    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
+    lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.
   - **Pure move**: a change that only renames paths, certified by `move_check`. A layout move's PR (`Move: tools/move/MAP.toml`)
     lands as any PR does, on a land verdict.

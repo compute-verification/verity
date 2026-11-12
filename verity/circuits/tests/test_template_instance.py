@@ -48,6 +48,19 @@ Dot = bind(_comp("TDot", 1, (), lambda S: ((("a", Array(2, V32)), ("b", Array(2,
 Step = bind(_comp("TStep", 1, (), lambda S: ((("c", V32), ("x", V32)), Tuple(V32, V32)),
                   lambda B, S, c, x: (lambda s: tuple_of(s, s))(B.call(TAdd, c, x))))
 X3 = Array(3, Array(2, V32))
+#: x * x
+Sq = bind(_comp("TSq", 1, (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(TMul, x, x)))
+
+
+def _keyed(key: str, first: bool = False) -> Program:
+    """One instance of `Sq` and one call of a composite of one gate whose id is the input id `key`: the call reads the
+    instance and the root returns it, or, `first`, the instance reads the call. Only a primitive is an input
+    (`program.is_input`), so the call is a node of another function, whatever its id."""
+    name, version = key.rsplit("_v", 1)
+    keyed = bind(_comp(name, int(version), (), lambda S: ((("x", V32),), V32), lambda B, S, x: B.call(TAdd, x, x)))
+    assert codec.descriptor_id(keyed) == key
+    return Program(_comp("TKeyedProg", 0, (), lambda S: ((("x", V32),), V32),
+                         (lambda B, S, x: B.call(Sq, B.call(keyed, x))) if first else (lambda B, S, x: B.call(keyed, B.call(Sq, x)))))
 
 
 def _mixed(B, S, xs, k, a, b):
@@ -66,7 +79,9 @@ SCAN = Program(_comp("TScanProg", 0, (), lambda S: ((("xs", Array(3, V32)), ("c"
 PRIM = Program(_comp("TPrimProg", 0, (), lambda S: ((("x", Array(2, V32)),), V32), lambda B, S, x: B.call(TAdd, x[0], x[1])))
 EMPTY = Program(_comp("TEmptyProg", 0, (), lambda S: ((("a", Array(0, Array(2, V32))), ("b", Array(0, Array(2, V32)))), Array(0, V32)),
                       lambda B, S, a, b: B.batch(Dot, a, b, axes=(0, 0))))
-PROGRAMS = {"population": POPULATION, "mixed": MIXED, "scan": SCAN, "primitive": PRIM, "empty": EMPTY}
+PROGRAMS = {"population": POPULATION, "mixed": MIXED, "scan": SCAN, "primitive": PRIM, "empty": EMPTY,
+            "keyed": _keyed("Input8_v1"), "keyed_first": _keyed("Input8_v1", first=True),
+            "keyed_registered": _keyed("RegisteredInput8_v1")}
 SCALE_ID, DOT_ID = codec.descriptor_id(Scale), codec.descriptor_id(Dot)
 
 #: (label, program, query): the query applies
@@ -74,6 +89,7 @@ CASES = [
     ("Q_template_instance over a population program", "population", PO.template_instance_query(Scale)),
     ("Q_template_instances over two templates", "mixed", PO.template_instances_query([Scale, Dot])),
     ("the list order is kept: the same units, another digest", "mixed", PO.template_instances_query([Dot, Scale])),
+    ("a listed composite whose id is an input id is an instance", "keyed", PO.template_instances_query([Sq, "Input8_v1"])),
 ]
 #: (label, program, query): the query refuses the program
 REFUSED = [
@@ -83,6 +99,9 @@ REFUSED = [
     ("a scan at the root", "scan", PO.template_instance_query(Step)),
     ("a primitive at the root", "primitive", PO.template_instance_query(TAdd)),
     ("a batch of 0 members is no instance", "empty", PO.template_instance_query(Dot)),
+    ("a composite whose id is an input id is no input", "keyed", PO.template_instance_query(Sq)),
+    ("a composite whose id is an input id, which the instance reads", "keyed_first", PO.template_instance_query(Sq)),
+    ("a composite whose id is a registered input id is no input", "keyed_registered", PO.template_instance_query(Sq)),
 ]
 #: (label, query): the object's form is refused (`validate`: query-params or query-unknown)
 MALFORMED = [

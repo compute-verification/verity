@@ -189,19 +189,48 @@ def test_a_dry_run_says_what_it_would_set_and_writes_nothing(node, capsys):
     assert json.loads(capsys.readouterr().out)["set"] == [[50, 0]]
 
 
-def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_the_shared_nodes():
+def test_a_pass_makes_its_log_s_directory_on_a_node_that_has_none(node, tmp_path):
+    rd = node.run("r20261019-140000-2222", pgid=50)
+    node.process(50, pgid=50, anon_gb=10, run_dir=rd)
+    log = tmp_path / "monitoring" / "oom-order.jsonl"
+    assert not log.parent.exists()
+    assert O.main(["--proc", str(node.proc), "--runs", str(node.runs), "--ramlock", str(node.ramlock), "--log", str(log)]) == 0
+    assert node.adj(50) == 505 and json.loads(log.read_text())["run"] == "r20261019-140000-2222"
+
+
+def test_a_service_outside_the_runs_roots_keeps_its_adj_beside_a_live_run(node, tmp_path):
+    """The verified queue's loop on a CPU node: a system service at its unit's OOMScoreAdjust, in no session scope, whose launches
+    keep their records under its own home. No pass raises it, whatever its processes hold or name."""
+    own = tmp_path / "home" / ".research" / "runs" / "r20261019-150000-4444"
+    own.mkdir(parents=True)
+    (own / "status.json").write_text(json.dumps({"state": "running", "pgid": 60}))
+    node.process(60, pgid=60, anon_gb=300, adj=-500, run_dir=str(own), scope="/system.slice/vy-vqueue.service")
+    node.process(61, pgid=61, anon_gb=1, adj=-500, scope="/system.slice/vy-vqueue.service")
+    rd = node.run("r20261019-150000-5555", pgid=20)
+    node.process(20, pgid=20, anon_gb=10, run_dir=rd)
+    assert node.main() == 0
+    assert node.adj(60) == node.adj(61) == -500 and node.adj(20) == 505
+    assert [r["run"] for r in node.log()] == ["r20261019-150000-5555"]
+
+
+def test_the_script_is_stdlib_only_and_deploy_toml_runs_it_as_root_on_both_nodes_and_every_cpu_node():
     src = Path(O.__file__)
     mods = {n.names[0].name.split(".")[0] if isinstance(n, ast.Import) else (n.module or "").split(".")[0]
             for n in ast.walk(ast.parse(src.read_text())) if isinstance(n, (ast.Import, ast.ImportFrom))}
     assert mods - {"__future__"} <= set(sys.stdlib_module_names), "deploy.toml installs this file alone"
     import tomllib
     m = tomllib.loads((src.parent / "deploy.toml").read_text())
-    rows = {e["path"]: e for e in m["file"]}
-    nodes = {"vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4",
-             "vy-nebius-cpu-5", "vy-nebius-cpu-6"}
+    cpu = {n for n in m["nodes"] if n.startswith("vy-nebius-cpu-")}
+    assert cpu >= {f"vy-nebius-cpu-{i}" for i in range(1, 14)}
+    fix = "every CPU node takes the OOM order and the four memory drop-ins: add it to these entries' `nodes`"
     for path in ("/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.service",
                  "/etc/systemd/system/vy-oom-order.timer"):
-        assert set(rows[path]["nodes"]) == nodes and nodes <= set(m["nodes"]), path
-    assert rows["/etc/systemd/system/vy-oom-order.timer"]["run"] == ["systemd:vy-oom-order.timer"]
+        row, = (e for e in m["file"] if e["path"] == path)
+        assert set(row["nodes"]) == {"vy-nebius-1", "vy-nebius-2"} | cpu, f"{path}: {fix}"
+    for path in ("/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
+                 "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"):
+        assert cpu <= {n for e in m["file"] if e["path"] == path for n in e["nodes"]}, f"{path}: {fix}"
+    row, = (e for e in m["file"] if e["path"] == "/etc/systemd/system/vy-oom-order.timer")
+    assert row["run"] == ["systemd:vy-oom-order.timer"]
     unit = (src.parent / "vy-oom-order.service").read_text()
     assert "ExecStart=/usr/bin/python3 /usr/local/lib/vy-monitoring/oom_order.py\n" in unit and "User=" not in unit

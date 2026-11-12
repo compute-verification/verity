@@ -5,6 +5,28 @@ from math import isfinite
 import pytest
 
 
+def test_a_cases_serve_tax_is_the_sum_of_the_cards_named_parts():
+    """The planner's serve tax is the serve_tax card's (A), part by part: a case with no lever pays every part and so
+    the card's total; one whose replay reads the edge's state live pays every part but the edge snapshot; one with its
+    own replay-block length pays the edge's pause over that length; and the planner reads every part the card names,
+    so a part added to the card can't be left out of a case's tax."""
+    from breakeven import sweep
+
+    parts, tc = sweep.PARTS, sweep.tc
+    assert set(parts) == {*sweep.SERVED, tc.EDGE} and len(sweep.SERVED) == len(set(sweep.SERVED))
+    assert {"step record", "two-stage boundary commitment", "history tables"} <= set(sweep.SERVED)
+    assert sweep.Case().tax() == pytest.approx(sum(parts.values()), rel=1e-12)
+    assert sweep.Case().tax() == pytest.approx(sweep.TAXES["tokens"]["tax"], rel=1e-12)
+    served = sum(parts[p] for p in sweep.SERVED)
+    assert sweep.Case(live=True).tax() == pytest.approx(served, rel=1e-12)
+    assert parts[tc.EDGE] == pytest.approx(sweep.EDGE_PAUSE / sweep.WINDOW, rel=1e-12)
+    assert sweep.Case(edge_s=60.0).tax() == pytest.approx(served + sweep.EDGE_PAUSE / 60.0, rel=1e-12)
+    assert sweep.Case(form="one-stage").tax() == sweep.TAX_ONE_STAGE
+    for name, case in sweep.cases().items():
+        if case.form != "one-stage":
+            assert case.tax() >= served, name
+
+
 @pytest.mark.slow
 def test_the_proof_servers_line_prices_on_figure_1s_path():
     """`P5+poolwin600`, the proof server's line at its last step, builds from the cards (fused per-expert reads, the

@@ -17,6 +17,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from research import jobuser
@@ -526,10 +527,222 @@ def test_every_root_command_of_a_job_is_one_vy_sudo_takes_and_both_allowlists_na
     assert jobuser.helper(str(LOCKOUT / "vy_sudo.py")), "the helper this tree installs has the job's forms"
 
 
+@pytest.mark.parametrize("listed", [("user",), ("mnt",), ("net",), ("user", "mnt"), ("user", "net"), ("mnt", "net"), ("user", "mnt", "net")])
+def test_vy_sudo_and_both_allowlists_take_a_unit_that_may_make_the_namespaces_its_run_listed(listed, tmp_path):
+    """`research run --job-namespaces LIST` reaches the unit as RestrictNamespaces=<the list>, one argument with spaces in it.
+    vy-sudo passes a property it lists with the value it was given, so which lists a run may give stays research's rule
+    (jobuser.check_namespaces); were the value held to `yes` here, such a run would fail at its unit's start on a locked node."""
+    d = tmp_path / "runs" / "r1"
+    (d / "control").mkdir(parents=True)
+    env = d / "control" / "job.env"
+    env.write_text("A=1\n")
+    os.chown(env, CALLER, CALLER_GID)
+    unit = jobuser.Unit(name="research-job-r1", user="vyjob", run_dir=str(d), cwd=str(d), env_file=str(env), namespaces=listed)
+    argv = [*jobuser.unit_argv(unit, via=True), "true"]
+    prop = "RestrictNamespaces=" + " ".join(sorted(listed))
+    assert argv.count(prop) == 1
+    out = VS.systemd_run(argv[4:], CALLER, CALLER_GID, user=_pw(pw_gid=990))
+    assert [a for a in out if a.startswith("RestrictNamespaces=")] == [prop] and out[out.index(prop) - 1] == "-p"
+    assert out.count("-p") == argv.count("-p"), "every property of the unit reaches systemd-run"
+    for p in LO.PROFILES:
+        assert LO.allowed("research", "root", " ".join(argv[2:]), p), p.file
+
+
+def _unit_ns(*props: str) -> list[str]:
+    """vy-sudo's arguments for a job's unit carrying each `RestrictNamespaces=<value>` of `props`, each as its own `-p`."""
+    head = ["--unit=research-job-r1", "--uid=vyjob", "--wait", "--pipe"]
+    return [*head, *(x for v in props for x in ("-p", f"RestrictNamespaces={v}")), "--", "true"]
+
+
+def test_vy_sudo_refuses_a_restrict_namespaces_value_that_would_widen_the_unit():
+    """RestrictNamespaces= only narrows at `yes` (no namespace) or a space-separated list out of NAMESPACES (only those); `no`, a
+    `~` list, a type outside the set, or anything else widens the unit, so vy-sudo refuses it. The set is the launcher's
+    (jobuser.check_namespaces), held equal here because vy-sudo is a lone `python3 -I` script on the node and can't import it."""
+    assert set(VS.NAMESPACES) == set(jobuser.NAMESPACES)
+    job = _pw(pw_gid=990)
+    allowed = ("yes", "user", "mnt", "net", "user mnt", "net user", "user mnt net", "user user", "  user   mnt ")
+    for value in allowed:
+        out = VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+        assert [a for a in out if a.startswith("RestrictNamespaces=")] == [f"RestrictNamespaces={value}"], value
+    widening = ("", "no", "false", "0", "off", "~", "~user", "~user mnt", "yes mnt", "YES", "Yes", "User", "MNT",
+                "user,mnt", "user,net", "pid", "cgroup", "uts", "ipc", "user pid", "bogus", "all")
+    for value in widening:
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(value), CALLER, CALLER_GID, user=job)
+    # a property repeated with different values: vy-sudo checks each occurrence, so a widening one is caught wherever it sits,
+    # whichever systemd would take last
+    assert VS.systemd_run(_unit_ns("user", "mnt"), CALLER, CALLER_GID, user=job).count("RestrictNamespaces=user") == 1
+    for pair in (("user", "no"), ("no", "user"), ("yes", "~net")):
+        with pytest.raises(VS.Refused, match="RestrictNamespaces"):
+            VS.systemd_run(_unit_ns(*pair), CALLER, CALLER_GID, user=job)
+    with pytest.raises(VS.Refused, match="widen the unit: only .* mnt, net, user"):
+        VS.systemd_run(_unit_ns("no"), CALLER, CALLER_GID, user=job)
+
+
 def test_job_user_is_never_root_or_a_privileged_account():
     for name in ("root", "0", "no-such-user-vy"):
         with pytest.raises(VS.Refused):
             VS.job_user(name)
+
+
+# ---- vy-sudo: which accounts are job users --------------------------------------------------------------------------------------
+
+DAEMONS = ("polkitd", "messagebus", "_chrony")
+SUDO_ENV = {"SUDO_UID": str(CALLER), "SUDO_GID": str(CALLER_GID)}
+
+
+class Accounts:
+    """Stand-ins for vy-sudo's `pwd` and `grp`: `users` is name -> (uid, primary group), `groups` name -> its member list."""
+
+    def __init__(self, users: dict[str, tuple[int, str]], groups: dict[str, tuple[str, ...]]):
+        gid = {g: 0 if g == "root" else CALLER + 100 + i for i, g in enumerate(groups)}
+        self.users = [SimpleNamespace(pw_name=n, pw_uid=u, pw_gid=gid.get(g, CALLER + 99)) for n, (u, g) in users.items()]
+        self.groups = [SimpleNamespace(gr_name=g, gr_gid=gid[g], gr_mem=list(mem)) for g, mem in groups.items()]
+
+    @staticmethod
+    def _one(rows, field, value):
+        for r in rows:
+            if getattr(r, field) == value:
+                return r
+        raise KeyError(value)
+
+    def getpwnam(self, name):
+        return self._one(self.users, "pw_name", name)
+
+    def getpwuid(self, uid):
+        return self._one(self.users, "pw_uid", uid)
+
+    def getgrgid(self, gid):
+        return self._one(self.groups, "gr_gid", gid)
+
+    def getgrall(self):
+        return list(self.groups)
+
+
+def _node(monkeypatch, listed: tuple[str, ...] = ("vyjob",), group: bool = True, admin_group: str = "vy-admin") -> Accounts:
+    """vy-sudo on a node with these accounts: root (and `toor`, uid 0 too), vy-admin, three daemons' (each in its own group and
+    no other), `vyjob` (made for jobs), `ops` (in sudo), `imager` (primary group disk) and `byprimary` (primary group the job
+    users'), with `listed` as the job users' group's member list; `group=False` is a node that has no such group."""
+    uid = {n: CALLER + i for i, n in enumerate(("vy-admin", *DAEMONS, "vyjob", "ops", "imager", "byprimary"), 1)}
+    own = ("vy-admin", *DAEMONS, "vyjob", "ops")
+    users = {"root": (0, "root"), "toor": (0, "root"), **{n: (uid[n], n) for n in own}, "vy-admin": (uid["vy-admin"], admin_group),
+             "imager": (uid["imager"], "disk"), "byprimary": (uid["byprimary"], VS.JOB_GROUP)}
+    groups = {"root": (), **{n: () for n in own}, "users": (), "disk": (), "sudo": ("ops",),
+              **({VS.JOB_GROUP: tuple(listed)} if group else {})}
+    acc = Accounts(users, groups)
+    monkeypatch.setattr(VS, "pwd", acc)
+    monkeypatch.setattr(VS, "grp", acc)
+    return acc
+
+
+def _unit_as(who: str) -> list[str]:
+    """vy-sudo's arguments for a job's unit that runs as `who`."""
+    return ["systemd-run", "--unit=research-job-r1", f"--uid={who}", "--wait", "--pipe", "--collect", "--quiet", "--", "python3", "job.py"]
+
+
+def test_a_daemons_account_is_no_job_user_for_a_unit_or_for_job_reclaim(tmp_path, monkeypatch):
+    """A daemon's account (polkitd, messagebus, _chrony) is in no privileged group, and some are root by another name: only a
+    list of the accounts that are job users keeps a caller from running a unit as one or taking its files."""
+    acc = _node(monkeypatch)
+    d, _outside = _left_by_a_job(tmp_path)
+    for who in (*DAEMONS, *(str(acc.getpwnam(n).pw_uid) for n in DAEMONS)):
+        for argv in (_unit_as(who), ["env", "PATH=/usr/bin", *_unit_as(who)]):
+            with pytest.raises(VS.Refused, match="is not a job user"):
+                VS.plan(argv, SUDO_ENV)
+        with pytest.raises(VS.Refused, match="is not a job user"):
+            VS.reclaim([str(d), who], ME, MY_GID, say=lambda s: pytest.fail("nothing is removed"))
+    assert (d / "to-dir").is_symlink() and (d / "out" / "sub" / "fifo").is_fifo()
+
+
+def test_an_account_is_a_job_user_once_root_lists_it_in_the_job_users_group(tmp_path, monkeypatch):
+    d, _outside = _left_by_a_job(tmp_path)
+    _node(monkeypatch, listed=())
+    with pytest.raises(VS.Refused, match="vyjob is not a job user"):
+        VS.plan(_unit_as("vyjob"), SUDO_ENV)
+    with pytest.raises(VS.Refused, match="vyjob is not a job user"):
+        VS.reclaim([str(d), "vyjob"], ME, MY_GID)
+    acc = _node(monkeypatch, listed=("vyjob",))                     # after `usermod -aG`
+    uid = acc.getpwnam("vyjob").pw_uid
+    for who in ("vyjob", str(uid)):
+        argv, _env = VS.plan(_unit_as(who), SUDO_ENV)
+        assert argv[0] == "/usr/bin/systemd-run" and f"--uid={who}" in argv and argv[-2:] == ["python3", "job.py"]
+    assert VS.job_user("vyjob").pw_uid == uid
+    removed: list[str] = []
+    assert VS.reclaim([str(d), "vyjob"], ME, MY_GID, say=removed.append) == 0 and removed == [], "nothing here is vyjob's"
+
+
+def test_the_job_users_group_as_a_primary_group_makes_no_job_user(monkeypatch):
+    """Only the group's member list counts: `getent group` then prints every job user, and a gid that comes to equal the
+    group's grants nothing."""
+    _node(monkeypatch, listed=("vyjob",))
+    with pytest.raises(VS.Refused, match=f"byprimary is not a job user.*{VS.JOB_GROUP} as its primary group doesn't count.*"
+                                         f"usermod -aG {VS.JOB_GROUP} byprimary"):
+        VS.plan(_unit_as("byprimary"), SUDO_ENV)
+    _node(monkeypatch, listed=("vyjob", "byprimary"))
+    assert VS.plan(_unit_as("byprimary"), SUDO_ENV)[0][0] == "/usr/bin/systemd-run"
+    _node(monkeypatch, group=False)
+    with pytest.raises(VS.Refused, match="byprimary's group .* has no entry"):
+        VS.plan(_unit_as("byprimary"), SUDO_ENV)
+
+
+def test_a_listed_account_in_a_privileged_group_is_still_refused(monkeypatch):
+    """The list adds a condition and takes none away: an account listed while it is in sudo, or whose own group is disk."""
+    _node(monkeypatch, listed=("vyjob", "ops", "imager"))
+    for who, why in (("ops", "ops is in sudo: not a job user"), ("imager", "imager is in disk: not a job user")):
+        with pytest.raises(VS.Refused, match=why):
+            VS.plan(_unit_as(who), SUDO_ENV)
+        with pytest.raises(VS.Refused, match=why):
+            VS.reclaim(["/nonexistent", who], CALLER, CALLER_GID)
+    _node(monkeypatch, listed=())
+    for who in ("ops", "imager"):
+        with pytest.raises(VS.Refused) as e:
+            VS.plan(_unit_as(who), SUDO_ENV)
+        assert "usermod" not in str(e.value), "listing it would not make it a job user, so the refusal doesn't say to"
+
+
+def test_root_and_vy_admin_are_never_job_users_whatever_their_groups(monkeypatch):
+    acc = _node(monkeypatch, listed=("root", "toor", "vy-admin", "vyjob"), admin_group="users")
+    for who in ("root", "0", "toor", "vy-admin", str(acc.getpwnam("vy-admin").pw_uid)):
+        with pytest.raises(VS.Refused, match="can't be a job user"):
+            VS.plan(_unit_as(who), SUDO_ENV)
+        with pytest.raises(VS.Refused, match="can't be a job user"):
+            VS.reclaim(["/nonexistent", who], CALLER, CALLER_GID)
+
+
+def test_the_refusal_of_an_unlisted_account_names_who_lists_it_and_with_what_command(monkeypatch, capsys):
+    """What the caller reads on stderr (and a `--job-user` run in its log): vy-admin can act on it without the source."""
+    fix = f"sudo groupadd -f --system {VS.JOB_GROUP} && sudo usermod -aG {VS.JOB_GROUP} vyjob"
+    monkeypatch.setattr(os, "geteuid", lambda: 0)                   # as sudo runs it
+    monkeypatch.setattr(os, "execve", lambda *a: pytest.fail("nothing runs"))
+    for name, value in SUDO_ENV.items():
+        monkeypatch.setenv(name, value)
+    for group in (True, False):                                     # the group with other members, and a node without the group
+        _node(monkeypatch, listed=("ops",), group=group)
+        for argv in (_unit_as("vyjob"), ["job-reclaim", "/nonexistent", "vyjob"]):
+            assert VS.main(argv) == VS.REFUSED
+            err = capsys.readouterr().err
+            assert err.startswith(f"vy-sudo: refused: vyjob is not a job user: it is not listed in group {VS.JOB_GROUP}"), err
+            assert fix in err and "root (vy-admin, after the lock-out)" in err and "made to run jobs and nothing else" in err
+
+
+def test_the_plan_the_readme_and_research_give_the_command_that_makes_a_job_user(monkeypatch):
+    """No tool makes a job user, so the command is where an operator reads it, and each place names vy-sudo's group."""
+    group = VS.JOB_GROUP
+    assert jobuser.JOB_GROUP == LO.JOB_GROUP == group
+    make, grant = f"sudo groupadd -f --system {group}", f"sudo usermod -aG {group} USER"
+    for text in (LO.plan_text("vy-nebius-1"), LO.plan_text(CPU13), (LOCKOUT / "README.md").read_text(), VS.__doc__):
+        assert make in text and grant in text
+    deploy = next(ln for ln in LO.plan_text(CPU13).splitlines() if ln.startswith("1. deploy"))
+    assert make in deploy and grant in deploy, "vy-sudo is the one asked from the deploy on, so the plan has it there"
+
+    def missing(name):
+        raise KeyError(name)
+    with pytest.raises(jobuser.Refused) as e:
+        jobuser.check_user("newjob", getpwnam=missing, getgrall=list)
+    said = str(e.value)
+    assert f"{make} && sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups {group} newjob" in said
+    acc = _node(monkeypatch, listed=())                             # research's own admission has no such rule: vy-sudo's alone
+    assert jobuser.check_user("vyjob", getpwnam=acc.getpwnam, getgrall=acc.getgrall, uid=CALLER, gid=CALLER_GID).pw_name == "vyjob"
 
 
 # ---- vy-lockout: the allowlist --------------------------------------------------------------------------------------------------

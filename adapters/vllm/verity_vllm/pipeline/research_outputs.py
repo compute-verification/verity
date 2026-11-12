@@ -12,7 +12,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
                                       weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
     build   -> vllm-build/v1          build_summary.json, build_workload/{workload_program.json, descriptor.json.gz} (the workload
                                       Program), build_step/ and build_request*/ descriptor files (never
-                                      instances.json.gz), manifest.json (the required-value manifest, when built), target_family / admission /
+                                      instances.json.gz), manifest.json (the required-value manifest, when built), target_family /
                                       source_identity / tree / release records; meta {row, stage, program_digest, workload_digest,
                                       correspondence_digest?, required_manifest, stage_status}
     match   -> vllm-match-record/v1   match/instances.jsonl, match/program.json, match/run.json, match/versions.json, global_match.json,
@@ -26,7 +26,7 @@ all, and gets each stage's entries that stages.txt records (`build_stages`):
                                       a config run (`config` verdict line) decides in config_record.json instead, at TP1 and TP
     replay  -> vllm-verdict/v1        config_record.json beside the rewritten Commit record (a TP row that is not a config run decides in
                                       commit/summary.json, as tp-commit-replay folded it)
-    (all)   -> execution-evidence/v1  stages.txt, admission.json; meta {row, stage}
+    (all)   -> execution-evidence/v1  stages.txt; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
 No entry holds a private file (`private`), wherever it sits, and these stay on the node, prover-side:
@@ -81,7 +81,7 @@ PRIVATE = ("tokens.json", "tokens_p*.json", "match_stoch.json", "sampled_replay*
 
 BUILD_FILES = ["build_summary.json", "build_workload/workload_program.json", "build_workload/descriptor.json.gz", "manifest.json",
                "target_family.build.json", "target_family.json",
-               "admission.json", "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
+               "source_identity.json", "tree.json", "release.json", "build_request/digest.txt"]
 MATCH_FILES = ["match/instances.jsonl", "match/program.json", "match/run.json", "match/versions.json", "global_match.json",
                "match_summary.json", "match_compare.json", "match_decomp.json", "match_shape.json", "match/fold_summary.json",
                "match/tp2_match.json", "match/fold_match/tp2_fold_match.json", "match/capture/versions.json", "match/control/versions.json"]
@@ -90,7 +90,7 @@ TP_BUILD_GLOBS = ["build/rank*/build_step", "build/rank*/build_request*", "build
 TP_LOG_GLOBS = ["build/rank*/*.log", "match/*.log"]
 PLAN_FILES = ["plan/commit_plan.json", "plan.log", "weights_of_record.log", "manifest.log"]
 COMMIT_FILES = ["verdict.json", "config_record.json", "weights_of_record.log", "manifest.log", "manifest_verify.log"]
-EVIDENCE_FILES = ["stages.txt", "admission.json"]
+EVIDENCE_FILES = ["stages.txt"]
 
 
 def _read_json(p: Path) -> Any:

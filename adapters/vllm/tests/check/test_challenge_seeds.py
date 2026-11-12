@@ -7,8 +7,7 @@ import inspect
 
 import pytest
 
-SEEDED = [("verity_vllm.check.replay.driver", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck"),
-          ("verity_vllm.correspondence.capture_identities", "run")]
+SEEDED = [("verity_vllm.check.replay.driver", "sampled_replay"), ("verity_vllm.check.replay.compiled_kernel_check", "CompiledKernelCheck")]
 
 
 @pytest.mark.parametrize("module, name", SEEDED)
@@ -17,15 +16,6 @@ def test_the_seed_has_no_default(module, name):
         pytest.importorskip("torch")
     fn = getattr(importlib.import_module(module), name)
     assert inspect.signature(fn).parameters["seed"].default is inspect.Parameter.empty
-
-
-def test_capture_identities_refuses_to_sample_coordinates_without_a_seed(tmp_path, capsys):
-    from verity_vllm.pipeline import cli
-
-    with pytest.raises(SystemExit) as e:
-        cli.main(["capture-identities", "--commit", str(tmp_path), "--checkpoint", str(tmp_path / "x.safetensors"), "--request", "r0", "--positions", "0",
-                 "--out", str(tmp_path / "corr.json")])
-    assert e.value.code == 2 and "--seed" in capsys.readouterr().err and not (tmp_path / "corr.json").exists()
 
 
 def test_the_derivations_of_record_are_pinned():

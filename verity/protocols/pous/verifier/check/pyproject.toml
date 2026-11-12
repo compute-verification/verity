@@ -53,6 +53,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
           # (`deploy.stream.Side`) and runs on
           "verity/configuration/deploy", "verity/configuration/wire",
           "verity/protocols/flock/verifier/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "benchmarks/pous/band_gpu/__init__.py",

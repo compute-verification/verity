@@ -26,6 +26,8 @@ its facts and every link-window's its scan's, so the public's `audits` and `unit
 sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses a stratified profile with a stratum
 sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
 of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`).
+
+`RowsCapPublished` reads the public off the acceptance, in each form.
 -/
 
 @[expose] public section
@@ -145,7 +147,7 @@ def tiedWindow : Lean.Json :=
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
 def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
-def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, none⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Lean.Json :=
@@ -321,12 +323,14 @@ def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd 
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
     some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
 
-/-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public. -/
+/-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public, the
+rows form's (`rowsPublic`) with the schedule's response cap. -/
 theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
     {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) :
     c.audits.size = p.audits.size ∧ e.windows.size = c.windows.size ∧ e.audits.size = c.audits.size ∧
       (∀ y ∈ rowsWindows p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
-      pub = rowsPublic p c (auditChecks p c e) scan ((rowsWindows p c e s sd).filterMap (·.toOption.join)) := by
+      pub = { rowsPublic p c (auditChecks p c e) scan ((rowsWindows p c e s sd).filterMap (·.toOption.join)) with
+        maxTokensCap := p.form.maxTokensCap } := by
   unfold check at h
   split at h
   · cases h
@@ -351,6 +355,7 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
         (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
     · injection h with hp
+      rw [hform]
       exact hp.symm
 
 theorem auditChecks_getElem? {p : Params} {c : Commitment} {e : Evidence} {i : ℕ} {a : Audit} {reg : Lean.Json}
@@ -561,5 +566,45 @@ theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
   simp [rowsTerms] at hf
+
+/-! ## The published response cap -/
+
+theorem rowsCapPublished : RowsCapPublished := by
+  intro p c e pub prof h
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;> simp [CapPublished, hf]
+
+/-- **`RowsCapPublished`'s honest lemma**: the period check accepts a period under a schedule with a response cap,
+`cappedPeriod` with nothing registered. A period with link-windows needs the network certifier's LMS signatures and
+one-stage's answers, which the period's difftest builds and checks against the mirror. -/
+theorem rowsCapPublished_honest :
+    ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
+
+/-- **`RowsCapPublished`'s nontrivial lemma**: the public `acceptAllRows` publishes for `cappedPeriod`, the rows form's
+terms of no link-window, names no cap, and the period's schedule has one. -/
+theorem rowsCapPublished_nontrivial :
+    ¬ CapPublished cappedPeriod
+      (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] cappedPeriod.cells cappedPeriod.jitter cappedPeriod.windows) := by
+  intro h
+  cases h
+
+/-- **No period check that accepts every period has `RowsCapPublished`'s property.** -/
+theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
+  fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
 
 end Properties.NetworkPeriod

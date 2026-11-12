@@ -9,7 +9,7 @@ committed false output word, a false output claim, a flipped internal bit). The 
 (`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
 that refusal in `lean_refused_no_program`, apart from Lean's acceptances (`lean_accepted`), and never as an acceptance.
 
-Three kinds of type (`stage.py`'s docstring has each):
+Four kinds of type (`stage.py`'s docstring has each):
 
 - a Definition proved as one proof block (`UNITS`: the FP8 GEMM coordinate with scale groups of 128, the W8A8 GEMM
   coordinate), staged by `class_statement.stage_unit` on PoUW's row convention, each input's output held to the Program's
@@ -22,7 +22,9 @@ Three kinds of type (`stage.py`'s docstring has each):
   K = 6144; any other by `census:NAME`, the name verbatim), one whole Definition a proof block, staged like a `UNITS`
   type on bf16 rows, held to the Program's reference; FlashInfer's FP8 linear and its quantisation part, the MoE router
   and DSA's indexer query (`fi`, `fi-quant`, `router-row`, `router-slots`, `dsa-q-row`) are their Boolean `_v2`
-  templates as served, flat, their MUFU reads in gates.
+  templates as served, flat, their MUFU reads in gates;
+- a table read (`READS`: `table-read`, a sparse MLA history table's read at its capacity), staged as serving stages a read,
+  on the verifier's own read template (`flock-read-tmpl`), each honest read's row held to the table's.
 
 Files:
 

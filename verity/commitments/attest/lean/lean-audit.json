@@ -3,9 +3,9 @@
  "roots": ["Attest"],
  "layers": {
   "Attest": {
-   "imports": ["Flock", "Lms.Hss", "Attest"],
+   "imports": ["Commitments", "Lms.Hss", "Attest"],
    "except": [],
-   "why": "the period and liveness checks are code: Lean core, C-Flock's frames, hashes and bytes and LMS's HSS only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
+   "why": "the period and liveness checks are code: Lean core, frame-v3 (`core_commitments`), core's randomness and LMS's HSS only, no Mathlib and nothing of Security; the period and liveness checks are code: Lean core, C-Flock's frames, hashes and bytes and LMS's HSS only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
   }
  },
  "guarantees": {},

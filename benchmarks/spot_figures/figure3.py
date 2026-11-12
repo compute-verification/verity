@@ -4,7 +4,8 @@
   spent (x), each series' measured points and its best so far, for the series that name no model of the post.
 * Right, the model's serve-time cuts: each cut's bytes a token (`design`'s token bytes, the `workload` card's
   `boundaries`, the `infiltration` card's boundary) over the `commitment` card's hash rate, against the token's
-  serving GPU-seconds at Figure 1's MFU and peak (modeled), beside the card's series that name the model (measured).
+  serving GPU-seconds at Figure 1's MFU and peak (modeled; under `serving="measured"` at the `serving_rate` card's
+  rate, `figure1.token_seconds`), beside the card's series that name the model (measured).
 
     uv run python benchmarks/spot_figures/figure3.py card HASH_LOOP.json --art art:...
 """
@@ -64,12 +65,12 @@ def best(points: list[dict]) -> list[float]:
     return out
 
 
-def run(model: str) -> dict:
+def run(model: str, serving: str = "assumed") -> dict:
     hc = spot_cards.load("commit_hillclimb", None, required=False)
-    sc = figure1.slot_cards(model)
-    c = figure1.cards(model)
+    sc = figure1.slot_cards(model, serving)
+    c = figure1.cards(model, serving=serving)
     part = figure1.TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
-    token_s = 2 * part.served_macs / (c["mfu_serve"].value * c["peak_flops"].value)
+    token_s = figure1.token_seconds(c, part.served_macs)
     rate = c["hash_rate"].value
     cuts = {"tokens": c["token_bytes"].value} | sc["workload"]["value"].get("boundaries", {})
     modeled = [{"cut": k, "label": CUT_NAMES[k], "bytes_per_token": b, "share": b / rate / token_s}
@@ -82,7 +83,8 @@ def run(model: str) -> dict:
     climb = [s | {"best": best(s["points"])} for s in series if s.get("model") is None]
     measured = [{"label": s["label"], "share": s["points"][-1]["y"], "runs": s["points"][-1]["runs"]}
                 for s in series if s.get("model") == model]
-    return {"schema": SCHEMA, "model": model, "cards": {k: v for k, v in sc.items() if k != "proof_overhead"}
+    return ({"serving": figure1.reading(sc, c, part)} if serving == "measured" else {}) | {
+            "schema": SCHEMA, "model": model, "cards": {k: v for k, v in sc.items() if k != "proof_overhead"}
             | ({"commit_hillclimb": hc} if hc else {}),
             "status": "card" if hc else "pending",
             "x": hc["value"]["x"] if hc else None, "y": hc["value"]["y"] if hc else None,

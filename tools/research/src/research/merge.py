@@ -20,8 +20,8 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
-ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`) is required of no
+check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
 there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -123,7 +123,8 @@ REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: slot.py's options (`SLOT_FLAGS`, `SLOT_OPTS`), each at most once and in any order, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
-#: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
+#: slot.py's options a recorded check may carry: which slot it waits for, and how long, never what it runs (not `--budget-gb`,
+#: which changes how much CMD starts at once)
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
@@ -216,8 +217,8 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
     those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
-    can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    can't be read.  A job off the gate runs after landing, in drive's after-landing run, whose red names its culprit; no check
+    needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)

@@ -35,6 +35,8 @@ harness (`verity/core/difftest`):
   `core_check.rounds` takes it): null, or `{"refused": [code, why]}`.
 * `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
   `{"refused": why}`; any other input is a reject.
+* `ratio` (`s` and `ctx`, strings): `Core.Ratio.ofString s ctx` (`core_check.ratio`) as `{"ratio": [num, den]}`, each in
+  lowercase hex, which no limit on decimal digits touches, or `{"refused": why}`.
 
 The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
 `ValueError`, and a malformed input a reject:
@@ -136,6 +138,14 @@ def chunksOf (j : Json) : Except String Json := do
     | .ok n => Json.mkObj [("chunks", toJson n)]
     | .error why => Json.mkObj [("refused", Json.str why)]
 
+def ratioOf (j : Json) : Except String Json := do
+  let .str s ← get j "s" | throw "the input's s is not a string"
+  let .str ctx ← get j "ctx" | throw "the input's ctx is not a string"
+  let hex (n : Nat) : Json := .str (String.ofList (Nat.toDigits 16 n))
+  pure <| match Core.Ratio.ofString s ctx with
+    | .ok r => Json.mkObj [("ratio", Json.arr #[hex r.num, hex r.den])]
+    | .error why => Json.mkObj [("refused", Json.str why)]
+
 def intOf (j : Json) (k : String) : Except String Int := do need k (PouwWindow.strictInt? (← get j k))
 
 def natOf (j : Json) (k : String) : Except String Nat := do
@@ -201,8 +211,8 @@ def leadWindowOf (j : Json) : Except String Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
-  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("lead-record", leadRecordOf),
-  ("lead-instance", leadInstanceOf), ("lead-unit", leadUnitOf), ("lead-egress", leadEgressOf),
-  ("lead-window", leadWindowOf)]
+  ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf),
+  ("lead-record", leadRecordOf), ("lead-instance", leadInstanceOf), ("lead-unit", leadUnitOf),
+  ("lead-egress", leadEgressOf), ("lead-window", leadWindowOf)]
 
 end PouwCheck.Difftest

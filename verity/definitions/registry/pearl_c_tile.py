@@ -2,7 +2,6 @@
 product, built from the devices' own tensor-core steps, and the unscale that serves y from its U, each with its Boolean
 version.
 
-    PearlCChain_v1{K,DOT,G}           (a, b: Array<K, E4M3>) -> F32                                       the device's chain
     PearlCTileReadCell_v1{K,DOT,G}    (a, b: Array<K, E4M3>, pa, pb: Array<64, BF16>) -> (F32, F32)       one word's C̃ and U
     PearlCTileRead_v1{K,TM,TN,DOT,G}  (ac: Array<TM, Array<K, E4M3>>, bc: Array<TN, Array<K, E4M3>>,
                                        pa: Array<TM, Array<64, BF16>>, pb: Array<TN, Array<64, BF16>>)
@@ -11,6 +10,9 @@ version.
                                        [, bias: Array<TN, BF16>]) -> Array<TM, Array<TN, BF16>>           the served y
     each _v2                          σ of its _v1 (`verity.definitions.boolean.sigma_lift`): the same body on bits, ``DOT``
                                       the step's Boolean Definition, read as its word
+
+The device's chain is `verity.definitions.registry.pearl_c_forming`'s `PearlCChain_v1{K,DOT,G}`, the one Definition of it, which
+each word calls.
 
 **The order** is `verity.protocols.pouw.verifier.schemes.pearl_c_u`'s, op for op.  A′, B̃ are the formed E4M3 operands (K codes
 each) and P_A,i, P_B,j the peel's 64 BF16 factors of row i and column j; every word is FP32 unless named.
@@ -29,7 +31,7 @@ y_ij          RN_bf16(RN_f32(RN_f32(U_ij · RN_f32(1/α_A,i)) · RN_f32(1/α_B,j
 or `BlackwellE4m3QmmaDot32_v1` (the sm_120 records); ``G`` is the device's promotion period, 4 on both.  The peel's step is
 `HopperBF16WgmmaDot16_v1` (``HOPPER_BF16_WGMMA_K16``) on every record, as in `pearl_c_device`.  No −0 arises: each step's zero
 is +0 and the total starts at +0, so the reference's −0 → +0 after a promotion never fires.  K is a multiple of 32 and G at
-least 1; the scheme's own domain (128 | K) is narrower.
+least 1 (the chain's own G = 0, the unpromoted record, is refused here); the scheme's own domain (128 | K) is narrower.
 
 **The served y** is the Pearl-C kernels' epilogue (`store_y` in ``benchmarks/pouw/pearl_c_sm90`` and ``pearl_c_sm120``): each
 output word ``__float2bfloat16_rn(__fmul_rn(__fmul_rn(u, ia_i), ib_j))``, where ia = ``__frcp_rn(α)``, a correctly rounded
@@ -45,14 +47,15 @@ this registry, nor this registry core, so the two are separate bodies, and core'
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.fp32 import Bf16Add, F32AddV2, F32DivV2, F32MulV2
-from verity.definitions.ops.prims import ZERO32, F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.definitions.ops.fp32 import Bf16Add, F32DivV2, F32MulV2
+from verity.definitions.ops.prims import F2fpBf16, HopperBF16WgmmaDot16, const
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.boolean import sigma_lift
+from verity.definitions.registry.pearl_c_forming import PearlCChain
 
-__all__ = ["PearlCChain", "PearlCChainV2", "PearlCTileRead", "PearlCTileReadCell", "PearlCTileReadCellV2", "PearlCTileReadV2",
-           "PearlCUnscale", "PearlCUnscaleV2"]
+__all__ = ["PearlCTileRead", "PearlCTileReadCell", "PearlCTileReadCellV2", "PearlCTileReadV2", "PearlCUnscale",
+           "PearlCUnscaleV2"]
 
 E4M3, BF16, F32 = Value(8), Value(16), Value(32)
 SLICE, PEEL, K16 = 32, 64, 16
@@ -73,24 +76,6 @@ def _refuse(b: dict) -> str | None:
         if (v := b.get(name)) is not None and (not isinstance(v, int) or v < 1):
             return f"{name} is a tile's {'rows' if name == 'TM' else 'columns'}, at least 1: {v!r}"
     return None
-
-
-def _chain_sig(S):
-    return (("a", Array(S.K, E4M3)), ("b", Array(S.K, E4M3))), F32
-
-
-@composite("PearlCChain", 1, ["K", "DOT", "G"], _chain_sig, conformance=CONFORMANCE, refuse=_refuse)
-def PearlCChain(B, S, a, b):
-    """The device's chain over a·b (`pearl_c_u.chain`): per window of 32·G products a fresh +0 accumulator takes the window's
-    ``DOT`` steps in k order, and one FP32 add promotes it into the total, from +0; the last window may be short."""
-    total = B.call(ZERO32)
-    window = SLICE * S.G
-    for ws in range(0, S.K, window):
-        local = B.call(ZERO32)
-        for s in range(ws, min(ws + window, S.K), SLICE):
-            local = B.call(S.DOT, local, a[s:s + SLICE], b[s:s + SLICE])
-        total = B.call(F32AddV2, total, local)
-    return total
 
 
 def _cell_sig(S):
@@ -155,7 +140,6 @@ def PearlCUnscale(B, S, u, alpha_a, alpha_b, *bias):
     return array_of(rows)
 
 
-PearlCChainV2 = sigma_lift(PearlCChain, 2)
 PearlCTileReadCellV2 = sigma_lift(PearlCTileReadCell, 2)
 PearlCTileReadV2 = sigma_lift(PearlCTileRead, 2)
 PearlCUnscaleV2 = sigma_lift(PearlCUnscale, 2)

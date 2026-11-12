@@ -53,6 +53,7 @@ ALLOWLIST = "50-vy-research"
 FALLBACK = "59-vy-research-fallback"
 ADMIN = "10-vy-admin"
 CLOUD_INIT = "90-cloud-init-users"
+JOB_GROUP = "vy-job"                                       # vy-sudo's JOB_GROUP: a job's unit runs only as an account listed in it
 BACKUP = Path("/root/vy-lockout")
 UNITS = Path("/etc/systemd/system")
 ENVS = Path("/etc/vy/env")
@@ -82,7 +83,7 @@ ALLOW = (
          "its own threads); vy-sudo: own pids only"),
     Rule("/usr/local/sbin/vy-sudo", "taskset *", "journal n2 491 + n1 217 `taskset -pc|-apc CPUS PID`; vy-sudo: own pid only"),
     Rule("/usr/local/sbin/vy-sudo", "systemd-run *", "journal n1 43 + n2 31 `systemd-run --scope ... --slice=`, n1 6 `--uid= --pipe` "
-         "(jobuser.py:196, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
+         "(jobuser.py unit_argv, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
     Rule("/usr/local/sbin/vy-sudo", "env *", "journal n2 48 `env PATH=* systemd-run --quiet --scope` (provers.sh:8, pous_quiet.sh:8, "
          "device.sh:17, fill_runner.py:472)"),
     Rule("/usr/local/sbin/vy-sudo", "systemctl *", "journal n2 2 `systemctl stop hidden-zk-*.scope` (scope.sh:18), fill_runner.py:399 "
@@ -728,7 +729,10 @@ def plan_text(node: str) -> str:
     rows = [
         ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
                    + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
-                   "sudoers.d or a unit's .d, and starts nothing)", "research deploy attic"),
+                   "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
+                   f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
+                   f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
+                   "jobs and nothing else (after the lock-out only vy-admin can)", "research deploy attic"),
         ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
                      + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
                                            "sshd lets only research log in until then); ")

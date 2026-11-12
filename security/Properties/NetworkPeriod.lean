@@ -46,6 +46,8 @@ many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTi
 `check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`), which the nontrivial lemmas state false at
 `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
 being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
+`RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
+its property of any period check, false at `acceptAllRows` too.
 -/
 
 @[expose] public section
@@ -181,9 +183,36 @@ def RowsTiedCharged : Prop :=
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window, no audit's facts and
-no charge: what `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedChargedOf` must fail at for `RowsProgWired`,
-`RowsStateTied` and `RowsTiedCharged` (each its `…Of` at `check`) to say something. -/
+no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf` and `RowsCapPublishedOf` must fail at for
+`RowsProgWired`, `RowsStateTied`, `RowsTiedCharged` and `RowsCapPublished` (each its `…Of` at `check`) to say
+something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+
+/-- The public `pub` publishes the response cap of the period's schedule (`Form.maxTokensCap`): the rows form's
+`max_tokens_cap`, none when its schedule has none and in the clock form. -/
+def CapPublished (p : Params) (pub : Public) : Prop := pub.maxTokensCap = p.form.maxTokensCap
+
+/-- **The period check publishes its schedule's response cap.** If the check accepts a period, its public's
+`max_tokens_cap` is the cap of the schedule the parameters name (`CapPublished`), the schedule whose digest every
+link-window's registrations bind (`rowsCheck`): a reader of the public, the communication audit's charge, reads the cap
+the network certifier held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
+schedule has none. -/
+def RowsCapPublished : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → CapPublished p pub
+
+/-- `RowsCapPublished` of any period check. -/
+def RowsCapPublishedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → CapPublished p pub
+
+/-- A rows-form schedule of one slot, one lane and a window of one step, with a response cap of 4. -/
+def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, some 4⟩
+
+/-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
+period `RowsCapPublished`'s witnesses are stated at. -/
+def cappedPeriod : Params :=
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
 
 end Properties.NetworkPeriod

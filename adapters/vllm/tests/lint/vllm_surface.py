@@ -32,8 +32,7 @@ SURFACE = {
     "vllm.config:set_current_vllm_config": "the config the meta-device frontend builds its model under",
     "vllm.platforms:current_platform": "the platform, whose device capability the frontend's profile pins and facts record",
     "vllm.platforms.interface:DeviceCapability": "a compute capability, to ask vLLM's tuned GEMM arch family for a device",
-    "vllm.utils:deep_gemm": "vLLM's DeepGEMM: its verdict, which the build inventory records, and the FP8 GEMMs "
-                            "engine.stock_kernels calls",
+    "vllm.utils:deep_gemm": "vLLM's DeepGEMM: its verdict, which the build inventory records",
     "vllm.utils:flashinfer": "vLLM's FlashInfer verdict, which the build inventory records",
     "vllm.utils.flashinfer:has_flashinfer": "vLLM's FlashInfer verdict for this process, which engine.build records",
     "vllm.utils.platform_utils:num_compute_units": "the SM count that fixes the top-p split's launch geometry",
@@ -51,9 +50,6 @@ SURFACE = {
     "vllm.distributed:tensor_model_parallel_all_reduce": "the all-reduce the export's TP ops stand in for",
     "vllm.distributed.parallel_state:get_pp_group": "a PoUW H1 rank's pipeline-parallel rank",
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
-    "vllm.distributed.device_communicators.cuda_communicator:CudaCommunicator": "a group's CUDA communicator, whose "
-                                                                                "all-reduce engine.collectives.all_reduce wraps",
-    "vllm.forward_context:get_forward_context": "the forward context, whose KV slot mapping the KV slots source reads",
     "vllm.forward_context:is_forward_context_available": "whether a forward context is set, which the fused rope asks "
                                                          "before it reads the KV slots",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
@@ -106,10 +102,6 @@ SURFACE = {
     "vllm.model_executor.layers.quantization:register_quantization_config": "registers the int8 quantization config",
     "vllm.model_executor.layers.quantization.base_config:QuantizationConfig": "the base of the int8 quantization config",
     "vllm.model_executor.layers.quantization.utils.quant_utils:is_layer_skipped": "the layers the int8 recipe leaves bf16",
-    "vllm.model_executor.layers.quantization.utils.fp8_utils:per_token_group_quant_fp8": "the per-token-group FP8 quant "
-                                                                                         "engine.stock_kernels calls",
-    "vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm:triton_scaled_mm":
-        "the Triton scaled GEMM engine.stock_kernels calls",
     "vllm.model_executor.layers.rotary_embedding.base:RotaryEmbedding": "the rotary embedding, whose CUDA forward the "
                                                                         "fused rope stands in for",
     "vllm.model_executor.layers.vocab_parallel_embedding": "the embedding's module, whose all-reduce the rank worker hooks",
@@ -142,9 +134,7 @@ SURFACE = {
     "vllm.v1.attention.ops.triton_decode_attention:decode_attention_fwd": "the Triton MLA decode the MLA capture calls",
     "vllm.v1.kv_cache_layout:KVCacheLayout": "the KV layout the int8 attention backend declares",
     "vllm._custom_ops": "vLLM's custom ops: the MoE router and sum the MoE sources hook, and the silu-mul difftest",
-    "vllm:_custom_ops": "vLLM's custom ops: the rotary embedding the RoPE difftests call, and the int8 quant and CUTLASS "
-                        "GEMM engine.stock_kernels calls",
-    "vllm.vllm_flash_attn:flash_attn_varlen_func": "the paged FlashAttention prefill engine.stock_kernels calls",
+    "vllm:_custom_ops": "vLLM's custom ops: the rotary embedding the RoPE difftests call",
     # sampling
     "vllm.v1.sample.ops:topk_topp_triton": "the Triton top-p kernels, whose split statistics the top-p probe reads",
     "vllm.v1.sample.ops.topk_topp_triton": "the Triton top-p module, which topp_pin pins and its check installs",

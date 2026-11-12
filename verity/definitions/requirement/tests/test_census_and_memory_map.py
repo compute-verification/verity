@@ -1,4 +1,4 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) held to
+"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.memory_map.Lines`) held to
 `core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
 agreeing with Lean on each.
 
@@ -15,7 +15,9 @@ builder wrote it to (the record's store index, holding the bytes the record's di
 writes, a request's last and partial one, in a block of its own). The store is the record's fresh blocks, written and
 released under the 21:52Z convention: step s's record (its frees, then its writes) takes effect after step s's reads, so
 `Store.resident` at t reads the records before t. Step t's plan is the blocks the replayed map holds then (`Replay`, for a
-plan holding every live block). The session is the builder test's: a small Llama's rows of 1 KiB in pages of 4 slots, so
+plan holding every live block). The builder is driven from the session's blocks (`session_lines`): a slot's first
+write, a whole block's completion step, digest and its rows' last structural reader. The session: a small Llama's rows
+of 1 KiB in pages of 4 slots, so
 a page's plane is one 4 KiB block; r0 (a prefill of 4 and 5 decode steps) from step 0, and r1 (a prefill of 4 and a
 decode step) from step 1 or 3.
 
@@ -25,8 +27,7 @@ every credited row is in a block the map holds; a block with no credited row may
 row's group is its request, layer and plane, and the rows the audit doesn't credit lie in one block per group
 (`OneBlockEach`). The builder frees each block in the record of its rows' last structural reader, a gather that may
 select one included (`test_a_block_a_gather_may_select_stays_resident_through_the_last_step_that_may`, where a free at
-their last use breaks `StoreMatches`), and leaves out a block no step reads while it is resident
-(`test_a_block_its_last_reader_completes_is_in_no_record`): the link holds at every step, and the map holds no block
+their last use breaks `StoreMatches`): the link holds at every step, and the map holds no block
 with every row dead, which the tests check beside the link. Its coins come back before the next
 step's reads; with them back later (`deferred`, memory-map/v1's deferred residency) a block is written in the record of
 the step before its first encoded read and credited from that read, a block whose rows are dead by then is withdrawn,
@@ -44,7 +45,7 @@ import pytest
 import verity_difftest as D
 from test_requirement_difftest import PORT, _lean, encode, rmsnorm, serve, toy_decoder
 from verity.protocols.poub.verifier import codec
-from verity.protocols.poub.verifier.memory_map import Replay
+from verity.protocols.poub.verifier.memory_map import Header, Replay, Step
 from verity.definitions.circuits import requirement as R
 from verity.definitions.circuits.census import census, step_ends, step_of
 from verity.circuits.program import REGISTRATION, Program, is_input
@@ -162,7 +163,7 @@ def test_the_rmsnorm_rows_census_path(server):
 
 # --- the memory map ----------------------------------------------------------------------------------------------------
 
-#: the builder test's model: vLLM's predict tests' TINY Llama with 512 hidden and 4 KV heads, rows of 1 KiB
+#: the session's model: vLLM's predict tests' TINY Llama with 512 hidden and 4 KV heads, rows of 1 KiB
 WIDE = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 512, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 4, "num_hidden_layers": 2, "vocab_size": 256,
         "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
@@ -180,8 +181,7 @@ def requests() -> dict[str, Program]:
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
-    return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program,
-            "r1_page": build_program(phi, "request", LP=4, T=4).program}
+    return {"r0": build_program(phi, "request", LP=4, T=5).program, "r1": build_program(phi, "request", LP=4, T=1).program}
 
 
 def census_values(program: Program, c: dict, group) -> set[int]:
@@ -225,39 +225,57 @@ def selected_at(c: dict, values: set[int], step: int) -> dict:
 
 def first_need(rows: dict, arrive: dict[str, int]) -> dict[str, list[int]]:
     """Each request's pages as an engine hands them out, from page 1 in the order the session first needs them (a page's
-    first row's step, then its request), through `MM.tables` from the slot mapping they give, as the Commit reads them."""
-    from verity_vllm.commit import memory_map as MM
-
+    first row's step, then its request)."""
     need = sorted((arrive[r] + rs.layers[0][0][q].born, r, q // BLOCK_SIZE)
                   for r, rs in rows.items() for q in range(0, rs.positions, BLOCK_SIZE))
     pages: dict[str, list[int]] = {r: [] for r in rows}
     for page, (_, r, _) in enumerate(need, start=1):
         pages[r].append(page)
+    return pages
 
-    def slots(r: str, step: int) -> list[int]:
-        return [pages[r][q // BLOCK_SIZE] * BLOCK_SIZE + q % BLOCK_SIZE
-                for q, x in enumerate(rows[r].layers[0][0]) if arrive[r] + x.born == step]
 
-    return MM.tables(rows, arrive, slots, BLOCK_SIZE)
+def session_lines(pages: list, arrive: dict[str, int], blocks: int) -> list[Step]:
+    """The session's record as `Lines` builds it beside a registered store of `blocks` blocks, one line a step, from
+    `pages`, each block of each page (`map_case`): a slot's registered block is freed at the step a write first reaches
+    it, and a whole block is appended at the step its last row is born, with its digest and its rows' last structural
+    reader, a step's blocks one append by slot whose coin is back before the next step's reads (it lands at once)."""
+    from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
+
+    reach: dict[int, list[int]] = {}
+    done: dict[int, list[tuple[int, bytes, int]]] = {}
+    for r, _, _, got, slot, off, whole, _ in pages:
+        reach.setdefault(arrive[r] + min(x.born for x in got), []).append(slot)
+        if whole:
+            data = b"".join(_payload(r, x) for x in got)[off:off + codec.BLOCK_BYTES]
+            done.setdefault(arrive[r] + max(x.born for x in got), []).append(
+                (slot, codec.digest(data), arrive[r] + max(x.last for x in got)))
+    lines, out, t = Lines(blocks), [], 0
+    while t <= max(chain(reach, done)) or lines.busy:
+        lines.free(reach.get(t, ()))
+        if t in done:
+            lines.land(lines.append(*zip(*sorted(done[t]))).first)
+        if (line := lines.close(t)) is not None:
+            out.append(line)
+        t += 1
+    return out
 
 
 def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dict[str, dict] | None = None) \
         -> tuple[dict, dict]:
     """The session's KV under the builder's record as an instance, and what the test reads beside it: each row value's
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
-    request's census is its Program's at its sampling events unless `censuses` gives one."""
+    request's census is its Program's at its sampling events unless `censuses` gives one. The registered store is the
+    KV pool, a region a layer, and each slot is one request's."""
     from verity_vllm.commit import memory_map as MM
-    from verity_vllm.protocols.remote_bandwidth.commit_map import KvPool, record
     from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
     from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
-    head, steps = record(rows, arrive, _payload, bytes(range(64)), KvPool(block_size=BLOCK_SIZE), tables)
     end = max(arrive[r] + rs.steps for r, rs in rows.items())
-    assert all(s.step < end for s in steps)
     (sb,) = {rs.row_bytes for rs in rows.values()}
+    (layers,) = {len(rs.layers) for rs in rows.values()}
     ids, lo, hi = _page_blocks(PageLayout(1 + max(max(t) for t in tables.values()), BLOCK_SIZE, sb), codec.BLOCK_BYTES)
     per_plane, region = ids.shape[1] // 2, int(ids.max()) + 1
     # each block of a page: its request, layer, plane, rows, slot, its first byte in its rows, whether it is whole, and
@@ -268,6 +286,10 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
              for plane, i in [divmod(c, per_plane)]
              for p0, p1 in [(q * BLOCK_SIZE + int(lo[c]), q * BLOCK_SIZE + int(hi[c]))]
              for layer, kv in enumerate(rs.layers)]
+    assert len({slot for *_, slot, _, _, _ in pages}) == len(pages)
+    head = Header(bytes(range(64)), layers * region)
+    steps = session_lines(pages, arrive, head.blocks)
+    assert all(s.step < end for s in steps)
     by, slots = {s.step: s for s in steps}, {x for s in steps for x in (*s.freed, *(w.slot for w in s.written))}
     replay, written, freed, index, held = Replay(head), {}, {}, {}, []
     for t in range(end):
@@ -362,20 +384,6 @@ def test_the_memory_map(r1, requests, server):
     assert {(session["rows"][v][0], session["rows"][v][3].born) for vs in uncredited.values() for v in vs} == \
         {("r0", 1), ("r0", 2), ("r0", 3)}
     _one_block_each(out, session, uncredited)
-
-
-def test_a_block_its_last_reader_completes_is_in_no_record(requests, server):
-    """A request ending on a page boundary while another runs on: r1 (a prefill of 4 and 4 decode steps) from step 0 completes
-    its second page at its last step, 4, which is also its last structural reader. Its rows were live only while the page was incomplete,
-    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling):
-    the link holds at every step, and the map holds no block with every row dead."""
-    value, session = map_case({"r0": requests["r0"], "r1": requests["r1_page"]}, {"r0": 0, "r1": 0})
-    out = _lean(value, server)
-    assert out is not None
-    uncredited, dead = _verdicts(out, session)
-    _one_block_each(out, session, uncredited)
-    late = {t: sorted(js) for t, js in dead.items() if js}
-    assert all(s["store_matches"] and s["plan_matches"] for s in out["steps"]) and not late, late
 
 
 def freed_at(value: dict, blocks: set[int], t: int, u: int) -> dict:

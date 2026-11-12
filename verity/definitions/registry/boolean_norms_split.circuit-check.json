@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "RMSNormApplyCudaVector8_v2{G=8}": {
+   "and": 19154,
+   "type": "626b7c8d88fb198cd27d975b7fb0a717ccb4974df89c42eadb452c9bfa039ac094302f1af1b6a5a0d328899b8b03cc2497b056e213babc0fccdcca5c302714ce"
+  },
+  "RMSNormDecodeCuda_v1": {
+   "and": 18,
+   "type": "5c5af312b1cfe126298aaf0b3d110e18f9359a4f90d2edff27a018aad18fb6bcf776240453fe1e4412d36a68a07e1cc055285a969c6add142a42cc9e2aac64af"
+  },
+  "RMSNormFusedApplyCudaVector8_v2{G=8}": {
+   "and": 24890,
+   "type": "ff2d0bd833d5809ef0419cdc66ef93730ca850eb3310481a3d0916d85e39a1c0eab09b8c09119cd43abe0cfb9da5ec30e2da63cf668365e8d9a5e54bcc45f5c6"
+  },
+  "RMSNormFusedSumSqCudaVector8_v2{N=16,EPS=1e-05,BLOCK=16,RSQRT=RsqrtApprox_v2}": {
+   "and": 36507,
+   "type": "3fa8d68b0733cc395ff2b000636b999b3c0bce06e756acaca61392d0957d340fc87c06c8184f0a0ed9af52b17bd45126c62304738a217eba940fb69995e5a69c"
+  },
+  "RMSNormSumSqCudaVector8_v2{N=16,EPS=1e-05,BLOCK=2,RSQRT=RsqrtApprox_v2}": {
+   "and": 33519,
+   "type": "521e176f0bfeba0cb47430facfe0abfea3386f42af55436c6a579916eac06be472a4c5e86bc4d841efcbc2f73e6e9885a04a4b82c5e90f0e3ed244e9c13cc8c4"
+  }
+ }
+}
