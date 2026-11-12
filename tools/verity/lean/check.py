@@ -4932,18 +4932,46 @@ REPLAY_TIMEOUT = 4 * 3600
 CLOSURE_TIMEOUT = 24 * 3600
 
 
+#: {(module, its parts' digests): `olean_graph.canonical` of those parts}, for each module `replay_digest` read in full
+_GRAPHS: dict[tuple[str, str], str | None] = {}
+_GRAPHS_LOCK = threading.Lock()
+
+
+def replay_digest(m: str, parts: list[Path], digest, og, mk) -> str:
+    """What module ``m``'s replay key reads of its `.olean` files ``parts``: each part's ``digest``, or, when its
+    `olean.server` holds its source's path (a message's file, which Lean writes as the absolute path it compiled), the
+    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`; ``mk``: `module_keys`,
+    for the path), which the module compiled in another tree shares."""
+    plain = ",".join(digest(p) for p in parts)
+    server = next((p for p in parts if p.name.endswith(".olean.server")), None)
+    if server is None:
+        return plain
+    with _GRAPHS_LOCK:
+        known = (m, plain) in _GRAPHS
+        graph = _GRAPHS.get((m, plain))
+    if not known:
+        source = mk.path_of(m, ".lean").as_posix()
+        graph = None
+        if f"/{source}".encode() in server.read_bytes():
+            graph = og.canonical({"olean" + p.name.rpartition(".olean")[2]: p for p in parts}, source)
+        with _GRAPHS_LOCK:
+            _GRAPHS[(m, plain)] = graph
+    return f"graph:{graph}" if graph else plain
+
+
 def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
-    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
-    each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
-    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built.
-    ``digest`` hashes a file in place of `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a
-    seal's copies, which `Replay.lean` reads in step)."""
-    graph, digest = facts["graph"], digest or sha256
+    function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part, `replay_digest`), and
+    the name and key of each module it imports, so it covers the `.olean` files of everything it imports, transitively, each
+    under its module's name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the
+    package is built, and so does one whose parts differ only in where its source was. ``digest`` hashes a file in place of
+    `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
+    in step)."""
+    graph, digest, og, mk = facts["graph"], digest or sha256, sibling("olean_graph"), sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda ps: ",".join(digest(p) for p in ps), files.values())))
+        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og, mk), files)))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
