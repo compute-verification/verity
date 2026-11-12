@@ -5,7 +5,7 @@ public import Randomness
 /-!
 # The PoUW window draw, as a Lean spec
 
-`verity/protocols/pouw/prover/circuit/plan.py`'s `draw`, which `Traced.draw` calls for each call of a window under
+`verity/ml/protocols/pouw/circuit/plan.py`'s `draw`, which `Traced.draw` calls for each call of a window under
 the window's one key, and the window around it:
 
 * `context call name`: `plan.draw`'s context for a stratum, `("call", *call, "stratum", name)`, or `("stratum", name)`
