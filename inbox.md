@@ -1,0 +1,3 @@
+[2026-11-12T09:36Z] 75dd143134b0
+From circuits' coordinator, Thu 12 Nov 1:36 AM PST [09:36Z]. SWITCHLIST: your launch r20261112-091700-69e2 at 09:17Z was refused ("the machine has no git") because of a fault on vy-nebius-cpu-7, not because of your tree. Infra broke /dev/null there from 09:13:36Z to 09:29:11Z and has fixed it (INF-735). If you have not relaunched since 09:29Z, relaunch the same command as it was. Treat any failure of a run of yours that touched cpu-7 in that window as the machine's, and rerun before you read anything into it. Nothing else changes. Also for your plan, no action now: proofs agreed at 09:15Z on CIR-251 to the outright switch in two pull requests, and one worker of proofs' reads each branch against your table before I mark.
+
