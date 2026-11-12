@@ -520,6 +520,41 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reservations(tmp_path, monkeypatch, node_2):
+    """A pool's `free_gb` is what a lane run would find free there, which `choose` places by. Slots with peaks= count the
+    live lane reservations as a crowd reaches them (slot.py's `reserved_gb`), so the probe counts them the same way, with the
+    tree's own slot.py: counted whole, a pool whose slots would start the job reads as short of memory and the job goes to
+    wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none."""
+    from research.pods.nebius import slot_only
+    slots, ramlock, src = tmp_path / "locks" / "research" / "slots", tmp_path / "ramlock", tmp_path / "src"
+    slots.parent.mkdir(parents=True)
+    ramlock.mkdir()
+    for i in range(6):
+        (ramlock / f"r{i}.json").write_text(json.dumps({"gb": 32.2, "run_id": f"r{i}"}))
+    monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(ramlock))
+    monkeypatch.setattr(slot_only, "POOLS", {**slot_only.POOLS, auto.SPILL_POOL: str(slots)})
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n")
+
+    def read(lines: str) -> dict:
+        slots.write_text(lines)
+        return auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]
+
+    whole = read("r0 0-3 mem=30\nr1 4-7 mem=30\n")
+    assert whole["free_gb"] == 200 - 179 and all(s["blocked"].startswith("21 GB of memory free") for s in whole["slots"])
+    crowd = read("r0 0-3 mem=30 peaks=2\nr1 4-7 mem=30 peaks=3\nt0 8-11 only=trains mem=150\n")
+    assert crowd["free_gb"] == 200 - 112, "the largest peaks= of the lane slots: three runs' 30 whole and three at a quarter"
+    assert [(s["name"], s.get("peaks"), s["blocked"]) for s in crowd["slots"]] == [("r0", 2, None), ("r1", 3, None), ("t0", None, None)]
+    target, why = auto.choose({N2: share(waiters=5), CPU1: {"research": crowd}}, 4, 32)
+    assert target == (CPU1, "research") and why.endswith("a slot is free there now")
+    target, why = auto.choose({N2: share(free=8), CPU1: {"research": whole}}, 4, 32)
+    assert target is None and f"21{auto.MEMORY_BLOCK}" in why, "the same ledger counted whole: no memory there"
+    mixed = read("r0 0-3 mem=30 peaks=2\nr1 4-7 mem=30\n")
+    assert mixed["free_gb"] == 21 and [s["blocked"] is None for s in mixed["slots"]] == [True, False], \
+        "one lane slot without peaks=: the pool's figure is the least any of its slots would find free"
+
+
 def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_path, monkeypatch, node_2):
     """For a run that takes a Lean slot the probe runs the tree's own lean_slot.py on the machine's Lean slots, as
     `lean_slot.py --status --json` does: here the repository's, on a slots file and a line this test keeps."""

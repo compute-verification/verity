@@ -121,6 +121,6 @@ what they read of it (the suite's tests read more of a module than its list). Fr
 `verity/protocols/pouw/receipts/receipt_conform.py --adopter egemm_ref` checks `egemm_ref.py`'s `xin_keys`,
 `xin13_receipts` and `tile_receipts` (the suite runs that check too), `benchmarks/pouw/theory/`'s fold checks import
 `egemm_depthr_check.py`'s `key_ok_r11` and `key_ok_r11_32`, `adapters/vllm/tests/engine/` loads `fattn_ref.py` by path
-as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/pouw/machine_model/data/` are
+as the int8 attention's oracle, and the ACCEL model's honest profiles under `benchmarks/machine_model/data/` are
 written from `eps_profile.py OUT --toml` and `egemm80.py summary`. The Python here touches no GPU but `flash_ref.py`;
 the job scripts do the rest.
