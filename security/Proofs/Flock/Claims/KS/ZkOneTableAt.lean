@@ -72,10 +72,7 @@ theorem tables_one {rel : Readable.Parsed → Readable.Relation} {x : Claims.Msg
     (hs : parse true rel x = some s) (h1 : s.tables = 1) (hx : (setupOf true x).isSome) :
     ∃ spec st, tables true x = [(spec, st)] := by
   have hl : (tables true x).length = 1 := (tables_length hs hx).trans h1
-  have he : ∃ p, tables true x = [p] := by
-    first
-      | exact List.length_eq_one_iff.1 hl
-      | exact List.length_eq_one.1 hl
+  have he : ∃ p, tables true x = [p] := List.length_eq_one_iff.1 hl
   obtain ⟨⟨a, b⟩, hp⟩ := he
   exact ⟨a, b, hp⟩
 

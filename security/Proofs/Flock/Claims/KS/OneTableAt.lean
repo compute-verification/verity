@@ -25,15 +25,9 @@ theorem mapM_range_one {α : Type} (f : ℕ → Option α) : (List.range 1).mapM
   rw [List.range_one]
   cases h : f 0 with
   | none =>
-    first
-      | simp [h]
-      | (rw [List.mapM_cons, h]; rfl)
-      | simp [List.mapM_cons, List.mapM_nil, h]
+    simp [h]
   | some a =>
-    first
-      | simp [h]
-      | (rw [List.mapM_cons, h]; rfl)
-      | simp [List.mapM_cons, List.mapM_nil, h]
+    simp [h]
 
 /-- The count: `k_0` is the session's `k` where table `0`'s length is `N₀`. -/
 theorem kAt_zero_eq {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg)
@@ -65,9 +59,7 @@ theorem checkAt_zero_eq (parse : Msg → Option Stmt) (table : Msg → ℕ → O
     (hs : parse x = some s) (ht : table x 0 = some s) (w : Wit) :
     Claims.Flock.checkAt table 0 x w = Claims.Flock.check parse x w := by
   unfold Claims.Flock.checkAt Claims.Flock.check
-  first
-    | (rw [hs, ht]; all_goals rfl)
-    | simp [hs, ht]
+  rw [hs, ht]
 
 /-- The assemble step: table `0`'s is the statement's at a statement of one table. -/
 theorem assembleAt_zero_eq {Col T : Type} (parse : Msg → Option Stmt) (table : Msg → ℕ → Option Stmt)
@@ -75,12 +67,10 @@ theorem assembleAt_zero_eq {Col T : Type} (parse : Msg → Option Stmt) (table :
     (h1 : s.tables = 1) (opens : List (ℕ → List (ℕ × Col))) :
     Claims.Flock.assembleAt table decode read 0 x opens = Claims.Flock.assemble parse table decode read x opens := by
   unfold Claims.Flock.assembleAt Claims.Flock.assemble
-  first
-    | (rw [hs]; dsimp only)
-    | simp only [hs]
-  first
-    | (rw [h1, mapM_range_one, Option.map_map]; all_goals rfl)
-    | simp [h1, mapM_range_one, Option.map_map, Function.comp_def]
+  rw [hs]
+  dsimp only
+  rw [h1, mapM_range_one, Option.map_map]
+  all_goals rfl
 
 /-- `Pr` at two predicates that agree. -/
 theorem pr_congr {α : Type} [Fintype α] {p q : α → Prop} (h : ∀ a, p a ↔ q a) : Pr p = Pr q := by
@@ -104,10 +94,8 @@ theorem ERep_eval_congr {Coin W Op Ω : Type} [Fintype Coin] [Nonempty Coin] [In
     (a a' : Msg → List Op → Option W) (c c' : Msg → W → Bool) (x : Msg) (hk : k x = k' x) (ha : a x = a' x)
     (hc : c x = c' x) (ω : Ω) (r₀ : Fin (V.k x) → Coin) (ρ : Fin (m x) → Fin (K x) → Fin (V.k x) → Coin) :
     (ERep V m k K opens a c).eval H P x ω r₀ ρ = (ERep V m k' K opens a' c').eval H P x ω r₀ ρ := by
-  first
-    | (unfold Extractor.eval; rw [ERep_ext_eq, ERep_ext_eq, hk, ha, hc])
-    | (unfold Extractor.eval ERep; simp only [hk, ha, hc])
-    | simp only [Extractor.eval, ERep, hk, ha, hc]
+  unfold Extractor.eval
+  rw [ERep_ext_eq, ERep_ext_eq, hk, ha, hc]
 
 /-- The failure probability of two `E^rep`s that agree at a statement, at relations that agree there. -/
 theorem prBad_ERep_congr {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
@@ -118,33 +106,24 @@ theorem prBad_ERep_congr {Coin W Op : Type} [Fintype Coin] [Nonempty Coin] [Inha
   have hext : ∀ o : Option W, R.ext x o ↔ R'.ext x o := by
     intro o
     cases o with
-    | none =>
-      first
-        | exact Iff.rfl
-        | simp [Rel.ext]
-    | some w =>
-      first
-        | exact hR w
-        | simpa [Rel.ext] using hR w
+    | none => exact Iff.rfl
+    | some w => exact hR w
   unfold PrBad
   refine pr_congr fun s => ?_
   have h := ERep_eval_congr H P V m k k' K opens a a' c c' x hk ha hc s.1 s.2.1 s.2.2
   constructor
   · rintro ⟨hacc, hno⟩
     refine ⟨hacc, fun hw => hno ((hext _).2 ?_)⟩
-    first
-      | exact h ▸ hw
-      | (rw [h]; exact hw)
+    exact h ▸ hw
   · rintro ⟨hacc, hno⟩
     refine ⟨hacc, fun hw => hno ((hext _).1 ?_)⟩
-    first
-      | exact h.symm ▸ hw
-      | (rw [← h]; exact hw)
+    exact h.symm ▸ hw
 
 section OneTable
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
+omit [DecidableEq Col] in
 /-- **The failure probability at table `0` is the session's**, at a statement of one table whose table `0` is the
 statement and whose length is `N₀`. -/
 theorem prBad_zero_eq (H : Msg → Msg) (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)

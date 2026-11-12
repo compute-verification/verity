@@ -103,10 +103,7 @@ theorem wordLenJ_cast {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt
   have e : wordLenJ true x j = 2 ^ (Claims.Flock.zkLevel0 st.m).d := by
     simp [wordLenJ, h]
   rw [e, Nat.cast_pow, Nat.cast_ofNat]
-  first
-    | done
-    | simp only [tableLen, ite_true]
-    | simp [tableLen]
+  simp only [tableLen, ite_true]
 
 /-- **`κ_j ≤ 2^{−202.98}` at a masked table in scope**: a table of the statement at an `m` the masked verifier
 serves and a shape in `InRange`. -/
@@ -129,10 +126,7 @@ theorem zkIn_at (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {
     Claims.Flock.κAt (deployZk rel) (wordLenJ true) (tableErrAt true) j x ≤ 2 ^ (-(202.98 : ℝ)) ∧
       201.98 ≤ Claims.lamOf (Claims.Flock.κAt (deployZk rel) (wordLenJ true) (tableErrAt true) j x)
         (Claims.Flock.γ (deployZk rel) x) := by
-  have hmem : sts[j] ∈ sts.toList := by
-    first
-      | exact Array.getElem_mem_toList hj
-      | simp
+  have hmem : sts[j] ∈ sts.toList := Array.getElem_mem_toList hj
   obtain ⟨h25, h35, hst⟩ := h.tab sts[j] hmem
   have ht : (tables true x)[j]? = some (spec, sts[j]) :=
     tables_getElem? h.setup (Array.getElem?_eq_getElem hj)
