@@ -145,6 +145,7 @@ public import Proofs.Pouw.PearlC.RowSeedGap
 public import Proofs.Pouw.PearlC.RowSeedKGap
 public import Proofs.Pouw.PearlC.RowSeedSkip
 public import Proofs.Pouw.PearlC.ServedFadd8Rev1Gap
+public import Proofs.Pouw.PearlC.ServedH100Rev1Gap
 public import Proofs.Pouw.PearlC.ServedMixedRev1Gap
 public import Proofs.Pouw.PearlC.ServedRev1Gap
 public import Proofs.Pouw.PearlC.Sm120Checks
