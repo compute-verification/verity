@@ -34,7 +34,7 @@ def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
     rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
     returns := Spot.SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
     supplied := it.params.verifier.supplied,
-    fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1) }
+    fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads }
 
 /-- An object `Json.mkObj` builds is a well-formed map. -/
 theorem mkObj_wf (l : List (String × Json)) : ∃ m : Std.TreeMap.Raw String Json compare,

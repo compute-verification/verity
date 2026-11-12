@@ -15,21 +15,23 @@ verifier that runs is `Spot.Run.run`. This module states, as `Prop`s, what ties 
 `SpotRunAcceptsPlay`), and the play's coins are the
 challenger's bytes the run read, in the order the guarantee assumes (`PlayCoins`).
 
-`Run.run` calls round 2's check with the form's switch (`SecondStage.FORM`), which is off, so no two-stage run is
-accepted today. The statement is of `Run.run` as it is, and holds unchanged the day the switch is on: its proof reads
-round 2's check only through `SecondStage.check b own ss` having no codes, which at every `b` gives the check with the
-form allowed having none.
+`Run.run` reads the form's switch (`SecondStage.FORM`), which is off, so no two-stage run is accepted today and
+`AcceptedTwo` has no instance: every statement here holds of nothing until it is stated at the switch on. Its proof
+reads round 2's check only through `SecondStage.check b own ss` having no codes, which at every `b` gives the check with
+the form allowed having none.
 
 What the run does not decide, each a named premise of `SpotRunAcceptsPlay`:
 
-* `RoundTwo`: round 2's check, passing, gives the model's statement check (`stmtOk`) where the registration's clauses
-  and those on the session statements' own bytes hold; proved of `SecondStage.check` on its own;
+* `RoundTwo`: round 2's check, passing, gives the model's statement check (`stmtOk`) where the clauses round 2 does not
+  make hold; `RunsAs.Round2`'s `stmtOk_of_check`;
 * `SessionsAccept`: the session statements' message states the statements round 2 checked (`StmtsAre`), each with
-  the clauses on its own bytes (`SessionsHeld`), and each template's session is a run Flock's masked verifier accepts. `Run.run` reads the sessions'
-  verdicts as JSON (`Service.checkVerdicts`) and holds no statement or transcript of a session, so this is what the
-  verdict of record (`flock-verify`'s) says, taken as given;
-* `ScopeHolds`: the held copies are in the two-stage scope the model decides (`two`: `scopeOk`, `filesOk`,
-  `templateOk`), a property of the registration that `Run.run` does not check;
+  the clauses on its own bytes (`RoundsHeld`, `ScopeHeld`, `PinHeld`), and each template's session is a run Flock's
+  masked verifier accepts. `Run.run` reads the sessions' verdicts as JSON (`Service.checkVerdicts`) and holds no
+  statement or transcript of a session, so this is what the verdict of record (`flock-verify`'s) says;
+* `TwoHolds`: the held copies are in the two-stage scope the model decides (`two`: `scopeOk`, `filesOk`,
+  `templateOk`), which `Run.run` does not check;
+* `NamesDistinct`, `RecordsHeld` and `RegistersNone`: the templates' names are distinct, the run's records name their
+  registrations' names, and round 1's record registers no value.
 -/
 
 @[expose] public section
@@ -78,64 +80,85 @@ structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) :
   refs : refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)
   refReads : refRegisteredOf h = it.circuits.map fun (t, _, _, r) => (t, r)
 
-/-- **The held copies are in the two-stage scope the model decides** (`two`: `scopeOk`, `filesOk`, `templateOk`).
-`Run.run` makes none of these checks; they read the members' circuits and the reference statements, which it does not
-hold. -/
-def ScopeHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 
-/-! ## Round 2: the hand-off -/
+/-! ## Round 2: the hand-off
+
+These are `RunsAs.Round2`'s statements, word for word, so its `stmtOk_of_check` is `RoundTwo` at every `h`. -/
+
+/-- **The running verifier's `Own` on what the model reads**: the fields the model's (`ownOf`) leaves at their defaults
+set to them. -/
+def core (own : Spot.SecondStage.Own) : Spot.SecondStage.Own :=
+  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[], reads := #[] }
 
 /-- **What the verifier holds of the run is the model's** (`OwnAgrees`): `own` is `ownOf h st rec draw c₀` in every
-field `ownOf` sets; the fields it leaves at their defaults (the reported reads, the verified statements, the block's
-returns, the supplied and fixed values) may be anything. -/
+field `ownOf` sets (`core`). -/
 def OwnAgrees (h : Held) (own : Spot.SecondStage.Own) (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) :
     Prop :=
-  { own with reported := none, verified := #[], returns := #[], supplied := #[], fixed := #[] } =
-    ownOf h st rec draw c₀
+  core own = ownOf h st rec draw c₀
 
-/-- **The session statements' message states `ss`**: `m₂` states one session statement a template, and template
-`t`'s decodes and reads as the statement round 2 holds at position `t` (`stmtJsonOf`). -/
+/-- **The templates' names are distinct**, as the members' order names them. Round 2 takes the statements by position
+and finds a statement's part by its template's name, so with two parts of one name it passes a run with fewer
+statements than parts. -/
+def NamesDistinct (h : Held) : Prop :=
+  ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
+
+/-- **The session statements' message states `ss`**: `m₂` states as many session statements as `ss` has, and the
+`t`-th decodes and reads as round 2 reads a statement (`stmtJsonOf`) as the `t`-th of `ss`. -/
 def StmtsAre (h : Held) (m₂ : Msg) (ss : Array Json) : Prop :=
-  ∃ xs, stmtsOf m₂ = some xs ∧ xs.length = h.ms.length ∧ ∀ t < h.ms.length, ∃ w,
+  ∃ xs, stmtsOf m₂ = some xs ∧ xs.length = ss.size ∧ ∀ t < xs.length, ∃ w,
     FlockDeploy.decode (xs.getD t (h.xS₀ t)) = some w ∧
-      stmtJsonOf h t w = Spot.SecondStage.Stmt.ofJson? (ss.getD t .null)
+      stmtJsonOf h t w = Spot.SecondStage.Stmt.ofJson? (ss.toList.getD t .null)
 
-/-- **The registration's clauses hold at the run's statement**: `x` parses, and its partition and two-stage design
-evaluate (`parse`, `partition`, `two`); round 2 makes none of these checks. -/
-def RegHolds (h : Held) (x : Msg) : Prop :=
-  ∃ s, parse h x = some s ∧ (partition h s).isSome = true ∧ (two h s).isSome = true
+/-- **The design evaluates** (`two`), at every statement: it reads only the auditor's copies (`scopeOk`, `filesOk`,
+`templateOk`), which `Run.run` does not hold. -/
+def TwoHolds (h : Held) : Prop := ∀ s, (two h s).isSome = true
 
-/-- **The clauses on each session statement's own bytes hold**: template `t`'s, as `m₂` states it, has `k₀ t` rounds, is
-in scope (`sessionOk`) and is its reference statement but for the run's fields (`pinOk`); round 2 never reads these
-bytes. -/
-def SessionsHeld (h : Held) (m₂ : Msg) : Prop :=
-  ∃ xs, stmtsOf m₂ = some xs ∧ ∀ t < h.ms.length,
-    (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) = k₀ h t ∧ sessionOk h t (xs.getD t (h.xS₀ t)) = true ∧
-      ∃ w, FlockDeploy.decode (xs.getD t (h.xS₀ t)) = some w ∧ pinOk h t w = true
+/-- **The run's records name their registrations' names** (`recordsOk`). Round 2 does not make it: `Run.run`'s
+registration step (`Registration.check`) does. -/
+def RecordsHeld (h : Held) (x m₁ : Msg) : Prop := recordsOk h x m₁ = true
 
-/-- **Round 2's check gives the model's statement check** (part 3, `stmtOk_of_check`'s statement): where what the
-verifier holds of the run is the model's (`OwnAgrees`), the session statements' message states the statements round 2
-checked (`StmtsAre`), the registration's clauses hold (`RegHolds`) and so do those on the session statements' own bytes
-(`SessionsHeld`), round 2's check with the form allowed reporting no code makes the model's statement check pass
-(`stmtOk`). -/
+/-- **Round 1's record registers no value**: no entry under its `registered` names a string `value`. The model refuses
+every registered value (`SecondStage.inputsFailure` at `ownOf`, with no value of the verifier's own and no read);
+round 2 passes a value the verifier pinned, fills or opens as a read's row. A premise on the run, decided on its
+interior record, that round 2's passing check does not give. -/
+def RegistersNone (rec : Json) : Prop :=
+  ∀ es, Spot.getD rec "registered" = .arr es → ∀ e ∈ es, ∀ v, Spot.getD e "value" ≠ .str v
+
+/-- **Each session statement has its template's reference statement's rounds.** No check of round 2 makes it. -/
+def RoundsHeld (h : Held) (m₂ : Msg) : Prop :=
+  ∀ t < h.ms.length, (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t
+
+/-- **Each session statement is in scope** (`sessionOk`). No check of round 2 makes it. -/
+def ScopeHeld (h : Held) (m₂ : Msg) : Prop :=
+  ∀ t < h.ms.length, sessionOk h t (stmtAt h m₂ t) = true
+
+/-- **Each session statement is its template's reference statement** but for its sample, registered reads and public
+file (`pinOk`). No check of round 2 makes it. -/
+def PinHeld (h : Held) (m₂ : Msg) : Prop :=
+  ∀ t < h.ms.length, ∀ w, FlockDeploy.decode (stmtAt h m₂ t) = some w → pinOk h t w = true
+
+/-- **Round 2's check gives the model's statement check** (part 3, `Round2.StmtOkOfCheck` at `h`): where what the
+verifier holds of the run is the model's and the statements round 2 checked are the session statements', round 2's
+check with the form allowed reporting no code makes the model's statement check pass (`stmtOk`), given the clauses
+round 2 does not make. -/
 def RoundTwo (h : Held) : Prop :=
-  ∀ {own : Spot.SecondStage.Own} {ss : Array Json} {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
-    {st : Roots} {rec draw : Json},
-    decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw →
-    OwnAgrees h own st rec draw c₀ → StmtsAre h m₂ ss → RegHolds h x → SessionsHeld h m₂ →
-    Spot.SecondStage.inputsFailure { own with fixed := #[], supplied := #[] } = none →
-    (Spot.SecondStage.check true own (some ss)).codes = #[] →
-    stmtOk h x m₁ m₂ c₀ c₁ = true
+  ∀ (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
+    (st : Roots) (rec draw : Json),
+    decode x = some st → jsonMsg m₁ = some rec → secondDraw h c₀ c₁ = some draw → OwnAgrees h own st rec draw c₀ →
+      StmtsAre h m₂ ss → RegistersNone rec → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
+        RoundsHeld h m₂ → ScopeHeld h m₂ → PinHeld h m₂ → (Spot.SecondStage.check true own (some ss)).codes = #[] →
+          stmtOk h x m₁ m₂ c₀ c₁ = true
 
 /-! ## The sessions -/
 
-/-- **The sessions accept** (part 4's premise): the session statements' message `m₂` states the statements `ss` holds,
-one a template, each with the clauses on its own bytes (`SessionsHeld`), and Flock's masked verifier accepts template
-`t`'s session, the prover `P' t` at the statement `m₂` states for it on the coins `r' t`. `Run.run` holds the sessions'
-verdicts of record only as JSON (`Service.checkVerdicts`); this is what a verdict of record that accepts says. -/
+/-- **The sessions accept** (part 4's premise): the session statements' message `m₂` states the statements `ss`, each
+with its template's rounds, in scope and its reference statement but for the run's fields (`RoundsHeld`, `ScopeHeld`,
+`PinHeld`), and Flock's masked verifier accepts template `t`'s session, the prover `P' t` at the statement `m₂` states
+for it on the coins `r' t`. `Run.run` holds the sessions' verdicts of record only as JSON (`Service.checkVerdicts`);
+this is what a verdict of record that accepts says. -/
 def SessionsAccept (h : Held) (H : Msg → Msg) (ss : Array Json) (m₂ : Msg) (P' : ℕ → Prover Unit)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin) : Prop :=
-  StmtsAre h m₂ ss ∧ SessionsHeld h m₂ ∧
+  StmtsAre h m₂ ss ∧ RoundsHeld h m₂ ∧ ScopeHeld h m₂ ∧ PinHeld h m₂ ∧
     ∀ t < h.ms.length, (Claims.run H (P' t) (FlockDeploy.V true) (stmtAt h m₂ t) () (r' t)).out = .acc
 
 /-! ## The coins -/
@@ -197,32 +220,28 @@ def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
 
 /-! ## The top statement -/
 
-/-- **The interior record registers no value a replay block may not read, without the verifier's own values**: round
-2's input check (`inputsFailure`) finds nothing in what the verifier holds of the run once the values it pins or holds
-to an earlier record and those it fills itself are dropped. A premise on the run that round 2's passing check does not
-give, decided on the run's records, the replay's program and the templates' reference statements: `inputsFailure`
-reads none of the draws, so the sample, the parts and the drawn units here are empty. -/
-def RegistersNone (i : Spot.Run.Input) (it : Spot.Run.Interior) : Prop :=
-  Spot.SecondStage.inputsFailure
-    { sample := #[], parts := none, interior := it.record, boundary := i.record, drawn := #[],
-      links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
-      refReads := it.circuits.map fun (t, _, _, r) => (t, r) } = none
-
 /-- **A two-stage run `Run.run` accepts is a play `SpotFlock.V h` accepts** (the inner statement: the form's check,
-`VStar.Recursive.SampledTwo.checkBlobsAt`, computes the sessions' verdicts and then runs `Run.run`). At every held copy
-`h` that agrees with what the run reads and is in the model's scope: if `Run.run` accepted the two-stage run `i` with
-interior `it` (`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round 2's check gives the
-model's checks (`RoundTwo`, part 3), the interior record registers no value (`RegistersNone`, a premise on the run
-round 2 does not give) and Flock accepts each template's session at the statement `m₂` states for it
-(`SessionsAccept`, part 4), then on every round-0 coin and second-stage coins that start with the bytes the run read
-(`PlayCoins`), `SpotFlock.V h` accepts the play that sends `m₁`, then `m₂`, then each session's messages
-(`proverSeq`), each session on its own coins (`seqCoins`). -/
+`VStar.Recursive.SampledTwo.checkBlobsAtWith`, computes the sessions' verdicts and then runs `Run.run`). At every held
+copy `h` that agrees with what the run reads: if `Run.run` accepted the two-stage run `i` with interior `it`
+(`AcceptedTwo`), `x` and `m₁` are the boundary and interior records' bytes, round 2's check gives the model's checks
+(`RoundTwo`, part 3) and Flock accepts each template's session at the statement `m₂` states for it (`SessionsAccept`,
+part 4), then on every round-0 coin and second-stage coins that start with the bytes the run read (`PlayCoins`),
+`SpotFlock.V h` accepts the play that sends `m₁`, then `m₂`, then each session's messages (`proverSeq`), each session
+on its own coins (`seqCoins`).
+
+The premises the run does not decide, each said here: the design evaluates (`TwoHolds`), the templates' names are
+distinct (`NamesDistinct`), the run's records name their registrations' names (`RecordsHeld`, which `Run.run`'s
+registration step checks and this statement does not yet derive from it), and round 1's record registers no value
+(`RegistersNone`, a premise on the run).
+
+`Run.run` reads the form's switch (`SecondStage.FORM`), which is off, so `AcceptedTwo` has no instance today and this
+statement holds of nothing until it is stated at the switch on. -/
 def SpotRunAcceptsPlay : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (h : Held) (H : Msg → Msg) (x m₁ m₂ : Msg)
     (P' : ℕ → Prover Unit) (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
     (c₀ : FlockDeploy.Coin) (c₁ : Stage h),
-    AcceptedTwo i it j → HeldMatches i it h → ScopeHolds h → RegistersNone i it →
-    jsonMsg x = some i.record → jsonMsg m₁ = some it.record →
+    AcceptedTwo i it j → HeldMatches i it h → TwoHolds h → NamesDistinct h → RecordsHeld h x m₁ →
+    RegistersNone it.record → jsonMsg x = some i.record → jsonMsg m₁ = some it.record →
     RoundTwo h → SessionsAccept h H ((it.statements).getD #[]) m₂ P' r' → PlayCoins h i it c₀ c₁ →
       (Claims.run H (proverSeq h [] m₁ m₂ P') (V h) x (fun _ => ()) (seqCoins h (x := x) c₀ c₁ r')).out = .acc
 

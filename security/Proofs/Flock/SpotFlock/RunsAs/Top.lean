@@ -12,8 +12,7 @@ select, the second stage's and round 2's check with no code. The held copies agr
 the units the draw proves (`proved_select`), and the model's second draw is the run's (part 2, `secondDraw_pad`). What
 the verifier holds is the model's (`OwnAgrees`), round 2 had statements (`statements_some`), and round 2's check gives
 the model's statement check (part 3, `RoundTwo`). The sessions accept (`SessionsAccept`), so the play accepts on its
-coins (part 4, `accepts_seqCoins`). The interior record registers no value (`RegistersNone`) is a premise on the run
-round 2's check does not give.
+coins (part 4, `accepts_seqCoins`). The clauses round 2 does not make are the statement's premises.
 -/
 
 @[expose] public section
@@ -69,15 +68,9 @@ theorem resolve_ne_all {rule : Spot.Select.Rule} {p query} {resolved : Spot.Sele
     simp
   · cases h
 
-/-- `RegistersNone` is `inputsFailure` at the run's own, whatever the draws. -/
-theorem registersNone_runOwn {i : Spot.Run.Input} {it : Spot.Run.Interior} (h : RegistersNone i it)
-    (sample : Array ℕ) (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) :
-    Spot.SecondStage.inputsFailure { runOwn i it sample strata draw with fixed := #[], supplied := #[] } = none :=
-  h
-
 /-- **`SpotRunAcceptsPlay`.** -/
 theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
-  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm hs hnone hx hm₁ hr2 hsa hpc
+  intro i it j h H x m₁ m₂ P' r' c₀ c₁ ha hm htwo hnd hrec hnone hx hm₁ hr2 hsa hpc
   obtain ⟨hcl, workTable, resolved, draw, rest, read, ht, hres, hsel, -, grain, replay, k, ns, ids, ks, draw₂, read₂,
     strata, hrule, hns, hids, hks, hss, -, hstrata, hcodes⟩ := accepted_steps ha
   obtain ⟨⟨t₀, ht₀⟩, ⟨t₁, ht₁⟩⟩ := hpc
@@ -109,24 +102,19 @@ theorem spotRunAcceptsPlay : SpotRunAcceptsPlay := by
     exact hss
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
       ⟨i.record, portRoots i.record⟩ it.record draw₂ c₀ := by
-    unfold OwnAgrees runOwn ownOf
+    unfold OwnAgrees core runOwn ownOf
     rw [hsample, ← hproved, hm.parts strata _ hstrata, hm.links, hm.wires, hm.rows, hm.refs, hm.refReads]
     all_goals rfl
   obtain ⟨ss, hst⟩ := statements_some hcodes
   rw [hst] at hcodes
   rw [hst, Option.getD_some] at hsa
-  obtain ⟨hstm, hheld, hacc⟩ := hsa
+  obtain ⟨hstm, hrounds, hscope, hpin, hacc⟩ := hsa
   have hdec : decode x = some ⟨i.record, portRoots i.record⟩ := by
     unfold decode
     rw [hx]
     rfl
-  have hp : ∃ s, parse h x = some s := by
-    unfold parse
-    rw [hdec]
-    exact ⟨_, rfl⟩
-  obtain ⟨s, hps⟩ := hp
-  have hok : stmtOk h x m₁ m₂ c₀ c₁ = true := hr2 hdec hm₁ hsd hown hstm ⟨s, hps, rfl, hs s⟩ hheld
-    (registersNone_runOwn hnone _ _ _) hcodes
+  have hok : stmtOk h x m₁ m₂ c₀ c₁ = true :=
+    hr2 _ ss x m₁ m₂ c₀ c₁ _ it.record draw₂ hdec hm₁ hsd hown hstm hnone htwo hnd hrec hrounds hscope hpin hcodes
   exact accepts_seqCoins h H x [] m₁ m₂ c₀ c₁ hok P' (fun _ => ()) r' hacc
 
 end SpotFlock.RunsAs
