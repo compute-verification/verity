@@ -1,17 +1,25 @@
 """A row's setup and precheck past the tree's own checks (`Row.setup`, `prepare`, `run`): its stages' environment, the cuBLAS
 names, the release line, the target-family preflight, the Commit's session checks. A row's stages run with the run store's tool
 (`tools/research/src`) on their path, so these run only where it is beside the tree; `test_row` holds a tree without it to the
-refusal at setup, by name."""
+refusal at setup, by name.
+
+Then what the run store brings a row's stages (`pipeline/research.py`'s readers): a job's recorded inputs, an artifact's meta, an
+Attempt's outputs, tool, status and source, each for a document that leaves the block out or states it as null or empty.  The
+research CLI is a stand-in that answers ``data show`` with the document a test gives it."""
 from __future__ import annotations
 
 import dataclasses
 import json
 import os
+import re
 import shutil
 import signal
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -25,7 +33,9 @@ from tests.pipeline.test_row import (
     _timeline,
     _tp_row,
 )
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import research as RS
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
@@ -354,3 +364,123 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
     assert "precheck-target FAIL" in (tmp_path / r.row / "stages.txt").read_text()
     can = (TREE / "verity_vllm" / "ops" / "canary.sh").read_text()
     assert 'TARGET_FAMILY_WAIVER=${TARGET_FAMILY_WAIVER:-"canary $TAG"}' in can
+
+
+# ---------------------------------------------------------------------------------------------------------------- what the run store brings
+
+def _shows(monkeypatch, *docs: Any, publish: str = "") -> tuple[tuple[list[str], dict[str, str]], list[list[str]]]:
+    """The research CLI as a stand-in: ``data show`` answers with the newest of ``docs`` (a str as it is, else its JSON), and any
+    other command with ``publish`` as its stdout.  Returns the CLI as `research_argv` gives it, and the commands asked."""
+    asked: list[list[str]] = []
+
+    def run(argv, **kw):
+        asked.append(list(argv))
+        if asked[-1][1:3] != ["data", "show"]:
+            return subprocess.CompletedProcess(argv, 0, stdout=publish)
+        return subprocess.CompletedProcess(argv, 0, stdout=docs[-1] if isinstance(docs[-1], str) else json.dumps(docs[-1]))
+
+    monkeypatch.setattr(RS.subprocess, "run", run)
+    return (["research"], {}), asked
+
+
+def test_a_jobs_input_is_nothing_where_its_record_lists_none(tmp_path):
+    """A run's ``job.json`` lists its inputs under ``store.inputs``; a record without the block, with it null or empty, with no
+    such input, or with a block that is no table, has none."""
+    job = tmp_path / "job.json"
+    lists_none: list[Any] = [{"store": {}}, {"store": None}, {"store": {"inputs": None}}, {"store": {"inputs": {}}},
+                             {"store": {"inputs": {"build": None}}}, {"store": {"inputs": {"match": "art:m"}}}, {"store": "inputs"},
+                             {"store": ["inputs"]}, {"store": {"inputs": ["build"]}}, {"store": {"inputs": "build"}}]
+    for doc in lists_none:
+        job.write_text(json.dumps(doc))
+        assert RS.job_input(str(tmp_path), "build") == "", doc
+    job.write_text(json.dumps({"store": {"inputs": {"build": "art:b", "match": "art:m"}}}))
+    assert (RS.job_input(str(tmp_path), "build"), RS.job_input(str(tmp_path), "match")) == ("art:b", "art:m")
+
+
+@pytest.mark.parametrize("doc, digest", [
+    ({"manifest": {"meta": {"program_digest": "ab" * 32}}}, "ab" * 32),         # the local store shows a manifest, and its meta is read
+    ({"meta": {"program_digest": "ab" * 32}}, "ab" * 32),                       # the remote shows the meta at the top
+    ({"manifest": {}, "meta": {"program_digest": "cd" * 32}}, "cd" * 32),       # an empty manifest is none
+    ({"manifest": None, "meta": {"program_digest": 7}}, "7"),
+    ({"manifest": {"meta": None}, "meta": {"program_digest": "cd" * 32}}, ""),  # a manifest that is there is the one read
+    ({"manifest": {"meta": {}}}, ""),
+    ({"meta": None}, ""),
+    ({"meta": {}}, ""),
+    ({"meta": {"program_digest": None}}, ""),
+    ({"meta": {"workload_digest": "ef" * 32}}, ""),
+    ({}, ""),
+    ([{"meta": {"program_digest": "ab" * 32}}], ""),                            # a list is no artifact
+    ("null", ""),
+    ("not a document", ""),
+])
+def test_an_artifacts_meta_is_its_manifests_and_nothing_where_the_store_shows_none(monkeypatch, doc, digest):
+    research, _ = _shows(monkeypatch, doc)
+    assert RS.artifact_meta(research, "art:" + "a" * 64, "program_digest") == digest
+
+
+@pytest.mark.parametrize("doc, art", [
+    ({"outputs": {"build": "art:b", "plan": "art:p"}}, "art:b"),
+    ([{"outputs": {"build": "art:b"}}, {"outputs": {"build": "art:c"}}], "art:b"),   # the store may show a list: its first is the Attempt
+    ({"outputs": {"build": None}}, ""),
+    ({"outputs": {"plan": "art:p"}}, ""),
+    ({"outputs": {}}, ""),
+    ({"outputs": None}, ""),
+    ({}, ""),
+    ([], ""),
+    (["r1"], ""),
+    ("7", ""),
+    ("not a document", ""),
+])
+def test_an_attempts_output_is_the_artifact_it_published_under_that_name(monkeypatch, doc, art):
+    research, asked = _shows(monkeypatch, doc)
+    assert RS.attempt_output(research, "r1", "build") == art and asked == [["research", "data", "show", "r1", "--json"]]
+
+
+def test_a_cited_attempt_is_its_stages_passing_one_with_its_account_artifact(monkeypatch):
+    """`--match-run` (and `--build-run`) cite an Attempt of the stage's tool that exited 0 and published the stage's account
+    artifact; an Attempt that leaves one of the three out, or states it as null or empty, is refused with what it has."""
+    passing = {"tool": {"name": "vllm.match"}, "status": {"rc": 0}, "outputs": {"match": "art:m", "build": "art:b"}}
+    research, _ = _shows(monkeypatch, passing)
+    assert RS.cited(research, "match", "r1") == {"run_id": "r1", "artifact": "art:m", "rc": 0}
+    has = {"tool": "tool vllm.match", "status": "rc 0", "outputs": "match artifact art:m"}
+    lacks = {"tool": "tool None", "status": "rc None", "outputs": "match artifact None"}
+    for block in has:
+        without = {k: v for k, v in passing.items() if k != block}
+        for attempt in (without, {**passing, block: None}, {**passing, block: {}}):
+            research, _ = _shows(monkeypatch, attempt)
+            said = ", ".join({**has, block: lacks[block]}.values())
+            with pytest.raises(UsageError, match=re.escape(f"--match-run r1: not a passing Match Attempt ({said})")):
+                RS.cited(research, "match", "r1")
+    for attempt, said in (({**passing, "tool": {"name": "vllm.build"}}, "tool vllm.build, rc 0, match artifact art:m"),
+                          ({**passing, "status": {"rc": 1}}, "tool vllm.match, rc 1, match artifact art:m"),
+                          ({**passing, "outputs": {"build": "art:b"}}, "tool vllm.match, rc 0, match artifact None")):
+        research, _ = _shows(monkeypatch, attempt)
+        with pytest.raises(UsageError, match=re.escape(f"({said})")):
+            RS.cited(research, "match", "r1")
+    research, _ = _shows(monkeypatch, {"tool": {"name": "vllm.build"}, "status": {"rc": 0}, "outputs": {"build": "art:b"}})
+    assert RS.cited(research, "build", "r0") == {"run_id": "r0", "artifact": "art:b", "rc": 0}
+
+
+def test_a_record_is_published_only_from_a_commit_attempt_that_ran_a_clean_commit(tmp_path, monkeypatch, capsys):
+    """`publish` asks the store which source the Commit Attempt ran: one that records no source, no commit, or a tree that was
+    dirty or not said to be clean, publishes nothing (exit 21) and says so in row.log; a clean commit is the record's tree."""
+    record = "art:" + "e" * 64
+    o = SimpleNamespace(row=ROW)
+    runs = {st: {"artifact": f"art:{st}", "run_id": f"r-{st}"} for st in RS.OF_RECORD}
+    how = {"ref": "main", "by": "vllm", "tier": None}
+    no_clean_commit: list[dict[str, Any]] = [{}, {"source": None}, {"source": {}}, {"source": {"commit": "c0ffee"}},
+                                             {"source": {"commit": "c0ffee", "dirty": True}}, {"source": {"commit": "c0ffee", "dirty": None}},
+                                             {"source": {"commit": "", "dirty": False}}, {"source": {"dirty": False}}]
+    for attempt in no_clean_commit:
+        research, asked = _shows(monkeypatch, attempt, publish=record)
+        assert RS.publish(o, str(tmp_path), runs, research, how) == RS.PUBLISH_REFUSED
+        ran = attempt.get("source") or "unknown"
+        said = (tmp_path / "row.log").read_text().splitlines()[-1]
+        assert said.endswith(f"publishes nothing: the Commit r-commit ran source {ran}, not a clean commit"), attempt
+        assert asked == [["research", "data", "show", "r-commit", "--json"]] and not (tmp_path / "row.json").exists()
+    research, asked = _shows(monkeypatch, {"source": {"commit": "c0ffee", "dirty": False}}, publish=f"published {record}\n")
+    assert RS.publish(o, str(tmp_path), runs, research, how) == 0
+    words = asked[-1]
+    assert words[1:5] == [*RS.CLI, "records", "publish"] and words[words.index("--tree") + 1] == "main@c0ffee" and "--tier" not in words
+    assert json.loads((tmp_path / "row.json").read_text())["record"] == {"artifact": record, "rc": 0}
+    assert f"publish - {record} rc=0" in capsys.readouterr().out
