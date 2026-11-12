@@ -29,7 +29,10 @@ from verity_vllm.observe.fold.patterns import (
     schema_param_names,
     split_heads,
 )
-from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.patterns.sampling import (
+    TokenSelectGumbelTopP,
+    TokenSelectGumbelTwoStage,
+)
 from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
 from verity_vllm.observe.fold.profiles.kernel_allowlist import KERNEL_ALLOWLIST
 from verity_vllm.observe.fold.resolver import (
@@ -699,6 +702,37 @@ def test_fa2_arguments_under_a_schema_that_names_none_are_unsupported_with_the_s
     assert len(u.detail["views"]) == 7 and set(u.consumed) == next(r for r in se.roots if r.op == u.op).ids()
 
 
+FA3_UNBOUND = "target has no registered attention binding: flash_attn_version 3"
+
+
+@pytest.mark.parametrize("extra, reason, detail", [
+    (None, FA3_UNBOUND, None),
+    (("k_new", 0), FA3_UNBOUND, None),
+    (("k_new", bf(777, (1, 3, 64))), "FA3 op argument 'k_new' is bound: not the registered chain", repr(bf(777, (1, 3, 64)))),
+    (("q_descale", i64(778, (1,), dtype="int8")), "FA3 op argument 'q_descale' is not a float32 scale view", repr(i64(778, (1,), dtype="int8"))),
+    (("cp_world_size", 2), "FA3 context parallelism is not modelled", 2),
+])
+def test_an_fa3_call_is_held_to_the_arguments_the_registered_chain_models(extra, reason, detail):
+    """Under an FA3 target the scope reads the FA3 call's own arguments before its chain: an appended key, a scale that is not float32 and
+    context parallelism are refused with the argument; a call with none of them (or one at 0) goes on to the target's binding."""
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+    events, start = decode_step()
+    for i, e in enumerate(events):
+        if isinstance(e, DispatchEnter) and e.op == "_vllm_fa2_C.varlen_fwd.default":
+            schema, args = e.schema.replace("_vllm_fa2_C::varlen_fwd", "_vllm_fa3_C::fwd"), list(e.args)
+            if extra is not None:
+                schema, args = schema.replace(") -> ", f", Tensor? {extra[0]}=None) -> "), [*args, extra[1]]
+            events[i] = dataclasses.replace(e, op="_vllm_fa3_C.fwd.default", schema=schema, args=args)
+    se = step_events(events)
+    ctx = context(start, se.sample)
+    doc = {**ctx.header.profile, "target": TargetProfile(flash_attn_version=3).to_json()}
+    res = resolve_step(se, dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc)))
+    u = next(r for root, r in zip(se.roots, res) if root.op == "vllm.unified_attention_with_output.default")
+    assert isinstance(u, Unsupported) and u.reason.startswith(reason), u
+    assert extra is None or detail is None or u.detail[extra[0]] == detail
+
+
 def test_silu_embedding_tokenselect_gather():
     events, start = decode_step()
     se = step_events(events)
@@ -818,6 +852,20 @@ def test_gumbel_two_stage_sampler_is_one_token_select():
     kernel = next(n for n in se2.roots if n.op.endswith("_gumbel_sample_kernel"))
     alone = TokenSelectGumbelTwoStage(vocab=V, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, context(start, None, sampling=stochastic))
     assert isinstance(alone, Unsupported) and "outside greedy sampling" in alone.reason
+
+
+def test_a_stochastic_sampler_on_widened_logits_is_held_to_the_vocabulary_and_then_to_the_split_pipeline():
+    """Under a stochastic header the kernel on the float32 widening of the logits is the stochastic pattern's: at the profile's vocabulary
+    it goes on and refuses the launch for the split pipeline no event of this step records; at another vocabulary it refuses the width."""
+    events, start = decode_step(sampler="gumbel", f32_logits=True)
+    se = step_events(events)
+    ctx = context(start, se.sample, sampling={"greedy": False, "temperature": 0.7})
+    kernel = next(n for n in se.roots if n.op.endswith("_gumbel_sample_kernel"))
+    u = next(r for root, r in zip(se.roots, resolve_step(se, ctx)) if root is kernel)
+    assert isinstance(u, Unsupported) and u.reason.startswith("_gumbel_sample_kernel without the complete split pipeline")
+    off = TokenSelectGumbelTopP(vocab=V + 1, block_size=PROF.SAMPLER_BLOCK_SIZE).match(kernel, ctx)
+    assert isinstance(off, Unsupported) and off.reason == "logits width is not the vocabulary"
+    assert (off.detail["V"], off.detail["vocab"]) == (V, V + 1)
 
 
 def _as_index_select(events, dim=0):

@@ -4,7 +4,8 @@
 * each prefill chunk gathers its requests' keys, then DeepGEMM fills an invisible ``[align(rows, 4), width]`` f32 allocation whose row of
   request j holds its logits from column ``cu_j``; the decodes' paged logits ``[rows, width]`` come after, from column 0;
 * each top-k writes the run of the top-k allocation's rows its launch covers;
-* every row is one `DsaMqaLogits_v3{N=T}` and one `DsaTopKShortRow_v1`, the Build's per row; a launch that is not the next one is refused.
+* every row is one `DsaMqaLogits_v3{N=T}` and one `DsaTopKShortRow_v1`, the Build's per row; a launch that is not the next one is refused;
+* the FA3 sparse MLA call is held to its pointers, the step's rows, the pinned widths, bf16 and the default arguments, in that order.
 """
 from __future__ import annotations
 
@@ -158,3 +159,37 @@ def test_each_top_k_writes_the_rows_of_its_launch():
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32", offset=12 * 2048),
                  view(4, (1048576,), "uint8"), 2048, 20])
     assert isinstance(D.DsaTopK().match(off, ctx), Unsupported)
+
+
+MLA = "_vllm_fa3_C::fwd(Tensor q, Tensor k, Tensor v, Tensor? q_v) -> Tensor[]"
+
+
+def _mla(rows=2, heads=8, out_width=512, dtype="bfloat16", q_v=True, outs=True, op="_vllm_fa3_C.fwd.default"):
+    """An FA3 sparse MLA call: `q` [rows, heads, 64], `q_v` and the output [rows, heads, 512], `k` and `v` of the paged cache."""
+    q, qv, out = view(20, (rows, heads, 64), dtype), view(21, (rows, heads, 512), "bfloat16"), view(22, (rows, heads, out_width), "bfloat16")
+    args = [q, view(23, (4, 64, 1, 64), "bfloat16"), view(24, (4, 64, 1, 512), "bfloat16"), qv if q_v else None]
+    return _node(40, op, MLA, args, outs=[out] if outs else None), q, qv, out
+
+
+@pytest.mark.parametrize("kw", [{"q_v": False}, {"outs": False}])
+def test_a_sparse_mla_without_one_of_its_pointers_is_refused(kw):
+    off = D.DsaSparseMla().match(_mla(**kw)[0], _ctx([("a", [5]), ("b", [9])]))
+    assert isinstance(off, Unsupported) and off.reason == "FA3 sparse MLA q/q_v/k/v/out pointers are not bound" and off.consumed == (40,)
+
+
+@pytest.mark.parametrize("kw", [{"rows": 3}, {"heads": 4}, {"out_width": 64}])
+def test_a_sparse_mla_off_the_steps_rows_or_the_pinned_widths_is_refused_with_its_views(kw):
+    node, q, qv, out = _mla(**kw)
+    off = D.DsaSparseMla().match(node, _ctx([("a", [5]), ("b", [9])]))
+    assert isinstance(off, Unsupported) and off.reason == "FA3 sparse MLA views differ from [M,8,64]/[M,8,512]"
+    assert (off.detail["q"], off.detail["q_v"], off.detail["out"]) == (repr(q), repr(qv), repr(out))
+
+
+def test_a_sparse_mla_at_the_pinned_views_is_held_to_bf16_and_then_to_the_default_arguments():
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    wide = D.DsaSparseMla().match(_mla(dtype="float32")[0], ctx)
+    assert isinstance(wide, Unsupported) and wide.reason == "FA3 sparse MLA views are not bf16"
+    off = D.DsaSparseMla().match(_mla()[0], ctx)
+    assert isinstance(off, Unsupported) and off.reason == "FA3 sparse MLA arguments differ from the GLM-5.3 default path"
+    assert off.detail["mismatches"]["max_seqlen_k"] == (None, 2048) and off.detail["mismatches"]["is_causal"] == (None, True)
+    assert D.DsaSparseMla().match(_mla(op="_vllm_fa2_C.fwd.default")[0], ctx) is None, "another library's call is not this pattern's"
