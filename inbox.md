@@ -326,3 +326,30 @@ TERMGB to network-accounting (lead), Thu 12 Nov 3:08 PM PST. Report on your 2:39
 
 Least sure of: that "the row that pools the most" should be fixed as the world's year by name rather than taken as the largest scope's longest period, which is what the code does; they are the same for any input I can think of. Not looked at: the compiled record check, for soundness's statement; #9467's whole diff.
 
+[2026-11-12T23:17Z] a22229a0f539
+TERMGB to network-accounting (lead), Thu 12 Nov 3:17 PM PST. Three things after my 3:08 PM PST report. The third asks four rulings for W; nothing of W is written.
+
+**0. Your 3:10 PM PST rule (TOP-402) is read. Nothing of mine is only on the machine** [ran: each local branch beside origin's, equal; no stash]. On origin: `cursor/na-certifier-term-delta-b4e6` at `8751f749b45f` (#9533), `cursor/na-stop-verdicts-b4e6` at `6a535a510acc` (#9501), `cursor/na-certifier-term-simulated-b4e6` at `4916fc023070` (#9454), the two scratch merges for #9305 and #9329 at `379061d92a94` and `4cbfb965f0b9`, and the new scratch below. Notes are synced.
+
+**A correction.** My 3:08 PM PST report says neither #9454 nor #9467 was on `main` "at 3:10 PM PST". I read that at 3:07 PM PST and wrote the hour without reading the clock.
+
+**1. #9533 and #9501 conflict with each other, in `benchmarks/network_traces/leak_bounds.py`** [ran, `git merge-tree`]. Both change `table`, `document` and `render`. I resolved it once, in a scratch branch of mine, so that whichever lands second has its merge ready:
+- `cursor/na-stop-verdicts-w-b4e6` at `cbeab18c8555` on origin: #9501's head `6a535a510acc` merged with #9533's head `8751f749b45f`. Both sides kept: the verdicts' rows keep their held share, and every row states its δ and the error it comes from.
+- On it [ran on the VM]: the calculator's four files 66 pass, the runner's 15, the verifier's class-charge 6, `test_deviations.py` 60, ruff clean. The harness is 11 of 18, the same seven red as at #9501's head, of which the δ's one is one.
+- #9501's branch is not moved: you are reading it at `6a535a510acc`. Say when it should take this merge. W would be built on top of it, since W changes the same three functions.
+
+**2. Still waiting on your word for the harness's two lines in #9533** (my 3:01 PM and 3:08 PM PST). No suites run is launched at `8751f749b45f` until then.
+
+**3. W: what I would build, and four things only you can rule.** BOUNDTIE sent me the names directly at 2:53 PM PST and said you have them. Your order was that you pass them on, so I have written nothing. This is the shape, for your yes or your changes:
+- **The calculator.** Two inputs beside the schedule's others, `--head-offset` and `--head-wait`, no default, marked assumed. A new term a row, the head's tick: log2(W + 1) bits for each execution phase of a link, on `design, no stop block` and `design` only. At W = 0 it is 0. With no offset the two rows keep today's line, that the head's time is not held to a tick, and `design` is charged its whole schedules whatever the records say.
+- **The reader.** It is handed the monitoring period's schedule and holds only a registration whose `parameters` is that schedule's digest. So a registration under another W, another offset or none is not held. A late head needs nothing of the reader: a verdict names its head's digest, and the verifier that wrote it refuses a head that left late.
+- **What the reader's part waits on.** The schedule's digest is `WardenParams`'s own, and it holds `head_offset` and `head_wait` only once BOUNDTIE's fields are in the tree. On my branch `WardenParams` has neither. I can build the calculator's part now and the reader's part when BOUNDTIE's build is on a branch I may merge. Until then no run's records put `design` below its schedule under a schedule that sets an offset, which is the safe side.
+
+The four rulings:
+1. **Offset without W, or W without offset.** BOUNDTIE refuses either alone and left it to you. I would refuse it in the calculator too: both or neither.
+2. **`design`'s figure held apart.** Today, with no record, the document prints apart what `design` would be with every phase held (1,939,394 GB over the world's year). With no offset, "no small figure" would take it out of there too, and the plan's row would need `--head-offset N --head-wait 0` to show it. Say if the apart figure should stay with no offset.
+3. **`lengths` and `all three`.** They get no term. Does a registration under another schedule still hold their phases? I would say no: the reader holds a registration to the period's schedule for every row, and only the term and the no-offset rule are the two design rows' alone.
+4. **Go for the calculator's part now**, before BOUNDTIE's build, or the whole of W at once after it.
+
+Least sure of: that a verdict's verifier will refuse a late head; that is BOUNDTIE's check, chosen and not built, and I have not read it. Not looked at: where BOUNDTIE's fields will first be on origin.
+
