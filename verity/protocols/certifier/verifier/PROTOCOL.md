@@ -2112,9 +2112,28 @@ Which execution phases have a head is the form's:
   - **The run's last execution phase** ends at the run's last close, with the one before it. The network certifier
     admits a connection only at a bucket s with s + `WardenParams.span` inside the run, `span` = D +
     ⌊(`egress_cells` − 1)/r⌋ buckets being the longest a connection lasts, so every release of the last execution
-    phase has ended by then: the run admits nothing in its last `span` buckets. A connection that arrives in them
-    waits in the queue and is cut at the run's end; the queue's bound holds there as anywhere, so arrivals past it
-    are refused and that execution phase's records withheld.
+    phase has ended by then: the run admits nothing in its last `span` buckets. A connection still queued when
+    they begin waits and is cut at the run's end with no cell.
+  - **An arrival in those buckets is turned away**, which is no refusal: it takes no ordinal, is never queued, and
+    no record is withheld for it, so a load that goes on to the run's end leaves the last execution phase its
+    certificates. The network certifier counts the arrivals it turned away apart from its refusals. Three things
+    hold of a turn-away, each held by a test of the network certifier (`test_network_certifier_phase_ends`):
+    - its one cell is a `REFUSED` cell on ordinal 0, the same bytes at every turn-away;
+    - the cell leaves with the next tick's bucket, as that bucket's cells do, through the pacer where the network
+      certifier is paced, and never at the arrival; its stream's end leaves with it, from the same hand;
+    - which arrivals are turned away is a function of the network certifier's tick count at each arrival, the
+      run's length and the schedule: nothing the queue or the lanes hold, so nothing a server does, moves the set.
+
+    On those three the cell is charged nothing and is in no record: no Lean states this. A network certifier of
+    which one failed would have the cell charged at its width, as any cell a server can move is. What a server
+    does set is what the queue holds when those buckets begin, and so which arrivals before them are admitted,
+    wait and are cut, or are refused, as at any run's end. A full queue before them refuses as anywhere, and that
+    execution phase's records are withheld.
+
+    The link stays open after the cell. The network certifier reads what the client still sends and drops it,
+    none of it reaching a server, and closes the link at the client's end of stream, when the client resets it,
+    which it counts, or at the run's end. A link closed with its client's request unread is reset, and a reset
+    client may lose the cell it has not read; a refusal's link, closed at the arrival, still can be.
   - **The word** is one certificate over SHA-512 of the link, the execution phase and the parameters' digest under a
     tag of its own (`connection_rows.no_head_digest`), for the session and under the key every certificate is. A
     reader tells the three cases apart from public values: a certificate over that digest is the word, a certificate

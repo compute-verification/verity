@@ -5,9 +5,10 @@ bucket here is handed a time long past on the host's monotonic clock, so the pac
 reads no clock."""
 
 import asyncio
+import os
 import socket
 
-from verity.protocols.certifier.verifier.pacer import Pacer
+from verity.protocols.certifier.verifier.pacer import Pacer, _end
 
 
 async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False):
@@ -126,6 +127,68 @@ def test_each_link_holds_only_its_own_bytes_and_a_last_part_closes_its_link():
     assert fast_got == b"a" * 300 + b"b" * 200
     assert [(r.t, r.written) for r in written] == [(0, True), (1, True)]
     assert slow_got == slow_sent
+
+
+def test_a_last_part_ends_its_links_stream_though_the_handing_process_keeps_its_socket():
+    """Two links whose sockets the handing process keeps open. One's part is its last: once the bucket is written
+    its peer has the part and then the stream's end, and what the peer sends after still reaches the handing
+    process. The other's part is not: its peer has the part and no end."""
+
+    async def run():
+        pacer = await Pacer.start()
+        (going, going_peer), (staying, staying_peer) = _pair(), _pair()
+        pacer.add(1, going.fileno())
+        pacer.add(2, staying.fileno())
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(1, b"the last", True), (2, b"more to come", False)])
+        got = [await anext(reports), await anext(reports)]
+        going_peer.setblocking(False)
+        staying_peer.setblocking(False)
+        read = [going_peer.recv(64), going_peer.recv(64), staying_peer.recv(64)]
+        try:
+            read.append(staying_peer.recv(64))
+        except BlockingIOError:
+            read.append(None)
+        going_peer.sendall(b"after")
+        read.append(going.recv(64))
+        await pacer.close()
+        return got, read
+
+    got, read = asyncio.run(run())
+    assert [(r.t, r.end is None, r.written) for r in got] == [(0, True, True), (0, False, True)]
+    assert read == [b"the last", b"", b"more to come", None, b"after"]
+
+
+def test_a_link_that_takes_its_last_part_and_not_the_streams_end_leaves_the_bucket_unwritten():
+    """A socket connected to nothing, the state a peer's reset leaves a link in, takes no end of stream, and neither
+    does a link that is no socket: `_end` says so of each and raises nothing, and of a connected one that it took
+    the end. The pacer writes a pipe's last part, reports its bucket unwritten, and goes on to the next."""
+    alone = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    (link, peer), (other, other_peer), (reading, writing) = _pair(), _pair(), os.pipe()
+    peer.setblocking(False)
+    took = [_end(alone.fileno()), _end(writing), _end(link.fileno())]
+    assert took == [False, False, True] and peer.recv(64) == b""
+    peer.sendall(b"still read")
+    assert link.recv(64) == b"still read" and os.write(writing, b"open") == 4
+    alone.close()
+
+    async def run():
+        pacer = await Pacer.start()
+        pacer.add(1, writing)
+        pacer.add(2, other.fileno())
+        reports = pacer.reports()
+        pacer.hand(0, 0.0, [(1, b" pipe", True)])
+        pacer.hand(1, 0.001, [(2, b"next", False)])
+        got = [await anext(reports) for _ in range(4)]
+        code = await pacer.close()
+        return code, got
+
+    code, got = asyncio.run(run())
+    os.close(writing)
+    assert code == 0 and os.read(reading, 64) == b"open pipe" and os.read(reading, 64) == b""
+    assert other_peer.recv(64) == b"next"
+    assert sorted((r.t, r.end is None, r.written) for r in got) == [(0, False, False), (0, True, True),
+                                                                   (1, False, True), (1, True, True)]
 
 
 def test_a_link_passed_just_before_its_first_bucket_holds_no_release():
