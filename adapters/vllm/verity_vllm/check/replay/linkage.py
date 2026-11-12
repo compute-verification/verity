@@ -13,8 +13,9 @@ from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity_vllm.program.sampling_event import circuit_token_id
+from verity_vllm.records.schema_ids import BOUNDARY_LINKAGE_SCHEMA
 
-LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
+LINKAGE_SCHEMA = BOUNDARY_LINKAGE_SCHEMA
 
 
 def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], workload_requests: list[dict[str, Any]],
