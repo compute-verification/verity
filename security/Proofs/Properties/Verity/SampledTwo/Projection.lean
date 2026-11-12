@@ -21,8 +21,10 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
 * **The pieces**:
   * `CoinMapLaw`: the coin map is uniform up to the device's coin trees' hiding, and writes each read round's coin at
     the device's release for it.
-  * `CoinsRead` at each group of coins: on an accepted play whose log the check read is the device's (`Good`), the coin
-    the check reads for a round of the group is the device's release for it.
+  * `CoinsRead` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
+    device's (`Good`), the coin the check reads for a round of the group is the device's release for it. Every piece but
+    the coin map's, the cut's and the assemblies' is a lemma about the form's check alone, at `Acc`; that the sampled
+    verdict accepts only where the check does is the composite's wiring's, one hypothesis of `ProjectionOf`.
   * `MessagesFixed`: on such a play, the message the check reads for each round is the one the prover sends there, but
     on plays at most `miss` likely; and the prover's calls are within the strategy's (`CallsLe`).
   * `CutBound`: an accepted play whose log the check read is not the device's is at most `terms` likely (the read
@@ -109,26 +111,25 @@ def CoinMapLaw (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Ar
     ∀ (ω : TapeOf V θ F c σ) (r : Coins A x) (i : Fin (A.L.V.k x)), Rd.reads i.val →
       Rd.dev (Fr.out ω r).log i.val = some (r i)
 
-/-- **The coins the check reads at group `g`** (piece: one per group of coins): on a play the sampled verdict accepts
-whose log the check read is the device's (`Good`), the coin the check reads for each read round of group `g` is the
-device's release for it. -/
-def CoinsRead (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (Rd : Reading A)
-    (Good : Verity.Exchange → Prop) (g : Group) : Prop :=
-  ∀ o : Verity.Exchange, V.Verdict k .sampled o → Good o → ∀ i, Rd.reads i → groupOf A i = g →
+/-- **The coins the check reads at group `g`** (piece: one per group of coins): on a play the form's check accepts
+(`Acc`) whose log the check read is the device's (`Good`), the coin the check reads for each read round of group `g`
+is the device's release for it. -/
+def CoinsRead (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (g : Group) : Prop :=
+  ∀ o : Verity.Exchange, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g →
     Rd.coin o i = Rd.dev o.log i
 
 /-- **The statements' round reads no coin**: the run's verifier reads none at round `stage + 1`. -/
 def StmtReadsNone (A : Live₂) (Rd : Reading A) : Prop :=
   ∀ i, Rd.reads i → groupOf A i ≠ .stmt
 
-/-- **The messages fixed at their digests** (piece: the messages): on a play the sampled verdict accepts whose log the
+/-- **The messages fixed at their digests** (piece: the messages): on a play the form's check accepts whose log the
 check read is the device's, the message the check reads for each round is the prover's there in the run at the same
 tape and coins, but on plays at most `miss` likely. -/
-def MessagesFixed (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
-    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
-    (Rd : Reading A) (Good : Verity.Exchange → Prop) (miss : ℝ≥0∞) : Prop :=
+def MessagesFixed (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Rd : Reading A)
+    (Acc Good : Verity.Exchange → Prop) (miss : ℝ≥0∞) : Prop :=
   ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
-      V.Verdict k .sampled (Fr.out s.1 s.2) ∧ Good (Fr.out s.1 s.2) ∧
+      Acc (Fr.out s.1 s.2) ∧ Good (Fr.out s.1 s.2) ∧
         ∃ i < A.L.V.k x, Rd.msg (Fr.out s.1 s.2) i ≠
           msgAt (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2) i) ≤ miss
 
@@ -147,22 +148,22 @@ def CutBound (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArra
     Prop :=
   Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ ≤ terms
 
-/-- **The check's accept is the run's** (piece: the accept, with the form's accept lemma): wherever the sampled
-verdict accepts and the check reads the statement `x`, every run at `x` whose coins at the read rounds and whose
-messages are what the check read accepts. -/
-def AcceptsRun (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (Rd : Reading A) : Prop :=
-  ∀ o : Verity.Exchange, V.Verdict k .sampled o → Rd.stmt o = some x →
+/-- **The check's accept is the run's** (piece: the accept, with the form's accept lemma): wherever the form's check
+accepts and reads the statement `x`, every run at `x` whose coins at the read rounds and whose messages are what the
+check read accepts. -/
+def AcceptsRun (A : Live₂) (x : Msg) (Rd : Reading A) (Acc : Verity.Exchange → Prop) : Prop :=
+  ∀ o : Verity.Exchange, Acc o → Rd.stmt o = some x →
     ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Coins A x),
       (∀ i : Fin (A.L.V.k x), Rd.reads i.val → Rd.coin o i.val = some (r i)) →
       (∀ i < A.L.V.k x, Rd.msg o i = msgAt (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) →
       (Claims.run FlockDeploy.sha512 P A.L.V x ω r).out = .acc
 
-/-- **The frame's statement is the one the check reads** (with the assembly): on every play of the frame the sampled
-verdict accepts, the check reads the statement `x`, the boundary registration's record the commitment `c` carries. -/
-def StmtAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
-    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
-    (Rd : Reading A) : Prop :=
-  ∀ (ω : TapeOf V θ F c σ) (r : Coins A x), V.Verdict k .sampled (Fr.out ω r) → Rd.stmt (Fr.out ω r) = some x
+/-- **The frame's statement is the one the check reads** (with the assembly): on every play of the frame the form's
+check accepts, the check reads the statement `x`, the boundary registration's record the commitment `c` carries. -/
+def StmtAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Rd : Reading A)
+    (Acc : Verity.Exchange → Prop) : Prop :=
+  ∀ (ω : TapeOf V θ F c σ) (r : Coins A x), Acc (Fr.out ω r) → Rd.stmt (Fr.out ω r) = some x
 
 /-- **The projection's bound**: the sampled verdict is at most as likely as the frame's run accepting, at a uniform
 tape and uniform coins, plus `bound`. -/
@@ -173,15 +174,17 @@ def ProjectionBound (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
       (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2).out = .acc) + bound
 
-/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the coin map's law, the
-coins read at the first stage's, the second stage's and the sessions' rounds, no coin read at the statements', the
-messages, the cut, the accept and the statement read give the projection's bound at `hide + miss + terms`. -/
+/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict
+only where the form's check accepts (`Acc`, which the composite's wiring owes), the coin map's law, the coins read at
+the first stage's, the second stage's and the sessions' rounds, no coin read at the statements', the messages, the cut,
+the accept and the statement read give the projection's bound at `hide + miss + terms`. -/
 def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop :=
-  ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Good : Verity.Exchange → Prop) (hide miss terms : ℝ≥0∞),
-    CoinMapLaw V A x θ F c σ Fr Rd hide → CoinsRead V k A Rd Good .first → CoinsRead V k A Rd Good .second →
-      CoinsRead V k A Rd Good .sessions → StmtReadsNone A Rd → MessagesFixed V k A x θ F c σ Fr Rd Good miss →
-      CutBound V k θ F c σ Good terms → AcceptsRun V k A x Rd → StmtAt V k A x θ F c σ Fr Rd →
+  ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (hide miss terms : ℝ≥0∞),
+    (∀ o, V.Verdict k .sampled o → Acc o) →
+    CoinMapLaw V A x θ F c σ Fr Rd hide → CoinsRead A Rd Acc Good .first → CoinsRead A Rd Acc Good .second →
+      CoinsRead A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
+      CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
       ProjectionBound V k A x θ F c σ Fr (hide + miss + terms)
 
 /-- **The witness fixed at registration** (piece: the majority): where the claim fails on the vocabulary's transcript
