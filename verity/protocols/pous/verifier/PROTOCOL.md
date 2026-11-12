@@ -452,17 +452,41 @@ indices are uniform and independent, with replacement: live coins, never Fiat–
 | Step | From, to | What |
 |---|---|---|
 | open | challenger, public | the `WipeCommitment` header: the protocol, the server, the session, `N`, the label size, `k`, the batch size, the deadline a batch (`limit_ns`), and every memory tier inside the boundary with its size, the sizes adding up to `N · 64` bytes; the id goes into the challenger's `SessionLog` first, which refuses it again |
+| mark | challenger, its mark source | the start message (below), once, before the fill's first clock reading; the source returns the start certificate, and the challenger keeps its SHA-512, the session's start mark. On site the source is the network certifier. With no source nothing is sent and the mark is empty |
 | fill | challenger, server | `L_0 … L_{N−1}` in index order, a chunk at a time; the challenger reads its clock at the first and last chunk |
 | challenge | challenger, server | once the fill is complete, the coins are flipped, then batch `t`'s indices, `c_{tB} … c_{tB+B−1}`; the send time is read |
 | answer | server, challenger | 64 bytes an index, in order; the receipt time is read before anything is hashed, then each answer is compared with `L_{c_j}` |
 | egress | network certifier, challenger | the bits that crossed the boundary over the session (C6), as the certifier counts them |
-| sign | challenger | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v1\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the fill's times, the batch count and the egress; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
+| sign | challenger | one LMS signature (`memory_challenger.SCHEMES`, n = 64) over `SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64 len ‖ header ‖ records root)`: the header is the commitment, how the session ended, the start mark, the fill's times, the batch count and the egress; the records root is the frame-v3-sha512 root of the batch records, each `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖ answers)` |
+| end | challenger's host, network certifier | the end message (below), of the signed message and its signature. `end_message` computes it; nothing in `streamed_wipe` sends it |
+
+**The marks.** The start and end messages tie the session to the network certifier's record of what left the site
+while the wipe ran. Neither is signed. Each is 64 bytes:
+
+~~~text
+commitment = the WipeCommitment header as JSON, keys sorted, separators "," and ":", in UTF-8
+start      = SHA-512("verity-pous/streamed-wipe/start/v1\0" ‖ u64be len(commitment) ‖ commitment)
+start_mark = SHA-512(start certificate), 64 bytes; empty with no mark source
+header     = the commitment's fields with ended, start_mark, fill_start_ns, fill_end_ns, batches and egress_bits,
+             as JSON likewise; start_mark is 128 lowercase hex digits, or ""
+message    = SHA-512("verity-pous/streamed-wipe/session/v2\0" ‖ u64be len(header) ‖ header ‖ records root)
+end        = SHA-512("verity-pous/streamed-wipe/end/v1\0" ‖ u64be len(message) ‖ message
+                     ‖ u64be len(signature) ‖ signature)
+~~~
+
+`start_message(commitment)` is `start` and `end_message(signed)` is `end`. The challenger hands `start` to its mark
+source (`Challenger(..., mark_source=)`) as the statement before `fill` or `fill_by` reads the clock, so no label is
+streamed until it holds the certificate. A source that raises, or returns no bytes, stops the fill there. The
+challenger does not check the certificate: it signs the digest of the bytes it was given. A session with an empty mark
+is judged as any other: the mark says which certificate the challenger held, and the judge reads no certificate.
 
 The first late or wrong batch ends the session (`late`, `wrong`). No batch is retried and no index is sampled again, so a
 failed wipe is a visible failure. `verdict(signed, commitment, trusted=...)` accepts a session only when it is
 signed under a trusted key and its header is the published commitment, its batch size is 1 (the reveal the guarantee
 covers), every batch is present in order, none has a wrong answer, each is within `limit_ns` on the challenger's clock,
-and the first was sent after the fill ended.
+and the first was sent after the fill ended. The format is `verity-pous/streamed-wipe/v2`: the readers
+(`wipe_party.signed_of`, the Lean judge) refuse a session of another version, and a start mark that is neither empty nor
+128 lowercase hex digits.
 
 The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdict`, the executable
 `streamed-wipe-verdict`, which `wipe_verdict.judge` (beside the Lean package) sends the signed session, the commitment,
@@ -470,8 +494,8 @@ the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which re
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 `verity/protocols/pous/device/lean/tests/test_wipe_verdict.py` holds the Lean to `streamed_wipe.verdict` on generated sessions at every batch size, one adversarial edit of them (a wrong
-label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a field past its width),
-JSON the Lean must refuse, and named negative controls.
+label, a late or early answer, an untrusted signer, a wrong count, a batch dropped or added, a start mark changed, a
+field past its width), JSON the Lean must refuse, and named negative controls.
 
 **Batches and deadlines.** A batch's deadline runs from its send to its receipt on the challenger's monotonic clock, at
 a resolution of at most `memory_challenger.CLOCK_RESOLUTION_NS`. It is to be set below the challenger's round trip to
@@ -485,8 +509,10 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
 protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's samples). The
-signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
-prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
+signed session (its start mark, its times, its batch records and the exact egress) is witness, as a memory-challenger
+session is: the prover proves `verdict` of it through the proof system, and only the verdict is published. The marks
+make nothing new public: the start message is a digest of the commitment, which is public already, and the end message
+goes to the network certifier alone, whose record is witness too. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
 
 **The bound.** For every prover of the sequential wipe, with `M` bits inside the boundary when the fill ends (every
@@ -633,7 +659,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `ChallengeReply.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
 | `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed before the session; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
-| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
+| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=, mark_source=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `start_message(commitment)` and `end_message(signed)`, the two marks' messages, and `mark_of`, which reads a start mark's hex; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, its record of one session (`ChallengePhaseRecord`: signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
 | `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
