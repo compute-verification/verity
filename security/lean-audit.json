@@ -45382,7 +45382,7 @@
    }
   },
   "MemoryChallenger.StreamedWipe": {
-   "digest": "08aa1e6cd8d6ef25e8793324c5002e78aa1a31ae1046922901e7bb855a03d3d4",
+   "digest": "732a770609b2b4aad8ddc3e96a17400d282255841bb7a5ec16f5c3d0cf8e6b17",
    "definitions": {
     "MemoryChallenger.StreamedWipe.Batch": "c41fb834ea7b752afa45114c300050fe7328c6ed51abb498123e584d9ffdf6af",
     "MemoryChallenger.StreamedWipe.Batch.b": "721183a276bad453e26b8c0e2453c4b40f5eaf062b9f6113542e38dbc6762b07",
@@ -45394,10 +45394,11 @@
     "MemoryChallenger.StreamedWipe.Batch.sendNs": "e4fd754e53dc9724c7e1cc55dbb88df0b2925ef1b03d9fac43374e0cdaf8cff5",
     "MemoryChallenger.StreamedWipe.Batch.value": "f45e7dcbbe5d6404e9c957227f657e7da860401e19181b660565c36f29490c88",
     "MemoryChallenger.StreamedWipe.Batch.wrong": "9847fe2c51f5fa77eea58411f716e0bcc923515f26e25f68e73b5e0a3913f63c",
+    "MemoryChallenger.StreamedWipe.CLOCK": "2f93b339985fd50f5f5f53de6eb41d1c7dc7758259f8509241469834f573b4b3",
     "MemoryChallenger.StreamedWipe.COMPLETE": "1d2d336e1407d724b0d02cce9f782355267399e5971c7bba385eaf6720a02928",
     "MemoryChallenger.StreamedWipe.Commitment": "b3701cfabf1d5f9ff1be0429b19a43baab4a67cbf6ca3c78de4d31ccff82f8c4",
     "MemoryChallenger.StreamedWipe.Commitment.casesOn": "a5b125bbf36f21871504d50fe535b6eef69e6f95c9e792939eff0550688999c4",
-    "MemoryChallenger.StreamedWipe.Commitment.headerFields": "57117b81cc03f953ad1f40ccc1336f42c267760785ce9dab8f0fa97f61da85f4",
+    "MemoryChallenger.StreamedWipe.Commitment.headerFields": "ba49018548cb0283d1086c98f5ee97f64e72244a6797776af30a10edd9493aa2",
     "MemoryChallenger.StreamedWipe.Commitment.params": "e9e530aa066265d26b817a014d70807af1651944ca9cba66529f105d411fdf21",
     "MemoryChallenger.StreamedWipe.Commitment.rec": "4b7e6d703fba700e42e78766ceec083d8f10ea48f36d21b0c4c2ca2fde2cecce",
     "MemoryChallenger.StreamedWipe.Commitment.server": "bbbebc508bea4eefc6b84b32f742d61352e15ff36b2efdd18431d805aa98e21e",
@@ -45475,12 +45476,12 @@
    }
   },
   "MemoryChallenger.WipeJudge": {
-   "digest": "627758ad14b9a19426d11d7e40b2d91ae5b7995ff12063648bc1d0949cca3868",
+   "digest": "2c58a8c8288da8e1b0c9b3cc1cdc6d880102497d8dc5e184fea79c1b5a4b446c",
    "definitions": {
     "MemoryChallenger.StreamedWipe.Batch.ofJson": "18299b08a8f2c16d63386d60e7a8fa727a27538ee0af5a8499d02011b5b5fa16",
     "MemoryChallenger.StreamedWipe.Batch.toJson": "4ec6a8077c7ca846ff9c160ef6455d103d63cfb4c2b6d21f1ec22706741da75e",
     "MemoryChallenger.StreamedWipe.Commitment.ofJson": "d59da38bc0225be808bb942cabbb26acde89443162da37641087192c0a997e40",
-    "MemoryChallenger.StreamedWipe.Commitment.toJson": "8aec678367b8c384039c45605043056b2e61baf08542b67036856cdd3e485b1e",
+    "MemoryChallenger.StreamedWipe.Commitment.toJson": "198425288e71b049d1a65174938ebcb6c2c8f04d65fe74001ce7a33e3c2948e4",
     "MemoryChallenger.StreamedWipe.Signed.ofJson": "a0a3a740b47d764ed8b1d2a21f8cebbff30c34365e289210c4d617e497cfa0a5",
     "MemoryChallenger.StreamedWipe.Signed.toJson": "db34814223a2ec88286fbe758ad84d2c6aa801966270a886dc15ce109a32ea3a",
     "_private.MemoryChallenger.WipeJudge.0.MemoryChallenger.StreamedWipe.hexJ": "d762bfacb778ace058f6c070c88fab74270d40ef5af392759046c7831cc08c31",
