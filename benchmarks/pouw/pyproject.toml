@@ -62,13 +62,13 @@ untraced = [
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
+          "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/protocols/certifier",
-          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",

@@ -60,7 +60,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $FW/py && $UV pip install -q --python $PY numpy blake3; } || exit 1
 export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
-KEY=$(cd $REPO && find benchmarks/served_units/stage.py verity/ml adapters/vllm/verity_vllm tools/verity/circuit_check/src \
+KEY=$(cd $REPO && find benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src \
   -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 
 # name UNIT N: the statement's directory name, a census name's past 96 characters cut to 80 and its digest's first 12

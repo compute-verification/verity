@@ -49,7 +49,7 @@
    "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
    "draws": 64,
    "generator": "verity_flock.synthetic",
-   "key": "verity.ml.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'gemm-coordinate/k64/sm80-mma-bf16', 'seed': 20260926})",
+   "key": "verity.commitments.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'gemm-coordinate/k64/sm80-mma-bf16', 'seed': 20260926})",
    "n": 64,
    "parameters": {
     "K": 64,

@@ -90,7 +90,7 @@ def tree(root: Path, files: dict[str, str]) -> None:
 @pytest.fixture
 def repo(tmp_path):
     tree(tmp_path, {"benchmarks/served_units/stage.py": "s", "benchmarks/served_units/window.py": "w",
-                    "verity/ml/a.py": "a", "verity/ml/sub/b.py": "b", "verity/ml/c.txt": "c",
+                    "verity/circuits/a.py": "a", "verity/definitions/sub/b.py": "b", "verity/commitments/c.txt": "c", "verity/protocols/p.py": "p",
                     "adapters/vllm/verity_vllm/d.py": "d", "adapters/vllm/tests/e.py": "e",
                     "tools/verity/circuit_check/src/circuit_check/f.py": "f", "verity/core/g.py": "g"})
     return tmp_path
@@ -109,14 +109,14 @@ def test_key_agrees(monkeypatch, repo):
         return sh
 
     k0 = both()
-    for f in ("verity/ml/c.txt", "verity/core/g.py", "adapters/vllm/tests/e.py", "benchmarks/served_units/window.py"):
+    for f in ("verity/commitments/c.txt", "verity/core/g.py", "adapters/vllm/tests/e.py", "benchmarks/served_units/window.py"):
         (repo / f).write_text("changed")
         assert both() == k0, f"{f} is outside the staging tree's key"
     keys = {k0}
-    for f in ("benchmarks/served_units/stage.py", "verity/ml/sub/b.py", "adapters/vllm/verity_vllm/d.py",
+    for f in ("benchmarks/served_units/stage.py", "verity/definitions/sub/b.py", "adapters/vllm/verity_vllm/d.py",
               "tools/verity/circuit_check/src/circuit_check/f.py"):
         (repo / f).write_text("changed")
         keys.add(both())
-    tree(repo, {"verity/ml/new.py": ""})
+    tree(repo, {"verity/protocols/new.py": ""})
     keys.add(both())
     assert len(keys) == 6, "a change to a staged source left the key as it was"

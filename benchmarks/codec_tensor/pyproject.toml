@@ -15,13 +15,13 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "verity/hardware/record.py",
           "benchmarks/word_codec/kv_twin.py",
           "benchmarks/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
-          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/poub/verifier",
           "verity/protocols/spot/verifier/profile.py",  # with verity/circuits, what store.store_salt's audit import reads
           "verity/protocols/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/hardware",  # kv_bench.py reads the RTX PRO 6000's card
           "verity/protocols/spot/device/challenger.py", "verity/protocols/spot/device/remote.py",
-          "verity/ml/__init__.py", "verity/commitments/crypto",
+          "verity/commitments/crypto",
           "verity/circuits", "verity/commitments", "verity/commitments/randomness",
           "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]

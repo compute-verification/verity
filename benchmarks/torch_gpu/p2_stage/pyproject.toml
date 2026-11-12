@@ -17,14 +17,14 @@ untraced = ["tests/test_sketch.py"]
 # and its host twin's sources. sketch.py and that engine read their variables through their settings.py, on
 # verity_config.settings.
 inputs = ["verity/configuration/config/verity_config",
-          "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pous", "verity/protocols/interface",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+          "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/protocols/pous", "verity/protocols/interface",
+          "verity/protocols/pous/prover",
           "verity/hardware/record.py",
           "verity/protocols/poub/verifier", "verity/protocols/spot",
           "verity/protocols/spot/verifier/profile.py",
           "verity/commitments/identity", "verity/commitments/randomness",
-          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/circuits", "verity/definitions/kernels",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/store-toy",
