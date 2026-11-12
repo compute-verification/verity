@@ -363,7 +363,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
                                                 "priority": bool(w.get("priority")), "mem_gb": w.get("mem_gb"),
                                                 "twin": str(w.get("twin") or "").partition("@")[0] or None, "home": home,
                                                 "placed": {"by": "auto", "said": w["auto"].get("said")} if isinstance(
-                                                    w.get("auto"), dict) else {"by": "its lane", "said": None}})
+                                                    w.get("auto"), dict) else {"by": None, "said": None}})
                 if w.get("run") and w["run"] not in j["runs"]:
                     j["runs"].append(w["run"])
                 j["lines"].append({"machine": m, "since": w.get("since"), "minutes": w.get("minutes") or 0})
@@ -507,7 +507,8 @@ def text(doc: dict, with_moves: bool = False) -> str:
         out += ["", f"{w['pool']}  {w['job']}" + (f" (twin pair, runs {', '.join(w['runs'])})" if w["twin"] else "")
                 + f": in {lines}; by {w['by'] or 'no one named'}" + ("; priority" if w["priority"] else "")
                 + (f"; asks {_gb(w['mem_gb'])}" if w["mem_gb"] else ""),
-                "  placed by its lane" if w["placed"]["by"] != "auto" else f"  placed by --on auto: {str(w['placed']['said'])[:300]}"]
+                f"  placed by --on auto: {str(w['placed']['said'])[:300]}" if w["placed"]["by"] == "auto" else
+                "  placed: not recorded (its request has no auto key)"]
         out += [f"  could run now on {p['machine']}: slot {p['slot']}, cores {p['cores']}, mem {_gb(p['mem'])}"
                 + (f", {p['count']} places" if p["count"] > 1 else "")
                 + (f"; lane runs hold {p['lane_cores']} of its cores" if p["lane_cores"] else "") for p in w["places"]]
@@ -551,8 +552,8 @@ def findings(ctx: Any) -> list:
     STRANDED_S rings ci, one incident a job (the runner times it: `for_s`); any other pool rings infra once a pool while one of
     its jobs has been stranded STRANDED_S (``ctx.memo`` keeps when each was first seen so). Then infra's: a pool not read or
     shut by a floor (`shut`: at once on a machine that holds no run while that pool's jobs wait elsewhere, else after SHUT_S),
-    a line stalled on memory for STALLED_S, a wait for a Lean slot of LEAN_WAIT_MIN, a machine whose /etc/vy/peers is missing
-    or short. Raises only when no machine could be read at all."""
+    a line stalled on memory for STALLED_S, a wait for a Lean slot of LEAN_WAIT_MIN, and one incident (`peers`) naming every
+    machine whose /etc/vy/peers is missing or short. Raises only when no machine could be read at all."""
     from .monitors import Finding
 
     names = machines()
@@ -613,11 +614,14 @@ def findings(ctx: Any) -> list:
                                         "holding their CPU slot: " + "; ".join(f"{x['job']} ({x['pool']}, {x['minutes']} min)"
                                                                                 for x in ws[:OLDEST]),
                            owners=("infra",), for_s=0))
-    for x in doc["peers"]:
-        out.append(Finding(f"peers|{x['machine']}", f"*{x['machine']}'s {PEERS} " + (
-            f"lacks {', '.join(x['missing'])}*" if x["file"] else "is missing*") + ": a check's twin there can't claim on "
-                                                                                  "those machines, so it gives its slot back",
-                           owners=("infra",), for_s=0))
+    if doc["peers"]:
+        none = [x["machine"] for x in doc["peers"] if not x["file"]]
+        short = [f"{x['machine']} (lacks {len(x['missing'])})" for x in doc["peers"] if x["file"]]
+        out.append(Finding("peers", f"*{len(doc['peers'])} CPU machine(s) have a missing or short {PEERS}*: "
+                                    + "; ".join(([f"no file on {', '.join(none)}"] if none else [])
+                                                + ([f"short on {', '.join(short)}"] if short else []))
+                                    + ". A check's twin there can't claim on the machines its file lacks, so it gives its slot "
+                                      "back; `research queue stranded` lists each one's.", owners=("infra",), for_s=0))
     return out
 
 

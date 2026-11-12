@@ -211,12 +211,15 @@ def test_a_pool_under_a_disk_floor_is_shut_and_the_check_pool_is_read_as_slot_py
     assert doc["pools"]["check"]["places"] == 1, "slot.py blocks the check slots itself under its own floor"
 
 
-def test_a_jobs_auto_words_are_printed_and_a_job_its_lane_placed_says_so():
+def test_a_jobs_auto_words_are_printed_and_a_job_with_no_auto_key_is_not_recorded_as_placed():
     said = f"{B}'s research pool has the most places for it (3)"
     docs = {A: machine(research=pool(slot("r0", held=True), waiters=(waiter(30, "r1", said=said), waiter(20, "r2")))),
             B: machine(research=pool(slot("r0", "16-31"), slot("r1", "32-47")))}
-    out = stranded.text(stranded.analyse(docs, T0, CPUS))
-    assert f"placed by --on auto: {said}" in out and "placed by its lane" in out
+    doc = stranded.analyse(docs, T0, CPUS)
+    assert [w["placed"] for w in doc["waits"]] == [{"by": "auto", "said": said}, {"by": None, "said": None}]
+    out = stranded.text(doc)
+    assert f"placed by --on auto: {said}" in out and "placed: not recorded (its request has no auto key)" in out
+    assert "its lane" not in out
 
 
 def test_the_peers_a_machine_lacks_are_listed():
@@ -376,8 +379,17 @@ def test_infra_hears_of_a_line_stalled_30_minutes_a_lean_wait_of_10_and_a_short_
     lean = {"file": "lean-slots", "pools": {"audit": {"n": 1, "slots": [], "waiters": [{"pid": 1, "minutes": 11, "run": "r-l"}]}}}
     docs = quiet(**{A: machine(research=stall), B: machine(lean=lean), C: machine(peers=[A])})
     got = watch(tmp_path, [(T0, docs), (T0 + 1800, docs)])
-    assert sorted(got) == [("open", "stranded|lean|" + B, ["infra"]), ("open", "stranded|peers|" + C, ["infra"]),
+    assert sorted(got) == [("open", "stranded|lean|" + B, ["infra"]), ("open", "stranded|peers", ["infra"]),
                            ("open", "stranded|stalled|research", ["infra"])]
+
+
+def test_every_machine_short_of_peers_is_one_finding_naming_the_ones_with_no_file_and_how_many_the_others_lack():
+    docs = quiet(**{A: machine(peers=[B]), B: machine(peers=None) | {"peers": None}, C: machine(peers=[])})
+    ctx = M.Ctx(now=T0, run=lambda argv, **kw: subprocess.CompletedProcess(argv, 0, json.dumps(docs[argv[0]]).encode(), b""))
+    (f,) = [f for f in stranded.findings(ctx) if f.key.startswith("peers")]
+    assert f.key == "peers" and f.owners == ("infra",) and f.for_s == 0
+    assert f.text.startswith("*3 CPU machine(s) have a missing or short /etc/vy/peers*: ")
+    assert f"no file on {B}; short on {A} (lacks 1), {C} (lacks 2)." in f.text
 
 
 def test_the_watch_raises_with_the_fix_only_when_no_machine_could_be_read(tmp_path):
