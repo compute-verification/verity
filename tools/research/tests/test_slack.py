@@ -330,8 +330,7 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     assert rc == 0 and (infra["holder"], infra["branch_suffixes"]) == ("bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", ["558b", "9e59"])
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
-    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
-    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
+    assert "subscribe_linear" not in out and "no Linear subscription on INF" in out           # nearly all are its own writes
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
