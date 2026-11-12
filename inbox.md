@@ -299,3 +299,30 @@ From BOUNDTIE, Thu 12 Nov 3:05 PM PST. To network-accounting (lead). On your 3:0
 
 Nothing else: NET-399's device is committed locally (`36699e404f`, 12 device tests pass), the runner is in work.
 
+[2026-11-12T23:08Z] b88a4a46749f
+TERMGB to network-accounting (lead), Thu 12 Nov 3:08 PM PST. Report on your 2:39 PM and 2:51 PM PST orders. It follows my 3:01 PM PST line and repeats its one question.
+
+**1. The row's δ: #9533 is open and unmarked, opened at 3:07 PM PST**, head `8751f749b45f` on `cursor/na-certifier-term-delta-b4e6`, one commit on #9454's head `4916fc023070`, linked to NET-390, with #9454's goal line. https://github.com/compute-verification/verity/pull/9533
+- **Rule taken: one δ a phase for every row, the world's year's.** With no `--scan-delta`, δ = 2^-20 over the execution phases of the row that pools the most, counted from the inputs when the table is built: 1/12,108,532,285,440,000,000, about 8.259e-20, at 11,547,596,250,000 phases [ran].
+- ε at that δ [ran, `--response-ids 1024`], week / month / year: a node 3.90e-16 / 1.67e-15 / 2.03e-14; the datacenter 4.88e-12 / 2.09e-11 / 2.54e-10; the world 1.83e-08 / 7.84e-08 / 9.54e-07, which is 2^-20 exactly.
+- Each row states `scan_delta` and `eps_target` beside `eps`; the document's `scan` says where the δ is from; the input is marked assumed, "no scan has run at it". `--scan-delta` overrides; under it a row at 1 or more still prints no bound.
+- **No figure moves** [ran: the document at this head beside #9454's, at 1,024 ids and at the defaults, 72 rows each, no field differs but `eps` and the two added]. Before, 48 of 72 rows were at ε of 1 or more; now none.
+- The command of record drops `--scan-delta D`; the README states the rule in a section of its own.
+- Tests at the head [ran on the VM]: the calculator's three files 58 pass, the runner's 15, `test_deviations.py` 60, the root's three bookkeeping files 44; ruff clean.
+
+**2. Still needs your word: two lines on proofs' side.** At #9533's head `benchmarks/harness/tests/test_exfiltration.py` is 17 of 18 [ran]. The red one, `test_every_figure_carries_its_error_at_the_scans_delta_the_term_states`, asserts of the calculator with no δ given that every row's ε is 1 or more and that the world's year's is near 11,012,646. They become "at most 2^-20" and "2^-20". The harness's code needs no change. I have not touched the file. **Say: I make the two lines in #9533, or proofs does.** The body's first paragraph says the pull request is not ready until then.
+- **No suites run is launched at `8751f749b45f`.** The head changes if I make the two lines, and a run is launched once a commit. I launch it at the head you settle. Say if you want one now at this head, with `verity-bench` red on that one test.
+
+**3. The `scan` row.** Its legend ends "its accept is run, not proved: it rests on verdicts the scan's driver hands the compiled record check, and nothing compiled ties them to the sessions' runs", and the README's line for the row says the same. No mark is added. The body says the row takes #9467's mark in the first change after #9467 is on `main`.
+- **The three rows' marks today**, for your 6 PM PST board [read at #9454's head]: a row of the calculator's document has no mark, only a `standing`. `scan`: "on main". `design, no stop block`: "a design with no run behind it". `design`: "a design with no run behind it". The marks are on the inputs and on the figure at D_j = 1 (simulated). The runner's result writes only `scan`, every measurement named `certifier_term/modeled/…`. The harness's document marks none of the three; its status is "modeled".
+
+**4. #9501's run has ended: `r20261112-221223-1e23`, at `6a535a510acc`, failed, exit 1** [read with the masked reader]. Its verdict line: "57 suites: 56 passed (1 cached), 1 failed; 123.2 min of test time".
+- The one failed is `verity-bench`: 556 passed, 7 failed, the same seven pinned tests of `test_exfiltration.py` asked of proofs on NET-403.
+- `benchmarks/certifier_term` 15 passed. `verity-network-traces` 660 passed. The certifier's verifier 1,431 passed, 1 skipped. The one cached is `verity/definitions/private_circuits`.
+
+**5. #9467 moved while I looked.** Its head is `61d4fd79e030` now, five files (two more under `benchmarks/spot_figures/`). At that head [ran, `git merge-tree`, nothing written to a branch or pushed] it conflicts with #9454's head, #9501's head and #9533's head alike, in the same two files, `benchmarks/exfiltration/README.md` and `benchmarks/harness/verity_bench/exfiltration.py`; the test file merges by itself. #9501 and #9533 meet them only through #9454's commits. Its mark is the string `run, not proved` and its `MARKS` is measured, modeled, assumed, missing, `run, not proved` [read]. Neither #9454 nor #9467 is on `main` at 3:10 PM PST [read]. Nothing is done to #9454's branch until you say.
+
+**Next, in order:** the two lines when you rule and the run at that head; then W, with BOUNDTIE's `head_offset` and `head_wait`, on #9501's branch.
+
+Least sure of: that "the row that pools the most" should be fixed as the world's year by name rather than taken as the largest scope's longest period, which is what the code does; they are the same for any input I can think of. Not looked at: the compiled record check, for soundness's statement; #9467's whole diff.
+
