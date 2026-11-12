@@ -37,8 +37,10 @@ The Build derives a row's Programs and the Match checks them against a live serv
 wrapper's Program from the pinned vLLM model class and writes it with its instance sequence (`build_instances`).
 `global_program` composes the derived request Programs into a workload's Program. `manifest` builds the
 required-value manifest under the query of record, and `manifest_verify` rebuilds one and compares digests. `match`
-takes one configuration through every Match stage into one run directory, and `served_match` is the Match of a
-served-compiled row on live data. Beside them are the workload generators (`workload`, `coverage_workloads`) and
+takes one configuration through every Match stage into one run directory: `match_stage` runs one stage's command,
+`match_workload` reads what the driver needs of the workload file, and `match_fold` is one fold of an observation
+log, with the Program and the instance sequence written from it. `served_match` is the Match of a served-compiled
+row on live data. Beside them are the workload generators (`workload`, `coverage_workloads`) and
 `workload_file`, which makes a workload file present and checked; `program_cache`, a Build's derives reused on one
 host; `circuit_db`, the circuit database behind `verity-vllm records`; `neutrality`, which rebuilds the rows of
 record's Programs and fails if a Program digest moved; `program_graph`, a row's Program as a graph; the store and
@@ -50,8 +52,14 @@ What code outside these modules takes from one of them is what its `__all__` lis
 `same_module_path`, `sampler_geometry`, `sampling_policy`, `write_instances`), `build_instances` (`write_instances`,
 which `benchmarks/prove_path` imports too), `circuit_db` (`STAGED`, `checkpoint`, `data`), `global_program`
 (`MODELLED_ENGINE`, `compilation_facts`, `request_id_of`, `stop_rule`, `workload_target`), `manifest` (`build`,
-`build_global`, `cpus`, `incomplete_rc`, `taps_of`), `program_cache` (`key`, `lookup`, `publish`, `restore`),
-`served_match` (`ServedCommit`), `vu_store` (`after_replay`) and `workload_file` (`workload_file`, which the
-benchmarks import). Three modules state no `__all__`: `match`, from which the TP row's fold Match imports
-`fold_construction_args` beside the command; `topp_pin_check`, a command and nothing else; and `vu_export`, which
-only `program_graph` and `vu_store` read.
+`build_global`, `cpus`, `incomplete_rc`, `taps_of`), `match_fold` (`INSTANCES_FORM_ENV`, `INSTANCES_SCHEMA`,
+`INSTANCES_SCHEMA_V2`, `PROGRAM_SCHEMA`, `fold_summary_result`, `instances_form`, `persist_program`,
+`run_input_bindings`), `match_stage` (`run_stage`), `match_workload` (`fold_construction_args`), `program_cache`
+(`key`, `lookup`, `publish`, `restore`), `served_match` (`ServedCommit`), `vu_store` (`after_replay`) and
+`workload_file` (`workload_file`, which the benchmarks import). Three modules state no `__all__`: `match`, from
+which the TP row's fold Match imports `fold_construction_args` beside the command; `topp_pin_check`, a command and
+nothing else; and `vu_export`, which only `program_graph` and `vu_store` read. `match` imports private names of its
+two readers, `match_workload`'s `_workload_doc`, `_workload_enforce_eager`, `_workload_engine_args`,
+`_workload_execution` and `_workload_expected_steps` and `match_fold`'s `_jsonable`, and it hands on the names
+other modules' tests still read through it: the three `INSTANCES_` names, `fold_summary_result`, `persist_program`,
+`run_stage`, `_workload_moe_construction` and `engine.served`'s `ENFORCE_EAGER`.
