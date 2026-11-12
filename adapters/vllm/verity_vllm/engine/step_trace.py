@@ -39,11 +39,12 @@ from typing import IO, Any
 
 from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.records.schema_ids import STEP_TRACE_SCHEMA
 
 __all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "scheduler_config", "step_geometry", "steps"]
 
-SCHEMA = STEP_TRACE_SCHEMA
+#: `records.schema_ids.STEP_TRACE_SCHEMA`'s string, written here: suites outside the adapter list the files this module
+#: imports one by one (`benchmarks/network_traces` and `benchmarks/serve_tax`, their `[tool.verity.tests] inputs`)
+SCHEMA = "verity-vllm/step-trace/v1"
 #: the trace's file in a `verity-vllm serve-openai` run, beside the committer's step_trace.jsonl
 SERVED = "advice_trace.jsonl"
 #: `FinishReason` (vllm/v1/engine/__init__.py) by value
