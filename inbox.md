@@ -125,3 +125,30 @@ LEANMERGE to the network-accounting lead, Thu 12 Nov 1:23 PM PST. **Job 1: every
 - **Not run**: the rest of the suite; `benchmarks/mempool/cost.py`'s `unit_cost`, the one other caller that passed a memo on `main`, which keeps its own at the head and has no test. Least sure of: nothing here; the times are one machine's, 4 CPUs.
 - Job 2's scratch branch is cut from the marked head (`cursor/na-remote-merge-mends-7c1d`, no commit yet). The checkpoint line you asked for is in the lane's report (notes pushed 1:23 PM PST).
 
+[2026-11-12T21:24Z] 415c736dae35
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:25 PM PST. **A stop on NET-335's runs: the scratch's base cannot build two Lean packages, so run 3 failed for that and runs 4 and 6 will. It is the base's, not the change's. I ask for two things below. Your 1:17 and 1:21 PM PST lines are read; the two answers come by 3 PM PST.**
+
+**What ran**
+
+- Run 3 `r20261112-201438-5273`, tree `a11f58adbfdc`: ended `failed`, exit 1 [run: `research status`]. Seven suites, four passed (`verity-network-sim` 21, `verity-graph` 220, `benchmarks/prove_path` 170, `repository` 354) and three failed: `verity-network-e2e` (62 passed, 3 failed, 5 errors), `benchmarks/one_stage` (959 passed, 10 errors), `verity-network-traces` (566 passed, 27 failed, 77 errors) [read: its stdout].
+- Every failure its output shows is one refusal: `lake build network-records`, and `lake build inference-only`, stop with "dependency 'core_spot' of 'nci_check' not in manifest" [read]. Where I did not look: my job kept no suite log, so I cannot name the 27 failed tests of `verity-network-traces`, nor say that none is the change's.
+
+**Why it is the base's** [read: `git show` of the two manifests at each head]
+
+- At lean's `e209a56847d4`, so at proofs' `c2aebff06095` that the scratch is cut from, `nci_check`'s lakefile requires `core_spot`, and the manifests of the certifier verifier's Lean package and of the inference-only check's do not list it. At lean's marked head `bafae2eaec2e` both list it.
+- The scratch's own diff holds no Lean manifest: seven files, `NetworkCheck/Period.lean` the only Lean [run: `git diff --stat c2aebff06095`].
+- **proofs' branch is at `8e92d28fe27b` since 12:24 PM PST**: a merge of `bafae2eaec2e` into `77414839aa90`. `c2aebff06095` is its ancestor [run: `git merge-base --is-ancestor`].
+
+**What follows**
+
+- No run at the present base can pass a step that builds those packages. Run 4 `r20261112-202915-98ab` (`3f2187ae6bf9`) is running since about 1:15 PM PST and builds them for its rounds [argued: not ended]. Run 6 `r20261112-205347-9a48` (`be0ccca4548a`) still waits, and its first step is the Lean try in the certifier verifier's package.
+
+**Asked**
+
+1. **Merge proofs' `8e92d28fe27b` into the scratch once now**, not at proofs' ready line (and once more at it). Until your word I do it locally, unpushed, with the tests the VM can run.
+2. **The runs:** let run 4 end; cancel run 6 while it waits; launch one run at the merged scratch head with both jobs (the real rounds, the challenger test with the two unlisted cases, the Lean try on `Period.lean`, the changed suites, `scan_period.sh`), its suite logs kept this time. You said not to relaunch: I touch no run until you answer.
+
+Job 6's run 2 `r20261112-192107-f9f9` is still running at 1:21 PM PST. Your fact on its records at lean's head is noted: if the run at `c299bad61230` fails on the seven names and `rowsCapPublished_nontrivial` and nowhere else, I say so in one line and commit no record.
+
+TIMER: none
+
