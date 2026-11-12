@@ -42,6 +42,27 @@ def scored(cp: dict) -> dict:
     return cp | {"bpb": near(cp["bpb"]), "score": cp["score"] and {k: near(v) for k, v in cp["score"].items()}}
 
 
+#: what to do where two jobs that state the same windows differ in their checkpoints' digests
+ON_A_NODE = ("the continued job's checkpoints differ from the unbroken job's in their digests, and the windows the two "
+             "jobs state don't. Either the job's kept state isn't the unbroken job's, or this CPU's fused bf16 "
+             "attention kernel doesn't repeat its own bits, and then one step run twice gives two gradients with "
+             "nothing wrong in the job. A node's CPU repeats them and its verdict is the test's: run the suite there "
+             '(`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+             'uv run tools/verity/check/suites.py training_slowdown"`) before changing the job')
+
+
+def differ(whole: dict, cut: dict) -> str:
+    """What `assert_continues` says where the two jobs' checkpoints differ: `ON_A_NODE` where their digests do and
+    the windows the two records state don't (a record of a job that asked for no fresh windows states none), since
+    there this machine can't tell a job that continued wrongly from a kernel that didn't repeat itself. The limit on
+    oneDNN (conftest) keeps a bf16 product the same every time and doesn't reach the fused attention kernel."""
+    def digests(rec):
+        return [{k: v for k, v in cp.items() if k.endswith("sha256")} for cp in rec["checkpoints"]]
+    if whole.get("windows") == cut.get("windows") and digests(whole) != digests(cut):
+        return ON_A_NODE
+    return "the continued job's checkpoints aren't the unbroken job's"
+
+
 def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> None:
     """`cut`, a job stopped and continued from step `at`, records what `whole`, the unbroken one, does: every step's
     count, every checkpoint's digests, its score to within `SCORE_REL` (`scored`), and everything else but its
@@ -65,7 +86,7 @@ def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> Non
         b["steps"][at] = short | {k: full[k] for k in (*counts, *by, "struct")}
     assert b["steps"] == a["steps"] and [s["step"] for s in b["steps"]] == list(range(len(b["steps"])))
     assert [cp | {"macs": cp["macs"] - build * (cp["step"] >= at)} for cp in b["checkpoints"]] == [
-        scored(cp) for cp in a["checkpoints"]]
+        scored(cp) for cp in a["checkpoints"]], differ(whole, cut)
     assert b["structures"].items() >= a["structures"].items()
 
     def rest(rec):
