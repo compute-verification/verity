@@ -7,6 +7,13 @@ module of FILE's package that is built and imports FILE neither directly nor thr
 roots aside: each declares `main` and is the root of its own build, so no module imports two of them. Lean refuses a
 duplicate name as it imports, before it elaborates anything, and its refusal names both modules.
 
+The stub leaves out as well every module under an `exempt` prefix of the package's lock (`exempt`). The lock lists there
+the module prefixes nothing imports, so no root loads such a module beside its siblings, and a name it shares with one
+clashes in no build: two scripts run with `lean --run` each declare `main`. A prefix is matched as the audit matches it
+(`check.py`'s `under`: the name, or below it). FILE's own module stays in, so a try of such a script still checks it
+against the library. The check doesn't judge the lock, which is the audit's to judge: a package with no lock, or with one
+that can't be read (a line on stderr says so), plans as one whose lock exempts nothing.
+
 The stub reads FILE's build through a `--setup` file (its `importArts`, as Lake hands a module its imports) and the rest
 from LEAN_PATH. It is a `module` with `public import`s, as a package root is, when FILE and every sibling are modules,
 else a plain file. A package's modules are its `[[lean_lib]]`s' files (the library's name or under it) and its
@@ -49,6 +56,7 @@ at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only wit
 from __future__ import annotations
 
 import contextlib
+import functools
 import importlib.util
 import json
 import os
@@ -56,6 +64,7 @@ import re
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import time
 import tomllib
@@ -83,15 +92,27 @@ def _headers():
 H = _headers()
 
 
+@functools.cache
+def _audit():
+    """`check.py`, the audit, loaded by path once a plan reads a lock, for the lock's file name (`POLICY`) and for how the
+    audit matches a module against a lock's prefixes (`under`). The audit doesn't load the sibling check in turn, which
+    stays out of every audit's key."""
+    spec = importlib.util.spec_from_file_location("lean_check_for_siblings", HERE / "check.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 class Plan(NamedTuple):
     #: FILE's module name
     module: str
     #: whether the stub is a `module`
     is_module: bool
-    #: the built modules of the package that don't import FILE, other executables' roots aside
+    #: the built modules of the package that don't import FILE; other executables' roots and the modules under an
+    #: `exempt` prefix of the lock aside
     siblings: list[str]
     #: the package's other modules that don't import FILE, each without a build of its source as it is or importing, in
-    #: any package of the workspace, a module without one or a product with no source; other executables' roots aside
+    #: any package of the workspace, a module without one or a product with no source; the same modules aside
     unchecked: list[str]
 
 
@@ -149,6 +170,22 @@ def executables(pkg: Path) -> set[str]:
     """The module names of ``pkg``'s `[[lean_exe]]`s' roots."""
     got = source_dir(pkg)
     return set() if got is None else {exe.get("root", exe["name"]) for exe in got[1].get("lean_exe", [])}
+
+
+def exempt(pkg: Path) -> list[str]:
+    """The module prefixes ``pkg``'s lock lists under `exempt`, which nothing imports. None for a package with no lock, or
+    with one whose `exempt` holds no names, or that can't be read, which a line on stderr says: the audit judges the
+    lock, and a plan never fails on it."""
+    lock = pkg / _audit().POLICY
+    if not lock.is_file():
+        return []
+    try:
+        got = json.loads(lock.read_text())
+    except (OSError, ValueError) as e:
+        print(f"siblings: {lock} can't be read ({e}): no module is left out for its `exempt`", file=sys.stderr)
+        return []
+    listed = got.get("exempt") if isinstance(got, dict) else None
+    return [p for p in listed if isinstance(p, str)] if isinstance(listed, (dict, list)) else []
 
 
 def _header(f: Path):
@@ -304,8 +341,10 @@ def plan(pkg: Path, rel: str) -> Plan | str:
             stack.pop()
         return good[m]
 
+    prefixes = exempt(pkg)
+    aside = (executables(pkg) | {m for m in mods if _audit().under(prefixes, m)}) - {mod}
     built, unchecked = [], []
-    for m in sorted(set(mods) - above - (executables(pkg) - {mod})):
+    for m in sorted(set(mods) - above - aside):
         (built if loads(m) else unchecked).append(m)
     return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked)
 

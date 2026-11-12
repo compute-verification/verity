@@ -348,8 +348,6 @@
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c.py", "count": 1},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_c4.py", "count": 1},
     {"file": "verity/protocols/pouw/prover/schemes/pearl_kw.py", "count": 1},
-    {"file": "verity/protocols/pouw/verifier/tests/test_circuit_pc8.py", "count": 1},
-    {"file": "verity/protocols/pouw/verifier/tests/test_pouw_pearl_kw.py", "count": 1},
     {"file": "verity/protocols/poub/verifier/lean/tests/ra_cases.py", "count": 1},
     {"file": "verity/protocols/poub/verifier/lean/tests/test_schedule.py", "count": 1},
     {"file": "verity/protocols/poub/verifier/p2_party.py", "count": 3},

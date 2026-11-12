@@ -15,7 +15,10 @@ removes its directory).  On
 `vqueue.Retry` with this run's verdict infra, it calls `start` again and keeps the new record in place of the old.  It gives
 the `Landing` the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a `Landing` without machines.  Under `--dry-run` it
 calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
-loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.
+loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.  Where the check gates, a candidate
+sharing a member with one whose check the loop cancelled in the last `CARRY_WAIT_S` (`replaced`) launches only once those
+runs' records are in the store or that long has passed since their cancel, and names them to its launch, so its check reuses
+every pass they left (`start`'s ``after``).
 
 A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-512 over the step's name and the files it
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
@@ -142,6 +145,11 @@ LEAN_INPUTS = ("**/*.lean", "**/lakefile.lean", "**/lakefile.toml", "**/lake-man
                "security", "Security")
 #: the files whose directory `lean_inputs` takes whole as a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
+#: how long after the loop cancelled a run a check that replaces it waits for the run's record (`start`'s ``after``), in
+#: seconds; past it the check launches without that run's passes
+CARRY_WAIT_S = 180
+#: what names the runs ``after`` holds to the candidate's check.py, whose launch sends their packs first (`check.carried_packs`)
+CARRY_ENV = "TRAIN_CARRY_FROM"
 
 
 def lean_inputs(files: Iterable[str]) -> tuple[str, ...]:
@@ -207,8 +215,60 @@ def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
     return [s for s in steps if s in names]
 
 
+def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
+    """The runs a check of a candidate holding ``members`` replaces (`start`'s ``after``), each by when the loop cancelled it:
+    of each line of the loop's log (``lines``) in the last `CARRY_WAIT_S` that cancelled the check of a candidate sharing a
+    member, a drop's or one's that cancelled a check still launching at its drop (`Loop._launched`), its runs
+    (``beside_cancelled``, those that had ended already among them) but one its cancel left running (`KEEP_RUNS`), which
+    no wait would see end."""
+    want, out = set(members), {}
+    for r in lines:
+        at = _epoch(r.get("at"))
+        if at is None or now - at > CARRY_WAIT_S or not want & set(r.get("members") or ()):
+            continue
+        kept = {i for i, why in (r.get("beside_cancel_failed") or {}).items() if str(why).startswith("left running")}
+        for rid in r.get("beside_cancelled") or ():
+            if rid not in kept:
+                out.setdefault(rid, at)
+    return out
+
+
+def left(driver: Landing, rid: str) -> bool:
+    """Whether run ``rid`` has left its passes where a check's launch finds them: it ended and custody published its record,
+    so the store's remote holds its attempt, which `check.run_packs` reads its packs from."""
+    try:
+        return driver.q.store.get_attempt(rid) is not None
+    except Exception:  # noqa: BLE001  (no store, or one that can't answer now: the wait runs on to its bound)
+        return False
+
+
+def _awaiting(driver: Landing, runs: dict[str, float]) -> tuple[list[str], list[str]]:
+    """Of ``runs`` (`replaced`) whose records `left` doesn't find: those still waited for, cancelled less than `CARRY_WAIT_S`
+    ago, and those gone without, past it."""
+    now, awaited, gone = driver.now(), [], []
+    for rid, at in sorted(runs.items()):
+        if not left(driver, rid):
+            (awaited if now - at < CARRY_WAIT_S else gone).append(rid)
+    return awaited, gone
+
+
+@contextlib.contextmanager
+def _carrying(runs: Iterable[str]):
+    """`CARRY_ENV` naming ``runs`` while a launch starts, and in no launch after: `landing.train_launch` hands train.sh this
+    process's environment, the one way to the candidate's check.py that every tree's train.sh passes.  Only this sets it in
+    the loop's process."""
+    if not (runs := ",".join(runs)):
+        yield
+        return
+    os.environ[CARRY_ENV] = runs
+    try:
+        yield
+    finally:
+        os.environ.pop(CARRY_ENV, None)
+
+
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
-          audit_from: str | None = None) -> dict | None:
+          audit_from: str | None = None, after: dict[str, float] | None = None) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -224,7 +284,11 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     ``lean_audit_from`` with ``audit_from``.  None,
     logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
     dry run, or its queue's shadow).  Every launch leaves out the tests the loop's list ``deselect`` names (`deselection`), each
-    shard's alike; the nightly uncached check, which reads no list, runs them."""
+    shard's alike; the nightly uncached check, which reads no list, runs them.
+    With ``after`` (`replaced`: the runs of dropped candidates' checks it replaces, by when each was cancelled), it names them
+    to its launch (`CARRY_ENV`, ``carry``), so its check reuses their passes first, and launches only once `left` finds each
+    one's record or `CARRY_WAIT_S` has passed since its cancel: until then the record holds ``wait`` and no ids, and the
+    `judge` that finds the wait over launches it, ``at`` then, naming each run it went without (``carry_without``)."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs the queue's machines: build the Landing with drive.toml's `on` "
                          "(`research.queue.flags_at(repo, main).on`)")
@@ -247,30 +311,65 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
-    if auto:
-        rec, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
+    rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
+           **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
+           **({"carry": sorted(after)} if after else {})}
+    go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
+    awaited, gone = _awaiting(driver, after or {})
+    if awaited:
+        driver.q.log(f"research queue vqueue: {what}: waiting for the records of {' '.join(awaited)}, whose passes it reuses, "
+                     f"at most {CARRY_WAIT_S // 60} min after their cancel")
+        return {**rec, "wait": {"runs": after, **go}}
+    return rec if _go(driver, rec, go, gone) is None else None
+
+
+def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
+    """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
+    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`); ``gone``, the runs it waited for in vain, kept
+    as ``carry_without``.  None, logged, once launched; the tail of a launch that registered no run, logged."""
+    sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
+    if go["auto"]:
+        got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        rec, tail = _launch(driver, sha, sent, kw, n)
-        if rec is not None and not any("launch" in r for r in rec["shards"]):
-            _grouped(rec)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry)
+        if got is not None and not any("launch" in r for r in got["shards"]):
+            _grouped(got)
     else:
-        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
-    if rec is None:
-        driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
-        return None
-    driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or ('planning' if auto else 'launching')}")
-    return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
-            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {})}
+        with _carrying(carry):
+            got, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
+    if got is None:
+        driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
+        return tail
+    rec.update(got, at=driver.now(), **({"carry_without": gone} if gone else {}))
+    driver.q.log(f"research queue vqueue: {go['what']}: {' '.join(rec['ids']) or ('planning' if go['auto'] else 'launching')}"
+                 + (f"; without the passes of {' '.join(gone)}, whose records weren't in the store {CARRY_WAIT_S // 60} min "
+                    "after their cancel" if gone else ""))
+    return None
 
 
-def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None) -> tuple[dict | None, str]:
+def _waited(driver: Landing, rec: dict) -> Verdict:
+    """The check `start` left waiting in ``rec`` (``wait``) for the records of the runs it replaces: pending while it waits
+    (`_awaiting`), then launched (`_go`) and pending; infra, kept, when that launch registered no run."""
+    awaited, gone = _awaiting(driver, rec["wait"]["runs"])
+    if awaited:
+        return Verdict(PENDING)
+    go = {k: v for k, v in rec.pop("wait").items() if k != "runs"}
+    if (tail := _go(driver, rec, go, gone)) is not None:
+        return _keep(rec, _down(rec, f"registered no run: {tail}"))
+    return Verdict(PENDING)
+
+
+def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
+            carry: Iterable[str] = ()) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
-    plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it.  The record of every shard's launch
-    (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
-    got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
-                                                  **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
-           for k, on in enumerate(shard_machines(driver.on, n), 1)]
+    plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry`` (`_carrying`).
+    The record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
+    cancelled."""
+    with _carrying(carry):
+        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
+                                                      **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
+               for k, on in enumerate(shard_machines(driver.on, n), 1)]
     if any(r is None for r, _ in got):
         if ids := [i for r, _ in got if r for i in r["ids"]]:
             driver.cancel(driver.repo, ids, f"vqueue: a shard of candidate {sha[:12]}'s check registered no run")
@@ -320,7 +419,7 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
     elif doc["n"] != plan["n"]:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
-        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN))
+        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or ())
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -337,7 +436,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     """The verdict of the run `start` recorded in ``rec``, read on the steps it judges on the merge gate: `SLIM_JUDGED` but a
     step it skipped and policy.toml's `off_gate` at ``tip``; of the check that gates (``gate``), every step `main` waits for
     at ``base`` (`Landing._gating`), the preflights and a lean-agreement it ran, but policy.toml's `off_gate` there and
-    drive.toml's `warn_steps` (`_gate`).  Pending while its auto plan is made, the call that finds it made launching the
+    drive.toml's `warn_steps` (`_gate`).  Pending while it waits for the records of the runs it replaces, the call that finds
+    the wait over launching it (`_waited`), and while its auto plan is made, the call that finds it made launching the
     shards (`_planned`), and while it launches or runs, each shard's launch read as the run's own is; the check that gates,
     while it runs, fails once a shard has failed one of those steps (`_early`).
     Infra when it registered no run (``rec`` None, its auto plan failed, or a detached launch that printed no run ids,
@@ -354,6 +454,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
         return _down(None, "registered no run")
     if "verdict" in rec:
         return _kept(rec["verdict"])
+    if "wait" in rec:
+        return _waited(driver, rec)
     tip, check = rec["tip"], rec.get("gate") == CHECK
     what = f"the run of {', '.join(rec['steps'])} " + (f"as candidate {tip[:12]}'s check" if check else
                                                       f"beside candidate {tip[:12]}'s check")
