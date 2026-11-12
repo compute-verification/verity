@@ -574,7 +574,13 @@ def test_a_build_that_read_its_tree_at_a_fixed_path_is_indexed_as_one_at_the_tre
     assert MK.indexable("R", keyed, pkgs, {}, at) == f"{tmp_path / 'p'} has no keys, and a compile read mathlib under {tmp_path / 'p'}"
     elsewhere = {"D.X": tmp_path / "d/.lake/build/lib/lean/D/X.olean", "R.A": lib("r", "R.A"), "Mathlib": mathlib}
     _setup(root, "R", "r", elsewhere)
-    assert MK.indexable("R", keyed, pkgs, {}, at) is None, "a path outside the fixed one is read as it is"
+    assert MK.indexable("R", keyed, pkgs, {}, at, own := set()) is None, "a path outside the fixed one is read as it is"
+    assert own == {"R"}, "and counted, for `put` to log"
+    _setup(root, "R", "r", right)
+    assert MK.indexable("R", keyed, pkgs, {}, at, own := set()) is None and own == set()
+    _setup(root, "R", "r", elsewhere)
+    MK.indexable("R", keyed, pkgs, {}, None, own)
+    assert own == set(), "a build that bound nothing is not counted"
 
 
 def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_pins_them(tmp_path):

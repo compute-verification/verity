@@ -6282,9 +6282,18 @@ def test_a_bound_build_gives_a_module_the_same_bytes_wherever_its_tree_is(tmp_pa
     assert x == y
     assert f"{A.FIXED}/P/M.lean".encode() in x["olean.server"] and str(tmp_path.resolve()).encode() not in x["olean.server"]
 
-    store, said = tmp_path / "artifacts", []
-    assert LA.LakeArtifacts(store).put({long: {"sandbox": True, "bound": [str(A.FIXED), str(long.resolve())]}},
-                                       log=said.append) == 2, said
+    store, said, bound = tmp_path / "artifacts", [], [str(A.FIXED), str(long.resolve())]
+    assert LA.LakeArtifacts(store).put({long: {"sandbox": True, "bound": bound}}, log=said.append) == 2, said
+    counted = f"lean-audit: {long}: {{}} setup.json of this build, which read its tree at {A.FIXED}, name a path under " \
+              f"the tree's own ({long.resolve()}), each read as it is"
+    assert counted.format(0) in said, said
+    setup = long / ".lake" / "build" / "ir" / "P.setup.json"
+    own = setup.read_text().replace(str(A.FIXED), str(long.resolve()))
+    assert own != setup.read_text()
+    setup.write_text(own)
+    said.clear()
+    assert LA.LakeArtifacts(tmp_path / "artifacts-own").put({long: {"sandbox": True, "bound": bound}}, log=said.append) == 2
+    assert counted.format(1) in said, said
     third = tree(tmp_path / "elsewhere" / "c")
     shutil.copy(long / "lake-manifest.json", third)
     monkeypatch.setattr(A, "ARTIFACTS", store)
