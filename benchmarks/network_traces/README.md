@@ -44,10 +44,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
-- **A cheating server.** `served_cheats.py` runs four cheats of a server (tokens, length, timing, failures) in a dry
-  run on stand-in responses of GLM-5.3's tokens, and prints for each what the audit was expected to do and what it
-  did. `deviations.py` puts a deviating process between the relay and the server's id front, plants a random string,
-  and tries six ways to send it out, each with a network certifier process of its own (both below).
+- **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
+  a random string, and tries six ways to send it out, each with a network certifier process of its own;
+  `deviations.sh` is its tries as a job behind one ssh forward (below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -129,38 +128,11 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 
 ## A cheating server
 
-`served_cheats.py` runs four cheats of a server, each a switch, and prints per switch what the network certifier's
-audit was expected to do and what it did (`negatives.py` is the catalogue of what each check refuses). Only
-`--stand-in`, the dry run, is wired: it builds every record in process on an injected clock from responses of
-GLM-5.3's tokens, so it needs no GPU or served model, and no switch reads a kept served record. The four switches:
-
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch tokens
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch length
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch timing
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch failures
-
-- `tokens`: ids of the server's own choosing in a response, its frame counts honest's. It runs the proxy
-  (`certifier_serve.py`'s recipe, which builds the Lean verifier) and reports what N2's counts say; the I/O tie, which
-  reads the frames' tokens, is not run.
-- `length`: a response ended late or early. It runs the proxy and reports what N2's counts say on `--profile`.
-- `timing`: an interval's bytes written in a burst around the release time. It runs `benchmarks/certifier_timing`'s
-  burst attack for `--timing-intervals` intervals and reports its figure and ceiling against its budget. It reads the
-  wall clock and measures its host, so it runs on a team machine.
-- `failures`: servers that send part of a response and withhold the rest. It runs the relay (`warden_serve.py`'s
-  recipe) with those connections failed and with none, its control, and reports the relay's record, its offline
-  check and what the leak bound's table charges the fail cells.
-
-`--switch all` runs the four, the proxy's honest run first. The command exits 0 when every control ran as an honest
-run does and no switch errored: what a cheat's row says is its finding. Its report is read from the run's published
-Attempt, never from this README.
-
-### Behind the relay
-
-`deviations.py` is the cheating server on the relay's path. A deviating process sits between the network certifier
-(`warden_serve.py`'s relay, in its id egress form) and the server's id front. It plants a random string and tries one
-way to send it out, a class a try; a receiver that reads only what the client got scores the bits it has back; and
-the table sets them beside the check that refuses the class, in the refusal's own words, and what the leak bound
-charges. The dry run, against the stand-in id endpoint:
+`deviations.py` is the cheating server on the relay's path (`negatives.py` is the catalogue of what each check
+refuses). A deviating process sits between the network certifier (`warden_serve.py`'s relay, in its id egress form)
+and the server's id front. It plants a random string and tries one way to send it out, a class a try; a receiver that
+reads only what the client got scores the bits it has back; and the table sets them beside the check that refuses the
+class, in the refusal's own words, and what the leak bound charges. The dry run, against the stand-in id endpoint:
 
     uv run benchmarks/network_traces/deviations.py try --stand-in --out DIR
 
@@ -209,6 +181,8 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   connections whose last event was dropped, and the relay failed exactly the connections withheld or held, or each
   connection at the cell after a response the front sent whole. A row refused for anything else didn't do what its
   check says: a server that answers out of the id form, or stops, is never a deviation refused.
+- The receiver reads a cell's bucket, never when inside its bucket it arrived. That channel is
+  `benchmarks/certifier_timing`'s to measure: `verity bench certifier_timing run --attacks burst`.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
   client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
   after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are

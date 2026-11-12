@@ -1,6 +1,6 @@
 """deviations, the server that deviates behind the relay. Each class's deviation of an id-form response, whatever
 chunks it arrives in: the planted bits are where the receiver reads them, and nothing else changes. Then each class
-through the relay on a `VirtualClock` (`served_cheats.relay_run`, the id egress form): the honest responses are
+through the relay on a `VirtualClock` (`_relay_run`, the id egress form): the honest responses are
 accepted by the relay's check and by the I/O tie; changed ids and a dropped event pass the relay's check and are
 refused by the tie's content, and the receiver has every planted bit; a withheld response fails late and bytes out of
 the id form fail (format), each refused by the relay's audit in its own words, the second with nothing read; a held
@@ -8,14 +8,22 @@ response that is on time is accepted and not seen. A refusal counts only where i
 keeps holds no salt, key or address, and the table is made from it alone."""
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import shutil
 import sys
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.certifier.verifier.certificate import Issuer
+from verity.protocols.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,12 +38,113 @@ def _load(name: str, rel: str):
 
 
 dv = _load("network_traces_deviations", "benchmarks/network_traces/deviations.py")
-sc = _load("network_traces_served_cheats_relay", "benchmarks/network_traces/served_cheats.py")
 ws, IT = dv.ws, dv.IT
-PARAMS = dv.WardenParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=8, queue=8, window=60,
-                         ingress_cells=40, ingress_buckets=30, egress_cells=64, egress="id")
+#: the connections of a try on the virtual clock: a lane and a place in the queue each, so that they arrive together
+N = 8
+PARAMS = WardenParams(cell_bytes=256, slots=2, bucket_ms=100, delay=3, lanes=N, queue=N, window=60,
+                      ingress_cells=40, ingress_buckets=30, egress_cells=64, egress="id")
 P = PARAMS.payload
 IDS = [1000, 1001, 2002, 2003, 3004, 3005, 4006]
+SESSION = bytes(range(32))
+
+
+class _Side:
+    """One end of an in-memory connection as the relay holds it: a reader fed what the peer sends, and a transport
+    that keeps each write with the tick it was made in."""
+
+    def __init__(self, warden: Warden | None = None) -> None:
+        self.warden, self.writes, self.closed, self.transport = warden, [], False, self
+        self.reader, self.fed, self.eof = asyncio.StreamReader(), 0, False
+
+    def feed(self, data: bytes, end: bool) -> None:
+        if data:
+            self.reader.feed_data(data)
+        self.fed += len(data)
+        if end:
+            self.reader.feed_eof()
+            self.eof = True
+
+    def write(self, data: bytes) -> None:
+        self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
+
+    def is_closing(self) -> bool:
+        return self.closed
+
+    def close(self) -> None:
+        self.closed = True
+
+    def get_write_buffer_size(self) -> int:
+        return 0
+
+
+def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[bytes],
+               served: Sequence[tuple[bytes, bool]]) -> list[dict]:
+    """`requests` through the relay for one window on a `VirtualClock`, the k-th server to be connected sending
+    `served[k]`'s bytes and, when its flag says so, ending: a server that doesn't end withholds the rest. Published in
+    `out` as `warden_serve`'s `serve` and `client` publish a run (`test_warden_serve._run`, whose servers all end),
+    with the relay's log (`warden.json`), each bucket ticked once the relay has read what its servers sent. Returns
+    the relay's log, an entry a connection."""
+    out.mkdir(parents=True, exist_ok=True)
+    tau, B = params.bucket_ms / 1000, params.cell_bytes
+    signer = ws.cs.signer(key, 4)
+    public = signer.public_key()
+    publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
+    servers: list[_Side] = []
+
+    async def connect():
+        side, k = _Side(), len(servers)
+        servers.append(side)
+        side.feed(*served[k])
+        return side.reader, side
+
+    def settled(w: Warden) -> bool:
+        return all(c.server is not None and c.ingress_ended and c.bytes_out == c.server[1].fed
+                   and c.egress_ended == c.server[1].eof for c in w.active)
+
+    async def main() -> tuple[list[_Side], Warden]:
+        clock = VirtualClock(-tau / 2)
+        warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+                        withhold=publisher.withhold)
+        running = asyncio.create_task(warden.run())
+        clients, tasks = [], []
+        for request in requests:
+            side = _Side(warden)
+            side.feed(cells(request, B), True)
+            clients.append(side)
+            tasks.append(asyncio.create_task(warden.handle(side.reader, side)))
+        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+        for t in range(params.window):
+            await warden.until(settled)
+            clock.advance(t * tau)
+            await warden.until(lambda w, t=t: w.ticks > t)
+        await running
+        await asyncio.gather(*tasks)
+        return clients, warden
+
+    try:
+        clients, warden = asyncio.run(main())
+    finally:
+        publisher.close()
+        signer.close()
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
+                                      upstream=("127.0.0.1", 2), slack=warden.slack, run_id=warden.run_id)
+    (out / "deployment.json").write_text(json.dumps(deployment))
+    log = []
+    for index, (request, client) in enumerate(zip(requests, clients)):
+        shim = Shim(B)
+        for t, data in client.writes:
+            for i in range(0, len(data), B):
+                kind, shim.ordinal, payload = read_cell(data[i:i + B], B)
+                shim.arrivals.append((t * tau + 0.001, kind))
+                shim.data += payload if kind in (DATA, END) else b""
+        kinds = [k for _, k in shim.arrivals]
+        shim.outcome = ("refused" if REFUSED in kinds else "end" if END in kinds else "fail" if FAIL in kinds
+                        else "cut")
+        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0,
+                                     params.payload if request.startswith(active.ID_REQUEST_HEAD) else None))
+    (out / "client.json").write_text(json.dumps({"connections": log}))
+    (out / "warden.json").write_text(json.dumps({"connections": warden.log}))
+    return warden.log
 
 
 def _bits(bits: list[int]):
@@ -104,7 +213,7 @@ def test_the_fronts_address_comes_from_the_named_variable_and_no_message_holds_i
 def _requests(users: str = "user") -> tuple[list[dict], list[bytes], list[list[int]]]:
     """Eight id requests named ``<users>-<k>``: their fields, their bytes, and the stand-in's own ids of each."""
     fields = [{"model": "fake", "user": f"{users}-{k}", "prompt": [7, 8, 9 + k], "max_tokens": 4 + k, "seed": k}
-              for k in range(sc.REQUESTS)]
+              for k in range(N)]
     requests = [dv.id_request(**f, frame_bytes=PARAMS.cell_bytes, offset=0) for f in fields]
     return fields, requests, [ws.fake_ids(json.loads(request.partition(dv.BLANK)[2])) for request in requests]
 
@@ -126,8 +235,8 @@ def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str 
         gone = dev.withhold or (late and dev.delay > 0) or k in down
         served.append((b"" if gone else out, not gone))
         lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted)), "whole": dev.whole})
-    log = sc.relay_run(run, run.parent / f"key-{run.name}", {}, params, requests=requests, served=served)
-    assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(sc.REQUESTS))
+    log = _relay_run(run, run.parent / f"key-{run.name}", params, requests, served)
+    assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(N))
     (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
     (run / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
     (run / "check.json").write_text(json.dumps(ws.check(run)))
@@ -157,28 +266,28 @@ def test_planted_ids_pass_the_relays_check_and_the_ties_content_refuses_them(tmp
     row = _try(tmp_path, "tokens", [1, 0] * 60)
     assert (row["relay"], row["tie"], row["ok"]) == ("accepted", "refused", True)
     assert row["words"].startswith("IoTieWindow.content at window 0, bucket ") and "isn't the Commit's id" in row["words"]
-    assert row["planted"] == row["right"] == row["read"] > sc.REQUESTS and row["information"] > 0
+    assert row["planted"] == row["right"] == row["read"] > N and row["information"] > 0
 
 
 def test_a_dropped_event_passes_the_relays_check_and_the_tie_finds_the_output_no_cell_carries(tmp_path):
     row = _try(tmp_path, "length", [(len(ids) + 1) % 2 for ids in HONEST])
     assert (row["relay"], row["tie"], row["ok"]) == ("accepted", "refused", True)
     assert row["words"].startswith("IoTieWindow.content at window -1: connection ")
-    assert row["planted"] == row["right"] == sc.REQUESTS and row["charged"].startswith(f"{sc.REQUESTS * 7} bits")
+    assert row["planted"] == row["right"] == N and row["charged"].startswith(f"{N * 7} bits")
 
 
 def test_a_withheld_response_fails_late_and_the_relays_audit_refuses_the_run(tmp_path):
     row = _try(tmp_path, "fail", [0, 1, 1, 0, 0, 0, 1, 0])
     assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, 3)
     assert row["words"].startswith("audit: connection 2 failed closed (late) at egress cell 0")
-    assert row["planted"] == row["right"] == sc.REQUESTS and row["information"] > 0
+    assert row["planted"] == row["right"] == N and row["information"] > 0
 
 
 def test_bytes_out_of_the_id_form_fail_their_connection_and_none_is_read(tmp_path):
     row = _try(tmp_path, "extra", [1, 0, 0, 1] * 16)
-    assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, sc.REQUESTS)
+    assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, N)
     assert "failed closed (format) at egress cell" in row["words"]
-    assert (row["planted"], row["read"], row["right"], row["information"]) == (8 * sc.REQUESTS, 0, 0, 0.0)
+    assert (row["planted"], row["read"], row["right"], row["information"]) == (8 * N, 0, 0, 0.0)
 
 
 def test_under_a_response_cap_bytes_after_a_full_response_fail_at_its_limit(tmp_path):
@@ -191,7 +300,7 @@ def test_under_a_response_cap_bytes_after_a_full_response_fail_at_its_limit(tmp_
     assert full and {c["failed"] for c in full} == {"limit"} and reasons <= {"limit", "format"}
     assert all(c["failed_at"] == len(c["ids"]) for c in kept["connections"])
     row = dv.row(kept, None)
-    assert (row["relay"], row["ok"], row["refusals"], row["read"]) == ("refused", True, sc.REQUESTS, 0)
+    assert (row["relay"], row["ok"], row["refusals"], row["read"]) == ("refused", True, N, 0)
     kept["connections"][0]["failed_at"] -= 1
     assert dv.row(kept, None)["ok"] is False
 
@@ -208,7 +317,7 @@ def test_a_server_that_answers_out_of_the_id_form_or_stops_short_is_no_extra_byt
         two = next(c for c in kept["connections"] if c["index"] == 2)
         assert (two["failed"], two["whole"], two["failed_at"]) == ("format", False, len(two["ids"]))
         row = dv.row(kept, None)
-        assert (row["relay"], row["ok"], row["refusals"]) == ("refused", False, sc.REQUESTS)
+        assert (row["relay"], row["ok"], row["refusals"]) == ("refused", False, N)
     kept = _kept(tmp_path / "whole", "extra", bits)
     assert dv.row(kept, dv.stand_in_ids(kept))["ok"] is True
     other = {o: [x + 2 for x in ids] for o, ids in dv.stand_in_ids(kept).items()}
@@ -221,11 +330,11 @@ def test_a_hold_that_is_on_time_is_accepted_and_not_seen_and_one_past_the_deadli
     assert (row["relay"], row["ok"], row["refusals"]) == ("accepted", True, 0)
     assert row["words"] == ("accepted, and the hold is not seen at the client's bucket: 4 of 8 connections held 500 "
                             "ms, and the first cell of 8 of 8 is 3 buckets after its admission")
-    assert (row["planted"], row["information"]) == (sc.REQUESTS, 0.0) and "refused" not in row["words"]
+    assert (row["planted"], row["information"]) == (N, 0.0) and "refused" not in row["words"]
     row = _try(tmp_path / "long", "bucket", bits, late=True)
     assert (row["relay"], row["ok"], row["refusals"]) == ("refused", True, 4)
     assert row["words"].startswith("audit: connection 2 failed closed (late) at egress cell 0")
-    assert row["right"] == sc.REQUESTS and row["information"] > 0
+    assert row["right"] == N and row["information"] > 0
 
 
 def test_a_refusal_counts_only_where_it_is_the_deviations(tmp_path):
