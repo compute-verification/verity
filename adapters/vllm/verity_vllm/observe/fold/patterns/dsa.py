@@ -63,16 +63,6 @@ Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
 INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
 
 
-def _same(a: Any, b: ViewDesc) -> bool:
-    return isinstance(a, ViewDesc) and (a.alloc, a.offset, a.shape, a.strides, a.dtype) == (
-        b.alloc,
-        b.offset,
-        b.shape,
-        b.strides,
-        b.dtype,
-    )
-
-
 def _module(node: TreeNode) -> str:
     return getattr(node.enter, "module", None) or ""
 
