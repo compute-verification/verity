@@ -97,6 +97,7 @@ import re
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -2720,9 +2721,76 @@ def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> 
              **({"succeeds": old.get("holder")} if old and old.get("holder") != holder else {})}
         if not ns.dry_run:
             print(publish_route(routes.root, r, f"routes.d: open @{name} for {holder}"))
+        if r.get("succeeds"):
+            registry_handover(ns, name, r)
         old = r
     print(f'subscribe_slack_thread(channelId="{ch}", threadTs="{old["inbox_ts"]}", expiresInSeconds={EXPIRES_S})   # @{name}\'s inbox; renew on every wake')
     return 0
+
+
+def registry_with_route(text: str, name: str, route: dict) -> str | None:
+    """The registry's text with `name`'s holder and branch suffixes as its route has them, or None where they already agree
+    or the registry has no such handle."""
+    reg = json.loads(text)
+    h = next((h for h in reg.get("handles", []) if h.get("handle") == name), None)
+    if h is None or not route.get("holder"):
+        return None
+    sfx = list(dict.fromkeys([*h.get("branch_suffixes", []), *route.get("branch_suffixes", [])]))
+    if h.get("holder") == route["holder"] and sfx == h.get("branch_suffixes", []):
+        return None
+    h["holder"] = route["holder"]
+    if sfx:
+        h["branch_suffixes"] = sfx
+    return json.dumps(reg, indent=2, ensure_ascii=False) + "\n"
+
+
+def registry_handover(ns: argparse.Namespace, name: str, route: dict) -> str | None:
+    """A succession's second record: the registry change that gives `name` its route's holder and branch suffixes, pushed from
+    main and opened as a PR, whose URL it returns.  The queue reads a PR's owner and a mark's signer from main's registry, so
+    until this lands a successor's work resolves to its predecessor.  Where it can't (no checkout of the registry's repository,
+    no push), it says what to open by hand and the route stands."""
+    from . import queue
+
+    by_hand = (f"open the registry change by hand: @{name}'s `holder` {route['holder']} and its `branch_suffixes` in "
+               f"{REGISTRY_REL}, then `research queue ready N --mark --by {name}`")
+    path = registry_path(getattr(ns, "registry", None))
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], capture_output=True, text=True, timeout=120,  # noqa: E731
+                                         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, check=True).stdout.strip()
+    try:
+        top = Path(git(path.resolve().parent, "rev-parse", "--show-toplevel"))
+        git(top, "fetch", "-q", "origin", "main")
+        new = registry_with_route(git(top, "show", f"origin/main:{REGISTRY_REL}") + "\n", name, route)
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        print(f"registry: main's registry can't be read here ({str(e)[:120]}): {by_hand}", file=sys.stderr)
+        return None
+    if new is None:
+        print(f"registry: main's registry already names @{name}'s holder and branch suffixes")
+        return None
+    branch = f"cursor/registry-{name}-{route['holder'][-4:]}"
+    if ns.dry_run:
+        print(f"registry: would push {branch} from origin/main with @{name}'s holder {route['holder']} and open its PR")
+        return None
+    work = Path(tempfile.mkdtemp(prefix="registry-handover-"))
+    try:
+        git(top, "worktree", "add", "-q", "--detach", str(work), "origin/main")
+        (work / REGISTRY_REL).write_text(new)
+        git(work, "commit", "-qam", f"Registry: @{name}'s holder is {route['holder']}, as its inbox route has it")
+        sha = git(work, "rev-parse", "HEAD")
+        git(work, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+        body = (f"Lane {name}\n\n@{name}'s inbox passed to {route['holder']} (`research msg names open --succeeds`). This gives "
+                f"the registry the route's holder and branch suffixes, so the queue reads the successor's PRs and marks as "
+                f"@{name}'s.")
+        url = queue.open_pr(top, queue.REPO, branch, f"Registry: @{name}'s holder after its handover",
+                            queue.with_issue(body, "none:the registry follows a handover"), sha=sha)
+    except (OSError, subprocess.SubprocessError, queue.QueueError) as e:
+        print(f"registry: {str(e)[:200]}: {by_hand}", file=sys.stderr)
+        return None
+    finally:
+        subprocess.run(["git", "-C", str(top), "worktree", "remove", "--force", str(work)], capture_output=True)
+    n = url.rstrip("/").rsplit("/", 1)[-1]
+    print(f"registry: {url}: mark it with `research queue ready {n} --mark --by {name}`; a holder change waits for a "
+          "reviewer's verdict")
+    return url
 
 
 def seen_path(name: str) -> Path:
