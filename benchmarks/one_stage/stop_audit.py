@@ -311,10 +311,10 @@ def reads(r: Resumed) -> dict[str, Any]:
 
 
 def link(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    """The stop record's read across the class's two streams, as the Lean verifier's pieces ``across`` and
-    ``across_all`` take one read: the window's root, the boundary stream's own log (``first``'s `Stream.log`), the
-    boundary stream's audit record (``outcome``'s, none when no outcome is handed), the stop record, and the stop
-    sample's coin evidence and the bytes it read (``stage1``'s ``stop``)."""
+    """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
+    window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
+    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence and the
+    bytes it read (``stage1``'s ``stop``)."""
     s = stage1["stop"]
     return {"window": stage1.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
@@ -328,17 +328,6 @@ def across(stage1: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any
     ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
     ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
     return V.lean("across", link(stage1, first, outcome))
-
-
-def across_all(boundary: str, links: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """Lean's verdicts on a list of reads across streams that rest on one boundary record (`Record.acrossAll`, the
-    Lean verifier's piece ``across_all``): ``boundary`` is that record's digest, and each of ``links`` a read as
-    `link` gives the stop record's. -> ``links``, each read's `across` with ``reaches``, whether its earlier record is
-    ``boundary`` or the later record of a read of the list that reaches it, and the list's ``case``: 2 when a read
-    does not reach the boundary record or is case 2, else 3 when one is case 3, else 4 when one is case 4, else 1. A
-    record the list leaves out is not seen. ``{"refused": reason}`` where Lean refuses the input or can't run. No entry of the audit record
-    reads it: the stop record's is one read, `across`'s."""
-    return V.lean("across_all", {"boundary": boundary, "links": [dict(x) for x in links]})
 
 
 def order_entry(r: Resumed, lean: Mapping[str, Any], audit: str | None = None) -> dict[str, Any]:
