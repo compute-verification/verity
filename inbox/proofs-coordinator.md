@@ -103072,3 +103072,22 @@ I launched `8f08` before the cut so it held a place; if `9cc5` is recorded as pa
 Nothing on this VM is needed: the tools are in the notes (`lanes/proofs/tools/onsite_carve_*`), the runbooks in `20261112T2124Z-report-carve-ready-line-9455-world-pr-rehearsal.md` and this hour's note.
 
 **What I wait on:** a slot for `8f08` and `2ca7`; #9375 on `main`; ci's word on the route and on the mover's repinning (yours to ask); your marks.
+
+## SESSIONOF, Thu 12 Nov 21:39Z: started; my branch is `cursor/proofs-sessionof-5c1e` at soundness's head `0e12a1ba4366`; nothing is written or built yet
+
+I am the worker who builds, in Lean, the session the verifier sets up from the parameters and the registered files, so that three of the four premises of the theorem for sampled proofs become facts about one definition. Nothing is written yet; this entry says who I am, where my work goes and the order I do it in.
+
+- Agent id: `bc-2bd94745-4f86-5d4d-9a14-4300ce6839dc` [run: `run-info`]. Mailbox `inbox/bc-2bd94745-4f86-5d4d-9a14-4300ce6839dc.md` does not exist yet on `cursor/proofs-inbox` [run].
+- Branch: `cursor/proofs-sessionof-5c1e`, cut from `origin/cursor/soundness-prf579-8fb2` at `0e12a1ba43661382a8bc22e306b11dea5ead62ac`, pushed [run].
+- Read: COMMON.md, SESSIONOF.md, `## PROVED` 21:01Z, 21:04Z and 21:18Z whole; `Live` (`Sampled.lean:130-196`), `SetsUp` (`:678-694`), `OpensReady` (`Sampled/OpensAt.lean:146-149`), `SessionRegistered` (`Sampled/SessionAt.lean:47-52`), `Accepted` and `checkBlobs_event` (`Sampled/Event.lean:200-266`), all at `0e12a1ba43` [read].
+
+Plan, in order:
+1. `Sampled/SessionOf.lean`: `def SessionChecks (θ : ByteArray) (F : Array ByteArray) (bp : BoundParams) : Prop`, the checks a `Live` needs, stated at v2's own inputs (`Spot.OneStageZk.inputsOf` at `paramsOf θ` and the files `readOf θ F` names); `noncomputable def sessionOf … (h : SessionChecks θ F bp) : Live`; the signature with `sorry`-free stubs left as named `Prop` hypotheses where a field has no lemma (`y₀`, the rate). Its exact text goes in my next entry, by 22:40Z, before any proof.
+2. The table of `Live`'s fields against the lemma that gives each, checked by name on my branch (PROVED 21:18Z section 2 is my start; I recheck each line it tags).
+3. `sessionOf_setsUp : SetsUp V θ F (sessionOf …)` at any vocabulary with v2's digests and reading, and `sessionOf_opensReady`.
+4. `Sampled/AcceptedChecks.lean`: an accepting play on the registered files gives `SessionChecks`, from `checkBlobs_event` and `Accepted`.
+5. Each file tried with `verity lean try` through `research run` as soon as it is written.
+
+**Not established:** everything; no Lean written, no run launched.
+
+**To post:** nothing.
