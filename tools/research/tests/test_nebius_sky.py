@@ -1159,6 +1159,73 @@ def test_researchs_store_eviction_prunes_the_pycache_of_sources_that_are_gone(tm
     assert not mirror(src / "gone").exists() and mirror(src / "live").is_dir()
 
 
+def test_researchs_store_eviction_also_removes_what_nothing_else_does_and_says_what_stayed(tmp_path):
+    """Request directories without a run dir, the clones of runs that are over, the store's lock files and uv's editable shards
+    took a node's inodes by the million with nothing removing them. Research's unit points a pass at each (its drop-in, beside the
+    capabilities their /proc scan needs), the journal line counts what each removed and why the rest stayed, naming the first path
+    in use, and one that could not run fails the unit. A variable left empty switches its removal off."""
+    import subprocess
+    conf = (SKY / "store_evict_src.conf").read_text()
+    assert "Environment=VY_EVICT_REQUESTS=/workspace/research/requests VY_EVICT_SCRATCH=/workspace/research/scratch\n" in conf
+    assert "Environment=VY_EVICT_LOCKS=1 VY_EVICT_UV=/workspace/cache/uv\n" in conf and "AmbientCapabilities=" in conf
+    assert " UV_CACHE_DIR=/workspace/cache/uv " in (SKY.parent / "vm_setup.sh").read_text(), "the cache the nodes' uv writes is the one the pass reads"
+    tool, bin_dir = tmp_path / "tool", tmp_path / "bin"
+    (tool / "research" / "store").mkdir(parents=True)
+    bin_dir.mkdir()
+    (tool / "research" / "__init__.py").write_text("")
+    flags = ("--requests-dir", "--scratch-dir", "--locks", "--uv-cache", "--uv-keep-h")
+    (tool / "research" / "store" / "cli.py").write_text("".join(f'ap.add_argument("{f}")\n' for f in flags))
+    (tool / "research" / "__main__.py").write_text(
+        "import json, os, sys\n"
+        "open(os.environ['FAKE_ARGV'], 'w').write(json.dumps(sys.argv[1:]))\n"
+        "left = json.loads(os.environ['FAKE_LEFT'])\n"
+        "print(json.dumps({'store': {'evicted_bytes': 0, 'reached_target': False}, 'runs': {'evicted_bytes': 0},\n"
+        "                  **{k: v for k, v in left.items() if '--' + {'requests': 'requests-dir', 'clones': 'scratch-dir', 'locks': 'locks',\n"
+        "                                                           'uv': 'uv-cache'}[k] in sys.argv}}))\n"
+        "sys.exit(1)\n")
+    (bin_dir / "df").write_text('#!/bin/sh\necho " Avail"\necho " 1443"\n')
+    (bin_dir / "df").chmod(0o755)
+    shard = "/workspace/cache/uv/sdists-v9/editable/0123456789abcdef"
+    left = {"requests": {"deleted": 2, "deleted_bytes": 3e6, "deleted_inodes": 12, "kept": 3, "kept_by": {"recent": 2, "run": 1}, "kept_first": [], "error": None},
+            "clones": {"deleted": 1, "deleted_bytes": 4.5e9, "deleted_inodes": 189264, "kept": 0, "kept_by": {}, "kept_first": [], "error": None},
+            "locks": {"deleted": 316915, "deleted_bytes": 0, "deleted_inodes": 316915, "kept": 4, "kept_by": {"recent": 4}, "kept_first": [], "error": None},
+            "uv": {"deleted": 5, "deleted_bytes": 2e8, "deleted_inodes": 51, "kept": 9, "kept_by": {"2": 1, "recent": 6, "retired": 2},
+                   "kept_first": [{"path": shard, "why": "2: its lock is held (.lock)"}], "error": None}}
+    env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(tool), "FAKE_ARGV": str(tmp_path / "argv.json"),
+           "VY_EVICT_STORE": "/workspace/research/store", "VY_EVICT_RUNS": "/workspace/research/runs", "VY_EVICT_GIT": str(tmp_path / "no-git"),
+           "VY_EVICT_REQUESTS": "/workspace/research/requests", "VY_EVICT_SCRATCH": "/workspace/research/scratch", "VY_EVICT_LOCKS": "1",
+           "VY_EVICT_UV": "/workspace/cache/uv", "FAKE_LEFT": json.dumps(left)}
+
+    def run(**extra):
+        r = subprocess.run(["bash", str(SKY / "store_evict.sh")], env={**env, **extra}, capture_output=True, text=True)
+        return r, json.loads((tmp_path / "argv.json").read_text())
+
+    r, argv = run()
+    assert r.returncode == 0, r.stderr
+    assert argv == ["data", "evict", "--target-free-gb", "2500", "--runs", "--runs-dir", "/workspace/research/runs",
+                    "--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch", "--locks",
+                    "--uv-cache", "/workspace/cache/uv", "--min-mb", "1e12", "--json"]
+    assert ("target reached: False; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1)"
+            "; clones: deleted 1 (4.5 GB, 189264 inodes), kept 0 (none); store locks: deleted 316915 (0.0 GB, 316915 inodes), kept 4 (recent:4)"
+            f"; uv cache: deleted 5 (0.2 GB, 51 inodes), kept 9 (2:1 recent:6 retired:2), e.g. {shard}: 2: its lock is held (.lock)"
+            "; no store blob") in r.stdout, r.stdout
+    r, argv = run(VY_EVICT_UV="", VY_EVICT_LOCKS="0", VY_EVICT_UV_KEEP_H="72")
+    assert r.returncode == 0 and "--uv-cache" not in argv and "--uv-keep-h" not in argv and "--locks" not in argv, "left empty: switched off"
+    assert argv[7:11] == ["--requests-dir", "/workspace/research/requests", "--scratch-dir", "/workspace/research/scratch"]
+    assert "uv cache" not in r.stdout and "store locks" not in r.stdout and "; clones: deleted 1" in r.stdout
+    r, argv = run(VY_EVICT_UV_KEEP_H="72")
+    assert argv[12:16] == ["--uv-cache", "/workspace/cache/uv", "--uv-keep-h", "72"]
+    failed = {**left, "uv": {**left["uv"], "deleted": 0, "error": "2: /proc/1 is unreadable"}}
+    r, argv = run(FAKE_LEFT=json.dumps(failed))
+    assert "kept 9 (2:1 recent:6 retired:2), e.g. " in r.stdout and ", nothing more deleted: 2: /proc/1 is unreadable; no store blob" in r.stdout
+    assert r.returncode == 1 and "could not run" in r.stderr and "; clones: deleted 1" in r.stdout, "the unit fails, after the line"
+    (tool / "research" / "store" / "cli.py").write_text('ap.add_argument("--requests-dir")\n')
+    r, argv = run()
+    assert r.returncode == 0 and argv[7:9] == ["--requests-dir", "/workspace/research/requests"] and "--locks" not in argv
+    assert ("; requests: deleted 2 (0.0 GB, 12 inodes), kept 3 (recent:2 run:1); clones: not removed, tool has no --scratch-dir"
+            "; store locks: not removed, tool has no --locks; uv cache: not removed, tool has no --uv-cache; no store blob") in r.stdout
+
+
 def test_the_store_eviction_keeps_the_fixture_registry_of_the_newest_shipped_trees_and_else_evicts_no_blob(tmp_path):
     """Node 1's runs have no private remote and the public export can lack a fixture, so the evictor passes the union of
     `fixtures/artifacts.json` at the newest `refs/research/src/*` commits as `--keep-registry`; with no registry to read, or a tool
