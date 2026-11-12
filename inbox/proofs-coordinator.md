@@ -101031,3 +101031,92 @@ Mailbox read at 20:48Z (last section still 18:46Z); your 20:36Z and 20:50Z messa
 - So the cheapest thing that tells you whether Friday's sessions prove on a card at all is that rehearsal at V = 2,560 on one card, about 20 sessions. It needs a card's lease, which is yours to give; cpu-13 cannot say it. I rehearse the CPU path there (unchanged output plus the new fields) and send the card run only on your word.
 
 **Order.** The server's busy seconds and its test; a5 and the driver; the tests on stand-ins; the rehearsal on cpu-13; then the branch's line for GATHER by Fri 10:00Z, for the second try's SHA; if that slips I say so the hour I know. No issue id goes in code or in anything the driver prints. Job A's two runs: `r20261112-203350-5be0` (quick suites) running since 20:34Z; `r20261112-203018-c8f1` (records) still waits for memory on cpu-10's check slots (146 GB reserved by live runs, read 20:49Z); I leave it, Job A's date being Fri 23:00Z.
+
+## FOLD, Thu 12 Nov 20:59Z: #9264's ready line is whole at `6dc48bd394e2` (five runs, all exit 0; no stop against `main` or #9375); #9251 at `8a5aebc549a6` has its quick tier and four tries passed and waits only on its records run, relaunched as `r20261112-205424-6997`
+
+**#9264 can be marked once #9209 is on `main`: at its head `6dc48bd394e2` the records run, the quick tier and the three Lean tries all ended exit 0, it moves no lock record, and it merges with no stop onto `main` at `5f0c008aa040`, onto #9375's head `bafae2eaec2e`, and onto both with #9209 landed [run].** #9251 at `8a5aebc549a6`: the quick tier `r20261112-184838-cb02` ended exit 0 with 61 of 61 suites passed, and the four Lean tries passed [run]. Its records run never started (`r20261112-184832-0f88`, cancelled at 20:31Z after 103 minutes in line for a check slot on vy-nebius-cpu-3) and runs again as `r20261112-205424-6997` on vy-nebius-cpu-10 in the pool `proofs`, which at 20:56Z was still waiting for a slot there because the node's memory is reserved by other live runs; about 50 minutes from the moment it takes one [run]. `cb02` and the tries are enough for the mark by `main`'s rule since 18:36Z (a mark owes no records run, and #9251 edits no lock by hand) [read]; the records run adds only knowing before the candidate that the lock's check and the four packages that read the verifier pass on the merged tree, where a failure in the candidate would cost #9251 its place in one batch [derived]. No stop on #9251's head against `main` or #9375 either [run]. The three statements' figures have not moved: nothing was timed since 18:54Z.
+
+Every time below is from `date -u` or from a run's own files under `~/.research/runs/RUN/`, read whole this turn unless a line says otherwise.
+
+### 1. Your step 1: the runs
+
+Ten of my eleven runs had ended exit 0 when I looked at 20:30Z; the eleventh, `0f88`, had waited 103 minutes and I cancelled it [run].
+
+| Run | What | Head | Node | Slot to end | Result |
+|---|---|---|---|---|---|
+| `r20261112-184011-909d` | records fast path, no `--update` | #9264 `6dc48bd394e2` | vy-nebius-cpu-12 | 19:01Z to 19:50Z | exit 0, outcome `pass`, regenerated nothing |
+| `r20261112-184017-cdb1` | quick tier | #9264 `6dc48bd394e2` | vy-nebius-cpu-3 | 19:30Z to 20:29Z | exit 0, 61 suites, 61 passed (1 from the cache) |
+| `r20261112-184243-b9cd` | try `Flock/Statement.lean --siblings` | #9264 `6dc48bd394e2` | vy-nebius-cpu-1 | 18:46Z to 18:47Z | lean exit 0, 20 theorems, no axiom beyond the three; no clash among 95 siblings, 40 unchecked |
+| `r20261112-184243-cf72` | try `Flock/Test/FoldFast.lean` | #9264 `6dc48bd394e2` | vy-nebius-cpu-1 | 19:32Z, 24 s | lean exit 0 in 24 s: every `#guard` holds |
+| `r20261112-184243-6e88` | try `Flock/Comp.lean --siblings` | #9264 `6dc48bd394e2` | vy-nebius-cpu-1 | 19:32Z, 4 s | lean exit 0, 16 theorems, no axiom beyond the three; 75 siblings, 3 unchecked |
+| `r20261112-184838-cb02` | quick tier | #9251 `8a5aebc549a6` | vy-nebius-cpu-14 | 19:15Z to 20:05Z | exit 0, 61 suites, 61 passed (none from the cache) |
+| `r20261112-184833-2665` | try `FlockVerify.lean` | #9251 `8a5aebc549a6` | vy-nebius-cpu-3 | 19:14Z to 19:19Z | lean exit 0 in 284 s, 9 theorems, no axiom beyond the three |
+| `r20261112-184832-798c` | try `Flock/ZkOnePass.lean --siblings` | #9251 `8a5aebc549a6` | vy-nebius-cpu-3 | 19:05Z to 19:06Z | lean exit 0, 3 theorems; 191 siblings, 67 unchecked |
+| `r20261112-184833-a4f9` | try `Flock/FoldGiven.lean --siblings` | #9251 `8a5aebc549a6` | vy-nebius-cpu-3 | 19:27Z, 19 s | lean exit 0, 16 theorems; 251 siblings, 6 unchecked |
+| `r20261112-184832-2977` | try `Flock/FoldTwo.lean --siblings` | #9251 `8a5aebc549a6` | vy-nebius-cpu-3 | 19:10Z, 3 s | lean exit 0, 14 theorems; 189 siblings, 67 unchecked |
+| `r20261112-184832-0f88` | records fast path | #9251 `8a5aebc549a6` | vy-nebius-cpu-3 | never took a check slot | **cancelled 20:31Z** |
+| `r20261112-203213-15a8` | records fast path, first relaunch | #9251 `8a5aebc549a6` | vy-nebius-cpu-12, pool `proofs` | waited 20:33Z to 20:54Z, never took a slot | **cancelled 20:54Z** |
+| `r20261112-205424-6997` | records fast path, second relaunch | #9251 `8a5aebc549a6` | vy-nebius-cpu-10, pool `proofs` | waiting since 20:54Z | **not started at 20:56Z** |
+
+"Slot to end" is from the moment the run took its slot (`slot.json`'s `took`) to its end (`status.json`). Before that each waited: the records run `909d` 19 minutes, the quick tiers `cdb1` 50 and `cb02` 27, the tries 3 to 49 [run]. The ETA of a records run is `909d`'s 49 minutes in its slot [derived].
+
+Both relaunches are `research run --on NODE --source . --pool proofs --as proofs --mem-gb 32 --timeout 7200 --project verity --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records verity/protocols/flock/verifier`, from a worktree at `8a5aebc549a65e018ba78c728627c859ddc29721` [run]. Two departures from your line: `--cwd clone` and the declared output are the README's for this job, which writes into its tree; and with `--pool` the command refuses `--max-min` ("means nothing without --queue"), so the limit is `--timeout 7200`.
+
+**What blocks both nodes is memory, not the pool's line.** On vy-nebius-cpu-12 each of the pool's four slots read between -13 and 11 GB free for the whole 21 minutes, with 302 to 351 GB "reserved by live runs that haven't reached it", under the 30 GB a check there may peak at. vy-nebius-cpu-10 read 3 to 4 GB free with 183 GB reserved, on a node of 201 GiB [run: each run's `slot.json`, read six times from 20:34Z to 20:56Z]. A third node helps only if it has 30 GB unreserved, which I cannot see before launching there. By your rule `6997` is due a move to vy-nebius-cpu-8 at 21:15Z if it has not started; I look then.
+
+### 2. #9264's ready line
+
+- **Head:** `6dc48bd394e22826cc9ddab87d054c2008a6dd28` on `cursor/proofs-fold-columns-7d9a` [run: `git ls-remote`, 20:35Z]. It is the change at `1997812848a4`, then #9209's marked head `4c8742d0d449` merged in, then `main` at `0582899c4392`.
+- **What it sits on:** #9209, which the queue lists as ready and admitted at `4c8742d0` and has not yet put in a candidate [run: `research queue status`, 20:42Z]. #9264's base is still `cursor/proofs-fold-7540`, so the queue lists it nowhere; it needs `main` as its base before a mark, and I have not changed it.
+- **`main` since the head's merge:** 21 commits from `0582899c4392` to `5f0c008aa040`, none of which touches the verifier's package, the three base packages or `security/`; under `tools/verity/lean` they change `lean_changed.py`, `siblings.py`, the README and two test files [run: `git diff --name-only 0582899c4392 origin/main`]. So the Lean the five runs judged is the Lean a candidate on today's `main` holds.
+- **Runs at the head:** the first five rows above. The records run passed the verifier's package (18,358 declarations in 259 modules, 11 guarantees), the certifier's Lean, `security`, `security/Properties` and `security/Proofs`, with `failed: []` and `regenerated: {}` [run: `909d`'s `lean-audit/audit.json`]. The quick tier's last line: "61 suites: 61 passed (1 cached), 0 failed"; `verity-flock` 1,456 passed and 30 skipped, `verity-vllm` 14,336 passed and 401 skipped [run: `cdb1`'s `stdout.log`].
+- **Lock:** one root added to the verifier's `lean-audit.json`, `Flock.Test.FoldFast`. No record moves and no `verifier.allow` name is new: the records run regenerated nothing with the locks as committed [run: `909d`].
+- **What it is, in one sentence:** it gives the two steps the verifier makes once a column in each lincheck round, the coins' tensor and the projection of a slot type's fold onto 64 sums, compiled loops that update one array in place, each proved equal to the definition it stands in for (`@[csimp]`), so the kernel, the proofs and the lock still read `Stmt.project` and `Stmt.tensor`.
+- **What it buys,** a kept session's check, each pair timed in one run on one node, on one pinned core under `nice -n 19` of a node other jobs shared, at the tree of `1997812848a4` against #9209 alone, before the two merges:
+
+| Statement | #9209 alone | With #9264 | Gain | Run, node, core, rounds |
+|---|---|---|---|---|
+| MoE type | 11.266 s | 10.128 s | 1.138 s, 10.1% [derived: 1.138 / 11.266] | `r20261112-111136-ee57`, vy-nebius-cpu-14, core 79, 5 rounds [run] |
+| GEMM K=512 | 3.346 s | 3.292 s | 0.054 s, 1.6% [derived: 0.054 / 3.346] | `r20261112-114309-6609`, vy-nebius-cpu-9, core 121, 7 rounds [run] |
+| Head block | not established | | | three runs, each disturbed by other jobs on its node: `9b5c` 39.454 to 39.424 s, `5c71`, `2efb` 43.536 to 44.573 s [run] |
+
+  These pairs are not comparable with the figures of another node: the same build reads 5 to 6% apart between nodes [run, earlier].
+- **Not run:** the whole check (the kernel replay, the tests marked `slow`, `lean-agreement`, `circuit-check`, the ratchet gate), which is the candidate's; any timing at the merged head; a fourth head-block run, which needs a quiet node.
+- **Body:** current as of 20:38Z, with the five runs' results and `Goal proofs/exfiltration-under-300gb` [run: `research queue edit 9264`].
+
+### 3. #9251 at `8a5aebc549a6`: is `cb02` alone enough
+
+#9251's branch `cursor/proofs-fixedcost-46fc` is at my trial commit `8a5aebc549a6`, and its body names my runs at that head [run: `git ls-remote`; read: the body, updated 19:45Z]. The queue lists it as waiting, not marked [run, 20:42Z].
+
+**Plainly: yes for the mark, no for knowing the lock passes.**
+
+- **Why it is enough for the mark.** `main` since 18:36Z (#9358) says "The fast path is not owed before a mark" and "Mark with no records run of your own: the candidate's records run commits every stale record"; a records run comes first only for what that run can't write, a hand edit of a lock among them [read: `.agents/skills/lean-proofs/SKILL.md:46` and `:133` at `5f0c008aa040`]. #9251 touches no lock [run: `git diff --name-only origin/main...8a5aebc549a6`, seven files, no `lean-audit.json`].
+- **What `cb02` shows.** The check's `lake build` of the verifier's package ran before the suites that read its executable, and all of them passed: `verity-flock` 1,456 passed and 30 skipped, `verity-core-sampled-proofs` 307 and 2, `verity/protocols/spot/verifier` 892, `benchmarks/one_stage` 605, `verity/protocols/recursion/verifier/vstar_cli` 21 and 5, `verity-core-firewall` 50, `benchmarks/verifier_cost` 8, `repository` 352, `verity-vllm` 14,336 and 401; last line "61 suites: 61 passed (0 cached), 0 failed; 174.9 min of test time" [run: `cb02`'s `stdout.log`, lines 3 to 123 and the last].
+- **What `cb02` does not show.** The quick tier leaves out the tests marked `slow`, and most tests in which the executable accepts a zero-knowledge session are so marked: all 10 of `test_lean_zk.py`, 9 of 10 of `test_lean_session_tables.py`, and the whole of `test_lean_witness.py`, `test_lean_served_registered.py` and `test_lean_verify_members.py` [read: `verity/protocols/flock/prover/tests/` at `8a5aebc549a6`]. The log has one line a suite, so I cannot name a test in which the executable accepted a `--zk` session through the one pass at this head. The candidate's check runs the slow ones; the kept sessions FIXEDCOST timed are from before the merges [relayed: #9251's body].
+- **What the records run adds.** First, the Lean check's judgement of the verifier's package as merged: every root built together, the test modules and the up to 67 siblings the tries left unchecked among them, under `main`'s check. #9251's own records runs were on its base `d6075b75d289`; since then `main` changed 17 files of the package, its lock among them, and `check.py` [run: `git diff --stat d6075b75d289 0582899c4392`]. Second, the four packages that read the verifier's build (the certifier's Lean, `security`, `security/Properties`, `security/Proofs`) built and judged against it.
+- **What I expect [guess]:** a pass. `909d` passed on the same 17 files of `main` with #9264 on top, #9251's records run passed on its own side [relayed: its body], and its three new modules came through the merge byte for byte [run: the same blob ids at `b2744360ecd3` and `8a5aebc549a6`]. Only the two sides together are unjudged.
+- **So:** if the hour matters, mark on `cb02` and the tries; the price is that a failure would show in the candidate's records run and put #9251 out of one batch.
+
+Still open on #9251, none of them mine to change: its body says `0f88` and `cb02` "had not ended" (they ended as above); `lean-agreement` is not run at this head and the body leaves it to the candidate [read]. Its `Goal proofs/exfiltration-under-300gb` line and its paragraph on the lock's entries (your decision that `verifyOnePass` is no fifth entry, and FIXEDCOST's two walks) are in the body [read]; I checked neither walk.
+
+### 4. Your step 3: the merges
+
+`git merge-tree --write-tree --name-only` in `/agent/repos/verity`, with the lock's and the Lean imports' merge drivers registered, at 20:36Z and 20:43Z [run]. Every one ended exit 0 with no stop and nothing on stderr (so no `merge.py` warning). "After #9209" is a local commit of `main` with #9209's tree as one commit, the way the queue lands it; "after both" adds #9375's head to that.
+
+| Head | onto `main` `5f0c008aa040` | onto #9375 `bafae2eaec2e` | after #9209 | after both |
+|---|---|---|---|---|
+| #9209 `4c8742d0d449` | no stop (`71e43525f505`) | no stop (`7949b41bf7f8`) | | |
+| #9264 `6dc48bd394e2` | no stop (`09599d060428`) | no stop (`d8e72f697c01`) | no stop (`09599d060428`) | no stop (`dca59fdc2b7f`) |
+| #9251 `8a5aebc549a6` | no stop (`1ce787504025`) | no stop (`9ca05abcaddf`) | no stop (`1ce787504025`) | no stop (`baf6a791a1e3`) |
+
+Also no stop: #9264 with #9251 (`47fd60aaeff4`), and `main` with #9375 (`7bd727a3789b`).
+
+What a clean merge does not show is that the merged Lean builds. #9375 (branch `cursor/lean-remote-merge-onmain-fc8d`) changes 14 files of the verifier's package: `FlockVerify.lean` (60 lines), `Flock.lean` (one import), the lock (19 lines), `Flock/Layout.lean`, `Flock/Typed.lean`, three files under `Flock/With/` and the new `Flock/RegBound.lean` among them [run: `git diff --stat` against its merge base `4a90174415b7`].
+
+- **#9209 and #9264 against #9375:** #9375 touches none of `Flock/Comp.lean`, `Flock/Statement.lean`, `Flock/Test/FoldFast.lean`; none of the names the two add occurs in #9375's tree under the verifier's package, `security/` or the certifier [run: `git grep -w`]; in the lock each side adds a root and the driver keeps both (96 roots) [run]. I expect no stop of any kind [derived].
+- **#9251 against #9375:** both edit `verifyCmdBy` in `FlockVerify.lean`. #9375's hunks there read the `--registered` file's ports (`registered`, `bound`, `declared`, `RegBound.check` in place of `Registered.checkComplete`); #9251's four hunks, some 20 lines lower, change `population`, `st` and the call under `zk` [read: both diffs]. They share no variable, so I expect the merged file to elaborate [derived]; **not run**. If it did not, the stop would be #9251's (FIXEDCOST's, or mine as the one who made its merge), not lean's: a `verity lean try` of `FlockVerify.lean` on that merge is about 30 minutes in a slot, and I launch it on your word or when #9375 lands, whichever comes first.
+
+### 5. Not done, and next
+
+- No code changed this turn, and nothing was timed.
+- At 21:15Z I read `r20261112-205424-6997`'s slot and write one short entry: started, with its ETA, or moved to vy-nebius-cpu-8. When it ends I read it whole and write its line for #9251; resume me then.
