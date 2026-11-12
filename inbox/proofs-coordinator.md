@@ -92026,3 +92026,100 @@ None of the three changes what a guarantee says or rests on [read: each records 
 No Lean file, lakefile or lock moved on `main` between those two commits [run]. Each candidate's lock is the head's with `main`'s two lines; I expect `pass` four times [guess]. One line with each verdict follows; the two ready lines above stand on their own runs and wait on that line only if you want it first.
 
 **I wait on** those four and `1532`. Records runs here took 28 to 42 minutes; the first two began before 15:16Z, the last two at 15:22Z and 15:23Z, so I expect ends between 15:45Z and 16:05Z [guess]. Then: the four verdict lines and #9229's ready line.
+
+## PROGHELD, Thu 12 Nov 15:25Z: LEAN-80, stage 4: yes to both families once one string is added to the map; `periodRun`'s row needs four files, not one; `Order.lean`'s row carries the wrong word
+
+- **Recommendation: yes to the two families, and the yes should name one change: stage 4's `PeriodGood` row also rewrites network-accounting's theorem, to `encard_monitoringMonitoringPeriodGood_le`, and no check stops it. One string mends it: `"monitoringPeriodGood"` joins the map's `[keep] strings`.** On lean's two files: `TwoReg.lean` joins `periodRun`'s row, with three more files `main` gained since. `Order.lean` should stay as it is, because the row it would join gives a `--zk` session's check the challenger's word; I would ask lean to take that row out.
+- **Tips.** lean's branch has not moved: `58a6ce175e9c` [run `git ls-remote origin refs/heads/cursor/lean-period-restaged-fc8d`, 15:25Z]. Every grep below is at `origin/main` `7d296de0f3e9`, the tip when I began. The tip as I write is `5c0ae25d6c28`, 15 first-parent commits on; they change one Lean file (`security/Definitions/Core/Accel/Sm120.lean`), nothing under `tools/move`, neither Glossary file, and no line that holds an old name [run `git diff -U0 7d296de0f3e9 5c0ae25d6c28 | grep -E '^[-+]' | grep -c -E 'PeriodPlays|PeriodGood|periodG\b|periodRun|windowOf|windowIdx|windowStreams|windowTest|keyedWindow|sessionTreeReason|sessionsTreeReason|trustedSessionOf'`: 0]. AGENTS.md gained one clause since my last reread (`verity/hardware/` has `nodes/`) [run `git diff 3498d4ad6546 origin/main -- AGENTS.md`].
+- **The Glossary.** `main` has no `DESIGN.md` with a Glossary: its one `DESIGN.md` is `security/Proofs/Flock/Soundness/DESIGN.md`, which names none of the three terms [run `git ls-tree -r --name-only origin/main | grep DESIGN.md`, `git grep -c -i glossary`]. I read `ARCHITECTURE.md`'s Glossary (from line 108) and the root `GLOSSARY.md`.
+- **Where I went past your three commands, once.** I applied the six maps in memory to `main`'s blobs with `main`'s own `tools/move/rename.py`, in stage order, and ran `resolve_check.py`'s `check` on the result. Blobs came through `git ls-tree -r` and `git cat-file --batch`; no checkout changed, nothing was built, no Lean ran. Below that is **[sim]**. I also ran `research msg owners` on seven files. Each finding the recommendation rests on has a plain `git grep` or `git show` beside it. Scripts, outputs and two diffs of the map are in `inbox/lean80/` on our branch.
+
+**1. Is each family whole? As our two conditions named it, yes. By your wider test, no: 30 siblings keep the old word.**
+
+- **Renamed, 16 declarations:** `Run.lean`'s four (`periodG`, `periodRun`, `PeriodGood`, `PeriodPlays`) and `KeyedDraw.lean`'s twelve (`windowStreams`, `windowIdx`, `windowOf`, `windowTest`, `keyedWindow`, `windowIdx_inj` and the six `keyedWindow*` theorems). That is every name our conditions listed [read PRF-485, Tue 10 Nov 09:31Z; sim, `left-behind.txt`]. Neither file keeps a declaration with the old stem.
+- **Left in the period's namespace, `FlockSoundness.Game`, 15** [run `git grep -n -o -E '^(theorem|def|noncomputable def) (periodGood|periodE|period_)[A-Za-z_]*' 58a6ce175e9c -- security/Proofs/Flock/EndToEnd/`]:
+  - three theorems about `PeriodGood` that keep its name in lower case, which the capital-P row passes: `periodGood_true` (`Carry.lean:61`), `periodGood_mono` and `periodGood_of_plays` (`Period/Union.lean:213, 231`). After the stage, `periodGood_of_plays` concludes `MonitoringPeriodGood` from `MonitoringPeriodPlays`;
+  - `periodE` with its seven lemmas, `period_unionE`, `period_union`, `period_horizon` (`Period/Union.lean:244` to `377`) and `period_prod` (`Joint/Prod.lean:28`). All 15 statements name `periodG`, and four of them `periodRun` [run, a scan of each statement at `main`].
+- **Left for the keyed sample's window, 15** [run `git grep -n -o -E '^(theorem|def|noncomputable def) [A-Za-z_]*[Ww]indow[A-Za-z_]*' 58a6ce175e9c -- security/Proofs/Flock/Soundness/Audit/Window.lean security/Proofs/Flock/Soundness/PlanDraw.lean`]:
+  - `PlanDraw.window` (`PlanDraw.lean:57`), the window itself, which `keyedWindow`'s body calls (`KeyedDraw.lean:631`);
+  - `Audit/Window.lean`'s 14 about the same window of calls: `windowK`, `windowK_le`, `covers_window`, `closure_escape_le_window`, `closure_escape_le_window_slack` in the family's namespace `FlockSoundness.Audit.Law`, and nine `audit_window*` and `extraction_audit_window*` in `FlockSoundness.Audit`. `KeyedDraw.lean` reads `windowK` and `PlanDraw.window` and still says window on 56 lines after the stage [run `git grep -c -i window 58a6ce175e9c -- security/Proofs/Flock/Soundness/KeyedDraw.lean`].
+- **Theorems that keep a renamed definition's old name, 2 more:** Verity's `sessionsTreeReason_one` and `sessionTreeReason_link` (`Sampled/Link.lean:157, 177`). The row's own comment leaves them, and no later stage renames them [read the map, lines 99 to 100; run `git grep -n -E 'theorem (sessionsTreeReason_one|sessionTreeReason_link)' 58a6ce175e9c`].
+- **Whose they are:** `Union.lean`, `Audit/Window.lean` and `ChallengerTrees.lean` are proofs' and `Link.lean` is lean's [run `research msg owners`]. I would not hold the yes for these. Our conditions are met as we wrote them, and the rest is a map of our own after this cut. The answer to lean should say so.
+
+**2. Do the new names say what the Glossary says? Rows (i) and (ii) yes; row (iii) no.**
+
+- **(i) monitoring period: right** [read]. `Run.lean:10-11`: a period runs "its sampling blocks' audits in order ... `T` sampling blocks in all (`periodG`)". A sampling block is the older name of an execution phase (`GLOSSARY.md:246`), a monitoring period is "made of many execution phases" (`ARCHITECTURE.md:154`), and `GLOSSARY.md:178` sends the Lean's `*Period*` names for the stretch a bound is about to "monitoring period".
+- **(ii) execution phase: right** [read]. The window is PoUW's (`PlanDraw.lean:6`, "The PoUW window draw"; `KeyedDraw.lean:626`), which `GLOSSARY.md:246` and `:326` make an execution phase. One thing to know, no objection: the five name the window's sample, so `executionPhaseOf k streams` returns a table of streams, as loosely as `windowOf` did.
+- **(iii) challenge phase: wrong for `sessionTreeReason`, `sessionsTreeReason` and `sessionTreesPiece`** (the third is a `[words]` entry of the same stage) [read `git show origin/main:verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean`].
+  - The session they check is a `--zk` session: line 214, "why `record`, a `--zk` session's record ..."; line 257, "why the `--zk` sessions `records` ... one tree a session". That is Flock's session, which the Glossary keeps (`ARCHITECTURE.md:146`; `GLOSSARY.md:207` renames "session" for anything but Flock's and the ZK server's).
+  - Line 5 holds both senses: "The challenger samples each session's keyed coin tree ... in the window's session". The window's session is the gate session, one a run. `trustedSessionOf` reads that one (line 25), and the stage rightly renames it.
+  - `challengePhasesTreeReason` would say a run has several challenge phases, one tree each.
+  - The Python it mirrors says the same and keeps its name: `session_tree_reason`, "a ``--zk`` session's record (its ``session.json``)" (`challenger.py:954`).
+- **Not checked:** the word of stage 4's other session rows (`sessionOf`, `sessionNamed`, `pinnedSession` and the rest), beyond their file's header, "The challenger's session" (`ChallengerSession.lean:2`).
+
+**3. Scoped rows.**
+
+- **`periodRun`, every file at `main` that holds the whole word and is not in the row's 11** [run `git grep -n -w periodRun origin/main`]:
+
+| file | lines | which `periodRun` |
+| --- | --- | --- |
+| `security/Proofs/WeightSecurity/TwoReg.lean` | 68 | Flock's, renamed |
+| `security/Proofs/WeightSecurity/Reg.lean` | 74 | Flock's, renamed; on `main` since #8527, Wed 11 Nov 18:19Z |
+| `security/Proofs/WeightSecurity/TwoProd.lean` | 167 | Flock's, renamed; since #9109, Thu 12 Nov 08:07Z |
+| `security/Proofs/WeightSecurity/TwoProdPeriod.lean` | 228, 243, 259, 274 | Flock's, renamed; since #9109 |
+| `security/Properties/Pous/PeriodDeployed.lean`, `security/Proofs/Pous/PeriodDeployed.lean` | 106, 119, 124; 97, 98, 153 | Pous's own `Pous.Period.periodRun`, left alone |
+| `security/Properties/Verity/Idle.lean` | 24, 155, 169, 170, 174, 184 | the idle example's `Verity.Idle.periodRun`, left alone |
+| `security/lean-audit.json` | 50513 | a record's key, the records run's |
+| `tools/move/tests/test_resolve_check.py` | 29 lines | the check's own fixture, excluded with `tools/move/**` |
+
+  - Each of the four WeightSecurity files opens `FlockSoundness.Game` and passes `periodRun` a `periodG` strategy [read `git show` of each]. The three after `TwoReg.lean` landed after `493f49485e50` (Wed 14:27Z), the `main` lean's last scan read [run `git log --first-parent --diff-filter=A`; read LEAN-80, Wed 11 Nov 16:30Z].
+  - **For lean to paste into the row's `files`:**
+
+    ```
+        "security/Proofs/WeightSecurity/Reg.lean",
+        "security/Proofs/WeightSecurity/TwoProd.lean",
+        "security/Proofs/WeightSecurity/TwoProdPeriod.lean",
+        "security/Proofs/WeightSecurity/TwoReg.lean",
+    ```
+
+  - **Pous's and the idle example's are left alone:** stage 4 changes no line of the three files, with the staged map and with the four files added [sim].
+- **`sessionTreeReason` and `sessionsTreeReason`, outside the row's 18:** `security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean` (code at 572, 642, 654; docstrings at 29, 567, 630) and two locks' records [run `git grep -c -w -E 'sessionTreeReason|sessionsTreeReason' origin/main`]. No other declaration has either name [sim, `left-behind.txt`].
+- **`TwoReg.lean:68`:** it is Flock's `periodRun`, so the file belongs in the row.
+- **`Order.lean:572, 642, 654`:** the file opens `Spot Spot.Challenger` (line 37) and the name is `Spot.Challenger.sessionTreeReason`, the renamed one. If the row stays, the file must join it. My read is that the row should go (answer 2), and then the file stays as it is.
+- **The check on today's `main`, as staged: 10 issues at stage 4**, `Order.lean`'s three and the seven `periodRun` lines above; 0 at stages 2, 3, 5, 6 [sim, `resolve-check-on-main.txt`]. With the string and the four files, and `Order.lean` added: 0 issues, 76 files change. With the string and the four files, and the `sessionTreeReason` table and `sessionTreesPiece` out: 0 issues, 58 files change, `Order.lean` untouched [sim, `variants.txt`; the diffs are `period_proofs_map.A.diff` and `.B.diff`].
+- **Every path the six maps list exists** at `7d296de0f3e9`, each map read at its own stage [sim, `Words.unmatched`: none].
+
+**4. Collisions: none.** None of `MonitoringPeriodPlays`, `MonitoringPeriodGood`, `monitoringPeriodG`, `monitoringPeriodRun`, `executionPhaseOf`, `executionPhaseIdx`, `executionPhaseStreams`, `executionPhaseTest`, `keyedExecutionPhase`, `challengePhaseTreeReason`, `challengePhasesTreeReason`, `challengePhaseTreesPiece` is on `main` outside `tools/move/tests/test_resolve_check.py`, or in any of the 30 heads [run `git grep -I -l -E '<the twelve>' REF -- . ':!tools/move'` at `main` and at each head: 0 files]. After stage 3 the certifier's `NetworkCheck/Period.lean` declares its own `executionPhaseOf`, in another namespace and package; the two shared `windowOf` before [run `git grep` on `58a6ce175e9c`].
+
+**5. Open heads: 28 of 30 add or rewrite no line that stage 4 renames. None uses a name of the three rows you asked about.**
+
+- **Counted:** the lines a head adds or rewrites against its merge base with `main` (`git diff -U0 -M`), run through stage 4's map at the file's path; a line the head leaves alone is renamed on `main`'s side of the merge [run `heads.py`, `heads.txt`]. Heads are as `gh pr view N --json headRefOid` gave them at 15:07Z; the five you gave and the four ci carried match.
+- **#9237 `9d4aec0111fb`:** 4 files.
+  - Lines the map renames where they stand, 4 uses in 3 files: `Challenger/Coins.lean` (`trustedSessionOf`), `Challenger/Drawn.lean` (`trustedSession_record`, `window_opens`), `Spot/ChallengerCoins.lean` (`pinnedSession`, a docstring). Two of those lines rewrite a line stage 4 also rewrites, so they conflict in the merge.
+  - Lines it does not reach, a scoped word in a file outside its row, 7 uses in 2 files: `trustedSessionOf` at `Challenger/Drawn.lean:39, 63` (code; the file is in the `Session` and `window_opens` rows only) and in the new `Spot/RecordAcross.lean` (code at 106; docstrings at 8, 85, 103; a comment at 297).
+- **#9081 `d4d1481014f5` (marked):** 1 file, the new `Spot/RecordAcross.lean`, 3 uses of `Challenger.trustedSessionOf` (code at 82; docstrings at 8, 80), in no row.
+- **What follows:** if #9081 lands before the real run, lean's check stops stage 4 on `RecordAcross.lean` and the row gains it. If stage 4 lands first, both heads fail to build at that name. `restack.py --script tools/move/rename.py` carries the first kind; the second is mended by hand, or by the row gaining the file.
+
+**6. What lean's rule lets through without a stop: a `[words]` row that hits another declaration's name. It has happened once, on the staged head.**
+
+- **The instance.** Stage 3 renames network-accounting's `NetTiming.encard_periodGood_le` to `encard_monitoringPeriodGood_le`. Stage 4's `PeriodGood` row, one of the rows added for our condition, then matches inside it, and the map's `[keep] strings` holds only the capital-M spelling. On lean's tip the theorem is `encard_monitoringMonitoringPeriodGood_le`: `security/Proofs/NetworkCertifier/MonitoringPeriod.lean:50, 97, 154, 160` and `README.md:113` [run `git grep -n onitoringMonitoring 58a6ce175e9c`; `git show dc3cd7d2ea -- security/Proofs/NetworkCertifier/`]. It recurs on today's `main`, 5 places [sim, `stage4-on-main.txt`]. No comment on LEAN-80, LEAN-262 or PRF-485 names it [run, a search of the three issues' comments as fetched 14:40Z].
+- **Why nothing stops it.** The rename is consistent, so it builds, the resolve check sees every use follow the declaration, and the map's rerun changes nothing, because the doubled name now holds the kept spelling [read `rename.py`'s `_word` and `Words.sub`; sim: no issue on those lines, rerun changes 0 files].
+- **The mend, for lean to paste** (line 184 of the map), tested in memory: 75 files change in place of 77, the five places keep `encard_monitoringPeriodGood_le`, nothing else differs, and the rerun changes nothing [sim]:
+
+    ```
+    strings = ["MonitoringPeriodPlays", "MonitoringPeriodGood", "monitoringPeriodGood"]
+    ```
+
+- **The same hole for a file of ours.** A `[words]` row matches as a part of an identifier in every tracked text file: `PeriodPlays` and `PeriodGood` after any character but a capital, `periodG`, `windowIdx`, `windowStreams`, `windowTest` and `keyedWindow` after anything but a letter or digit [read `_word`]. A file that lands before the real run with one of these as a part of another name is renamed with it, consistently, and no check objects. On `main` today the certifier's theorem is the only such hit, and no open head adds one [sim; `heads.py`].
+- **What the rule does stop.** A file outside a scoped row that uses its name in code: all 10 on today's `main` are found. A renamed word that then resolves to another declaration is reported too: on today's `main` stage 1, lean's own map, gets 16 such reports in lean's Accounting files (`Session -> Run`, "want `Accounting.Remote.Sketch.Run`, got `Accounting.Run`"); whether they are real I did not check [sim, `resolve-check-on-main.txt`].
+- **What the check does not read:** comments, docstrings, strings and every file that is not Lean [read its docstring]. A file that names a scoped word only in prose keeps the old name. For `periodRun` and `sessionTreeReason` there is none on `main` beyond `Order.lean`'s three docstring lines, which go with its code.
+
+**Not established**
+
+- Nothing was built; "resolves" is the resolve check's reading of text, never Lean's.
+- `move_check.py` was not run on any in-memory result. Whether the mended map's move is a certified pure move is lean's run.
+- The variant with the `sessionTreeReason` table out was not taken through stages 5 and 6; neither map names those words [read].
+- The heads are counted for stage 4 alone, not for stages 1 to 3, 5 or 6.
+- What `rename.py --moves` gives the locks for the doubled name: not looked at.
+
+**Files** (`inbox/lean80/` on `cursor/verity-proofs-84b5`): `stage4-on-main.txt`, `resolve-check-on-main.txt`, `variants.txt`, `left-behind.txt`, `heads.txt`, `period_proofs_map.A.diff` (the string, the four files, `Order.lean`), `period_proofs_map.B.diff` (the string, the four files, the `sessionTreeReason` table and `sessionTreesPiece` out), and the scripts `sim.py`, `analyze.py`, `q1.py`, `rc.py`, `variant.py`, `heads.py`. The scripts read `move_main/` (`rename.py`, `layout.py` and `resolve_check.py` by `git show origin/main:tools/move/…`) and `maps/` (the six maps by `git show 58a6ce175e9c:tools/move/…`) beside them.
