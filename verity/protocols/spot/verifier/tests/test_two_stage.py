@@ -766,6 +766,34 @@ def test_each_stage_is_once_and_in_order():
         ("delivered",)
 
 
+def test_the_interior_registration_is_in_the_boundary_registrations_window_or_the_one_the_verifier_computes():
+    """The interior registration's window root is the boundary registration's, so one session samples both stages, or
+    the root the verifier computes from the boundary registration's digest and the replay sample
+    (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
+    (`interior-window`): a root of the prover's choosing, none where the boundary registration has one, and the root
+    of another sample or another registration. On the computed root, the second stage's session opened for it, the run
+    of record agrees through both stages, and the outcome's one failure is the form's (`second_stage.FORM`)."""
+    stream = _stream()
+    reg = stream.register(*_boundary())
+    first = stream.select(reg)
+    sample = D.proved(first.draw)
+    interior = _interior(Q * N_RHO, reg.digest, sample)
+    root = SS.interior_root(reg.digest, sample)
+    assert len(sample) == Q > 1 and root != FC.WINDOW["root"]
+    for other in ("22" * 64, None, SS.interior_root(reg.digest, sample[::-1]), SS.interior_root("00" * 64, sample)):
+        assert _refused(lambda: stream.register_interiors(first, *interior, window_root=other)) == ("interior-window",)
+    ireg = stream.register_interiors(first, *interior, window_root=root)
+    stream.fake.window = {"root": root}
+    second = stream.select(ireg)
+    stream.deliver(second, [SESSION])
+    statements = stream.statements(second)
+    out = stream.outcome(second, _lean(reads=_reads_of(statements), checked=statements[0]), {"statement": "stub"},
+                         session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and "run" not in checks and checks["statements"]["codes"] == ["two-stage-form"]
+    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
+
+
 def test_a_one_stage_stream_has_no_interior_registration():
     spec = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
                   PUBLIC, b"two-stage-test")
