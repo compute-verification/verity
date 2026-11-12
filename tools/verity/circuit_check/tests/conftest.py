@@ -34,12 +34,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from verity_config.settings import of
 
 from circuit_check import cache as CC
 from circuit_check import cli
 from circuit_check import targets as TG
 from circuit_check import units as UN
 
+#: circuit-check's settings registry (the `settings.py` beside its `pyproject.toml`), which declares the variables read here
+SETTINGS = of(__file__)
 #: one xdist worker's share of the memory suites.py runs the suite in (`[tool.verity.tests] worker_gb`, which it divides by)
 WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
 
@@ -48,14 +51,14 @@ WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml
 #: guard points at an empty directory of its own (`HOST_CACHES`).  The session reads the records there and writes the ones it
 #: has built.  A record counts only for inputs identical to the ones it was made from (`units.plan`, as `check`'s
 #: circuit-check takes it), so it changes how long the catalog takes, not what it holds.
-_HANDED = os.environ.get("CIRCUIT_CHECK_RECORDS")
+_HANDED = SETTINGS.CIRCUIT_CHECK_RECORDS
 RECORDS = Path(_HANDED or Path.home() / ".cache" / "verity-check" / "circuit-check")
 #: the records were handed (the graph's test-file runner sets them from `circuit-catalog:records`): one that doesn't count is
 #: skipped and its binding built, as where they weren't, and a reason the catalog's line gives names the directory as handed
 HANDED = bool(_HANDED)
 #: where the session lists the records its catalog rests on (`units.listing`, as ``circuit-check --records-manifest`` does):
 #: what a store that carries the records to other runs names.  Unset, it lists none
-LISTED = os.environ.get("CIRCUIT_CHECK_RECORDS_MANIFEST")
+LISTED = SETTINGS.CIRCUIT_CHECK_RECORDS_MANIFEST
 
 #: what each catalog binding reaches (`units.manifest`), written once a session by the xdist worker that builds the catalog
 #: without records (`_apart`) into the directory every worker's basetemp is in (the controller's, which the session starts
