@@ -48,7 +48,11 @@ WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml
 #: guard points at an empty directory of its own (`HOST_CACHES`).  The session reads the records there and writes the ones it
 #: has built.  A record counts only for inputs identical to the ones it was made from (`units.plan`, as `check`'s
 #: circuit-check takes it), so it changes how long the catalog takes, not what it holds.
-RECORDS = Path(os.environ.get("CIRCUIT_CHECK_RECORDS") or Path.home() / ".cache" / "verity-check" / "circuit-check")
+_HANDED = os.environ.get("CIRCUIT_CHECK_RECORDS")
+RECORDS = Path(_HANDED or Path.home() / ".cache" / "verity-check" / "circuit-check")
+#: the records were handed (the graph's test-file runner sets them from `circuit-catalog:records`): one that doesn't count is
+#: skipped and its binding built, as where they weren't, and a reason the catalog's line gives names the directory as handed
+HANDED = bool(_HANDED)
 #: where the session lists the records its catalog rests on (`units.listing`, as ``circuit-check --records-manifest`` does):
 #: what a store that carries the records to other runs names.  Unset, it lists none
 LISTED = os.environ.get("CIRCUIT_CHECK_RECORDS_MANIFEST")
@@ -326,8 +330,7 @@ def _taken(cache: Path, shared: Path | None, jobs: int, handed: bool = False) ->
 def build() -> Catalog:
     """This process's catalog: built the first time it is asked for, from the records (`_taken`)."""
     if not _BUILT:
-        _BUILT.append(_taken(RECORDS, _SHARED[0] if _SHARED else None, _jobs(os.environ),
-                             handed=bool(os.environ.get("CIRCUIT_CHECK_RECORDS"))))
+        _BUILT.append(_taken(RECORDS, _SHARED[0] if _SHARED else None, _jobs(os.environ), HANDED))
         print(_line(_BUILT[0]), flush=True)
     return _BUILT[0]
 
