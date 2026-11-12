@@ -317,6 +317,17 @@ def test_the_program_writer_lists_nothing_for_a_request_without_ids_or_samples_a
         assert json.loads((d / "instances.jsonl").read_text())["requests"] == []
 
 
+@pytest.mark.parametrize("sampled", [{}, {"sampled": None}, {"sampled": {}}, {"sampled": {"r0": [5]}}])
+def test_the_program_writer_looks_a_request_s_id_up_whether_or_not_the_fold_sampled(sampled, tmp_path):
+    """An id that is no key raises where it is looked up, in the fold's samples or in the empty table of a fold with none; a
+    prompt with no length raises first."""
+    with pytest.raises(TypeError, match="unhashable type: 'list'"):
+        MF.persist_program(_fold(requests=[{"request_id": ["r0"]}], instances=[], **sampled), tmp_path, profile_name="toy", log_path="log")
+    with pytest.raises(TypeError, match="object of type 'int' has no len"):
+        MF.persist_program(_fold(requests=[{"request_id": ["r0"], "prompt_token_ids": 7}], instances=[], **sampled), tmp_path,
+                           profile_name="toy", log_path="log")
+
+
 APPLICABILITY = {"components": {"num_sms": 132}}
 
 
@@ -428,6 +439,17 @@ def test_the_policy_of_a_workload_that_states_no_sweep_no_variant_and_no_samplin
     assert B.sampling_policy(None, str(wl))["kind"] == "greedy", "a top variant the workload does not define, and no request"
     wl.write_text(json.dumps({**doc, "sampling": {"variant": "v"}, "variants": {"v": {"temperature": 0.5}}}))
     assert B.sampling_policy(None, str(wl))["temperature"] == 0.5
+
+
+@pytest.mark.parametrize("named", [{}, {"variants": None}, {"variants": {}}, {"variants": {"v": {"temperature": 0.5}}}])
+def test_a_variant_s_name_is_looked_up_whether_or_not_the_workload_names_a_policy(named, tmp_path):
+    """A name that is no key raises where it is looked up, in the workload's named policies or in the empty table of a workload
+    with none, for a request's variant and for the workload's own."""
+    wl = tmp_path / "wl.json"
+    for doc in ({"requests": [{"variant": ["v"]}]}, {"sampling": {"variant": ["v"]}}):
+        wl.write_text(json.dumps({**named, **doc}))
+        with pytest.raises(TypeError, match="unhashable type: 'list'"):
+            B.sampling_policy(None, str(wl))
 
 
 @pytest.mark.parametrize("params", [{}, {"sampling_params": None}, {"sampling_params": {}}])
