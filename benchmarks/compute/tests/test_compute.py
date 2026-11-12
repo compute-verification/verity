@@ -430,7 +430,7 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
 #: and 1 in call 70, ε's deduction on calls 2 and 71, and holds 120,150,994,944 of the linears' MACs
 GIVE_UP = {"lm_head": 4_202_692_608, "attention": 165_150_720, "outside": 16_079_998_976, "excluded_a": 150_994_944,
            "excluded_b": 0, "voluntary": 0, "kept_width": 0, "epsilon_macs": Fraction(5_700_348_825_400, 399),
-           "over_cap_macs": 0, "rho_macs": Fraction(210_898_255_873, 798), "floor": Fraction(1, 2)}
+           "over_bound_macs": 0, "rho_macs": Fraction(210_898_255_873, 798), "floor": Fraction(1, 2)}
 
 
 def resum(doc: dict) -> None:
@@ -445,7 +445,7 @@ def resum(doc: dict) -> None:
 
 
 def moved(n: Fraction) -> Callable[[dict], None]:
-    """An edit that moves `n` MACs of call 71's ε deduction to its credit, ρ taking its share, and restates the totals."""
+    """An edit that moves `n` MACs of call 71's ε deduction to its credit, ι taking its share, and restates the totals."""
     def edit(doc: dict) -> None:
         c = doc["uncredited"]["calls"][3]
         c["epsilon_macs"] = str(Fraction(c["epsilon_macs"]) - n)
@@ -474,24 +474,24 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert text[7:] == [
         "  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of its 4 "
         "calls (out/pieces/pouw/verify.json):",
-        "    LM head, which Pearl+ doesn't credit        4,202,692,608 MACs   11.96%",
-        "    attention, which Pearl+ doesn't credit        165,150,720 MACs    0.47%",
-        "    linears outside the passes                 16,079,998,976 MACs   45.75%",
-        "    excluded A rows                               150,994,944 MACs    0.43%",
-        "    excluded B rows' column blocks                          0 MACs    0.00%",
-        "    voluntary rows' bands and blocks                        0 MACs    0.00%",
-        "    side channels (k beyond |K|)                            0 MACs    0.00%",
-        "    ε's deduction                              14,286,588,535 MACs   40.64%",
-        "    draws over the inert-work bound                         0 MACs    0.00%",
-        "    ρ, the scheme's cap                           264,283,529 MACs    0.75%",
-        "    the credit's floor                                      0 MACs    0.00%",
-        "  ε's deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most MACs "
+        "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   11.96%",
+        "    attention, which Pearl+ doesn't credit         165,150,720 MACs    0.47%",
+        "    linears outside the passes                  16,079,998,976 MACs   45.75%",
+        "    excluded A rows                                150,994,944 MACs    0.43%",
+        "    excluded B rows' column blocks                           0 MACs    0.00%",
+        "    voluntary rows' bands and blocks                         0 MACs    0.00%",
+        "    side channels (k beyond |K|)                             0 MACs    0.00%",
+        "    ε's deduction                               14,286,588,535 MACs   40.64%",
+        "    sampled tiles over the inert-work bound                  0 MACs    0.00%",
+        "    ι, the inert-work share                        264,283,529 MACs    0.75%",
+        "    the credit's floor                                       0 MACs    0.00%",
+        "  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most MACs "
         "a ticket, so the calls it lands on carry it for the whole run",
         "  the 2 calls that give up the most:",
         "    pass 1 call 71, weight 1000 1x1, 111493951488x1x1 with 111493951488 real rows: 13,532,106,942 MACs "
-        "(ε's deduction 13,286,588,535, ρ 245,518,407)",
+        "(ε's deduction 13,286,588,535, ι 245,518,407)",
         "    pass 0 call 2, weight 2 gate_up, 128x2048x16384 with 128 real rows: 1,008,237,419 MACs "
-        "(ε's deduction 1,000,000,000, ρ 8,237,418)",
+        "(ε's deduction 1,000,000,000, ι 8,237,418)",
     ]
     assert bench(store, "--from", RUN, "--per-call") == 0
     top = printed(capsys)[1]["per_call"]["top"]
@@ -500,9 +500,9 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
 
 
 @pytest.mark.parametrize("edits, why", [
-    ({"VERIFY": None}, "the record's verify document holds no per-call split (it predates it): `served_passes.py "
-                       "uncredited` writes one from the run's passes, and --uncredited reads it"),
-    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record's verify document holds no per-call split (it predates it)"),
+    ({"VERIFY": None}, "the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
+                       "verifier side of the per-call give-up is on main"),
+    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record holds no per-call give-up (`uncredited`)"),
     ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
     ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
     ({"VERIFY": lambda d: (d["uncredited"]["calls"][1].update(macs=d["uncredited"]["calls"][1]["macs"] + 1), resum(d))},
@@ -530,9 +530,9 @@ def test_a_per_call_split_that_is_not_the_answers_is_refused(store, tmp_path, ca
                                                             "share": float(Fraction(799, 800) / (TOTAL - CREDITED))}
 
 
-def test_per_call_reads_served_passes_split_for_a_record_that_predates_it(store, tmp_path, capsys):
-    """``--uncredited F`` reads ``served_passes.py uncredited``'s file in place of the verify document, which isn't
-    fetched, and holds its passes' records to the answer's where the answer names them."""
+def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):
+    """``--uncredited F`` reads a split in a file of its own, with its commitment and its passes' records, in place of
+    the verify document, which isn't fetched, and holds those records to the answer's where the answer names them."""
     split = json.loads((RECORD / "pieces/pouw/verify.json").read_text())["uncredited"]
     given = tmp_path / "uncredited.json"
     given.write_text(json.dumps({"schema": split["schema"], "verify": "verify.json", "commitment": "c0" * 64,
