@@ -40,7 +40,7 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
-from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
+from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
 
 __all__ = ["EXTENSION"]
 
@@ -1226,8 +1226,10 @@ class TP2CaptureWorkerExtension:
             res["t6_4"] = self._t6_4_check(com, rc)
             # the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
-            tpp = res.get("tp_partials") or {}
-            bm = (tpp.get("by_member") or {}).get("out") or {}
+            tpp = res.get("tp_partials")
+            by_member = tpp.get("by_member") if tpp else None    # a compare that did not run, raised or failed early counts no member
+            out = by_member.get("out") if by_member else None
+            bm = out if out else {}                              # no `/out` compared
             res["t6_4"]["out_tensors_vs_clone"] = int(bm.get("tensors") or 0)
             res["t6_4"]["clone_mismatches"] = int(bm.get("tensors") or 0) - int(bm.get("tap_equal") or 0) if bm else None
             res["t6_4"]["clone_rule"] = "committed <L>.mlp.experts/out == TPPartialSource bind-time clone _bytes(y) (tp_partials.by_member.out); None = no /out compared"
@@ -1236,7 +1238,7 @@ class TP2CaptureWorkerExtension:
             elif res["t6_4"].get("result") is None and (res["t6_4"]["clone_mismatches"] or 0) > 0:
                 res["t6_4"]["result"] = False           # not-applicable by the pair rule, but a committed /out differs from its bind-time clone
         except Exception as e:  # noqa: BLE001
-            res["t6_4"] = {"schema": "verity/commit-integ/t6_4-check/v1", "result": False, "error": repr(e)[:300]}
+            res["t6_4"] = {"schema": LATE_READ_CHECK_SCHEMA, "result": False, "error": repr(e)[:300]}
         if vc is not None:
             vc.uninstall()
         if tps is not None:
