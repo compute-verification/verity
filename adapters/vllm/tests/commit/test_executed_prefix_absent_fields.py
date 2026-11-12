@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import pytest
 
+from tests.records.test_commit_binding import EOS, _binding
 from verity_vllm.commit import executed_prefix as EP
 from verity_vllm.records.schema_ids import NOT_EXECUTED_RECONCILIATION_SCHEMA
 
-EOS = 7
 #: the identity coverage `commit.binding.coverage_check` writes, which the account links sit beside
 COVERED = {"ok": True, "expected_n": 4, "bound_n": 4, "missing_n": 0, "ambiguous_n": 0}
 #: a Commit's token record link (`check.commit_tokens`) that holds for r0, with no Match record beside the Commit
@@ -17,8 +17,9 @@ LINK = {"ok": True, "required": True, "lag_attested": True, "problems": [], "rec
 
 
 def _epr() -> dict:
-    """r0 stopped by EOS at 2 of its cap 4 under LAG 1: its executed prefix is 3 steps."""
-    return EP.executed_prefix_of_record(["r0"], {"r0": [5, EOS]}, caps={"r0": 4}, eos_of_record=[EOS], lag=1)
+    """The executed prefixes of the records' fixture binding: r0 stopped by EOS after 2 tokens under LAG 1 and executed 3 steps; r1
+    served all 3 of its own."""
+    return _binding()["coverage"]["executed_prefix_of_record"]
 
 
 @pytest.mark.parametrize("epr", [{}, {"requests": None}, {"requests": {}}])
@@ -139,14 +140,15 @@ def test_a_classification_that_states_nothing_reconciles_with_one_that_counts_no
 def test_a_request_the_population_states_no_n_exec_for_is_not_reconciled(by_request):
     got = EP.reconcile_not_executed(None, {"applied": True, "by_request": by_request}, _epr())
     assert got["ok"] is False and got["total"] is False
-    assert got["n_exec"] == {"r0": {"commit": 3, "population": None, "equal": False}}
-    assert got["problems"] == ["r0: executed prefix of record 3 != the population's n_exec None (two prefixes on one record)"]
+    assert got["n_exec"]["r0"] == {"commit": 3, "population": None, "equal": False}
+    assert got["problems"][0] == "r0: executed prefix of record 3 != the population's n_exec None (two prefixes on one record)"
 
 
 def test_a_request_is_reconciled_on_the_populations_n_exec():
-    got = EP.reconcile_not_executed(None, {"applied": True, "by_request": {"r0": {"n_exec": 3}}}, _epr())
-    assert got == _reconciled(n_exec={"r0": {"commit": 3, "population": 3, "equal": True}})
-    off = EP.reconcile_not_executed(None, {"by_request": {"r0": {"n_exec": 3}}}, _epr())
+    by_request = {"r0": {"n_exec": 3}, "r1": {"n_exec": 3, "arrive": 1}}
+    got = EP.reconcile_not_executed(None, {"applied": True, "by_request": by_request}, _epr())
+    assert got == _reconciled(n_exec={r: {"commit": 3, "population": 3, "equal": True} for r in ("r0", "r1")})
+    off = EP.reconcile_not_executed(None, {"by_request": by_request}, _epr())
     assert off["problems"] == ["population.not_executed_by_rule not applied on a record with an EOS-stopped request"] and off["n_exec"]["r0"]["equal"]
 
 
