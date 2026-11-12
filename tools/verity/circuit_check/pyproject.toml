@@ -27,16 +27,23 @@ markers = [
 ]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree.
+# Among them every file with a test that asks for the catalog (conftest.py's `catalog` and `suite`, or its `build`): where a
+# binding's record doesn't count, its session has it built by a `circuit-check --all --records-only` started without the read
+# tracer (conftest.py's `_untraced`), so that `check`'s circuit-check takes the record it stores.
 untraced = [
     "tests/test_ambient.py",
+    "tests/test_attention_split.py",
     "tests/test_cache.py",
     "tests/test_cache_imports_and_moves.py",
     "tests/test_cache_redteam.py",
+    "tests/test_catalog_fixture.py",
     "tests/test_circuit_check.py",
+    "tests/test_metadata_files.py",
     "tests/test_metadata_listings.py",
     "tests/test_named_targets.py",
     "tests/test_shard.py",
+    "tests/test_split_prims_serve.py",
     "tests/test_units.py",
 ]
 # a pass can take up to an hour, past suites.py's SUITE_TIMEOUT_S
