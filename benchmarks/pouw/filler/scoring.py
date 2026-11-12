@@ -46,6 +46,21 @@ import share  # the capacity model's constants: MACs a token, non-GEMM times, FA
 
 log = logging.getLogger(__name__)
 
+#: what the scorer, the arms' runners, the readers and the tests read
+__all__ = [
+    "CERTIFIED", "CONTROL_BYTES", "CONTROL_RANGE", "DEFER_1GPU", "DEFER_FIT", "DEFER_FIT_TP", "DEFER_T", "DEFER_TP",
+    "DEFER_TP_R6", "DEFER_TP_RUNS", "DRAM_LIMIT", "FILLER_ENTRIES", "FILLER_KERNELS", "FOLDS", "FOLD_UNCHECKED",
+    "LIMIT", "PER_SM", "PREFILL_COINS", "PREFILL_M", "RANGE_LOG2", "RECEIPT_TAGS", "ROBUST", "SCORER",
+    "SELECT_LEMMA", "TOO_GOOD", "TP_FILLER", "TP_NCU_KERNEL", "TP_SUITE", "UNCHECKED", "UNCHECKED_V4", "UNDER_CH",
+    "V2", "V3", "V4", "V5", "capacity", "certified", "certified_v5", "cheat_s", "clock_gate", "coverage",
+    "credit_fixed", "declared_fold", "decode_entry", "defer_at", "defer_fit", "defer_measured", "defer_pass",
+    "defer_rates", "defer_shown_1gpu", "dram_gate", "dseed", "fill_parts", "filler_entry", "filler_entry_v4",
+    "filler_entry_v5", "fold_facts", "fold_reading", "fold_words", "gates", "honesty", "isfinite", "kernel_facts",
+    "margins", "mix_context", "mix_entry", "ncu_metric", "other_ms", "parse_nvdisasm", "parse_smi", "paths_gate",
+    "point_stats", "points", "prefill_entry", "program_facts", "replay_gate", "score", "score_v5", "secondary",
+    "served_model", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
+]
+
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
 #: margin (`margins`), and the filler read at its proved entry (`FILLER_ENTRIES`, `filler_entry`) with SCORE under CH

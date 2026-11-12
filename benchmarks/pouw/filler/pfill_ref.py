@@ -28,6 +28,14 @@ for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
 smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
 RF = sys.modules["receipt_folds"]  # the receipts reference: the folds' steps, key rules and pfill's lane starts
 
+#: what the tests and the receipts reference's conformance check read
+__all__ = [
+    "BITS", "BU", "CTR_B", "CTR_KEY", "DOMS", "DOM_BU", "DUO", "E2M1", "KINDS", "LI", "M32", "R9", "RAM", "S8",
+    "TN", "W", "XIN13", "XOR", "absorb", "block", "bu_columns", "bu_products", "digest", "dom_of", "fold", "ho_ok",
+    "key_ok", "key_ok_r9", "keys", "packed_receipt", "packed_words", "popcount", "q_receipt", "q_words", "receipt",
+    "rotl", "rows", "tile_words", "u_of", "words",
+]
+
 #: a uint32 word, or an array of them
 U32 = np.ndarray | int
 W, TN = 8, 1024
