@@ -1,0 +1,145 @@
+the six maps of 58a6ce175e9c applied in memory, in stage order, to every blob of main 7d296de0f3e9 (sim.py)
+period_map: files changed 140, moved 11, words 1363, paths no file matches []
+period_map_2: files changed 28, moved 0, words 120, paths no file matches []
+period_net_map: files changed 116, moved 11, words 741, paths no file matches []
+period_proofs_map: files changed 77, moved 1, words 660, paths no file matches []
+period_proofs_map_2: files changed 3, moved 0, words 30, paths no file matches []
+period_soundness_map: files changed 9, moved 0, words 48, paths no file matches []
+
+stage 4 (period_proofs_map.toml): words
+    95  sessionTreeReason -> challengePhaseTreeReason
+    72  periodG -> monitoringPeriodG
+    51  keyedWindow -> keyedExecutionPhase
+    38  trustedSessionOf -> trustedChallengePhaseOf
+    37  sessionNamed -> challengePhaseNamed
+    36  sessionOf -> challengePhaseOf
+    35  PeriodGood -> MonitoringPeriodGood
+    34  pinnedSession -> pinnedChallengePhase
+    30  periodRun -> monitoringPeriodRun
+    30  Session -> ChallengePhase
+    28  windowIdx -> executionPhaseIdx
+    27  sessionsTreeReason -> challengePhasesTreeReason
+    24  PeriodPlays -> MonitoringPeriodPlays
+    16  windowTest -> executionPhaseTest
+    10  isSessionId -> isChallengePhaseId
+    10  creditedSession -> creditedChallengePhase
+     6  windowStreams -> executionPhaseStreams
+     6  Challenger.Session -> Challenger.ChallengePhase
+     6  auditedSession -> auditedChallengePhase
+     5  windowOf -> executionPhaseOf
+     5  window_opens -> run_opens
+     5  isWindow -> isRun
+     5  WindowSeedSalt -> RunSeedSalt
+     5  WindowPoolReset -> RunPoolReset
+     5  WindowPoolWeek -> RunPoolWeek
+     5  WindowPoolSpent -> RunPoolSpent
+     4  sessionNamed_sid -> challengePhaseNamed_sid
+     4  sessionHashed -> challengePhaseHashed
+     3  trustedSession_record -> trustedChallengePhase_record
+     3  isReservedSession -> isReservedChallengePhase
+     3  windowSalt -> runSalt
+     2  sessionOf_record -> challengePhaseOf_record
+     2  sessionOf_record_spec -> challengePhaseOf_record_spec
+     2  sessionNamed_record -> challengePhaseNamed_record
+     2  sessionHashed_length -> challengePhaseHashed_length
+     2  exfiltration_bound_windows -> exfiltration_bound_runs
+     2  isV1Window -> isV1Run
+     2  sessionPiece -> challengePhasePiece
+     2  sessionTreesPiece -> challengePhaseTreesPiece
+     1  Challenger/Session -> Challenger/ChallengePhase
+
+stage 4: files changed (lines)
+    2  security/Definitions/Pouw/Guarantees/Window.lean
+    2  security/Proofs/Flock/EndToEnd/Blocks.lean
+    5  security/Proofs/Flock/EndToEnd/Carry.lean
+    1  security/Proofs/Flock/EndToEnd/Carry/Statement.lean
+    1  security/Proofs/Flock/EndToEnd/Joint/Bound.lean
+    1  security/Proofs/Flock/EndToEnd/Joint/MT/Bound.lean
+    3  security/Proofs/Flock/EndToEnd/Joint/MT/Statement.lean
+    7  security/Proofs/Flock/EndToEnd/Joint/Prod.lean
+    3  security/Proofs/Flock/EndToEnd/Joint/Statement.lean
+    1  security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean
+    3  security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean
+    2  security/Proofs/Flock/EndToEnd/Period.lean
+   22  security/Proofs/Flock/EndToEnd/Period/Run.lean
+    3  security/Proofs/Flock/EndToEnd/Period/Statement.lean
+   34  security/Proofs/Flock/EndToEnd/Period/Union.lean
+    2  security/Proofs/Flock/Soundness/ASSUMPTIONS.md
+    4  security/Proofs/Flock/Soundness/Audit/README.md
+   88  security/Proofs/Flock/Soundness/KeyedDraw.lean
+    4  security/Proofs/NetworkCertifier/MonitoringPeriod.lean
+    1  security/Proofs/NetworkCertifier/README.md
+    3  security/Proofs/Pouw/Credit.lean
+   20  security/Proofs/Properties/Challenger/Coins.lean
+    6  security/Proofs/Properties/Challenger/Drawn.lean
+    6  security/Proofs/Properties/Challenger/Limits.lean
+   37  security/Proofs/Properties/Challenger/Session.lean
+   39  security/Proofs/Properties/Challenger/Window.lean
+    3  security/Proofs/Properties/Pouw/LiveSalt.lean
+   14  security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean
+    3  security/Proofs/Properties/Spot.lean
+    3  security/Proofs/Properties/Verity/Sampled.lean
+    4  security/Proofs/Properties/Verity/Sampled/Binding.lean
+    8  security/Proofs/Properties/Verity/Sampled/Counts.lean
+    4  security/Proofs/Properties/Verity/Sampled/CountsLayout.lean
+    3  security/Proofs/Properties/Verity/Sampled/Lines.lean
+   12  security/Proofs/Properties/Verity/Sampled/Link.lean
+    2  security/Proofs/Properties/Verity/Sampled/LinkPts.lean
+   11  security/Proofs/Properties/Verity/Sampled/LinkTrees.lean
+    1  security/Proofs/Properties/Verity/Sampled/Moves.lean
+    2  security/Proofs/Properties/Verity/Sampled/MovesLayout.lean
+   18  security/Proofs/Properties/Verity/Sampled/MovesReach.lean
+    4  security/Proofs/Properties/Verity/Sampled/RecordRounds.lean
+    5  security/Proofs/Properties/Verity/Sampled/RoundsRead.lean
+   11  security/Proofs/Properties/Verity/Sampled/SpecTie.lean
+   14  security/Proofs/Properties/Verity/Sampled/Trees.lean
+   15  security/Proofs/Properties/Verity/SampledRead.lean
+    2  security/Proofs/Spot/ExfiltrationBound.lean
+    6  security/Proofs/WeightSecurity/Deployed.lean
+    2  security/Proofs/WeightSecurity/FaultedTwo.lean
+    3  security/Proofs/WeightSecurity/Pressure.lean
+    3  security/Proofs/WeightSecurity/Reg.lean
+    2  security/Proofs/WeightSecurity/RegWitnesses.lean
+    9  security/Proofs/WeightSecurity/Stop.lean
+   12  security/Proofs/WeightSecurity/Two.lean
+    5  security/Proofs/WeightSecurity/TwoProd.lean
+    7  security/Proofs/WeightSecurity/TwoProdPeriod.lean
+    1  security/Proofs/WeightSecurity/TwoProdWitnesses.lean
+    3  security/Proofs/WeightSecurity/TwoReg.lean
+    2  security/Proofs/WeightSecurity/TwoRegWitnesses.lean
+    1  security/Proofs/lakefile.toml
+    1  security/Proofs/lean-audit.json
+    5  security/Properties/Pouw/LiveSalt.lean
+    7  security/Properties/Spot.lean
+    1  security/Properties/Verity/Game.lean
+    1  security/lean-audit.json
+    1  tests/lint/allowlists/repo_retired_terms.json
+   11  verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean
+    4  verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean
+    5  verity/protocols/pouw/verifier/lean/check/PouwCheck/Rounds.lean
+    3  verity/protocols/pouw/verifier/lean/check/README.md
+    3  verity/protocols/spot/verifier/lean/Spot/ChallengerCoins.lean
+    2  verity/protocols/spot/verifier/lean/Spot/ChallengerDraw.lean
+    1  verity/protocols/spot/verifier/lean/Spot/ChallengerInnerTrees.lean
+   34  verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean
+   18  verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean
+    3  verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean
+    2  verity/protocols/spot/verifier/lean/Spot/Pieces.lean
+    3  verity/protocols/spot/verifier/lean/Spot/Supplied.lean
+
+stage 4: every line of the two certifier files it changes
+  security/Proofs/NetworkCertifier/Period.lean:51
+    - set (`encard_periodSeqs_le`, over any sets of accepted sequences; `encard_monitoringPeriodGood_le` at `AccSeqsSampled`). A
+    + set (`encard_periodSeqs_le`, over any sets of accepted sequences; `encard_monitoringMonitoringPeriodGood_le` at `AccSeqsSampled`). A
+  security/Proofs/NetworkCertifier/Period.lean:142
+    - theorem encard_monitoringPeriodGood_le (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
+    + theorem encard_monitoringMonitoringPeriodGood_le (H : Msg → Msg) (D : Compiled Coin A) (L K S : ℕ)
+  security/Proofs/NetworkCertifier/Period.lean:183
+    - `sampledLeak_certifier` with the registered inputs pinned (`adviceIn_asReg`), and `encard_monitoringPeriodGood_le`. -/
+    + `sampledLeak_certifier` with the registered inputs pinned (`adviceIn_asReg`), and `encard_monitoringMonitoringPeriodGood_le`. -/
+  security/Proofs/NetworkCertifier/Period.lean:189
+    - encard_monitoringPeriodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
+    + encard_monitoringMonitoringPeriodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
+  security/Proofs/NetworkCertifier/README.md:125
+    - encard_monitoringPeriodGood_le, periodLeak; periodLeak_fixed at operators fixed before
+    + encard_monitoringMonitoringPeriodGood_le, periodLeak; periodLeak_fixed at operators fixed before

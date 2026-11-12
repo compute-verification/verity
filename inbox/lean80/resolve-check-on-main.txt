@@ -1,0 +1,31 @@
+resolve_check.py's `check` (main's copy) fed the in-memory trees: the six maps of 58a6ce175e9c applied in stage order to every blob of main 7d296de0f3e9 (rc.py).
+A first run of all six stages gave 0 issues at stages 2, 3, 5 and 6; this file is the rerun of stages 4 and 1.
+
+stage 4: 3638 of 5375 files compared; 10 issue(s)
+    security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean:572: sessionTreeReason -> sessionTreeReason in Verity.Sampled.MemberForm: want Spot.Challenger.challengePhaseTreeReason, got None (unchanged file)
+    security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean:642: sessionTreeReason -> sessionTreeReason in Verity.Sampled.MemberForm: want Spot.Challenger.challengePhaseTreeReason, got None (unchanged file)
+    security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean:654: sessionTreeReason -> sessionTreeReason in Verity.Sampled.MemberForm: want Spot.Challenger.challengePhaseTreeReason, got None (unchanged file)
+    security/Proofs/WeightSecurity/Reg.lean:74: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoProd.lean:167: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoProdPeriod.lean:228: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoProdPeriod.lean:243: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoProdPeriod.lean:259: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoProdPeriod.lean:274: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+    security/Proofs/WeightSecurity/TwoReg.lean:68: periodRun -> periodRun in WeightSecurity.SecurityProofs: want FlockSoundness.Game.monitoringPeriodRun, got None
+stage 1: 3574 of 5375 files compared; 16 issue(s)
+    security/Definitions/Accounting/Guarantees/RemoteSketch.lean:56: Session -> Run in Accounting.Guarantees.Remote: want Accounting.Remote.Sketch.Run, got Accounting.Run
+    security/Definitions/Accounting/Guarantees/RemoteSketch.lean:68: Session -> Run in Accounting.Guarantees.Remote: want Accounting.Remote.Sketch.Run, got Accounting.Run
+    security/Definitions/Accounting/Guarantees/RemoteSketchP2.lean:54: Session -> Run in Accounting.Guarantees.Remote: want Accounting.Remote.Sketch.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:118: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:124: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:139: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:145: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:194: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Binding.lean:233: Session -> Run in Accounting.SecurityProofs.Remote.Binding: want Accounting.Remote.Draw.Run, got Accounting.Remote.Draw.Run|Accounting.TS.Run
+    security/Proofs/Accounting/RemoteHeld/Draw.lean:879: Session -> Run in Accounting.SecurityProofs.Remote.Draw: want Accounting.Rate.Run|Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/Draw.lean:1191: Session -> Run in Accounting.SecurityProofs.Remote.Draw: want Accounting.Rate.Run|Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/Draw.lean:1245: Session -> Run in Accounting.SecurityProofs.Remote.Draw: want Accounting.Rate.Run|Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/Draw.lean:1255: Session -> Run in Accounting.SecurityProofs.Remote.Draw: want Accounting.Rate.Run|Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/DrawMeets.lean:104: Session -> Run in Accounting.SecurityProofs.Remote.DrawMeets: want Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/DrawMeets.lean:199: Session -> Run in Accounting.SecurityProofs.Remote.DrawMeets: want Accounting.Remote.Draw.Run, got Accounting.Run
+    security/Proofs/Accounting/RemoteHeld/DrawMeets.lean:320: Session -> Run in Accounting.SecurityProofs.Remote.DrawMeets: want Accounting.Remote.Draw.Run, got Accounting.Run

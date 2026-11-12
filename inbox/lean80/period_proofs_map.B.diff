@@ -1,0 +1,61 @@
+--- tools/move/period_proofs_map.toml
++++ tools/move/period_proofs_map.toml
+@@ -25,7 +25,6 @@
+ "sessionHashed_length" = "challengePhaseHashed_length"
+ "sessionNamed_record" = "challengePhaseNamed_record"
+ "isReservedSession" = "isReservedChallengePhase"
+-"sessionTreesPiece" = "challengePhaseTreesPiece"
+ "sessionNamed_sid" = "challengePhaseNamed_sid"
+ "sessionOf_record" = "challengePhaseOf_record"
+ "creditedSession" = "creditedChallengePhase"
+@@ -96,31 +95,6 @@
+ words = { "sessionNamed" = "challengePhaseNamed", "trustedSessionOf" = "trustedChallengePhaseOf" }
+ 
+ [[words_in]]
+-# `sessionTreeReason` and `sessionsTreeReason` begin Verity's `sessionTreeReason_link` and `sessionsTreeReason_one`, so
+-# they are renamed as whole words where they stand.
+-files = [
+-    "security/Proofs/Properties/Verity/Sampled.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Binding.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Counts.lean",
+-    "security/Proofs/Properties/Verity/Sampled/CountsLayout.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Lines.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Link.lean",
+-    "security/Proofs/Properties/Verity/Sampled/LinkPts.lean",
+-    "security/Proofs/Properties/Verity/Sampled/LinkTrees.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Moves.lean",
+-    "security/Proofs/Properties/Verity/Sampled/MovesLayout.lean",
+-    "security/Proofs/Properties/Verity/Sampled/MovesReach.lean",
+-    "security/Proofs/Properties/Verity/Sampled/RecordRounds.lean",
+-    "security/Proofs/Properties/Verity/Sampled/RoundsRead.lean",
+-    "security/Proofs/Properties/Verity/Sampled/SpecTie.lean",
+-    "security/Proofs/Properties/Verity/Sampled/Trees.lean",
+-    "verity/protocols/spot/verifier/lean/Spot/ChallengerInnerTrees.lean",
+-    "verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean",
+-    "verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean",
+-]
+-words = { "sessionTreeReason" = "challengePhaseTreeReason", "sessionsTreeReason" = "challengePhasesTreeReason" }
+-
+-[[words_in]]
+ # The challenger's proofs name the session's lemmas from inside `Properties.Challenger` by their short prefix
+ # (`Session.sessionOf_run`), which the dotted `Challenger.Session` above doesn't reach; `Spot.ChallengerSession` is
+ # another module and isn't a whole word. The namespace's own file (`Challenger/Session.lean`, `ChallengePhase.lean`
+@@ -155,8 +129,12 @@
+     "security/Proofs/Flock/EndToEnd/Period/Statement.lean",
+     "security/Proofs/Flock/EndToEnd/Period/Union.lean",
+     "security/Proofs/WeightSecurity/Deployed.lean",
++    "security/Proofs/WeightSecurity/Reg.lean",
+     "security/Proofs/WeightSecurity/Stop.lean",
+     "security/Proofs/WeightSecurity/Two.lean",
++    "security/Proofs/WeightSecurity/TwoProd.lean",
++    "security/Proofs/WeightSecurity/TwoProdPeriod.lean",
++    "security/Proofs/WeightSecurity/TwoReg.lean",
+ ]
+ words = { "periodRun" = "monitoringPeriodRun" }
+ 
+@@ -181,4 +159,4 @@
+             '"(?:window|windows|session|sessions|period|periods)"']
+ # The new names that hold their old word after a lowercase letter, where it would match again: kept, so that running
+ # the map again on its move changes nothing (`stage.py`'s rerun).
+-strings = ["MonitoringPeriodPlays", "MonitoringPeriodGood"]
++strings = ["MonitoringPeriodPlays", "MonitoringPeriodGood", "monitoringPeriodGood"]

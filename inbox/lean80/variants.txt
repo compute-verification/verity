@@ -1,0 +1,6 @@
+variant A: files changed 76, moved 1, words 668; resolve check: 3571 of 5375 compared, 0 issue(s)
+   doubled word in the result: 0; periodRun renamed 37; sessionTreeReason renamed 101; PeriodGood renamed 30
+   Order.lean changed: True; Pous/Idle changed: []
+variant B: files changed 58, moved 1, words 538; resolve check: 3571 of 5375 compared, 0 issue(s)
+   doubled word in the result: 0; periodRun renamed 37; sessionTreeReason renamed 0; PeriodGood renamed 30
+   Order.lean changed: False; Pous/Idle changed: []

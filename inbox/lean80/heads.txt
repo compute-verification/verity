@@ -1,0 +1,40 @@
+8915 3b8adbc4d315 mb 0188ed442e8d new-layout files 11 guessed-paths 4 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9075 cbe0bcdd160d mb 3d8530f5268a new-layout files 49 guessed-paths 3 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9080 a5eb973283ee mb 3d8530f5268a new-layout files 25 guessed-paths 3 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9081 d4d1481014f5 mb 3d8530f5268a new-layout files 7 guessed-paths 5 | added uses - | rewritten lines the move also rewrites - | outside-row 3
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 8, 'trustedSessionOf', "* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedSessionOf`), the bytes the later")
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 80, 'trustedSessionOf', 'opens on `window` (`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads it). -/')
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 82, 'trustedSessionOf', 'let (_, roots) ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])')
+9091 675dea740d6a mb c330688b9582 new-layout files 59 guessed-paths 9 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9108 16757e170166 mb 33faab2be81c new-layout files 304 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9116 d7ac2f984a43 mb 3d8530f5268a new-layout files 11 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9149 1f136cf79060 mb 3498d4ad6546 new-layout files 22 guessed-paths 12 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9173 77079df43db5 mb 3d8530f5268a new-layout files 11 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9176 99f2f3ba2cf1 mb 3d8530f5268a new-layout files 16 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9190 f6d1341b8529 mb 62bf29346f76 new-layout files 11 guessed-paths 5 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9199 7a528d6b1c01 mb 33866d93e66e new-layout files 23 guessed-paths 7 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9208 34148509870b mb 58a598e615b1 new-layout files 10 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9209 4c8742d0d449 mb 71a2afe671aa new-layout files 1 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9212 80c00895e20d mb 3d8530f5268a new-layout files 19 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9215 8241b2326eac mb 3d8530f5268a new-layout files 7 guessed-paths 3 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9220 a5858d735fc3 mb 19fb19a21e40 new-layout files 3 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9229 9e075516baff mb 3d8530f5268a new-layout files 18 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9230 649165225a67 mb 33866d93e66e new-layout files 25 guessed-paths 9 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9234 95fe2956f926 mb 33866d93e66e new-layout files 19 guessed-paths 6 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9237 9d4aec0111fb mb 33866d93e66e new-layout files 51 guessed-paths 12 | added uses {'other': (3, 4)} | rewritten lines the move also rewrites {'other': (2, 2)} | outside-row 7
+      outside-row: ('security/Proofs/Properties/Challenger/Drawn.lean', 39, 'trustedSessionOf', '(ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key')
+      outside-row: ('security/Proofs/Properties/Challenger/Drawn.lean', 63, 'trustedSessionOf', '(ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key')
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 8, 'trustedSessionOf', "* `order`: in the one session the auditor's ledger opens on the window (`Challenger.trustedSessionOf`), the bytes the later")
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 85, 'trustedSessionOf', 'form: `receivedOf` reads a log only once `Challenger.trustedSessionOf` holds it. -/')
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 103, 'trustedSessionOf', '(`Challenger.trustedSessionOf`, as `Challenger.coinsReason` reads them). -/')
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 106, 'trustedSessionOf', 'let _ ← Challenger.trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)])')
+      outside-row: ('verity/protocols/spot/verifier/lean/Spot/RecordAcross.lean', 297, 'trustedSessionOf', "-- `rootLines` holds a line to no more than that: the log's form is `Challenger.trustedSessionOf`'s to check, before it")
+9249 e28f52c10a7d mb 33faab2be81c new-layout files 8 guessed-paths 1 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9253 cf5587e21642 mb 62bf29346f76 new-layout files 13 guessed-paths 6 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9256 f48f4fde96a4 mb bcaf58a45d53 new-layout files 13 guessed-paths 1 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9265 035ad78452b2 mb 33faab2be81c new-layout files 21 guessed-paths 11 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9270 a064cf7c46e4 mb 33faab2be81c new-layout files 8 guessed-paths 1 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9286 f7902b5a9958 mb c330688b9582 new-layout files 6 guessed-paths 1 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9312 b034e9d200b5 mb 1cfd02137251 new-layout files 7 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+9313 9c1d260d0f87 mb 1cfd02137251 new-layout files 15 guessed-paths 0 | added uses - | rewritten lines the move also rewrites - | outside-row 0
+wired 9713e4691e32 mb 57d5b5bb7717 new-layout files 19 guessed-paths 8 | added uses - | rewritten lines the move also rewrites - | outside-row 0

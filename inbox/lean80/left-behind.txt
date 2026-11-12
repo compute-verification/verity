@@ -1,0 +1,123 @@
+every Lean declaration of main 7d296de0f3e9 (resolve_check.py's Scan), paired in file order with its name after stage 4 and after all six stages (q1.py)
+
+== declarations stage 4 renames for the three rows asked about
+   security/Proofs/Flock/EndToEnd/Period/Run.lean | FlockSoundness.Game.periodG -> monitoringPeriodG
+   security/Proofs/Flock/EndToEnd/Period/Run.lean | FlockSoundness.Game.periodRun -> monitoringPeriodRun
+   security/Proofs/Flock/EndToEnd/Period/Run.lean | FlockSoundness.Game.PeriodGood -> MonitoringPeriodGood
+   security/Proofs/Flock/EndToEnd/Period/Run.lean | FlockSoundness.Game.PeriodPlays -> MonitoringPeriodPlays
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.windowStreams -> executionPhaseStreams
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.windowIdx -> executionPhaseIdx
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.windowOf -> executionPhaseOf
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.windowTest -> executionPhaseTest
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindow -> keyedExecutionPhase
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindow_escape_le -> keyedExecutionPhase_escape_le
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.windowIdx_inj -> executionPhaseIdx_inj
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindow_escape_le_of_names -> keyedExecutionPhase_escape_le_of_names
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindow_audit_of_record -> keyedExecutionPhase_audit_of_record
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindow_extraction_audit_of_record -> keyedExecutionPhase_extraction_audit_of_record
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindowReg_extraction_audit_of_record -> keyedExecutionPhaseReg_extraction_audit_of_record
+   security/Proofs/Flock/Soundness/KeyedDraw.lean | FlockSoundness.Audit.Law.keyedWindowReg_audit_of_record -> keyedExecutionPhaseReg_audit_of_record
+   verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean | Spot.Challenger.sessionTreeReason -> challengePhaseTreeReason
+   verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean | Spot.Challenger.sessionsTreeReason -> challengePhasesTreeReason
+   verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean | Spot.Challenger.sessionTreesPiece -> challengePhaseTreesPiece
+
+== namespace FlockSoundness.Game: names that still hold period after all six stages: 15
+   security/Proofs/Flock/EndToEnd/Carry.lean | FlockSoundness.Game.periodGood_true 
+   security/Proofs/Flock/EndToEnd/Joint/Prod.lean | FlockSoundness.Game.period_prod 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodGood_mono 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodGood_of_plays 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_nonneg 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_mono 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_const_le 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_zero 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_add 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_mul 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodE_sum 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.period_unionE 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.period_union 
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.period_horizon 
+
+== other declarations under security/Proofs/Flock/EndToEnd/ that still hold Period or period: 16
+   security/Proofs/Flock/EndToEnd/Carry.lean | Flock.Guarantees.CarriedBlocks.periodE_errX_le 
+   security/Proofs/Flock/EndToEnd/Carry.lean | Flock.Guarantees.CarriedBlocks.sum_periodE_le 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean | Flock.Guarantees.JointPeriodV5.harm_le_maxHarm 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean | Flock.Guarantees.JointPeriodV5.within_of_le 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean | Flock.Guarantees.JointPeriodV5.game 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean | Flock.Guarantees.JointPeriodV5.run 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean | Flock.Guarantees.JointPeriodV5.Plays 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean | Flock.Guarantees.JointPeriodV5.maxHarm 
+   security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean | Flock.Guarantees.JointPeriodV5.Within 
+   security/Proofs/Flock/EndToEnd/Period.lean | Flock.SecurityProofs.IntegrityPeriod 
+   security/Proofs/Flock/EndToEnd/Period.lean | Flock.SecurityProofs.IntegrityPeriodLog 
+   security/Proofs/Flock/EndToEnd/Period/Statement.lean | Flock.Guarantees.Period.game 
+   security/Proofs/Flock/EndToEnd/Period/Statement.lean | Flock.Guarantees.Period.run 
+   security/Proofs/Flock/EndToEnd/Period/Statement.lean | Flock.Guarantees.Period.Plays 
+   security/Proofs/Flock/EndToEnd/Period/Statement.lean | Flock.Guarantees.IntegrityPeriod 
+   security/Proofs/Flock/EndToEnd/Period/Statement.lean | Flock.Guarantees.IntegrityPeriodLog 
+
+== security/Proofs/WeightSecurity/: names that still hold Period or period: 28
+   security/Proofs/WeightSecurity/Reg.lean | WeightSecurity.SecurityProofs.PeriodReg 
+   security/Proofs/WeightSecurity/Reg.lean | WeightSecurity.SecurityProofs.CompilerPeriodReg 
+   security/Proofs/WeightSecurity/RegPeriod.lean | WeightSecurity.SecurityProofs.periodReg_of 
+   security/Proofs/WeightSecurity/RegPeriod.lean | WeightSecurity.SecurityProofs.compilerPeriodReg_of 
+   security/Proofs/WeightSecurity/RegPeriod.lean | WeightSecurity.SecurityProofs.compilerPeriodReg 
+   security/Proofs/WeightSecurity/RegWitnesses.lean | WeightSecurity.SecurityProofs.periodReg_honest 
+   security/Proofs/WeightSecurity/RegWitnesses.lean | WeightSecurity.SecurityProofs.periodReg_nontrivial 
+   security/Proofs/WeightSecurity/Stop.lean | WeightSecurity.SecurityProofs.period_lead 
+   security/Proofs/WeightSecurity/Stop.lean | WeightSecurity.SecurityProofs.period_undetected 
+   security/Proofs/WeightSecurity/TwoProd.lean | WeightSecurity.SecurityProofs.PeriodTwoProd 
+   security/Proofs/WeightSecurity/TwoProd.lean | WeightSecurity.SecurityProofs.PeriodTwoLead 
+   security/Proofs/WeightSecurity/TwoProd.lean | WeightSecurity.SecurityProofs.CompilerPeriodTwoProd 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.periodTwoProd_of 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.period_leadEscape 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.periodTwoLead_of 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.compilerPeriodTwoProd 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.periodTwoProd_regVal 
+   security/Proofs/WeightSecurity/TwoProdPeriod.lean | WeightSecurity.SecurityProofs.periodTwoLead_regVal 
+   security/Proofs/WeightSecurity/TwoProdWitnesses.lean | WeightSecurity.SecurityProofs.periodTwoProd_honest 
+   security/Proofs/WeightSecurity/TwoProdWitnesses.lean | WeightSecurity.SecurityProofs.periodTwoLead_nontrivial 
+   security/Proofs/WeightSecurity/TwoProdWitnesses.lean | WeightSecurity.SecurityProofs.periodTwoProd_nontrivial 
+   security/Proofs/WeightSecurity/TwoReg.lean | WeightSecurity.SecurityProofs.PeriodTwoReg 
+   security/Proofs/WeightSecurity/TwoReg.lean | WeightSecurity.SecurityProofs.CompilerPeriodTwoReg 
+   security/Proofs/WeightSecurity/TwoRegPeriod.lean | WeightSecurity.SecurityProofs.periodTwoReg_of 
+   security/Proofs/WeightSecurity/TwoRegPeriod.lean | WeightSecurity.SecurityProofs.compilerPeriodTwoReg_of 
+   security/Proofs/WeightSecurity/TwoRegPeriod.lean | WeightSecurity.SecurityProofs.compilerPeriodTwoReg 
+   security/Proofs/WeightSecurity/TwoRegWitnesses.lean | WeightSecurity.SecurityProofs.periodTwoReg_honest 
+   security/Proofs/WeightSecurity/TwoRegWitnesses.lean | WeightSecurity.SecurityProofs.periodTwoReg_nontrivial 
+
+== namespaces FlockSoundness.Audit.* and FlockSoundness.PlanDraw: names that still hold window: 15
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.Law.windowK 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.Law.windowK_le 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.Law.covers_window 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.Law.closure_escape_le_window 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.Law.closure_escape_le_window_slack 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window_of_le 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.extraction_audit_window 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window_of_record 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window_split_of_record 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window_of_le_slack 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.extraction_audit_window_of_le_slack 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.extraction_audit_window_split_of_record_of_le_slack 
+   security/Proofs/Flock/Soundness/Audit/Window.lean | FlockSoundness.Audit.audit_window_split_of_record_of_le_slack 
+   security/Proofs/Flock/Soundness/PlanDraw.lean | FlockSoundness.PlanDraw.window 
+
+== anywhere: a name that still holds one of the renamed names after all six stages
+   security/Definitions/Accounting/ComposeMonitoringPeriod.lean | Accounting.Compose.PeriodRun
+   security/Definitions/Accounting/JointPeriod.lean | Accounting.PeriodRun
+   security/Proofs/Flock/EndToEnd/Carry.lean | FlockSoundness.Game.periodGood_true
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodGood_mono
+   security/Proofs/Flock/EndToEnd/Period/Union.lean | FlockSoundness.Game.periodGood_of_plays
+   security/Proofs/Pous/PeriodDeployed.lean | Pous.Period.SecurityProofs.held_periodRun
+   security/Proofs/Properties/Verity/Sampled/Link.lean | Verity.Sampled.sessionsTreeReason_one
+   security/Proofs/Properties/Verity/Sampled/Link.lean | Verity.Sampled.sessionTreeReason_link
+   security/Properties/Attest.lean | MemoryChallenger.Attest.Properties.PeriodRun
+   security/Properties/Pous/PeriodDeployed.lean | Pous.Period.periodRun
+   security/Properties/Verity/Idle.lean | Verity.Idle.periodRun
+   security/Properties/Verity/Idle.lean | Verity.Idle.periodRun_pouw_fails
+   verity/protocols/pouw/verifier/lean/check/PouwCheck/CreditDifftest.lean | PouwCheck.CreditDifftest.windowOf
+   verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean | PouwCheck.windowOf
+
+== anywhere: a doubled word in a declaration's name after all six stages
+   security/Proofs/NetworkCertifier/Period.lean | NetTiming.encard_periodGood_le => NetTiming.encard_monitoringMonitoringPeriodGood_le
