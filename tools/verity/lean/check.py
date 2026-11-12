@@ -106,6 +106,12 @@ SETUP = threading.Lock()
 _INSTALLED: set[str] = set()
 #: the build sandbox (`sandbox.sh`): new user, mount, network and PID namespaces
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+#: where a sandboxed build reads its tree (`sandbox.sh --at`, `fixed`). Lean writes a source's absolute path into the
+#: module's `.olean.server` with each message its compile logged, and its `.olean.private` points past that string, so
+#: only a build that reads every tree at one path gives one source one set of bytes, in every tree and on every node
+FIXED = Path("/var/tmp/verity")
+#: `--tree`: the tree the audited packages are in, which a build binds at `FIXED` (default: this file's checkout)
+TREE = ROOT
 #: the controls' own packages; `--all` does not audit them as the repository's
 FIXTURES = HERE / "tests" / "fixtures"
 #: each package of the controls with the violations its copies add: `modules` is written in Lean's module system, where
@@ -4566,10 +4572,12 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     while this runs. In the sandbox each of the build's `.lake` directories (`writable`) gets an overlay whose upper layer
     is under ``work``/`sampled` (`in_overlay`); there the sampled modules' outputs and Lake's files beside them
     (`SAMPLED_BESIDE`) are removed, and `lake build +M...` compiles them (``jobs``: the build's `env` prefix, without the
-    staged cache, so Lake restores nothing), into the upper layer at the build's own path. Every output (`SAMPLED_OUTPUTS`)
+    staged cache, so Lake restores nothing), into the upper layer at the build's own path, read at `FIXED` as the build
+    read it (`bound`). Every output (`SAMPLED_OUTPUTS`)
     must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
-    Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
+    Lean keeps a message's file in `olean.server`, so a build at another path, one from before builds were bound at
+    `FIXED` or one of a package outside `TREE`, differs there. A failure names the module
     and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
     a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
     in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
@@ -4620,10 +4628,11 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
         return [Failure("sampled", None, f"sampled: {out[0]} resolves outside the .lake directories the recompile "
                                          f"overlays ({', '.join(map(str, lakes))}), so it can't be recompiled")], rep
     top.mkdir(parents=True)
-    (listing := top / "remove.txt").write_text("".join(f"{f.resolve()}\n" for f in gone))
+    at = bound([pkg / ".lake", *lakes])
+    (listing := top / "remove.txt").write_text("".join(f"{fixed(f) if at else f.resolve()}\n" for f in gone))
     log(f"sampled: {pkg}: recompiling {len(sample)} of the {len(pop)} modules this build didn't compile")
     rc, text = run(in_overlay(layers, ["bash", "-c", 'while IFS= read -r f; do rm -f -- "$f" || exit; done < "$0"; exec "$@"',
-                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)]),
+                                       str(listing), *jobs, "lake", "build", *(f"+{m}" for m in sample)], at),
                    pkg, work / "sampled.log")
     for t in layers.values():
         _remove_tree(t / "work")
@@ -4680,19 +4689,37 @@ def _remove_tree(d: Path) -> None:
     shutil.rmtree(d, ignore_errors=True)
 
 
-def in_overlay(layers: dict[Path, Path], argv: list[str]) -> list[str]:
+def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:
+    """`sandbox.sh`'s `--at` for a build that writes the `.lake` directories ``lakes``: ``tree`` (default `TREE`) at
+    `FIXED`, when each of them is in it. A package outside it (a control's fixture, one given by a path of its own) gets
+    none and compiles at its own path: its place under `FIXED` would be no function of the tree."""
+    tree = (tree or TREE).resolve()
+    return ["--at", str(FIXED), str(tree)] if all(d.resolve().is_relative_to(tree) for d in lakes) else []
+
+
+def fixed(path: Path, tree: Path | None = None) -> Path:
+    """``path``, in ``tree`` (default `TREE`), as a build bound at `FIXED` names it: its directory resolved, as the tree
+    is, and its own name kept (a package's `.lake/packages` may be a link out of the tree)."""
+    return FIXED / (path.parent.resolve() / path.name).relative_to((tree or TREE).resolve())
+
+
+def in_overlay(layers: dict[Path, Path], argv: list[str], at: Iterable[str] = ()) -> list[str]:
     """``argv`` in the build sandbox with an overlay over each directory of ``layers`` ({directory: its layers'
     directory}, `sandbox.sh`'s `--overlay`): it reads each directory as it is and writes only into its layers, so the
-    directory itself, which other processes read meanwhile, never changes."""
+    directory itself, which other processes read meanwhile, never changes. ``at``: `bound`'s words, with which ``argv``
+    reads the tree, overlays included, at `FIXED`."""
     return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"),
-            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), "--", *argv]
+            *(a for d, t in sorted(layers.items()) for a in ("--overlay", str(d), str(t))), *at, "--", *argv]
 
 
-def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
+def in_sandbox(pkg: Path, argv: list[str], compiles: bool = False) -> list[str]:
     """``argv`` inside the build sandbox, writable only in the package's `writable` directories, and `ARTIFACTS` readable
-    (``argv`` as is where there is no sandbox)."""
+    (``argv`` as is where there is no sandbox). A build (``compiles``) reads the tree at `FIXED` (`bound`); a step that
+    compiles nothing stays at the package's own path, where its caller opens the files its output names."""
     ro = ["--ro", str(ARTIFACTS)] if ARTIFACTS else []
-    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *map(str, writable(pkg)), "--", *argv] if sandboxed() else argv
+    lakes = writable(pkg)
+    at = bound(lakes) if compiles else []
+    return [*UNSHARE, "--", "bash", str(TOOL / "sandbox.sh"), *ro, *at, *map(str, lakes), "--", *argv] if sandboxed() else argv
 
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
@@ -5583,7 +5610,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     pipe = None
     if build:
         rep["sandbox"] = sandboxed()
-        (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
+        rep["bound"] = [str(FIXED), str(TREE.resolve())] if rep["sandbox"] and bound(writable(pkg)) else None
+        (work / BUILDING).write_text(json.dumps({k: rep[k] for k in ("package", "sandbox", "bound")}))
         n = build_threads(pkg)
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
@@ -5602,10 +5630,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
             for step, argv in (("setup", None), ("stage", None),
-                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts])
+                               ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts], True)
                                                           if (ts := plugin_targets(pkg)) else [])),
-                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"])),
-                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
+                               ("build", in_sandbox(pkg, [*jobs, "lake", "build"], True)),
+                               ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])],
+                                                          True))):
                 if step == "stage":
                     if cache:
                         # it takes traces from this build and from those of the path dependencies this run doesn't audit
@@ -6125,7 +6154,7 @@ def tampered(seals: dict[str, str], watch: list[Path]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    global TOOL, ARTIFACTS, DEV_CACHE
+    global TOOL, ARTIFACTS, DEV_CACHE, TREE
     ap = argparse.ArgumentParser(prog="check.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("package", nargs="*", type=Path, help="a Lake package directory with a lean-audit.json")
     ap.add_argument("--all", action="store_true", help="the controls, then every package under --root")
@@ -6174,6 +6203,9 @@ def main(argv: list[str]) -> int:
                     "suite runs them, when the auditor changes)")
     ap.add_argument("--repo", type=Path, default=ROOT, help="the checkout a test's `generate` reads as {repo} (default: the "
                     "one this file is in)")
+    ap.add_argument("--tree", type=Path, default=ROOT, help="the tree the packages are in (default: the checkout this file "
+                    f"is in): a sandboxed build of a package in it reads it at {FIXED}, so its bytes don't depend on where "
+                    "the tree is; a package outside it is built at its own path")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
                     "recorded run, else a temporary directory)")
     ap.add_argument("--facts", choices=("all", "named", "none"), default="all", help="the facts documents kept beside the "
@@ -6226,6 +6258,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    TREE = a.tree
     DEV_CACHE = a.dev_cache
     lifts = None
     if a.lift:

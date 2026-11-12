@@ -99,7 +99,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
   the `.olean` files of a package audited earlier while the audit runs: the Lean files run from a copy taken before the
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
-Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
+Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
+the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
+after taking
 one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
 `MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`

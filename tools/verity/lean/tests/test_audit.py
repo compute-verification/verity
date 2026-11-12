@@ -5972,7 +5972,7 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     assert rep["staged"].startswith("not used: this node builds without the sandbox") and "stage" not in rep["seconds"]
     seen.clear()
     monkeypatch.setattr(A, "sandboxed", lambda: True)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
     rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
     assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
                     (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
@@ -6010,7 +6010,7 @@ def test_an_audit_has_its_build_settle_only_the_path_dependencies_its_run_does_n
         return {}, {"modules": 0, "keyed": 0, "missed": {}, "first": {}, "took": {}, "left": 0}
 
     monkeypatch.setattr(A, "sandboxed", lambda: True)
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, "fake build"))
     monkeypatch.setattr(A, "ARTIFACTS", tmp_path / "store")
@@ -6034,11 +6034,17 @@ def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_t
     seen = []
     monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
     monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: seen.append(json.loads(began.read_text())) or (1, ""))
-    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv, compiles=False: argv)
     for sandbox in (True, False):
         monkeypatch.setattr(A, "sandboxed", lambda: sandbox)
         assert A.audit(pkg, out, build=True, runs=False)["sandbox"] is sandbox
-        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox}
+        assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": None}, "a package outside the tree isn't bound"
+    with monkeypatch.context() as m:
+        m.setattr(A, "TREE", tmp_path)
+        for sandbox, bound in ((True, [str(A.FIXED), str(tmp_path.resolve())]), (False, None)):
+            m.setattr(A, "sandboxed", lambda: sandbox)
+            assert A.audit(pkg, out, build=True, runs=False)["bound"] == bound
+            assert seen[-1] == {"package": str(pkg), "sandbox": sandbox, "bound": bound}
     (pkg / A.POLICY).write_text("{")
     assert A.audit(pkg, out, build=True, runs=False)["failures"] and began.exists(), "a package it never opened keeps its own"
     (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
@@ -6165,6 +6171,76 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
 def files_of(build: Path) -> dict[Path, tuple[int, int, bytes]]:
     """Each file under ``build``, by its inode, its modification time and its bytes: equal only if nothing wrote it."""
     return {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes()) for p in build.rglob("*") if p.is_file()}
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_bound_build_gives_a_module_the_same_bytes_wherever_its_tree_is(tmp_path, monkeypatch):
+    """`P.M` logs a warning, and Lean keeps the message's source path in the module's `olean.server`: two trees built at
+    their own paths differ there. Built as an audit's build steps are, each tree bound at `FIXED`, they give every part
+    the same bytes. The artifact cache indexes such a build, told where it read its tree (the report's `bound`); a third
+    tree restores it; and the sampled recompile there, bound the same way, finds both modules equal byte for byte,
+    where a build at the tree's own path is equal only as an object graph."""
+    if not A.sandboxed():
+        pytest.skip("no sandbox here, so no build is bound")
+    spec = importlib.util.spec_from_file_location("lean_audit_for_bound", HERE.parent / "lean_audit.py")
+    LA = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(LA)
+    mk = A.sibling("module_keys")
+    lean = {"P/M.lean": "module\n\n@[expose] public section\n\ndef P.v : Nat := 1\n\ndef P.unused (m : Nat) (k : Nat) : Nat := k\n",
+            "P.lean": "module\n\npublic import P.M\n"}
+
+    def tree(at: Path) -> Path:
+        for rel, text in lean.items():
+            (at / rel).parent.mkdir(parents=True, exist_ok=True)
+            (at / rel).write_text(text)
+        (at / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+        shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", at)
+        return at
+
+    def build(at: Path, bound: bool, *pre: str) -> str:
+        monkeypatch.setattr(A, "TREE", at)
+        argv = A.in_sandbox(at, ["env", *pre, "lake", "build"], True) if bound else ["env", *pre, "lake", "build"]
+        assert ("--at" in argv) is bound
+        r = subprocess.run(argv, cwd=at, capture_output=True, text=True, env=A.lake_env())
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout + r.stderr
+
+    def parts(at: Path) -> dict[str, bytes]:
+        return {x: (at / ".lake" / "build" / "lib" / "lean" / "P" / f"M.{x}").read_bytes()
+                for x in ("olean", "olean.server", "olean.private")}
+
+    short, long = tree(tmp_path / "a"), tree(tmp_path / "a-tree-whose-path-is-longer" / "b")
+    for t in (short, long):
+        build(t, False)
+    x, y = parts(short), parts(long)
+    assert str(short.resolve()).encode() in x["olean.server"] and x["olean.server"] != y["olean.server"]
+    for t in (short, long):
+        shutil.rmtree(t / ".lake" / "build")
+        assert "Built P.M" in build(t, True)
+    x, y = parts(short), parts(long)
+    assert x == y
+    assert f"{A.FIXED}/P/M.lean".encode() in x["olean.server"] and str(tmp_path.resolve()).encode() not in x["olean.server"]
+
+    store, said = tmp_path / "artifacts", []
+    assert LA.LakeArtifacts(store).put({long: {"sandbox": True, "bound": [str(A.FIXED), str(long.resolve())]}},
+                                       log=said.append) == 2, said
+    third = tree(tmp_path / "elsewhere" / "c")
+    shutil.copy(long / "lake-manifest.json", third)
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    monkeypatch.setattr(A, "TREE", third)
+    cache = store / mk.STAGE / "test"
+    _, staged = A.stage_build(mk, third, ["P"], cache)
+    assert staged["modules"] == 2 and not staged["missed"], staged
+    assert "Built" not in build(third, True, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}")
+    assert parts(third) == x
+    before = files_of(third / ".lake" / "build")
+    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w1", set(), [], log=lambda s: None)
+    assert fails == [] and rep["modules"] == ["P", "P.M"] and rep["by_graph"] == [], rep
+    assert files_of(third / ".lake" / "build") == before, "the build is never written"
+
+    monkeypatch.setattr(A, "TREE", tmp_path / "another-tree")
+    fails, rep = A.sampled_recompile(third, ["P"], tmp_path / "w2", set(), [], log=lambda s: None)
+    assert fails == [] and rep["by_graph"] == ["P.M"], "outside the tree it is compiled at its own path, as before"
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

@@ -1531,6 +1531,10 @@ def test_try_names_the_records_run_when_lake_wanted_to_write_in_the_read_only_de
         "the dependencies of a package it requires by path are mounted read-only too"
     for other in (text.replace("/packages/", "/build/"), text.replace(str(tree.resolve()), "/elsewhere"), text.splitlines()[0]):
         assert LC.refused_write(other, "Sec/Proofs", slot) is None
+    bound = text.replace(str(tree.resolve()), str(LC.AUDIT.FIXED))
+    assert LC.refused_write(bound, "Sec/Proofs", slot) == f"{slot}/Sec/.lake/packages/dep/.lake", \
+        "a build reads the tree at the fixed path and Lake names the file there: it is said as the tree's"
+    assert LC.refused_write(bound.replace("/packages/", "/build/"), "Sec/Proofs", slot) is None
     monkeypatch.setattr(LC, "build", lambda *a, **k: (1, text.replace("/packages/", "/build/")))
     said.clear()
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
@@ -1721,6 +1725,36 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dependencies_read_only_there_too(
+        tmp_path, monkeypatch):
+    """A build reads its tree at check.py's `FIXED` (`sandbox.sh --at`), so what it compiles doesn't depend on where the
+    slot tree is. The tree's `.lake` directories are writable under both paths, so the fetched dependencies are mounted
+    read-only under both; a `packages` that is a link out of the tree (the node's kept dependencies) keeps its name."""
+    real = tmp_path / "cache-root" / "build-2"
+    (real / "Sec" / ".lake").mkdir(parents=True)
+    (real / "Dep" / ".lake" / "packages").mkdir(parents=True)
+    (tmp_path / "kept").mkdir()
+    (real / "Sec" / ".lake" / "packages").symlink_to(tmp_path / "kept")
+    link = tmp_path / "build-2"
+    link.symlink_to(real)
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
+    fixed = LC.AUDIT.FIXED
+    assert LC.bound("Sec", link) == ["--at", str(fixed), str(real)]
+    argv = LC.in_sandbox("Sec", link, ["lake", "build"], True)
+    box = argv.index(str(LC.SANDBOX))
+    assert argv[box + 1:argv.index("--", box)] == ["--at", str(fixed), str(real), str(real / "Sec" / ".lake"),
+                                                   str(real / "Dep" / ".lake")]
+    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [
+        str(real / "Sec" / ".lake" / "packages"), str(real / "Dep" / ".lake" / "packages"),
+        str(fixed / "Sec" / ".lake" / "packages"), str(fixed / "Dep" / ".lake" / "packages")]
+    assert LC.built_report("Sec", link, "✔ [3/4] Built Sec.A (1.2s)\n") == {
+        "sandbox": True, "bound": [str(fixed), str(real)], "compiled": ["Sec.A"]}
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "../elsewhere"])
+    (tmp_path / "cache-root" / "elsewhere").mkdir()
+    assert LC.bound("Sec", link) == [] and "--at" not in LC.in_sandbox("Sec", link, ["lake", "build"], True), \
+        "a package required from outside the tree has no place under the fixed path"
 
 
 def read_only(tmp: Path, dirs: list[Path], cmd: list[str], monkeypatch) -> tuple[int, list[str]]:
