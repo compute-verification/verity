@@ -661,6 +661,7 @@
     {"file": "verity_vllm/pipeline/kchunk_rows.py", "kind": "I001", "symbol": "read", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/launch_context.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/layout.py", "kind": "UP034", "symbol": "component_dirs", "detail": "Avoid extraneous parentheses"},
+    {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 16},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "T201", "symbol": "incomplete_rc", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/pipeline/manifest_verify.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},

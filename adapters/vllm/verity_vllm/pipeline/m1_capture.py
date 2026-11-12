@@ -34,12 +34,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
 
 if TYPE_CHECKING:
-    from verity_vllm.acquire.plan import AcquisitionPlan
-    from verity_vllm.observe.events import RunHeader
     from verity_vllm.protocols import Composition
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
@@ -59,8 +56,6 @@ from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
 __all__ = ["Options", "dump_cos_sin", "main"]
-
-logger = init_logger(__name__)
 
 
 def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
@@ -185,96 +180,6 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Compositi
     return protocols, list(protocols.entries) if protocols is not None else []
 
 
-def request_rows(wl: dict, tokens: dict, per_req: dict | None, lag: int | None) -> list[dict]:
-    """A row of tokens.json for each request of the workload, said as it is made: the tokens served beside the accepted record's, the
-    realized schedule (`per_req`, the run's timing by request: None where the timing has none, and a request it has no record of has
-    no realized step and did not stop early), and the two lengths, kept distinct.  served_output_len = the tokens served (generated_token_ids, the answer up
-    to and including the EOS or the limit); executed_prefix_len = served + LAG on an EOS stop before the limit (the post-EOS row is
-    active internal computation whose sampled token is NOT served), None on such a stop under an unattested lag.  Both are a function
-    of the served tokens + the recorded fact, never of the trace; GM-01 G6 verifies them against the rows the record actually holds."""
-    rows = []
-    for r in wl["requests"]:
-        rid = r["request_id"]
-        acc = wl["accepted"].get(rid)
-        gen = tokens.get(rid, [])
-        eq = (acc is not None and gen == acc[: len(gen)] and len(gen) == len(acc)) if acc is not None else None
-        timed = None if per_req is None else per_req.get(rid)
-        steps_r: dict = {} if timed is None else timed
-        served = len(gen)
-        limit = int(r["max_tokens"])
-        eos_stop = (str(steps_r.get("finish_reason")) == "stop") and served < limit
-        executed = served if not eos_stop else (None if lag is None else served + lag)
-        rows.append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
-                     "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
-                     # realized lengths and schedule (D87): every run artifact records them
-                     "prompt_len": len(r["prompt_token_ids"]), "n_generated": len(gen),
-                     "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
-                     "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
-                     "finish_reason": steps_r.get("finish_reason"),
-                     # the two lengths, distinct; whether the limit was reached beside them
-                     "served_output_len": served, "executed_prefix_len": executed, "cap_exhausted": served == limit,
-                     "eos_stop_before_cap": eos_stop, "lag": lag})
-        logger.info("[m1] %s: prompt_len=%s arrive=%s steps=%s..%s (%s) generated %s\n[m1]   accepted  %s  equal=%s", rid,
-                    len(r["prompt_token_ids"]), int(r.get("arrive_step") or 0), steps_r.get("first_step"), steps_r.get("finish_step"),
-                    steps_r.get("finish_reason"), gen, acc, eq)
-    return rows
-
-
-def observed_run(eng: va.Engine, wl: dict, args: Options, out: Path, tl: Timeline, plan: AcquisitionPlan | None, revision: str,
-                 protocol_entries: list[str]) -> tuple[dict, dict, RunHeader, dict[str, list[int]]]:
-    """The capture arm: the workload served under the observer, which writes DIR/log.jsonl.gz and whose counts go to DIR/stats.json,
-    with the acquisition plan's hooks beside it where there is a plan (what they saw: DIR/acquisition_observed.json).  Returns the
-    served tokens, the run's timing, the observer's header and the ids it saw sampled at each step."""
-    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
-
-    tl.start("work.capture_run")
-    snap = parse_steps(args.snapshot_steps)
-    header = make_header(eng, wl, adapter_revision=revision, wheel_sha256=args.wheel_sha256, vllm_commit=args.vllm_commit,
-                         extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights),
-                                      "protocols": protocol_entries})
-    cfg = ObserverConfig(mode="record", reenter=not args.no_reenter, triton=not args.no_triton,
-                         module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
-                         snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
-                         snapshot_max_bytes_op=args.snapshot_max_bytes_op)
-    observer = Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
-    observer.install()
-    logger.info("[m1] observer installed: %s roots, profile_id=%s, reenter impls=%s", len(observer.roots), header.profile_id,
-                header.notes.get("reenter_impls"))
-    if plan is not None:
-        from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
-
-        acq_sink = OccurrenceSink()
-        acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
-        logger.info("[m1] acquisition plan hooks installed beside the observer: %s sites (%s deferred to their sources: taps / "
-                    "registered inputs / prescribed)", len(acq_inst.installed), len(acq_inst.deferred))
-    t0 = time.perf_counter()
-    tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
-    run_s = time.perf_counter() - t0
-    if plan is not None:
-        acq_inst.remove()                                  # before the observer's close() restores the runner's sample(): the wraps unwind in order
-        obs = acq_sink.to_json()
-        obs["plan_digest"] = plan.digest
-        obs["installed"] = list(map(list, acq_inst.keys()))
-        (out / "acquisition_observed.json").write_text(json.dumps(obs, indent=1) + "\n")
-        logger.info("[m1] acquisition observed: %s occurrences over %s sites -> %s", sum(s["occurrences"] for s in obs["sites"]),
-                    len(obs["sites"]), out / "acquisition_observed.json")
-    stats = observer.close()
-    tl.end("work.capture_run", run_s=round(run_s, 3), events=stats.get("events_written"), steps=stats.get("steps"))
-    per_step = {str(s): ids for s, ids in observer.sample_ids.items()}
-    logger.info("[m1] observed run %.2fs: %s events, %s steps, recorder=%s, storage=%s, snapshot_bytes=%s, errors=%s", run_s,
-                stats["events_written"], stats["steps"], stats["recorder"], stats["storage"], stats["snapshot_bytes"],
-                len(stats["errors"]))
-    if stats["errors"]:
-        logger.error("[m1] ERRORS: %s", json.dumps(stats["errors"][:5], indent=1))
-    (out / "stats.json").write_text(json.dumps(stats, indent=1, default=str) + "\n")
-    try:
-        sz = (out / "log.jsonl.gz").stat().st_size
-        logger.info("[m1] log size %.1f MB", sz / 1e6)
-    except OSError:
-        pass
-    return tokens, timing, header, per_step
-
-
 def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -291,8 +196,8 @@ def main(args: Options) -> None:
                           execution=va.execution_of_workload(wl))     # the workload's execution decides enforce_eager, recorded in the header
     tl.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
            engine_reused=False, restart_reason="fresh process (one m1_capture per Match arm)")
-    logger.info("[m1] engine built in %.1fs (case %s, %s); kwargs=%s", eng.build_s, case, eng.cp["repo"],
-                {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")})
+    print(f"[m1] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']}); "
+          f"kwargs={ {k: v for k, v in eng.kwargs.items() if k not in ('model', 'tokenizer')} }", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
     # [D88 artifact model] the specification's concrete workload as known BEFORE any engine step: the prompt token ids the workload
     # loader produced from the checkpoint's tokenizer, per-request output limits, arrival steps, sampling parameters, and the engine
@@ -307,74 +212,147 @@ def main(args: Options) -> None:
         "row_id": wl.get("row_id"), "declared_execution": eng.execution, "effective_execution": eng.effective},
         indent=1, default=str) + "\n")
     cs = dump_cos_sin(eng, out)
-    logger.info("[m1] cos_sin_cache -> %s", cs)
+    print(f"[m1] cos_sin_cache -> {cs}", flush=True)
     nz = dump_normalizer(eng, out)
     if nz is not None:
-        logger.info("[m1] normalizer -> %s", nz)
+        print(f"[m1] normalizer -> {nz}", flush=True)
     # [v2 acquire, Phase 4a] the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan, written
     # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
     import os
 
     from verity_vllm.acquire.install import IncompletePlan
     from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
+    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
     man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
     try:
         acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture")
     except IncompletePlan as e:
-        logger.error("[m1] REFUSE: acquisition plan: %s", e)
+        print(f"[m1] REFUSE: acquisition plan: {e}", flush=True)
         sys.exit(3)
     for ln in acq_docs.log_lines("m1"):
-        logger.info("%s", ln)
+        print(ln, flush=True)
 
     tw = None
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         with tl.span("prep.warmup_control"):
             _, tw = va.run_requests(eng, warm, wl["sampling"])
-        logger.info("[m1] warm-up (uninstrumented, %s throwaway requests): %.2fs, %s steps", len(warm), tw["wall_s"], tw["engine_steps"])
+        print(f"[m1] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
 
+    stats = None
     header = None
     protocols, protocol_entries = capture_protocols(wl, args, eng.model)
     if args.no_observer:
         t0 = time.perf_counter()
         with tl.span("work.control_run"):
             tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
-        logger.info("[m1] control run (no observer): %.2fs", time.perf_counter() - t0)
+        print(f"[m1] control run (no observer): {time.perf_counter() - t0:.2f}s", flush=True)
         per_step = None
     else:
-        tokens, timing, header, per_step = observed_run(eng, wl, args, out, tl, acq_docs.plan, revision, protocol_entries)
+        tl.start("work.capture_run")
+        snap = parse_steps(args.snapshot_steps)
+        header = make_header(eng, wl, adapter_revision=revision, wheel_sha256=args.wheel_sha256, vllm_commit=args.vllm_commit,
+                             extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights),
+                                          "protocols": protocol_entries})
+        cfg = ObserverConfig(mode="record", reenter=not args.no_reenter, triton=not args.no_triton,
+                             module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
+                             snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
+                             snapshot_max_bytes_op=args.snapshot_max_bytes_op)
+        cap = Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
+        cap.install()
+        print(f"[m1] observer installed: {len(cap.roots)} roots, profile_id={header.profile_id}, "
+              f"reenter impls={header.notes.get('reenter_impls')}", flush=True)
+        plan = acq_docs.plan
+        if plan is not None:
+            from verity_vllm.acquire.install import OccurrenceSink, install_from_plan
+
+            acq_sink = OccurrenceSink()
+            acq_inst = install_from_plan(plan, eng.model, getattr(eng, "runner", None), sink=acq_sink)
+            print(f"[m1] acquisition plan hooks installed beside the observer: {len(acq_inst.installed)} sites "
+                  f"({len(acq_inst.deferred)} deferred to their sources: taps / registered inputs / prescribed)", flush=True)
+        t0 = time.perf_counter()
+        tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
+        run_s = time.perf_counter() - t0
+        if plan is not None:
+            acq_inst.remove()                                  # before cap.close() restores the runner's sample(): the wraps unwind in order
+            obs = acq_sink.to_json()
+            obs["plan_digest"] = plan.digest
+            obs["installed"] = list(map(list, acq_inst.keys()))
+            (out / "acquisition_observed.json").write_text(json.dumps(obs, indent=1) + "\n")
+            print(f"[m1] acquisition observed: {sum(s['occurrences'] for s in obs['sites'])} occurrences over {len(obs['sites'])} sites -> {out / 'acquisition_observed.json'}", flush=True)
+        stats = cap.close()
+        tl.end("work.capture_run", run_s=round(run_s, 3), events=stats.get("events_written"), steps=stats.get("steps"))
+        per_step = {str(s): ids for s, ids in cap.sample_ids.items()}
+        print(f"[m1] observed run {run_s:.2f}s: {stats['events_written']} events, {stats['steps']} steps, "
+              f"recorder={stats['recorder']}, storage={stats['storage']}, snapshot_bytes={stats['snapshot_bytes']}, "
+              f"errors={len(stats['errors'])}", flush=True)
+        if stats["errors"]:
+            print("[m1] ERRORS:", json.dumps(stats["errors"][:5], indent=1), flush=True)
+        (out / "stats.json").write_text(json.dumps(stats, indent=1, default=str) + "\n")
+        try:
+            sz = (out / "log.jsonl.gz").stat().st_size
+            print(f"[m1] log size {sz / 1e6:.1f} MB", flush=True)
+        except OSError:
+            pass
 
     if protocols is not None:
         protocols.close()
     ss = static_schedule.against_warmup(timing.get("static_schedule"), (tw or {}).get("static_schedule"))
-    # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
-    # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
-    # unattested (no default).
-    asched = va.resolved_async_scheduling(eng.llm)
-    lag = None if asched is None else (1 if asched else 0)
-    rows = request_rows(wl, tokens, timing.get("requests"), lag)
-    doc = {"requests": rows, "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer, "protocols": protocol_entries,
+    doc = {"requests": [], "per_step_sampled": per_step, "timing": timing, "observer": not args.no_observer, "protocols": protocol_entries,
            "profile_id": header.profile_id if header is not None else None, "case": case, "model": eng.cp["repo"],
            # [coverage D87] the serving profile / context class the workload declares and the realized shape of this run
            "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
-           "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps"),
-           "lag": {"value": lag, "async_scheduling": asched,
-                   "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
-                   "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
-                           "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"},
-           "all_equal_accepted": all(row["equals_accepted"] for row in rows)}
+           "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
+    all_equal = True
+    per_req = timing.get("requests")       # the run's timing by request: None where the timing has none
+    # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
+    # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
+    # unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
+    # the answer up to and including the EOS or the cap); executed_prefix_len = served + LAG on an EOS stop before the cap (the post-EOS row
+    # is active internal computation whose sampled token is NOT served).  Both are a function of the served tokens + the recorded fact,
+    # never of the trace; GM-01 G6 verifies them against the rows the record actually holds.
+    _asched = va.resolved_async_scheduling(eng.llm)
+    _lag = None if _asched is None else (1 if _asched else 0)
+    doc["lag"] = {"value": _lag, "async_scheduling": _asched,
+                  "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
+                  "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
+                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"}
+    for r in wl["requests"]:
+        rid = r["request_id"]
+        acc = wl["accepted"].get(rid)
+        gen = tokens.get(rid, [])
+        eq = (acc is not None and gen == acc[: len(gen)] and len(gen) == len(acc)) if acc is not None else None
+        all_equal = all_equal and bool(eq)
+        timed = None if per_req is None else per_req.get(rid)
+        steps_r: dict = {} if timed is None else timed       # a request the timing has no record of has no realized step
+        _served = len(gen)
+        _cap = int(r["max_tokens"])
+        _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
+        _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
+        doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
+                                "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
+                                # realized lengths and schedule (D87): every run artifact records them
+                                "prompt_len": len(r["prompt_token_ids"]), "n_generated": len(gen),
+                                "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
+                                "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
+                                "finish_reason": steps_r.get("finish_reason"),
+                                # the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
+                                "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _cap,
+                                "eos_stop_before_cap": _eos_stop, "lag": _lag})
+        print(f"[m1] {rid}: prompt_len={len(r['prompt_token_ids'])} arrive={int(r.get('arrive_step') or 0)} "
+              f"steps={steps_r.get('first_step')}..{steps_r.get('finish_step')} ({steps_r.get('finish_reason')}) generated {gen}\n"
+              f"[m1]   accepted  {acc}  equal={eq}", flush=True)
+    doc["all_equal_accepted"] = all_equal
     # [GEN sampling] n > 1: the child sequences vLLM generated (ids f"{index}_{request_id}", the ids the log's StepStart rows carry)
     wl_ids = {r["request_id"] for r in wl["requests"]}
     children = {rid: toks for rid, toks in tokens.items() if rid not in wl_ids}
     if children:
         doc["children"] = [{"request_id": rid, "generated_token_ids": toks} for rid, toks in sorted(children.items())]
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
-    if ss is not None:
-        say = logger.info if ss["ok"] else logger.error
-        for ln in static_schedule.report_lines(ss):
-            say("[m1] %s", ln)
-        if not ss["ok"]:
-            sys.exit(3)
+    for ln in static_schedule.report_lines(ss) if ss is not None else []:
+        print(f"[m1] {ln}", flush=True)
+    if ss is not None and not ss["ok"]:
+        sys.exit(3)
     tl.event("process.end", "mark", rc=0, s=round(time.time() - _T_PROCESS0, 3))
-    logger.info("[m1] done -> %s", out)
+    print(f"[m1] done -> {out}", flush=True)
