@@ -10,14 +10,20 @@ import math
 
 import numpy as np
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    norm_kind,
+    rows_of,
+    shape,
+)
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, norm_kind, rows_of, shape
 
 aten = torch.ops.aten
 
@@ -173,8 +179,8 @@ class ElementwiseRefRule(OpRule):
     modes = frozenset({"reference"})
     info = RuleInfo("Elementwise[reference]", 3, "op-binding", applies_to="aten.relu / silu / gelu(approximate none|tanh) / add.Tensor / mul.Tensor on f32 or bf16 values",
                     preconditions=("operands are value collections of one dtype in {f32, bf16}",
-                                   "binary operands have identical shapes, OR exactly one of them is a 0-d parameter/buffer of the module (G-RH-17: "
-                                   "its one Input leaf is read N times; name / kind / dtype / value recorded); no other broadcast, no Python scalar",
+                                   ("binary operands have identical shapes, OR exactly one of them is a 0-d parameter/buffer of the module (G-RH-17: "
+                                    "its one Input leaf is read N times; name / kind / dtype / value recorded); no other broadcast, no Python scalar"),
                                    "add.Tensor alpha == 1", "gelu approximate in {'none', 'tanh'}"),
                     evidence_domain="numerics are the ReluRef/SiluRef/GeluRef/AddRef/MulRef kinds' — reference-defined")
 
@@ -225,7 +231,7 @@ class ElementwiseRefRule(OpRule):
                 t = tensors.get(nm)
                 if t is not None and t.device.type != "meta":
                     return float(t.detach().to(torch.float32).item())
-        except Exception:  # noqa: BLE001 — provenance only; the program does not depend on it
+        except (AttributeError, RuntimeError):  # no source module, or a tensor torch cannot read: provenance only
             return None
         return None
 
@@ -257,7 +263,7 @@ class ElementwiseRefRule(OpRule):
         fn = ctx.kind(role, node, **statics)
         out = ctx.call(fn, *flat, node=node, rule=self)
         ctx.define(node, out.reshape(_tensor_type(shp, w)))
-        rec = {"op": role, **statics}
+        rec: dict[str, object] = {"op": role, **statics}
         if scalar_rec is not None:
             rec["scalar_operand"] = scalar_rec
         ctx.record(self, node, rec, emitted=fn.id)
@@ -525,8 +531,8 @@ class EmbeddingRefRule(OpRule):
     modes = frozenset({"reference"})
     info = RuleInfo("Embedding[reference]", 2, "op-binding", applies_to="aten.embedding(table[V,H] f32|bf16, ids int32|int64 value, padding_idx=any int|None)",
                     preconditions=("table is a value collection [V, H] of dtype in {f32, bf16}", "ids is a value collection (not static structure) of int32 or int64 leaves",
-                                   "padding_idx is a Python int or None (forward-irrelevant: ATen's embedding forward is the row gather for every "
-                                   "padding_idx; only embedding_backward reads it) — recorded; scale_grad_by_freq / sparse are defaults",
+                                   ("padding_idx is a Python int or None (forward-irrelevant: ATen's embedding forward is the row gather for every "
+                                    "padding_idx; only embedding_backward reads it) — recorded; scale_grad_by_freq / sparse are defaults"),
                                    "one EmbeddingRef call per token (+ one I64ToI32 per int64 token)"),
                     evidence_domain="numerics are EmbeddingRef_v1's (row gather) and I64ToI32_v1's — reference-defined")
 
@@ -608,11 +614,11 @@ class SdpaRefRule(OpRule):
                                "scale=None|D^-0.5, enable_gqa=False|True)",
                     preconditions=("q [.., NH, T, D], k and v [.., KVH, T, D] are value collections of one dtype (bf16 / f32)",
                                    "dropout_p == 0",
-                                   "causal structure: is_causal=True with attn_mask None, OR is_causal=False with attn_mask a StaticIndex bool "
-                                   "tensor whose every [T, T] slice (leading dims 1 or batch) equals tril(ones(T, T)) — allowed iff key <= query",
+                                   ("causal structure: is_causal=True with attn_mask None, OR is_causal=False with attn_mask a StaticIndex bool "
+                                    "tensor whose every [T, T] slice (leading dims 1 or batch) equals tril(ones(T, T)) — allowed iff key <= query"),
                                    "scale is None or np.float32(scale) == np.float32(D ** -0.5)",
-                                   "enable_gqa False with KVH == NH, or enable_gqa True with NH % KVH == 0 (torch: k, v repeat_interleave'd "
-                                   "NH//KVH over heads == the kind's head h -> KV head h // (NH//KVH))"),
+                                   ("enable_gqa False with KVH == NH, or enable_gqa True with NH % KVH == 0 (torch: k, v repeat_interleave'd "
+                                    "NH//KVH over heads == the kind's head h -> KV head h // (NH//KVH))")),
                     evidence_domain="structural; numerics: EagerAttentionRef_v1 (reference-defined)")
 
     def targets(self):
@@ -796,7 +802,7 @@ class ArgmaxRefRule(OpRule):
             return "keepdim=True"
         if dim is None and len(sx or ()) != 1:
             return "argmax over a flattened >1-D tensor (not a bound rule)"
-        if dim is not None and dim not in (-1, len(sx) - 1):
+        if dim is not None and dim not in (-1, len(sx or ()) - 1):
             return f"argmax over dim {dim} of {sx} is not the last axis"
         return True
 
