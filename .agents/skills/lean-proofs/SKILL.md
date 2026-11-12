@@ -43,8 +43,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
-- **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the records run can't
-  write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
+- **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
+  can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
   (the README's commands have the line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
