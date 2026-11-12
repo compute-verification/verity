@@ -61,23 +61,24 @@ it, and fast-forwards `main` only to a candidate with no new failure, each gatin
   your next PR). A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
   team's Apps and Daniel, is refused at its mark and at admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
-  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
+  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs. Stack only on your own unlanded
+  PR, two deep at most: hand a longer chain in as one head, marked once, with the marks below withdrawn.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
   LANE`); no other per-head grant exists. A PR whose change touches nothing drive.toml's `lowrisk_excludes` names (Lean,
   locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone, with no verdict (the
   low-risk lane); a layout move's PR (`Move: tools/move/MAP.toml` in its body) never does.
 - The loop builds candidates from the marked PRs with a land verdict or in the low-risk lane, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
-  below, and one `Queue: #N` merge per PR. A PR that doesn't merge onto `main` is left out, and its owner told to merge
-  `main` (across a move, `tools/move/restack.py`) and mark the new head. A candidate holding a change to a
+  below, and one `Queue: #N` merge per PR. A PR that doesn't merge onto `main` is left out, and its owner told the fix.
+  A candidate holding a change to a
   `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
   Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
   run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
   `main` moves only to regenerated records; a records run that fails is a failure like any other.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
   machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
-  unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it, and the owner of each
-  unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
+  unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it. A failure
+  its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
   suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
   and their logs, several are bisected, and the candidates above are dropped and built again. A failure of the machines
