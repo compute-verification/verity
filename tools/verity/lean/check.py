@@ -4663,25 +4663,33 @@ def in_sandbox(pkg: Path, argv: list[str]) -> list[str]:
 
 #: the `.lake` directories a Lake build running now may write, under the condition notified when one ends
 _WRITING: set[Path] = set()
+#: those of `_WRITING` held by a step that only reads them (`writing`'s ``reads``)
+_READING: set[Path] = set()
 _WROTE = threading.Condition()
 
 
 @contextlib.contextmanager
-def writing(pkg: Path, log=print):
+def writing(pkg: Path, log=print, reads: bool = False):
     """Hold ``pkg``'s `writable` directories for one Lake build: two builds that share one run one at a time, and the
     others side by side. Two dependents of one stale path dependency would both rebuild its modules into its one
-    `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135)."""
+    `.lake/build`, and one's `clang` reads a `.c` file the other is rewriting (exit 135). With ``reads`` the holder
+    writes none of them (`publish`'s put): builds still wait for it, and `tests`, which reads the live build too,
+    doesn't."""
     dirs = set(writable(pkg))
     with _WROTE:
         if busy := sorted(str(d.parent) for d in _WRITING & dirs):
             log(f"build: {pkg} waits for a build that writes the .lake of {', '.join(busy)}")
         _WROTE.wait_for(lambda: not _WRITING & dirs)
         _WRITING.update(dirs)
+        if reads:
+            _READING.update(dirs)
     try:
         yield
     finally:
         with _WROTE:
             _WRITING.difference_update(dirs)
+            if reads:
+                _READING.difference_update(dirs)
             _WROTE.notify_all()
 
 
@@ -5040,10 +5048,11 @@ def publish(pkg: Path, rep: dict, roots, held: threading.Event, said: dict, log=
     write the module versions it added there as bundles for other nodes (`LakeArtifacts.bundle_into`), with the replay
     entries this run's kernel has accepted so far beside them (`pack_replays`). The put reads the build under the
     package's `writing`, and ``held`` is set once it holds it (or failed to): a dependent's build, which waits for that
-    hold, then cannot write the build under it. ``said`` gets how many versions were new (`published`)."""
+    hold, then cannot write the build under it, and the package's tests, which only read the build too, run beside it.
+    ``said`` gets how many versions were new (`published`)."""
     try:
         store = sibling("lean_audit").LakeArtifacts(ARTIFACTS)
-        with writing(pkg, log):
+        with writing(pkg, log, reads=True):
             held.set()
             said["published"] = store.put({pkg: rep}, STARTED, log, roots={pkg: roots})
         log(f"publish: {pkg}: {said['published']} module version(s) new in the artifact cache")
@@ -5441,10 +5450,11 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     fails, now = [], {}
     # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
     # that build. Only a dependent's build writes a package's own `.lake`, and a package with `runs` has no dependents,
-    # so every build in the run has ended before its tests start. Fail loudly rather than read a build one is still
-    # writing: a `runs` entry on a depended-on package would be caught here, not read mid-build.
+    # so every build in the run has ended before its tests start; its own publish may still hold it, and only reads it.
+    # Fail loudly rather than read a build one is still writing: a `runs` entry on a depended-on package would be caught
+    # here, not read mid-build.
     with _WROTE:
-        racing = pkg.resolve() / ".lake" in _WRITING
+        racing = (lake := pkg.resolve() / ".lake") in _WRITING and lake not in _READING
     if racing:
         return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
                         f"it live; a package with `runs` must be one no other package builds")], now

@@ -6014,6 +6014,41 @@ def test_a_replay_pack_holds_only_the_entries_this_run_s_kernel_accepted_as_it_s
     assert A.pack_replays(at) == (at / "lean-replays-2.tar.gz", 1)
 
 
+def test_a_package_s_tests_run_beside_its_publish_which_holds_its_build_only_to_read_it(tmp_path, monkeypatch):
+    """A package with `runs` has no dependents, so after its announcement the one hold on its `.lake` is its own
+    publish's, which keeps builds out while the put reads the build and writes none of it. The tests start then, in
+    `audit`'s background beside the put, and read the build as it does: they run, where a build still writing that
+    `.lake` fails them (`runs.racing-build`)."""
+    pkg, _, _ = _publishing(tmp_path, monkeypatch)
+    reading, read = threading.Event(), threading.Event()
+
+    class Store:
+        added: list = []
+
+        def __init__(self, at):
+            pass
+
+        def put(self, reports, since=None, log=print, roots=None):
+            reading.set()
+            read.wait()
+            return 0
+
+    loaded = A.sibling
+    monkeypatch.setattr(A, "sibling", lambda name: type("LA", (), {"LakeArtifacts": Store}) if name == "lean_audit"
+                        else loaded(name))
+    A.publishing(pkg, {"package": str(pkg), "sandbox": True, "failures": []}, set(), ["P"], log=lambda s: None)
+    reading.wait()
+    try:
+        assert A.tests(pkg, {"runs": {}}, {}, tmp_path / "w", tmp_path, False)[0] == [], \
+            "the package's tests refused to run beside its own publish, which only reads its build"
+    finally:
+        read.set()
+        A.PUBLISHING.pop(pkg)[0].join()
+    with A.writing(pkg):
+        fails = A.tests(pkg, {"runs": {}}, {}, tmp_path / "w", tmp_path, False)[0]
+    assert [f.code for f in fails] == ["runs.racing-build"], "a build writing the package's .lake still fails its tests"
+
+
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp_path, monkeypatch):
     """An index entry of the node's artifact cache that names another version's `.olean`, digest and all, passes every
