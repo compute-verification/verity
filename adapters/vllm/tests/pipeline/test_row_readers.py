@@ -5,7 +5,9 @@ the Match and Build records' fields
 the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the config record of a row that
+(`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
+log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
+record of a row that
 ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's window and its command, which report a file's
 last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
@@ -35,8 +37,11 @@ import verity_vllm.pipeline.research_outputs as RO
 import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
+from tests.check.test_verdict import _base, _row_dir
 from tests.pipeline.test_row import STAGE_START, _summary_row
+from verity_vllm.check.gates import GateResult
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.pipeline import cli
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -232,6 +237,29 @@ def test_the_card_names_each_stage_that_is_not_ok():
     md = card({"build": {"status": "failed", "log": "build.log"}, "match": {"status": "ok"}, "commit": {}, "check": {"status": "skipped"}})
     assert "- stages not ok: build (failed, build.log), check (skipped, None)\n" in md
     assert "stages not ok" not in card({"build": {"status": "ok"}, "commit": {}})
+
+
+def test_the_card_reads_each_gates_detail_under_that_gates_id(tmp_path):
+    """The ambiguous count is G2's, tier a and the quarantine are G4's, and the sample is G5's: a detail under another id is not read."""
+    sample = {"status": "pass", "k": 2, "strata": 4, "seed": 9}
+    detail: dict[str, dict[str, Any]] = {"G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample}}
+    other = {"ambiguous": 99, "k": 99, "quarantine": {"specs": 99}, "sample": {"status": "fail"}}
+    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="pass", detail=detail.get(g, other))
+                                      for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8")])
+    assert card.counts["ambiguous"] == 7 and card.counts["sampled_vus"] == "k=2 x 4 strata, seed 9 PASS"
+    assert (card.replay["tier_a"]["k"], card.replay["quarantine"], card.replay["sample"]) == (3, {"specs": 1}, sample)
+
+
+def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_code(tmp_path, capsys):
+    """The row driver's Commit stage reads the first word of the one line `verdict from-record` prints.  Evidence that passes
+    under a Commit that exited nonzero is not a PASS, and without `--out` the record goes beside the row."""
+    d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
+    for rc, outcome in (("0", "PASS"), ("1", "INSUFFICIENT_EVIDENCE")):
+        out = tmp_path / f"rc{rc}.json"
+        assert cli.main(["verdict", "from-record", str(d), "--rc", rc, "--out", str(out)]) == 0
+        said = capsys.readouterr().out.splitlines()
+        assert len(said) == 1 and said[0].startswith(f"{outcome} {out} [") and json.loads(out.read_text())["outcome"] == outcome
+    assert cli.main(["verdict", "from-record", str(d)]) == 0 and capsys.readouterr().out.startswith(f"PASS {d / 'verdict.json'} [")
 
 
 def test_the_config_record_of_a_row_that_ran_nothing_fails_at_its_build(tmp_path):
