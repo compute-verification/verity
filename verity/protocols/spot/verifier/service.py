@@ -2053,7 +2053,10 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R8 against the challenger's own copies
+        query, its population (`interior-population`: Q·n_rho), its window (`interior-window`: `window_root` is the
+        boundary registration's, or the root the verifier computes from the boundary registration's digest and the
+        replay sample, `second_stage.interior_root`, so the second stage is sampled on one session with the first or
+        on the session on that one root), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
@@ -2072,6 +2075,10 @@ class Stream:
             if v.ok and not (type(n := record.get("population")) is int and n == m):
                 v = _refuse("interior-population", {"population": n, "replay_sample": len(first.units),
                                                     "n_rho": self.n_rho}).verdict
+            boundary = self._entries[first.registration.order].copies[8]
+            if v.ok and window_root != boundary and (window_root is None or window_root != SS.interior_root(
+                    first.registration.digest, D.proved(first.draw))):
+                v = _refuse("interior-window", {"window_root": window_root, "boundary": boundary}).verdict
             if v.ok:
                 program, query = self.interior_program(len(first.units)), self.spec.check.query
                 earlier = self._earlier(record, supplied, outputs)

@@ -793,6 +793,17 @@ def _run_of(rec: Any) -> str | None:
     return run if isinstance(run, str) else None
 
 
+INTERIOR_ROOT = "verity-vllm/interior-run/v1"
+
+
+def interior_root(boundary: str, sample: Sequence[int]) -> str:
+    """`SecondStage.interiorRoot`: the interior window's open root for the boundary registration of digest `boundary`
+    and the replay sample `sample`, in order. The verifier computes it, so a second stage sampled on a session of its
+    own is sampled on the one window its boundary registration and replay sample name."""
+    message = canonical_json({"boundary": boundary, "replay_sample": [int(u) for u in sample]})
+    return hashlib.sha512(INTERIOR_ROOT.encode() + b"\x00" + message).hexdigest()
+
+
 def set_name(run: str, k: int) -> str:
     """`SecondStage.setName`: the input set of the `k`-th part's session in run `run`, as the served path names it."""
     return f"served/{run}/m{k}"
@@ -1209,7 +1220,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
 
 
 __all__ = ["FORM", "READ_ROW_FIELDS", "READ_RUN_FIELDS", "Checked", "Link", "Own", "Part", "Rows", "Run", "Wire",
-           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads", "link_runs",
-           "links_of",
+           "at_run", "attach", "blank_reads", "blank_run", "check", "interior_order_ok", "interior_reads",
+           "interior_root", "link_runs", "links_of",
            "own_draw", "parts", "port_binding", "replay_links", "replay_rows", "replay_wires", "row_at", "rows_of",
            "set_name", "statement_reads", "verified_of", "wire_runs", "wires_of"]

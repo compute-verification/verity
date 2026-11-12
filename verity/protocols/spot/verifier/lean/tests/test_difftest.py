@@ -1567,9 +1567,10 @@ def _interior_of(it) -> dict:
 
 
 def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
-    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, then the second stage on its
-    own coins, the rule's counts `k` over the replay block's cells; its receipt, sample, law and bytes read, or the
-    step's refusal."""
+    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, in the boundary
+    registration's window or the one the verifier computes (`Run.interiorWindowOk`), then the second stage on its own
+    coins, the rule's counts `k` over the replay block's cells; its receipt, sample, law and bytes read, or the step's
+    refusal."""
     p, rec = it["decoded"], it["record"]
     pub = check_public({"public": j["public"], "query": it["params"]["query"], "record": rec, "scheme": p["scheme"],
                         "values": it["values"]})
@@ -1585,6 +1586,9 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     population = rec.get("population") if isinstance(rec, dict) else None
     if not (_nat(population) and population == m):
         return {"codes": ["interior-population"], "step": "interiors"}
+    window, boundary = it["params"].get("window_root"), j["params"].get("window_root")
+    if window != boundary and (window is None or window != SS.interior_root(R.digest(j["record"]), sample)):
+        return {"codes": ["interior-window"], "step": "interiors"}
     codes = _registration({**p, "law": {"law": "subset", "k": m}}, rec)
     if codes:
         return {"codes": list(codes), "step": "interiors"}
@@ -3968,12 +3972,13 @@ def _as_stated(c: dict) -> dict:
 
 
 @functools.cache
-def _two_stage_text(seed: int) -> str:
+def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
     """A two-stage run's input (canonical text; the coins' sessions are signed once): the boundary registration over
     `BOUNDARY`'s replay blocks, its first stage from a ledger session's challenger opened after its digest, then the
     interior registration over the replay sample's six proof blocks, logged after it in a window of its own that names
-    the replay sample in order, its second stage from another session's challenger opened after the interior
-    registration's digest; the verdicts accepting, the second-stage session's statement the honest one
+    the replay sample in order, its second stage from another session's challenger, its window's root the one the
+    verifier computes from the boundary registration's digest and the replay sample (`second_stage.interior_root`), or
+    when `elsewhere` a sampled one, opened after the interior registration's digest; the verdicts accepting, the second-stage session's statement the honest one
     (`_second_statement`), each slot reading the boundary's `x` and `o0` at its PAIR instance's row of its cell's replay
     block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
@@ -4009,7 +4014,8 @@ def _two_stage_text(seed: int) -> str:
 
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
-    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage))
+    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
+               window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)})
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
                   "reads": [b.ports[v]["leaves"] // b.population * sample[u // n] + u % n for u in range(m)]}
@@ -4043,8 +4049,8 @@ def _two_stage_text(seed: int) -> str:
                      "served": None, "session_roots": dict(ROOTS), "statements": statements}})
 
 
-def _two_stage_case(seed: int = 0) -> dict:
-    return json.loads(_two_stage_text(seed))
+def _two_stage_case(seed: int = 0, elsewhere: bool = False) -> dict:
+    return json.loads(_two_stage_text(seed, elsewhere))
 
 
 def _inner(change):
@@ -4058,6 +4064,16 @@ def _inner(change):
 
 def _inner_record(**fields):
     return _inner(lambda it, x: {**it, "record": {**it["record"], **fields}})
+
+
+def _inner_params(**fields):
+    return _inner(lambda it, x: {**it, "params": {**it["params"], **fields}} if isinstance(it.get("params"), dict) else it)
+
+
+def _inner_window(c, x: int):
+    """The interior registration's window root changed: none, one no session opened, or the boundary registration's."""
+    boundary = c["params"].get("window_root") if isinstance(c.get("params"), dict) else None
+    return _inner_params(window_root=[None, "22" * 64, boundary][x % 3])(c, x)
 
 
 def _restated(ss, x: int):
@@ -4161,6 +4177,7 @@ TWO_STAGE_CHANGES = [
     (_with("rule", None), st.sampled_from([{"law": "rate:1/2", "rule": "law"}, {"rule": "all"}])),
     (_with("interior", None), st.sampled_from([None, 5, {}, []])),
     (_inner_record(population=5), st.just(0)), (_inner_record(population=12), st.just(0)),
+    (_inner_window, st.integers(0, 63)),
     (_inner_record(previous="11" * 64), st.just(0)), (_inner_record(window=WINDOW), st.just(0)),
     (_inner(lambda it, x: {**it, "record": {k: v for k, v in it["record"].items() if k != "previous"}}), st.just(0)),
     (_inner(lambda it, x: {**it, "values": it["values"][1:] if x % 2 else [*it["values"], {"name": "z", "registered": False}]}),
@@ -6232,9 +6249,12 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     reading its linked `x` from the interior's own (`second-read`), a statement whose verifier of record checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
     links is no run's. Then refused at each step: a grain the registration's query isn't (`grain`); no
-    interior registration (`interior`); an interior registration of another population (`interior-population`), not
-    after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold; second-stage coins
-    without their evidence (`coins`). Rejected where a verdict didn't accept, and refused before it starts for `k` =
+    interior registration (`interior`); an interior registration of another population (`interior-population`), in a
+    window that is neither the boundary registration's nor the one the verifier computes (`interior-window`: the
+    second session opened on a sampled root, which signs and opens as the honest one does; a root no session opened;
+    no root), not after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold;
+    second-stage coins without their evidence, or held to the boundary registration's window, which the second
+    session didn't open (`coins`). Rejected where a verdict didn't accept, and refused before it starts for `k` =
     n_rho (it would prove whole replay blocks) and an interior registration under a one-stage rule."""
     case = _two_stage_case()
     out = run(copy.deepcopy(case))
@@ -6286,9 +6306,13 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         ({**case, "rule": {**case["rule"], "grain": INTERIOR.query}}, ("register", ["grain"])),
         ({**case, "interior": None}, ("interiors", ["interior"])),
         (_inner_record(population=9)(case, 0), ("interiors", ["interior-population"])),
+        (_two_stage_case(elsewhere=True), ("interiors", ["interior-window"])),
+        (_inner_params(window_root="22" * 64)(case, 0), ("interiors", ["interior-window"])),
+        (_inner_params(window_root=None)(case, 0), ("interiors", ["interior-window"])),
         (_inner_record(previous="11" * 64)(case, 0), ("interiors", ["R6-previous"])),
         (_inner(lambda it, x: {**it, "values": it["values"][1:]})(case, 0), ("interiors", None)),
         (_inner(lambda it, x: {**it, "coins": None})(case, 0), ("second", ["coins"])),
+        (_inner_params(window_root=case["params"]["window_root"])(case, 0), ("second", ["coins"])),
     ]
     for changed, (step, codes) in steps:
         got = run(copy.deepcopy(changed))
