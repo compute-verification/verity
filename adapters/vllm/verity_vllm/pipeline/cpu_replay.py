@@ -36,7 +36,7 @@ refused unless the Definitions its tree evaluates the picks by are the ones the 
 BUNDLE may be that keep (`open_keep`): its files are checked against `slim.json`, and the record beside it, decided by a replay of the
 bundle the keep was cut from (the verdict's `replayed` names that bundle's manifest sha256), is read back in its deferred state
 (`undecided`), so the replay decides the run again from its own sample.  It is refused before anything is evaluated unless this code's
-sample is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
+sample is the keep's picks in order (`kept_sample`).  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -553,7 +553,7 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     return doc
 
 
-def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
+def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     """Refused unless this code samples the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
     so another sample (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
     try:
@@ -567,6 +567,10 @@ def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     seen = (f"reads what the keep does not hold ({why})" if why else
             f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
     raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+
+
+#: `kept_sample` under its older name, for the callers that still say it
+kept_draw = kept_sample
 
 
 def replay(o: Options) -> bool | None:
@@ -598,7 +602,7 @@ def replay(o: Options) -> bool | None:
                             components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
                             weights_check=lambda: dict(wc), tl=tl, reads=reads)
     if "keep" in b:
-        kept_draw(site, b["keep"])
+        kept_sample(site, b["keep"])
     with SD.touched(store) as touched:
         C2.run(site, {})
     engine_of_record(row, ctx, out / f"sampled_replay_p{pair}.json")
