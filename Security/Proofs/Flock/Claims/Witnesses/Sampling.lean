@@ -88,7 +88,7 @@ section NoHash
 
 variable {R α β : Type}
 
-theorem ownLog_noHash (H : Msg → Msg) (run : R → Trace) : ∀ p : RP R α, NoHash p → ownLog H run p = []
+theorem ownLog_noHash (H : Msg → Msg) (run : R → Transcript) : ∀ p : RP R α, NoHash p → ownLog H run p = []
   | .ret _, _ => rfl
   | .hash _ _, h => h.elim
   | .rerun r k, h => ownLog_noHash H run (k (run r).seen) (h _)

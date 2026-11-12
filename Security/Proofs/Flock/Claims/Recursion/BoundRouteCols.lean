@@ -244,7 +244,7 @@ theorem Bound.seen_viewAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (m
         ((List.range (Bd.DE.V.k x)).map (coinSeq r)) := by
   rw [Bd.run_ivstar H x ms r hk]
   obtain ⟨n, hn⟩ : ∃ n, Bd.DE.V.k x = n + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hk).symm⟩
-  unfold Bound.viewAt Bound.decAt Trace.seen
+  unfold Bound.viewAt Bound.decAt Transcript.seen
   generalize (Bd.IVStar.next x ((List.range (Bd.DE.V.k x)).map fun i => ms.getD i [])
     ((List.range (Bd.DE.V.k x)).map (coinSeq r))).eval H = d
   rw [hn, Nat.add_sub_cancel, range_map_getD_succ, List.range_succ, List.map_append, List.map_singleton,
@@ -322,7 +322,7 @@ theorem innerViewRun_C {Col' T' : Type} (H : Msg → Msg) (Bd : Bound Coin Col T
     (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T') :
     Claims.Recursion.InnerViewRun H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO := by
   intro decO x Ω P ω r c ws _
-  exact (congrArg Claims.Trace.seen (innerRun_C H Bd decI ivScope b x r ws)).symm
+  exact (congrArg Claims.Transcript.seen (innerRun_C H Bd decI ivScope b x r ws)).symm
 
 theorem innerView_C [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (ivScope : Msg → Bool) (b : Brings)
     (hCF : Bd.LastCoinFree H) (x : Msg) (r : Fin ((deployRec Bd.IVStar ivScope b).V.k x) → Coin)

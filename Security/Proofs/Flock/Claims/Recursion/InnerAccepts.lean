@@ -89,7 +89,7 @@ theorem Form.shape_cases (f : Form) : f.Dense ∨ f.Holo ∨ f.Sparse := by
 /-! ## `E_O`'s witnesses are in the outer relation -/
 
 /-- `collect` returns, in order, what each of its programs returned. -/
-theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ (ps : List (RP R (Option α))) (as : List α), ((collect ps).eval H run).1 = some as →
       List.Forall₂ (fun p a => (p.eval H run).1 = some a) ps as
   | [], as, h => by
@@ -110,7 +110,7 @@ theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Trace) :
       exact .cons hp (collect_some H run ps l hl)
 
 theorem stepWith_acc_pos {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).out = .acc → 0 < n
   | 0, _, _, _, h => by simp [stepWith] at h
   | _ + 1, _, _, _, _ => Nat.succ_pos _
@@ -142,7 +142,7 @@ theorem eoGives_outerHolds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) :
     OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws := by
   obtain ⟨hacc, h⟩ := h
-  simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+  simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   have hf := collect_some H _ _ ws h
   have hlen := hf.length_eq
   rw [List.length_map, List.length_finRange] at hlen

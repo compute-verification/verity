@@ -66,14 +66,14 @@ theorem expectN_drawGame : ∀ (k : ℕ) (F : List Dr → ℝ),
     simp [List.finRange_succ, List.map_cons, List.map_map, Function.comp_def]
 
 /-- The run at a sample accepts. -/
-def AccD (tr : Dr → Trace) (d : Dr) : Prop := (tr d).out = .acc
+def AccD (tr : Dr → Transcript) (d : Dr) : Prop := (tr d).out = .acc
 
-theorem accPrD_eq (tr : Dr → Trace) : accPrD tr = expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) := by
+theorem accPrD_eq (tr : Dr → Transcript) : accPrD tr = expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) := by
   rw [expect_drawGame]
   exact Claims.Bridge.Pr_eq_Ex _
 
 /-- **`k` accepted samples that fail `G`**, on the samples' law. -/
-theorem accFailD_eq (tr : Dr → Trace) (k : ℕ) (G : List Seen → Prop) :
+theorem accFailD_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) :
     accFailD tr k G = expectN (drawGame Dr) (drawS Dr) k fun bs =>
       (bs.map (ind (AccD tr))).prod * ind (fun bs => ¬ G (bs.map fun d => (tr d).seen)) bs := by
   classical
@@ -92,7 +92,7 @@ theorem accFailD_eq (tr : Dr → Trace) (k : ℕ) (G : List Seen → Prop) :
     by_cases h2 : G ((List.finRange k).map fun i => (tr (σ i)).seen) <;> simp [AccD, h1, h2]
 
 /-- **One wait's left side over samples is the product form's**: `ε · Q/ε^k = ε · expectAcc(¬G)`. -/
-theorem oneWaitD_lhs_eq (tr : Dr → Trace) (k : ℕ) (G : List Seen → Prop) :
+theorem oneWaitD_lhs_eq (tr : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) :
     accPrD tr * (accFailD tr k G / accPrD tr ^ k) =
       expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) *
         expectAcc (drawGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ G (bs.map fun d => (tr d).seen)) := by
@@ -110,13 +110,13 @@ variable {Dr Coin Col T : Type} [Fintype Dr] [Nonempty Dr] [DecidableEq Col] [Ze
 open Classical in
 /-- **An accepted run's openings over samples** at the word's positions, its first table-0 column at each; none on a
 rejected run. -/
-noncomputable def opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Trace) (d : Dr)
+noncomputable def opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) (d : Dr)
     (p : Fin (N x)) : Option Col :=
   if (tr d).out = .acc then lookCol (D.cols (tr d).seen 0) p.val else none
 
 omit [Fintype Dr] [Nonempty Dr] [DecidableEq Col] in
 /-- **On accepted samples the extractor's table is the zero-filled word.** -/
-theorem firstTable_opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Trace) (bs : List Dr)
+theorem firstTable_opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) (bs : List Dr)
     (hacc : ∀ b ∈ bs, AccD tr b) (p : Fin (N x)) :
     firstTable (opD D N x tr) (fun _ => 0) bs p =
       (lookCol ((bs.map fun d => (tr d).seen).flatMap fun v => D.cols v 0) p.val).getD 0 := by
@@ -129,7 +129,7 @@ theorem firstTable_opD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg)
 /-- **One wait's bound over samples, from the table's bound**: at a run law `tr` over finite samples, where the statement
 has one table, `Ok` admits `0` and every column an accepted run opens, and every table of `Ok` columns that does not
 extract leaves accepted runs at least `ε − ε_c` off it, `ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + √(k · Pr[conflict])`. -/
-theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Trace) {s : Flock.Stmt}
+theorem oneWaitD (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (h1 : s.tables = 1) (Ok : Msg → Col → Prop) (hz : Ok x 0)
     (hok : ∀ d q u, (tr d).out = .acc → q < N x → lookCol (D.cols (tr d).seen 0) q = some u → Ok x u)
     (εc : ℝ) (hεc : 0 ≤ εc)
@@ -213,7 +213,7 @@ end OneWaitD
 
 section ForkD
 
-variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Trace}
+variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
 /-- **Escapes over samples with one more fork event**: `e`'s, and `ev` at round `j₀` with weight `c`. -/
 def EscapesD.addFork (e : EscapesD H n tr) (c : ℝ) (hc : 0 ≤ c) (j₀ : Fin n)
@@ -287,7 +287,7 @@ theorem abortRun_acc_iff {H : Msg → Msg} {Ω A : Type} {P : Prover Ω} {V : Ve
   unfold abortRun
   by_cases h : keep ω d.1 d.2 = true
   · simp [h]
-  · simp [h, abortTrace]
+  · simp [h, abortTranscript]
 
 /-- **The fixed-table bound at the abort distribution**: `TableBoundθ` at the runs as they abort, with escapes tied to those runs,
 as `BAbort` samples them: at every statement, prover and way it may abort, escapes that fit the weight with one more

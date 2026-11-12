@@ -47,7 +47,7 @@ on the inner protocol's KS against such provers, `Inner.KSAbort`, which the clai
 
 * **The abort model** (`abortRun`): after the inner rounds, a prover may abort its run, reading its tape, every coin of
   the run and fresh coins of its own for that run (`A`), which the inner verifier doesn't read. An aborted run sends
-  nothing and is rejected (`abortTrace`). Its messages are the prover's, so they read only the history.
+  nothing and is rejected (`abortTranscript`). Its messages are the prover's, so they read only the history.
 * **The claim** (`Inner.KSAbort`): `Inner.KS`'s inequality at every such prover. `E^rep` reruns at samples of the run's
   coins with fresh abort coins, the judged sample first, and sees each run as it aborts (`Inner.PrBadAbort`), so an
   aborted rerun is one it doesn't see accepted. `B` sees the two runs as they abort, each with its own abort coins
@@ -69,7 +69,7 @@ theorem erep_eq {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemb
 
 /-- **`E^rep` over relabeled samples**: `E^rep` at the samples `μ d₀` and `μ ∘ ρ` against `run₂` is `E^rep` at `d₀` and `ρ`
 against `run₂ ∘ μ`. -/
-theorem erepProg_eval_comp {D₁ D₂ W Op : Type} (H : Msg → Msg) (run₂ : D₂ → Trace) (μ : D₁ → D₂) (m k K : ℕ)
+theorem erepProg_eval_comp {D₁ D₂ W Op : Type} (H : Msg → Msg) (run₂ : D₂ → Transcript) (μ : D₁ → D₂) (m k K : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool) (d₀ : D₁) (ρ : Fin m → Fin K → D₁) :
     ((erepProg m k K opens assemble check (μ d₀) (fun i j => μ (ρ i j))).eval H run₂).1 =
       ((erepProg m k K opens assemble check d₀ ρ).eval H (fun d => run₂ (μ d))).1 := by

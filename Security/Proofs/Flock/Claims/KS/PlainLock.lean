@@ -56,7 +56,7 @@ theorem stepWith_acc_iff {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims
     (v₁ v₂ : List Claims.Msg → Claims.OC Claims.Out) (K : ℕ)
     (hlt : ∀ bs : List Claims.Msg, bs.length < K → v₁ bs = v₂ bs)
     (heq : ∀ bs : List Claims.Msg, bs.length = K → (((v₁ bs).eval H).1 = .acc ↔ ((v₂ bs).eval H).1 = .acc)) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       as.length + n = K →
       ((Claims.stepWith H P x ω v₁ n hist as t).out = .acc ↔ (Claims.stepWith H P x ω v₂ n hist as t).out = .acc) := by
   intro n
@@ -220,7 +220,7 @@ theorem run_acc_iff_lastK (keep : Bool → Bool) (H : Claims.Msg → Claims.Msg)
 before it (`depMsg`), wherever the verifier answers each round with its coin's bytes. -/
 theorem stepWith_dep {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
     (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       hist = depHist H P x ω c as.length → as = (List.range as.length).map (depMsg H P x ω c) →
       t.msgs.map Prod.fst = as →
       (Claims.stepWith H P x ω (fun as => V'.next x as ((List.range as.length).map c)) n hist as t).msgs.map

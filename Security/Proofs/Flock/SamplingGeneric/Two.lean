@@ -294,7 +294,7 @@ theorem unions_of_nPU_le {H : Msg → Msg} (L : CompiledTwo Coin A) (hout : ∀ 
 
 /-- **An outer run bad for the sets `Xs`**, its second stage `g`: the inner wait comes up short, or for some `X ∈ Xs`
 no kept inner run has a proof block of `X` good. -/
-def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (Xs : Finset (Finset ℕ))
     (g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin) (e : L.E1 x) : Prop :=
   (accList (fun d => (run' (g d)).out = .acc) (L.kIn x) ((List.finRange (L.capIn x)).map e.1)).length < L.kIn x ∨
@@ -304,7 +304,7 @@ def BadOuterTwo (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Co
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **An outer run bad for sets is bad for their projections** on any set `B` of proof blocks: a kept inner run that
 has no proof block of `X` good has none of `X ∩ B`. -/
-theorem badOuterTwo_inter (L : CompiledTwo Coin A) {x : Msg} {run' : (Fin (L.V.k x) → Coin) → Trace}
+theorem badOuterTwo_inter (L : CompiledTwo Coin A) {x : Msg} {run' : (Fin (L.V.k x) → Coin) → Transcript}
     {found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop} {Xs : Finset (Finset ℕ)}
     {g : (Fin (L.V.k x) → Coin) → Fin (L.V.k x) → Coin} {e : L.E1 x} (B : Finset ℕ)
     (h : L.BadOuterTwo x run' found Xs g e) : L.BadOuterTwo x run' found (Xs.image (· ∩ B)) g e := by
@@ -314,7 +314,7 @@ theorem badOuterTwo_inter (L : CompiledTwo Coin A) {x : Msg} {run' : (Fin (L.V.k
 
 /-- **The extraction's failure event**: the statement is in scope, and the outer wait comes up short or, for some
 candidate `Y`, every kept outer run is bad for the sets that escape no more than `Y`. -/
-def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+def FailsTwo (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) (c : L.ECoins x) : Prop :=
   ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧ InScopeTwo Pt d s ∧
     ((accList (fun r => (run' r).out = .acc) (L.kOut x) ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x ∨
@@ -328,7 +328,7 @@ omit [Inhabited Coin] in
 /-- **One outer run's inner wait**, at sets `Xs` of proof blocks below `n_PU`, at most `2^m` of them (`m ≤ n_in`), each
 missed by the second stage at `r` with probability at most `esc`: `Compiled.inner_bad_le`'s union bound at the picked
 slot for each `X`, and the wait's over `Xs`. -/
-theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop) {Xs : Finset (Finset ℕ)} {m : ℕ}
     (hXs : ∀ X ∈ Xs, ∀ v ∈ X, v < L.nPU x) (hcard : Xs.card ≤ 2 ^ m) (hm : m ≤ L.nIn x)
     (hslots : ∀ r', (L.checked x r').length ≤ L.nPU x) (r : Fin (L.V.k x) → Coin)
@@ -364,7 +364,7 @@ at each wait's count. Each outer run's inner wait unions over those sets project
 which the second stage misses alike (`inter_sampleBlocks_cell`), at most `2^{|sampleBlocks|}` (`|sampleBlocks| ≤ n_in`);
 the outer wait unions over their values `above Y`, at most `2^M` (`M ≤ n_out`). -/
 theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg)
-    (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (run' : (Fin (L.V.k x) → Coin) → Transcript)
     (found : (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
     (Pt : Partition) (d : Claims.Sampling.Design.Two) (hPU : L.nPU x = Pt.blocks.length)
     (hun : footBits Pt d ≤ L.nOut x ∧ ∀ r e, (run' (forkOn (L.stage2 x) r e)).out = .acc →

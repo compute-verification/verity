@@ -110,11 +110,11 @@ theorem Ex_sum_pi {E : Type} [Fintype E] [Nonempty E] (f : E → ℝ) :
 /-! ## One wait's reruns -/
 
 /-- A wait's reruns over the coin samples `rs`, from `a` accepted so far. -/
-def waitRuns {R : Type} (run : R → Trace) (k : ℕ) : List R → ℕ → ℕ
+def waitRuns {R : Type} (run : R → Transcript) (k : ℕ) : List R → ℕ → ℕ
   | [], _ => 0
   | r :: rs, a => if k ≤ a then 0 else waitRuns run k rs (if (run r).out = .acc then a + 1 else a) + 1
 
-theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 = waitRuns run k rs acc.length := by
   intro rs
   induction rs with
@@ -124,10 +124,10 @@ theorem waitAcc_runs_eq {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
     simp only [waitAcc, waitRuns]
     split_ifs with h hacc
     · simp [RP.eval]
-    all_goals simp [RP.eval, ih, Trace.seen, hacc]
+    all_goals simp [RP.eval, ih, Transcript.seen, hacc]
 
 /-- The waits rerun the prover at most as often as the waits do, each on its own. -/
-theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤
       (rss.map fun rs => waitRuns run k rs 0).sum := by
@@ -145,11 +145,11 @@ theorem firstWait_runs_le_sum {R W Op : Type} (H : Msg → Msg) (run : R → Tra
     · exact ih
 
 /-- `N(K, a)`: one wait's expected reruns over `K` uniform samples, from `a` accepted so far. -/
-noncomputable def waitExp {D : Type} [Fintype D] (run : D → Trace) (k K a : ℕ) : ℝ :=
+noncomputable def waitExp {D : Type} [Fintype D] (run : D → Transcript) (k K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => (waitRuns run k ((List.finRange K).map σ) a : ℝ)
 
 /-- **One wait's expected reruns**: `ε · N(K, a) ≤ k − a`, so a wait makes at most `k/ε` reruns in expectation. -/
-theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k K : ℕ) :
+theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k K : ℕ) :
     ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * waitExp run k K a ≤ k - a := by
   induction K with
   | zero => intro a ha; simp [waitExp, waitRuns, Ex, ha]
@@ -186,7 +186,7 @@ theorem waitRuns_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k 
     · simp [waitExp, waitRuns, List.finRange_succ, Ex]
 
 /-- The waits' bound, over the judged run's coins and `m` waits of `K` samples: `𝔼[1[acc] · Σᵢ wait_i + 1] ≤ 1 + m·k`. -/
-theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k m K : ℕ) :
+theorem waits_exp {D : Type} [Fintype D] [Nonempty D] (run : D → Transcript) (k m K : ℕ) :
     Ex (fun s : D × (Fin m → Fin K → D) => (if (run s.1).out = .acc then (1 : ℝ) else 0) *
       ∑ i, (waitRuns run k ((List.finRange K).map (s.2 i)) 0 : ℝ) + 1) ≤ (1 : ℝ) + m * k := by
   have hin : ∀ d : D, (Ex fun ρ : Fin m → Fin K → D => (if (run d).out = .acc then (1 : ℝ) else 0) *

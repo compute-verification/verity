@@ -150,7 +150,7 @@ def SpotRecursiveAt
   Claims.Recursion.decOK (deployZkRec _root_.Flock.Readable.relation) q.decO →
   ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) (k : Verity.Registration.Composite)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
-    (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl K₀ : ℕ) (δs : ℝ),
     (∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m → K₀ ≤ m) →
     (∀ U : Finset (Fin (V.units θ F)), K₀ ≤ U.card → Claims.Pr (fun ξ : S.Ξ => Disjoint (S.drawOf ξ) U) ≤ δs) →

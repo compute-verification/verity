@@ -60,7 +60,7 @@ variable {Ω Ω' : Type} (H : Msg → Msg)
 
 /-- **A round answered with a message and no `H` call** appends the prover's message and the answer, and continues. -/
 theorem stepWith_msg (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
-    (as : List Msg) (t : Trace) (m : Msg) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret (.msg m)) :
+    (as : List Msg) (t : Transcript) (m : Msg) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret (.msg m)) :
     stepWith H P x ω v (n + 1) hist as t =
       stepWith H P x ω v n (hist ++ [(((P.next x hist ω).eval H).1, m)]) (as ++ [((P.next x hist ω).eval H).1])
         ⟨t.msgs ++ [(((P.next x hist ω).eval H).1, .msg m)], t.pLog ++ ((P.next x hist ω).eval H).2, t.vLog,
@@ -69,7 +69,7 @@ theorem stepWith_msg (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Ou
 
 /-- **A round refused with no `H` call** appends the prover's message and the refusal, and ends the run. -/
 theorem stepWith_rej (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (n : ℕ) (hist : List (Msg × Msg))
-    (as : List Msg) (t : Trace) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret .rej) :
+    (as : List Msg) (t : Transcript) (hv : v (as ++ [((P.next x hist ω).eval H).1]) = .ret .rej) :
     stepWith H P x ω v (n + 1) hist as t =
       ⟨t.msgs ++ [(((P.next x hist ω).eval H).1, .rej)], t.pLog ++ ((P.next x hist ω).eval H).2, t.vLog, .rej⟩ := by
   simp only [stepWith, hv, OC.eval, List.append_nil]
@@ -81,7 +81,7 @@ theorem stepWith_shift (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω) 
     (hist₀ : List (Msg × Msg)) (as₀ : List Msg) (m₀ : List (Msg × Out)) (p₀ l₀ : List (Msg × Msg))
     (hP : ∀ hist, P.next x (hist₀ ++ hist) ω = P'.next x' hist ω')
     (hv : ∀ bs : List Msg, bs ≠ [] → v (as₀ ++ bs) = v' bs) (n : ℕ) :
-    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H P x ω v n (hist₀ ++ hist) (as₀ ++ as) ⟨m₀ ++ t.msgs, p₀ ++ t.pLog, l₀ ++ t.vLog, t.out⟩ =
         ⟨m₀ ++ (stepWith H P' x' ω' v' n hist as t).msgs, p₀ ++ (stepWith H P' x' ω' v' n hist as t).pLog,
           l₀ ++ (stepWith H P' x' ω' v' n hist as t).vLog, (stepWith H P' x' ω' v' n hist as t).out⟩ := by

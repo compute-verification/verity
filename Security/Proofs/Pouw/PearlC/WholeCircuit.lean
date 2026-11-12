@@ -26,7 +26,7 @@ namespace Pouw.PearlC.WholeCircuit
 open Pouw.PearlC.TileCircuit
 
 /-- **An evaluation is correct for every unit**: recomputing a unit from the evaluation gives the evaluation back. -/
-theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Transcript) (u : Fin n) :
+theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.localEval (C.eval a) u = C.eval a := by
   funext g
   induction g using WellFoundedLT.induction with
@@ -41,7 +41,7 @@ theorem localEval_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
       exact C.op_congr g _ _ fun x hx => ih x (C.reads_lt g x hx)
     · exact P.localEval_of_not_mem _ h
 
-theorem correct_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Transcript) (u : Fin n) :
+theorem correct_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n) (a : C.Trace) (u : Fin n) :
     P.Correct (C.eval a) u := fun g _ _ => by rw [localEval_eval]
 
 /-! ## Laying out blocks -/
@@ -168,17 +168,17 @@ theorem unit_ne {g : Fin W.spec.toCircuit.N} (hg : g.val < W.nIn + blocksLen L1)
     · simp
 
 /-- Instance `q` of a block cut out of `X`: the template evaluated on the values `X` gives its ports. -/
-def cut (X : W.spec.toCircuit.Transcript) (B : Block) (q : ℕ) : B.S.toCircuit.Transcript :=
+def cut (X : W.spec.toCircuit.Trace) (B : Block) (q : ℕ) : B.S.toCircuit.Trace :=
   B.S.toCircuit.eval fun a => BitVec.ofNat _ (val X (B.port q a))
 
 omit hW hq in
-theorem cut_correct (X : W.spec.toCircuit.Transcript) (B : Block) (q : ℕ) : B.S.part.Correct (W.cut X B q) 0 :=
+theorem cut_correct (X : W.spec.toCircuit.Trace) (B : Block) (q : ℕ) : B.S.part.Correct (W.cut X B q) 0 :=
   correct_eval _ _ _
 
 /-- **The cut is the composed table's unit, gate by gate**: where the template's inputs are its first `nIn` gates and
 each port's value fits its input's width, every template gate's value in the cut is the unit's local evaluation at its
 copy. -/
-theorem cut_val (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_val (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) :
     ∀ a < B.S.N, val (W.cut X B q) a =
       val (W.part.localEval X ⟨_, W.unit_lt hW hq⟩) (B.reloc (W.nIn + blocksLen L1) q a) := by
@@ -209,7 +209,7 @@ theorem cut_val (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gat
       exact ih a' this (by omega)
 
 /-- The cut's inputs are the ports' values. -/
-theorem cut_input (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_input (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hnN : B.nIn ≤ B.S.N) {a : ℕ} (ha : a < B.nIn) :
     val (W.cut X B q) a = val X (B.port q a) := by
   have hpN := W.port_lt_N hW hq ha
@@ -217,7 +217,7 @@ theorem cut_input (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.g
     W.part.localEval_of_not_mem X (W.unit_ne hW hq (g := ⟨_, hpN⟩) (W.port_lt hW hq ha))]
 
 /-- **A correct unit's committed gates are the cut's.** -/
-theorem cut_committed (X : W.spec.toCircuit.Transcript) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
+theorem cut_committed (X : W.spec.toCircuit.Trace) (hin : ∀ a < B.S.N, (B.S.gate a).input = true ↔ a < B.nIn)
     (hfit : ∀ a < B.nIn, val X (B.port q a) < 2 ^ (B.S.gate a).w) (hX : W.part.Correct X ⟨_, W.unit_lt hW hq⟩)
     {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N)
     (hcom : (⟨_, W.inst_lt hW hq ha1 ha2⟩ : Fin W.spec.toCircuit.N) ∈ W.part.committed) :

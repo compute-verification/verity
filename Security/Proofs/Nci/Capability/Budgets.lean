@@ -63,7 +63,7 @@ theorem RecoveredBudget : Guarantees.RecoveredBudget := by
   linarith
 
 /-- In an honest run, what a proof block holds is determined by its unregistered inputs. -/
-theorem eval_eq_of_unregistered (R : Committed) {u : Fin R.d.n} {a a' : R.d.D.Transcript} (ha : R.Honest a)
+theorem eval_eq_of_unregistered (R : Committed) {u : Fin R.d.n} {a a' : R.d.D.Trace} (ha : R.Honest a)
     (ha' : R.Honest a') (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g) :
     ∀ g ∈ holds R.d.D (R.d.𝓘.gates u), R.d.D.eval a g = R.d.D.eval a' g := by
   intro g hg
@@ -74,8 +74,8 @@ theorem StatHeldBudget : Guarantees.StatHeldBudget := by
   intro R c k hCK ι X μ Λ hμ hH u U σ hsel hσ
   classical
   set S := R.d.unregistered (R.d.𝓘.gates u)
-  let φ : R.d.D.Transcript → (S → Bool) := fun a g => (R.d.D.eval a g.1).getLsbD 0
-  let f : R.d.D.Transcript → List Bool := fun a => selectionBits (R.d.D.eval a) U σ
+  let φ : R.d.D.Trace → (S → Bool) := fun a g => (R.d.D.eval a g.1).getLsbD 0
+  let f : R.d.D.Trace → List Bool := fun a => selectionBits (R.d.D.eval a) U σ
   have hf : ∀ a ∈ μ.support, ∀ a' ∈ μ.support, φ a = φ a' → f a = f a' := by
     intro a ha a' ha' hφ
     have heq := eval_eq_of_unregistered R (hμ a ha) (hμ a' ha') fun x hx => by

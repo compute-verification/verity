@@ -184,7 +184,7 @@ theorem nextE_eval_of_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as :
 
 theorem stepWith_out_VE {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (cs : List Claims.Msg → List Coin) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       (Claims.stepWith H P x ω (fun as => next false x as (cs as)) n hist as t).out = .acc →
         (Claims.stepWith H P x ω (fun as => nextE x as (cs as)) n hist as t).out = .acc := by
   intro n

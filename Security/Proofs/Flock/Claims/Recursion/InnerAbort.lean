@@ -72,7 +72,7 @@ open Claims
 
 /-- **Runs that look alike give one result**: a program against two runs that show the same at every sample it reruns at
 returns the same. -/
-theorem RP.eval_congr {R α : Type} (H : Msg → Msg) (run₁ run₂ : R → Trace) (p : RP R α)
+theorem RP.eval_congr {R α : Type} (H : Msg → Msg) (run₁ run₂ : R → Transcript) (p : RP R α)
     (h : ∀ r ∈ p.rerunsAt H run₁, (run₁ r).seen = (run₂ r).seen) : (p.eval H run₁).1 = (p.eval H run₂).1 := by
   induction p with
   | ret a => rfl
@@ -367,9 +367,9 @@ noncomputable def keepD (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
 /-- **`P_I`'s run at a sample, as it aborts**: at the sample's first `k_I` coins, unless `keepD` refuses it. -/
 noncomputable def innerF (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (decC : Msg → Msg → Coin) (ω : Ω)
-    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Trace :=
+    (d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Transcript :=
   if keepD H D I DO decO P x ω d then run H (innerP H D I DO decO P x decC) I.V (xI D x) ω (innerCoins D I x d.1)
-  else abortTrace
+  else abortTranscript
 
 /-- **`P_I`'s aborts**: an inner run at the inner coins `ρ` and the abort coins `a` (the compiled verifier's other
 coins and `E_O`'s) is kept as `keepD` keeps the sample they extend to. -/
@@ -385,7 +385,7 @@ theorem EO_some_acc (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
     (c : (EO D I DO decO).C x) {ws : List Flock.Wit} (h : ((EO D I DO decO).eval H P x ω r c).1 = some ws) :
     (run H P D.V x ω r).out = .acc := by
   by_contra hne
-  simp only [Extractor.eval, EO, RP.eval, Trace.seen, hne, ↓reduceIte] at h
+  simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hne, ↓reduceIte] at h
   cases h
 
 theorem eoGives_of_some {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO : Flock.Deploy Coin Col T}
@@ -496,7 +496,7 @@ theorem innerF_vLog_sub {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {
     obtain ⟨ws, hws⟩ := Option.isSome_iff_exists.1 hk'.1
     rw [innerF_eq_innerRun hpc hws hk'.2, hws]
     exact hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws)
-  · exact Or.inl fun e he => by simp [innerF, hk, abortTrace] at he
+  · exact Or.inl fun e he => by simp [innerF, hk, abortTranscript] at he
 
 /-- The calls `Be` reads at a sample are true evaluations: `E_O`'s witnesses' where it gives them (`CallsTrue`), none's
 where it gives up (`CallsNil`). -/

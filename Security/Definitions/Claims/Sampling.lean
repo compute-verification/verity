@@ -474,7 +474,7 @@ def ofOC {R α : Type} : OC α → RP R α
   | .query q k => .hash q fun a => ofOC (k a)
 
 /-- The `H` calls a rerun program makes itself, in order, as `(query, answer)`: not its reruns'. -/
-def ownLog {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List (Msg × Msg)
+def ownLog {R α : Type} (H : Msg → Msg) (run : R → Transcript) : RP R α → List (Msg × Msg)
   | .ret _ => []
   | .hash q k => (q, H q) :: ownLog H run (k (H q))
   | .rerun r k => ownLog H run (k (run r).seen)

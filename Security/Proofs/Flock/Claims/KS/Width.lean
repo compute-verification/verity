@@ -206,7 +206,7 @@ theorem runOf_m {zk : Bool} {s : Claims.Seen} {j : ℕ} {r : Claims.Flock.ZkRun}
 the trace records. -/
 theorem stepWith_acc_msgs {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (vnext : List Claims.Msg → Claims.OC Claims.Out) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       t.msgs.map Prod.fst = as → (Claims.stepWith H P x ω vnext n hist as t).out = .acc →
         ((vnext ((Claims.stepWith H P x ω vnext n hist as t).msgs.map Prod.fst)).eval H).1 = .acc := by
   intro n

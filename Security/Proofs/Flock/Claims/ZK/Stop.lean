@@ -209,7 +209,7 @@ def stopRel {WS : Type} (RB : Rel WS) : Rel (Option WS)
 /-- The run reads the prover only at the statement it is at and its tape. -/
 theorem stepWith_retag {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω)
     (ω' : Ω') (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x' hist ω' = P.next x hist ω) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H P' x' ω' vnext n hist as t = stepWith H P x ω vnext n hist as t
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by

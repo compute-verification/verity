@@ -74,7 +74,7 @@ def FanIn (C : Circuit) (a : ℕ) : Prop := ∀ g, (C.reads g).card ≤ a
 
 /-- The bits of a bundle of gates `l` in `X`, gate by gate in `l`'s order, each gate's value least significant bit
 first. On a Boolean circuit, one bit per gate. -/
-def bits (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)) : List Bool :=
+def bits (C : Circuit) (X : C.Trace) (l : List (Fin C.N)) : List Bool :=
   l.flatMap fun g => List.ofFn fun i : Fin (C.w g) => (X g).getLsbD i
 
 /-- A value's least significant bit, in `ZMod 2`. -/
@@ -131,19 +131,19 @@ the monitored computation. -/
 structure Committed where
   trace : List (List Bool)
   d : RegisteredCircuit
-  val : d.D.Transcript
+  val : d.D.Trace
 
 namespace Committed
 
 variable (R : Committed)
 
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
-def Honest (a : R.d.D.Transcript) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
+def Honest (a : R.d.D.Trace) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
 /-- **`X` reads the commitments**: it holds the registered values on `θ`, and at each proof block's committed inputs
 and outputs outside `θ` (`Partition.committed` of the proof blocks) the committed value at the gate's position in the
 trace, as its bits. -/
-def Reads (X : R.d.D.Transcript) : Prop :=
+def Reads (X : R.d.D.Trace) : Prop :=
   R.Honest X ∧ ∀ g ∈ R.d.P.committed, g ∉ R.d.θ → ∃ i, R.d.pos g = some i ∧ R.trace[i]? = some (R.d.D.bits X [g])
 
 /-- **The compiler's output explains the committed trace**: no two of the proof blocks' committed gates outside `θ` take
@@ -156,7 +156,7 @@ def Explains : Prop := Set.InjOn R.d.pos ↑(R.d.P.committed \ R.d.θ) ∧ ∃ X
 /-- **Inference block `u` recomputed** from `R` and `X`: a registered gate takes its registered value, every
 other gate outside the inference block takes `X`'s value, and the inference block's gates are computed in order. On the
 inference block and its inputs, only `X`'s values on `in(I) \ θ` matter. -/
-def recompute (X : R.d.D.Transcript) (u : Fin R.d.n) : R.d.D.Transcript :=
+def recompute (X : R.d.D.Trace) (u : Fin R.d.n) : R.d.D.Trace :=
   R.d.D.run fun g => if g ∈ R.d.θ then some (R.val g) else if R.d.𝓘.unit g = some u then none else some (X g)
 
 end Committed
@@ -180,14 +180,14 @@ noncomputable def LDL {ρ : Type} (M : Decoder ρ) (t : ℕ) (r : ρ) (y : List 
 
 /-- The program Lemma 1 hands a decoder for inference block `u` of a run `X`: the evaluator `e`, the inference block's index,
 and the bits of its unregistered inputs in gate order. -/
-def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.d.n) : List Bool :=
+def blockProgram (R : Committed) (e : List Bool) (X : R.d.D.Trace) (u : Fin R.d.n) : List Bool :=
   e ++ indexCode u ++ R.d.D.bits X ((R.d.unregistered (R.d.𝓘.gates u)).sort (· ≤ ·))
 
 /-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every inference block: on inference block
 `u`'s program of any run `X`, `M` outputs the string `y u` extracts from inference block `u` recomputed from that program's
 contents. -/
 def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Committed) (e : List Bool)
-    (y : Fin R.d.n → R.d.D.Transcript → List Bool) : Prop :=
+    (y : Fin R.d.n → R.d.D.Trace → List Bool) : Prop :=
   ∀ u X, M.run r (blockProgram R e X u) t = some (y u (R.recompute X u))
 
 end Verity

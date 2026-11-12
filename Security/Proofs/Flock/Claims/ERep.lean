@@ -60,7 +60,7 @@ namespace Claims
 /-! ## Rerun programs -/
 
 /-- Running a bound program: its result is the continuation's on the first part's result, and its reruns add. -/
-theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).1 = ((f (p.eval H run).1).eval H run).1 ∧
       ((p.bind f).eval H run).2.2 = (p.eval H run).2.2 + ((f (p.eval H run).1).eval H run).2.2 := by
   induction p with
@@ -74,7 +74,7 @@ theorem RP.eval_bind {R α β : Type} (H : Msg → Msg) (run : R → Trace) (p :
     rw [(ih _).2]; ring
 
 /-- A wait reruns the prover at most once per coin sample it holds. -/
-theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.2 ≤ rs.length := by
   intro rs
   induction rs with
@@ -88,7 +88,7 @@ theorem waitAcc_runs_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k : �
       exact Nat.add_le_add_right (ih _) 1
 
 /-- The waits rerun the prover at most once per coin sample they hold. -/
-theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.2 ≤ (rss.map List.length).sum := by
   intro rss
@@ -105,12 +105,12 @@ theorem firstWait_runs_le {R W Op : Type} (H : Msg → Msg) (run : R → Trace) 
     · exact ih
 
 /-- What one wait over the coin samples `rs` yields: some candidate that `check` accepts. -/
-def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+def WaitOk {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (rs : List R) : Prop :=
   ∃ w, assemble (((waitAcc k rs []).eval H run).1.flatMap opens) = some w ∧ check w = true
 
 /-- The waits return only candidates `check` accepts. -/
-theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ (rss : List (List R)) (w : W), ((firstWait k opens assemble check rss).eval H run).1 = some w →
       check w = true := by
@@ -129,7 +129,7 @@ theorem firstWait_some {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k 
     · exact ih w h
 
 /-- The waits return nothing only if every wait failed. -/
-theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (opens : Seen → List Op)
+theorem firstWait_none {R W Op : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).1 = none →
       ∀ rs ∈ rss, ¬ WaitOk H run k opens assemble check rs := by
@@ -189,7 +189,7 @@ theorem ERep_bad_le (H : Msg → Msg) (V : Verifier Coin) (R : Rel W) (m k K : M
   simp only [← Pr_pi]
   rw [← Pr_indep]
   refine Pr_mono fun s ⟨hacc, hbad⟩ => ⟨hacc, fun i hok => hbad ?_⟩
-  simp only [Extractor.eval, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte] at hbad ⊢
+  simp only [Extractor.eval, ERep, RP.eval, Transcript.seen, hacc, ↓reduceIte] at hbad ⊢
   generalize hres : ((firstWait (k x) opens (assemble x) (check x)
     ((List.finRange (m x)).map fun i => (List.finRange (K x)).map (s.2.2 i))).eval H (run H P V x s.1)).1 = res
     at hbad ⊢

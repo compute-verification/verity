@@ -66,7 +66,7 @@ section Transport
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- A collision among the verifier's own SHA-512 calls in the run `t`. -/
-def VColl (H : Msg → Msg) (t : Trace) : Prop :=
+def VColl (H : Msg → Msg) (t : Transcript) : Prop :=
   ∃ u v, u ∈ t.vLog.map Prod.fst ∧ v ∈ t.vLog.map Prod.fst ∧ Collision H u v
 
 /-- **One run's collision is `B`'s**: `B`'s first run is the prover's at a uniform tape and coins, and `B` outputs a
@@ -136,7 +136,7 @@ theorem KS_of_parts {W : Type} (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
 a pair from the run and `E`'s output by an oracle program `pick`. Its cost is the run's SHA-512 calls (both parties'),
 `E`'s, and `pick`'s. -/
 def oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) : Finder where
   S := Ω × (Fin (V.k x) → Coin) × E.C x
   out s := ((pick x (run H P V x s.1 s.2.1) (E.eval H P x s.1 s.2.1 s.2.2).1).eval H).1
@@ -145,7 +145,7 @@ def oneRunExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Co
 
 /-- **`oneRunExt`'s cost**: a run's calls `T`, `E`'s `N_h` and `pick`'s `c`, each at most. -/
 theorem oneRunExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) {T Nh c : ℕ} (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
     (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w, ((pick x t w).eval H).2.length ≤ c)
     (s : (oneRunExt H V E pick P x).S) : (oneRunExt H V E pick P x).cost s ≤ T + Nh + c := by
@@ -157,7 +157,7 @@ theorem oneRunExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : 
 
 /-- **`oneRunExt` under `ExpectedCR`**: it finds a collision with probability at most `(T + N_h + c)/2^256`. -/
 theorem oneRunExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (pick : Msg → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (x : Msg) {T Nh c : ℕ} (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
     (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w, ((pick x t w).eval H).2.length ≤ c)
     (hCR : ExpectedCR H (oneRunExt H V E pick P x)) :
@@ -172,7 +172,7 @@ theorem oneRunExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Ex
 with fresh continuations after round `j` (`B`'s runs), run `E` on each, and compute a pair from both runs and both
 outputs by `pick`. Its cost is both runs' SHA-512 calls, both of `E`'s, and `pick`'s. -/
 def forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) : Finder where
   S := BCoins Ω Coin (V.k x) × E.C x × E.C x
   ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
@@ -192,7 +192,7 @@ def forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
 omit [Nonempty Coin] in
 /-- An event on which `pick` outputs a collision has probability at most `forkExt`'s. -/
 theorem Pr_le_forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (Ev : (forkExt H V E pick P x hk).S → Prop)
     (hEv : ∀ s, Ev s → ∃ u v, (forkExt H V E pick P x hk).out s = some (u, v) ∧ Collision H u v) :
     Pr Ev ≤ (forkExt H V E pick P x hk).Pr H :=
@@ -201,7 +201,7 @@ theorem Pr_le_forkExt {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extr
 omit [Nonempty Coin] in
 /-- **`forkExt`'s cost**: two runs' calls `T` each, two of `E`'s `N_h` each, and `pick`'s `c`. -/
 theorem forkExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}
     (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
     (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w t' w', ((pick x t w t' w').eval H).2.length ≤ c)
@@ -219,7 +219,7 @@ theorem forkExt_cost_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Ex
 omit [Nonempty Coin] in
 /-- **`forkExt` under `ExpectedCR`**: it finds a collision with probability at most `(2T + 2N_h + c)/2^256`. -/
 theorem forkExt_Pr_le {W : Type} (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V)
-    (pick : Msg → Trace → Option W → Trace → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (pick : Msg → Transcript → Option W → Transcript → Option W → OC (Option (Msg × Msg))) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) {T Nh c : ℕ}
     (hT : ∀ ω r, (run H P V x ω r).pLog.length + (run H P V x ω r).vLog.length ≤ T)
     (hE : ∀ ω r₀ e, (E.eval H P x ω r₀ e).2.1 ≤ Nh) (hc : ∀ t w t' w', ((pick x t w t' w').eval H).2.length ≤ c)

@@ -112,7 +112,7 @@ theorem run_fork_get {Coin : Type} [Inhabited Coin] (H : Msg → Msg) {Ω : Type
 
 theorem Compiled.sessionProg_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (L : Compiled Coin A) (H : Msg → Msg) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (s : Fin (L.nS x)) (xO : Msg)
-    (c : A.EC (L.sh x s)) (run₂ : (Fin (L.V.k x) → Coin) → Trace) {a : Msg × A.W}
+    (c : A.EC (L.sh x s)) (run₂ : (Fin (L.V.k x) → Coin) → Transcript) {a : Msg × A.W}
     (h : ((L.sessionProg x r₀ s xO c).eval H run₂).1 = some a) : a.1 = xO := by
   unfold Compiled.sessionProg at h
   split_ifs at h
@@ -130,9 +130,9 @@ theorem Compiled.EO_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
         (List.finRange (L.nS x)).map fun s : Fin (L.nS x) => (L.stmts x (run H P L.V x ω r).msgs).getD s.val [] := by
   have hacc : (run H P L.V x ω r).out = .acc := by
     by_contra hn
-    simp [Extractor.eval, Compiled.EO, RP.eval, Trace.seen, hn] at h
+    simp [Extractor.eval, Compiled.EO, RP.eval, Transcript.seen, hn] at h
   refine ⟨hacc, ?_⟩
-  simp only [Extractor.eval, Compiled.EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+  simp only [Extractor.eval, Compiled.EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   exact forall₂_map_fst (fun s _ ha => L.sessionProg_fst H x r s _ (c s) _ ha)
     (List.forall₂_map_left_iff.1 (collect_some H _ _ w h))
 
@@ -147,7 +147,7 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
           if ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default then .acc else .rej)],
         if ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default then .acc else .rej⟩ ∧
     (run H P (echoArg Coin).V x ω c).vLog = [] := by
-  simp [run, stepWith, echoArg, echoV, OC.eval, Trace.seen]
+  simp [run, stepWith, echoArg, echoV, OC.eval, Transcript.seen]
   split_ifs with h
   · simp
     exact (ite_eq_left h).symm
@@ -158,7 +158,7 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
 and the candidate is the rerun's message, the statement. -/
 theorem echoArg_ext_eval {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
     (H : Msg → Msg) (x : Msg) (r : Fin ((echoArg Coin).V.k x) → Coin) (c : (echoArg Coin).EC ((echoArg Coin).shape x))
-    (rn : (Fin ((echoArg Coin).V.k x) → Coin) → Trace) (hrn : ∀ r', (rn r').seen = ⟨[(x, .acc)], .acc⟩) :
+    (rn : (Fin ((echoArg Coin).V.k x) → Coin) → Transcript) (hrn : ∀ r', (rn r').seen = ⟨[(x, .acc)], .acc⟩) :
     (((echoArg Coin).ext x r c).eval H rn).1 = some x := by
   simp [Claims.SamplingGeneric.Arg.ext, ERep, RP.eval, firstWait, waitAcc, RP.bind, hrn, echoArg,
     List.finRange_succ]
@@ -342,9 +342,9 @@ theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
   rw [List.getD_eq_getElem?_getD] at hF hrej
   by_cases hcond : a = xS ∨ c = default
   · rw [ite_eq_left hcond] at hF ⊢
-    simp [Compiled.echo, Trace.seen, hF]
+    simp [Compiled.echo, Transcript.seen, hF]
   · rw [ite_eq_right hcond] at hF ⊢
-    simp [Compiled.echo, Trace.seen, hF, hrej (by rw [hF])]
+    simp [Compiled.echo, Transcript.seen, hF, hrej (by rw [hF])]
 
 /-- **The echo compiler meets the outer sessions' contract.** -/
 theorem echo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]

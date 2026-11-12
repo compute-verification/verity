@@ -59,14 +59,14 @@ open Claims
 
 /-! ## Reruns and own calls of a list's programs -/
 
-theorem flatMapRP_runs_le {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (B : ℕ)
+theorem flatMapRP_runs_le {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (B : ℕ)
     (l : List β) (h : ∀ b ∈ l, ((f b).eval H run).2.2 ≤ B) : ((flatMapRP f l).eval H run).2.2 ≤ l.length * B := by
   rw [flatMapRP_runs]
   refine (List.sum_le_length_nsmul _ B fun n hn => ?_).trans_eq (by simp)
   obtain ⟨b, hb, rfl⟩ := List.mem_map.1 hn
   exact h b hb
 
-theorem ownLog_flatMapRP_le {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (B : ℕ)
+theorem ownLog_flatMapRP_le {R β γ : Type} (H : Msg → Msg) (run : R → Transcript) (f : β → RP R (List γ)) (B : ℕ)
     (l : List β) (h : ∀ b ∈ l, (ownLog H run (f b)).length ≤ B) :
     (ownLog H run (flatMapRP f l)).length ≤ l.length * B := by
   rw [ownLog_flatMapRP]
@@ -79,7 +79,7 @@ theorem length_zip_finRange_le {α : Type} (k : ℕ) (l : List α) : ((List.finR
   exact min_le_left _ _
 
 /-- `checkRevealed`'s own calls: the commitment's checks of each opening, under its roots. -/
-theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Trace) (Cm : CommitmentScheme Bool)
+theorem ownLog_checkRevealed_length {R : Type} (H : Msg → Msg) (run : R → Transcript) (Cm : CommitmentScheme Bool)
     (rs : List (List Msg × Opening Bool)) :
     (ownLog H run (checkRevealed (R := R) Cm rs)).length = (rs.map fun p => ((Cm.opens p.1 p.2).eval H).2.length).sum := by
   unfold checkRevealed
@@ -102,7 +102,7 @@ def OpenCallsLe (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 /-- **The outer wait and what follows it** rerun at most `K + k·B` times: the wait over `K` samples, and at most `k`
 bodies of at most `B` reruns each. Stated at every `k`, so that the kernel never meets the deployed `k`'s
 `List.finRange`. -/
-theorem outer_runs_le {R γ β : Type} (H : Msg → Msg) (run : R → Trace) (k K B : ℕ) (rs : List R)
+theorem outer_runs_le {R γ β : Type} (H : Msg → Msg) (run : R → Transcript) (k K B : ℕ) (rs : List R)
     (hrs : rs.length = K) (body : Fin k × (R × Seen) → RP R (List γ)) (fin : List γ → β)
     (hB : ∀ jo, ((body jo).eval H run).2.2 ≤ B) :
     (((waitAccC k rs []).bind fun outer =>

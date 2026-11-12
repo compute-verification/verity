@@ -119,7 +119,7 @@ theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
@@ -163,7 +163,7 @@ theorem readUnitDrawn_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
@@ -212,7 +212,7 @@ theorem readUnitDrawn_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ} {
         (∀ i ∈ R.reads, ∃ j, ∃ hj : j < (Flock.HmOut.unrolled ct).upv,
           R.port i = readPorts (Flock.Bridge.copyGate (.tmpl ct) hB n (R.unit i) hj) hr V H) →
         ∀ (acc : Ω → Prop) (drawn : Ω → Finset (Fin n))
-          (tr : Ω → (Flock.Bridge.circuitOf (.tmpl ct) hB n).Transcript) (cost : Ω → ℕ) (ε : ℝ),
+          (tr : Ω → (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (cost : Ω → ℕ) (ε : ℝ),
         R.Committed Verity.sha512 Verity.sha512 pinnedKey →
         Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
           ¬ ((Flock.Bridge.partsOf (.tmpl ct) hB n).Correct (tr ω) (R.unit i) ∧

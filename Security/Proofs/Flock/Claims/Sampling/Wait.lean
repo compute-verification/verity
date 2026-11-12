@@ -102,7 +102,7 @@ theorem accList_length_le {R : Type} (acc : R → Prop) [DecidablePred acc] (k :
     (accList acc k rs).length ≤ k :=
   List.length_take_le _ _
 
-theorem waitAccC_eval {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) :
+theorem waitAccC_eval {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) :
     ∀ (rs : List R) (acc : List (R × Seen)), acc.length ≤ k →
       ((waitAccC k rs acc).eval H run).1 =
         acc ++ ((rs.map fun r => (r, (run r).seen)).filter fun p => decide (p.2.out = .acc)).take (k - acc.length) := by
@@ -125,7 +125,7 @@ theorem waitAccC_eval {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ)
         exact ih _ hlen
 
 /-- **The wait keeps the first `k` accepted samples**, each with what it showed. -/
-theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R) :
+theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R) :
     ((waitAccC k rs []).eval H run).1 =
       (accList (fun r => (run r).out = .acc) k rs).map fun r => (r, (run r).seen) := by
   rw [waitAccC_eval H run k rs [] (Nat.zero_le _), List.nil_append, List.length_nil, Nat.sub_zero, accList,

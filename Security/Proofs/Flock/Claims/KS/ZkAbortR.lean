@@ -72,7 +72,7 @@ open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extra
 
 section MergeD
 
-variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Trace}
+variable {Ω Coin A : Type} {H : Msg → Msg} {n : ℕ} {tr : Ω → (Fin n → Coin) × A → Transcript}
 
 /-- **The escapes fit `C` counted per round**: `Σ_i m_i c_i ≤ 2C`, with `m_i` the fork events at `i`'s round, and
 `Σ_l β_l ≤ n`. -/

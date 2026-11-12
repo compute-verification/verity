@@ -82,7 +82,7 @@ def Bound.decAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List M
 
 theorem Bound.stepWith_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), hist.length = t.msgs.length →
       as.length = t.msgs.length → t.msgs.length + (n + 1) = Bd.DE.V.k x →
       stepWith H (replay ms) x () (Bd.vnAt x r) (n + 1) hist as t =
         { msgs := t.msgs ++ (List.range' t.msgs.length n).map (fun i => (ms.getD i [], Out.msg (Bd.ans (coinSeq r i)))) ++

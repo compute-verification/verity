@@ -77,10 +77,10 @@ namespace Accounting.ReadUnit
 variable {C : Verity.Circuit}
 
 /-- Bit 0 of gate `g`'s value in `X`: a read unit's ports are one-bit gates. -/
-def bit (X : C.Transcript) (g : Fin C.N) : Bool := (X g).getLsbD 0
+def bit (X : C.Trace) (g : Fin C.N) : Bool := (X g).getLsbD 0
 
 /-- The bits the gates `gs` hold in `X`, in order. -/
-def bits {k : ℕ} (X : C.Transcript) (gs : Fin k → Fin C.N) : List Bool := List.ofFn fun i => bit X (gs i)
+def bits {k : ℕ} (X : C.Trace) (gs : Fin k → Fin C.N) : List Bool := List.ofFn fun i => bit X (gs i)
 
 /-- A number from its bits, least significant first. -/
 def num : List Bool → ℕ
@@ -113,7 +113,7 @@ structure Ports (C : Verity.Circuit) where
 
 namespace Ports
 
-variable (q : Ports C) (X : C.Transcript)
+variable (q : Ports C) (X : C.Trace)
 
 /-- The index the read's index gates hold. -/
 def tokOf : ℕ := num (bits X q.tok)
@@ -144,7 +144,7 @@ def verifier (key : Hash.Msg) (id : Verity.Digest) : Hash.RowLeaf.Verifier :=
 /-- **The read's ports hold its reference** in `Y`, under the hashes `H` and `G` and the hm96 key `key`: the row the
 read returns is `Hash.EmbeddingRead.h`'s on its ports' values, and its verdict bit is set only where
 `Hash.EmbeddingRead.ok` holds of them, in its table's domain under the domain id its port holds. -/
-def Computes (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (Y : C.Transcript) : Prop :=
+def Computes (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (Y : C.Trace) : Prop :=
   q.hOf Y = Hash.EmbeddingRead.h q.count q.words (q.tokOf Y) (q.opening Y) ∧
     (q.okOf Y = true →
       Hash.EmbeddingRead.ok H G (q.domainAt (q.domainOf Y)) key (q.rootOf Y) q.count (q.tokOf Y) (q.opening Y))
@@ -169,7 +169,7 @@ path and the SHA-512 compressions under them), or an instance of a lowering-corr
 instantiates. -/
 structure GatesRefine (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
     (P : Verity.Partition C n) (u : Fin n) (q : Ports C) : Prop where
-  computes : ∀ X : C.Transcript, P.Correct X u → (∀ g ∈ P.io u, ∀ b, consts g = some b → bit X g = b) →
+  computes : ∀ X : C.Trace, P.Correct X u → (∀ g ∈ P.io u, ∀ b, consts g = some b → bit X g = b) →
     q.Computes H G key (P.localEval X u)
   root_committed : ∀ i, P.unit (q.root i) = some u → q.root i ∈ P.committed
   domain_committed : ∀ i, P.unit (q.domain i) = some u → q.domain i ∈ P.committed
@@ -179,7 +179,7 @@ structure GatesRefine (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
 domain id's gates hold them, its verdict bit is held to 1, and the registered constants `consts` among its inputs and
 outputs hold. -/
 structure RegisteredRows (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verity.Partition C n) (u : Fin n) (q : Ports C)
-    (r d : Verity.Digest) (X : C.Transcript) : Prop where
+    (r d : Verity.Digest) (X : C.Trace) : Prop where
   root_eq : q.rootOf X = r
   domain_eq : q.domainOf X = d
   ok_eq : q.okOf X = true
@@ -188,7 +188,7 @@ structure RegisteredRows (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verit
 /-- **The read returns its table's row at its index** in `X`, for the table under the root `r`, the domain id `d` and
 the hm96 key `key`: for every opening `o₀` the root accepts at the index the read's index gates hold, the row the read
 returns is `o₀`'s, or `H` or `G` collides on what the read's check and `o₀`'s hashed. -/
-def Binds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (q : Ports C) (r d : Verity.Digest) (X : C.Transcript) :
+def Binds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (q : Ports C) (r d : Verity.Digest) (X : C.Trace) :
     Prop :=
   ∀ o₀ : Hash.RowLeaf.Opening, Hash.RowLeaf.accepts H G (q.verifier key d) r (q.tokOf X) o₀ →
     q.hOf X = o₀.row ∨
@@ -219,11 +219,11 @@ def Committed (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) : Prop :=
     Hash.RowLeaf.accepts H G ((R.port i).verifier key (R.domain i)) (R.root i) k (R.table i k)
 
 /-- The index read `i`'s index gates hold in `X`. -/
-def index (i : ι) (X : C.Transcript) : ℕ := (R.port i).tokOf X
+def index (i : ι) (X : C.Trace) : ℕ := (R.port i).tokOf X
 
 /-- **What read `i`'s check and its table's check hashed** in `X`, under one hash `H`: the read's opening and its
 table's opening at the read's index, each checked there. -/
-def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.Transcript) : List Hash.Msg :=
+def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.Trace) : List Hash.Msg :=
   Hash.RowLeaf.outerHashed H H ((R.port i).verifier key (R.domain i)) (R.index i X) ((R.port i).opening X) ++
     Hash.RowLeaf.outerHashed H H ((R.port i).verifier key (R.domain i)) (R.index i X) (R.table i (R.index i X)) ++
     (Hash.RowLeaf.innerHashed H ((R.port i).verifier key (R.domain i)) ((R.port i).opening X) ++
@@ -233,7 +233,7 @@ open Classical in
 /-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is drawn, in its unit's
 local evaluation of the transcript `X ω` under the partition `P`. -/
 noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
-    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ω : Ω) : List Hash.Msg :=
+    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
   (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
 open Classical in
@@ -241,7 +241,7 @@ open Classical in
 digest, if there are two, at the cost `cost ω`: the SHA-512 calls of reaching `ω`'s transcript and hashing what its
 drawn reads hashed. -/
 noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Partition C n)
-    (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript)
+    (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace)
     (cost : Ω → ℕ) : Claims.Finder where
   S := Ω
   out ω :=

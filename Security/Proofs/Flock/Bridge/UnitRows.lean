@@ -80,7 +80,7 @@ of the parsed file, every transcript `tr` gives, for each copy `j < units_per_vu
 `z` that satisfy the unit net's rows (`Rows.ofNet`), whose constant is `tr`'s bit at the unit's constant gate, and
 which are the bits of `u`'s local evaluation of `tr` at every column of the copy. (`X` is a token here: ArkLib's global
 `notation3 "X"` comes in through `CircuitOf`'s imports.) -/
-theorem rows_localEval (tr : (circuitOf D hU n).Transcript) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) :
+theorem rows_localEval (tr : (circuitOf D hU n).Trace) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) :
     ∃ z : ℕ → Bool, (Rows.ofNet hU).Sat (fun c => z c.val) ∧
       z (Rows.ofNet hU).one.val = (tr (constGate D hU n u)).getLsbD 0 ∧
       ∀ c : Fin (Rows.ofNet hU).w, z c.val = ((partsOf D hU n).localEval tr u (copyGate D hU n u hj c)).getLsbD 0 := by

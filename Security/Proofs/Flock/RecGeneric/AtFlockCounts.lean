@@ -30,7 +30,7 @@ open Claims Claims.Recursion
 
 /-- **`collect`'s result at a program list's head**: the head's result, then the rest's, the head's prepended; none
 where either gives up. -/
-theorem collect_cons_eval {R α : Type} (H : Msg → Msg) (run : R → Trace) (p : RP R (Option α))
+theorem collect_cons_eval {R α : Type} (H : Msg → Msg) (run : R → Transcript) (p : RP R (Option α))
     (ps : List (RP R (Option α))) :
     ((collect (p :: ps)).eval H run).1 =
       (p.eval H run).1.bind fun a => ((collect ps).eval H run).1.map fun l => a :: l := by
@@ -42,7 +42,7 @@ theorem collect_cons_eval {R α : Type} (H : Msg → Msg) (run : R → Trace) (p
     exact (RP.eval_bind H run _ _).1
 
 /-- **`collect` gives one result per program**, where it gives any. -/
-theorem collect_length {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_length {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ (ps : List (RP R (Option α))) (l : List α), ((collect ps).eval H run).1 = some l → l.length = ps.length
   | [], l, h => by
     have h' : some ([] : List α) = some l := h

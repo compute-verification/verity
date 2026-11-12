@@ -69,7 +69,7 @@ structure Method where
   /-- the circuit and its registered gates -/
   d : RegisteredCircuit
   /-- the registered values, read at `θ` only -/
-  registered : d.D.Transcript
+  registered : d.D.Trace
   /-- the coin gates -/
   coins : Finset (Fin d.D.N)
   /-- coin gates are input gates outside `θ` -/
@@ -85,7 +85,7 @@ def external : Finset (Fin M.d.D.N) :=
 
 /-- The input assignment on external input `x` and coin `ω`: registered gates take their registered values, coin gates
 `ω`'s, and the rest `x`'s. -/
-def assign (x ω : M.d.D.Transcript) : M.d.D.Transcript := fun g =>
+def assign (x ω : M.d.D.Trace) : M.d.D.Trace := fun g =>
   if g ∈ M.d.θ then M.registered g else if g ∈ M.coins then ω g else x g
 
 end Method
@@ -95,12 +95,12 @@ structure Evaluation where
   /-- the method -/
   M : Method
   /-- the external input -/
-  x : M.d.D.Transcript
+  x : M.d.D.Trace
   /-- the coin -/
-  ω : M.d.D.Transcript
+  ω : M.d.D.Trace
 
 /-- An evaluation's trace: its method's circuit evaluated on its input assignment. -/
-def Evaluation.trace (e : Evaluation) : e.M.d.D.Transcript := e.M.d.D.eval (e.M.assign e.x e.ω)
+def Evaluation.trace (e : Evaluation) : e.M.d.D.Trace := e.M.d.D.eval (e.M.assign e.x e.ω)
 
 /-- **An execution**: a declaration and the values its gates held, each computed gate's value its operation on them.
 `Actual.Run` is one once its baseline is given; `Accounting.Requirement.Execution` is a schedule, not this. -/
@@ -108,7 +108,7 @@ structure Execution where
   /-- the circuit that ran and its registered gates -/
   d : RegisteredCircuit
   /-- the values its gates held -/
-  val : d.D.Transcript
+  val : d.D.Trace
   /-- each computed gate's value is its operation on them (`Placed.Faithful`) -/
   faithful : ∀ g, d.D.isInput g = false → val g = d.D.op g val
 
@@ -237,7 +237,7 @@ structure Crossing {C : Circuit} {n : ℕ} (P : Partition C n) where
 
 /-- **The information in `S`** under the description-length function `I`: `I` of `S`'s values in `X`, in gate order.
 `I = LDL M t r` is the local description length; `I = length` is the wire bits. -/
-def info (I : List Bool → ℕ∞) (C : Circuit) (X : C.Transcript) (S : Finset (Fin C.N)) : ℕ∞ :=
+def info (I : List Bool → ℕ∞) (C : Circuit) (X : C.Trace) (S : Finset (Fin C.N)) : ℕ∞ :=
   I (C.bits X (S.sort (· ≤ ·)))
 
 /-! ### Time-ordered partitions -/
@@ -278,7 +278,7 @@ def outputsOf (v : Fin n) : Finset (Fin C.N) := (F.toPartition.gates v).filter f
 
 /-- **The information block `v` hands on with timing `t`** under `I`, on the values `X`: `handsOn`'s crossings measured
 by description length rather than wire bits. -/
-noncomputable def infoHandsOn (I : List Bool → ℕ∞) (X : C.Transcript) (t : Timing) (v : Fin n) : ℕ∞ :=
+noncomputable def infoHandsOn (I : List Bool → ℕ∞) (X : C.Trace) (t : Timing) (v : Fin n) : ℕ∞ :=
   info I C X (F.handsOn t v)
 
 end TimeOrdered
@@ -360,11 +360,11 @@ noncomputable def fewestBlocks (𝓡 : Set Resources) (k : ℕ) : ℕ∞ :=
 /-! ### Classes of methods -/
 
 /-- **A class fixed across inputs and coins**: the methods whose every evaluation has the property `p`. -/
-def everywhere (p : Evaluation → Prop) : Set Method := {M | ∀ x ω : M.d.D.Transcript, p ⟨M, x, ω⟩}
+def everywhere (p : Evaluation → Prop) : Set Method := {M | ∀ x ω : M.d.D.Trace, p ⟨M, x, ω⟩}
 
 /-- **The worst case** of `q` over a method's external inputs and coins. -/
 noncomputable def worst (q : Evaluation → ℕ∞) (M : Method) : ℕ∞ :=
-  ⨆ (x : M.d.D.Transcript) (ω : M.d.D.Transcript), q ⟨M, x, ω⟩
+  ⨆ (x : M.d.D.Trace) (ω : M.d.D.Trace), q ⟨M, x, ω⟩
 
 /-- **The cell of `r`**: the methods that attain a vector at most `r` on every external input and coin. -/
 noncomputable def within {Loc : Type} (E : Setoid Evaluation) (𝔉 : Family Loc) (r : Resources) :

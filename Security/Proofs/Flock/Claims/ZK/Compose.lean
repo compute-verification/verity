@@ -102,7 +102,7 @@ theorem histOf_append (τ τ' : List (Msg × Out)) : histOf (τ ++ τ') = histOf
   simp [histOf]
 
 theorem stepWith_comap {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (x : Msg) (ω : Ω')
-    (vnext : List Msg → OC Out) : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    (vnext : List Msg → OC Out) : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H (P.comap f) x ω vnext n hist as t = stepWith H P x (f ω) vnext n hist as t
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by
@@ -120,7 +120,7 @@ theorem runStar_comap {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (f : 
 /-- The run reads the prover only at `x` and its tape. -/
 theorem stepWith_congr {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (P' : Prover Ω') (x : Msg) (ω : Ω) (ω' : Ω')
     (vnext : List Msg → OC Out) (h : ∀ hist, P'.next x hist ω' = P.next x hist ω) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       stepWith H P' x ω' vnext n hist as t = stepWith H P x ω vnext n hist as t
   | 0, _, _, _ => rfl
   | n + 1, hist, as, t => by
@@ -236,7 +236,7 @@ theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → P
 /-- **Every call in a run's `pLog` is one round's**: the trace's own, or the prover's on the history before some
 round. -/
 theorem stepWith_pLog_mem {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = hist.map Prod.fst →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = hist.map Prod.fst →
       ∀ e ∈ (stepWith H P x ω vnext n hist as t).pLog, e ∈ t.pLog ∨
         ∃ i < (interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist).length,
           e ∈ ((P.next x (hist ++ histOf ((interact (fun as => ((vnext as).eval H).1)

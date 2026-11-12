@@ -76,7 +76,7 @@ theorem oc_eval_calls (H : Msg → Msg) {α : Type} : ∀ (o : OC α), ∀ e ∈
 /-! ## Transcripts -/
 
 theorem stepWith_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), as = hist.map Prod.fst →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript), as = hist.map Prod.fst →
       (stepWith H P x ω vnext n hist as t).msgs =
         t.msgs ++ interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist
   | 0, _, _, _, _ => by simp [stepWith, interact]
@@ -105,7 +105,7 @@ section Calls
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
 
-theorem stepWith_pLog_sub : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+theorem stepWith_pLog_sub : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     t.pLog ⊆ (stepWith H P x ω vnext n hist as t).pLog
   | 0, _, _, _ => by simp [stepWith]
   | n + 1, hist, as, t => by
@@ -115,7 +115,7 @@ theorem stepWith_pLog_sub : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List 
       · exact List.subset_append_left _ _
       · exact List.subset_append_left _ _
 
-theorem stepWith_pLog_calls : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+theorem stepWith_pLog_calls : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     (∀ e ∈ t.pLog, e.2 = H e.1) → ∀ e ∈ (stepWith H P x ω vnext n hist as t).pLog, e.2 = H e.1
   | 0, _, _, _, ht => by simpa [stepWith] using ht
   | n + 1, hist, as, t, ht => by
@@ -131,7 +131,7 @@ theorem stepWith_pLog_calls : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : Lis
 
 /-- **Each round's calls of the prover are in the run's `pLog`**: round `i`'s message is computed from the history of
 the run's first `i` rounds. -/
-theorem stepWith_round_log : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+theorem stepWith_round_log : ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
     as = hist.map Prod.fst →
       ∀ i < (interact (fun as => ((vnext as).eval H).1) (fun h => ((P.next x h ω).eval H).1) n hist).length,
         ((P.next x (hist ++ histOf ((interact (fun as => ((vnext as).eval H).1)

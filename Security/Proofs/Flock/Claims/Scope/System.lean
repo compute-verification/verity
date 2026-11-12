@@ -200,7 +200,7 @@ theorem foldl_filter (p f : ℕ → Bool) (l : List ℕ) (c : Bool) :
 
 section Eval
 
-variable {a : S.circ.toCircuit.Transcript} {x : ℕ → Bool}
+variable {a : S.circ.toCircuit.Trace} {x : ℕ → Bool}
 
 theorem bit_input {g : Fin S.size} (hg : g.val < S.J * S.N) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (a g).getLsbD 0 := by
@@ -319,7 +319,7 @@ theorem forall_outputs {P : Fin S.size → Prop} :
 
 /-- **The block circuit's outputs**: on block `b`'s inputs, every output gate holds the value its output reads exactly
 when the system holds in block `b`. -/
-theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB) (a : S.circ.toCircuit.Transcript)
+theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB) (a : S.circ.toCircuit.Trace)
     (ha : ∀ g : Fin S.size, (a g).getLsbD 0 = w.hid.getD (S.idx b g.val) false) (val : Claims.Flock.Src → Bool)
     (hhid : ∀ i, val (.hid i) = w.hid.getD i false) (hpub : ∀ i, val (.pub i) = S.pubs.getD i false) :
     (∀ o ∈ S.circ.outputs, (S.circ.toCircuit.eval a o).getLsbD 0 = val (S.rel.out b o.val)) ↔ S.Holds w b := by

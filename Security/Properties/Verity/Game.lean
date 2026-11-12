@@ -656,7 +656,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   check reads none -/
   coinsRead : Subprotocol → Sent → Option (List Release)
   extract : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Transcript
+    Game.Strategy (play (families θ) (signer θ) θ F c) → (read θ F).circuit.Trace
   finder : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c) → Claims.Finder
   cost : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →

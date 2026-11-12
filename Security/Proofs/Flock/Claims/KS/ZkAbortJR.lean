@@ -75,13 +75,13 @@ variable {Dr Coin Col T : Type} [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonem
 open Classical in
 /-- **An accepted run's openings over samples** at the words' positions, its first column of table `j` at table `j`'s;
 none on a rejected run. -/
-noncomputable def opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) (d : Dr)
+noncomputable def opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (d : Dr)
     (p : PosJ D N x) : Option Col :=
   if (tr d).out = .acc then lookCol (D.cols (tr d).seen p.1) p.2.val else none
 
 omit [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- **On accepted samples the extractor's table is the zero-filled words.** -/
-theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) (bs : List Dr)
+theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (bs : List Dr)
     (hacc : ∀ b ∈ bs, AccD tr b) (p : PosJ D N x) :
     firstTable (opDJ D N x tr) (fun _ => 0) bs p =
       (lookCol ((bs.map fun d => (tr d).seen).flatMap fun v => D.cols v p.1) p.2.val).getD 0 := by
@@ -94,7 +94,7 @@ theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **One wait's bound over samples, from every table's bound**: `oneWaitD` at a statement of several tables, the
 positions every table's word's (`PosJ`). -/
-theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) {s : Flock.Stmt}
+theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (Ok : Msg → ℕ → Col → Prop) (hz : ∀ j, Ok x j 0)
     (hok : ∀ d j q u, (tr d).out = .acc → j < nTab D x → q < N x j → lookCol (D.cols (tr d).seen j) q = some u →
       Ok x j u)

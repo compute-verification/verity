@@ -29,7 +29,7 @@ open Verity Finset
 
 section Support
 
-variable (d : RegisteredCircuit) (θv : d.D.Transcript)
+variable (d : RegisteredCircuit) (θv : d.D.Trace)
 
 theorem mem_admissible_self : θv ∈ admissible d θv :=
   mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩
@@ -108,7 +108,7 @@ end Support
 
 section Info
 
-variable (d : RegisteredCircuit) (θv : d.D.Transcript) (R : Finset (Fin d.D.N))
+variable (d : RegisteredCircuit) (θv : d.D.Trace) (R : Finset (Fin d.D.N))
 
 theorem novelInfo_le_iff (x : ℝ) :
     novelInfo d θv R ≤ x ↔ (support d θv (d.D.into R \ d.θ) : ℝ) ≤ 2 ^ x :=
@@ -134,13 +134,13 @@ theorem novelInfo_eq_novelReads_of_inputs (hU : ∀ g ∈ d.D.into R \ d.θ, d.D
 
 end Info
 
-theorem smallInfo_of_small {c : RegisteredCircuit} (θv : c.D.Transcript) {Γ : ℕ} {S : ℝ} {R : Finset (Fin c.D.N)}
+theorem smallInfo_of_small {c : RegisteredCircuit} (θv : c.D.Trace) {Γ : ℕ} {S : ℝ} {R : Finset (Fin c.D.N)}
     (hR : Small c Γ S R) : SmallInfo c θv Γ S R :=
   ⟨hR.1, hR.2.1, (novelInfo_le_novelReads c θv R).trans hR.2.2⟩
 
 /-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, the
 inequality in support form is `WeightsIncompressible`'s. -/
-theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Transcript) (T : Threading c) (b_w b_a : ℝ)
+theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Trace) (T : Threading c) (b_w b_a : ℝ)
     (R : Finset (Fin c.D.N)) (hU : ∀ g ∈ c.D.into R \ c.θ, c.D.isInput g = true) :
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
         support c θv (c.D.into R \ c.θ) ↔
@@ -149,23 +149,23 @@ theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Transcri
 
 section Threads
 
-variable {c : RegisteredCircuit} (T : Threading c) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ)
+variable {c : RegisteredCircuit} (T : Threading c) (θv : c.D.Trace) (Γ : ℕ) (S : ℝ) (d e : ℕ)
 
 end Threads
 
 open Classical in
 /-- A run of `C` lifted through `M` to a run of `D`: `b` at the images of `C`'s gates, `θv` elsewhere. -/
-noncomputable def liftRun {C D : Circuit} (M : Containment C D) (θv : D.Transcript) (b : C.Transcript)
+noncomputable def liftRun {C D : Circuit} (M : Containment C D) (θv : D.Trace) (b : C.Trace)
     (h : Fin D.N) : BitVec (D.w h) :=
   if hh : ∃ g, M.emb g = h then BitVec.ofNat (D.w h) (b hh.choose).toNat else θv h
 
-theorem liftRun_emb {C D : Circuit} (M : Containment C D) (θv : D.Transcript) (b : C.Transcript) (g : Fin C.N) :
+theorem liftRun_emb {C D : Circuit} (M : Containment C D) (θv : D.Trace) (b : C.Trace) (g : Fin C.N) :
     liftRun M θv b (M.emb g) = BitVec.ofNat (D.w (M.emb g)) (b g).toNat := by
   have hh : ∃ g', M.emb g' = M.emb g := ⟨g, rfl⟩
   have hc : hh.choose = g := M.emb_inj hh.choose_spec
   rw [liftRun, dif_pos hh, hc]
 
-theorem pull_liftRun {C D : Circuit} (M : Containment C D) (θv : D.Transcript) (b : C.Transcript) :
+theorem pull_liftRun {C D : Circuit} (M : Containment C D) (θv : D.Trace) (b : C.Trace) :
     M.pull (liftRun M θv b) = b := by
   funext g
   apply BitVec.eq_of_toNat_eq
@@ -176,7 +176,7 @@ theorem pull_liftRun {C D : Circuit} (M : Containment C D) (θv : D.Transcript) 
 /-- Through a containment, `c`'s gates take no more values over its runs with the baseline at `θc` than their images
 over `d`'s with the baseline at `θv`, when `θc` is what `θv` gives the images of `c`'s baseline. -/
 theorem support_le_of_containment {c d : RegisteredCircuit} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
+    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Trace} {θv : d.D.Trace}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g)
     {U : Finset (Fin c.D.N)} {U' : Finset (Fin d.D.N)} (hU : ∀ g ∈ U, M.emb g ∈ U') :
     support c θc U ≤ support d θv U' := by
@@ -222,7 +222,7 @@ theorem emb_into_filter {c d : RegisteredCircuit} (M : Containment c.D d.D)
 /-- **Information through a containment**: the piece of `c` inside a set `W` of `d`'s computed gates reads no more
 information than `W`. -/
 theorem novelInfo_le_of_containment {c d : RegisteredCircuit} (M : Containment c.D d.D)
-    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
+    (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Trace} {θv : d.D.Trace}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {W : Finset (Fin d.D.N)}
     (hW : W ⊆ d.D.computed) : novelInfo c θc (univ.filter fun g => M.emb g ∈ W) ≤ novelInfo d θv W := by
   unfold novelInfo
@@ -249,7 +249,7 @@ theorem feeds_of_read {D : Circuit} {g x y : Fin D.N} (hg : D.Feeds g x) (hx : x
   | step hgh _ ih => exact fun hx => .step hgh (ih hx)
 
 /-- A gate's value is determined by the input gates that feed it. -/
-theorem eval_agree_of_feeds {D : Circuit} {a b : D.Transcript} :
+theorem eval_agree_of_feeds {D : Circuit} {a b : D.Trace} :
     ∀ t, (∀ g, D.isInput g = true → D.Feeds g t → a g = b g) → D.eval a t = D.eval b t := by
   intro t
   induction t using WellFoundedLT.induction with
@@ -265,7 +265,7 @@ theorem eval_agree_of_feeds {D : Circuit} {a b : D.Transcript} :
 /-- **What a set's values carry when novel inputs `P` alone feed it**: at most `2^width(P)` values, whatever the gates
 compute. A declared value that is a function of the baseline and the prompts that feed it carries at most their
 width. -/
-theorem support_le_of_feeds (d : RegisteredCircuit) (θv : d.D.Transcript) {F P : Finset (Fin d.D.N)}
+theorem support_le_of_feeds (d : RegisteredCircuit) (θv : d.D.Trace) {F P : Finset (Fin d.D.N)}
     (h : ∀ g, ∀ t ∈ F, d.D.isInput g = true → g ∉ d.θ → d.D.Feeds g t → g ∈ P) :
     support d θv F ≤ 2 ^ d.D.width P := by
   classical

@@ -102,12 +102,12 @@ theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircui
 theorem Circuit.ofAudit_reads (g : Fin C.N) : (Circuit.ofAudit C).reads g = (C.op g).args.toFinset :=
   congrArg List.toFinset (args_coreOp _)
 
-theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Transcript) :
+theorem Circuit.ofAudit_op (g : Fin C.N) (v : (Circuit.ofAudit C).Trace) :
     (Circuit.ofAudit C).op g v = BitVec.ofBool ((C.op g).apply fun a => (v a).getLsbD 0) :=
   congrArg BitVec.ofBool (apply_coreOp _ _)
 
 /-- A transcript of bits as core's. -/
-def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Transcript := fun g => BitVec.ofBool (xs g)
+def Circuit.ofBits (xs : Fin C.N → Bool) : (Circuit.ofAudit C).Trace := fun g => BitVec.ofBool (xs g)
 
 variable {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
 
@@ -133,7 +133,7 @@ theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin
     rfl
 
 /-- Every transcript of core's circuit of a game circuit is a transcript of bits. -/
-theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Transcript) :
+theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Trace) :
     Circuit.ofBits (fun g => (tr g).getLsbD 0) = tr := by
   funext g
   apply BitVec.eq_of_getLsbD_eq
@@ -145,7 +145,7 @@ theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Transcript) :
   simp [Circuit.ofBits]
 
 /-- A unit's local evaluation in core's view of a game partition is the game's, at the transcript's bits. -/
-theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Transcript) (u : Fin n) (g : Fin C.N) :
+theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Trace) (u : Fin n) (g : Fin C.N) :
     ((Partition.ofAudit P).localEval tr u g).getLsbD 0 = P.localEval (fun g => (tr g).getLsbD 0) u g := by
   have e := Partition.localEval_ofAudit P (fun g => (tr g).getLsbD 0) u g
   rw [Circuit.ofBits_getLsbD] at e
@@ -351,7 +351,7 @@ end Opened
 
 /-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
 noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
-    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Transcript :=
+    (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Trace :=
   Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
 section Parsed

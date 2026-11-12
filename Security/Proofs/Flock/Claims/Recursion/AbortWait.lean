@@ -64,19 +64,19 @@ section Draws
 variable {Dr W Op : Type} [Fintype Dr]
 
 /-- `ε`: the probability that the run at a sample is accepted. -/
-noncomputable def accPrD (run : Dr → Trace) : ℝ := Pr fun d => (run d).out = .acc
+noncomputable def accPrD (run : Dr → Transcript) : ℝ := Pr fun d => (run d).out = .acc
 
 /-- `Q`: `k` independent samples, all accepted, whose views fail `G`. -/
-noncomputable def accFailD (run : Dr → Trace) (k : ℕ) (G : List Seen → Prop) : ℝ :=
+noncomputable def accFailD (run : Dr → Transcript) (k : ℕ) (G : List Seen → Prop) : ℝ :=
   Pr fun σ : Fin k → Dr => (∀ i, (run (σ i)).out = .acc) ∧ ¬ G ((List.finRange k).map fun i => (run (σ i)).seen)
 
 /-- `f`: the probability that one wait over `K` fresh samples fails. -/
-noncomputable def waitFailD (H : Msg → Msg) (run : Dr → Trace) (k K : ℕ) (opens : Seen → List Op)
+noncomputable def waitFailD (H : Msg → Msg) (run : Dr → Transcript) (k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) : ℝ :=
   Pr fun ρ : Fin K → Dr => ¬ WaitOk H run k opens assemble check ((List.finRange K).map ρ)
 
 /-- **One wait's failure over samples**: at most the short-wait probability plus the failure on `k` accepted runs. -/
-theorem waitFailD_le [Nonempty Dr] (H : Msg → Msg) (run : Dr → Trace) (k K : ℕ) (opens : Seen → List Op)
+theorem waitFailD_le [Nonempty Dr] (H : Msg → Msg) (run : Dr → Transcript) (k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (hε : 0 < accPrD run) :
     waitFailD H run k K opens assemble check ≤
       Pr (fun ρ : Fin K → Dr => (waitRes run k ((List.finRange K).map ρ) []).length < k) +
@@ -100,7 +100,7 @@ theorem waitFailD_le [Nonempty Dr] (H : Msg → Msg) (run : Dr → Trace) (k K :
 
 /-- **One tape, truncated, over samples**: from one wait's bound on `k` accepted runs, `ε · Q/ε^k ≤ a + rate·ε` with
 `rate ≤ 1/4`, `ε · f^m ≤ 4a + 2^{−m} + 2k/K + e^{−k/8}`. -/
-theorem tape_trunc [Nonempty Dr] (H : Msg → Msg) (run : Dr → Trace) (m k K : ℕ) (opens : Seen → List Op)
+theorem tape_trunc [Nonempty Dr] (H : Msg → Msg) (run : Dr → Transcript) (m k K : ℕ) (opens : Seen → List Op)
     (assemble : List Op → Option W) (check : W → Bool) (hK : 0 < K) (hk : 8 ≤ k) {a rate : ℝ} (ha : 0 ≤ a)
     (hrate : rate ≤ 1 / 4)
     (hwait : 0 < accPrD run →
@@ -134,7 +134,7 @@ theorem PrBadAbort_le (H : Msg → Msg) (I : Inner Coin W) (hcheck : ∀ x w, I.
   simp only [← Pr_pi]
   rw [← Pr_indep]
   refine Pr_mono fun s ⟨hacc, hbad⟩ => ⟨hacc, fun i hok => hbad ?_⟩
-  simp only [erep, RP.eval, Trace.seen, hacc, ↓reduceIte] at hbad ⊢
+  simp only [erep, RP.eval, Transcript.seen, hacc, ↓reduceIte] at hbad ⊢
   generalize hres : ((firstWait (I.k x) I.opens (I.assemble x) (I.check x)
     ((List.finRange (I.waits x)).map fun i => (List.finRange (I.cap x)).map (s.2.2 i))).eval H
       (abortRun H P I.V x keep s.1)).1 = res at hbad ⊢

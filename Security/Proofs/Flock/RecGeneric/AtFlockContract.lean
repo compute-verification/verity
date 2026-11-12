@@ -241,7 +241,7 @@ theorem forks_of (hF : RecFacts H D Bd decI DO pk x) {Ω : Type} (P : Prover Ω)
     intro r₀ w₀ h e he
     have hr : (innerRun H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x r₀ w₀).vLog =
         (Bd.decAt H (xI (D.record Bd.IVStar) x) (D.msgs x w₀) fun i => coinSeq r₀ i.val).2 :=
-      (congrArg Trace.vLog (innerRun_ofRec D (Inner.ofFlock Bd.deploy decI) hF.xI_eq r₀ w₀)).trans (hdec r₀ w₀).2
+      (congrArg Transcript.vLog (innerRun_ofRec D (Inner.ofFlock Bd.deploy decI) hF.xI_eq r₀ w₀)).trans (hdec r₀ w₀).2
     exact h e (by rw [hr]; exact he)
   rcases hF.accepts Ω P ω r w ha ho with ha₁ | ha₁
   swap

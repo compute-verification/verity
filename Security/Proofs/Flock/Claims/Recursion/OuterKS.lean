@@ -193,7 +193,7 @@ theorem sessP_fork {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D :
 
 /-! ## Session `s`'s extraction is the outer Flock's `E^rep` at the session's prover -/
 
-theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ → Trace) (run₂ : R₂ → Trace) (μ : R₁ → R₂)
+theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ → Transcript) (run₂ : R₂ → Transcript) (μ : R₁ → R₂)
     (k : ℕ) : ∀ (rs : List R₁) (acc : List Seen), (∀ r ∈ rs, (run₁ r).seen = (run₂ (μ r)).seen) →
       ((waitAcc k rs acc).eval H run₁).1 = ((waitAcc k (rs.map μ) acc).eval H run₂).1
   | [], _, _ => rfl
@@ -205,7 +205,7 @@ theorem waitAcc_eval_map {R₁ R₂ : Type} (H : Msg → Msg) (run₁ : R₁ →
       rw [h r List.mem_cons_self]
       exact waitAcc_eval_map H run₁ run₂ μ k rs _ fun r' hr' => h r' (List.mem_cons_of_mem _ hr')
 
-theorem firstWait_eval_map {R₁ R₂ W' Op : Type} (H : Msg → Msg) (run₁ : R₁ → Trace) (run₂ : R₂ → Trace)
+theorem firstWait_eval_map {R₁ R₂ W' Op : Type} (H : Msg → Msg) (run₁ : R₁ → Transcript) (run₂ : R₂ → Transcript)
     (μ : R₁ → R₂) (k : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W') (check : W' → Bool) :
     ∀ rss : List (List R₁), (∀ l ∈ rss, ∀ r ∈ l, (run₁ r).seen = (run₂ (μ r)).seen) →
       ((firstWait k opens assemble check rss).eval H run₁).1 =
@@ -243,7 +243,7 @@ theorem EOs_eval_acc {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhab
         ((List.finRange (D.nums x s).waits).map fun i => (List.finRange (D.nums x s).cap).map fun j =>
           fork (offO H D I DO P x ω s r) r (c i j))).eval H
         (servedRun H (viewing (D.session x s)) (run H P D.V x ω))).1.map fun w => (sessStmt H D I P x ω s r, w) := by
-  simp only [Extractor.eval, EOs, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, EOs, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   rw [RP.eval_bind_ret, serve_eq, (RP.serve_eval H _ _ _).1]
   rfl
 
@@ -255,7 +255,7 @@ theorem flockE_eval_acc {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
         (Flock.check DO.parse y)
         ((List.finRange (DO.waits y)).map fun i => (List.finRange (DO.cap y)).map (ρ i))).eval H
         (run H Q DO.V y ())).1 := by
-  simp only [Extractor.eval, Flock.E, ERep, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, Flock.E, ERep, RP.eval, Transcript.seen, hacc, ↓reduceIte]
 
 /-- `SessionRuns` at a prefix some continuation of which accepts: every fork at the session's first round shows the
 session prover's run, and the outer verifier's calls in it are the compiled verifier's. -/

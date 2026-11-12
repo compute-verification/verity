@@ -27,7 +27,7 @@ def JointPeriodLive_honest : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (C : Verity.Circuit) (O : Type) (G : Verity.Game O)
     (r : PeriodLive d α C G) (c : Certificates) (s : Verity.Game.Strategy G),
     0 ≤ c.ε →
-    (∀ o, ∃ x : C.Transcript, r.extract s o = C.eval x) →
+    (∀ o, ∃ x : C.Trace, r.extract s o = C.eval x) →
     (∀ o g, r.opens g (r.extract s o g)) →
     (∀ o, c.W ≤ (C.size (r.computed s o) : ℝ)) →
     (∀ o, c.S * (r.world s o).win.len ≤

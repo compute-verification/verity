@@ -33,7 +33,7 @@ namespace Verity
 
 open Finset
 
-theorem Circuit.bits_congr (C : Circuit) {X Y : C.Transcript} {l : List (Fin C.N)} (h : ∀ g ∈ l, X g = Y g) :
+theorem Circuit.bits_congr (C : Circuit) {X Y : C.Trace} {l : List (Fin C.N)} (h : ∀ g ∈ l, X g = Y g) :
     C.bits X l = C.bits Y l := by
   induction l with
   | nil => rfl
@@ -41,7 +41,7 @@ theorem Circuit.bits_congr (C : Circuit) {X Y : C.Transcript} {l : List (Fin C.N
     simp only [Circuit.bits, List.flatMap_cons] at ih ⊢
     rw [h g List.mem_cons_self, ih fun x hx => h x (List.mem_cons_of_mem g hx)]
 
-theorem Committed.recompute_congr (R : Committed) {X Y : R.d.D.Transcript} {u : Fin R.d.n}
+theorem Committed.recompute_congr (R : Committed) {X Y : R.d.D.Trace} {u : Fin R.d.n}
     (h : ∀ g ∈ R.d.unregistered (R.d.𝓘.gates u), X g = Y g) :
     ∀ g ∈ Nci.Capability.holds R.d.D (R.d.𝓘.gates u), R.recompute X u g = R.recompute Y u g := by
   intro g

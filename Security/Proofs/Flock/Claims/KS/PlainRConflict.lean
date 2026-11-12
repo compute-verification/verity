@@ -105,7 +105,7 @@ theorem answersCoin_VR (rd : Claims.Msg → Option FinalP) (H : Claims.Msg → C
 coin's bytes (`stepWith_dep`'s induction): the last answer is the decision, which shows `default`. -/
 theorem stepWith_outCoin {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims.Prover Ω) (V' : Claims.Verifier Coin)
     (x : Claims.Msg) (ω : Ω) (c : ℕ → Coin) (hV : Claims.Bridge.AnswersCoin H V' x Coin.bytes) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Transcript),
       t.msgs.map Prod.fst = as → (t.msgs.map Prod.snd).map RecDeploy.outCoin = (List.range as.length).map c →
       (Claims.stepWith H P x ω (fun as => V'.next x as ((List.range as.length).map c)) n hist as t).out = .acc →
       ((Claims.stepWith H P x ω (fun as => V'.next x as ((List.range as.length).map c)) n hist as t).msgs.map

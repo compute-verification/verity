@@ -228,13 +228,13 @@ of the run and fresh coins of its own for that run, which the inner verifier doe
 and is rejected. -/
 
 /-- An aborted run: nothing sent, rejected. -/
-def abortTrace : Trace := ⟨[], [], [], .rej⟩
+def abortTranscript : Transcript := ⟨[], [], [], .rej⟩
 
 /-- **A run that may abort after the inner rounds**: `P`'s run at the tape `ω` and the coins `t.1`, unless `keep`, which
 reads the tape, every coin of the run and the run's fresh coins `t.2`, refuses it; then the run aborts. -/
 def abortRun {Coin : Type} [Inhabited Coin] {Ω A : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin)
-    (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (t : (Fin (V.k x) → Coin) × A) : Trace :=
-  if keep ω t.1 t.2 then run H P V x ω t.1 else abortTrace
+    (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (t : (Fin (V.k x) → Coin) × A) : Transcript :=
+  if keep ω t.1 t.2 then run H P V x ω t.1 else abortTranscript
 
 /-- **`Pr[run = acc ∧ ¬R(x, E^rep(x))]` at a prover that may abort**, over the tape, the judged run's coins with its
 abort coins, and `E^rep`'s samples, each a run's coins with its abort coins: `E^rep` at the inner protocol's waits reruns

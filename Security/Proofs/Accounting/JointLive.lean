@@ -106,7 +106,7 @@ theorem Live.sound_of_break {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
 /-- **No unit is unbound** in a transcript that is an evaluation and that the openings open at every gate. -/
 theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (x : C.Transcript) (ho : ∀ g, opens g (C.eval x g)) :
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (x : C.Trace) (ho : ∀ g, opens g (C.eval x g)) :
     unbound P opens (C.eval x) = ∅ := by
   refine Finset.eq_empty_of_forall_notMem fun u hu => ?_
   simp only [unbound, Finset.mem_filter, Finset.mem_univ, true_and] at hu
