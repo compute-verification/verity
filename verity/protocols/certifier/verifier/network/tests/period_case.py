@@ -268,6 +268,18 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
+def rows_wf(s: WardenParams, windows: int) -> bool:
+    """`rowsWf`: a cell's B bytes are under 2^32, so its payload's length is a u32, and the period's
+    `lanes · windows · window` connections, the k-th at ordinal k + 1, have distinct u32 ordinals."""
+    return s.cell_bytes < U32 and s.lanes * windows * s.window < U32
+
+
+def rows_wf_refusal(s: WardenParams, windows: int) -> str:
+    return (f"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = "
+            f"{s.lanes * windows * s.window} connections and a cell's {s.cell_bytes} bytes must each be under 2^32, or "
+            "two frames could encode alike (rowsWf)")
+
+
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
     u32s, in the id egress form, and its response cap when it has one (`WardenParams.max_tokens_cap`)."""
@@ -684,6 +696,12 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
+    if schedule is not None and not rows_wf(schedule, windows):
+        raise D.Reject(rows_wf_refusal(schedule, windows))
+    if schedule is not None and list(cells) != schedule.caps(windows):
+        raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
+                       f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
+                       f"schedule can carry (Schedule.caps), not these {len(cells)}")
     return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
                   schedule, scan)
 
@@ -1124,6 +1142,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
             findings.append(f)
     if any(f.delta != scans[0][0].delta for f, _ in scans):
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
+    if p.schedule is not None and not rows_wf(p.schedule, p.windows):
+        findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
     charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
@@ -2092,7 +2112,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"scan": scan, "schedule": schedule_json(bound)}
+        case_params |= {"cells": bound.caps(n_windows), "scan": scan, "schedule": schedule_json(bound)}
     else:
         case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
     c_json = {"audits": audit_regs, "windows": window_regs}
@@ -2101,6 +2121,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         case_params["first"] = first + r.choice([1, -1] if first else [1])
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
+        if rows:
+            case_params["cells"] = bound.caps(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -2138,7 +2160,7 @@ def _bad_params(p: dict, n: int) -> list:
                       p | {"sync_set": ss | {"rhos": [[1, 0]]}}, p | {"sync_set": ss | {"deltas": [1, 1]}},
                       p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}}]
     s = p["schedule"]
-    return out + [p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
+    return out + [*bad_cells(p), p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
                   p | {"schedule": s | {"x": 1}}, p | {"schedule": s | {"egress": "bytes"}}, p | {"schedule": [s]},
                   p | {"schedule": s | {"delay": 0}},
                   p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
@@ -2147,6 +2169,14 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
                   *_bad_caps(s, p), *bad_scans(p)]
+
+
+def bad_cells(p: dict) -> list[dict]:
+    """Rows-form parameters whose `cells` aren't the schedule's caps (`Schedule.caps`), each one change to `p`: none,
+    one connection short, one more, and one cap below `egress_cells`."""
+    caps = p["cells"]
+    return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},
+            p | {"cells": [caps[0] - 1, *caps[1:]]}]
 
 
 def _bad_caps(s: dict, p: dict) -> list[dict]:

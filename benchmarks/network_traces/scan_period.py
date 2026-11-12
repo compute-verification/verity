@@ -7,7 +7,8 @@ and its Lean.
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused),
+  form, and a run in another is refused; its caps over the one link-window are the cells, `WardenParams.caps`:
+  `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
@@ -53,7 +54,7 @@ sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
-from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS  # noqa: E402
+from verity.protocols.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 
@@ -105,7 +106,8 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     audits = doc.get("audits", [])
     cap = dep["params"].get("max_tokens_cap")
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
-    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
+    caps = WardenParams(**dep["params"]).caps(1)
+    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": caps,
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,

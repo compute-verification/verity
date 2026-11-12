@@ -275,6 +275,13 @@ class WardenParams:
         """A window's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
 
+    def caps(self, windows: int) -> list[int]:
+        """Each connection's cell cap over `windows` windows, the period check's rows-form `cells`
+        (`NetworkCheck.Period.Schedule.caps`): `egress_cells` for each of the `lanes · windows · window` connections the
+        network certifier can carry, as `_tick` admits only while fewer than `lanes` are live and serves each
+        connection in its admission bucket."""
+        return [self.egress_cells] * (self.lanes * windows * self.window)
+
     @property
     def stride_releases(self) -> int:
         """K: the most requests the network certifier releases in one slot stride with lengths rows, a lengths row's
