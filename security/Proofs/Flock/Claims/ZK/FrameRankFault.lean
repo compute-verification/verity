@@ -438,8 +438,6 @@ namespace LeanRelease
 
 open Loop Ranked
 
-variable {wideLeaf : Bool}
-
 set_option maxHeartbeats 400000 in
 /-- **A rep's rank check holds where the loop is in its inner proof**: at a `Live` statement the loop serves, on at most
 `refK x` openings that reach table `j`'s rep `r`'s inner round `e`, where the loop's state on the coins before that
@@ -530,7 +528,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
@@ -566,7 +564,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
     exact eA
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) (htsch ▸ hz :
-    _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad)))
+    _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad)))
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
   have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
