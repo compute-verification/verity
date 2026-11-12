@@ -1,0 +1,333 @@
+"""GPU run: a stand-in for GLM-5.3 served with its multi-token-prediction draft on (vLLM's ``speculative_config`` method
+``mtp``), then replayed from the scheduler's step trace alone; the replay's steps and every token are held to the served ones.
+
+The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers and `EXPERTS` routed experts, with
+its MTP layer, served tensor-parallel 1 on one card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer.
+``--weights dummy`` keeps vLLM's values, under which a token depends on little but the token before it; ``--weights scaled``
+redraws every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
+
+Each arm of `ARMS` is one speculative config (``off`` has none). Each phase is a process of its own:
+
+- ``--phase serve``: an engine with the arm's config under the step trace (`verity_vllm.engine.step_trace.StepTrace`). The
+  requests of `plan` (greedy and sampled, each under its own seed, some sharing a cached prefix, more than fit one batch)
+  arrive between engine iterations. It writes the trace, each request's tokens and the draft tokens each step scheduled.
+- ``--phase replay``: an engine built from the trace's header (the scheduler's settings and its ``speculative`` entry), each
+  request put back before the step the trace says it arrived before; the scheduler decides the rest. It writes the same.
+
+Without ``--phase`` it runs every arm's serve and replay for each of ``--weights``, compares each replay with its serve
+(steps, draft counts, tokens) and each draft arm's tokens with ``off``'s, writes OUT/specdec_replay.json and exits 0 only if
+every draft arm scheduled draft tokens and every replay equals its serve. A phase that fails is recorded and the rest go on.
+
+In the pod venv, on one idle card, from the tree's root:
+
+    PYTHONHASHSEED=0 $PY adapters/vllm/tests/properties/specdec_replay_gpu.py --out DIR [--weights dummy,scaled] [--arms ...]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import random
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import Any
+
+ADAPTER = Path(__file__).resolve().parents[2]
+CONFIG = ADAPTER / "verity_vllm/engine/profiles/hf_configs/GLM53.config.json"
+#: the stand-in's decoder layers (GLM-5.3's three dense layers, then MoE layers with a shared and an own index) and experts
+LAYERS, EXPERTS = 7, 16
+#: ``--weights scaled``: every weight's standard deviation, and the scale beside an FP8 weight drawn uniform on [-1, 1]
+STD = 0.02
+FP8_SCALE = STD * 3 ** 0.5
+#: one speculative config an arm; ``synthetic`` accepts by a rate instead of the model's probabilities, so a stand-in whose
+#: draft rarely agrees with its target still takes accepted draft tokens through the cache and the scheduler
+ARMS: dict[str, dict[str, Any] | None] = {
+    "off": None,
+    "mtp1": {"method": "mtp", "num_speculative_tokens": 1},
+    "mtp3": {"method": "mtp", "num_speculative_tokens": 3},
+    "synthetic3": {"method": "mtp", "num_speculative_tokens": 3, "rejection_sample_method": "synthetic",
+                   "synthetic_acceptance_rates": [0.8, 0.6, 0.4]},
+}
+#: the served engine's settings; the replay's are the trace header's
+SERVE = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
+         "enable_prefix_caching": True, "async_scheduling": None, "block_size": None, "num_gpu_blocks": 8192}
+REQUESTS = 14
+#: what of a step record the replay must repeat
+STEP_KEYS = ("T", "order", "rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
+
+
+def stand_in(where: Path) -> None:
+    cfg = json.loads(CONFIG.read_text())
+    cut = {**cfg, "num_hidden_layers": LAYERS, "n_routed_experts": EXPERTS}
+    for k in ("indexer_types", "mlp_layer_types"):
+        cut[k] = cfg[k][:LAYERS]
+    (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
+
+
+def plan(default_seed: int) -> list[dict[str, Any]]:
+    """The requests, the same in every arm: its id, the engine iteration it arrives before, its prompt and its sampling."""
+    rng = random.Random(0)
+
+    def ids(n: int) -> list[int]:
+        return [rng.randrange(1000, 150000) for _ in range(n)]
+
+    shared = ids(160)
+    out = []
+    for i in range(REQUESTS):
+        n = rng.choice((24, 70, 150, 330, 610))
+        prompt = shared + ids(max(n - len(shared), 8)) if i % 3 == 2 else ids(n)
+        sampling: dict[str, Any] = {"temperature": 0.0, "seed": default_seed}
+        if i % 2:
+            sampling = {"temperature": 0.8, "seed": 1000 + i}
+        if i % 4 == 3:
+            sampling.update(top_p=0.95, top_k=50)
+        out.append({"id": f"specdec-{i:02d}", "iteration": 2 * i, "prompt_ids": prompt, "sampling": sampling,
+                    "max_tokens": rng.choice((24, 40, 56))})
+    return out
+
+
+def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
+    from vllm import EngineArgs
+    from vllm.v1.engine.llm_engine import LLMEngine
+
+    args = EngineArgs(model=str(model), load_format="dummy", skip_tokenizer_init=True, generation_config="vllm",
+                      dtype="bfloat16", seed=0, trust_remote_code=True, enforce_eager=eager,
+                      max_model_len=cfg["max_model_len"], max_num_seqs=cfg["max_num_seqs"],
+                      max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
+                      enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
+                      block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True,
+                      speculative_config=cfg.get("speculative"))
+    return LLMEngine.from_engine_args(args)
+
+
+def rescale(eng: Any) -> dict[str, int]:
+    """Redraw the target's and the draft's weights from one seeded generator, in the modules' own order: a norm's gain 1, a
+    quantization scale `FP8_SCALE`, an FP8 weight uniform on [-1, 1], every other float weight normal at `STD`."""
+    import torch
+
+    from verity_vllm.engine import handle
+
+    runner = handle.model_runner(eng)
+    gen = torch.Generator(device=runner.device)
+    gen.manual_seed(1234)
+    seen: set[int] = set()
+    count = {"norm": 0, "scale": 0, "fp8": 0, "float": 0}
+    models = [runner.model, getattr(runner.speculator, "model", None)]
+    with torch.no_grad():
+        for model in models:
+            for name, p in (model.named_parameters() if model is not None else ()):
+                if id(p) in seen or not torch.is_floating_point(p):
+                    continue
+                seen.add(id(p))
+                if "scale" in name:
+                    p.fill_(FP8_SCALE)
+                    count["scale"] += 1
+                elif "norm" in name and p.ndim == 1:
+                    p.fill_(1.0)
+                    count["norm"] += 1
+                elif torch.finfo(p.dtype).bits < 16:
+                    draw = torch.empty(p.shape, dtype=torch.float16, device=p.device).uniform_(-1.0, 1.0, generator=gen)
+                    p.copy_(draw.to(p.dtype))
+                    count["fp8"] += 1
+                else:
+                    p.normal_(0.0, STD, generator=gen)
+                    count["float"] += 1
+    return count
+
+
+def params(sampling: dict[str, Any], max_tokens: int) -> Any:
+    from vllm import SamplingParams
+
+    return SamplingParams(n=1, temperature=sampling.get("temperature", 0.0), top_p=sampling.get("top_p", 1.0),
+                          top_k=sampling.get("top_k", 0), seed=sampling.get("seed"), max_tokens=max_tokens, ignore_eos=True,
+                          detokenize=False)
+
+
+def run(a: argparse.Namespace) -> dict[str, Any]:
+    """One engine: the serve of ``a.arm``, or the replay of the serve in ``a.dir``."""
+    if os.environ.get("PYTHONHASHSEED") != "0":
+        raise SystemExit("specdec-replay: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
+    os.environ["VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"] = "1"
+    sys.path.insert(0, str(ADAPTER))
+    from verity_vllm.engine import env, served_seed
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.engine.step_trace import StepTrace, load
+
+    env.apply_engine(None)
+    out = Path(a.dir)
+    reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED)}
+    if a.phase == "serve":
+        cfg = {**SERVE, "speculative": ARMS[a.arm]}
+        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
+        (out / "trace.jsonl").unlink(missing_ok=True)
+    else:
+        recs = load(out / "trace.jsonl")
+        cfg = recs[0]["config"]
+        due = [{"id": r["request"], "before_step": r["before_step"]} for r in recs if r["kind"] == "arrive"]
+    model = Path(tempfile.mkdtemp(prefix="specdec-stand-in-"))
+    stand_in(model)
+    eng = engine(model, cfg, eager=not a.compiled)
+    redrawn = rescale(eng) if a.weights == "scaled" else None
+    trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
+    drafted: dict[int, dict[str, int]] = {}
+    tokens: dict[str, list[int]] = {}
+    # a schedule that scheduled nothing takes no step index, so the trace cannot say whether a request arrived before
+    # or after it: the serve counts such arrivals, which the replay puts back before it
+    empty: dict[int, int] = {}
+    after_empty: list[str] = []
+
+    def add(rid: str) -> None:
+        r = reqs[rid]
+        if empty.get(trace.scheduled):
+            after_empty.append(rid)
+        got = eng.add_request(rid, {"prompt_token_ids": r["prompt_ids"]}, params(r["sampling"], r["max_tokens"]))
+        if got not in (None, rid):
+            raise SystemExit(f"specdec-replay: the engine named {rid} {got}")
+
+    def schedule(orig: Any) -> Any:
+        def wrapped(*args: Any, **kw: Any) -> Any:
+            while a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled:
+                add(due.pop(0)["id"])
+            before = trace.scheduled
+            so = orig(*args, **kw)
+            if trace.scheduled > before:
+                drafted[before] = {rid: len(ids) for rid, ids in (getattr(so, "scheduled_spec_decode_tokens", None) or {}).items()}
+            else:
+                empty[before] = empty.get(before, 0) + 1
+            return so
+        return wrapped
+
+    hooks = Hooks(tag="specdec-replay")
+    hooks.wrap(trace.sched, "schedule", schedule)
+    iteration = 0
+    while due or eng.has_unfinished_requests():
+        if a.phase == "serve":
+            idle = not eng.has_unfinished_requests()
+            while due and (due[0]["iteration"] <= iteration or idle):
+                add(due.pop(0)["id"])
+                idle = False
+        elif due and (due[0]["before_step"] < trace.scheduled or not eng.has_unfinished_requests()):
+            if due[0]["before_step"] != trace.scheduled:
+                raise SystemExit(f"specdec-replay: at step {trace.scheduled} with {due[0]['id']} due before step "
+                                 f"{due[0]['before_step']}")
+            add(due.pop(0)["id"])
+        for o in eng.step():
+            if o.finished:
+                tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
+        iteration += 1
+    hooks.uninstall()
+    trace.uninstall()
+    steps = [r for r in trace.records if r["kind"] == "step"]
+    doc = {"phase": a.phase, "arm": a.arm, "weights": a.weights, "compiled": a.compiled, "config": trace.records[0]["config"],
+           "redrawn": redrawn, "steps": steps, "drafted": {str(s): d for s, d in sorted(drafted.items())}, "tokens": tokens,
+           "sampling": {rid: r["sampling"] for rid, r in reqs.items()}, "empty_schedules": sum(empty.values()),
+           "arrived_after_an_empty_schedule": after_empty}
+    (out / f"{a.phase}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
+    return doc
+
+
+def acceptance(doc: dict[str, Any]) -> dict[str, Any]:
+    """Over the rows that verified draft tokens: the draft tokens scheduled, those accepted (a row's emitted tokens less the
+    one the target samples), and how many rows accepted each count."""
+    emitted = {s["step"]: s["emitted"] for s in doc["steps"]}
+    rows = scheduled = accepted = 0
+    by_count: dict[str, int] = {}
+    for step, row in doc["drafted"].items():
+        for rid, n in row.items():
+            e = emitted.get(int(step), {}).get(rid)
+            if not n or e is None:
+                continue
+            rows += 1
+            scheduled += n
+            accepted += e - 1
+            by_count[str(e - 1)] = by_count.get(str(e - 1), 0) + 1
+    return {"rows_with_drafts": rows, "draft_tokens": scheduled, "accepted": accepted, "rows_by_accepted": by_count,
+            "distinct_tokens": len({t for ids in doc["tokens"].values() for t in ids})}
+
+
+def token_diff(want: dict[str, list[int]], got: dict[str, list[int]], sampling: dict[str, dict]) -> dict[str, Any]:
+    out: dict[str, Any] = {"greedy": {"requests": 0, "equal": 0}, "sampled": {"requests": 0, "equal": 0}, "differing": []}
+    for rid, x in sorted(want.items()):
+        kind = out["sampled" if sampling[rid].get("temperature") else "greedy"]
+        y = got.get(rid, [])
+        kind["requests"] += 1
+        if x == y:
+            kind["equal"] += 1
+            continue
+        first = next((i for i, (p, q) in enumerate(zip(x, y)) if p != q), min(len(x), len(y)))
+        out["differing"].append({"request": rid, "tokens": len(x), "tokens_other": len(y), "first_position": first})
+    return out
+
+
+def compare(serve: dict[str, Any], replay: dict[str, Any]) -> dict[str, Any]:
+    s, r = serve["steps"], replay["steps"]
+    first = next((i for i, (x, y) in enumerate(zip(s, r)) if any(x[k] != y[k] for k in STEP_KEYS)), None)
+    if first is None and len(s) != len(r):
+        first = min(len(s), len(r))
+    tok = token_diff(serve["tokens"], replay["tokens"], serve["sampling"])
+    equal = first is None and serve["drafted"] == replay["drafted"] and serve["tokens"] == replay["tokens"]
+    return {"equal": equal, "steps": len(s), "steps_replayed": len(r), "first_step_differing": first,
+            "drafted_equal": serve["drafted"] == replay["drafted"], "requests": len(serve["tokens"]),
+            "tokens": sum(map(len, serve["tokens"].values())), "tokens_differing": tok["differing"],
+            "empty_schedules": serve["empty_schedules"], "arrived_after_an_empty_schedule": serve["arrived_after_an_empty_schedule"]}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--weights", default="dummy,scaled")
+    ap.add_argument("--arms", default=",".join(ARMS))
+    ap.add_argument("--compiled", action="store_true", help="vLLM's defaults (torch.compile, CUDA graphs) instead of eager")
+    ap.add_argument("--phase", choices=("serve", "replay"))
+    ap.add_argument("--arm", choices=tuple(ARMS))
+    ap.add_argument("--dir")
+    a = ap.parse_args()
+    if a.phase:
+        doc = run(a)
+        print(f"specdec-replay: {a.weights} {a.arm} {a.phase}: {len(doc['steps'])} steps, {len(doc['tokens'])} requests, "
+              f"{sum(map(len, doc['tokens'].values()))} tokens, drafts {acceptance(doc)}", flush=True)
+        return 0
+    out = Path(a.out)
+    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    report: dict[str, Any] = {"layers": LAYERS, "experts": EXPERTS, "compiled": a.compiled, "runs": {}}
+    ok = True
+    for weights in a.weights.split(","):
+        docs: dict[str, dict[str, Any]] = {}
+        for arm in a.arms.split(","):
+            d = out / f"{weights}-{arm}"
+            d.mkdir(parents=True, exist_ok=True)
+            entry: dict[str, Any] = {"speculative": ARMS[arm]}
+            report["runs"][f"{weights}-{arm}"] = entry
+            for phase in ("serve", "replay"):
+                argv = [sys.executable, __file__, "--out", str(out), "--phase", phase, "--arm", arm, "--dir", str(d),
+                        "--weights", weights, *(["--compiled"] if a.compiled else [])]
+                with (d / f"{phase}.log").open("w") as log:
+                    rc = subprocess.run(argv, env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+                tail = (d / f"{phase}.log").read_text(errors="replace").splitlines()[-1:]
+                print(f"== {weights} {arm} {phase}: rc {rc}: {tail[0] if tail else ''}", flush=True)
+                entry[phase] = {"rc": rc}
+                if rc:
+                    entry[phase]["log_tail"] = (d / f"{phase}.log").read_text(errors="replace").splitlines()[-25:]
+                    ok = False
+                    break
+            if entry.get("replay", {}).get("rc") != 0:
+                continue
+            serve, replay = (json.loads((d / f"{p}.json").read_text()) for p in ("serve", "replay"))
+            docs[arm] = serve
+            entry.update(config=serve["config"], redrawn=serve["redrawn"], drafts=acceptance(serve), replay_equal=compare(serve, replay))
+            ok = ok and entry["replay_equal"]["equal"] and (ARMS[arm] is None or entry["drafts"]["draft_tokens"] > 0)
+        for arm, doc in docs.items():
+            if arm != "off" and "off" in docs:
+                report["runs"][f"{weights}-{arm}"]["tokens_against_off"] = token_diff(docs["off"]["tokens"], doc["tokens"], doc["sampling"])
+    report["ok"] = ok
+    (out / "specdec_replay.json").write_text(json.dumps(report, indent=1) + "\n")
+    for name, e in report["runs"].items():
+        print(f"{name}: drafts {e.get('drafts')} replay {e.get('replay_equal')} against off {e.get('tokens_against_off')}", flush=True)
+    print(f"specdec-replay: {'ok' if ok else 'FAILED'}: {out / 'specdec_replay.json'}", flush=True)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
