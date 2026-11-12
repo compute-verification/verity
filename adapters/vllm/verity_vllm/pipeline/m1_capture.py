@@ -34,6 +34,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from verity_vllm import settings
 from verity_vllm.records.schema_ids import SPEC_TOKENS_SCHEMA
 
 if TYPE_CHECKING:
@@ -218,13 +219,11 @@ def main(args: Options) -> None:
         print(f"[m1] normalizer -> {nz}", flush=True)
     # [v2 acquire, Phase 4a] the built engine's runtime tree (always) and, with a required-value manifest, the acquisition plan, written
     # before any run; the plan's hooks go in beside the observer below (counts / shapes only).
-    import os
-
     from verity_vllm.acquire.install import IncompletePlan
     from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
     from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
-    man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
+    man_path = args.acquisition_manifest or settings.raw(MANIFEST_ENV) or None
     try:
         acq_docs = plan_at_stage(eng.model, getattr(eng, "runner", None), man_path, out, source="m1_capture")
     except IncompletePlan as e:

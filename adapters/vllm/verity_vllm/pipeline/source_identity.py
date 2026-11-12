@@ -132,7 +132,7 @@ def declared_sha(sha: str | None = None) -> tuple[str | None, str | None]:
     """(sha, where it came from): `--sha` first, then $RESEARCH_SOURCE_SHA (the research runner's declaration of the shipped tree)."""
     if sha:
         return sha, "--sha"
-    env = os.environ.get(ENV_SOURCE_SHA)
+    env = settings.raw(ENV_SOURCE_SHA)
     if env:
         return env, ENV_SOURCE_SHA
     return None, None
@@ -182,8 +182,8 @@ def manifest(tree: str | os.PathLike[str] | None = None, *, sha: str | None = No
         doc["requested"]["git_sha"] = sha            # the requested tree's own sha, when the tree cannot say it (git archive)
         doc["requested"]["git_sha_source"] = sha_src
     doc["VERITY_TREE"] = settings.raw("VERITY_TREE")
-    doc["PYTHONPATH"] = os.environ.get("PYTHONPATH")
-    doc[ENV_SOURCE_SHA] = os.environ.get(ENV_SOURCE_SHA)
+    doc["PYTHONPATH"] = settings.raw("PYTHONPATH")
+    doc[ENV_SOURCE_SHA] = settings.raw(ENV_SOURCE_SHA)
     return doc
 
 
