@@ -560,7 +560,7 @@ def held_json(r: p2.Registration, plan: Plan) -> dict[str, Any]:
 
 def hold(lean: Lean, data: bytes, chunk: int = CHUNK) -> tuple[p2.Registration, Plan]:
     """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
-    (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store, every `chunk` draws
+    (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store, every `chunk` samples
     checked on a thread (`P2Session.heldOf`)."""
     doc = json.loads(data.decode())
     reg = registration_of(doc)

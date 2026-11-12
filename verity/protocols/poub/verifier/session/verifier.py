@@ -1608,8 +1608,8 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                     help=f"each session's append coins, the most appends it takes (`coins.families`): by default "
                          f"{coins.APPENDS}, or none when the prover's hello says its sessions append nothing")
     ap.add_argument("--groups-per-coin", type=int, default=1, metavar="G",
-                    help="each session's windows drawn on one openings coin (`audit.Params.groups_per_coin`): its "
-                         "draw's last window's close draws them together, ⌈W/G⌉ openings coins in all, and the line "
+                    help="each session's windows sampled on one openings coin (`audit.Params.groups_per_coin`): its "
+                         "sample's last window's close samples them together, ⌈W/G⌉ openings coins in all, and the line "
                          "of record's pooled bound reads its samples (`line.draws_of`); none is at one window in "
                          "flight (a `--paced` F = 1), which no property covers (`line.SHARED`)")
     ap.add_argument("--memory-of", type=Path, metavar="VERIFIER_JSON",
@@ -1617,9 +1617,9 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     ap.add_argument("--model", metavar="ROLE",
-                    help="bind the registered store to this pinned model (`remote_bandwidth.store.Binding`): a hello whose "
+                    help="bind the registered store to this pinned model (`store.Binding`): a hello whose "
                          "payload root isn't the root of the store the pinned checkpoint lays out, under the payload "
-                         "key this verifier sends, is refused before the registry draws anything")
+                         "key this verifier sends, is refused before the registry samples anything")
     ap.add_argument("--checkpoint", type=Path, metavar="DIR",
                     help="--model's checkpoint on this machine, every file the pin names held to its SHA-512 first")
     ap.add_argument("--pin", type=Path, metavar="FILE",
