@@ -67739,3 +67739,96 @@ One inline read is 27,193 rows and 95.0 million nonzeros for EX2, and 27,073 row
 - The head moved to `b1217c59fd` after `c6d3` started; the one commit since touches `benchmarks/spot_figures/` alone, whose suite I run with the final head's [read: `git diff --stat 7f95cacd29 b1217c59fd`].
 
 **A fresh worker would next:** read the four runs; put the tree's figures (both partitions, labelled) and the audit's verdict in #9087's body with `research queue edit`; on your word merge #9075's head, run `tools/headsplit/repin.py` and the card job (`tools/headsplit/card/`), and commit the pins and the card each alone; after #8370 lands, merge `main` and paste circuits' text with the sentence they choose.
+
+## FRAME, Thu 12 Nov 02:13Z: the refusal of the two read shapes is stopped, not opened: the second stage on `main` reads every parameter of a replay block at a value the interior record registers, so the address property is false at the served design until the guarantees say which record a replay block's input is opened under; the property's statement is otherwise final and compiles at `601df7cb4bb5` on #8940's head with `main` in it; the skill pull request is #9084, unmarked
+
+Mailbox read at 02:13Z: five sections, none after your 01:19Z [run: `git show origin/cursor/proofs-inbox:inbox/bc-a1b8…md`]. Times are from `date -u`.
+
+**1. Item 1 of your 21:39Z ruling: I stop, by its second branch. A design in use needs the first shape, at every input link.**
+
+- [read: `benchmarks/one_stage/two_stage.py:29-32` at `main` `be9a3d566905`] The second-stage driver states its design so: "the block's parameters its templates' ports read (links, each registered by the interior as a value under the link's name), its wires and its return links".
+- [read: `benchmarks/one_stage/tests/test_two_stage_second.py:102-108` and `:166-196`] The token select's class of whole instances has one such link, `logits`. Its rule registers `logits` as a value of the interior record (`span_values == (("logits", O, (V, 16)),)`), the verifier's reads put the `logits` port at that value, and with the return link left out round 2 with the form allowed accepts (`SS.check(True, own, stmts)` is ok).
+- [read: `adapters/vllm/verity_vllm/pipeline/interior_links.py:4-23`] The adapter's links are of two kinds, and round 2 reads both "only at a value the interior registers under the link's name". A `Supply` is filled by the verifier from its own bytes at public salts (a table read's `root` and `domain`, an index). An `Operand` is given by the replay (scores, a count, a table read's row, salt and path): "the value is the interior's own … its root registered before the second draw's coins".
+- [read: `gh pr view`] These reached `main` in #8448 and #8875 at 00:35Z Thu. Round 2's half is #8486, merged Tue 10 Nov. My first check run's base was `118003ab7aca`, before both, which is why it saw nothing outside the verifier's own tests.
+- [read] Four tests on `main` hold round 2 to this read, by name. The run of section 8 will give the list the change refuses; I add it when it ends.
+  - `adapters/vllm/tests/pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links` (slow)
+  - `adapters/vllm/tests/pipeline/test_interior_indices.py::test_round_2_reads_an_index_port_at_the_name_the_served_records_ports_give_its_link`
+  - `benchmarks/one_stage/tests/test_two_stage_driver.py::test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name` (slow)
+  - `benchmarks/one_stage/tests/test_two_stage_second.py::test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_port_for` (slow)
+- **So no pull request for item 1.** The two changes and their mirror are on `cursor/proofs-readshapes-d930` at `6bc70985b314` for the check only, never to land. The vLLM lane need not be asked whether its second-stage driver hands either shape: by its own docstring it hands the first at every parameter of the block.
+- [read: `two_stage.py:47-52`] The block's return goes the other way: the interior never registers it and round 2 reads it only at a port round 1's record commits. A token select class commits none today, so that run ends on `second-read` and exits 1.
+- [relayed, now contradicted] My 18:57Z section 5 said the token select's links are both boundary ports, from GATHER's 18:26Z and WIRES's 18:14Z entries. On today's `main` the parameter link is not.
+
+**2. What it does to the property, and whose it is** [derived unless tagged]
+
+- `AddressesWired` asks that a gate the connected program has as an input of its replay block be read under the statement's roots: `CheckedRun.rootsWired` gives `r.s.roots` there. The model's `readRoots` gives the replay block's roots for a linked port where the interior registers the link's value [read: `FrameIsAt.lean:37-42`, `readsInterior`]. So at a run the model accepts with that read, at an input gate a checked unit needs, `ReadsRegisteredWired` asks that the statement's roots be the replay block's, which nothing gives, and `ReadsInteriorWired` asks that no registered read be named like the port, and one is. The property does not hold there, nor does `Addresses`. I have not proved that in Lean.
+- **It goes to the guarantees' statement, as you ruled.** Which record a replay block's input is opened under is what `SpotKSTwo` says of the block's inputs. In the driver on `main` an `Operand` is committed after the first stage's sample. [read: `interior_links.py:10-13`] R7 holds its name, rows, words and domain to the verifier's own entry, not its content. [read: `two_stage.py:54-58`] The replay block is a stand-in until the class's request Definition lands. I did not read what the request Definition's parameters will be, nor what else may hold an `Operand` to round 1.
+- [guess] If the restated guarantee is to say that some inputs of a replay block are committed between the two stages, that changes what the guarantee says and is Daniel's.
+- **On my side it is one definition once that is ruled** [derived, not built]: `rootsWired` opens a block's input gate under the record its link reads, and `revealWired` follows it. The proofs in `RevealsWired.lean` reach `rootsWired` only through `AddressHoldsWired`.
+- **The model lacks a check the verifier has** [read: `SpotFlock/Code.lean:484-489`; `Spot/SecondStage.lean:945-958`, `:1056-1061`]. `SpotFlock.readsOk` is `interiorOrderOk`, `codesOk` (no code of `stmtCodes`) and `pinOk`. `stmtCodes` has no check of names: `namesOk` (#8730, `second-interior-names`) is in `interiorFailures`, which the model does not read (`rg namesOk security/` finds only `Flock.KnownRead.namesOk`, another check). So in the model an interior record's value can stand in for a boundary port of the same name, at any design with a link. One conjunct in `readsOk` closes it. That file is #8940's, not mine.
+- **Shapes 2 and 3 are one condition** [derived]: both are reads at a port no link and no wire names, and `sourcesNamed h` leaves no such port among a program's input bits. With `namesOk` in the model and `sourcesNamed h`, the only read left at which the property is false is a linked port at a name the boundary record does not have: the served one.
+- **Your item 2, the conjunct in the design check, is not needed** [read: `Spot/SecondStage.lean:488-500` `nodeLinks`, `:574-590` `nodeWires`; `verity/circuits/lean/Circuits/Program.lean:195-215`, `Part` and `Seq`]. An argument is a list of parts and each part refers to a parameter or a node, so an argument of one bit or more has a source. `nodeLinks` makes a link where every source is one parameter and fails otherwise where a parameter is among them. `nodeWires` makes a wire where the argument is one field of one node whole and fails otherwise. A failure refuses the design (`second-links`, `second-wires`). So no Definition the design check passes has an input port of one bit or more that neither names, and none on `main` would fail the conjunct. Not run, and not a theorem: the proofs' side keeps `sourcesNamed h` as its condition, because nothing ties the held code's links and wires to that derivation.
+
+**3. The property's final statement** [read: my files at `601df7cb4bb5`]
+
+```lean
+def AddressesWired : Prop :=
+  ∃ addr : ℕ → Address,
+    (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
+      ∀ r : CheckedRun h.stage, r.Ok h →
+        ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+
+def sourcesNamed : Bool :=
+  (sourceBits h.ms).all fun s =>
+    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
+      (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
+
+def AddressesConnected : Prop :=
+  sourcesNamed h = true → AddressesWired h (wireMap h) (returned h)
+```
+
+- `AddressesWired` is unchanged since my 22:19Z entry. `sourcesNamed` is shape 3's condition on the held code, beside `Prog.Rewires` and `wiredOk h`. `AddressesConnected` is the property at the code's own wires under it.
+- Proved from it, compiled: `stmtOpensWired` (the sessions' openings at the connected program, from `BuiltWired`, `AddressesWired` and `Prog.Rewires`), `addressesWired_id` (`Addresses h → AddressesWired h id (fun _ => true)`), and `wireTarget_of_sourcesNamed` (under `sourcesNamed` and `wiresMove`, a source bit at a port no link names has a gate to go to).
+- **Where it is false, in one place:** at a run the model accepts in which a session reads a linked port at a value the interior record registers (section 2). Final means the statement's form. Its definition of roots moves once with your ruling on a block's inputs.
+
+**4. The witness** [read, run]
+
+- The instance is `fanProg` with `fanWire` and `fanKeep`: three members in one replay block, two writers and a reader of three inputs. The reader's first and third inputs are wired to the first writer's output and its second to the second's, so one written gate is read by one unit at two of its own gates. Four theorems by `decide` give, at the connected program, the gates each proof block needs and the record each is opened under. WIRED's `fanProg_rewires` and `fanProg_not_injective` are in its scratch [relayed].
+- **It witnesses the program side only. No accepted run witnesses the premise**, for the reason of my 18:57Z entry: an accepted run needs session statements inside Flock's zero-knowledge scope and no held code in the tree has one. So the lane's rule (no open premise without a witness) is met for the program and not for the run, as it is for `Addresses`.
+- After section 1 a run-side witness would also have to be of a design whose links read ports the boundary record commits. The served driver's are not.
+
+**5. Second reader of the premise in WIRED's 22:13Z section 2: three lines**
+
+- [read: `inbox/proofs-coordinator.md`, about `:66112-66122`, against my head] **They are my statements.** `AddressesWired` and `BuiltWired` as quoted are mine token for token; my file breaks one line differently.
+- [read] **Read as I meant them:** `addr` is indexed by gates of the members' programs side by side, the runs are the old code's own (`r.Ok h` reads `parse h`, so `r.s.prog` is the side-by-side program and the connected program enters through `ω` and `keep` alone), and `BuiltWired` reads `addressMapWired`, the addresses the premise gives where it holds.
+- [derived] **What reads otherwise than I meant:** taken at `wireMap h` and `returned h` with no condition, it asks more than is true. It needs `sourcesNamed h` (a sixth conjunct of `wiredOk h`, or the guarantees take `AddressesConnected h`), and it is false at the served driver's reads of a block's parameters (section 2). Neither is said in that entry, which was written before #8448 and #8875 landed.
+
+**6. The cap line, the base, #9080** [run, read]
+
+- Cap by your 01:19Z rule: `Proofs/Flock` at 272 modules and 2,336 declarations in my diff: `main`'s cap 265 and 2,130, plus #9043's 5 and 142, plus my 2 and 64. My files count 22 and 42 declarations by keyword, 64 and not the 61 of your message, since `sourcesNamed`, `wireTarget_of_sourcesNamed` and `AddressesConnected` are new. #9043's head `972a687a0583` now sets 270 and 2,272 [read]. `python3 tools/verity/lean/unread_gate.py origin/main HEAD` at my head: no area above its cap [run].
+- Base: my head `601df7cb4bb5` holds #8940's head `58a598e615b1`, which holds `main` `be9a3d566905`, by a clean merge (`112c0a86cd`), and #9043's files as of `335e4e4c2d`. #8940 and #9043 are both open [run: `gh pr view`, 01:55Z].
+- #9080 is a draft, unmarked. Its body is rewritten to this entry's facts and opens with the paragraph on the served design; It is on GitHub now (`research queue edit 9080`), with the second try's line to fill. The date in it is Thu 19 Nov 2026.
+- `addressesWired_id` stays until WIRED's third pull request deletes `Addresses`.
+
+**7. The skill pull request: #9084, open, unmarked** [run]
+
+- https://github.com/compute-verification/verity/pull/9084, branch `cursor/proofs-lean-skill-c2e7`, head `6e87dff94fc7`, on `main` `be9a3d566905`. Two additions to `.agents/skills/lean-proofs/SKILL.md` (15,741 bytes, cap 16,384): the `whnf` timeout at a theorem's first line with its cure, under *Build, iterate, check*; and the cap sentence with the body's list of unread modules, under *Before the PR*.
+- Quick tier of the changed suites: `r20261112-013148-0931`, exit 0, 3 suites passed, none failed.
+- **I did not mark it, and say why in its body.** [read: friction skill, `:117-119`] The Lean lane changes the lean-proofs skill without asking; another lane's change to it is not covered. And the sentence states your rule (the cap rises by the additions), where the Lean lane's rule in your 20:32Z section reads "`main`'s count plus what it adds, no room beyond". It is yours to mark once the Lean lane agrees.
+
+**8. Runs** [run]
+
+| run | what | state |
+|---|---|---|
+| `r20261112-012913-9301` | `RevealsWired.lean --siblings` at `601df7cb4bb5` | exit 0; Lean exit 0 in 1,784 s with its imports' build; 33 theorems, no axiom beyond the three; no name declared twice. It builds `AddressesWired.lean` as an import |
+| `r20261112-020201-e57e` | `AddressesWired.lean --siblings` at the same head, for its axioms | running since 02:02Z on another node, so it builds the imports again; verdict about 02:40Z |
+| `r20261112-013148-0931` | quick suites for #9084 | exit 0, 3 passed |
+| `r20261112-014345-d86c` | the two read changes on `main` `be9a3d566905`: the verifier's two suites, `benchmarks/two_stage`, `benchmarks/one_stage`, `benchmarks/serve_tax`, the adapter's `tests/pipeline` and `tests/records` in full, then the quick tier of the changed suites | running since about 01:50Z; about 02:50Z |
+| `r20261111-221147-67a5` | `AddressesWired.lean` through `addressesWired_id`, before the merge | exit 0, 11 theorems |
+| `r20261111-222236-964b` | the first read-shapes check, base `118003ab7aca` | exit 0 as a run; its stages: full 1, vLLM 0, quick 1; five tests failed, all in the verifier's two suites, all tests of the two shapes themselves |
+
+**9. Hours, and what is next**
+
+- This entry is the 04:00Z one and, for item 1, the 06:00Z one. The list of tests the change refuses on today's `main` follows when `r20261112-014345-d86c` ends, about 02:50Z.
+- #9080's ready line stays Thu 10:00Z. It waits on #8940 and #9043 reaching `main` (or WIRED's restated head), then one merge, one try a file, one records run and one quick-suites run at that head.
+- **What I need from you:** whether #9080 should still be made ready as it stands, with its body saying the property fails at the served design, or wait for the ruling on a replay block's inputs. I go on preparing it either way.
