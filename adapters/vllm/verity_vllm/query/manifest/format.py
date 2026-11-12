@@ -340,11 +340,11 @@ def moe_identities(g: dict[str, Any]) -> list[tuple[str, int, str]]:
 
 
 def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, windowed: bool = False) -> tuple[int, int, int, int, str]:
-    """(HB, M, NB, BN, name) of the FA2 launch the step's attention rows imply (mirror of `native_host.launch_words`).
+    """(HB, M, NB, BN, name) of the FA2 launch the step's attention rows imply (mirror of `native_host.launch_words`; the
+    name is the geometry part of `hidden_source.stream_name`'s).
     `windowed`: the layer's attention has a sliding window (vLLM passes `window_size=(W-1, 0)` to FA2 whatever the
     request length) -> the pinned FA2 does NOT apply the GQA decode `seqlenq_ngroups_swapped` fold (flash_api.cpp:646; mirror of
     `hidden_source.fa2_swapped`): the decode launch is b*H slabs of one row (`g8x1x..` on Gemma-2's even layers), not `g4x2x..`."""
-    from_words = None  # noqa: F841 (documentation: identical rule to hidden_source.stream_name / native_host.launch_words)
     BN = 128 if D <= 64 else 64                                                  # fa2_kblock_n(D, num_splits=1)
     seqlen_q = rows // max(1, n_seq)
     NB = -(-T_max // BN)
@@ -543,7 +543,7 @@ def alias_family(member: str) -> str:
 REQ_RE = re.compile(r"^r(\d+)$")
 
 
-def request_label(rid: Any, workload: Mapping[str, Any] | None = None, *, position: int | None = None) -> str:
+def request_label(rid: Any, workload: Mapping[str, Any] | None = None) -> str:
     """The identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
     the convention the binding's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
     a manifest keyed by it matches only the request-less weights.
@@ -551,8 +551,6 @@ def request_label(rid: Any, workload: Mapping[str, Any] | None = None, *, positi
     (fail closed -- a manifest keyed by an id no map can carry is a manifest that covers nothing)."""
     reqs = sweep_and_requests(workload)[1]
     if rid is None:
-        if position is not None:
-            return f"r{int(position)}"
         if reqs and isinstance(reqs[0], dict):
             return f"r{int(reqs[0].get('index', 0))}"
         return "r0"
