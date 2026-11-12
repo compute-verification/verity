@@ -15,10 +15,10 @@
 # CHECKPOINT, FLASHINFER, LDCONFIG, MAX_MIN and BUDGET_MIN). The arms are by default the arms at vLLM's published
 # settings (prod, prod-again, prod-record) for a model whose recipe the benchmark holds, else stock compiled vLLM,
 # stock again and the step record (prod_repro.py arms), each a server lifetime of its own; --again none serves stock
-# once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. The context limit is --max-model-len's for every arm, by default the
-# benchmark's for the arm (at the recipe's settings, the recipe's for the cards); limits.json holds what is known of
-# leaving it to vLLM, which the report's first line says. By
-# default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
+# once, and the cost then has no noise floor; --stock none serves ours alone, and there is then no cost. The context
+# limit is --max-model-len's for every arm, by default the benchmark's for the arm (at the recipe's settings, the
+# recipe's for the cards); limits.json holds what is known of leaving it to vLLM, which the report's first line says.
+# By default the corpus client sends the load: REQUESTS requests of the plan (about 60% of its
 # prompts behind one of eight shared prefixes) arriving at RATE a second, faster than the engine serves, each rep from
 # an empty prefix cache; then the replay re-runs rep 1 of ours under its recorded schedule, in the mode it was served
 # in (REPLAY_MODES, by default compiled). With --client vllm-bench vLLM's own client sends the load at its rungs, which
