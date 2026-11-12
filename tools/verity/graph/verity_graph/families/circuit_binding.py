@@ -7,16 +7,19 @@ names), so one binding's edit changes only the slices that read what it changed,
 listed here.
 
 Bindings are read from the binding files' syntax alone (`ast`), as circuit-check names them: each sidecar's (`*.circuit-check.py`
-under a regular package of `sidecars.PACKAGES`, named for its module as `sidecars.discover` names it) root functions
+in a regular package under one of the directories `sidecars.discover` searches, `_packages`, named for its module as it names
+it) root functions
 ``_X_roots``, its ``_model_roots`` (every model one binding) and each ``TEMPLATE_PARAMS`` entry; `targets.py`'s own root
 functions, the templates checked at their example (``TEMPLATE_PARAMS``) and the registered roots (``<registered>``).  Each task's
 inputs are what any run of the catalog reads (`base`): every run loads every registry and binding file, so a binding's own
-share of them narrows inside circuit-check, by its read-set cache, not here.  Its var ``lookups`` is what the tree answers the
-lookups those runs make beyond those files' bytes (`lookups`), so a module file added where a run looks for one reruns them,
-and an edit to a file none reads reruns none."""
+share of them narrows inside circuit-check, by its read-set cache, not here.  Its var ``lookups`` holds the names, not the
+bytes, of the paths where a run of the catalog can look beyond those files (`lookups`, at the var ``places``: `places`), so
+a path added, removed or renamed there reruns them, and an edit to a file none reads reruns none; the binding runner refuses
+a run whose report says it read or looked anywhere else (`runners.circuit_binding.undeclared`)."""
 from __future__ import annotations
 
 import ast
+import fnmatch
 import hashlib
 import json
 import tomllib
@@ -24,6 +27,7 @@ from pathlib import Path
 
 from .. import contract
 from ..graph import RUNNERS, GraphError
+from ..runners import circuit_binding as RB
 
 CHECKER = "tools/verity/circuit_check"
 SOURCE = f"{CHECKER}/src/circuit_check"
@@ -44,95 +48,104 @@ FAILURES = "out/failures"
 REGISTERED = ("<registered>", "_registered")
 #: the binding of the templates `targets.py` checks at their example, those no sidecar's ``TEMPLATE_PARAMS`` names
 EXAMPLES = "TEMPLATE_PARAMS"
-#: circuit-check's declaration of what its runs of the catalog read (`circuit_check.cli.READS`): its parts and their schema
-READS = f"{CHECKER}/reads"
-READS_PARTS = ("registries.json", "loaded.json", "bindings.json")
-READS_SCHEMA = "circuit-check-reads/v1"
-#: how a module file's name ends, on any platform (each of `importlib.machinery.all_suffixes()` ends so)
-MODULE_SUFFIXES = (".py", ".pyw", ".pyc", ".pyd", ".so")
+#: where in a workspace member an editable install puts the member on the import path: its directory, ``src/`` or ``python/``
+ENTRIES = ("", "/src", "/python")
+
+
+def _declared(root: Path) -> list[str]:
+    """What circuit-check's suite declares it reads of the tree (``[tool.verity.tests] inputs``, which the suite's guard holds it
+    to)."""
+    try:
+        return tomllib.loads((root / CHECKER / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
+        raise GraphError(f"{CHECKER}/pyproject.toml: no [tool.verity.tests] inputs ({e})") from e
 
 
 def base(root: Path, files: list[str]) -> list[str]:
     """The files any circuit-check run of the catalog may read: the checker's package but its tests, and what its suite declares
-    it reads of the tree (``[tool.verity.tests] inputs``, which the suite's guard holds it to), prose aside."""
-    try:
-        declared = tomllib.loads((root / CHECKER / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
-        raise GraphError(f"{CHECKER}/pyproject.toml: no [tool.verity.tests] inputs ({e})") from e
+    it reads of the tree (`_declared`), prose aside."""
+    declared = _declared(root)
     dirs = tuple(p.rstrip("/") + "/" for p in (CHECKER, *declared))
     exact = set(declared)
     return [f for f in files if (f in exact or f.startswith(dirs)) and not f.startswith(f"{CHECKER}/tests/")
             and not f.endswith(".md")]
 
 
-def _module_file(name: str) -> bool:
-    return name.partition(".")[0].isidentifier() and name.endswith(MODULE_SUFFIXES)
+def places(root: Path, files: list[str]) -> dict:
+    """Where a run of the catalog can look beyond its inputs' bytes, as `runners.circuit_binding.covering` reads it: ``under``,
+    the checker and what its suite declares it reads (`_declared`; prose and tests too, which a probe sees), and ``at``, where a
+    module lookup can find a module by its name: the root (the first entry of the import path of a run from there,
+    `runners.circuit_binding.checker`'s ``-m``), each workspace member's places of `ENTRIES` that are directories, and each
+    directory above a place of ``under``, where a package it is in, or a module beside it, is looked for."""
+    under = sorted({p.rstrip("/") for p in (CHECKER, *_declared(root))})
+    try:
+        ws = tomllib.loads((root / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
+        raise GraphError(f"pyproject.toml: no [tool.uv.workspace] ({e})") from e
+    dirs = {d for f in files for d in RB.above(f)}
+    members = {d for m in ws.get("members", ()) for d in fnmatch.filter(dirs, m)}
+    members -= {d for x in ws.get("exclude", ()) for d in fnmatch.filter(members, x)}
+    at = {""} | {e for m in members for e in (m + s for s in ENTRIES) if e in dirs} | {d for u in under for d in RB.above(u)}
+    return {"under": under, "at": sorted(at)}
 
 
-def _at_root(files: list[str]) -> list[str]:
-    """What a module lookup at the root can find: each module file there, each directory a package's name could be
-    (``<name>/``) and the ``__init__`` file that makes one a regular package."""
-    out = set()
+def lookups(files: list[str], where: dict) -> str:
+    """The digest of what the tree answers each lookup a run of the catalog can make beyond its inputs' bytes, at the places
+    ``where`` (`places`): the name of every path under a place of ``under``; at each place of ``at``, each entry a lookup there
+    can ask for by name (`runners.circuit_binding.named`), a directory's marked, and each package directory's ``__init__``;
+    and the kind of each place of ``at`` and of each directory above a place.  A path added, removed or renamed where a run
+    can look changes it; an edit to a file doesn't."""
+    under, at = set(where["under"]), set(where["at"])
+    prefixes = tuple(f"{u}/" for u in under)
+    have, dirs = set(files), {d for f in files for d in RB.above(f)}
+    names: dict[str, set[str]] = {e: set() for e in at}
     for f in files:
-        head, slash, rest = f.partition("/")
-        if not slash:
-            if _module_file(head):
-                out.add(head)
-        elif head.isidentifier():
-            out.add(f"{head}/")
-            if "/" not in rest and rest.partition(".")[0] == "__init__" and _module_file(rest):
-                out.add(f)
-    return sorted(out)
-
-
-def lookups(root: Path, files: list[str]) -> str:
-    """The digest of what the tree answers each lookup a run of the catalog makes beyond its inputs' bytes: the kind of each path
-    `READS` declares its runs probed and the names in each directory they listed (`circuit_check.cache.declared`'s ``probes``
-    and ``listed``), and the module files and packages at the root, the first entry of the import path of a run from there
-    (`runners.circuit_binding.checker`'s ``-m``), which `READS` needn't hold.  A file added or removed where a run looks
-    changes it; an edit to a file doesn't."""
-    have, got = set(files), {}
-    for part in READS_PARTS:
-        if (p := f"{READS}/{part}") in have:
-            try:
-                doc = json.loads((root / p).read_text())
-            except (OSError, ValueError) as e:
-                raise GraphError(f"{p}: {e}") from e
-            if not isinstance(doc, dict) or doc.get("schema") != READS_SCHEMA:
-                raise GraphError(f"{p} isn't {READS_SCHEMA}, the read sets this family keys its tasks' lookups on")
-            got.update(doc)
-    sets = [got.get("registries", {}), *got.get("groups", [])]
-    dirs = {""}
-    for f in files:
-        i = f.rfind("/")
-        while i > 0 and (d := f[:i]) not in dirs:
-            dirs.add(d)
-            i = f.rfind("/", 0, i)
-    probes = {*got.get("loaded", ()), *(p for s in sets for p in s.get("probes", ()))}
-    listed = sorted({d for s in sets for d in s.get("listed", ())})
+        for e in ("", *RB.above(f)):
+            if e not in at:
+                continue
+            head, slash, tail = (f[len(e) + 1:] if e else f).partition("/")
+            if not slash:
+                if RB.named(head):
+                    names[e].add(head)
+            elif RB.named(head):
+                names[e].add(f"{head}/")
+                if head.isidentifier() and "/" not in tail and RB.package_init(tail):
+                    names[e].add(f"{head}/{tail}")
+    kinds = at | {d for p in (*under, *at) for d in RB.above(p)}
     return contract.digest(contract.canonical({
-        "probes": [[p, "file" if p in have else "dir"] for p in sorted(probes) if p in have or p in dirs],
-        "listed": [[d, sorted({f[len(d) + 1:].partition("/")[0] for f in files if f.startswith(f"{d}/")})] for d in listed],
-        "root": _at_root(files)}))
+        "under": [f for f in files if f in under or f.startswith(prefixes)],
+        "at": {e: sorted(n) for e, n in sorted(names.items())},
+        "kinds": {p: "file" if p in have else "dir" for p in sorted(kinds) if p in have or p in dirs}}))
 
 
-def _packages(root: Path) -> set[str]:
-    """The top-level names of `sidecars.PACKAGES`, read from its source."""
+def _tuple(root: Path, name: str) -> tuple[str, ...]:
+    """`sidecars`' tuple ``name``, read from its source."""
     for node in ast.parse((root / SIDECARS).read_text()).body:
-        if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["PACKAGES"]:
-            return {p.partition(".")[0] for p in ast.literal_eval(node.value)}
-    raise GraphError(f"{SIDECARS}: no PACKAGES tuple to find the sidecars' packages by")
+        if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == [name]:
+            return tuple(ast.literal_eval(node.value))
+    raise GraphError(f"{SIDECARS}: no {name} tuple to find the sidecars' packages by")
 
 
-def module(path: str, have: set[str], tops: set[str]) -> str | None:
+def _packages(root: Path, have: set[str]) -> tuple[str, ...]:
+    """The directories `sidecars.discover` searches (`sidecars._roots`), each with its slash: the top-level packages of
+    `sidecars.PACKAGES`, at the root, and each package of `sidecars.TREES` (``<tree>/<stack>/<package>``) that registers
+    itself by a sidecar of its own module."""
+    own = (f"/__init__{SUFFIX}.py", f"/__init__{SUFFIX}.json")
+    out = {p.partition(".")[0] + "/" for p in _tuple(root, "PACKAGES")}
+    for tree in _tuple(root, "TREES"):
+        out |= {f.rpartition("/")[0] + "/" for f in have if f.startswith(f"{tree}/") and f.count("/") == 3 and f.endswith(own)}
+    return tuple(sorted(out))
+
+
+def module(path: str, have: set[str], tops: tuple[str, ...]) -> str | None:
     """The module sidecar ``path`` binds, named from the top of the regular packages it is in (``__init__.py`` all the way
-    down), as `sidecars.discover` names it; None outside one of ``tops``."""
+    down), as `sidecars.discover` names it; None in no regular package, or under none of the directories ``tops``."""
     parts = path.split("/")
     i = len(parts) - 1
     while i > 0 and "/".join(parts[:i]) + "/__init__.py" in have:
         i -= 1
     pkg, stem = parts[i:-1], parts[-1][:-len(f"{SUFFIX}.py")]
-    if not pkg or pkg[0] not in tops:
+    if not pkg or not path.startswith(tops):
         return None
     return ".".join(pkg if stem == "__init__" else [*pkg, stem])
 
@@ -169,7 +182,8 @@ def entries(path: str, source: str) -> list[str]:
 
 def bindings(root: Path, files: list[str]) -> dict[str, tuple[str, str]]:
     """{binding name, as `circuit-check --binding` takes it: (its binding file, its entry)} for the tree at ``root``."""
-    have, tops = set(files), _packages(root)
+    have = set(files)
+    tops = _packages(root, have)
     out = {name: (TARGETS, entry) for name, entry in (REGISTERED, (EXAMPLES, EXAMPLES))}
     out.update({e: (TARGETS, e) for e in entries(TARGETS, (root / TARGETS).read_text()) if not e.startswith(f"{EXAMPLES}:")})
     for f in files:
@@ -196,7 +210,8 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                          f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
     reads = [{"task": CATALOG, "output": RECORDS["name"]}]
     shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
-    seen = {"lookups": lookups(root, files)}
+    where = places(root, files)
+    seen = {"lookups": lookups(files, where)}
     return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record and slice",
              "inputs": shared, "outputs": [RECORDS, SHARED, *(slice_of(name) for name in found)],
              "resources": CATALOG_SLOT, "vars": seen},
@@ -206,5 +221,6 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
              "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"], **seen}},
             *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "outputs": [failures(name)],
                "reads": [{"task": CATALOG, "output": SHARED["name"]}, {"task": CATALOG, "output": slice_of(name)["name"]}],
-               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"], **seen}}
+               "vars": {"binding": name, "slice": slice_of(name)["path"], "shared": SHARED["path"], **seen,
+                        "places": json.dumps(where, separators=(",", ":"))}}
               for name, (f, e) in found.items())]

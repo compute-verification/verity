@@ -28,7 +28,6 @@ RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
 #: program/kernels/, and by name the modules of it that stay in the package when its Definitions move to `verity.definitions`
 LADDER_HOMES = ("verity/definitions/numerics/", "verity_vllm/program/sampling_rng.py",
-                "verity_vllm/program/libdevice_sampling.py", "verity_vllm/program/rmsnorm_fused_sweep.py",
                 "verity_vllm/program/gemm_target_correspondence.py", "verity_vllm/program/compiled_relations.py",
                 "verity_vllm/program/compiled_norm_literal.py")
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")

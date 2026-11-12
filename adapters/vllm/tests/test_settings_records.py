@@ -1,7 +1,6 @@
 """Records a reader fills from the environment, pinned at their bytes on `main` before the reader moves to `verity_vllm.settings`, so
-the move can't change them: the hot worker's key (`hot.env_identity`, `hot.so_identity`), the fast Match's declared configuration
-(`global_match_fast.config`, on every result document's impl block), the Commit's reasons to run cold with the staging
-environment it hands its committers (`commit.hot_unsafe_reasons`, `commit.staging_environ`), the configuration a committer
+the move can't change them: the fast Match's declared configuration (`global_match_fast.config`, on every result document's impl
+block), the staging environment the Commit hands its committers (`commit.staging_environ`), the configuration a committer
 takes from that environment (the collector's on `test_staging_defaults`' CPU fakes, its name among it), and the fields of the
 engine's records the environment fills (the replay's engine facts, the engine profile, the compilation facts, the generated kernels)."""
 from __future__ import annotations
@@ -18,7 +17,7 @@ import pytest
 
 from verity_vllm.check.match import global_match as GM
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.pipeline import cli, hot
+from verity_vllm.pipeline import cli
 
 
 def _digest(doc: object) -> str:
@@ -53,14 +52,6 @@ def committers():
     return test_staging_defaults, native_host
 
 
-def test_the_hot_key_takes_the_environment_as_before(env: pytest.MonkeyPatch) -> None:
-    for k, v in {"PATH": "/bin", "PYTHONPATH": "/src", "VLLM_BATCH_INVARIANT": "1", "VERITY_WINDOW_MB": "256", "VERITY_TIMELINE": "/t",
-                 "VERITY_HOT_SUBMIT": "1", "HASH_THREADS": "4", "CUDA_HOME": "/cuda", "TORCH_X": "", "OMP_NUM_THREADS": "8",
-                 "NATIVE_COLLECT_BUILD": "/no-such-build", "HOME": "/h", "NCCL_P2P_DISABLE": "1"}.items():
-        env.setenv(k, v)
-    assert _digest([hot.env_identity(), hot.so_identity([])]) == "7580fb5e57fd51d29eb814efbade623e"
-
-
 @pytest.mark.parametrize(("values", "digest"), [
     ({"MATCH_WORKERS": "1"}, "37c433ce7a6f3d0ef54af75f49134685"),
     ({"MATCH_WORKERS": " 3 ", "MATCH_COMPACT": " 0 "}, "aee01761c9e2b4dd6f984669223ef09f"),
@@ -76,21 +67,19 @@ def test_the_fast_match_declares_its_configuration_as_before(env: pytest.MonkeyP
 
 
 @pytest.mark.parametrize(("values", "argv", "digest"), [
-    ({}, [], "28285790244bd016269ddf08993ba559"),
-    ({"VERITY_FAULT": " skip_copy:1 ", "VERITY_SWITCH": "0.001"}, ["--arms", "a,b", "--window-mb", "0"], "e7f7725d89caf134f7ea831181381df2"),
+    ({}, [], "edff988efc365cb440922782a7a2740b"),
+    ({"VERITY_FAULT": " skip_copy:1 ", "VERITY_SWITCH": "0.001"}, ["--arms", "a,b", "--window-mb", "0"], "0782a772365ef37077e6ef5ca2947ab9"),
     ({"VERITY_FAULT": "  ", "VERITY_SWITCH": ""}, ["--bounded-staging", "--retain", "host", "--retain-exclude", "fa3_hidden_m1",
                                                    "--learn-budget-mb", "1024", "--window-mb", "256", "--window-slots", "4"],
-     "ce0b116482d3de00d51cf1c1a00a940f"),
-    ({"VERITY_FAULT": "", "VERITY_RETAIN": "device"}, ["--no-bounded-staging", "--retain", "none"], "ab1c19f50687282fe9ef2e4012560ec4"),
+     "c0cf1f89a010a49342ffbd4aaa9c3e39"),
+    ({"VERITY_FAULT": "", "VERITY_RETAIN": "device"}, ["--no-bounded-staging", "--retain", "none"], "4f050dc5298a6b0e961adb63fa0391dd"),
 ])
-def test_the_commit_names_its_cold_reasons_and_stages_as_before(commit, env: pytest.MonkeyPatch, values: dict[str, str],
-                                                                 argv: list[str], digest: str) -> None:
+def test_the_commit_stages_as_before(commit, env: pytest.MonkeyPatch, values: dict[str, str], argv: list[str], digest: str) -> None:
     for k, v in values.items():
         env.setenv(k, v)
     ns = cli.parse("commit", ["--out", "o", *argv], {})
-    reasons = commit.hot_unsafe_reasons(ns)
     commit.staging_environ(commit.resolve_staging(ns))
-    assert _digest([reasons, {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}]) == digest
+    assert _digest({k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}) == digest
 
 
 @pytest.mark.parametrize(("retain", "values", "digest"), [
@@ -122,7 +111,10 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
 
 @pytest.fixture(scope="module")
 def engine():
+    """The engine's modules, and Inductor's config imported before `env` clears the environment: torch reads the engine's fixed
+    switches (`engine.env.FIXED`) when that module is first imported, and the rest of the process keeps what it read."""
     pytest.importorskip("torch")
+    import torch._inductor.config  # noqa: F401
     from verity_vllm.acquire.sources import compiled_source
     from verity_vllm.check import fold_compare
     from verity_vllm.engine import kernel_identity
@@ -136,22 +128,22 @@ def engine():
 
 _ENGINE_VARS = ("VLLM_BATCH_INVARIANT", "CUBLAS_WORKSPACE_CONFIG", "CUBLASLT_WORKSPACE_SIZE", "NCCL_ALGO", "NCCL_PROTO", "NCCL_MIN_NCHANNELS",
                 "NCCL_MAX_NCHANNELS", "NCCL_NTHREADS", "NCCL_BUFFSIZE", "NCCL_LAUNCH_MODE", "VLLM_DISABLE_COMPILE_CACHE", "RUNPOD_POD_ID",
-                "TORCHINDUCTOR_CACHE_DIR", "VERITY_INDUCTOR_DIR_PER_PROCESS", "HF_HOME", "VERITY_FAULT")
+                "TORCHINDUCTOR_CACHE_DIR", "VERITY_INDUCTOR_DIR_PER_PROCESS", "HF_HOME")
 
 
 @pytest.mark.parametrize(("values", "digest"), [
-    ({}, "d43ddca387e48b9f037005834832ba17"),
+    ({}, "f3e0b8f1bac96c25de9a7ea75a4b6c18"),
     ({"VLLM_BATCH_INVARIANT": "1", "CUBLAS_WORKSPACE_CONFIG": ":4096:8", "CUBLASLT_WORKSPACE_SIZE": "0", "NCCL_ALGO": "Ring",
       "NCCL_PROTO": "Simple", "NCCL_MIN_NCHANNELS": "4", "NCCL_MAX_NCHANNELS": "8", "NCCL_NTHREADS": "512", "NCCL_BUFFSIZE": "4194304",
       "NCCL_LAUNCH_MODE": "GROUP", "VLLM_DISABLE_COMPILE_CACHE": "1", "RUNPOD_POD_ID": "pod-a", "TORCHINDUCTOR_CACHE_DIR": "/no/inductor",
-      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "HF_HOME": "/hf", "VERITY_FAULT": " skip_copy:3 "}, "6cbbab0e6f0be08fca8b082a0bd226cc"),
-    (dict.fromkeys(_ENGINE_VARS, ""), "b32b5b554142c2adc24aa3c97868d7ea"),
+      "VERITY_INDUCTOR_DIR_PER_PROCESS": "1", "HF_HOME": "/hf"}, "bfdf3bd35c114e4c1b1d13445f050b3a"),
+    (dict.fromkeys(_ENGINE_VARS, ""), "20b5d424ebbea51fb5d837f7125d6609"),
     ({"VLLM_BATCH_INVARIANT": " 1", "VLLM_DISABLE_COMPILE_CACHE": "true", "VERITY_INDUCTOR_DIR_PER_PROCESS": "true", "NCCL_ALGO": " Tree ",
-      "RUNPOD_POD_ID": " p "}, "346629f5207b0967e546ab33645f6704"),
+      "RUNPOD_POD_ID": " p "}, "1cf6b670f3e07e0322f4a3e4e18e2048"),
 ])
 def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.MonkeyPatch, values: dict[str, str], digest: str) -> None:
     """The fields of the engine's records that the environment fills: the replay's engine facts, the engine profile's linear backend,
-    NCCL settings and pod, the compilation facts' compile cache, the compiled source's fault, the generated kernels' Inductor
+    NCCL settings and pod, the compilation facts' compile cache, the generated kernels' Inductor
     directory, and the hub paths.  vLLM, CUDA and nvidia-smi are faked; the rest of each record is the machine's."""
     import torch
 
@@ -182,7 +174,6 @@ def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.Mo
            "pod": "<node>" if pod == os.uname().nodename else pod,
            "compile_cache": engine.build.compilation_facts(llm)["compile_cache"],
            "compile_cache_disabled": engine.compiled_source.compile_settings(llm)["compile_cache_disabled"],
-           "fault": engine.compiled_source.CompiledGraphSource().fault,
            "inductor": [gk["inductor_cache_dir"], gk["per_process_cache_dir"]],
            "hub": [str(engine.dense_generic.hf_snapshot("org/m", "abc")), engine.fold_compare.hf_safetensors_glob("org/m")]}
     assert _digest(doc) == digest, doc

@@ -8,17 +8,22 @@
     vy-lockout roots [--apply] [--back]       the runs roots root's and sticky, so a sealed run can't be renamed or replaced
     vy-lockout kubeconfig [--apply] [--back]  research's kubeconfig: cluster-admin out, a read-only token in
     vy-lockout harden [--apply] [--back]      ubuntu out of lxd, py-spy without cap_sys_ptrace, research in systemd-journal
-    vy-lockout sudoers [--apply] [--skip CHECK]...   research's ALL -> the allowlist, with the 24 h fallback
+    vy-lockout sudoers --node NODE [--apply] [--skip CHECK]...       research's ALL -> the node's allowlist, with the 24 h fallback
     vy-lockout fallback on [--hours H] | off | expire                the fallback; `on` only for vy-admin
-    vy-lockout audit [--since -24h]           what research ran under sudo that the allowlist would refuse (no arguments printed)
+    vy-lockout audit [--since=-24h] [--node NODE]                    what research asked sudo for that the node's allowlist would
+                                              refuse, or did (no arguments printed); anyone may run it, before the lock-out too
     vy-lockout rollback [--apply]             the sudoers step undone: cloud-init's grant back, the allowlist and fallback out
-    vy-lockout render                         the allowlist (ALLOW) as sudoers: sudoers/50-vy-research is this, byte for byte
+    vy-lockout render [--node NODE]           the node's allowlist as sudoers: its file under sudoers/ is this, byte for byte
+
+NODE is vy-nebius-1, vy-nebius-2 or a CPU node (vy-nebius-cpu-N). A CPU node has no loop to switch and no cluster, so its plan
+is deploy, vy-admin, seal, harden, sudoers, watch, and its allowlist is its own, smaller one (PROFILES).
 
 Without --apply every step says what it would do and changes nothing. A step with --apply stops at its first failure. Each
 step's --back undoes it; what a step moves aside goes to BACKUP (root's), never deleted.
 
-The allowlist is ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo journal, or the
-repository file that runs it); EXCLUDED says why each other form research ran is not in it. The sudoers step installs it beside a fallback that grants research ALL again until its `# expires` line, which
+An allowlist is ALLOW or CPU_ALLOW below, one Rule per command form with the evidence for it (a count in the nodes' sudo
+journal, or the repository file that runs it); EXCLUDED says why each other form research ran is not in it. The sudoers step
+installs it beside a fallback that grants research ALL again until its `# expires` line, which
 vy-sudo-fallback-expire.timer (root, every 10 min and at boot) enforces: past it, or without a readable one, the file goes.
 """
 from __future__ import annotations
@@ -42,11 +47,13 @@ from pathlib import Path
 from typing import Callable
 
 LIB = Path("/usr/local/lib/vy-lockout")
+SSHD_ADMIN = "/etc/ssh/sshd_config.d/11-vy-admin.conf"     # `AllowUsers vy-admin`, beside vm_setup.sh's `AllowUsers research`
 SUDOERS_D = Path("/etc/sudoers.d")
 ALLOWLIST = "50-vy-research"
 FALLBACK = "59-vy-research-fallback"
 ADMIN = "10-vy-admin"
 CLOUD_INIT = "90-cloud-init-users"
+JOB_GROUP = "vy-job"                                       # vy-sudo's JOB_GROUP: a job's unit runs only as an account listed in it
 BACKUP = Path("/root/vy-lockout")
 UNITS = Path("/etc/systemd/system")
 ENVS = Path("/etc/vy/env")
@@ -76,11 +83,13 @@ ALLOW = (
          "its own threads); vy-sudo: own pids only"),
     Rule("/usr/local/sbin/vy-sudo", "taskset *", "journal n2 491 + n1 217 `taskset -pc|-apc CPUS PID`; vy-sudo: own pid only"),
     Rule("/usr/local/sbin/vy-sudo", "systemd-run *", "journal n1 43 + n2 31 `systemd-run --scope ... --slice=`, n1 6 `--uid= --pipe` "
-         "(jobuser.py:196, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
+         "(jobuser.py unit_argv, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
     Rule("/usr/local/sbin/vy-sudo", "env *", "journal n2 48 `env PATH=* systemd-run --quiet --scope` (provers.sh:8, pous_quiet.sh:8, "
          "device.sh:17, fill_runner.py:472)"),
     Rule("/usr/local/sbin/vy-sudo", "systemctl *", "journal n2 2 `systemctl stop hidden-zk-*.scope` (scope.sh:18), fill_runner.py:399 "
-         "(fill-timing-*.scope); vy-sudo: a scope of the caller's processes only"),
+         "(fill-timing-*.scope), jobuser.py's stop of a job's unit; vy-sudo: a scope of the caller's processes, or a job's unit"),
+    Rule("/usr/local/sbin/vy-sudo", "job-reclaim *", "jobuser.py finish (`sudo -n find RUN_DIR -user USER ... -delete`, `chown -R "
+         "--from=USER`): vy-sudo does both, only under a directory of the caller's"),
     Rule("/usr/local/sbin/vy-sudo", "hf-ns *", "n2_build.sh:143, n2_commit.sh:288 (`sudo -n unshare --mount ...`, which ran bash as root)"),
     Rule("/usr/local/sbin/vy-seal-runs", "delete *", "research.retention gc/rm on a sealed run (this change)"),
     Rule("/usr/local/sbin/vy-seal-runs", "evict *", "research data evict --runs on a sealed run (vy-store-evict-research.service, as research)"),
@@ -92,12 +101,52 @@ ALLOW = (
          "-name replay_bundle_p* -prune -print0` and `xargs -0r du -sb` (infra/cluster/src/cluster/status.py:54, sky/release.py's: a "
          "root unit after the switch); vy-sudo runs that find with -exec du, since `xargs du` as root takes du's options from stdin"),
 )
+#: research -> root on a CPU node: what a run and the store need there, and nothing of the cluster's
+CPU_ALLOW = (
+    Rule("/usr/local/sbin/vy-sudo", "systemd-run *", "`research run --job-user` (jobuser.py unit_argv): the job's unit; vy-sudo: "
+         "runs as the caller or a job user"),
+    Rule("/usr/local/sbin/vy-sudo", "systemctl *", "jobuser.py supervise and finish: the stop of the job's unit; vy-sudo: a job's "
+         "unit, or a scope of the caller's processes"),
+    Rule("/usr/local/sbin/vy-sudo", "job-reclaim *", "jobuser.py finish: what the job user left in the run dir, back to the runner"),
+    Rule("/usr/local/sbin/vy-seal-runs", "delete *", "research.retention gc/rm on a sealed run (store/sealed.py)"),
+    Rule("/usr/local/sbin/vy-seal-runs", "evict *", "research data evict --runs on a sealed run (vy-store-evict-research.service, as research)"),
+    Rule("/usr/bin/systemctl", "start --no-block vy-lean-cache-daily.service", "the Lean cache's publish after a landing that touches "
+         "Lean (merge.py lean_publish starts it on the node that builds the cache); the unit takes nothing of the caller's"),
+    Rule("/usr/bin/true", "", "`sudo -n true` (infra/cluster/src/cluster/status.py:54)"),
+)
 #: who besides root research may run as, for anything: itself (journal n1 1,471 tmux, 512 env), and the job user ubuntu (journal n1
 #: 311 `env HOME=* PYTHONPATH=* ...`, 27 mv: n1_custody.sh:245, n2_build.sh:98,202, n2_commit.sh:50,197,215) once ubuntu has no root
 RUNAS_ALL = ("ubuntu", "research")
 #: ubuntu -> root: vy-store-evict.service runs `research data evict --runs` on /workspace/jobs/runs as ubuntu
 UBUNTU_ALLOW = (Rule("/usr/local/sbin/vy-seal-runs", "evict *", "vy-store-evict.service (User=ubuntu) on a sealed job run"),
                 Rule("/usr/local/sbin/vy-seal-runs", "delete *", "research retention gc/rm as ubuntu on a sealed job run"))
+
+
+@dataclass(frozen=True)
+class Profile:
+    """One kind of node's allowlist."""
+    file: str                       # the committed file under sudoers/, staged on the node as LIB/ALLOWLIST
+    source: str                     # the tuple of this module it is rendered from
+    nodes: str                      # whose it is, as its header says
+    rules: tuple[Rule, ...]         # research -> root
+    runas: tuple[str, ...]          # whom besides root research may run as, for anything
+    ubuntu: tuple[Rule, ...] = ()   # ubuntu -> root
+
+
+CLUSTER = Profile("50-vy-research", "ALLOW", "", ALLOW, RUNAS_ALL, UBUNTU_ALLOW)
+#: nothing on a CPU node runs as ubuntu, which its image leaves in sudo, adm and lxd: research runs there as root's forms or itself
+CPU = Profile("50-vy-research-cpu", "CPU_ALLOW", " on a CPU node (vy-nebius-cpu-N)", CPU_ALLOW, ("research",))
+PROFILES = (CLUSTER, CPU)
+CPU_NODE = re.compile(r"vy-nebius-cpu-[1-9][0-9]*")
+
+
+def profile(node: str) -> Profile:
+    """The node's profile; ValueError for a node the lock-out doesn't know."""
+    if node in SWITCH:
+        return CLUSTER
+    if CPU_NODE.fullmatch(node):
+        return CPU
+    raise ValueError(f"{node or 'no node'}: one of {', '.join(SWITCH)} or a CPU node (vy-nebius-cpu-N)")
 
 EXCLUDED = {
     "k3s kubectl, kubectl": "journal n1 410,831 + 106: the loops (dispatch, n1_lease, pool_n1, gpu_stray, release) become root units; "
@@ -116,6 +165,14 @@ EXCLUDED = {
     "kill, pkill": "journal n2 8 + n1 4: a process of the caller's needs no sudo",
     "unshare": "n2_build.sh:143 and n2_commit.sh:288 move to `vy-sudo hf-ns`",
     "vy-lean-build-setup, vy-device-cores": "setup that creates users or edits boot config: vy-admin's",
+    "apt-get": "remote.py's wake-time upgrade of the trust store asks only on a node that still trusts a distrusted root, which a "
+               "set-up node never is (vm_setup.sh's 52vy-trust keeps those packages current); any other install is vy-admin's",
+    "ip netns, ip -n, ip link, tcpdump": "CPU nodes: network namespaces and captures as root (benchmarks/network_sim, captures by "
+                                         "hand): a namespace's command is any command; they run where research keeps root, or "
+                                         "their owner asks for a form",
+    "tail, rsync --server, python3 FILE, sh -c (a service's tree under /root or /opt)": "CPU nodes: a service driven over research's "
+        "ssh that reads and writes as root is root by another name; it becomes a root unit or its own account before its node "
+        "is locked",
 }
 
 
@@ -124,15 +181,15 @@ def _alias_lines(name: str, rules: tuple[Rule, ...]) -> list[str]:
     return [f"Cmnd_Alias {name} = \\"] + [f"    {s}, \\" for s in specs[:-1]] + [f"    {specs[-1]}"]
 
 
-def render() -> str:
-    """The allowlist as sudoers (sudoers/50-vy-research)."""
-    out = ["# /etc/sudoers.d/50-vy-research: what research (every lane and infra loop) may run as root after the lock-out.",
-           "# Generated by `vy-lockout render` from ALLOW in tools/research/src/research/pods/nebius/lockout/lockout.py, which",
+def render(p: Profile = CLUSTER) -> str:
+    """A profile's allowlist as sudoers (its file under sudoers/)."""
+    out = [f"# /etc/sudoers.d/50-vy-research{p.nodes}: what research (every lane and infra loop) may run as root after the lock-out.",
+           f"# Generated by `vy-lockout render` from {p.source} in tools/research/src/research/pods/nebius/lockout/lockout.py, which",
            "# gives each line's evidence; edit there. vy-sudo and vy-seal-runs check the arguments sudoers can't.",
-           "", *_alias_lines("VY_RESEARCH", ALLOW), "", *_alias_lines("VY_UBUNTU", UBUNTU_ALLOW), "",
+           "", *_alias_lines("VY_RESEARCH", p.rules), "", *([*_alias_lines("VY_UBUNTU", p.ubuntu), ""] if p.ubuntu else []),
            "research ALL=(root) NOPASSWD: VY_RESEARCH",
-           f"research ALL=({', '.join(RUNAS_ALL)}) NOPASSWD: ALL",
-           "ubuntu ALL=(root) NOPASSWD: VY_UBUNTU", ""]
+           f"research ALL=({', '.join(p.runas)}) NOPASSWD: ALL",
+           *(["ubuntu ALL=(root) NOPASSWD: VY_UBUNTU"] if p.ubuntu else []), ""]
     return "\n".join(out)
 
 
@@ -169,11 +226,11 @@ def _pattern(args: str) -> str:
     return out
 
 
-def allowed(user: str, runas: str, command: str, rules: tuple[Rule, ...] = ALLOW) -> bool:
-    """Whether the allowlist alone lets `user` run `command` (path and arguments, as sudo logs it) as `runas`."""
-    if user == "research" and runas in RUNAS_ALL:
+def allowed(user: str, runas: str, command: str, p: Profile = CLUSTER) -> bool:
+    """Whether the profile's allowlist alone lets `user` run `command` (path and arguments, as sudo logs it) as `runas`."""
+    if user == "research" and runas in p.runas:
         return True
-    rules = rules if user == "research" else UBUNTU_ALLOW if user == "ubuntu" else ()
+    rules = p.rules if user == "research" else p.ubuntu if user == "ubuntu" else ()
     if runas != "root":
         return False
     path, _, args = command.partition(" ")
@@ -184,23 +241,26 @@ SUDO_LINE = re.compile(r"^\s*(?P<user>[a-z_][a-z0-9_-]*) : .*?USER=(?P<runas>[a-
 
 
 def shape(command: str, words: int = 3) -> str:
-    """A command as the audit prints it: its path and first words, numbers as N, every VAR=value as VAR=*, long words cut."""
+    """A command as the audit prints it: its path and first words, numbers as N, every VAR=value as VAR=*, mktemp's names as
+    tmp.*, long words cut."""
     out = []
     for w in command.split()[: words + 1]:
         w = re.sub(r"=.*", "=*", w) if "=" in w else w
+        w = re.sub(r"\btmp\.[A-Za-z0-9]{6,}", "tmp.*", w)
         w = re.sub(r"\d+", "N", w)
         out.append(w[:40] + "..." if len(w) > 40 else w)
     return " ".join(out)
 
 
-def audit(journal: str) -> list[tuple[int, str]]:
-    """(count, shape) of each command form research or ubuntu ran under sudo that the allowlist would refuse, most frequent first."""
+def audit(journal: str, p: Profile = CLUSTER) -> list[tuple[int, str]]:
+    """(count, shape) of each command form research or ubuntu asked sudo for that the profile's allowlist would refuse, most
+    frequent first: what ran under a wider grant, and what sudo -n refused (`a password is required`) once that grant is gone."""
     counts: dict[str, int] = {}
     for ln in journal.splitlines():
         m = SUDO_LINE.match(ln)
         if not m or m["user"] not in ("research", "ubuntu") or "command not allowed" in ln:
             continue
-        if not allowed(m["user"], m["runas"], m["cmd"].strip()):
+        if not allowed(m["user"], m["runas"], m["cmd"].strip(), p):
             k = f"{m['user']}->{m['runas']} {shape(m['cmd'].strip())}"
             counts[k] = counts.get(k, 0) + 1
     return sorted(((n, k) for k, n in counts.items()), key=lambda t: (-t[0], t[1]))
@@ -346,7 +406,23 @@ def _run(argv: list[str], **kw) -> subprocess.CompletedProcess:
     return subprocess.run(argv, capture_output=True, text=True, **kw)
 
 
-def preflight(node: str, run: Runner = _run, root: Path = Path("/")) -> list[Check]:
+def login_uid(path: str = "/proc/self/loginuid") -> int | None:
+    """The uid this session logged in as (the kernel's audit login uid: sshd sets it, and sudo and su leave it); None when unset."""
+    f = Path(path)
+    text = f.read_text().strip() if f.is_file() else ""
+    return int(text) if text.isdigit() and int(text) != 2**32 - 1 else None
+
+
+def uid_of(user: str, passwd_file: str = "/etc/passwd") -> int | None:
+    f = Path(passwd_file)
+    rows = [ln.split(":") for ln in f.read_text().splitlines()] if f.is_file() else []
+    return next((int(r[2]) for r in rows if len(r) > 2 and r[0] == user and r[2].isdigit()), None)
+
+
+ACCEPTED = re.compile(r"^(\d+(?:\.\d+)?) .*Accepted publickey for vy-admin ")
+
+
+def preflight(node: str, run: Runner = _run, root: Path = Path("/"), session: Callable[[], int | None] = login_uid) -> list[Check]:
     """What the sudoers step needs, each as a Check."""
     at = lambda p: root / str(p).lstrip("/")
     out: list[Check] = []
@@ -355,10 +431,23 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/")) -> list[Che
     out.append(Check("vy-admin", keys.is_file() and keys.stat().st_size > 0 and admin_sudo.is_file(),
                      f"authorized_keys {'present' if keys.is_file() else 'missing'}, {ADMIN} {'present' if admin_sudo.is_file() else 'missing'}",
                      "vy-admin-setup KEYS_FILE (Dan's and infra's lead's public keys)"))
-    login = run(["journalctl", "-u", "ssh", "-u", "sshd", "--since", "-7d", "-o", "cat", "-g", "Accepted publickey for vy-admin"])
-    out.append(Check("vy-admin-login", login.returncode == 0 and "Accepted publickey for vy-admin" in login.stdout,
-                     "an ssh login as vy-admin in the last 7 days" if login.stdout.strip() else "no ssh login as vy-admin in the journal",
-                     "log in as vy-admin and run `sudo -n true`: root must work through vy-admin before research loses it"))
+    # a login from before the keys or the sudoers file last changed says nothing about the ones in place now
+    newest = max((f.stat().st_mtime for f in (keys, admin_sudo) if f.is_file()), default=0.0)
+    login = run(["journalctl", "-u", "ssh", "-u", "sshd", "--since", "-7d", "-o", "short-unix", "-g", "Accepted publickey for vy-admin"])
+    times = [float(m.group(1)) for m in map(ACCEPTED.match, login.stdout.splitlines()) if m] if login.returncode == 0 else []
+    out.append(Check("vy-admin-login", any(t >= int(newest) for t in times),
+                     "an ssh login as vy-admin with the keys and sudoers file in place now" if any(t >= int(newest) for t in times)
+                     else "the last ssh login as vy-admin is older than its keys or its sudoers file" if times
+                     else "no ssh login as vy-admin in the last 7 days",
+                     "log in over ssh as vy-admin and run `sudo -n true`: root must work through vy-admin before research loses it "
+                     f"(a login sshd refuses: `sshd -T | grep -i allowusers` must name vy-admin, which {SSHD_ADMIN} and a reload of "
+                     "ssh give)"))
+    admin, me = uid_of("vy-admin", str(at("/etc/passwd"))), session()
+    out.append(Check("vy-admin-session", admin is not None and me == admin,
+                     "this session logged in as vy-admin and is root: its login and its sudo both work" if admin is not None and me == admin
+                     else f"this session logged in as uid {me}, not as vy-admin" + ("" if admin is not None else " (no such user)"),
+                     "run this from an ssh login as vy-admin, with sudo: a step that takes root from research is run by the "
+                     "account that keeps it"))
     try:
         g = groups_of("ubuntu", str(at("/etc/group")))
     except OSError:
@@ -383,6 +472,11 @@ def preflight(node: str, run: Runner = _run, root: Path = Path("/")) -> list[Che
         except FileNotFoundError:
             ok, d = True, f"{p}: none"
         out.append(Check(f"root:{p}", ok, d, "vy-lockout roots --apply"))
+    staged = at(LIB / ALLOWLIST)
+    out.append(Check("allowlist", staged.is_file() and staged.read_text() == render(profile(node)),
+                     f"{LIB / ALLOWLIST} is {node}'s (sudoers/{profile(node).file})" if staged.is_file() and
+                     staged.read_text() == render(profile(node)) else f"{LIB / ALLOWLIST} is missing or not sudoers/{profile(node).file}",
+                     f"research deploy install {node}: the files of one commit"))
     for loop in SWITCH.get(node, ()):
         if loop.tmux:
             ls = run(["runuser", "-u", "research", "--", "tmux", "has-session", "-t", f"={loop.tmux}"])
@@ -565,7 +659,8 @@ def step_kubeconfig(ctx: Ctx, back: bool, lib: Path = LIB, kube: Path = RESEARCH
 def step_harden(ctx: Ctx, back: bool) -> None:
     if back:
         ctx.do(["usermod", "-aG", "lxd", "ubuntu"])
-        ctx.do(["setcap", "cap_sys_ptrace+ep", PY_SPY])
+        if os.path.exists(PY_SPY):                  # a CPU node has none
+            ctx.do(["setcap", "cap_sys_ptrace+ep", PY_SPY])
         ctx.do(["gpasswd", "-d", "research", "systemd-journal"])
         return
     if "lxd" in groups_of("ubuntu"):
@@ -584,8 +679,8 @@ def step_sudoers(ctx: Ctx, node: str, skip: list[str], now: float, lib: Path = L
     if failing:
         raise Failed(f"preflight fails: {', '.join(c.name for c in failing)} (each check says its fix; --skip NAME only with Daniel's yes)")
     text = (lib / ALLOWLIST).read_text()
-    if text != render():
-        raise Failed(f"{lib / ALLOWLIST} isn't `vy-lockout render`'s: install the files of one commit")
+    if text != render(profile(node)):
+        raise Failed(f"{lib / ALLOWLIST} isn't `vy-lockout render --node {node}`'s: install the files of one commit")
     install_sudoers(ctx, ALLOWLIST, text, sudoers_d)
     install_sudoers(ctx, FALLBACK, fallback_text(now + FALLBACK_HOURS * 3600), sudoers_d)
     ctx.do(["install", "-d", "-m", "0700", str(backup / "sudoers")])
@@ -630,30 +725,54 @@ def fallback(ctx: Ctx, action: str, now: float, hours: float = FALLBACK_HOURS, s
 
 
 def plan_text(node: str) -> str:
-    loops = SWITCH[node]
+    loops, cluster = SWITCH.get(node, ()), profile(node) is CLUSTER
     rows = [
-        ("deploy", "from an agent VM: `research deploy install NODE --by WHO --apply` (stages /usr/local/lib/vy-lockout, the "
-                   "tools and node 1's /etc/vy/env/root.env; installs nothing into sudoers.d or a unit's .d)", "research deploy attic"),
-        ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; log in as vy-admin, `sudo -n true`; every "
-                     "step below runs as vy-admin", "userdel -r vy-admin; rm /etc/sudoers.d/10-vy-admin"),
+        ("deploy", f"from an agent VM: `research deploy install {node} --by WHO --apply` (stages /usr/local/lib/vy-lockout"
+                   + (", the tools and node 1's /etc/vy/env/root.env" if cluster else " and the tools") + "; installs nothing into "
+                   "sudoers.d or a unit's .d, and starts nothing). From this deploy on, `research run --job-user USER` here asks "
+                   f"vy-sudo for its unit, and vy-sudo starts one only as an account listed in group {JOB_GROUP}: before it, on the "
+                   f"node, `sudo groupadd -f --system {JOB_GROUP}`, and `sudo usermod -aG {JOB_GROUP} USER` for each account made for "
+                   "jobs and nothing else (after the lock-out only vy-admin can)", "research deploy attic"),
+        ("vy-admin", "copy the public keys to the node, then `sudo vy-admin-setup KEYS`; "
+                     + ("" if cluster else f"`sudo sshd -t && sudo systemctl reload ssh` ({SSHD_ADMIN}, which deploy staged: the node's "
+                                           "sshd lets only research log in until then); ")
+                     + "log in as vy-admin, `sudo -n true`; every step below runs as vy-admin",
+         "userdel -r vy-admin; rm /etc/sudoers.d/10-vy-admin"
+         + ("" if cluster else f" {SSHD_ADMIN}; sshd -t && systemctl reload ssh")),
         ("seal", "`sudo vy-seal-runs seal --dry-run`, read it, then `sudo systemctl enable --now vy-seal-runs.timer`; "
                  "`sudo vy-lockout roots --apply`", "systemctl disable --now vy-seal-runs.timer; vy-lockout roots --back --apply "
                  "(sealed dirs stay sealed: /var/lib/vy-seal-runs/sealed.jsonl has each one's former owner and mode)"),
-        ("switch", "one loop at a time, in this order: " + ", ".join(f"{lp.unit}" + (f" (tmux {lp.tmux})" if lp.tmux else "")
-                                                               for lp in loops) + f"; `vy-lockout switch {node} --unit U --apply`",
-         f"vy-lockout switch {node} --unit U --back --apply, newest first"),
-        ("root-units", f"`vy-lockout root-units {node}` lists what isn't root's alone; fix each, then --apply",
-         f"vy-lockout root-units {node} --back --apply"),
-        ("kubeconfig", "`vy-lockout kubeconfig --apply`; then `k3s certificate rotate` in a quiet window (copies of the old admin "
-                       "key elsewhere stop working)", "vy-lockout kubeconfig --back --apply"),
+        *([("switch", "one loop at a time, in this order: " + ", ".join(f"{lp.unit}" + (f" (tmux {lp.tmux})" if lp.tmux else "")
+                                                                  for lp in loops) + f"; `vy-lockout switch {node} --unit U --apply`",
+            f"vy-lockout switch {node} --unit U --back --apply, newest first"),
+           ("root-units", f"`vy-lockout root-units {node}` lists what isn't root's alone; fix each, then --apply",
+            f"vy-lockout root-units {node} --back --apply"),
+           ("kubeconfig", "`vy-lockout kubeconfig --apply`; then `k3s certificate rotate` in a quiet window (copies of the old admin "
+                          "key elsewhere stop working)", "vy-lockout kubeconfig --back --apply")] if cluster else []),
         ("harden", "`vy-lockout harden --apply`", "vy-lockout harden --back --apply"),
         ("sudoers", f"`vy-lockout preflight {node}` all ok, then `vy-lockout sudoers --node {node} --apply`: allowlist + 24 h "
                     "fallback, cloud-init's grant moved aside. From here `research deploy install` (sudo python3) needs vy-admin's "
-                    "login", "vy-lockout rollback --apply"),
-        ("watch", "during the 24 h: `vy-lockout audit --since -24h`; fix each refused form (call site or allowlist, by PR) before the "
-                  "fallback expires; vy-admin may `vy-lockout fallback on`", "vy-lockout fallback on (vy-admin)"),
+                    "login (`--login vy-admin`)", "vy-lockout rollback --apply"),
+        ("watch", f"during the 24 h: `vy-lockout audit --since=-24h --node {node}`; fix each refused form (call site or allowlist, "
+                  "by PR) before the fallback expires; vy-admin may `vy-lockout fallback on`. Once the fallback is gone, research's "
+                  "`sudo -n true` still passes and `sudo -n id` is refused", "vy-lockout fallback on (vy-admin)"),
     ]
     return "\n".join(f"{i}. {name}: {do}\n   rollback: {back}" for i, (name, do, back) in enumerate(rows, 1))
+
+
+def node_name(name: str) -> str:
+    try:
+        profile(name)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+    return name
+
+
+def staged_profile(lib: Path = LIB) -> Profile:
+    """The profile whose allowlist this node has staged; the cluster's when none is, or it is neither's."""
+    f = lib / ALLOWLIST
+    text = f.read_text() if f.is_file() else ""
+    return next((p for p in PROFILES if text == render(p)), CLUSTER)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -661,7 +780,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("plan", "preflight"):
         p = sub.add_parser(name)
-        p.add_argument("node", choices=sorted(SWITCH))
+        p.add_argument("node", type=node_name)
         p.add_argument("--json", action="store_true")
     p = sub.add_parser("switch")
     p.add_argument("node", choices=sorted(SWITCH))
@@ -686,23 +805,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("action", choices=("on", "off", "expire"))
     p.add_argument("--hours", type=float, default=FALLBACK_HOURS)
     p = sub.add_parser("audit")
-    p.add_argument("--since", default="-24h")
+    p.add_argument("--since", default="-24h", help="journalctl's --since; a time that starts with - is written --since=-24h")
+    p.add_argument("--node", type=node_name, help="default: the node whose allowlist is staged here")
     p = sub.add_parser("rollback")
     p.add_argument("--apply", action="store_true")
-    sub.add_parser("render")
+    p = sub.add_parser("render")
+    p.add_argument("--node", type=node_name, default="vy-nebius-1")
     ns = ap.parse_args(argv)
     if ns.cmd == "render":
-        sys.stdout.write(render())
+        sys.stdout.write(render(profile(ns.node)))
         return 0
     if ns.cmd == "plan":
         print(plan_text(ns.node))
         return 0
     if ns.cmd == "audit":
         r = _run(["journalctl", "SYSLOG_IDENTIFIER=sudo", "--since", ns.since, "-o", "cat"])
-        rows = audit(r.stdout)
+        prof = profile(ns.node) if ns.node else staged_profile()
+        rows = audit(r.stdout, prof)
         for n, k in rows:
             print(f"{n:8d}  {k}")
-        print(f"vy-lockout audit: {sum(n for n, _ in rows)} sudo calls since {ns.since} the allowlist would refuse, in {len(rows)} forms")
+        print(f"vy-lockout audit: {sum(n for n, _ in rows)} sudo calls since {ns.since} the allowlist (sudoers/{prof.file}) would "
+              f"refuse, in {len(rows)} forms")
         return 1 if rows else 0
     if os.geteuid() != 0:
         print("vy-lockout: run as root (vy-admin, with sudo)", file=sys.stderr)
@@ -727,8 +850,10 @@ def main(argv: list[str] | None = None) -> int:
         elif ns.cmd == "harden":
             step_harden(ctx, ns.back)
         elif ns.cmd == "sudoers":
-            if ns.node not in SWITCH:
-                raise Failed(f"--node: one of {', '.join(SWITCH)}")
+            try:
+                profile(ns.node)
+            except ValueError as e:
+                raise Failed(f"--node: {e}") from None
             step_sudoers(ctx, ns.node, ns.skip, time.time())
         elif ns.cmd == "rollback":
             step_rollback(ctx)

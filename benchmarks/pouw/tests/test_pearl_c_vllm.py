@@ -505,10 +505,12 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
         assert len({p["activation_roots"] for p in b if p["units"]}) == 5
 
 
+@pytest.mark.slow
 def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
     end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
+    length is the point: a few steps would not show a buffer that grows across passes."""
     rng = np.random.default_rng(17)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -740,7 +742,7 @@ class TwinDev(RecordingDev):
                 a.p[j] = v
             for j, v in enumerate(i):
                 a.i[j] = v
-            getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+            assert getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem) == 0, name
         if name.startswith("pd_") or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):

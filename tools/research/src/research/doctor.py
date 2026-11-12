@@ -9,7 +9,9 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   github      `gh auth status` exits 0
   git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
               accepts the credential git pushes with
-  notes-push  the same for the notes clone, through `notes_sync.remote_target` (RESEARCH_NOTES_TOKEN's helper when it is set)
+  notes-push  the same for the notes clone, through `notes_sync.remote_target`; it names the credential (`notes_sync.token_source`:
+              the GitHub broker's token on a Cursor agent, RESEARCH_NOTES_TOKEN where the broker gives none), and says when a
+              RESEARCH_NOTES_TOKEN set on an agent is no longer needed
   store       the evidence store's remote answers a HEAD of an absent key with "absent"; a 400, 401 or 403 is a refused credential
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
@@ -127,7 +129,8 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 
 def check_secrets(role: str) -> Check:
-    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n]
+    # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
+    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
@@ -233,13 +236,15 @@ def check_notes_push() -> Check:
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
-    fix = ("the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access"
-           if os.environ.get(notes_sync.SOURCE_ENV) == "broker"
-           else f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): unset it to use the GitHub broker's token, or put a new "
-                f"one in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
-           else "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
-                f"{notes_sync.TOKEN_ENV}")
-    return push_probe("notes-push", root, opts, where, fix)
+    source, said = notes_sync.token_source()
+    fix = {"broker": "the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access",
+           "env": f"{notes_sync.TOKEN_ENV} was refused (expired or revoked), and the GitHub broker gave no token to use instead "
+                  f"({notes_sync.broker_why()}): on a Cursor agent run this again in a minute, since the broker's token needs no "
+                  "secret; where there is no Cursor identity, set a new one",
+           None: "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
+                 f"{notes_sync.TOKEN_ENV}"}[source]
+    c = push_probe("notes-push", root, opts, where, fix)
+    return Check(c.name, c.status, f"{c.detail}; the credential is {said}", c.fix)
 
 
 def check_store() -> Check:

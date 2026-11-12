@@ -43,17 +43,18 @@ untraced = [
 # `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pous", "verity/ml/protocols/__init__.py",
-          "verity/protocols/pous/prover", "verity/difftest", "verity/ml/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/protocols/pous", 
+          "verity/protocols/pous/prover", "verity/difftest", 
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/interface", "verity/commitments/identity", "verity/commitments/randomness", "verity/protocols/flock/verifier/Flock",
           "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
           "verity/protocols/flock/verifier/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "benchmarks/pous/band_gpu/__init__.py",
-          "verity/core/devices/__init__.py", "verity/protocols/pous/device/__init__.py",
+          "verity/protocols/pous/device/__init__.py",
           "verity/protocols/pous/device/timed_audit.py", "benchmarks/pous/band_gpu/harness.py",
           "verity/protocols/pous/device/lean", "verity/commitments/attest/lean", "verity/commitments/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through

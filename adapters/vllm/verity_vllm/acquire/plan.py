@@ -15,7 +15,7 @@ Sites (`SITE_KINDS`):
                     consumer's read -- alias / in-place facts decide when the annotations carry them, else `lifetime: unknown`
   native_tap        an existing kernel-level source (the attention hidden-stream tap, the fused-MoE block source, the TP partial source)
   runner_return     the runner's `sample()` return (`runner.sampler/sampled_token_ids`); runner_state = a buffer the runner consumed
-                    (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
+                    (`seed`)
   registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
                     dumps and checks analytically (`analytic_table_of_buffer`)
   prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities)
@@ -37,7 +37,7 @@ from verity_vllm.correspondence.reader_for_acquire import RUNNER_PATH, AcquireCo
 AnnotationCorrespondence = AcquireCorrespondence
 
 SCHEMA = "acquisition-plan/v1"
-SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "launch_proxy", "registered_input", "analytic_table", "prescribed")
+SITE_KINDS = ("producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "analytic_table", "prescribed")
 HOOK_KINDS = ("producer_output", "consumer_input", "runner_return")      # the kinds `install_from_plan` installs as hooks / wraps
 POLICY = ("one legal site: chosen. several: producer output first (the owning module's forward hook, return slot = the Value's port); consumer input "
           "when the producer is a promoted interior Call (the Value is no module's return, so the first consumer's pre-hook is the only module "
@@ -49,7 +49,7 @@ POLICY = ("one legal site: chosen. several: producer output first (the owning mo
 ROUTE_OF_FAMILY = {"instance_outputs": "module_output", "input_token_ids": "module_input",
                    "fa2_hidden_m1_stream": "hidden_tap", "fa3_hidden_m1_stream": "hidden_tap",
                    "moe_block_stream": "moe_tap", "tp_rank_partials": "tp_tap",
-                   "sampled_token_ids": "runner_return", "sampler_seed": "runner_state", "sampler_splits": "launch_proxy",
+                   "sampled_token_ids": "runner_return", "sampler_seed": "runner_state",
                    "weights": "registered_input", "norm_scales": "norm_tap", "router_softmax": "router_tap", "vocab_range": "vocab_tap",
                    "scale_products": "scale_tap", "call_boundaries": "call_boundary_tap", "run_values": "run_tap"}
 #: the routes whose members are one per (layer, step) geometry or position: one Value class per op_path, member `*`
@@ -404,7 +404,7 @@ def sites_of(v: ValuePlan, corr: AcquireCorrespondence) -> tuple[list[Acquisitio
             refuse("native_tap", module, v.output_member, f"the module body {owner!r} is not a module of the runtime tree")
         return legal, refused
 
-    if route in ("runner_return", "runner_state", "launch_proxy"):
+    if route in ("runner_return", "runner_state"):
         kind = route
         rs = corr.return_slot(call)
         if rt.runner.get("sample"):
@@ -435,7 +435,7 @@ def choose(sites: list[AcquisitionSite], v: ValuePlan) -> tuple[AcquisitionSite 
         return None, "no legal site"
     if len(sites) == 1:
         return sites[0], "one legal site"
-    order = ["producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "launch_proxy", "registered_input", "prescribed", "analytic_table"]
+    order = ["producer_output", "consumer_input", "native_tap", "runner_return", "runner_state", "registered_input", "prescribed", "analytic_table"]
     if v.promoted:
         order.remove("consumer_input"); order.insert(0, "consumer_input")
     ranked = sorted(sites, key=lambda s: (order.index(s.kind) if s.kind in order else len(order), s.module, s.slot))

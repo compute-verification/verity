@@ -1,11 +1,10 @@
-"""`lean_changed`: Lean's early job, which `check` runs as its lean-changed step. `lake build` of every Lake package whose Lean
-audit misses (`lean_audit.py`: its inputs changed since a pass kept on this machine), on the step tree (`lean-changed` under
-the check cache, or `--tree`), which this machine keeps built, so a module that no longer compiles (two merges git combines
-cleanly that Lean doesn't) fails the run in minutes rather than when the audit's cold build reaches it.  Its `--records`,
-`--try` and `--build` work on a slot tree instead, one per `build` slot (below).
+"""`lean_changed`: a lane's Lean runs beside the audit (`lean_audit.py`), none of them a Lean verdict: its records
+(`--records`), its edit loop (`--try`) and the ready mark's preflight's Lean step (`--build`), each on a slot tree this machine
+keeps built, one per `build` slot (below), and a package's inputs key (`--inputs-key`). It runs one of those: without one it
+prints its usage and exits 2.
 
-    python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
+                                             [--allow CODE:ENTRY]...   with --records: a failure it takes as known, which is no pass
     python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
     python tools/verity/lean/lean_changed.py --inputs-key PKG... [--head SHA] [--repo DIR]   each PKG's inputs key at SHA
@@ -15,15 +14,24 @@ cleanly that Lean doesn't) fails the run in minutes rather than when the audit's
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
 `lake env lean` with the package's `[leanOptions]` (`siblings.options`) in that package's directory on a copy of FILE with
 the axiom probe appended (`axiom_probe.py`: its last line names each theorem whose axioms go beyond the standard three,
-`sorryAx` among them, or says none do), and exits with lean's
+`sorryAx` among them, or says none do; where lean fails on FILE's own lines it shows no answer of `#print axioms`, and
+names each theorem with an error on its own lines as failed), and exits with lean's
 status on FILE's own lines (with `--siblings`, that copy's build then goes through the sibling check, `siblings.py`, whose
-status it takes); when that status is an import clash (an
+status it takes: its stub imports no module whose build, or the build of anything it imports in any package of the
+closure, is not of its source as it is, as a tree synced across a move of names holds them, and counts those it left
+out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
 no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
-unsandboxed, and fetches dependencies the node does not keep.
+unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
+read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
+no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
+it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
+were fetched again under the `.lake/config` it kept has none. A write Lake is still refused there gives no verdict on FILE:
+the try says so, names the path and the `--records` run that builds the dependencies writable, and exits 2
+(`refused_write`).
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
@@ -40,8 +48,10 @@ reports, record keep and kind; that path builds in this checkout, so a run takes
 path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s slot tree is
 `lean-records/build-I` under the check cache, whoever holds that slot's lock owns it, and check.py inherits the lock's
 descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) it is `lean-records/local`. `--tree` names
-another, only under `lean-records/`. A slot tree's fetched dependencies are its own copy of the audit's (taken once per
-manifest and toolchain, else fetched cold), never links (the step tree's are links, below), so what Lake writes there stays
+another, only under `lean-records/` (a slot's tree there that is a link out of the check cache, onto another volume,
+too: `kept_tree`). A slot
+tree's fetched dependencies are its own copy of the audit's (taken once per
+manifest and toolchain, else fetched cold), never links, so what Lake writes there stays
 out of what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
@@ -54,7 +64,13 @@ says so. Before each build it `repair`s the slot tree: a module an interrupted b
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
 it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
-never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
+never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
+package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
+source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences, on failures
+`--allow` names and on a spec's `proved_in` package whose build that failure kept from passing
+(`proved_in.unpassed`), the run drops each of those modules' trace, `.hash` files and objects in the tree
+(`mismatched`, `forget`) and audits the package once more, with nothing restored from the artifact cache, so Lake
+compiles them; the first audit's reports go to `mismatched/<path>/`, and a second failure fails the run.
 
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
@@ -72,9 +88,25 @@ dependencies there drops the rest first.
 A record difference is not a failure of the run. A package that any other run of check.py fails only on record differences
 (check.py's report names the record that settles them, `regenerated`) has that record kept the same way, so a run without
 `--update` regenerates too. The run's outcome (`result.json`'s `outcome`, and its last line, `OUTCOME_LINE` and JSON) is its
-packages' worst: `pass`, `regenerated` (each changed lock kept under `record/`), `failed` (a failure of any other kind; a
-record kept for such a package goes again) or `refused` (nothing ran). It exits 0 on `pass` and `regenerated`, check.py's
-first failing status on `failed` and 2 on `refused`.
+packages' worst: `pass`, `regenerated` (each changed lock kept under `record/`), `allowed` (below), `failed` (a failure of
+any other kind; a record kept for such a package goes again) or `refused` (nothing ran). It exits 0 on `pass` and
+`regenerated`, 3 on `allowed` (`ALLOWED_RC`), check.py's first failing status on `failed` and 2 on `refused`.
+
+`--allow CODE:ENTRY`, repeatable and `--records`' alone, names a failure this run takes as known, by its `Failure.code`
+and `Failure.entry` as check.py's report lists them (`failure_codes`, `failure_entries`), never by its text. It stays a
+failure: check.py is run as ever and reports it in `failures`. A package whose audit's reports hold one, every other
+failure there a record difference the run settled, ends `allowed`, which is no pass: the run exits 3, keeps no pass of
+that package (nothing under `lean-records/passes/`, no key in `passes`), so nothing takes this run for its records and the
+next run audits it again, and keeps the record it regenerated for it under `allowed-record/<path>/` beside `record/` and
+never in `record/`, which holds only what the records gate may take; a line says where. A record difference is never
+allowed: beside allowed failures it takes `--update`, without which the package fails. The codes that may be named are a
+closed list here (`ALLOWABLE`: a statement that reads the proofs tree, a guarantee changed since `unwitnessed` listed
+it); any other is refused before anything runs (exit 2), a record difference, the build, the replay, an axiom, `sorry`,
+`native_decide`, a kernel bypass and a malformed lock among them. An allowance that matches no failure of the run fails
+it (`unmatched`), so one outlives its finding by no run. It is for a finding cured before the mark: one meant to land
+goes into the lock (`trees.except`), as ever. Allowances come from the command line alone, and only a lane gives one:
+this file's other modes (`--build` among them), check.py and every caller of either in the check, the merge queue and
+the ready mark's preflight take none.
 
 A package whose records need no run is skipped, and with none left nothing is built and no slot taken (`reused`; the
 `result.json`'s `path` is `reused`). Each package whose check.py passes is kept under `lean-records/passes/`, keyed on the
@@ -97,29 +129,10 @@ Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no
 in a recorded run, into its `result.json`, the Attempt's result. `check` fails its lean-audit step on a report of that kind or
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it. The compiled modules it leaves are not a verdict either: in a
-run they go into its `lean-audit/` as a bundle (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
-replays every declaration through the kernel.
-
-The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
-names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
-what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
-taken under their lock while the step tree has none for its manifest and toolchain; the build runs in the audit's sandbox
-(`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
-move them away without touching the links. The first build of a package here is cold; later ones are not.
-
-A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
-compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
-judgment of the guarantees, without the kernel replay, so a record two merges left stale (a statement or a definition a
-guarantee reads changed, a guarantee gone, a `reads` digest no longer its definitions') fails the run before the audit's cold
-build reaches it.
-
-The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
-only on a Lean error at a position in one of the step tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
-failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
-yet, another check holding the step tree, a dependency the links lack) skips the package by name and drops its links, so the next
-run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
-guarantees by name.
-`check.py` ends the run when this step fails, even under `--keep-going`. Delete the step tree to start it over.
+run they go into its `lean-audit/` in bundles (`lean_audit.LakeArtifacts.bundle_into`), and a node that restores one still
+replays every declaration through the kernel. `research run` sends a records run the URLs of the newest such bundles and of
+the checks' (`research.cli.lean_records_urls`, `lean_audit.shared_bundles`), and where builds are sandboxed the run takes
+them into the node's artifact cache before its first build (`sent_urls`), so it restores what another node compiled.
 """
 from __future__ import annotations
 
@@ -154,29 +167,30 @@ def _module(path: Path, name: str):
 
 
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
-#: `tools/verity/lean/check.py`, this step's own copy: `records` runs its commands in the sandbox
+#: `tools/verity/lean/check.py`, the audit tool, loaded as this file's own copy
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
-#: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
-FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
-#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself
+#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself. Before its
+#: mount, each package directly under DIR (a directory of its own, never a link) that has a `lakefile.lean` and no `.lake`
+#: gets an empty one: Lake keeps such a package's compiled configuration in the workspace's
+#: `.lake/config/<the package's place among those it loads>`, and where that place holds no trace of it (a dependency order
+#: this tree was never loaded at) it first makes the package's own `.lake`, which under the mount fails the load. A package
+#: nothing builds has no `.lake` unless Lake made it so. Nothing else under DIR is written; a `mkdir` that fails is left to
+#: Lake's own error (`refused_write`)
 READ_ONLY = ('ro=(); while [ "$1" != -- ]; do ro+=("$1"); shift; done; shift; '
-             'for d in "${ro[@]}"; do mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+             'for d in "${ro[@]}"; do '
+             'for p in "$d"/*; do [ -f "$p/lakefile.lean" ] && [ ! -L "$p" ] && [ ! -e "$p/.lake" ] && mkdir "$p/.lake"; done; '
+             'mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+#: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
+REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
 #: Lake's line for a Lean error, the file relative to its package: `error: Aa/Two.lean:2:39: Unknown identifier ...`
 ERROR = re.compile(r"^error: (?:\./)*(\S+?\.lean):\d+:\d+: ")
 #: {package: the dependencies' key its links were taken under}, beside the packages in the tree
 LINKS = "links.json"
-
-
-def missed(files: list[str], cache: Path) -> list[str]:
-    """The packages whose audit would run, those another requires by path first, and a spec after the packages its
-    `proved_in` names."""
-    pkgs = [p for p in LA.packages(files) if not (cache / f"{LA.key(p, files, LA.FLAGS)}.json").is_file()]
-    return sorted(pkgs, key=lambda p: (rank(p), p))
 
 
 def rank(pkg: str) -> int:
@@ -214,8 +228,8 @@ def provers(pkg: str, read=read_here) -> list[str]:
 
 
 def closure(pkg: str, read=read_here) -> list[str]:
-    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds `records` reads;
-    its manifests and locks read through ``read`` (this checkout's by default)."""
+    """``pkg``, the packages it requires by path, and those its `proved_in` names with theirs, whose builds the audit of
+    ``pkg`` reads; its manifests and locks read through ``read`` (this checkout's by default)."""
     return list(dict.fromkeys([pkg, *path_deps(pkg, read),
                                *(d for q in provers(pkg, read) for d in (q, *path_deps(q, read)))]))
 
@@ -230,12 +244,22 @@ def lists_guarantees(pkg: str) -> bool:
 
 def requirers(pkg: str, pkgs: list[str]) -> list[str]:
     """The other packages among ``pkgs`` whose guarantees' records read ``pkg``'s build (``pkg`` is in their `closure`), each
-    after those it requires, as `missed` orders them."""
+    after those it requires (`rank`)."""
     return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
 
 
+def audits(todo: list[str]) -> str:
+    """The packages a `--records` run of ``todo`` audits, in its order, as its line at launch names them: each of ``todo``,
+    and with it those its `proved_in` names (`provers`), which its check.py audits beside it, once more for each package
+    of ``todo`` that names them."""
+    return ", then ".join(f"{p} (with {', '.join(qs)})" if (qs := provers(p)) else p for p in todo)
+
+
 def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
-    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written."""
+    """Make ``tree``'s copy of ``pkgs`` this checkout's tracked files, leaving each `.lake`; the number of files written.
+    The product of a source it unlinks, or rewrites, stays: a tree serves several branches, and Lake replays the product
+    when one of them brings that source back as it was built from. Until then neither Lake nor a sibling check's stub
+    loads it: each reads in the module's trace which source it was built from (`siblings.py`)."""
     tracked, n = set(files), 0
     for p in pkgs:
         for d, dirs, names in os.walk(tree / p):
@@ -265,46 +289,42 @@ def sync(pkgs: list[str], files: list[str], tree: Path) -> int:
     return n
 
 
-def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print, copy: bool = False) -> bool:
-    """``tree/pkg/.lake/packages`` as hard links to the audit's kept dependencies for its manifest and toolchain (``copy``: a
-    copy of them, taken after their lock is released from hard links made under it, `packages.snap` beside it, so that the
-    audit waits on the lock only as long as linking takes; where they can't be linked, the copy is taken under the lock);
-    False when this machine keeps none (another run holds them, or none has passed here yet)."""
+def link(pkg: str, tree: Path, deps: Path, links: dict[str, str], log=print) -> bool:
+    """``tree/pkg/.lake/packages`` as a copy of the audit's kept dependencies for its manifest and toolchain, taken after
+    their lock is released from hard links made under it (`packages.snap` beside it), so that the audit waits on the lock
+    only as long as linking takes; where they can't be linked, the copy is taken under the lock. False when this machine
+    keeps none (another run holds them, or none has passed here yet)."""
     if (k := LA.deps_key(tree / pkg)) is None:
         return True
     dst = tree / pkg / ".lake" / "packages"
     if links.get(pkg) == k and dst.is_dir():
         return True
     unlink(pkg, tree, links)
-    verb, how = ("copy", "copied") if copy else ("link", "linked")
     snap = dst.with_name("packages.snap")
     shutil.rmtree(snap, ignore_errors=True)
     try:
         with LA.WarmDeps(deps)._lock(k):
             src = deps / k
             if not src.is_dir():
-                log(f"lean-changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to {verb}")
+                log(f"lean_changed: {pkg}: this machine keeps no dependencies for it ({k[:12]}) to copy")
                 return False
             t0 = time.monotonic()
             dst.parent.mkdir(parents=True, exist_ok=True)
             try:
-                shutil.copytree(src, snap if copy else dst, symlinks=True, copy_function=os.link)
+                shutil.copytree(src, snap, symlinks=True, copy_function=os.link)
             except (OSError, shutil.Error):
-                if not copy:
-                    raise
                 shutil.rmtree(snap, ignore_errors=True)
                 shutil.copytree(src, dst, symlinks=True, copy_function=shutil.copy2)
         if snap.is_dir():
             shutil.copytree(snap, dst, symlinks=True, copy_function=shutil.copy2)
     except (OSError, shutil.Error) as e:
         shutil.rmtree(dst, ignore_errors=True)
-        log(f"lean-changed: {pkg}: the dependencies ({k[:12]}) could not be {how} ({e})"
-            + ("" if copy else "; a link needs one filesystem"))
+        log(f"lean_changed: {pkg}: the dependencies ({k[:12]}) could not be copied ({e})")
         return False
     finally:
         shutil.rmtree(snap, ignore_errors=True)
     links[pkg] = k
-    log(f"lean-changed: {pkg}: dependencies {how} ({k[:12]}) in {time.monotonic() - t0:.0f} s")
+    log(f"lean_changed: {pkg}: dependencies copied ({k[:12]}) in {time.monotonic() - t0:.0f} s")
     return True
 
 
@@ -379,11 +399,19 @@ def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 
 
+def refused_write(text: str, pkg: str, tree: Path) -> str | None:
+    """The path Lake's output ``text`` says a read-only file system refused it (`REFUSED_WRITE`), when it lies in the fetched
+    dependencies of ``tree/pkg`` or of a package it requires by path, which `in_sandbox` mounts read-only; else None."""
+    ro = [(tree / p / ".lake" / "packages").resolve() for p in closure(pkg)]
+    return next((m.group(1) for m in REFUSED_WRITE.finditer(text)
+                 if any(d in Path(os.path.realpath(m.group(1))).parents for d in ro)), None)
+
+
 def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, sandbox: bool = True,
-          cmd: list[str] | None = None) -> tuple[int, str]:
+          cmd: list[str] | None = None, echo=None) -> tuple[int, str]:
     """`lake build` (of ``targets``, else the default ones; ``cmd``: that `lake` command instead) of ``tree/pkg``, in the
-    sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes. Before the default targets it links the
-    dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
+    sandbox unless ``sandbox`` is False; Lake's output is echoed as it comes, or each line handed to ``echo``. Before the
+    default targets it links the dependencies' compiler plugins alone (`check.py`'s `plugin_targets`)."""
     if cmd is None and targets is None and (plugins := AUDIT.plugin_targets(tree / pkg)):
         rc, text = build(pkg, tree, lake, plugins, sandbox)
         if rc:
@@ -396,54 +424,12 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
                          encoding="utf-8", errors="replace")
     out = []
     for line in p.stdout:
-        print(line, end="", flush=True)
+        if echo:
+            echo(line)
+        else:
+            print(line, end="", flush=True)
         out.append(line)
     return p.wait(), "".join(out)
-
-
-def errors(text: str, pkg: str, files: list[str]) -> list[str]:
-    """Lake's Lean errors in ``text`` that sit in a `.lean` file of ``pkg`` or a package it requires by path."""
-    own = {f[len(p) + 1:] for p in closure(pkg) for f in LA.own_files(p, files) if f.endswith(".lean")}
-    return [line for line in text.splitlines() if (m := ERROR.match(line)) and m.group(1) in own]
-
-
-def guarantee_roots(pkg: str, tree: Path) -> list[str]:
-    """The roots of ``tree/pkg``'s policy when it lists a guarantee, which `records` reads; none otherwise."""
-    policy = AUDIT.load(tree / pkg)
-    return list(policy["roots"]) if policy.get("guarantees") else []
-
-
-def records(pkg: str, tree: Path, lake: str) -> list[str]:
-    """The audit's failures about the guarantees on the tree's build of ``pkg`` (`check.py`'s `facts_of` and `judge`, without
-    the kernel replay): a guarantee missing, no longer a theorem or with no record, using an axiom the policy does not allow or
-    assuming an unnamed `Prop`, whose statement or the definitions it reads no longer match its record, or a `reads` entry
-    that no longer lists the modules the guarantees read or their definitions' digest, or a named assumption whose record
-    no longer matches the definition the guarantees read. A spec's
-    guarantees are read from the builds of the packages its `proved_in` names (`audit.proved`), built before it (`missed`).
-    Raises RuntimeError when `Facts.lean` cannot read a build."""
-    policy = AUDIT.load(tree / pkg)
-    work = tree / pkg / FACTS
-    work.mkdir(parents=True, exist_ok=True)
-    plain, tool, programs, scratch = AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH
-    # the sandbox mounts a private /tmp, where this checkout may be; the copy sits in the writable `.lake`, as the audit runs
-    # its tool from a copy
-    shutil.copy2(tool / "Facts.lean", work / "Facts.lean")
-
-    def lake_in_sandbox(argv: list[str], cwd: Path, *a, **kw) -> tuple[int, str]:
-        # the audit runs `lake env` unsandboxed on a tree of its own; here `.lake/packages` holds links to the files it keeps
-        return plain(in_sandbox(pkg, tree, [lake, *argv[1:]] if argv[:1] == ["lake"] else argv), cwd, *a, **kw)
-
-    # `Facts.lean`, in the sandbox, writes its document under `work` for the same reason
-    AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = lake_in_sandbox, work, work, work
-    try:
-        facts = AUDIT.facts_of(tree / pkg, policy, work, keep=False)
-        cross: list[str] = []
-        if "proved_in" in policy:
-            cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work, keep=False)
-    finally:
-        AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = plain, tool, programs, scratch
-    fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
-    return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
 
 def sandboxed() -> bool:
@@ -464,8 +450,22 @@ FAST_POOL = os.environ.get("LEAN_RECORDS_POOL") or "build"
 FAST_KIND = "lean-fast/v1"
 #: what a `--records` run found (its `result.json`'s `outcome`, and each package's under `records`), the better first: every
 #: package passed on the commit's own lock; every failure was a record difference, and each record that settles it is kept
-#: under `record/`; a failure of another kind; nothing ran
-PASS, REGENERATED, FAILED, REFUSED = OUTCOMES = ("pass", "regenerated", "failed", "refused")
+#: under `record/`; every failure left was one `--allow` named (no pass is kept for such a package, and a record
+#: regenerated for it is kept under `ALLOWED_RECORD`, never `record/`); a failure of another kind, or an allowance no
+#: failure matched; nothing ran
+PASS, REGENERATED, ALLOWED, FAILED, REFUSED = OUTCOMES = ("pass", "regenerated", "allowed", "failed", "refused")
+#: `--records`' exit status on `ALLOWED`, its own: not 0 (a pass or `REGENERATED`), not check.py's failing 1 or a signal's
+#: status (`FAILED`), not 2 (`REFUSED`)
+ALLOWED_RC = 3
+#: the failures `--allow` may name, by `Failure.code`: a closed list, the lock rules a lane has had ruled open on a branch
+#: and cures before its mark (a statement that reads the proofs tree, a guarantee restated since `unwitnessed` listed it).
+#: Never a record difference (`AUDIT.RECORD_DIFFERENCE`, which `--update` settles), the build, the replay, an axiom,
+#: `sorry`, `native_decide`, a kernel bypass or a malformed lock: `allowances` refuses every code not listed here
+ALLOWABLE = AUDIT.Codes({"trees.reads", "witnesses.unwitnessed-changed"})
+#: where `--records` keeps the records it regenerated, under its reports: `KEPT_RECORD` (`record/`) those of a package that
+#: ended `REGENERATED`, which a lane commits and `research queue`'s records gate names; `ALLOWED_RECORD` those of a package
+#: that ended `ALLOWED`, which no pass vouches for
+KEPT_RECORD, ALLOWED_RECORD = "record", "allowed-record"
 #: `--records`' last line, then a JSON object: its outcome, its package and its `records`
 OUTCOME_LINE = "lean-records: OUTCOME "
 #: how long `--records` waits for another run's hold on its tree (a node with no SLOTS shares `local` among every run;
@@ -504,12 +504,59 @@ DIRTY = "dirty.json"
 
 
 def mark(tree: Path, **what) -> None:
-    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`)."""
+    """`DIRTY`, replaced whole: this run and ``what`` (`package`, `phase`, and for a `--records` run's build what `put_left`
+    reads)."""
     doc = {"run": os.environ.get("RESEARCH_RUN_ID") or "a run", "pid": os.getpid(),
            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **what}
     tmp = tree / f"{DIRTY}.tmp"
     tmp.write_text(json.dumps(doc, sort_keys=True) + "\n")
     os.replace(tmp, tree / DIRTY)
+
+
+#: Lake's line for a module it compiled (`Built Mod (1.2s)`); one it restored says `Unpacked` or `Replayed`, and a facet's
+#: (an object, an executable) has a colon in its name
+BUILT = re.compile(r"^\s*\S+ \[\d+/\d+\] Built ([^\s:]+)(?: \(.*\))?$", re.M)
+
+
+def compiled(text: str) -> list[str]:
+    """The modules Lake's output ``text`` says it compiled. A `--try` or `--build` build reads Lake's own cache, so it
+    unpacks main's published build where that holds a module's input hash, and `put` must not take such a module as one
+    this node compiled: `LakeArtifacts.put` indexes only these."""
+    return sorted({m.replace("«", "").replace("»", "") for m in BUILT.findall(text)})
+
+
+def put_built(artifacts, reps: dict[Path, dict], since: float, log=print, who: str = "lean-records") -> None:
+    """Put what the builds of ``reps`` ({package: what says its build ran in the sandbox}) compiled since ``since`` into the
+    node's artifact cache (`LakeArtifacts.put`), whatever became of the run: a module is stored for what its compile read,
+    which a failure elsewhere in the package, or a kill, doesn't change, unless a source of the build runs code while it
+    compiles (`LA.runs_code`). Before anything writes the tree again: a key is computed from the sources the tree
+    holds, and those are the sources `put` reads for such code."""
+    try:
+        log(f"{who}: {artifacts.put(reps, since, log)} module version(s) new in the artifact cache")
+    except (OSError, ValueError) as e:
+        log(f"{who}: the artifact cache was not written: {e}")
+
+
+def put_left(tree: Path, left: dict | None, artifacts, log=print) -> None:
+    """`put_built` what the run that left ``tree`` mid-way (``left``, its `DIRTY`) had compiled when it stopped, which it never
+    stored itself: its mark names when its build began (`since`) and where check.py's reports say whether each build
+    ran in the sandbox (`out`, `LA.built`). Only a `--records` run's: what a `--try` or a `--build` left is not stored,
+    since Lake's output, which alone says which modules that build compiled and which it unpacked (`compiled`), ended
+    with the run. A run does this before it syncs the tree. Without it a build that is killed each time (a timeout
+    shorter than a cold build) would start from nothing each time, since `stage` leaves no trace of a module the cache
+    doesn't hold."""
+    if not left or left.get("phase") != "check" or not isinstance(since := left.get("since"), (int, float)):
+        return
+    reps = LA.built(Path(str(left.get("out"))))
+    if reps := {at: rep for at, rep in reps.items() if tree.resolve() in at.resolve().parents}:
+        put_built(artifacts, reps, since, log, f"lean-records: {tree}: of what {left.get('run', 'a run')} left")
+
+
+def storable(sandbox: bool) -> bool:
+    """Whether what a `--try` or `--build` build compiles may go into the artifact cache: it ran in the sandbox
+    (``sandbox``), and that sandbox leaves everything outside the build read-only (check.py's `sandboxed`, the probe its
+    own builds' stores rest on)."""
+    return sandbox and AUDIT.sandboxed()
 
 
 def left_by(tree: Path) -> dict | None:
@@ -527,51 +574,88 @@ def left_by(tree: Path) -> dict | None:
 #: file `.olean.server` and `.olean.private`), `.ilean` (`i`), and in a `module` file `.ir` (`r`) and `.ir.sig` (`rs`). All
 #: but the `.ilean` are in the olean format, which starts `olean`.
 LIB_OUTPUTS = ("o", "i", "r", "rs")
+#: the keys of a module trace's `outputs` that name what `lean` wrote in the build's `ir/`: the C, and the LLVM bitcode
+IR_OUTPUTS = ("c", "b")
+#: what Lake compiles from them there, by suffix, and the suffix of the output each is compiled from; each has a `.hash`
+#: and a `.trace` of its own beside it
+OBJECTS = {"c.o.export": "c", "c.o.noexport": "c", "bc.o": "bc"}
 
 
 def damaged(lib: Path) -> list[Path]:
     """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build or a restore left half-written:
     an output the trace lists beside it that is missing (`LIB_OUTPUTS`), one in the olean format without its header, an
-    output whose `.hash` is not the trace's or is older than the output, or a trace that is not JSON. Lake rebuilds a module
+    output there or in the build's `ir/` (`IR_OUTPUTS`) whose `.hash` is not the trace's or is older than the output, or a
+    trace that is not JSON. Lake rebuilds a module
     whose outputs are missing, but takes one whose trace matches and whose files exist as built, half-written or not, and
     reads an output's hash from its `.hash` without hashing the output. Every Lake path writes the `.hash` after its output,
     but two leave an older one: a build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks
     a `.ltar` over the outputs.
     A module that imports one then records the old hash for the new bytes, and a later build on the other side of the
     change replays it beside a module built against the new ones (a clash such as `Proofs.Pouw`'s on
-    `W1.Instr.exec.eq_10`). So each loses its trace and its `.hash` files (`forget`) for Lake to rebuild it."""
+    `W1.Instr.exec.eq_10`); an object compiled from its C is recorded under the old C's hash, and is taken as built once
+    the module's source is back at that C. So each loses its trace, its `.hash` files and its objects (`forget`) for Lake
+    to rebuild it."""
     out = []
+    ir = lib.parent.parent / "ir"
     for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
         base = trace.with_suffix("")
         try:
             doc = json.loads(trace.read_text())
             outputs = doc.get("outputs") if isinstance(doc, dict) else None
-            names = [n for k, v in outputs.items() if k in LIB_OUTPUTS for n in (v if isinstance(v, list) else [v])
-                     if isinstance(n, str)] if isinstance(outputs, dict) else []
-            for name in names:
+            names = [(k in LIB_OUTPUTS, n) for k, v in outputs.items() if k in LIB_OUTPUTS + IR_OUTPUTS
+                     for n in (v if isinstance(v, list) else [v]) if isinstance(n, str)] if isinstance(outputs, dict) else []
+            for beside, name in names:
                 digest, _, ext = name.partition(".")
-                f = base.with_name(f"{base.name}.{ext}")
-                if not f.is_file() or (ext != "ilean" and f.open("rb").read(5) != b"olean"):
+                f = (base if beside else ir / base.relative_to(lib)).with_name(f"{base.name}.{ext}")
+                if beside and (not f.is_file() or (ext != "ilean" and f.open("rb").read(5) != b"olean")):
                     raise ValueError(f"{f.name} missing or not in the olean format")
                 if (h := f.with_name(f"{f.name}.hash")).is_file():
                     if h.read_text().strip() != digest:
                         raise ValueError(f"{h.name} is not the trace's")
-                    if f.stat().st_mtime_ns > h.stat().st_mtime_ns:
+                    if f.is_file() and f.stat().st_mtime_ns > h.stat().st_mtime_ns:
                         raise ValueError(f"{h.name} is older than {f.name}")
         except (OSError, ValueError, UnicodeDecodeError):
             out.append(trace)
     return out
 
 
+def objects(base: Path) -> list[Path]:
+    """The objects Lake compiled from the module whose `ir/` outputs are ``base``'s (`ir/A/B` for `A.B`), each with the
+    `.hash` and the `.trace` beside it: the files that are there."""
+    return [f for o in OBJECTS for end in ("", ".hash", ".trace") if (f := base.with_name(f"{base.name}.{o}{end}")).exists()]
+
+
 def forget(lib: Path, trace: Path) -> None:
-    """Drop ``trace`` (a module's, under ``lib``) and the `.hash` file of each of the module's outputs, in ``lib`` and in
-    the build's `ir/`. A restore from Lake's cache that finds an output in place keeps it and its `.hash` as they are, so
-    a stale `.hash` left beside the trace would outlive the rebuild."""
+    """Drop ``trace`` (a module's, under ``lib``), the `.hash` file of each of the module's outputs, in ``lib`` and in
+    the build's `ir/`, and the module's objects there with their traces. A restore from Lake's cache that finds an output
+    in place keeps it and its `.hash` as they are, so a stale `.hash` left beside the trace would outlive the rebuild; an
+    object's trace names the hash Lake read for the C when it compiled it, which a stale `.hash` made another C's, so the
+    object would outlive it too."""
     rel = trace.relative_to(lib).with_suffix("")
     for d in (lib, lib.parent.parent / "ir"):
         for h in (d / rel).parent.glob(f"{glob.escape(rel.name)}.*.hash"):
             h.unlink(missing_ok=True)
+    for f in objects(lib.parent.parent / "ir" / rel):
+        f.unlink(missing_ok=True)
     trace.unlink(missing_ok=True)
+
+
+def outdated(lib: Path) -> list[Path]:
+    """The objects in the build's `ir/` (``lib`` is its `.lake/build/lib/lean`) older than the C or bitcode Lake compiles
+    them from: one written before the source beside it, one with no source beside it, and one whose module has no trace,
+    which Lake rebuilds, writing the source anew. Lake writes an object after its source, so such an object is from an
+    earlier source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that
+    dropped a module's trace and `.hash` files and kept its objects left them so."""
+    out = []
+    ir = lib.parent.parent / "ir"
+    for o, of in OBJECTS.items() if ir.is_dir() else ():
+        for obj in ir.rglob(f"*.{o}"):
+            base = obj.with_name(obj.name.removesuffix(f".{o}"))
+            src = base.with_name(f"{base.name}.{of}")
+            if not (lib / base.relative_to(ir)).with_name(f"{base.name}.trace").is_file() or not src.is_file() \
+                    or src.stat().st_mtime_ns > obj.stat().st_mtime_ns:
+                out.append(obj)
+    return sorted(out)
 
 
 def orphaned(lib: Path) -> dict[str, list[Path]]:
@@ -607,8 +691,9 @@ def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
 
 def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
     """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
-    finds loses its trace and `.hash` files (`forget`), so Lake rebuilds it, and a module with no trace loses its `.hash`
-    files (`orphaned`). Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    finds loses its trace, its `.hash` files and its objects (`forget`), so Lake rebuilds it, a module with no trace loses
+    its `.hash` files (`orphaned`), and an object older than the C Lake compiles it from goes with its trace (`outdated`),
+    so Lake compiles it again. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
     fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
     was taking (`phase` `deps`), has them dropped, so they are taken again."""
     if left is not None:
@@ -629,6 +714,13 @@ def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None
                 h.unlink(missing_ok=True)
             names = list(lone)
             log(f"lean-records: {p}: {len(names)} module(s) without a trace kept their .hash files, dropped: "
+                f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
+        if old := outdated(lib):
+            for obj in old:
+                for f in (obj, obj.with_name(f"{obj.name}.hash"), obj.with_name(f"{obj.name}.trace")):
+                    f.unlink(missing_ok=True)
+            names = [str(obj.relative_to(lib.parent.parent / "ir")) for obj in old]
+            log(f"lean-records: {p}: {len(names)} object(s) older than the C Lake compiles them from, dropped: "
                 f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
         if left is None:
             continue
@@ -670,6 +762,15 @@ def made(tree: Path) -> Path:
     again, where `mkdir` on the link raises FileExistsError and fails every run handed that slot."""
     tree.resolve().mkdir(parents=True, exist_ok=True)
     return tree
+
+
+def kept_tree(tree: Path) -> bool:
+    """Whether ``tree`` is one of the trees `--records` and `--try` keep: a directory under `RECORDS` in the check cache, or
+    a link in `RECORDS` onto another volume, as a node makes a slot's (`made`). Such a link leads out of the check cache;
+    one that leads to another part of it is not kept."""
+    cache, at, to = LA.COMMON.cache_dir().resolve(), Path(os.path.abspath(tree)), tree.resolve()
+    base = (cache / RECORDS).resolve()
+    return base in to.parents or (at.parent.resolve() == base and cache != to and cache not in to.parents)
 
 
 #: `--records`' kept passes, beside its trees: `<inputs_key>.json` for each package whose records passed on those inputs, the
@@ -969,24 +1070,31 @@ def label(out: Path) -> None:
 
 
 def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, out: Path, update: bool, path: str = "slot",
-                 records: dict[str, dict] | None = None, passes: dict[str, str] | None = None) -> None:
+                 records: dict[str, dict] | None = None, passes: dict[str, str] | None = None,
+                 allow: list[str] | None = None, stale: list[str] | None = None) -> None:
     """A recorded run's `result.json`, of kind ``FAST_KIND``: what `research merge` and `research queue`'s records gate read
     of the Attempt. ``outcome`` is one of `OUTCOMES`, and its `validation.status` is `passed` exactly when it is `PASS` or
     `REGENERATED`; ``records`` is each package's (`verdicts`), and ``passes`` {inputs key: package} each key a package's
     records passed on in this run (`passed`), which the store indexes as `passes.<key>` (`stored`). ``path``: `slot` (a
-    `build` slot's tree), `dev-cache` (`dev_records`) or `reused` (no package ran: `reused`)."""
+    `build` slot's tree), `dev-cache` (`dev_records`) or `reused` (no package ran: `reused`). A run given `--allow` also
+    says what it was given (``allow``, each `CODE:ENTRY`, in its fingerprint too) and which of those matched no failure
+    (``stale``, `stale_allowances`)."""
     rel = os.path.relpath(out, run_dir)
-    ran = ("nothing ran: every package's records passed on the same Lean inputs or are a merge's candidate" if path == "reused"
-           else "nothing ran" if outcome == REFUSED else f"check.py's first failing exit {rc} on the {path} path" if rc
-           else f"{outcome} on the {path} path")
+    ran = ("nothing ran" if outcome == REFUSED
+           else f"{len(stale)} allowance(s) matched no failure ({', '.join(stale)}), which fails the run" if stale
+           else "nothing ran: every package's records passed on the same Lean inputs or are a merge's candidate" if path == "reused"
+           else f"every failure left on the {path} path is one --allow named, which is no pass (exit {rc}; no pass is kept "
+                f"for such a package, and its regenerated record is kept under {ALLOWED_RECORD}/)" if outcome == ALLOWED
+           else f"check.py's first failing exit {rc} on the {path} path" if rc else f"{outcome} on the {path} path")
     doc = {"schema": "research/result/v0.1", "kind": FAST_KIND, "run_id": run_id, "commit": git("rev-parse", "HEAD"),
            "outcome": outcome, "workload_fingerprint": {"package": pkg, "update": update, "replay": False, "runs": False,
-                                                        "path": path},
+                                                        "path": path, **({"allow": allow} if allow else {})},
            "validation": {"status": "passed" if outcome in (PASS, REGENERATED) else "failed",
                           "checker": "tools/verity/lean/lean_changed.py --records",
                           "detail": f"{ran}, without the kernel replay or the tests: not a Lean verdict, and no merge accepts "
                                     "it"},
            "records": records or {}, "passes": passes or {},
+           **({"allow": allow, "stale_allowances": stale or []} if allow else {}),
            "artifacts": [] if rel.startswith("..") or not out.exists() else [rel]}
     tmp = run_dir / "result.json.tmp"
     tmp.write_text(json.dumps(doc, indent=1) + "\n")
@@ -994,89 +1102,224 @@ def write_result(run_dir: Path, run_id: str, pkg: str, outcome: str, rc: int, ou
 
 
 def finish(pkg: str, outcome: str, rc: int, out: Path, update: bool, path: str, records: dict[str, dict], log=print,
-           passes: dict[str, str] | None = None) -> int:
+           passes: dict[str, str] | None = None, allow: list[str] | None = None, stale: list[str] | None = None) -> int:
     """End a `--records` run: in a recorded run its `result.json` (`write_result`), and on every path its last line,
-    `OUTCOME_LINE` and JSON (``outcome``, ``pkg``, ``records``, ``passes``); ``rc``, its exit status."""
+    `OUTCOME_LINE` and JSON (``outcome``, ``pkg``, ``records``, ``passes``, and for a run given `--allow` what it was given,
+    ``allow``, and which of those matched no failure, `stale`); ``rc``, its exit status."""
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if run_dir and run_id:
-        write_result(Path(run_dir), run_id, pkg, outcome, rc, out, update, path, records, passes)
-    log(OUTCOME_LINE + json.dumps({"outcome": outcome, "package": pkg, "records": records, "passes": passes or {}},
-                                  sort_keys=True))
+        write_result(Path(run_dir), run_id, pkg, outcome, rc, out, update, path, records, passes, allow, stale)
+    log(OUTCOME_LINE + json.dumps({"outcome": outcome, "package": pkg, "records": records, "passes": passes or {},
+                                   **({"allow": allow, "stale": stale or []} if allow else {})}, sort_keys=True))
     return rc
 
 
-def differences(out: Path, base: Path, log=print) -> dict[str, Path] | None:
-    """{each package check.py failed in its reports under ``out``, by its path from ``base``: the record it wrote that settles
-    it}, when each such failure is a record difference only (check.py's report then names that record, `regenerated`, which
-    is what `--update` writes); None when one is of another kind, or the reports can't be read (said)."""
+def allowances(args: list[str]) -> tuple[frozenset[tuple[str, str]], str | None]:
+    """`--allow CODE:ENTRY...` as {(code, entry)}, each a failure's `Failure.code` and `Failure.entry` as check.py's report
+    lists them (`failure_codes`, `failure_entries`), never its text; and why the run is refused, or None: an argument that
+    is not a code and an entry, or a code outside `ALLOWABLE`, the closed list."""
+    got = set()
+    never = ("never a record difference (which --update settles), the build, the replay, an axiom, `sorry`, `native_decide`, a "
+             "kernel bypass or a malformed lock")
+    for a in args:
+        code, sep, entry = a.partition(":")
+        if not (sep and code and entry):
+            return frozenset(), (f"--allow {a}: an allowance is CODE:ENTRY, a failure's code and the entry it is about, as "
+                                 f"check.py's report lists them (`failure_codes`, `failure_entries`), never its text; the codes "
+                                 f"that may be allowed are {', '.join(sorted(ALLOWABLE))}")
+        if code not in ALLOWABLE:
+            what = "a record difference, which only --update settles" if code in AUDIT.RECORD_DIFFERENCE else \
+                "not a failure that may be allowed"
+            return frozenset(), (f"--allow {a}: {code} is {what}: the codes that may be allowed are "
+                                 f"{', '.join(sorted(ALLOWABLE))}, a closed list in lean_changed.py (`ALLOWABLE`), {never}")
+        got.add((code, entry))
+    return frozenset(got), None
+
+
+def named(allow: frozenset[tuple[str, str]]) -> list[str]:
+    """``allow`` as `--allow` takes it: each `CODE:ENTRY`, sorted."""
+    return sorted(f"{c}:{e}" for c, e in allow)
+
+
+def failures_of(rep: dict) -> list[tuple[str | None, str | None]]:
+    """(code, entry) of each failure in check.py's report ``rep`` on a package, in its order (`failure_codes` and
+    `failure_entries` beside `failures`); (None, None) for each where the report lacks either list or one is not as long as
+    its failures, so that such a failure is neither a record difference nor one an allowance names."""
+    fails = rep.get("failures") or []
+    codes, entries = rep.get("failure_codes"), rep.get("failure_entries")
+    if not (isinstance(fails, list) and isinstance(codes, list) and isinstance(entries, list)
+            and len(codes) == len(entries) == len(fails)):
+        return [(None, None)] * (len(fails) if isinstance(fails, list) else 1)
+    return [(c if isinstance(c, str) else None, e if isinstance(e, str) else None) for c, e in zip(codes, entries)]
+
+
+def unmatched(allow: frozenset[tuple[str, str]], audited: list[Path], log=print) -> list[str]:
+    """Those of ``allow`` (each as `CODE:ENTRY`) that no failure has in the reports check.py left under ``audited``, this
+    run's (a run that built nothing has none, so every allowance is one): stale allowances, each said with the allowable
+    failures the run did find, and each a failure of the run, so that a cured finding loses its allowance."""
+    seen: set[tuple[str | None, str | None]] = set()
+    for d in audited if allow else []:
+        try:
+            reps = json.loads((d / "audit.json").read_text()).get("packages") or []
+        except (OSError, ValueError, AttributeError) as e:
+            log(f"lean-records: check.py's reports under {d} can't be read ({e!r}), so no allowance matches a failure of them")
+            continue
+        for r in reps if isinstance(reps, list) else []:
+            seen.update(failures_of(r) if isinstance(r, dict) else [])
+    stale = named(allow - seen)
+    if stale:
+        found = sorted(f"{c}:{e}" for c, e in seen if c in ALLOWABLE and e is not None)
+        log(f"lean-records: --allow {', '.join(stale)}: no failure of this run has that code and entry, and an allowance "
+            f"that matches no failure fails the run: drop it where the finding is cured, name the failure as its report "
+            f"does, or, where its package's records needed no run or its audit stopped before that rule, run that "
+            f"(--rebuild) or cure what stopped it; "
+            + (f"the failures this run found that may be allowed: {', '.join(found)}" if found else
+               "this run found no failure that may be allowed"))
+    return stale
+
+
+def differences(out: Path, base: Path, log=print,
+                allow: frozenset[tuple[str, str]] = frozenset()) -> tuple[dict[str, Path], dict[str, list[str]]] | None:
+    """Of the packages check.py failed in its reports under ``out``, each by its path from ``base``: ({one whose every
+    failure is a record difference: the record check.py wrote that settles it} (its report then names that record,
+    `regenerated`, which is what `--update` writes), {one whose every failure ``allow`` names by code and entry: those, each
+    `CODE:ENTRY`}); None when a package fails any other way, or the reports can't be read (said). A package that fails on
+    record differences beside allowed failures has no such record without `--update`, and an allowance never covers a
+    record difference: it is of another kind, and the line says which run settles it."""
     try:
         bad = [r for r in json.loads((out / "audit.json").read_text())["packages"] if r.get("failures")]
-        if not all(isinstance(r.get("regenerated"), str) and Path(r["regenerated"]).is_file() for r in bad):
-            return None
-        return {os.path.relpath(Path(str(r["package"])).resolve(), base.resolve()): Path(r["regenerated"]) for r in bad}
+        diff: dict[str, Path] = {}
+        allowed: dict[str, list[str]] = {}
+        for r in bad:
+            q = os.path.relpath(Path(str(r["package"])).resolve(), base.resolve())
+            fs = failures_of(r)
+            if isinstance(r.get("regenerated"), str) and Path(r["regenerated"]).is_file():
+                diff[q] = Path(r["regenerated"])
+            elif allow and all(f in allow for f in fs):
+                allowed[q] = sorted({f"{c}:{e}" for c, e in fs})
+            else:
+                if allow and all((c, e) in allow or c in AUDIT.RECORD_DIFFERENCE for c, e in fs):
+                    log(f"lean-records: {q}: besides the failures --allow names, its records fail only on record "
+                        f"differences, which no allowance covers and check.py --update settles: run `--records {q} "
+                        f"--update` with the same --allow")
+                return None
+        return diff, allowed
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
         log(f"lean-records: check.py's reports under {out} can't be read ({e!r}), so its failures count as failures of "
             "another kind")
         return None
 
 
-def keep(q: str, pkg: str, src: Path, out: Path) -> bytes:
-    """Keep ``src``, the record a run wrote for package ``q``, under ``out``'s `record/<q>/` (PKG's also as
-    `record/lean-audit.json`, the path `research queue`'s records gate reads for PKG); its bytes."""
-    kept = out / "record" / q / LOCK
-    for k in [kept, *([out / "record" / LOCK] if q == pkg else [])]:
+def hits(out: Path | None, base: Path, allow: frozenset[tuple[str, str]], log=print) -> dict[str, list[str]]:
+    """{package, by its path from ``base``: the failures ``allow`` names (each `CODE:ENTRY`) in any report on it that check.py
+    left under ``out``}, whichever package's audit reported it: a package in it has an allowed failure, so no pass of it
+    is kept. A report that can't be read is said and left out."""
+    got: dict[str, set[str]] = {}
+    for a in [out / "audit.json", *sorted(out.glob("requirer-*/audit.json"))] if out and allow else []:
+        try:
+            reps = json.loads(a.read_text()).get("packages") or []
+        except (OSError, ValueError, AttributeError) as e:
+            log(f"lean-records: {a} can't be read ({e!r}); the failures it reports are not matched against --allow")
+            continue
+        for r in reps if isinstance(reps, list) else []:
+            q = os.path.relpath(Path(str(r.get("package"))).resolve(), base.resolve()) if isinstance(r, dict) else ".."
+            if not q.startswith("..") and (mine := {f"{c}:{e}" for c, e in failures_of(r) if (c, e) in allow}):
+                got.setdefault(q, set()).update(mine)
+    return {q: sorted(fs) for q, fs in got.items()}
+
+
+def withheld(outcomes: dict[str, str], ok: list[tuple[str, int]], out: Path, base: Path,
+             allow: frozenset[tuple[str, str]], log=print) -> list[tuple[str, int]]:
+    """``ok`` (each package whose audit did not fail, with check.py's exit) less every package that ended `ALLOWED`: the
+    packages whose pass a run keeps. A package with an allowed failure in any of the run's reports (`hits`) ends `ALLOWED`
+    in ``outcomes`` where it was better: one that its own audit passed and another package's audit, which audits it
+    beside, failed on a failure ``allow`` names."""
+    for q in hits(out, base, allow, log):
+        if outcomes.get(q) in (PASS, REGENERATED):
+            outcomes[q] = ALLOWED
+            log(f"lean-records: {q}: another package's audit reports a failure of it that --allow names, so no pass of it "
+                f"is kept")
+    return [(p, got) for p, got in ok if outcomes[p] not in (ALLOWED, FAILED)]
+
+
+def keep(q: str, pkg: str, record: bytes, out: Path, allowed: bool = False) -> bytes:
+    """Keep ``record``, the record a run wrote for package ``q``, under ``out``'s `record/<q>/` (PKG's also as
+    `record/lean-audit.json`, the path `research queue`'s records gate reads for PKG); for a package that ended `ALLOWED`
+    (``allowed``), under ``out``'s `ALLOWED_RECORD/<q>/` alone, and nowhere under `record/`. Its bytes."""
+    if allowed:
+        unkeep(q, pkg, out)
+    for k in [out / ALLOWED_RECORD / q / LOCK] if allowed else [out / KEPT_RECORD / q / LOCK,
+                                                               *([out / KEPT_RECORD / LOCK] if q == pkg else [])]:
         k.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, k)
-    return kept.read_bytes()
+        k.write_bytes(record)
+    return record
 
 
-def unkeep(q: str, pkg: str, out: Path) -> None:
-    """Remove what `keep` kept of ``q``'s record under ``out``."""
-    for k in [out / "record" / q / LOCK, *([out / "record" / LOCK] if q == pkg else [])]:
+def unkeep(q: str, pkg: str | None, out: Path) -> None:
+    """Remove what `keep` kept of ``q``'s record under ``out``, in `record/` and under `ALLOWED_RECORD`."""
+    for k in [out / KEPT_RECORD / q / LOCK, out / ALLOWED_RECORD / q / LOCK, *([out / KEPT_RECORD / LOCK] if q == pkg else [])]:
         k.unlink(missing_ok=True)
 
 
-def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, new: dict[str, bytes], own: bool = False,
-            log=print) -> str:
+def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, new: dict[str, bytes],
+            own: bytes | None = None, log=print, allow: frozenset[tuple[str, str]] = frozenset()) -> str:
     """``p``'s outcome once check.py on it exited ``got``, its reports under ``mine_out`` and its packages under ``base``,
-    ``own`` saying whether `checked` kept the record its `--update` wrote (in ``new``): `PASS`; `REGENERATED` when ``own``
-    or every failure in its reports is a record difference (`differences`), each such record then kept (`keep`) and put in
-    ``new``; `FAILED` otherwise, with ``own``'s record dropped again, since `record/` holds only records the gate may take."""
-    diff = {} if not got else None if AUDIT.killed(got) else differences(mine_out, base, log) or None
-    if diff is None:
+    ``own`` the record its `--update` wrote where that differs from the committed one (`checked`; in ``new``): `PASS`;
+    `REGENERATED` when ``own`` or every failure in its reports is a record difference (`differences`), each such record then
+    kept under `record/` (`keep`) and put in ``new``; `ALLOWED` when every failure left in its reports is a record
+    difference of another package or one ``allow`` names, its own record then kept under `ALLOWED_RECORD` and never under
+    `record/`, which holds only records the gate may take; `FAILED` otherwise, with ``own`` kept nowhere."""
+    found = ({}, {}) if not got else None if AUDIT.killed(got) else differences(mine_out, base, log, allow)
+    if found is None or (got and not (found[0] or found[1])):
         if p != pkg:
             log(f"lean-records: {p} requires {pkg}, and its records fail on this build, not only on record differences, "
                 f"which take a person (reports in {mine_out})")
-        if own:
-            unkeep(p, pkg, out)
+        if own is not None:
             new.pop(f"{p}/{LOCK}", None)
             log(f"lean-records: {p}: its records fail on this build, not only on record differences, so the record check.py "
                 "--update wrote is not kept")
         return FAILED
-    for q, src in diff.items():
-        if not (own and q == p):
-            new[f"{q}/{LOCK}"] = keep(q, pkg, src, out)
-    for q in {**({p: None} if own else {}), **diff}:
-        log(f"lean-records: {q}: the regenerated record is {out / 'record' / q / LOCK}; commit it over {q}/{LOCK}")
+    diff, allowed = found
+    mine = {**({p: own} if own is not None else {}),
+            **{q: src.read_bytes() for q, src in diff.items() if not (own is not None and q == p)}}
+    for q, record in mine.items():
+        new[f"{q}/{LOCK}"] = keep(q, pkg, record, out, allowed=bool(allowed) and q == p)
+    for q in mine:
+        if allowed and q == p:
+            log(f"lean-records: {q}: the regenerated record is {out / ALLOWED_RECORD / q / LOCK}, outside {KEPT_RECORD}/, "
+                f"since this run allowed a failure of its audit and keeps no pass of it: commit it over {q}/{LOCK} to go on, "
+                f"and run without --allow once the allowed findings are cured")
+        else:
+            log(f"lean-records: {q}: the regenerated record is {out / KEPT_RECORD / q / LOCK}; commit it over {q}/{LOCK}")
+    if allowed:
+        log(f"lean-records: {p}: every failure left in its audit is one --allow names ("
+            + "; ".join(f"{q}: {', '.join(fs)}" for q, fs in sorted(allowed.items()))
+            + f"): still a failure in its report, so no pass of {p} is kept and the run exits {ALLOWED_RC}")
+        return ALLOWED
     if diff:
         log(f"lean-records: {p}: every failure of its records is a record difference, which the kept record"
             f"{'s settle' if len(diff) > 1 else ' settles'}: not a failure of the run")
-    return REGENERATED if own or diff else PASS
+    return REGENERATED if mine else PASS
 
 
 def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base: Path, files: list[str],
              reused_: dict[str, tuple[str, dict | None]] | None = None, log=print,
-             committed: dict[str, bytes | None] | None = None) -> dict[str, dict]:
+             committed: dict[str, bytes | None] | None = None,
+             allow: frozenset[tuple[str, str]] = frozenset(), pkg: str | None = None) -> dict[str, dict]:
     """`result.json`'s `records`: {package: {`outcome`, `inputs_key` (this checkout's as the run found it, its locks read as
     ``committed`` holds them), and, when this run kept its record, `record` (its path in the run's files, else under ``out``)
-    and `record_sha256`; `reused` (why) for one that needed no run, and `reused_from` ({`run`, `commit`}) when a records
+    and `record_sha256`; `allowed` (each `CODE:ENTRY`) for one whose reports hold failures ``allow`` names; `reused` (why)
+    for one that needed no run, and `reused_from` ({`run`, `commit`}) when a records
     run's pass says so}}, for each package of ``todo`` ({package: its outcome}), each of ``reused_`` (`PASS`), and each
     package check.py audited beside one, its outcome read from its report under ``out`` (`PASS` when it failed nothing,
     `REGENERATED` when it failed only on record differences, which check.py's `regenerated` says, and this run kept its
-    record, `FAILED` otherwise), the worse when it was audited twice; with no ``out`` (nothing ran), none of those. A record
+    record, `ALLOWED` when ``allow`` names its every failure, `FAILED` otherwise), the worse when it was audited twice;
+    with no ``out`` (nothing ran), none of those. A record
     kept of a package that ends `FAILED` (audited beside one that settled it, and failing otherwise beside another) is
-    removed: `record/` holds only `REGENERATED` packages'."""
+    removed, and one of a package that ends `ALLOWED` is kept under `ALLOWED_RECORD` alone (``pkg``: the run's PKG, whose
+    record `keep` also puts at `record/`'s top): `record/` holds only `REGENERATED` packages'."""
     got = {**{p: PASS for p in reused_ or {}}, **todo}
+    named_ = hits(out, base, allow, lambda _s: None)
     for a in [out / "audit.json", *sorted(out.glob("requirer-*/audit.json"))] if out else []:
         try:
             reps = json.loads(a.read_text()).get("packages") or []
@@ -1086,9 +1329,13 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
             continue
         for r in reps if isinstance(reps, list) else []:
             q = os.path.relpath(Path(str(r.get("package"))).resolve(), base.resolve()) if isinstance(r, dict) else ".."
-            if q in todo or q.startswith(".."):
+            if q.startswith(".."):
                 continue
-            o = PASS if not r.get("failures") else REGENERATED if r.get("regenerated") and f"{q}/{LOCK}" in new else FAILED
+            fs = failures_of(r)
+            if q in todo:
+                continue
+            o = PASS if not r.get("failures") else REGENERATED if r.get("regenerated") and f"{q}/{LOCK}" in new else \
+                ALLOWED if allow and all(f in allow for f in fs) else FAILED
             got[q] = max(got.get(q, PASS), o, key=OUTCOMES.index)
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     recs: dict[str, dict] = {}
@@ -1100,14 +1347,20 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
             log(f"lean-records: {q}: its inputs key could not be read ({e!r})")
         rec: dict = {"outcome": o, "inputs_key": key}
         if out and f"{q}/{LOCK}" in new:
-            kept = out / "record" / q / LOCK
+            kept = out / (ALLOWED_RECORD if o == ALLOWED else KEPT_RECORD) / q / LOCK
             if o == FAILED:
-                kept.unlink(missing_ok=True)
+                unkeep(q, pkg, out)
                 log(f"lean-records: {q}: its records fail beside another package, not only on record differences, so its "
                     f"record is not kept")
             else:
+                if o == ALLOWED and ((out / KEPT_RECORD / q / LOCK).is_file() or not kept.is_file()):
+                    keep(q, pkg, new[f"{q}/{LOCK}"], out, allowed=True)
+                    log(f"lean-records: {q}: one of its audits holds a failure --allow names, so its regenerated record is "
+                        f"{kept}, outside {KEPT_RECORD}/")
                 rec |= {"record": os.path.relpath(kept, run_dir) if run_dir else str(kept),
                         "record_sha256": hashlib.sha256(new[f"{q}/{LOCK}"]).hexdigest()}
+        if q in named_:
+            rec["allowed"] = named_[q]
         if q in (reused_ or {}):
             why, src = reused_[q]
             rec |= {"reused": why, **({"reused_from": src} if src else {})}
@@ -1126,18 +1379,46 @@ def overall(records: dict[str, dict]) -> str:
     return max((r["outcome"] for r in records.values()), key=OUTCOMES.index, default=PASS)
 
 
+def conclude(pkg: str, records: dict[str, dict], rc: int, out: Path, update: bool, path: str, log=print,
+             passes: dict[str, str] | None = None, allow: frozenset[tuple[str, str]] = frozenset(),
+             audited: list[Path] | None = None) -> int:
+    """End a run whose packages' ``records`` are judged (`finish`): its outcome their worst (`overall`), `FAILED` too when
+    an allowance of ``allow`` matched no failure in the reports this run left under ``audited`` (`unmatched`); its exit
+    status 0 on `PASS` and `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, and ``rc`` (check.py's first failing status), else 1,
+    on `FAILED`."""
+    outcome = overall(records)
+    if stale := unmatched(allow, audited or [], log):
+        outcome = max(outcome, FAILED, key=OUTCOMES.index)
+    if outcome == ALLOWED:
+        log(f"lean-records: every failure left is one --allow named, each still in its package's report: exit {ALLOWED_RC}, "
+            f"which is no pass; check, research merge and the records gate take nothing from this run for "
+            f"{', '.join(q for q, r in records.items() if r['outcome'] == ALLOWED)}")
+    return finish(pkg, outcome, (rc or 1) if outcome == FAILED else ALLOWED_RC if outcome == ALLOWED else 0, out, update,
+                  path, records, log, passes, named(allow), stale)
+
+
 def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool = False, moved: Path | None = None,
-                  out: Path | None = None, log=print, dev_cache: bool = False, rebuild: bool = False) -> int:
+                  out: Path | None = None, log=print, dev_cache: bool = False, rebuild: bool = False,
+                  allow: list[str] | None = None) -> int:
     """`--records`: `check.py --build --no-replay --no-runs` on the package ``name`` names, in ``tree`` (default: the tree of the
     `build` slot it takes; any other must be under `RECORDS`), or `dev_records` where the node's Lean slots grant no `build`
-    slot or ``dev_cache`` asks for it. Its outcome is its packages' worst (`settled`, `verdicts`), and `finish` says it: it
-    exits 0 on `PASS` and on `REGENERATED`, check.py's first failing status on `FAILED`, and 2 on `REFUSED`, when ``tree`` is
-    not under `RECORDS`, ``name`` matches no single package, the memory refusal stops it or another run holds the tree past
+    slot or ``dev_cache`` asks for it. Its outcome is its packages' worst (`settled`, `verdicts`), and `conclude` says it: it
+    exits 0 on `PASS` and on `REGENERATED`, `ALLOWED_RC` on `ALLOWED`, check.py's first failing status on `FAILED`, and 2 on
+    `REFUSED`, when ``tree`` is
+    not under `RECORDS`, ``name`` matches no single package, an allowance of ``allow`` (`--allow CODE:ENTRY`) is one that may
+    not be given (`allowances`), the memory refusal stops it or another run holds the tree past
     `TREE_WAIT_S`. A package whose records need no run (`reused`) is skipped, and with none left nothing runs and no slot is
-    taken; ``rebuild`` and ``moved`` run them all. Each package whose records passed or were regenerated is kept (`passed`).
-    In a run, the module versions its passing builds added to the node's artifact cache (`LakeArtifacts.put`) go into ``out``
-    as one bundle for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do."""
+    taken; ``rebuild`` and ``moved`` run them all. Before it takes a slot, one line names the packages it audits, in
+    order (`audits`). Each package whose records passed or were regenerated is kept (`passed`); one that ended `ALLOWED`,
+    an allowed failure in its audit's reports, is not, so the next run audits it again.
+    What each check.py's builds compiled goes into the node's artifact cache when it ends, whatever its exit (`put_built`: the
+    package's, and those of the provers it audits), and what a run that was killed left goes in when the next run takes
+    the tree (`put_left`). In a run, the module versions it added go into ``out``
+    in bundles for other nodes (`LakeArtifacts.bundle_into`), as a recorded check's do, and on a node whose builds are
+    sandboxed the bundles other nodes' runs left, whose URLs `research run` sent it (`sent_urls`), go into that cache first
+    (`LakeArtifacts.take`), so its builds restore what they compiled."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    urls = sent_urls(run_dir, log)
     out = (out or (Path(run_dir) / "lean-audit" if run_dir else Path(tempfile.mkdtemp(prefix="lean-records-")))).resolve()
 
     def refused(why: str | None, pkg: str = name) -> int:
@@ -1145,10 +1426,12 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             log(f"lean-records: {why}")
         return finish(pkg, REFUSED, 2, out, update, "slot", {}, log)
 
-    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
-    if tree is not None and base not in tree.resolve().parents:
-        return refused(f"{tree} is not under {base}: the fast path builds only on its own trees, never on check's "
-                       "(lean-changed), whose dependencies are links to the audit's")
+    allowed, why = allowances(allow or [])
+    if why:
+        return refused(why)
+    if tree is not None and not kept_tree(tree):
+        return refused(f"{tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}: the fast path builds only on its "
+                       "own trees")
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
         return refused("the tree's files cannot be listed")
@@ -1161,19 +1444,25 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     skip = {} if rebuild or moved else reused(todo, files, log)
     if not (todo := [p for p in todo if p not in skip]):
         log(f"lean-records: nothing to build: the records of {', '.join(skip)} need no run (--rebuild runs them anyway)")
-        return finish(pkg, PASS, 0, out, update, "reused", verdicts({}, {}, None, ROOT, files, skip, log), log)
+        return conclude(pkg, verdicts({}, {}, None, ROOT, files, skip, log), 0, out, update, "reused", log, allow=allowed)
     here = ROOT / pkg
     audited = [here, *(q for _, q in AUDIT.provers(here, AUDIT.load(here)))] if (here / AUDIT.POLICY).is_file() else [here]
     if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
         return refused(why, pkg)
+    log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this one audits it again")
     if dev_cache:
-        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip)
+        return dev_records(pkg, todo, update, moved, out, "--dev-cache asks for it", log, files, skip, allowed)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip)
+        return dev_records(pkg, todo, update, moved, out, str(e), log, files, skip, allowed)
     artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+    if urls and sandboxed():
+        try:
+            log(f"lean-records: {artifacts.take(urls, log)} module version(s) taken from other nodes' bundles")
+        except OSError as e:
+            log(f"lean-records: no artifact bundle taken: {e}")
     try:
         tree = tree or records_tree()
         log(f"lean-records: taking the slot path: check.py on {tree}, which keeps its build between runs")
@@ -1186,6 +1475,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
             new: dict[str, bytes] = {}
             outcomes: dict[str, str] = {}
             left, killed, ok = left_by(tree), {}, []
+            put_left(tree, left, artifacts, log)
             env, fds = {**os.environ, "LEAN_NUM_THREADS": str(LA.COMMON.cores())}, () if slot is None else (slot,)
             for p in todo:
                 t0 = time.monotonic()
@@ -1205,42 +1495,53 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 mark(tree, package=p, phase="deps")
                 for other in [q for q in links if q not in todo and LA.deps_key(tree / p)]:
                     unlink(other, tree, links)
-                if not link(p, tree, deps, links, log, copy=True) and (k := LA.deps_key(tree / p)):
+                if not link(p, tree, deps, links, log) and (k := LA.deps_key(tree / p)):
                     links[p] = k
                     log(f"lean-records: {p}: its dependencies are fetched cold, once for this tree")
                 write_links(tree, links)
-                mark(tree, package=p, phase="check")
                 mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
-                got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store,
-                                                facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
-                if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
-                    up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg,
-                                                              artifacts=artifacts.store, facts_cache=facts_dir()),
-                                                   cwd=tree, env=env, pass_fds=fds).returncode
+                mark(tree, package=p, phase="check", since=since, out=str(mine_out))
+                store, redone = artifacts.store, False
+
+                def audit(with_update: bool) -> int:
+                    nonlocal store, redone
+                    got = subprocess.run(check_argv(tree / p, mine_out, with_update, moved, p == pkg, artifacts=store,
+                                                    facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                    if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree, log, allowed)):
+                        return got
+                    store, redone = None, True
+                    for mod, d in bad.items():
+                        forget(lib := d / ".lake" / "build" / "lib" / "lean", lib / LA.MK.path_of(mod, ".trace"))
+                    label(aside := set_aside(mine_out, out, p))
+                    log(f"lean-records: {p}: check.py's sampled recompile compiled {', '.join(sorted(bad))} to other "
+                        f"outputs than {tree} kept (Lean's output isn't reproducible for every module); each loses its "
+                        f"trace, its .hash files and its objects, and check.py audits {p} once more, where Lake compiles "
+                        f"them, with nothing restored from the artifact cache (the first audit's reports: {aside})")
+                    return audit(with_update)
+
+                got = audit(up)
+                if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log, allowed):
+                    up, got = True, audit(True)
+                put_built(artifacts, LA.built(mine_out), since, log, f"lean-records: {p}")
                 if AUDIT.killed(got):
                     killed[p] = got
                 label(mine_out)
                 log(f"lean-records: {p}: check.py{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s on "
-                    f"{tree} ({n} files changed there), without the kernel replay or the tests: a {FAST_KIND} result, which "
-                    f"check and research merge refuse; reports in {mine_out}")
+                    f"{tree} ({n} files changed there{', audited twice' if redone else ''}), without the kernel replay or "
+                    f"the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {mine_out}")
                 # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
                 # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
                 # record a lane must commit survives nowhere the run keeps.
-                if (b := checked(p, pkg, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
+                if (b := checked(p, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, log)) is not None:
                     new[f"{p}/{LOCK}"] = b
-                outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, b is not None, log)
-                if b is not None and outcomes[p] != FAILED:
+                outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, b, log, allowed)
+                if b is not None and outcomes[p] in (PASS, REGENERATED):
                     write_back(p, tree / p / LOCK, log)
-                if got == 0:
-                    try:
-                        log(f"lean-records: {p}: {artifacts.put({tree / p: report(mine_out, tree / p)}, since, log)} "
-                            "module version(s) new in the artifact cache")
-                    except (OSError, ValueError) as e:
-                        log(f"lean-records: {p}: the artifact cache was not written: {e}")
                 if outcomes[p] == FAILED:
                     rc = rc or got
                 else:
                     ok.append((p, got))
+            ok = withheld(outcomes, ok, out, tree, allowed, log)
             passes = {k: p for p, got in ok for k in passed(p, files, committed if got == 0 else committed | new, new, log)}
             if killed:
                 p, got = next(iter(killed.items()))
@@ -1251,24 +1552,39 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 (tree / DIRTY).unlink(missing_ok=True)
             if run_dir and artifacts.added and out.is_relative_to(Path(run_dir).resolve()):
                 try:
-                    dest, n = artifacts.bundle_into(out)
-                    log(f"lean-records: {n} module version(s) it added bundled for other nodes ({dest.name})")
+                    log(f"lean-records: {LA.bundled(*artifacts.bundle_into(out), len(artifacts.added))}")
                 except OSError as e:
                     log(f"lean-records: nothing bundled for other nodes: {e}")
-            records = verdicts(outcomes, new, out, tree, files, skip, log, committed)
-            outcome = overall(records)
-            return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "slot", records, log, passes)
+            records = verdicts(outcomes, new, out, tree, files, skip, log, committed, allowed, pkg)
+            return conclude(pkg, records, rc, out, update, "slot", log, passes, allowed, [reports(out, pkg, p) for p in todo])
     finally:
         if slot is not None:
             os.close(slot)
             os.environ.pop(LEAN_SLOT.HELD, None)
 
 
+def sent_urls(run_dir: str | None, log=print) -> dict[str, str]:
+    """The presigned URLs `research run` sent this run (`inputs/lean-deps-urls.json`, `lean_audit.url_file`), read and deleted
+    before anything else runs: each grants a read until it expires. {} outside a run, or without them."""
+    sent = Path(run_dir) / "inputs" / LA.URLS if run_dir else None
+    if sent is None or not sent.is_file():
+        return {}
+    try:
+        urls = json.loads(sent.read_text())
+    except (OSError, ValueError) as e:
+        log(f"lean-records: the bundle URLs research run sent can't be read ({type(e).__name__}): none taken")
+        urls = {}
+    sent.unlink(missing_ok=True)
+    return urls if isinstance(urls, dict) else {}
+
+
 def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out: Path, why: str, log=print,
-                files: list[str] | None = None, skip: dict[str, tuple[str, dict | None]] | None = None) -> int:
+                files: list[str] | None = None, skip: dict[str, tuple[str, dict | None]] | None = None,
+                allow: frozenset[tuple[str, str]] = frozenset()) -> int:
     """`--records` where the node's Lean slots grant no `build` slot (``why``): `check.py --dev-cache --build --no-replay
     --no-runs` on this checkout's ``todo`` (PKG, then its requirers; ``skip`` those `reused` left out), each build restored
-    from the published cache, with the same reports, record keep, outcome, exit status and result kind as the slot path;
+    from the published cache, with the same reports, record keep, allowances (``allow``), outcome, exit status and result
+    kind as the slot path;
     `REFUSED` (exit 2) in a tree `research run` shipped (`READY.json`), which every run of its commit shares and check.py
     would build in."""
     if (ROOT / "READY.json").is_file():
@@ -1286,26 +1602,25 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         mine_out, up = reports(out, pkg, p), first_update(p, pkg, update, moved, log)
         got = subprocess.run(check_argv(ROOT / p, mine_out, up, moved, p == pkg, dev=True, facts_cache=facts_dir()),
                              cwd=ROOT).returncode
-        if again := not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
+        if again := not up and regenerates(p, pkg, got, update, mine_out, ROOT / p, log, allow):
             up, got = True, subprocess.run(check_argv(ROOT / p, mine_out, True, moved, p == pkg, dev=True,
                                                       facts_cache=facts_dir()), cwd=ROOT).returncode
         label(mine_out)
         log(f"lean-records: {p}: check.py --dev-cache{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s "
             f"on {ROOT}, without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; "
             f"reports in {mine_out}")
-        if (b := checked(p, pkg, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
+        if (b := checked(p, got, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, log)) is not None:
             new[f"{p}/{LOCK}"] = b
-        outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, b is not None, log)
+        outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, b, log, allow)
         if outcomes[p] == FAILED:
             rc = rc or got
         else:
             ok.append((p, got))
-    for p, got in ok if files is not None else []:
+    for p, got in withheld(outcomes, ok, out, ROOT, allow, log) if files is not None else []:
         passes |= dict.fromkeys(passed(p, files, committed if got == 0 else committed | new, new, log), p)
-    records = verdicts(outcomes, new, out, ROOT, files, skip, log, committed) if files is not None else \
+    records = verdicts(outcomes, new, out, ROOT, files, skip, log, committed, allow, pkg) if files is not None else \
         {p: {"outcome": o, "inputs_key": None} for p, o in outcomes.items()}
-    outcome = overall(records)
-    return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "dev-cache", records, log, passes)
+    return conclude(pkg, records, rc, out, update, "dev-cache", log, passes, allow, [reports(out, pkg, p) for p in todo])
 
 
 #: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot and no machine's could be read
@@ -1374,11 +1689,13 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
     probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
-    or the tree's dependencies can't be had. Never check.py."""
+    the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
+    records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
+    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
     file = file.removeprefix("./")
-    base = (LA.COMMON.cache_dir() / RECORDS).resolve()
-    if tree is not None and base not in tree.resolve().parents:
-        log(f"lean-try: {tree} is not under {base}, where the trees `--records` and `--try` keep are")
+    if tree is not None and not kept_tree(tree):
+        log(f"lean-try: {tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}, where the trees `--records` and "
+            "`--try` keep are")
         return 2
     files = LA.COMMON.tracked_files(ROOT)
     if files is None:
@@ -1406,6 +1723,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             if not hold_tree(held, tree, log):
                 return 2
             t0, links, left = time.monotonic(), read_links(tree), left_by(tree)
+            artifacts = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve())
+            put_left(tree, left, artifacts, log)
             mark(tree, package=pkg, phase="sync")
             n = sync(closure(pkg), files, tree)
             there = [q for q in [*closure(pkg), (left or {}).get("package")] if isinstance(q, str) and (tree / q).is_dir()]
@@ -1416,7 +1735,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             packages = tree / pkg / ".lake" / "packages"
             # dependencies a `--records` run did not take (not in LINKS) are kept as they are, and stay out of LINKS, whose
             # packages the next `--records` run on another package drops
-            if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+            if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
                 if sandbox:
                     log(f"lean-try: {pkg}: no dependencies to take on this node, and the sandbox can't fetch them: nothing "
                         f"ran; run `lean_changed.py --records {pkg}` here once")
@@ -1425,6 +1744,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 links[pkg] = LA.deps_key(tree / pkg)
                 log(f"lean-try: {pkg}: its dependencies are fetched cold, once for this tree")
             write_links(tree, links)
+            since, storing = time.time(), storable(sandbox)
             mark(tree, package=pkg, phase="try")
             opts = SIBLINGS.options(tree / pkg)
             log(f"lean-try: {file} on {tree} ({n} files changed there, {time.monotonic() - t0:.0f} s; "
@@ -1432,6 +1752,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 f"{''.join(o + ' ' for o in opts)}on {PROBE.COPIES / rel}, {rel} with the axiom probe after its last line"
                 f"{', then the sibling check' if siblings else ''})")
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
+            if storing:                                 # before `lean` reads the file itself, whose code then runs
+                put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log, f"lean-try: {pkg}")
             plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
@@ -1442,12 +1764,19 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                 if rc == 0:
                     step, (rc, said, text) = "lean", PROBE.probe(
                         tree / pkg, at, (ROOT / file).read_text(),
-                        lambda copy: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy]))
+                        lambda copy, show: build(pkg, tree, lake, sandbox=sandbox, cmd=["env", "lean", *args, copy],
+                                                 echo=show))
                 log(f"lean-try: {file}: {step} exit {rc} in {time.monotonic() - t0:.0f} s")
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     log(f"lean-try: {file}: an import clash between {' and '.join(healed)}, which this tree can leave when "
                         "one was built against another version of a module both import: they lose their traces, so the "
                         "next try rebuilds them; a clash that comes back is in the source")
+                if rc and (path := refused_write(text, pkg, tree)):
+                    log(f"lean-try: {file}: not elaborated, and this says nothing about the file: Lake wanted to write "
+                        f"{path}, in the dependencies this tree fetched, which a try mounts read-only so that no try "
+                        f"changes what the next one builds against; `lean_changed.py --records {pkg} --rebuild` here builds "
+                        "them where Lake may write, on the tree it takes")
+                    rc = 2
                 if rc == 0 and checked:
                     def lean(a: list[str]) -> tuple[int, str, float, int]:
                         argv = [lake, "env", "lean", *a]
@@ -1493,7 +1822,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
     every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
     ``wait`` (`--no-wait`) it builds nothing when every `build` slot is taken, rather than wait in line: the preflight then
-    builds on its next node."""
+    builds on its next node. What each build compiled in the sandbox goes into the node's artifact cache, as `--try`'s."""
     doc: dict[str, dict] = {"built": {}, "failed": {}, "skipped": {}}
 
     def done(rc: int) -> int:
@@ -1531,6 +1860,8 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 doc["skipped"]["*"] = f"another run held {tree}"
                 return done(2)
             links, left, sandbox, have = read_links(tree), left_by(tree), sandboxed(), set(tracked)
+            artifacts, storing = LA.LakeArtifacts((deps.parent / "lean-artifacts").resolve()), storable(sandbox)
+            put_left(tree, left, artifacts, log)
             for pkg, fs in sorted(by_pkg.items(), key=lambda kv: (rank(kv[0]), kv[0])):
                 t0 = time.monotonic()
                 mark(tree, package=pkg, phase="sync")
@@ -1541,14 +1872,18 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
                 write_links(tree, links)
                 mark(tree, package=pkg, phase="deps")
                 packages = tree / pkg / ".lake" / "packages"
-                if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log, copy=True):
+                if not (packages.is_dir() and pkg not in links) and not link(pkg, tree, deps, links, log):
                     doc["skipped"][pkg] = "this node keeps no dependencies (Mathlib) for its manifest, and they aren't fetched cold"
                     continue
                 write_links(tree, links)
+                since = time.time()
                 mark(tree, package=pkg, phase="build")
                 mods = [f"+{module_of(pkg, f)}" for f in fs]
                 log(f"lean-build: {pkg} on {tree} ({n} files changed there): lake build {' '.join(mods)}")
                 rc, text = build(pkg, tree, lake, mods, sandbox)
+                if storing:
+                    put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log,
+                              f"lean-build: {pkg}")
                 errs = first_errors(text, pkg, have)
                 if rc and (healed := clashed(tree, closure(pkg), text)):
                     errs = {f: e for f, e in errs.items() if not CLASH.search(e)}
@@ -1591,16 +1926,59 @@ def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool,
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), str(at)]
 
 
-def settles(out: Path, at: Path) -> bool:
+def settles(out: Path, at: Path, allow: frozenset[tuple[str, str]] = frozenset()) -> bool:
     """Whether check.py's reports under ``out`` fail only the package at ``at``, and it only on record differences: its report
     names the record `--update` writes (`regenerated`), which check.py does when every failure's code is one of
     `RECORD_DIFFERENCE` (a statement, a `reads` group or an assumption no longer its record), which `--update` settles from
-    the build alone."""
+    the build alone. With ``allow``, also when it fails on record differences beside failures ``allow`` names and on
+    nothing else: `--update` then settles the differences, and the allowed failures are what is left."""
     try:
         bad = [r for r in json.loads((out / "audit.json").read_text())["packages"] if r.get("failures")]
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
-    return len(bad) == 1 and bool(bad[0].get("regenerated")) and Path(str(bad[0].get("package"))).resolve() == at.resolve()
+    if len(bad) != 1 or Path(str(bad[0].get("package"))).resolve() != at.resolve():
+        return False
+    fs = failures_of(bad[0])
+    return bool(bad[0].get("regenerated")) or (bool(allow) and any(c in AUDIT.RECORD_DIFFERENCE for c, _ in fs)
+                                               and all((c, e) in allow or c in AUDIT.RECORD_DIFFERENCE for c, e in fs))
+
+
+def mismatched(out: Path, tree: Path, log=print, allow: frozenset[tuple[str, str]] = frozenset()) -> dict[str, Path]:
+    """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
+    than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, a spec's `proved_in.unpassed`, which a
+    prover's failures there cause, or one ``allow`` names by code and entry, which the second audit reports again and
+    the run ends `ALLOWED` on; {} when there is none, when another failure is there, when a package it names is
+    outside ``tree``, or when the reports can't be read, which it says (``log``). Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
+    differ from a recompile of the same source, as a stale one does."""
+    found: dict[str, Path] = {}
+    try:
+        for r in json.loads((out / "audit.json").read_text())["packages"]:
+            fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
+            mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
+            named = failures_of(r) if allow else [(c, None) for c in codes]
+            if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
+                    not all(c in ("sampled", "proved_in.unpassed") or c in AUDIT.RECORD_DIFFERENCE or (c, e) in allow
+                            for c, e in named):
+                return {}
+            found |= {m: Path(d).resolve() for m, d in mods.items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        log(f"lean-records: check.py's reports in {out / 'audit.json'} can't be read for the modules its sampled recompile "
+            f"failed ({type(e).__name__}: {e}), so none is compiled again")
+        return {}
+    return found if all(d.is_relative_to(tree.resolve()) for d in found.values()) else {}
+
+
+def set_aside(mine_out: Path, out: Path, p: str) -> Path:
+    """Move check.py's reports on ``p`` (its `audit.json` and `audit-*` directories under ``mine_out``) to
+    `mismatched/<path>/` under ``out``, where no reader of the run's verdict looks; that directory."""
+    aside = out / "mismatched" / re.sub(r"[^A-Za-z0-9]+", "_", p)
+    shutil.rmtree(aside, ignore_errors=True)
+    aside.mkdir(parents=True)
+    for f in [mine_out / "audit.json", *sorted(mine_out.glob("audit-*"))]:
+        if f.exists():
+            shutil.move(f, aside / f.name)
+    return aside
 
 
 def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) -> bool:
@@ -1616,28 +1994,29 @@ def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) 
     return True
 
 
-def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, log=print) -> bool:
+def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, log=print,
+                allow: frozenset[tuple[str, str]] = frozenset()) -> bool:
     """Whether requirer ``p``, which check.py just audited at ``at`` (exit ``got``, its reports under ``out``), is audited again
-    with `--update`: in an `--update` run, when it failed only because what its guarantees read changed (`settles`), so one
-    run regenerates its lock beside PKG's instead of failing on it."""
-    if p == pkg or not update or not got or AUDIT.killed(got) or not settles(out, at):
+    with `--update`: in an `--update` run, when it failed only because what its guarantees read changed (`settles`; with
+    ``allow``, beside failures it names), so one run regenerates its lock beside PKG's instead of failing on it."""
+    if p == pkg or not update or not got or AUDIT.killed(got) or not settles(out, at, allow):
         return False
     log(f"lean-records: {p} requires {pkg}, and every failure of its records is a record difference (what its guarantees "
-        f"read changed): check.py --update on it too")
+        f"read changed){'' if settles(out, at) else ' or one --allow names'}: check.py --update on it too")
     return True
 
 
-def checked(p: str, pkg: str, got: int, record: Path, committed: bytes | None, up: bool, _update: bool, out: Path,
-            log=print) -> bytes | None:
+def checked(p: str, got: int, record: Path, committed: bytes | None, up: bool, log=print) -> bytes | None:
     """After check.py on ``p`` exited ``got``: when it ran with `--update` (``up``) and the record it wrote (``record``)
-    differs from the ``committed`` bytes, that record, kept under ``out``'s `record/<p>/` (`keep`) and returned, which
-    `settled` drops again when ``p`` fails otherwise; None when check.py was killed, which leaves no record to keep."""
+    differs from the ``committed`` bytes, that record's bytes, which `settled` keeps where ``p``'s outcome puts them
+    (`record/`, `ALLOWED_RECORD`, or nowhere when ``p`` fails otherwise); None when check.py was killed, which leaves no
+    record to keep."""
     if not up:
         return None
     if AUDIT.killed(got):
         log(f"lean-records: {p}: check.py was killed, so what it left at {record} is not kept")
         return None
-    return keep(p, pkg, record, out) if record.read_bytes() != committed else None
+    return b if (b := record.read_bytes()) != committed else None
 
 
 def write_back(p: str, record: Path, log=print) -> None:
@@ -1649,93 +2028,11 @@ def write_back(p: str, record: Path, log=print) -> None:
         log(f"lean-records: wrote {mine}")
 
 
-def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
-    files = LA.COMMON.tracked_files(ROOT)
-    if files is None:
-        log("lean-changed: skipped: the tree's files cannot be listed")
-        return 0
-    todo = missed(files, cache)
-    if not todo:
-        log("lean-changed: every package's audit is reused here; nothing to build")
-        return 0
-    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
-    if not Path(lake).is_file():
-        log("lean-changed: skipped: no `lake` here (lean-build installs it)")
-        return 0
-    if not sandboxed():
-        log("lean-changed: skipped: no build sandbox here (`unshare`), which keeps the audit's dependencies read-only")
-        return 0
-    made(tree)
-    with open(tree / ".lock", "w") as held:
-        try:
-            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            log("lean-changed: skipped: another check on this machine holds the tree")
-            return 0
-        carry_builds(tree, log)
-        links = read_links(tree)
-        failed: list[str] = []
-        built: list[str] = []
-        compared: list[str] = []
-        try:
-            for pkg in todo:
-                n = sync(closure(pkg), files, tree)
-                if not link(pkg, tree, deps, links, log):
-                    log(f"lean-changed: {pkg}: skipped; lean-audit builds it")
-                    continue
-                try:
-                    roots = guarantee_roots(pkg, tree)
-                except (OSError, ValueError, KeyError) as e:
-                    roots = []
-                    log(f"lean-changed: {pkg}: its {AUDIT.POLICY} cannot be read ({e!r}); its guarantees are not compared here")
-                t0 = time.monotonic()
-                rc, text = build(pkg, tree, lake)
-                if rc == 0 and roots:
-                    rc, more = build(pkg, tree, lake, [f"+{r}" for r in roots])
-                    text += more
-                took = time.monotonic() - t0
-                if rc and (bad := errors(text, pkg, files)):
-                    failed.append(pkg)
-                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: a module does not compile:")
-                    log("\n".join(f"  {line}" for line in bad[:20]))
-                    break
-                if rc:
-                    unlink(pkg, tree, links)
-                    log(f"lean-changed: {pkg}: skipped: `lake build` exited {rc} without a Lean error in the tree's files; "
-                        "its links are dropped, and lean-audit builds it")
-                    continue
-                built.append(pkg)
-                log(f"lean-changed: {pkg}: built in {took:.0f} s ({n} files changed in the tree)")
-                if not roots:
-                    continue
-                t0 = time.monotonic()
-                try:
-                    stale = records(pkg, tree, lake)
-                except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as e:
-                    log(f"lean-changed: {pkg}: its guarantees are not compared here: {str(e)[-2000:]}")
-                    continue
-                took = time.monotonic() - t0
-                if stale:
-                    failed.append(pkg)
-                    log(f"lean-changed: {pkg}: FAILED in {took:.0f} s: the audit fails its guarantees on this build:")
-                    log("\n".join(f"  {line}" for f in stale[:20] for line in f.splitlines()))
-                    break
-                compared.append(pkg)
-                log(f"lean-changed: {pkg}: its guarantees match their records ({took:.0f} s)")
-        finally:
-            write_links(tree, links)
-    log(f"lean-changed: {'FAIL (' + ', '.join(failed) + ')' if failed else 'PASS'}: built {len(built)} of the {len(todo)} "
-        f"package(s) whose audit misses; compared the guarantees of {len(compared)}")
-    return 1 if failed else 0
-
-
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="lean_changed.py", description=__doc__.split("\n\n")[0])
-    ap.add_argument("--cache", type=Path, default=LA.COMMON.cache_dir() / "lean-audit", help="the audit's kept passes")
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
-    ap.add_argument("--tree", type=Path, help="the step tree this step keeps built (default: lean-changed), or with --records, "
-                    f"--try or --build the slot tree ({RECORDS}/build-I, the Lean slot's), under the check cache; with those it "
-                    f"must be under {RECORDS}/")
+    ap.add_argument("--tree", type=Path, help=f"with --records, --try or --build: the slot tree (default: {RECORDS}/build-I, "
+                    f"the Lean slot's, under the check cache); it must be under {RECORDS}/")
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
@@ -1747,6 +2044,12 @@ def main(argv: list[str]) -> int:
                     "a build slot is granted (its tree's dependencies are fetched cold, say)")
     ap.add_argument("--rebuild", action="store_true", help="with --records: run every package's records, even those that "
                     "passed on the same Lean inputs or that a merge of main leaves a candidate of")
+    ap.add_argument("--allow", action="append", default=[], metavar="CODE:ENTRY",
+                    help="with --records only, and repeatable: a failure this run takes as known, named by its code and the "
+                    f"entry it is about as check.py's report lists them (the codes that may be: {', '.join(sorted(ALLOWABLE))}). "
+                    f"It stays a failure in its report; a run whose every other failure is settled exits {ALLOWED_RC} "
+                    f"(`{ALLOWED}`), keeps no pass of that package, and keeps its regenerated record under {ALLOWED_RECORD}/, "
+                    f"not {KEPT_RECORD}/; an allowance that matches no failure fails the run")
     ap.add_argument("--try", dest="try_", metavar="FILE",
                     help=f"elaborate FILE (from the repository's root) on the tree of a Lean slot of pool {FAST_POOL}: "
                     "lake build of its imports, then lake env lean FILE with its package's Lean options; never check.py")
@@ -1765,6 +2068,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--repo", type=Path, metavar="DIR", help="with --inputs-key: the git repository to read --head from "
                     "(default this file's checkout); a clone with no worktree checked out serves")
     a = ap.parse_args(argv)
+    if a.allow and not a.records:
+        ap.error("--allow goes with --records, a lane's fast path, and with nothing else: no other mode takes an "
+                 "allowance, --try, --build (the ready mark's preflight) and --inputs-key among them")
     if a.inputs_key:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.try_ or a.build or a.no_wait or a.tree:
             ap.error("--inputs-key takes only --head and --repo")
@@ -1789,11 +2095,11 @@ def main(argv: list[str]) -> int:
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
             ap.error("--update, --moved, --out, --dev-cache and --rebuild go with --records")
-        return run(a.cache, a.deps, a.tree or LA.COMMON.cache_dir() / "lean-changed", log=lambda s: print(s, flush=True))
+        ap.error("one of --records, --try, --build and --inputs-key is required")
     if a.dev_cache and a.tree:
         ap.error("--dev-cache builds in this checkout, not in a --tree")
     return audit_records(a.records, a.deps, a.tree, a.update, a.moved, a.out, log=lambda s: print(s, flush=True),
-                         dev_cache=a.dev_cache, rebuild=a.rebuild)
+                         dev_cache=a.dev_cache, rebuild=a.rebuild, allow=a.allow)
 
 
 if __name__ == "__main__":

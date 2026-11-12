@@ -117,6 +117,24 @@ def test_unseeded_stochastic_row_is_refused(tmp_path):
     assert res["ok"] is False and res["unsupported"]["reason"] == "sampler" and "seed" in res["unsupported"]["hint"]
 
 
+@pytest.mark.parametrize("splits", ["derived", 16, [32, 16], 0])
+def test_a_session_declaring_another_split_count_is_refused_before_export(tmp_path, splits):
+    """A session whose top-p split count isn't the registered one, `registered_splits(num_SMs)`, the S serving pins every launch to,
+    is refused by name before export, never rewritten to it: no Program, no artifact."""
+    from verity_vllm.pipeline.build import sampler_geometry
+    out = str(tmp_path / "build")
+    pol = dict(sampling_policy("stoch-t0.8-p0.95", None), seeded=True, splits=splits)
+    ref = sampler_geometry(dict(pol), _l40s(), LP=8, T=4)
+    assert ref["reason"] == "sampler_geometry" and ref["hint"].startswith(f"unregistered split count: the session declares top-p split "
+                                                                          f"count {splits!r}, not the registered one, registered_splits(142) = 32")
+    res = run(out, 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=8, T=4, sampling=pol, target=_l40s())
+    assert res["ok"] is False and res["unsupported"]["reason"] == "sampler_geometry", res
+    assert res["unsupported"]["hint"].startswith("unregistered split count") and res["unsupported"]["phase"] == "applicability"
+    assert "program" not in res and not os.path.exists(os.path.join(out, "artifact.json"))
+    pol32 = dict(pol, splits=32)
+    assert sampler_geometry(pol32, _l40s(), LP=8, T=4) is None and pol32["splits"] == 32
+
+
 def test_mixed_batch_is_refused(tmp_path):
     res = run(str(tmp_path / "b"), 1, 8, "b1-eager-v3", "gloo", wrapper="step", sampling={"kind": "mixed", "policies": []})
     assert res["ok"] is False and res["unsupported"]["reason"] == "sampler"
@@ -151,13 +169,13 @@ GEOM_KEYS = {"num_sms", "pipeline", "relation", "splits", "rule", "constant"}
 def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms, S):
     """The served engine runs every top-p launch at the registered split count (`engine.topp_pin`), so every stochastic row -- one
     request, B2, the uniform B8, the B8 whose live count would change vLLM's own S, staggered arrivals, no manifest at all -- takes
-    S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
+    S = registered_splits(num_SMs) = splits_for(1, num_SMs) as a constant of its Program (`sampling["splits"]` the int, no `splits`
     input), for every wrapper shape and the step wrapper alike; the geometry carries nothing of the batch, so every component of every
     workload on the target declares the same (GP-01 agreement by construction)."""
     from verity_vllm.pipeline.build import sampler_geometry
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for_v1
+    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
     cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
              dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8), None]
@@ -170,15 +188,18 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
             else:
                 pol = sampling_policy(None, _requests_manifest(tmp_path, c["n"], arrive=c.get("arrive"), caps=c.get("caps")))
             assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
-            assert pol["splits"] == S == registered_splits(num_sms) == splits_for_v1(1, num_sms) and registered_policy_splits(pol) == S
+            assert pol["splits"] == S == registered_splits(num_sms) == splits_for(1, num_sms) and registered_policy_splits(pol) == S
             g = pol["geometry"]
             assert set(g) == GEOM_KEYS, sorted(g)
             assert g["num_sms"] == num_sms and g["splits"] == S and g["relation"] == "registered"
             geoms.add(json.dumps(g, sort_keys=True))
     assert len(geoms) == 1
-    # a policy whose int is not the registered S of its geometry, or that has no geometry, carries no registered S
-    assert registered_policy_splits(dict(pol, splits=S * 2 if S < 32 else 16)) is None
-    assert registered_policy_splits({k: v for k, v in pol.items() if k != "geometry"}) is None
+    # a policy whose S is not the registered one of its geometry, or that has no geometry, is refused by name
+    for bad in (S * 2 if S < 32 else 16, "derived", [S, S]):
+        with pytest.raises(ValueError, match=f"is not the registered split count registered_splits\\({num_sms}\\) = {S}"):
+            registered_policy_splits(dict(pol, splits=bad))
+    with pytest.raises(ValueError, match="declares no num_sms"):
+        registered_policy_splits({k: v for k, v in pol.items() if k != "geometry"})
 
 
 def test_geometry_refusals_are_named(tmp_path):
@@ -207,23 +228,17 @@ def test_geometry_refusals_are_named(tmp_path):
     assert sampler_geometry({"kind": "greedy"}, _l40s()) is None
 
 
-def test_declared_live_counts_follow_arrivals_and_caps():
-    from verity_vllm.pipeline.build import declared_live_counts
-    reqs = [{"arrive_step": 0, "max_tokens": 4}, {"arrive_step": 1, "max_tokens": 2}, {"arrive_step": 5, "max_tokens": 1}]
-    assert declared_live_counts(reqs) == [1, 2, 2, 1, 0, 1]
-
-
-def test_make_wrapper_refuses_a_declared_s():
-    """A numeric `splits` other than the registered S of the policy's geometry is refused by name."""
+def test_make_wrapper_refuses_a_split_count_other_than_the_registered_one():
+    """A stochastic wrapper takes only the registered S of the policy's geometry: any other `splits`, or one without a geometry to
+    hold it to, is refused by name before any wrapper is built."""
     pytest.importorskip("torch")
     from verity_vllm.program.frontend.vllm_meta import make_wrapper
-    with pytest.raises(ValueError, match="must be the registered"):
-        make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32})
-    with pytest.raises(ValueError, match="must be the registered"):
-        make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 16,
-                                                                "geometry": {"num_sms": 188}})
-    with pytest.raises(ValueError, match="must be the registered"):
-        make_wrapper("request", object(), LP=8, T=4, sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": [16] * 5})
+    stoch = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True}
+    with pytest.raises(ValueError, match="the policy's geometry declares no num_sms"):
+        make_wrapper("request", object(), LP=8, T=4, sampling={**stoch, "splits": 32})
+    for bad in (16, "derived", [16] * 5):
+        with pytest.raises(ValueError, match=r"is not the registered split count registered_splits\(188\) = 32"):
+            make_wrapper("request", object(), LP=8, T=4, sampling={**stoch, "splits": bad, "geometry": {"num_sms": 188}})
 
 
 def test_geometry_refusal_is_the_driver_refusal(tmp_path):
@@ -237,10 +252,10 @@ def test_applicability_carries_the_sampler():
     prof = TargetProfile.default()
     g = applicability_conditions(prof, {}, {}, {}, {"kind": "greedy", "source": "default"})
     s = applicability_conditions(prof, {}, {}, {}, {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "source": "arg", "label": "x",
-                                                    "splits": "derived"})
+                                                    "splits": 32})
     assert g["sampler"] == {"kind": "greedy"} and g["token_select"] == SAMPLERS_BOUND["greedy"]
-    # the stochastic select IS bound now (GumbelTopPTokenSelect_v1{V}); the policy is a condition of reuse, S is DERIVED
-    assert s["sampler"] == {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+    # the stochastic select is bound; the policy, the registered S among it, is a condition of reuse
+    assert s["sampler"] == {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": 32}
     assert s["token_select"] == SAMPLERS_BOUND["stochastic"] and "GumbelTopPTokenSelect" in s["token_select"]
     assert g != s  # a greedy artifact is not reusable for a stochastic row (check_reuse names the differing field)
     # `source` / `label` / `workload` are provenance, not applicability: the same policy from two sources is one condition

@@ -33,7 +33,7 @@ from verity.circuits.types import Array, Tuple
 
 from verity.commitments.gates.sha512 import IV, compress_gadget, pad_tail
 
-__all__ = ["BlockKey", "KeyPrint", "ROOT", "block_key", "chain", "key_print", "pack_tokens"]
+__all__ = ["BlockKey", "KeyPrint", "ROOT", "block_key", "chain", "key_print", "pack_tokens", "token_width"]
 
 BIT = BL.BIT
 WORD = Array(64, BIT)
@@ -53,6 +53,16 @@ def _check(S) -> None:
 
 
 # --- the references ----------------------------------------------------------------------------------------------------
+
+def token_width(ctw: int, B: int) -> int:
+    """TOK for a class whose tokens are CTW bits and whose blocks hold B: CTW, widened until B tokens are whole bytes."""
+    if ctw < 1 or B < 1:
+        raise ValueError(f"tokens of {ctw} bits in blocks of {B}")
+    tok = ctw
+    while B * tok % 8:
+        tok += 1
+    return tok
+
 
 def pack_tokens(tokens: Sequence[int], TOK: int) -> bytes:
     """The tokens, TOK bits each, most significant bit first."""

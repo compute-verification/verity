@@ -158,7 +158,9 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
     """compare._bind_splits in compact mode consults the reader count of every candidate Const32 only: a progression over one node is
     `count` reads, a node-index progression (the gathers) is one read of every candidate it visits (bisection), so the binding decision
     (bound / shared / read by a gather) is the record's on the same instance sequence."""
+    import pytest
     from verity_vllm.check.match import program_compare as C
+    from verity_vllm.check.match.instance_sequence import ProgramSplitsInput
     from tests.check.test_compare_splits_binding import _prog
 
     def raw(**kw) -> C.RootView:
@@ -182,7 +184,7 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
 
     def same(R: C.RootView) -> tuple[C.RootView, C.RootView]:
         P, Q = bound(R, False), bound(R, True)
-        assert (P.n_splits_consts_bound, P.splits_values, P.splits_nodes) == (Q.n_splits_consts_bound, Q.splits_values, Q.splits_nodes)
+        assert (P.n_splits_consts_bound, P.splits_values) == (Q.n_splits_consts_bound, Q.splits_values)
         assert [r["k"] for r in P.inst] == [r["k"] for r in Q.inst] and P.steps == Q.steps
         for i in range(len(P.inst)):
             assert [K.expand(a) for a in Q.inst[i]["args"]] == P.inst[i]["args"]
@@ -193,7 +195,10 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
     assert P.n_splits_consts_bound == 3
     P, _ = same(raw(splits_form="const", S=[16, 16, 16], weights=2, shared_const=True))
     assert P.n_splits_consts_bound == 0                    # one constant read by three selects: shared, never bound
-    same(raw(splits_form="input", S=S, splits_node=2, weights=3))
+    R_in = raw(splits_form="input", S=S, splits_node=2, weights=3)
+    for compact in (False, True):                          # a select reading S from a Program input is refused in both forms
+        with pytest.raises(ProgramSplitsInput, match="reads its split count S from Program input node 2"):
+            bound(R_in, compact)
     same(raw(splits_form="static", S=S, weights=2))
     # a gather over consecutive nodes that VISITS the first select's splits constant makes it shared (readers 2) in both forms
     R = raw(splits_form="const", S=S, weights=2)
@@ -289,7 +294,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match as gm
     from verity_vllm.check.match import global_match_fast as GMF
-    from verity_vllm.program import instances_form as IF
+    from tests.program import instances_forms as IF
     from tests.check import test_global_match as T
     gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
     assert not [f for f in os.listdir(oracle) if ".compact." in f], os.listdir(oracle)   # the fold emits no sidecar
@@ -311,7 +316,7 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
         P = C.load_oracle(oracle, "o", compact=compact)
         assert {k: C.LOAD_NOTES[oracle][k] for k in ("source", "instances_schema", "operand_refs_form")} == {"source": "record files", "instances_schema": RC.INSTANCES_SCHEMA, "operand_refs_form": "runs"}
         # [n2] the two record files are named by content too (sha256 as read)
-        from verity_vllm.program.instances_form import sha256_file as _sf
+        from tests.program.instances_forms import sha256_file as _sf
         assert C.LOAD_NOTES[oracle]["instances_sha256"] == _sf(os.path.join(oracle, "instances.jsonl"))[0]
         assert C.LOAD_NOTES[oracle]["program_sha256"] == _sf(os.path.join(oracle, "program.json"))[0]
         assert {r["step"] for r in P.oracle_rows} != {99} and P.compact == compact
@@ -360,7 +365,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
             "source": "record files", "instances_schema": RC.INSTANCES_SCHEMA if tag == "v1" else RC.INSTANCES_SCHEMA_V2,
             "operand_refs_form": "runs" if tag == "v1" else "progressions"}, (impl, tag, fl)
         # [n2] EVERY document (record and fast, both stores) ties itself to the two fold files by content: sha256 as read == the files'
-        from verity_vllm.program.instances_form import sha256_file as _sf
+        from tests.program.instances_forms import sha256_file as _sf
         assert fl[o]["instances_sha256"] == _sf(os.path.join(o, "instances.jsonl"))[0] and fl[o]["program_sha256"] == _sf(os.path.join(o, "program.json"))[0], (impl, tag)
         assert all(v["source"] == "record files" for v in fl.values())     # the component folds too: nothing beside the record files
         if impl == "fast":
@@ -415,7 +420,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match as gm
-    from verity_vllm.program import instances_form as IF
+    from tests.program import instances_forms as IF
     from tests.check import test_global_match as T
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     gp1, o1 = T.assemble([T.R0, T.R1_LATE, T.R2_LATE], tmp_path / "v1")

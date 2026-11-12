@@ -45,9 +45,9 @@ import numpy as np
 import torch
 from verity_config.settings import of
 
+from verity.definitions.kernels import SHA512
 from verity.protocols.poub.verifier import p2
 from verity.protocols.poub.verifier import receipts as R
-from verity.definitions.kernels import SHA512
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent

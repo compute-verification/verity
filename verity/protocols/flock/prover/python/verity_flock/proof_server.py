@@ -10,7 +10,8 @@
   of the server's (the server's own ``RAYON_NUM_THREADS``, else rayon's default: the CPUs it may run on, within its cgroup's
   CPU quota), so each sizes its work, its host witness's lane groups a pass among it, for the cores it has rather than for
   every core.
-* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once, each session's public file and
+* **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once (a templated statement's with its
+  unit, `Statement.tmpl_unit`, which the prover's line names too), each session's public file and
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
   `submit` writes a session's two lines together.
@@ -32,6 +33,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -48,8 +50,9 @@ __all__ = ["ProofServer", "ProofServerError", "Session", "Statement"]
 @dataclass(frozen=True)
 class Statement:
     """A staged statement: its pinned circuit (``pin``, the circuit file's SHA-512 in hex, which names its type), the
-    circuit's tables, the prover's instance file and the verifier's public file, and for a circuit that declares links
-    the verifier's links file."""
+    circuit's tables, the prover's instance file and the verifier's public file, for a circuit that declares links
+    the verifier's links file, and for a templated statement (``verity/flock-circuit/tmpl``) its unit's rows at their
+    positions (``tmpl_unit``, `flock-tmpl-unit`'s), which both sides load its circuit with."""
 
     pin: str
     circuit: Path
@@ -57,6 +60,7 @@ class Statement:
     instances: Path
     public: Path
     links: Path | None = None
+    tmpl_unit: Path | None = None
 
 
 class ProofServerError(RuntimeError):
@@ -120,15 +124,57 @@ class Session:
 _ROOT = Path("/")
 
 
-def _threads(env: Mapping[str, str]) -> int:
+def _threads(env: Mapping[str, str], cpus: frozenset[int] | None = None) -> int:
     """The threads a server's provers share, as rayon sizes its pool: ``RAYON_NUM_THREADS`` in the server's environment
-    when it is a positive count, else rayon's default, Rust's `available_parallelism`: the CPUs this process may run on
-    (its affinity), at most its cgroups' CPU quota (`_quota`)."""
+    when it is a positive count, else rayon's default, Rust's `available_parallelism`: the CPUs the provers may run on
+    (``cpus``, else this process's affinity), at most its cgroups' CPU quota (`_quota`)."""
     v = env.get("RAYON_NUM_THREADS", "")
     if v.isdigit() and int(v) > 0:
         return int(v)
-    n, q = len(os.sched_getaffinity(0)), _quota(_ROOT)
+    n, q = len(os.sched_getaffinity(0) if cpus is None else cpus), _quota(_ROOT)
     return n if q is None else min(n, q)
+
+
+#: The command that runs a process on a set of CPUs (`taskset -c LIST CMD...`, util-linux's).
+TASKSET = "taskset"
+
+
+def _cpulist(text: str) -> frozenset[int]:
+    """A CPU list as taskset and `/sys/devices/system/cpu` write it: ``44-47``, ``44,45,46,47`` or ``0-3,8``."""
+    cpus: set[int] = set()
+    for part in text.split(","):
+        lo, sep, hi = part.strip().partition("-")
+        if not lo.isdigit() or (sep and not hi.isdigit()) or (sep and int(hi) < int(lo)):
+            raise ValueError(f"not a CPU list: {text!r} (write it as taskset does: 44-47, or 44,45,46,47)")
+        cpus.update(range(int(lo), int(hi if sep else lo) + 1))
+    return frozenset(cpus)
+
+
+def _cpus_text(cpus: frozenset[int]) -> str:
+    """``cpus`` as a CPU list of ascending runs (``0-9,12``)."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def _placement(env: Mapping[str, str]) -> dict[str, frozenset[int]]:
+    """``FC_VERIFIER_CPUS`` in the server's environment, a CPU list within its affinity: the verifiers' CPUs, and the
+    provers' the server's others (by process kind); unset or empty, none (every process on every CPU of the server's)."""
+    text = env.get("FC_VERIFIER_CPUS", "").strip()
+    if not text:
+        return {}
+    mine, own = _cpulist(text), frozenset(os.sched_getaffinity(0))
+    if not mine <= own:
+        raise ValueError(f"FC_VERIFIER_CPUS={text}: CPUs {_cpus_text(mine - own)} are outside the server's affinity "
+                         f"({_cpus_text(own)}); name CPUs within it, or start the server on more")
+    if not own - mine:
+        raise ValueError(f"FC_VERIFIER_CPUS={text}: every CPU of the server's ({_cpus_text(own)}), so none is left for the "
+                         "provers")
+    return {"verifier": mine, "prover": own - mine}
 
 
 def _quota(root: Path) -> int | None:
@@ -232,7 +278,12 @@ class ProofServer:
     logs and the verifiers' own records under ``out``. ``devices``: the GPUs to prove on (None: the CPU). ``provers``: the
     provers a device (or on the CPU). ``route``: a type's device by pin, for types the caller places itself. ``env``: added
     to every process's environment (a None value removes the variable). ``zk``: the masked protocol (`--zk`), SPOT's; off,
-    the plain one. ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``)."""
+    the plain one. ``challenger``: each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``).
+
+    ``FC_VERIFIER_CPUS`` in the server's environment (a CPU list within its affinity, as taskset takes it) runs every
+    verifier on those CPUs and every prover on the server's other CPUs (`taskset -c`), so a verifier's check of each
+    session it serves takes no CPU from the provers, whose threads split their own CPUs; unset, every process runs on all
+    the server's CPUs. A verifier's challenger keeps the server's."""
 
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  provers: int = 1, verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
@@ -245,8 +296,13 @@ class ProofServer:
         self.provers, self.verify_ahead, self.zk, self.challenger = provers, verify_ahead, zk, challenger
         self.challengers: dict[str, dict] = {}
         self._env = {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+        self._cpus = _placement(self._env)
+        self._taskset = shutil.which(TASKSET) if self._cpus else None
+        if self._cpus and self._taskset is None:
+            raise ValueError(f"FC_VERIFIER_CPUS places processes with {TASKSET} (util-linux), which is not on PATH")
         n = len(self.devices) * provers
-        self._share = {} if n == 1 else {"RAYON_NUM_THREADS": str(max(1, _threads(self._env) // n))}
+        share = _threads(self._env, self._cpus.get("prover")) // n
+        self._share = {} if n == 1 else {"RAYON_NUM_THREADS": str(max(1, share))}
         self._routes: dict[str, int | None] = dict(route or {})
         self._lock, self._send, self._typing = threading.Lock(), threading.Lock(), threading.Lock()
         self._provers: dict[tuple[int | None, int], _Process] = {}
@@ -268,6 +324,12 @@ class ProofServer:
     def routes(self) -> dict[str, int | None]:
         """Each type's device so far, by pin."""
         return dict(self._routes)
+
+    @property
+    def verifier_cpus(self) -> str | None:
+        """The verifiers' CPUs as ``FC_VERIFIER_CPUS`` placed them (a CPU list), or none when unplaced."""
+        cpus = self._cpus.get("verifier")
+        return _cpus_text(cpus) if cpus else None
 
     @property
     def pids(self) -> dict[str, int]:
@@ -308,6 +370,8 @@ class ProofServer:
             q["out"] = str(out)
         line = {"circuit": str(st.circuit), "tables": str(st.tables), "instances": str(st.instances), "pin": st.pin,
                 "verifier": v.addr, "label": label}
+        if st.tmpl_unit is not None:
+            line["tmpl_unit"] = str(st.tmpl_unit)
         if self_check is not None:
             line["self_check"] = self_check
         with self._send:
@@ -369,6 +433,8 @@ class ProofServer:
         return base if n == 0 else f"{base}.{n + 1}"
 
     def _start(self, name: str, kind: str, key: Any, cmd: list[str], env: dict[str, str]) -> _Process:
+        if cpus := self._cpus.get(kind):
+            cmd = [self._taskset, "-c", _cpus_text(cpus), *cmd]
         p = _Process(name, kind, key, cmd, self.out / f"{name}.log", env, self._line, self._exited)
         self._started.append(p)
         return p
@@ -394,7 +460,8 @@ class ProofServer:
                     raise ProofServerError(f"{name}'s challenger: {e}") from e
                 ch = (d, p)
             cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
-                   "--out", str(self.out / base), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
+                   "--out", str(self.out / base), "--circuit", str(st.circuit),
+                   *([] if st.tmpl_unit is None else ["--tmpl-unit", str(st.tmpl_unit)]), "--tables", str(st.tables), "--pin", st.pin,
                    "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
             with self._lock:
                 v = self._verifiers[(st.pin, key)] = self._start(name, "verifier", (st.pin, key), cmd, self._env)

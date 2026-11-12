@@ -21,7 +21,9 @@ over the three leaves `export_compat.dsa_leaves` exports in place of its kernels
         index order (T = TOPK; `DsaButterflyRowsPad_v1{T=n,N,...}` where n < N).  In the batched form a call's rows past TOPK go in
         blocks (`long_row_blocks`), each over the history's first N_b rows: `DsaMqaLogits_v3{N=N_b}`, `DsaTopKMaskCounted_v1{N,TOPK}`
         of the logits and the row's own key count, the settings, and the rows routed from N_b (`DsaButterflyRowsPad_v1{T=N_b,N}`),
-        each op over the block's rows in turn
+        each op over the block's rows in turn; under `dsa_table_reads` (`Registered.dsa_table_reads`) the mask's positions
+        `DsaTopKIndex_v1{N,TOPK}` in place of the settings, which an IndexShare layer reads as well, and the rows read at them
+        from the history's first N_b, `DsaHistoryReads_v1{V=N_b,TOPK,H}` (`program.dsa_table`), in place of the rows network
 
 and `output.copy_(rows)` (an allocation written whole); the latent absorptions around them are `vllm_dsa_absorb.py`'s.  A role the
 vocabulary lacks refuses by name.  The leaf the shim exports in dsa_indexer_attn's place on a prefill vLLM serves by dense MHA,
@@ -40,7 +42,8 @@ from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import refuse_cached_prefix, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, batched_form, launch_keys_of
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSERVED, active_target_profile, batched_form, dsa_table_reads,
+                                                                           launch_keys_of)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
 from verity.definitions.registry import dsa
@@ -73,6 +76,9 @@ ROLE_KERNELS = {"dsa_rmsnorm": "q_a_layernorm / kv_a_layernorm in _fused_norm_ro
                                       "concentrator's settings (DsaButterflyRows_v1)",
                 "dsa_butterfly_rows_pad": "the same at a row whose keys are no multiple of TOPK: its history and the pad to its "
                                           "size class two arguments (DsaButterflyRowsPad_v1)",
+                "dsa_topk_index": "the table-read form's positions of a row's top-TOPK mask, ascending (DsaTopKIndex_v1)",
+                "dsa_history_reads": "the table-read form's TOPK history rows sparse MLA reads, one read each at those positions "
+                                     "(DsaHistoryReads_v1)",
                 "sparse_mla": "FA3's sparse MLA (SparseMla_v1)",
                 "sparse_mla_split": "FA3's sparse MLA at vLLM's default split count (SparseMlaSplit_v1)",
                 "attention_dot": "FA3's dense causal prefill attention, FlashAttnPrefillBackend's (Attention_v4; AttentionSplit_v1 "
@@ -500,7 +506,9 @@ class DsaIndexerAttnRule(StateRule):
     rows `DsaButterflyRows_v1{N,K=TOPK}` routes at those settings, in ascending index order (the row `VERITY_DSA_TOPK=canonical`
     serves); an IndexShare layer reads the indexer layer's settings, so the wiring is static.  Below N it reads them through
     `DsaButterflyRowsPad_v1{T=n,N}`, the history and its pad two arguments, so the history is a cut one row longer than the row
-    before's, which the descriptor writes as an alias plus a part."""
+    before's, which the descriptor writes as an alias plus a part.  Under `dsa_table_reads` the batched form's long rows read
+    their history by table instead: the indexer layer's `DsaTopKIndex_v1{N,TOPK}` of the mask is what an IndexShare layer reads,
+    and each layer's `DsaHistoryReads_v1{V=N_b,TOPK,H}` reads the block's history at it (`program.dsa_table`)."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
                     preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
@@ -514,11 +522,13 @@ class DsaIndexerAttnRule(StateRule):
                                    "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
                                    "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the rows "
                                    "DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below its class) routes at the settings "
-                                   "DsaButterflySettings_v1 computes for DsaTopKMask_v1's set "
+                                   "DsaButterflySettings_v1 computes for DsaTopKMask_v1's set, or under dsa_table_reads the rows "
+                                   "DsaHistoryReads_v1 reads at DsaTopKIndex_v1's positions of that set "
                                    "(an IndexShare layer's rows have the indexer layer's key counts)",
                                    "layer_name static and written from one module; not under registered_values"),
                     evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaTopKMask_v1, DsaButterflySettings_v1, "
-                                    "DsaButterflyRows_v1, DsaButterflyRowsPad_v1, SparseMla_v1 or SparseMlaSplit_v1")
+                                    "DsaButterflyRows_v1, DsaButterflyRowsPad_v1, DsaTopKIndex_v1, DsaHistoryReads_v1, SparseMla_v1 or "
+                                    "SparseMlaSplit_v1")
 
     def targets(self):
         return {iface.dsa_indexer_attn.default}
@@ -547,9 +557,11 @@ class DsaIndexerAttnRule(StateRule):
         if (r := _prefill_by_dense_mha(layer, T)):
             return r
         hist = (ctx.state.get("dsa_history") or {}).get(layer)
-        if (len(hist["latent"]) if hist else 0) + T > topk and (
-                r := _missing(ctx, ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"] + (
-                    ["dsa_topk_mask_counted" if batched_form() else "dsa_topk_mask", "dsa_butterfly_settings"] if has else []))):
+        table = batched_form() and dsa_table_reads()
+        long_roles = (["dsa_history_reads"] + (["dsa_topk_mask_counted", "dsa_topk_index"] if has else [])) if table else (
+            ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"]
+            + (["dsa_topk_mask_counted" if batched_form() else "dsa_topk_mask", "dsa_butterfly_settings"] if has else []))
+        if (len(hist["latent"]) if hist else 0) + T > topk and (r := _missing(ctx, long_roles)):
             return r
         L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
@@ -611,6 +623,7 @@ class DsaIndexerAttnRule(StateRule):
             return pads[(w, bits)].slice(0, count)
 
         blocks = long_row_blocks(keys, TOPK) if batched_form() else []
+        table = bool(blocks) and dsa_table_reads()
         if has:
             H, D = shape(ctx, a["index_q"])[1:3]
             iq, iw = _rows(ctx, a["index_q"], 8), _rows(ctx, a["index_weights"], 32)
@@ -639,7 +652,8 @@ class DsaIndexerAttnRule(StateRule):
                 logits = [ctx.call(lg, iq[i], iw[i], ik, iks, node=node, rule=self, name=f"{h}/logits[t={pos[i]}]") for i in rows]
                 counts = [Coll(Value(32), pad(32, keys[i], 1, 1)) for i in rows]
                 tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
-                fm, fs = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK), ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK)
+                fm = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK)
+                fs = ctx.kind("dsa_topk_index" if table else "dsa_butterfly_settings", node, N=N, TOPK=TOPK)
                 masks = [ctx.call(fm, Coll(Array(N, Value(32)), concat([lgt.refs, *tail])), c, node=node, rule=self,
                                   name=f"{h}/topk_mask[t={pos[i]}]") for i, lgt, c in zip(rows, logits, counts)]
                 for i, m in zip(rows, masks):
@@ -659,11 +673,14 @@ class DsaIndexerAttnRule(StateRule):
         ql, qr = _rows(ctx, a["ql_nope"], 16), _rows(ctx, a["q_pe"], 16)
         row = Array(L + R, Value(16))
         rows_of = {}
-        for Nb, rows in long_row_blocks(keys, TOPK) if batched_form() else ():
+        for Nb, rows in blocks:
             N, hb = long_row_keys(Nb, TOPK), Coll(Array(Nb, row), latent.cut(Nb))
-            rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if N > Nb else ()
-            fr = (ctx.kind("dsa_butterfly_rows_pad", node, T=Nb, N=N, TOPK=TOPK, W=L + R) if rest
-                  else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
+            if table:
+                fr, rest = ctx.kind("dsa_history_reads", node, V=Nb, TOPK=TOPK, H=L + R), ()
+            else:
+                rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if N > Nb else ()
+                fr = (ctx.kind("dsa_butterfly_rows_pad", node, T=Nb, N=N, TOPK=TOPK, W=L + R) if rest
+                      else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
             for i in rows:
                 rows_of[i] = ctx.call(fr, selected[pos[i]], hb, *rest, node=node, rule=self, name=f"{h}/rows[t={pos[i]}]")
         outs = []
@@ -686,12 +703,13 @@ class DsaIndexerAttnRule(StateRule):
                                 "BN": G["BN"], "DOT": G["DOT"].name, "INV": G["INV"].name, "scale": scale, "TOPK": TOPK, "indexer": has,
                                 "top_k_from": source, "selection": "rows 0..n-1 in order (n <= TOPK: DsaTopKShortRow_v1's slots); past "
                                 "TOPK DsaTopKMask_v1's set of the logits at the row's class (long_row_keys), its rows in ascending index "
-                                "order by DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below the class) at DsaButterflySettings_v1's settings",
+                                + ("order read at DsaTopKIndex_v1's positions by DsaHistoryReads_v1 (the history table's reads)" if table else
+                                   "order by DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below the class) at DsaButterflySettings_v1's settings"),
                                 "past_topk": past, "attention_impl_observed": (_OBSERVED["attention_impls"] or {}).get(layer)},
                    emitted=f"{attn.id} x{T} (splits {splits})" +
                            (f" + DsaMqaLogits_v3, DsaTopKShortRow_v1 x{T - len(past)}" if has else f" (top-k of {source})") +
-                           (f" + {('DsaTopKMaskCounted_v1' if blocks else 'DsaTopKMask_v1') + ', DsaButterflySettings_v1, ' if has else ''}"
-                            f"DsaButterflyRows[Pad]_v1 x{len(past)}"
+                           (f" + {('DsaTopKMaskCounted_v1' if blocks else 'DsaTopKMask_v1') + (', DsaTopKIndex_v1, ' if table else ', DsaButterflySettings_v1, ') if has else ''}"
+                            f"{'DsaHistoryReads_v1' if table else 'DsaButterflyRows[Pad]_v1'} x{len(past)}"
                             if past else ""))
 
 

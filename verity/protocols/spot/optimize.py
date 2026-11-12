@@ -50,7 +50,8 @@ incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bit
 log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
 prices a sampled replay block's proving, each type's statements its own or its registration's, padded to a public cap
 (`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
-(the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
+(the public size classes up to a threshold in one stratum, each wider one in its own; on request also each distinct
+width in its own, `two_stage_strata`) or uniform (one stratum).
 """
 from __future__ import annotations
 
@@ -61,8 +62,8 @@ from fractions import Fraction
 from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
 from pathlib import Path
 
-from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
-from verity.protocols.spot.verifier.consumers import exfiltration_bound
+from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
+from verity.protocols.spot.verifier.consumers import entropy_bits, exfiltration_bound
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 
 
@@ -293,6 +294,10 @@ class PlanBounds:
     exact: bool = True
 
 
+#: `_log_miss` sums this many of its terms before it takes their closed form: a planner asks it a million times
+MISS_TERMS = 64
+
+
 @dataclass(frozen=True)
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a sample size per subcircuit, the subcircuits
@@ -312,19 +317,12 @@ class Plan:
 
 
 def _log_miss(n: int, m: int, k: int) -> float:
-    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given proof blocks: the product
-    prod_{i < t} (1 - s / (n - i)) over t = min(m, k), s = max(m, k), summed when t is small, by `lgamma` up to 2^25 proof blocks
-    and past that, where `lgamma`'s differences lose their digits, by its midpoint (either within about 1e-7 relative)."""
-    if k > n - m:
-        return -inf
-    if m == 0 or k == 0:
-        return 0.0
-    t, s = min(m, k), max(m, k)
-    if t <= 64:
-        return fsum(log1p(-s / (n - i)) for i in range(t))
-    if n <= 1 << 25:
-        return lgamma(n - m + 1) - lgamma(n - m - k + 1) - lgamma(n + 1) + lgamma(n - k + 1)
-    return t * log1p(-s / (n - (t - 1) / 2))
+    """log C(n - m, k) / C(n, k), that a uniform k-subset of n misses m given proof blocks: minus core's risk
+    (`neg_log_escape`), which sums its t = min(m, k) terms while t <= `MISS_TERMS` and past that takes their closed form.
+    The closed form puts the log over its exact value by less than s / (8 (n - t + 1)(n - s - t + 1)) at s = max(m, k),
+    under 1 / (100 n) of it wherever the miss is at least 2^-40.  It prices a plan and steers `max_harm`'s search; no
+    bound reads it."""
+    return -inf if k > n - m else -neg_log_escape(n, k, m, MISS_TERMS)
 
 
 def _miss(n: int, m: int, k: int) -> float:
@@ -973,14 +971,13 @@ class Grain:
 
 
 def loc_bits(n: int, k: int) -> float:
-    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
-    (`consumers.location_bits`' bound)."""
+    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j), to the floats' rounding: 0 at K = 0, n H2(K/n) up to
+    K = n/2 (`consumers.entropy_bits`) and n past it (`consumers.location_bits`' bound, before its margin)."""
     if k <= 0:
         return 0.0
     if 2 * k >= n:
         return float(n)
-    x = k / n
-    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
+    return entropy_bits(n, k)
 
 
 def leak_count(g: Grain, ell: float) -> int:
@@ -1159,13 +1156,14 @@ def _capped(g: tuple[float, ...], lw: float) -> tuple[float, float]:
 
 
 def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
-                    served: float | None = None, union: bool = False, tol: float = 1e-6) -> float:
+                    served: float | None = None, union: bool = False, tol: float = 1e-6, fanout: int = 1) -> float:
     """`two_stage_rankin`'s bits."""
-    return two_stage_rankin(cells, k, replay_blocks, q, delta, served, union, tol)[0]
+    return two_stage_rankin(cells, k, replay_blocks, q, delta, served, union, tol, fanout)[0]
 
 
 def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
-                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> tuple[float, float]:
+                     served: float | None = None, union: bool = False, tol: float = 1e-6,
+                     fanout: int = 1) -> tuple[float, float]:
     """At least log2 of `CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, over `replay_blocks` replay blocks
     (R) of the cells each, the first stage sampling each replay block with probability q and the second `k[t]` of
     stratum t's n_t proof blocks in a sampled one.
@@ -1182,7 +1180,11 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted
     (θ = 0).  It returns the bits and that θ.
 
-    `served`, S, caps each replay block's charge at the bits it serves (a cap lemma in progress).  The sets' form
+    `served`, S, caps each replay block's charge at the bits it serves (the capped form,
+    `Properties.Spot.TwoStageCheckServedSound`, whose `N` is `fanout`).  `fanout`, F, is the replay grain's fan-out
+    (`partition.fanout`): the requests reading in a replay block serve at most F S bits together, so S is read as F S.
+    F is 1 when every replay block is closed, each recomputing from its own inputs any value another computed while
+    serving; the patterns' form reads each request in one replay block, so it refuses F > 1.  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
     becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
     and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
@@ -1196,6 +1198,10 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
         raise ValueError("needs 0 <= q <= 1, 0 < delta < 1 and replay_blocks >= 1")
     if (served is None and union) or (served is not None and not served >= 0):
         raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
+    if not fanout >= 1 or (union and fanout > 1):
+        raise ValueError(f"a fan-out is at least 1, and the patterns' form reads each request in one replay block, so it "
+                         f"needs fan-out 1, not {fanout}")
+    served = None if served is None else served * fanout
     strata = _strata(cells, k)
     groups: dict[tuple[float, float], float] = {}
     for c in cells:
@@ -1373,48 +1379,86 @@ def _size_class(bits: float) -> int:
     return w
 
 
+def two_stage_strata(cells: Iterable[Cell], merged: int | None) -> list[Cell]:
+    """The cells in the strata of a `two_stage_design` row whose `merged` is this: the public size classes
+    (`unit_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; or, `merged` None, each
+    distinct width in a stratum of its own, named by the width's place among the cells' widths in increasing order."""
+    cells = list(cells)
+    if merged is None:
+        place = {bits: i for i, bits in enumerate(sorted({c.bits for c in cells}))}
+        return [replace(c, stratum=place[c.bits]) for c in cells]
+    return [replace(c, stratum=0 if (w := _size_class(c.bits)) <= merged else w) for c in cells]
+
+
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
+                     widths: bool = False,
+                     margin: float = 0.0,
+                     kappas: Sequence[float] | None = None,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
-                     union: bool = False, registration: float = 0.0) -> dict | None:
+                     union: bool = False, registration: float = 0.0, fanout: int = 1) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
     narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
-    worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
+    worse.  A class's stratum is sampled at the rate its widest block asks, so with `widths` the family also holds the
+    designs that give each distinct width a stratum of its own (`merged` None, `two_stage_strata`): a block narrower
+    than its class's widest is then sampled at its own bits' rate, and the design is again never worse.  At each κ of
+    `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
     most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
     proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
-    block does.  Under a served-output cap (`served` and `union`, as `two_stage_exfil` takes them) b_t is at most the
-    cap and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
+    block does.  Under a served-output cap (`served`, `union` and `fanout`, as `two_stage_exfil` takes them) b_t is at
+    most the cap read at the fan-out and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
     `boundary` (serving's boundary hashing) leaves of the budget on sampled replay blocks, each costing `replay`, its
     interior's `commit_bytes` at `h` a byte, and
     `two_stage_price`'s proving.  A statement holds one sampled replay block's proof blocks of one Definition, or with
     `registration` (the replay blocks one interior registration spans) the registration's, padded to its public cap
-    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
-    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (Q, the
+    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  With
+    `margin` m > 0 the family also holds, at each threshold and κ, the design that samples (1 + m) k_t, at most n_t, of
+    every stratum but the one whose statements cost the most proving at those k: where one stratum is most of the
+    proving a margin on the rest costs little, and the design is again never worse.  With `kappas`, some of `KAPPAS`,
+    the family holds only the designs at those κ: k_t grows with κ, so a caller that holds down the proof blocks a
+    sampled replay block proves pins it.  Its row:
+    `merged` (the widest size class in stratum 0, None where each width is a stratum), `kappa`, `margin` (m where its
+    k carry it, else 0), `k`, `q`,
+    `registration`, `registration_sample` (Q, the
     replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
     `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
     `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
     alone is over the budget."""
     cells = list(cells)
+    if not margin >= 0:
+        raise ValueError(f"a margin is at least 0, not {margin}")
+    if kappas is not None and not (kappas and set(kappas) <= set(KAPPAS)):
+        raise ValueError(f"a design's κ are some of KAPPAS, not {tuple(kappas)}")
     if not cells or not budget >= boundary:
         return None
-    classes = [_size_class(c.bits) for c in cells]
-    thresholds = sorted(set(classes)) if stratify else [max(classes)]
+    classes = {_size_class(c.bits) for c in cells}
+    thresholds: list[int | None] = sorted(classes) if stratify else [max(classes)]
+    if stratify and widths:
+        thresholds.append(None)
     charge = fsum(c.n * c.bits for c in cells)
     if served is not None:
-        charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union)
+        charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union, fanout=fanout)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
     rows, seen = [], set()
-    for merged in thresholds:
-        split = [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)]
+    for merged, m in [(t, x) for t in thresholds for x in ((0.0, margin) if margin > 0 else (0.0,))]:
+        split = two_stage_strata(cells, merged)
         strata: dict[int, float] = {}
         widest: dict[int, float] = {}
         for c in split:
             strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
-            widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served))
+            widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served * fanout))
         for kappa in KAPPAS:
+            if kappas is not None and kappa not in kappas:
+                continue
             k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
                  if charge > 0 else 1 for t, n in strata.items()}
+            if m:
+                cost: dict[int, float] = {}
+                for c, r in zip(split, two_stage_statements(split, k)):
+                    cost[c.stratum] = cost.get(c.stratum, 0.0) + r["prove"]
+                most = max(cost, key=cost.__getitem__)
+                k = {t: v if t == most else min(ceil(strata[t]), ceil((1 + m) * v)) for t, v in k.items()}
             if (key := (merged, *sorted(k.items()))) in seen:
                 continue
             seen.add(key)
@@ -1427,19 +1471,19 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
             per = replay + interior + prove
             sampled = q * replay_blocks
-            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
+            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa, "margin": m,
                          "k": k, "q": q, "registration": registration, "registration_sample": q * registration,
                          "registration_cap": registration_cap(q * registration, registration),
                          "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
                          "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0, "split": split,
-                         "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN),
+                         "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN, fanout),
                          "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
                          "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
                          "commit": boundary + sampled * interior, "total": boundary + sampled * per,
                          "fill": prove / marginal if marginal > 0 else 1.0})
     best = min(rows, key=lambda r: (r["bound"], r["total"]))
     split = best.pop("split")
-    bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union)
+    bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union, fanout=fanout)
     return best | {"bound": bound, "theta": theta}
 
 
@@ -1451,5 +1495,6 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
            "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
-           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
+           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements",
+           "two_stage_strata", "weigh",
            "work_draws", "work_law"]
