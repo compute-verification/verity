@@ -27,8 +27,6 @@ import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
-from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program.instances_file import read_instances
 from verity_vllm.records import required_manifest
 
 __all__ = ["LIFTED_DTYPES", "LIFTED_F32", "MOE_FP8_PLANES", "MOE_PLANES", "PROMOTED_DTYPE_BYTES",
@@ -466,6 +464,9 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
     """The Program dir's instances, result and artifact.  `expand=False` keeps a v2 row's argument progressions as stored, for a reader
     that expands what it reads (the sampled replay's `index.row_args` / `node_runs`).  Equal argument items are one list
     (`instances_file.read_instances`): read them, never modify them in place."""
+    # Inside the function: importing this module loads nothing of `program`, which a suite that lists its inputs by file
+    # and reads this module relies on (its read guard fails on a file its list lacks).
+    from verity_vllm.program.instances_file import read_instances
     inst = read_instances(os.path.join(program_dir, "instances.json.gz"), expand=expand)
     with open(os.path.join(program_dir, "result.json")) as f:
         res = json.load(f)
@@ -707,6 +708,8 @@ def program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
     build_request*/result.json declaring exactly (LP, T, C) (the row's default request Program); never a near shape, and never a cold
     request's Program for a warm one (`prefix_plan.request_shape`).  The traversal engine streams these (rows never all in
     memory: 57 MB vs 1 GB peak on the Llama B8 fold, same digest)."""
+    # Inside the function, for `load_program`'s reason.
+    from verity_vllm.program import prefix_plan as PP
     progs: dict[str, str] = {}
     for r in fx["requests"]:
         sh = PP.request_shape(r)
