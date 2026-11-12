@@ -24,6 +24,11 @@ parameters, to a reference of node `k`'s argument at the root. With `Resolve.ste
 resolution from below `A` (`run_below`) ends in `A`'s gates or at what a reference of node `k`'s argument resolves to
 from the root. `Prog.gate`'s walk to a gate of `A` goes through `A` (`gateStep_root`) and stays below it, and each
 operand it returns is such a resolution (`gate_below`): `memberReads`.
+
+The step that leaves `A` starts at `A` itself, at a leaf of one of its parameters (`step_below`), so resolution from
+below `A` ends in `A`'s gates or at what a leaf of one of `A`'s parameters resolves to (`run_param`), and a gate of `A`
+reads, outside `A`'s gates, only what `A`'s parameters resolve to (`memberReads_params`): a template's body reads only
+its parameters, which the scan's cut (`Proofs.Properties.NetworkScan.ViewCut`) rests on.
 -/
 
 @[expose] public section
@@ -140,14 +145,15 @@ theorem below_off {A : Scope} : ∀ {sc : Scope}, Below A sc → Resolve.Good P 
 
 omit hroot hL in
 /-- **One step of resolution from below `A`**, the activation of member `m` of root node `k` (a batch or a call): it ends
-at a gate at or past its activation's offset, moves below `A`, or leaves `A` up through a parameter, to a reference of
-node `k`'s argument at the root. -/
+at a gate at or past its activation's offset, moves below `A`, or leaves `A` up through a parameter, from `A` itself at
+a parameter's leaf to a reference of node `k`'s argument at the root. -/
 theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) (B : ℕ) (s : Scope × Ref) (x)
     (hs : Resolve.Inv P B s) (hb : Below A s.1) (h : resolveStep P s = .ok x) :
     (∀ a, x = .inl a → s.1.off ≤ a) ∧ (∀ s', x = .inr s' → Below A s'.1 ∨
-      (s'.1 = P.rootScope ∧ ∃ i t : ℕ, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
-        s'.2 = (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t)) := by
+      (s.1 = A ∧ s.2.p = true ∧ s'.1 = P.rootScope ∧
+        ∃ i t : ℕ, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
+          s'.2 = (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t)) := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
   obtain ⟨hg, hr, -, -⟩ := hs
   dsimp only at hg hr hb ⊢
@@ -191,7 +197,8 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       rw [hfn] at hup
       have hu := hup i hi j hj m' hm'
       rcases below_child hb with he | hpb
-      · rw [hA] at he
+      · have hsA := he.symm
+        rw [hA] at he
         simp only [Prog.child, Scope.child.injEq] at he
         obtain ⟨hpar, -, -, hkk, hmm⟩ := he
         subst hpar
@@ -205,13 +212,13 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
         · rcases hf'' : ((P.defs[P.rootScope.d]!).body.nodes[k]!).form
           · simp only [hf''] at hu
             rw [Resolve.rs_up P _ d off k m i j (Or.inl hf'')] at h; cases h; cases hs'
-            exact ⟨rfl, i, j, hu, rfl⟩
+            exact ⟨hsA, rfl, rfl, i, j, hu, rfl⟩
           · simp only [hf''] at hu
             rw [Resolve.rs_up P _ d off k m i j (Or.inr hf'')] at h; cases h; cases hs'
-            exact ⟨rfl, i, j, hu, rfl⟩
+            exact ⟨hsA, rfl, rfl, i, j, hu, rfl⟩
           · simp only [hf''] at hu
             rw [Resolve.rs_up_batch P _ d off k m i j hf'', Resolve.memberRef_eq] at h; cases h; cases hs'
-            exact ⟨rfl, i, _, hu, rfl⟩
+            exact ⟨hsA, rfl, rfl, i, _, hu, rfl⟩
           · exact absurd hf'' hf
       · rcases hf'' : ((P.defs[parent.d]!).body.nodes[k']!).form
         · rw [Resolve.rs_up P parent d off k' m' i j (Or.inl hf'')] at h
@@ -259,7 +266,7 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       exact Or.inl ⟨le_trans (below_off P hroot hB hL hb hs.1).1 h1, h2⟩
     · simp only [hx, bind, Except.bind] at h
       have hs' := (Resolve.step_ok P hroot hB hL _ s _ hs hx).2 s' rfl
-      rcases (step_below P hB hA hf _ s _ hs hb hx).2 s' rfl with hb' | ⟨h1, i, t, ht, h2⟩
+      rcases (step_below P hB hA hf _ s _ hs hb hx).2 s' rfl with hb' | ⟨-, -, h1, i, t, ht, h2⟩
       · rcases run_below hA hf n s' a hs' hb' h with h3 | ⟨i, t, ht, n', hn', h4⟩
         · exact Or.inl h3
         · exact Or.inr ⟨i, t, ht, n', by omega, h4⟩
@@ -268,6 +275,38 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
         dsimp only at h1 h2
         subst h1 h2
         exact h
+
+/-- **Resolution from below `A`, at the parameter it leaves through**: it ends in `A`'s gates, or at the gate a leaf of
+one of `A`'s parameters resolves to from `A`, in no more steps. So what an activation reads outside its own gates, it
+reads through its parameters. -/
+theorem run_param {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) :
+    ∀ (n : ℕ) (s : Scope × Ref) (a : ℕ), Resolve.Inv P (A.off + (P.defs[A.d]!).gates) s → Below A s.1 →
+      Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok a →
+      (A.off ≤ a ∧ a < A.off + (P.defs[A.d]!).gates) ∨
+        ∃ i j : ℕ, i < (P.defs[A.d]!).body.params.size ∧ j < ((P.defs[A.d]!).body.params[i]!).2.leaves ∧ ∃ n' ≤ n,
+          Flock.Steps.run "scope resolution" (resolveStep P) n' (A, ⟨true, i, j⟩) = .ok a
+  | 0, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h
+  | n + 1, s, a, hs, hb, h => by
+    have h0 := h
+    rw [Flock.Steps.run.eq_2] at h
+    rcases hx : resolveStep P s with e | (b | s')
+    · simp [hx, bind, Except.bind] at h
+    · simp only [hx, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      have h1 := (step_below P hB hA hf _ s _ hs hb hx).1 b rfl
+      have h2 := (Resolve.step_ok P hroot hB hL _ s _ hs hx).1 b rfl
+      rw [← h]
+      exact Or.inl ⟨le_trans (below_off P hroot hB hL hb hs.1).1 h1, h2⟩
+    · simp only [hx, bind, Except.bind] at h
+      have hs' := (Resolve.step_ok P hroot hB hL _ s _ hs hx).2 s' rfl
+      rcases (step_below P hB hA hf _ s _ hs hb hx).2 s' rfl with hb' | ⟨hsA, hp, -⟩
+      · rcases run_param hA hf n s' a hs' hb' h with h3 | ⟨i, j, hi, hj, n', hn', h4⟩
+        · exact Or.inl h3
+        · exact Or.inr ⟨i, j, hi, hj, n', by omega, h4⟩
+      · obtain ⟨sc, ⟨p, i, j⟩⟩ := s
+        dsimp only at hsA hp
+        rw [hsA, hp] at h0 hs
+        exact Or.inr ⟨i, j, (hs.2.1.1 rfl).1, (hs.2.1.1 rfl).2, n + 1, le_refl _, h0⟩
 
 omit hB in
 /-- **`Prog.gate`'s first step to a gate of `A`** goes into `A`. -/
@@ -415,5 +454,36 @@ theorem memberReads : MemberReads := by
   rcases run_below P ⟨hr, hrp⟩ hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb hres with h | ⟨i, t, ht, n', hn', h⟩
   · exact Or.inl h
   · exact Or.inr ⟨i, t, ht, Flock.Steps.run_mono hn' h⟩
+
+/-- **The walk lemma, at the parameters.** In a Program C-Flock decodes, topological and laid out, a gate `g` in the
+activation of member `m` of a root node `k` that calls a composite by a batch or a call reads only gates of that
+activation, or a gate a leaf of one of the activation's own parameters resolves to: a template's body reads, outside
+its gates, only its parameters. -/
+theorem memberReads_params {bytes : ByteArray} {P : Prog} (hdec : decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hbl : NciCheck.Desc.bodiesLaidOut P = true) {k m : ℕ}
+    (hk : k < (P.defs[P.root]!).body.nodes.size) (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members)
+    (hc : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) {g p : ℕ} {ops : Array ℕ} {sc : Scope}
+    (hgate : P.gate g = .ok (p, ops, sc)) (hg1 : (P.child P.rootScope k m).off ≤ g)
+    (hg2 : g < (P.child P.rootScope k m).off + (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates) {a : ℕ}
+    (ha : a ∈ ops) :
+    ((P.child P.rootScope k m).off ≤ a ∧
+        a < (P.child P.rootScope k m).off + (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates) ∨
+      ∃ i j : ℕ, i < (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).body.params.size ∧
+        j < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).body.params[i]!).2.leaves ∧
+        resolve P (P.child P.rootScope k m) ⟨true, i, j⟩ = .ok a := by
+  obtain ⟨hr, hrp, -⟩ := BodiesOk.decode_root bytes P hdec
+  obtain ⟨st, hP, hinv, -⟩ := BodiesOk.decode_spec bytes P hdec
+  obtain ⟨S, hS0, hS⟩ := BodiesOk.order_closed P hov
+  have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  have hB : ∀ sc, Resolve.Good P sc → Resolve.BodyOk P sc.d := fun sc hg => by
+    obtain ⟨hSd, hpd⟩ := BodiesOk.good_closed P S hS0 hrp (fun d hd hp => (hS d hd hp).2) sc hg
+    exact BodiesOk.body_ok P hok sc.d (hS sc.d hSd hpd).1
+  obtain ⟨-, hL, -, -⟩ := Walk.bodiesLaidOut_spec P hbl
+  obtain ⟨r, hinv', hb, hres⟩ := gate_below P ⟨hr, hrp⟩ hB hL hk hm hc hg1 hg2 hgate a ha
+  rcases run_param P ⟨hr, hrp⟩ hB hL (k := k) (m := m) rfl hf _ _ _ hinv' hb hres with
+    h | ⟨i, j, hi, hj, n', hn', h⟩
+  · exact Or.inl h
+  · exact Or.inr ⟨i, j, hi, hj, Flock.Steps.run_mono hn' h⟩
 
 end Properties.NetworkScan.WalkProof
