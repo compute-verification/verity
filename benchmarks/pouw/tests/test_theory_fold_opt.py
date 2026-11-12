@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import fold_opt as F
 import pytest
 
 from verity.protocols.pouw.receipts import receipt_folds as R
@@ -17,11 +18,6 @@ SCRIPT = THEORY / "fold_opt.py"
 
 def test_fold_step_matches_receipts():
     """fold_opt's inlined duo word is the one in receipt_folds.py (the reference of record)."""
-    sys.path.insert(0, str(THEORY))
-    try:
-        import fold_opt as F
-    finally:
-        sys.path.remove(str(THEORY))
     rng = F.lcg(0x1234)
     a = F.pick_key_ok_r9()
     for _ in range(200):

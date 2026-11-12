@@ -10,6 +10,9 @@ from collections.abc import Callable
 
 import numpy as np
 
+#: what `theory/fold_kernel_check.py` and the tests read
+__all__ = ["meet", "meet_kernel"]
+
 
 def _probes(xs: np.ndarray, probe: int, seed: int) -> np.ndarray:
     probe = max(probe, 2)

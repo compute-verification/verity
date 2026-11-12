@@ -117,7 +117,7 @@ def test_lambda_falls_to_its_many_rounds_limit_without_underflow():
 @pytest.mark.parametrize("i", [1, 3, -1])
 def test_one_long_window_is_the_least_rounds_under_one_percent_and_certifies_after_it_is_served(i):
     base = PC.configurations()[i]
-    k0 = PC.least_one_window_draws(base)
+    k0 = PC.least_one_window_k_d(base)
 
     def ratio(k):
         return PC.lam_limit(k, base.r) * base.delta_s_log2 * PC.math.log(2) / (base.u * (PC.TARGET - base.eps_flat))

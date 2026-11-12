@@ -55,6 +55,16 @@ import report as R
 import schedule as S
 import shapes as SH
 
+#: what `characterize.py` and the tests read
+__all__ = [
+    "Bench", "EXIT_DEVICE", "EXIT_OK", "EXIT_USAGE", "Entry", "L2_SM120", "METHODS", "NamesNotTaken",
+    "NegativeControlFailed", "PREFLIGHT_DERIVE", "PRIME_READY_S", "S", "Stages", "Terminated", "arm_entries",
+    "bad_throttle", "chain_entries", "dump_transcripts", "finalists_of", "free_entries", "gate_baselines", "lt_pick",
+    "lt_range", "now", "operand_overlaps", "panel_reps", "parse", "poison_dump", "prime_profiler", "run_shape",
+    "screen", "screened", "searched", "shape_plan", "shape_report", "timed_clocks", "transcript_buffers",
+    "tune_baselines", "twin_entries", "w_ratio",
+]
+
 ROOT = Path(__file__).resolve().parents[3]
 
 

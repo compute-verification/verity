@@ -55,6 +55,9 @@ from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 
+#: what the tests read
+__all__ = ["K", "cell"]
+
 SCHEME = "pearl-c-h100-v1-h3"
 K_ = 256
 N_CREDIT = 6144

@@ -25,34 +25,25 @@ from __future__ import annotations
 import dataclasses
 import functools
 import hashlib
-import importlib.util
 import itertools
 import json
 import random
 import re
 import shutil
 import socket
-import sys
 import threading
 from pathlib import Path
 
+import coins as CO
+import commit as CM
+import credit as CR
 import numpy as np
 import pytest
+import serve as SV
 import torch
 
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 
-HERE = Path(__file__).resolve().parents[1] / "served_h1"
-
-
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(f"served_h1_{name}", HERE / f"{name}.py")
-    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-CM, CR, CO = _load("commit"), _load("credit"), _load("coins")
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 
 
@@ -164,7 +155,6 @@ def test_an_admitted_zero_byte_block_is_computed_and_credited_and_a_non_admitted
 def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refused():
     """The gate's binding of `PouwH1Tile_v4`'s admit input (`serve.tile_admit`): each row block's two admit words open from
     the call's admit tree against its root as the tally's 32 bits, and a word with any one bit flipped is refused."""
-    SV = _load("serve")
     t, key = 128, bytes(range(64))
     bits = np.zeros(t, dtype=bool)
     bits[[0, 5, 40, 77]] = True
@@ -322,7 +312,6 @@ def test_b_tables_are_row_tables_under_the_weights_root():
     a tampered weight row is refused."""
     from verity.commitments import row_table as RT
 
-    SV = _load("serve")
     layers = [_Layer(96, 64, 1), _Layer(64, 128, 2)]
     names = {0: "l.0.qkv_proj", 1: "l.0.down_proj"}
     model, key = {"repo": "r", "revision": "v", "recipe": None}, bytes(range(64))
@@ -374,7 +363,6 @@ def test_schedule_tap_records_the_queue_and_commits_it():
     """`schedule_tap` records each engine step's requests and rows in batch order and restores the runner; two passes whose
     request ids differ give the same queue (requests indexed by first appearance), and its commitment is the tree over
     its two tables, the requests padded to S·T + 1."""
-    SV = _load("serve")
     passes = []
     for base in (0, 8):
         runner = _Runner()
@@ -556,7 +544,6 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     period, an open of another layout, and a window whose round root, opening, salt or sample root isn't what the
     challenger logged."""
     from verity.commitments.crypto import lms
-    SV = _load("serve")
     host = _Host(tmp_path)
     cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=host.open_draw)
     assert (cs.source, cs.label) == ("off-node", f"off-node session {SID} at {host.address} (unchecked)")
@@ -1038,7 +1025,6 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
     ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
     path (`adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
-    SV = _load("serve")
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
     monkeypatch.delenv(CO.COMMITMENT_ENV, raising=False)
@@ -1061,7 +1047,6 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
 
 
 def test_the_gates_picks_follow_the_sampling_coin_and_its_root():
-    SV = _load("serve")
     c = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes).commitment
     a, b = bytes(64), bytes([1]) * 64
     picks = SV.gate_rng(c, a, b).random()

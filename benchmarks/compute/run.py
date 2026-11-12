@@ -92,6 +92,10 @@ from verity.hardware.site import Site
 from verity_bench import kit
 from verity_config.settings import SHARED
 
+__all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
+           "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
+           "capacity", "from_run", "main", "model_macs"]
+
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the share the number is driven to
 TARGET = Fraction(97, 100)
@@ -162,7 +166,7 @@ class EvidenceStore:
     store, `pull` brings its labels of some targets up to the remote's, `error` is what the store raises, and
     `withdrawn` is the key of the label a withdrawal leaves."""
 
-    def __init__(self, store, pull: Callable, error: type[Exception], withdrawn: str) -> None:
+    def __init__(self, store: Any, pull: Callable, error: type[Exception], withdrawn: str) -> None:
         self.store, self.pull, self.error, self.withdrawn = store, pull, error, withdrawn
 
     def attempt(self, run: str) -> dict | None:
@@ -441,7 +445,8 @@ def commit_of(attempt: dict) -> str | None:
     return f"{source['commit']}-dirty" if source.get("commit") and source.get("dirty") else source.get("commit")
 
 
-def from_run(store, run: str, per_call: bool = False, given: Path | None = None, top: int = 10) -> dict:
+def from_run(store: EvidenceStore, run: str, per_call: bool = False, given: Path | None = None,
+             top: int = 10) -> dict:
     """The printed document of recorded run `run`; with `per_call`, its give-up by cause and by call too (`split`)."""
     attempt = store.attempt(run)
     if attempt is None:

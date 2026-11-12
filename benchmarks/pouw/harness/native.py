@@ -14,6 +14,9 @@ from arm import Buffer
 from identity import uuid_string
 from verity_config.settings import of
 
+#: what `baselines.py`, `bench.py`, `characterize.py` and the tests read
+__all__ = ["BAD_THROTTLE", "Device", "LtCandidate", "LtLib", "NativeError", "Nvml", "smi", "versions"]
+
 HERE = Path(__file__).parent
 settings = of(__file__)
 u64, vp, sz, i32 = C.c_uint64, C.c_void_p, C.c_size_t, C.c_int

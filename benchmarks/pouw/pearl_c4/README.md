@@ -46,7 +46,7 @@ and a replay's ACCEPT is never its verdict.
 
 ## Who reads it
 
-The tests in `../tests/` load `twin.py`, `replay.py`, `real.py`, `real_table.py` and `f1_fast.py` by path and start
+The tests in `../tests/` import `twin.py`, `replay.py`, `real.py`, `real_table.py` and `f1_fast.py` by name and start
 `sass.py` and `fixture.py` by their command lines, and `../settings.py` declares the variables `dev.py` reads. `dev.py`
 runs beside the cubin on the card with the standard library and numpy alone, so it imports nothing of the tree. Nothing
 here is a verifier: no script writes a verdict a guarantee reads, and only `run.sh` and the `dev.py` it starts touch a
