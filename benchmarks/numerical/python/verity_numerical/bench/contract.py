@@ -399,27 +399,34 @@ def parse_joint(name: str) -> tuple[str, ...] | None:
     return _joint_parts(name[len(_JOINT_PREFIX):].split(_JOINT_SEP))
 
 
-def _joint_parts(parts: Iterable[str]) -> tuple[str, ...]:
-    parts = tuple(parts)
+def _joint_fault(parts: tuple[str, ...]) -> str | None:
+    """Why ``parts`` name no joint stage; ``None`` when they name one."""
+
     unknown = [p for p in parts if p not in BUCKETS]
     if unknown:
-        raise ValueError(f"joint stage names buckets from {BUCKETS}, not {unknown}")
+        return f"joint stage names buckets from {BUCKETS}, not {unknown}"
     if len(parts) < 2:
-        raise ValueError("a joint stage fuses at least two buckets; a single bucket is t.<bucket>")
+        return "a joint stage fuses at least two buckets; a single bucket is t.<bucket>"
     if len(set(parts)) != len(parts):
-        raise ValueError(f"a joint stage lists each bucket once, got {parts}")
+        return f"a joint stage lists each bucket once, got {parts}"
+    return None
+
+
+def _joint_parts(parts: Iterable[str]) -> tuple[str, ...]:
+    parts = tuple(parts)
+    if (fault := _joint_fault(parts)) is not None:
+        raise ValueError(fault)
     return tuple(b for b in BUCKETS if b in parts)
 
 
 def unit_of(name: str) -> str | None:
-    """The contract's unit for ``name``; ``None`` for a name the contract does not define."""
+    """The contract's unit for ``name``; ``None`` for a name the contract does not define, a malformed joint among them."""
 
     if name in UNITS:
         return UNITS[name]
-    try:
-        return "s" if parse_joint(name) else None
-    except ValueError:
+    if not name.startswith(_JOINT_PREFIX):
         return None
+    return "s" if _joint_fault(tuple(name[len(_JOINT_PREFIX):].split(_JOINT_SEP))) is None else None
 
 
 def measurement(name: str, value: float | int, unit: str | None = None) -> dict[str, Any]:

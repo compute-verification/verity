@@ -211,6 +211,19 @@ def test_joint_is_canonical_and_checked() -> None:
     assert contract.unit_of("t.joint.witness+lookup") == "s" and contract.unit_of("t.joint.witness") is None and contract.unit_of("cycles.x") is None
 
 
+def test_a_malformed_joint_has_no_unit_and_parse_joint_says_why() -> None:
+    """`unit_of` answers None for every joint name `parse_joint` refuses, whatever is wrong with it, and a joint written
+    in another order of its buckets has seconds."""
+    malformed = {"t.joint.witness": "at least two", "t.joint.witness+fri": "not \\['fri'\\]",
+                 "t.joint.witness+witness": "each bucket once", "t.joint.": "not \\[''\\]"}
+    for name, why in malformed.items():
+        assert contract.unit_of(name) is None, name
+        with pytest.raises(ValueError, match=why):
+            contract.parse_joint(name)
+    assert contract.unit_of("t.joint.lookup+witness") == "s"
+    assert contract.parse_joint("t.joint.lookup+witness") == ("witness", "lookup")
+
+
 def test_measurement_supplies_and_checks_units() -> None:
     assert contract.measurement("t.total", 1.5) == {"name": "t.total", "value": 1.5, "unit": "s"}
     assert contract.measurement("transcript.bytes", 10) == {"name": "transcript.bytes", "value": 10, "unit": "B"}
