@@ -2,7 +2,13 @@
 a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
 its own average of the weights, or against the published rule where torch has none. The two end at the same output
 model. An entry whose output is an average over a horizon is held to torch's average of the weights the entry beside
-it writes, the one whose output is those weights, which has its own reference."""
+it writes, the one whose output is those weights, which has its own reference.
+
+What is held to a reference is the update's rule, so both sides run their forward in float32 (`forward_in_float32`):
+a reference sums a gradient in another order than its route (accumulation's micro-batches against the whole batch,
+LoRA's two factors against the merged matrix), and under the routes' bf16 autocast the two orders differ in the
+gradient's third digit, enough to turn the sign of an Adam step."""
+import contextlib
 import fnmatch
 import math
 import tomllib
@@ -24,6 +30,13 @@ STEPS, BATCH, CTX = 3, 4, 8
 #: the steps of an entry whose average has a horizon: enough that a tenth of them is over a step, where the average
 #: starts to keep some of itself
 LONG = 24
+
+
+@pytest.fixture(autouse=True)
+def forward_in_float32(monkeypatch):
+    """The routes' forward in float32: their bf16 autocast (`subset.step`'s and `qat.step`'s) is switched off for
+    these tests."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
 
 
 def entry(name: str):

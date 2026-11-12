@@ -1,4 +1,5 @@
-"""hash_h3.cuh and pearl_c_sm120/hash_fast.cuh on the host (pearl_c/hash_host.cpp, built with g++): each -h3 hashing kernel,
+"""hash_h3.cuh and pearl_c_sm120/hash_fast.cuh on the host (pearl_c/hash_host.cpp, built with g++, which builds hash_wide.cuh
+too: test_pearl_c_hash_wide.py): each -h3 hashing kernel,
 launched as pearl_c_sm120/run.py launches it, writes the bytes the verifier's reference computes: the SHA-512 row digests
 (s512_rows, and hash_fast.cuh's segment and fold launches), the seeds and line keys over them at the pinned vectors, the line
 raws, tickets and tile leaves (both ways), and the hm96-sha512 frame-v3-sha512 trees under ChaCha20 salts; then run.py's epoch,
@@ -20,6 +21,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
+WIDE = HERE / "hash_wide.cuh"
 _spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
 R = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(R)
@@ -81,7 +83,7 @@ def host(tmp_path_factory) -> Host:
 
 def test_every_hash_kernel_is_built(host):
     names = set(re.findall(r'extern "C" __global__ void (?:__launch_bounds__\([^)]*\) )?(\w+)\(',
-                           (HERE / "hash_h3.cuh").read_text() + FAST.read_text()))
+                           (HERE / "hash_h3.cuh").read_text() + FAST.read_text() + WIDE.read_text()))
     built = {host.lib.kernel_name(i).decode() for i in range(len(names))}
     assert built == names and host.lib.kernel_name(len(names)) is None
 
@@ -133,6 +135,48 @@ def test_fast_row_digests_are_s512_rows(host, k, rows):
         out = host.alloc(64 * rows)
         R.Pipeline.row_digests(SimpleNamespace(dev=host, k=k, sha=sha), src, out, host.alloc(64 * (k // 256) * rows), rows)
         assert host.read(out, 64 * rows) == want, sha
+
+
+@pytest.mark.parametrize("k", [33024, 128256, 1000, 0])
+@pytest.mark.parametrize("sha,scratch", [("fast", 64), ("ref", 64), ("fast", 0)])
+def test_row_digests_refuse_a_row_their_kernels_cant_take(host, monkeypatch, k, sha, scratch):
+    """pearl_c_sm120/run.py's `row_digests` launches nothing for a row past RS_MAX_SEGS segments, or of k not a positive
+    multiple of 256: s512_rows, s512_row_segs and s512_folds hold no bound of their own, and past it they read and write out
+    of bounds (the fast path can return a wrong digest with no error)."""
+    launched = []
+    monkeypatch.setattr(host, "launch", lambda name, *a, **kw: launched.append(name))
+    with pytest.raises(ValueError, match="^s512_rows takes"):
+        R.Pipeline.row_digests(SimpleNamespace(dev=host, k=k, sha=sha), 0, 0, scratch, 1)
+    assert not launched
+
+
+def test_a_row_digest_launch_its_kernel_cant_take_never_reaches_the_device():
+    """`rs_refusal`, which pearl_c_sm120/run.py's `Dev.launch` raises before anything else, so whatever calls it: each of
+    RS_KERNELS past RS_MAX_SEGS segments (hash_h3.cuh's constant), or with k not a positive multiple of 256.  Up to 128
+    segments, and the tile leaves' folds, go through."""
+    assert R.RS_MAX_SEGS == int(re.search(r"\bRS_MAX_SEGS = (\d+)", (HERE / "hash_h3.cuh").read_text()).group(1))
+    assert set(R.RS_KERNELS) == {"s512_rows", "s512_row_segs", "s512_folds"}
+    for name, i in (("s512_rows", (3, 32768)), ("s512_row_segs", (3, 256)), ("s512_folds", (5, 128, 5, 128)), ("s512_folds", (9, 32, 8, 31))):
+        assert R.rs_refusal(name, i) is None
+    for name, i in (("s512_rows", (1, 33024)), ("s512_row_segs", (1, 128256)), ("s512_folds", (4, 129, 4, 129)),
+                    ("s512_folds", (4, 32, 2, 501)), ("s512_rows", (1, 1000)), ("s512_row_segs", (1, 0)), ("s512_rows", ())):
+        with pytest.raises(ValueError, match=f"^{name} takes"):       # before `self` is read: nothing is launched
+            R.Dev.launch(None, name, 1, 128, p=(0, 0), i=i)
+
+
+def test_a_fold_count_is_refused_as_the_kernel_would_read_it():
+    """s512_folds' segment counts (`rs_fold_counts`): an int slot is an int32, so a negative count would reach the kernel as
+    its low 32 bits (200 - 2^32 as 200, past RS_MAX_SEGS): refused always.  A zero is refused only where a unit would fold
+    it: the tile leaves pass one for the last row block when every block is full, and that goes through."""
+    wrapped, a = 200 - 2**32, R.Args()
+    a.i[1] = wrapped
+    assert a.i[1] == 200 > R.RS_MAX_SEGS                             # what the kernel would have been given
+    for i in ((4, wrapped, 4, 32), (4, 32, 2, wrapped), (4, 32, 4, wrapped), (4, -1, 0, 32), (4, 0, 4, 32), (4, 0, 1, 32),
+              (4, 32, 2, 0), (4, 32, 0, 0)):
+        with pytest.raises(ValueError, match="^s512_folds takes"):    # before `self` is read: nothing is launched
+            R.Dev.launch(None, "s512_folds", 1, R.RS_FOLD_NT, p=(0, 0), i=i)
+    for i in ((8, 32, 8, 0), (8, 32, 0, 8), (8, 0, 0, 8), (0, 0, 0, 0), (5, 128, 5, 128)):
+        assert R.rs_refusal("s512_folds", i) is None
 
 
 def unit_block(salt: bytes, root_b: bytes, unit: int) -> bytes:
