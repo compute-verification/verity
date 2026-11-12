@@ -352,8 +352,9 @@ def _served_units() -> dict[str, list]:
 def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
     """Every unit of the cut at every served class, its rows read off its ports' bits as the composer reads them (a
     parameter a row, then a return field a row, each whole u16 words): at most `interface.MAX_ROWS` rows, one of them past
-    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and rows that alone fit a Flock
-    block of 2^K_MAX bits.  circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
+    `interface.LAST_BLOCK_BYTES` bytes so it compresses before its last SHA-512 block, and a proof block that at no
+    logic fits a Flock block of 2^K_MAX bits (`interface.proof_block_k_log` of its input rows and its output rows).
+    circuit-check's block check doesn't read the second: a slot over a chunk of 16 passed it."""
     units = _served_units()
     assert set(INDEX_UNITS) <= set(units)
     for us in units.values():
@@ -363,16 +364,17 @@ def test_every_served_unit_has_the_rows_flocks_composer_proves() -> None:
             rows = [2 * -(-sum(t.leaf_widths()) // 16) for t in [t for _, t in params] +
                     [f[1] if isinstance(f, tuple) else f for f in fields]]
             assert len(rows) <= IF.MAX_ROWS and max(rows) > IF.LAST_BLOCK_BYTES, (u.id, rows)
-            assert IF.rows_k_log(rows) <= IF.K_MAX, (u.id, rows)
+            assert IF.proof_block_k_log(rows[:len(params)], rows[len(params):]) <= IF.K_MAX, (u.id, rows)
 
 
 def test_the_index_and_read_units_pass_the_window_builders_proof_block_check() -> None:
     """`interface.check_proof_block`, which vllm's window builder runs on every unit it settles, passes the merge, the
     chunks, the slots and the read at every served class, at the least k_log their rows allow: 2^23 for the chunk and the
-    read, 2^21 for the slot (its chunk's 128 bytes the one row past 111), at most 2^26 for the merge of up to 8 blocks."""
+    read, 2^`interface.PACK_LOG` for the slot (its chunk's 128 bytes the one row past 111: its own block is 2^21 bits,
+    and the composer packs proof blocks into a Flock block of that size), at most 2^26 for the merge of up to 8 blocks."""
     units = _served_units()
     k = {b: {IF.check_proof_block(u) for u in units[b]} for b in INDEX_UNITS}
-    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {21}
+    assert k["DsaPositionsChunk_v1"] == k["EmbeddingRead_v1"] == {23} and k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}
     assert max(k["DsaPositionsMerge_v1"]) <= 26
 
 

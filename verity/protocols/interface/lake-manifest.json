@@ -27,7 +27,7 @@
    "name": "core_circuits",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../circuits/lean",
+   "dir": "../../difftest/lean/../../circuits/lean",
    "configFile": "lakefile.toml"}],
  "name": "core_protocol",
  "lakeDir": ".lake",
