@@ -690,7 +690,7 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
 STAND_IN = """#!/usr/bin/env bash
 f=started; [ -n "${ARMS:-}$*" ] || [ -z "${REPLAY:-}" ] || f=started.replay
 { echo "argv=$*"; for k in ARMS RATES REPS REQUESTS SPAN_S REPLAY REPLAY_FROM REPLAY_MODES MODEL_ID CLIENT MAX_MODEL_LEN \\
-    PASS_PROMPTS STOP_AT SAMPLED VERITY_DSA_TOPK VERITY_DSA_TOPK_LOG PYTHONPATH VLLM_PLUGINS; do
+    PASS_PROMPTS STOP_AT SAMPLED VERITY_DSA_TOPK VERITY_DSA_TOPK_LOG PYTHONPATH VLLM_PLUGINS MAX_MIN; do
     echo "$k=${!k-unset}"; done; } > "$RESEARCH_RUN_DIR/$f"
 if [ $f = started.replay ]; then
   if [ -n "${VERITY_DSA_TOPK_LOG:-}" ]; then
@@ -725,7 +725,7 @@ def bash(script: Path, *argv: str, run_dir: Path | None = None, **env: str) -> s
     base = {k: v for k, v in os.environ.items() if k not in (
         "RESEARCH_RUN_DIR", "LOAD", "REPS", "REQUESTS", "MODEL_ID", "STOCK", "AGAIN", "OURS", "RATE", "SPAN_S", "TARGET",
         "MAX_MODEL_LEN", "REPLAY", "REPLAY_FROM", "REPLAY_MODES", "PASS_PROMPTS", "STOP_AT", "ADVICE_TRACE", "ADVICE_STOPS",
-        "SAMPLED", "PRIVATE", "ARMS", "VLLM_PLUGINS", "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG")}
+        "SAMPLED", "PRIVATE", "ARMS", "VLLM_PLUGINS", "VERITY_DSA_TOPK", "VERITY_DSA_TOPK_LOG", "MAX_MIN")}
     for f in ("started", "started.replay"):
         if run_dir:
             (run_dir / f).unlink(missing_ok=True)
@@ -750,7 +750,7 @@ def test_the_runner_serves_the_three_arms_a_burst_and_replays_ours_then_reports(
         "SPAN_S": "unset", "REPLAY": "unset", "REPLAY_FROM": "unset", "REPLAY_MODES": "unset",
         "MODEL_ID": "moonlight", "CLIENT": "corpus", "MAX_MODEL_LEN": "8192", "PASS_PROMPTS": "unset", "STOP_AT": "unset",
         "SAMPLED": "unset", "VERITY_DSA_TOPK": "unset", "VERITY_DSA_TOPK_LOG": "unset", "PYTHONPATH": "",
-        "VLLM_PLUGINS": "another"}
+        "VLLM_PLUGINS": "another", "MAX_MIN": "unset"}
     assert (r["argv"], r["ARMS"], r["RATES"], r["CLIENT"], r["MODEL_ID"]) == ("", "unset", "unset", "corpus", "moonlight")
     assert (r["REPLAY"], r["REPLAY_FROM"], r["REPLAY_MODES"]) == ("burst", str(run_dir / "out/record"), "compiled")
     # record turns nothing on in its engine: its replay runs in the job's environment, less a filter on vLLM's plugins
@@ -803,9 +803,11 @@ def test_the_runner_replays_a_named_pass_of_vllms_client_under_ours_own_top_k_an
             "--pass-prompts", "chat=8", "--sampled", "--stop-at", "9999-01-01T00:00Z")
     replayed(run_dir / "out", "two-stage", load="chat@16")
     topk_log(private / "two-stage/topk-log", 21, 9000, (60, 0, 0))
-    p = bash(script, *argv, run_dir=run_dir, ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private))
+    p = bash(script, *argv, run_dir=run_dir, ADVICE_TRACE=str(tmp_path / "nowhere"), PRIVATE=str(private), MAX_MIN="90")
     assert p.returncode == 0, p.stdout + p.stderr
     s, r = started(run_dir), started(run_dir, "replay")
+    # the replay's lease is given the minutes the arms left of the job's
+    assert s["MAX_MIN"] == "90" and 1 <= int(r["MAX_MIN"]) <= 90
     assert s["argv"] == "--model glm53 --arms prod two-stage --loads chat=16 --reps 1"
     assert (s["PASS_PROMPTS"], s["STOP_AT"], s["SAMPLED"]) == ("chat=8", "9999-01-01T00:00Z", "1")
     # stock's server inherits nothing of ours: the arms' call has neither the top-k's switch nor a path to it

@@ -29,7 +29,8 @@
 # cards are leased a second time), under what ours' engine has on that the job's environment has not: the arm's own
 # vLLM general plugins and environment (prod_repro.py replay-env: the canonical DSA top-k's), which a stock arm's
 # server must not inherit. OUT/replay_engine.json says what that was, with the canonical top-k's counters from the
-# replay's processes and, with PRIVATE set, from serving's.
+# replay's processes and, with PRIVATE set, from serving's. MAX_MIN, the minutes a lease may last, is here the job's
+# in all: the replay's lease gets what the arms left of it, and none starts once it is spent.
 # The advice line reads the trace directory of a certified serve (ADVICE_TRACE, under the stop ids ADVICE_STOPS, else
 # the served checkpoint's own): no arm of this job is one.
 # The --report form reads an earlier job's out/ and needs no GPU. Every form ends with the report (prod_repro.py
@@ -84,6 +85,7 @@ export MODEL_ID=${MODEL_ID:-moonlight} CLIENT ${MAX_MODEL_LEN:+MAX_MODEL_LEN} ${
   ${SAMPLED:+SAMPLED}
 [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "prod_repro: --stop-at $STOP_AT is not a time"; exit 2; }
 unset REPLAY REPLAY_FROM   # the replay is this script's own step, below
+t0=$(date +%s)
 # SIGTERM (the job's time ending) reaches the runner and its arm too, which stop; this script goes on to the report
 termed=0; trap 'termed=1' TERM
 
@@ -95,13 +97,15 @@ replay_step() {
   if [ -n "${STOP_AT:-}" ] && [ "$(date +%s)" -ge "$stop_at" ]; then
     echo "prod_repro: no replay: --stop-at $STOP_AT has passed"; return 1
   fi
+  local left=${MAX_MIN:+$(( MAX_MIN - ($(date +%s) - t0) / 60 ))}
+  [ "${left:-1}" -ge 1 ] || { echo "prod_repro: no replay: the job's MAX_MIN=$MAX_MIN minutes are spent"; return 1; }
   kept=$(mktemp -d) || return 2
   "$PY" "$here/prod_repro.py" replay-env --ours "$OURS" --kept "$kept" > "$kept/env" || { rm -rf "$kept"; return 2; }
   [ ! -f "$OUT/engine_env.txt" ] || cp "$OUT/engine_env.txt" "$OUT/engine_env.arms.txt"   # the runner writes it anew
   (
     while IFS= read -r kv; do export "$kv"; done < "$kept/env"
     unset ARMS LOADS RATES VLLM_PLUGINS
-    export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES
+    export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES ${left:+MAX_MIN=$left}
     bash "$tax/run.sh"
   ) || rc=$?
   "$PY" "$here/prod_repro.py" replay-ran --ours "$OURS" --kept "$kept" ${PRIVATE:+--private "$PRIVATE"} --out "$OUT" || rc=1

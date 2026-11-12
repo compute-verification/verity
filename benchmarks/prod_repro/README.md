@@ -39,7 +39,8 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
   sends), `SAMPLED` (each request sampled at the recipe's temperature and top-p, under its user's seed) and `STOP_AT`
   (an arm starts no pass it can't finish by then; no replay starts after it either).
 - **The replay** is a step of its own after the arms: the benchmark's runner once more, in its replay-only form, so
-  the job leases the cards a second time. `replay.py` rebuilds the engine from the step trace's header and re-runs
+  the job leases the cards a second time (`MAX_MIN` is the job's minutes in all: the replay's lease gets what the
+  arms left of it). `replay.py` rebuilds the engine from the step trace's header and re-runs
   the pass under its recorded schedule. The step runs under what ours' engine has on that the job's environment has
   not: the arm's own vLLM general plugins and environment (`prod_repro.py replay-env`; today the canonical DSA
   top-k's, for an arm that has it). They are set for the replay alone, since the benchmark builds every server's path
