@@ -1,0 +1,3 @@
+# CIR-265 checkpoints (STAGEMEM)
+
+- 2026-11-12T13:58Z part 1 started. Both 40,960-key units are staging from af7d264de21 with the `commit-sum` wrapper as it is, one zero instance each, a 64 GB ask each and the profiler's own stop at 100 GiB: `DsaMaskPositions_v2{N=40960,AT=0,K=2048}` in r20261112-135646-d527 (cpu-11, slot taken 13:57:17Z after 10 s) and `DsaTopKMaskWhole_v2{N=40960,TOPK=2048}` in r20261112-135718-ef1a (cpu-5, slot taken 13:57:40Z after 2 s). Read off the Definitions on the VM (`verity_flock.circuit.unit_block`, no commit counted): the positions unit needs a block of 2^25 bits and the whole mask 2^27 (133,431,296 of 134,217,728 bits), against `K_MAX = 27` (`verity/commitments/windows/interface.py:307`). Next: read both runs, then the comment on CIR-265.
