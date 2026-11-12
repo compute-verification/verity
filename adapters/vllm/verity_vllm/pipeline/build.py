@@ -353,7 +353,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  "launch_context": launch, **({"stop": stop} if stop is not None else {}), **({"form": BATCHED} if batched else {}),
                  **({"dsa_table_reads": True} if table_reads else {})}
     res["code_rev"] = None
-    with contextlib.suppress(OSError, ValueError), open("EXPORT.json") as f:   # none here, or not JSON: the tree is no export
+    with contextlib.suppress(OSError, ValueError, RecursionError), open("EXPORT.json") as f:   # none here, not JSON, or nested past the parser: no export
         res["code_rev"] = json.load(f)
     # the profile's environment is applied BEFORE vLLM is imported (vllm_meta's setdefaults are the fallback for callers without a profile)
     engine_env.apply_target(target.env())
@@ -660,7 +660,7 @@ def _write_manifest(out: str, res: dict) -> None:
     """`construction_manifest.json`: what the construction read (inputs trace summary), which rules fired, the declared
     facts it relied on, wall/RSS, and the program identity — for the independent validator."""
     tr = {}
-    with contextlib.suppress(OSError, ValueError), open(os.path.join(out, "inputs.json")) as f:   # none written, or not JSON
+    with contextlib.suppress(OSError, ValueError, RecursionError), open(os.path.join(out, "inputs.json")) as f:   # none written, not JSON, or nested past the parser
         tr = json.load(f)
     tp, declared = res.get("tp"), res.get("declared_derived")   # None: a single-GPU Build, and one refused before it declared
     world, rank = (tp.get("world", 1), tp.get("rank", 0)) if tp else (1, 0)
