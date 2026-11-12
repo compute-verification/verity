@@ -82,20 +82,28 @@ def g(b) -> str:
     return "" if b is None else f"{b / GIB:,.2f}"
 
 
+def used(p: dict):
+    """What the allocators count in use at the phase's end: pymalloc's blocks, glibc's heap in use and its mmapped blocks."""
+    if p.get("py_in_use") is None or p.get("glibc_in_use") is None:
+        return None
+    return p["py_in_use"] + p["glibc_in_use"] + p.get("glibc_mmapped", 0)
+
+
 def table(recs: list[dict]) -> str:
     cols = [phases(r) for r in recs]
     names = [p["phase"] for p in max(cols, key=len)]
-    head = "| phase |" + "".join(f" {r['id']}: s | at end, GiB | high-water in it | so far |" for r in recs)
-    lines = [head, "|---|" + "---:|---:|---:|---:|" * len(recs)]
+    head = "| phase |" + "".join(f" {r['id']}: s | resident at end, GiB | in use at end | high-water in it | so far |" for r in recs)
+    lines = [head, "|---|" + "---:|---:|---:|---:|---:|" * len(recs)]
     for n in names:
         row = f"| {n} |"
         for c in cols:
             p = next((p for p in c if p["phase"] == n), None)
-            row += " | | | |" if p is None else f" {p['seconds']:,.0f} | {g(p['rss'])} | {g(p['hwm'])} | {g(p['so_far'])} |"
+            row += (" | | | | |" if p is None else
+                    f" {p['seconds']:,.0f} | {g(p['rss'])} | {g(used(p))} | {g(p['hwm'])} | {g(p['so_far'])} |")
         lines.append(row)
     row = "| **whole run** |"
     for r, c in zip(recs, cols):
-        row += f" **{sum(p['seconds'] for p in c):,.0f}** | | | **{g(max(p['hwm'] for p in c))}** |"
+        row += f" **{sum(p['seconds'] for p in c):,.0f}** | | | | **{g(max(p['hwm'] for p in c))}** |"
     lines.append(row)
     return "\n".join(lines)
 
