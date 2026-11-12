@@ -230,7 +230,7 @@ theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Para
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n) /
           nTab (inputsAt p cf pf)))
       (partS (inputsAt p cf pf) (printedDraw (.subset kd) S) S ⟨0, nTab_pos _⟩)
-      (drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) ⟨0, nTab_pos _⟩)) := by
+      (drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) 0)) := by
     rw [hk]
     exact ⟨setupZHJP y⟩
   exact ⟨{ p := p
@@ -240,7 +240,7 @@ theorem Accepted.checksWitness {θ : ByteArray} {p : _root_.Spot.OneStageZk.Para
            n := n
            desc := desc
            S₀ := partS (inputsAt p cf pf) (printedDraw (.subset kd) S) S ⟨0, nTab_pos _⟩
-           d₀ := drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) ⟨0, nTab_pos _⟩
+           d₀ := drawJ (inputsAt p cf pf) (printedDraw (.subset kd) S) 0
            checks :=
             { params := hθ
               challenger := hch
@@ -292,8 +292,8 @@ theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Comp
     lawAt_of_lawOf (c := c) ⟨law, derived, fl, hd, hn, hder, hfl, rfl⟩
   obtain ⟨kd, hkd⟩ := hsub _ _ hlaw
   rw [hkd] at hlaw hdu
-  have hsz : (drawnUnits ev.base.draw).size = kd := Flock.Bridge.drawUnits_size (law := .subset kd) (ns := [kd]) (kd := kd)
-    ⟨rfl, by simp⟩ hdu
+  have hsz : (drawnUnits ev.base.draw).size = kd :=
+    Flock.Bridge.drawUnits_size (law := .subset kd) (ns := [kd]) (kd := kd) ⟨rfl, by simp⟩ hdu
   obtain ⟨-, -, -, -, -, hcs, -, -, -⟩ := sent_verified hv.2.1 hcase hacc
   have hsr : sentRecord o.sent = some record := by
     unfold sentRecord
@@ -301,13 +301,14 @@ theorem sessionChecks_of_verdict {V : Vocab dv α} {k : Verity.Registration.Comp
     exact hrec
   obtain ⟨hasc, hrd⟩ := drawHeld k o.sent dr (.subset kd) n ξ (drawnUnits ev.base.draw) record hv.2.1
     ⟨a, b, e, p₀, c, ev, hcase, hacc, ⟨law, derived, fl, hd, hn, hder, hfl, hkd.symm⟩, rfl, read, hdu⟩ hsr
-  have hrd' : Exec.recordDraw record =
-      some (printedDraw (n := n) (.subset kd) (Finset.univ.filter fun u : Fin n => u.val ∈ drawnUnits ev.base.draw)) := by
+  have hrd' : Exec.recordDraw record = some (printedDraw (n := n) (.subset kd)
+      (Finset.univ.filter fun u : Fin n => u.val ∈ drawnUnits ev.base.draw)) := by
     rw [exec_recordDraw, hrd]
     show _ = some (ZkLink.drawOf (.subset kd) n _).toJson
     rw [drawOf_filter hasc, hsz]
   obtain ⟨cB', hg', hl⟩ := tables_registered hp₀ hv
-  obtain rfl : circuitB = cB' := Except.ok.inj (hcirc.symm.trans hg')
+  have hcB : cB' = circuitB := Except.ok.inj (hg'.symm.trans hcirc)
+  rw [hcB] at hl
   have htab := pinnedTables_eq hl rfl ht
   rw [inputsOf_eq htab.symm] at hA
   have hcf : circuitB = circuitAt o.params F := by
