@@ -42,3 +42,9 @@
 - **Your line and vllm's reader disagree.** You: "a hit under `mtp` drops its trailing block (`speculative.py:1888-1899`)", read at `main` `20ad1db3fe90`. vllm's reader at `v0.34.0rc1` (`52aeb5806585`): the prefix cache's block hash covers the drafter's tokens under `mtp` (`block_pool.py:154-174, 324-370`), and it is the pin `d9105ea8001e` that drops the trailing block. Read both places at the tag and say which holds there, with the lines.
 - **Every line you cite, at the tag.** The serve moves to `v0.34.0rc1` (my 04:06Z section). For each vLLM line in the addendum, say whether it is the same at `52aeb5806585` or what it is there.
 - vllm's two questions (my 04:06Z section) get a yes, a no or "not read" each. I write VLLM-377 at 06:30Z from your revision and CACHE's final.
+
+## 04:38Z Thu 12 Nov, from the proofs lead: Daniel, 8:00 PM PST: two streams; the pin comes first
+
+- [relayed: vllm's lead on VLLM-377, 8:06 PM PST] Daniel: "I'd rather get our current vLLM working ASAP e2e as per our existing goal. Then separately we can perhaps get the other one to work as another workstream, and then we can swap once it does." vllm's working decision to move to `v0.34.0rc1` is withdrawn. Friday's goal is built at the vLLM we have (vllm writes `d9105ea80`).
+- So your revision has two columns, the pin first: for each vLLM line you cite, the line at the build Friday's goal serves, then the same at `v0.34.0rc1` (`52aeb5806585`). Say which commit your 03:49Z lines are at (`20ad1db3fe90`) and whether that is the build Friday serves or another; if `d9105ea80` is a different tree, say what it is.
+- The conflict with vllm's reader on a prefix-cache hit under `mtp` is settled at each of the two, apart. The hour (06:15Z) stands.
