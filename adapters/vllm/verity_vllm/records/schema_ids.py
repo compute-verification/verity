@@ -45,6 +45,27 @@ REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
 #: writes
 SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 
+# --- the row driver (`verity_vllm.pipeline`)
+#: a row's `config_record.json` (`pipeline.config_record.SCHEMA`), which `record` writes
+CONFIG_RECORD_SCHEMA = "verity-vllm/config-record/v1"
+#: the circuit database's index, `manifests/records.json` (`pipeline.config_record.INDEX_SCHEMA`), which `load_index`
+#: gives an empty index and refuses any other than
+RECORDS_INDEX_SCHEMA = "verity-vllm/records-index/v1"
+#: a run's `spec.json`, what was to run as known before execution (`pipeline.experiment.SPEC_SCHEMA`), which
+#: `build_spec` writes
+EXPERIMENT_SPEC_SCHEMA = "verity-gen/spec/v1"
+#: a run's `experiment.json` (`pipeline.experiment.EXPERIMENT_SCHEMA`), which `build_experiment` writes
+EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
+#: the configuration card (`pipeline.report.CARD_SCHEMA`), which `build_card` writes
+CONFIGURATION_CARD_SCHEMA = "verity-gen/card/v1"
+#: one event of a row's `timeline.jsonl` (`pipeline.timeline.SCHEMA`), which `Timeline.event` writes; `report` writes
+#: it with `/report` appended
+TIMELINE_SCHEMA = "verity-sweep/timeline/v1"
+#: the `row.json` beside a row, its stages' Attempts, which `pipeline.research._row_json` writes
+ROW_ATTEMPTS_SCHEMA = "verity-sweep/row-v2/v1"
+#: the document of `epoch digests`, which `pipeline.epoch`'s `main` writes
+REBASELINE_DIGESTS_SCHEMA = "verity-vllm/rebaseline-digests/v1"
+
 # --- the Match (`verity_vllm.check.match`)
 #: the global workload Program's interface as the Match reads it (`check.match.declaration.GP_SCHEMA`)
 GLOBAL_PROGRAM_SCHEMA = "cb-a/global-program/v1"
