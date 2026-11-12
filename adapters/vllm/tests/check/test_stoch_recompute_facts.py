@@ -112,19 +112,3 @@ def test_the_lane_walk_and_its_vectorised_twin_give_one_token_and_one_masked_row
     assert [t for t, _, _ in by_lane] == [t for t, _, _ in by_rows] == [SR._eval_job(j)[0] for j in jobs]
     assert SR._evaluate_all([], None, "lane") == []
     assert set(SR.EVALUATORS) == set(SR.EVALUATOR_DOC) == {"lane", "rows"}
-
-
-def test_an_eos_before_the_cap_is_never_read_without_the_scheduler_profile(tmp_path, monkeypatch):
-    """`expected_executed_slots` leaves such a request unjudged; were it to judge one, the ledger raises and writes no lag slot."""
-    wl = tmp_path / "wl.json"
-    wl.write_text(json.dumps({"schema": SCHEMA, "model": "m", "engine": {}, "variants": {},
-                              "requests": [{"request_id": "a", "prompt_len": 10, "max_tokens": 6}]}))
-    draws = {"a": [{"step": k, "row": 0, "pos": 9 + k, "served": 2 if k == 1 else 7} for k in range(3)]}
-    b = tmp_path / "build"
-    (b / "build_workload").mkdir(parents=True)
-    (b / "build_workload" / "workload_program.json").write_text(json.dumps({"stop_rule": {"eos_token_ids": [2]}}))
-    led = SR.draw_accounting(draws, wl, b)
-    assert led["requests"]["a"]["finish"] == "unjudged" and led["requests_unjudged"] == 1 and len(led["problems"]) == 1
-    monkeypatch.setattr(SR, "expected_executed_slots", lambda served, cap, A, eos_ids: ([1, 2, 3], {"t_eos": 2, "n_executed": 3}))
-    with pytest.raises(TypeError, match="draw ledger a: an EOS at slot 2 before the cap 6 was judged without the scheduler profile"):
-        SR.draw_accounting(draws, wl, b)

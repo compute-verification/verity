@@ -2,8 +2,8 @@
 engine steps over a 64-token vocabulary, each step's sampler chain (the top-p mask launch, the Gumbel launch, the SampleEnd) and the
 snapshots the value check reads (the bf16 logits rows, the masked fp32 rows, the seeds, positions, temperatures, row mapping and
 top-p the kernels consumed).  The served tokens and the masked rows are the Definition's own, so the capture is honest unless a test
-changes one thing in it; each test then holds the verdict, the tally and the reason that names the change.  No stored row is read:
-the stochastic row of record is the regression suite's `stoch_value` check."""
+changes one thing in it; each test then holds the verdict, the tally and the reason that names the change.  No stored capture is
+read: the regression suite's `stoch_value` check recomputes the stored one."""
 from __future__ import annotations
 
 import json
@@ -25,7 +25,7 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.log import LogWriter
 from verity_vllm.records.workload import SCHEMA
 
-V, S, PROMPT_LEN, CAP = 64, 4, 5, 3
+V, S, PROMPT_LEN, MAX_TOKENS = 64, 4, 5, 3
 REQUESTS = (("a", 7), ("b", 9))                      # (request id, declared seed)
 TEMPERATURE, TOP_P = 0.8, 0.95
 WORDS = {"bfloat16": np.uint16, "float32": np.uint32, "int64": np.uint64, "int32": np.uint32}
@@ -47,29 +47,31 @@ def _launch(event: int, step: int, kernel: str, args: dict, constexprs: dict) ->
 
 def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple[str, int] | None = None, without_logits: tuple[int, ...] = (),
              without_arg: str | None = None, masked_xor: int | None = None, device_seed: int | None = None, header_seeds: dict | None = None,
-             manifest_seeds: dict | None = None, header_first: bool = True) -> tuple[Path, Path]:
+             manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True) -> tuple[Path, Path]:
     """Write the capture under `root/capture` and its workload manifest; return (the run directory, the manifest).  The keywords
     each change one thing: the served token of step `served_xor`'s first row, a launch that is absent (`(kernel, step)`), steps whose
     logits rows were not snapshotted, a small buffer of the Gumbel launch that was not, one word of step `masked_xor`'s masked row,
-    the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header."""
-    cap = root / "capture"
-    (cap / "values").mkdir(parents=True)
+    the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header, a
+    header that does not attest the scheduler's profile."""
+    capture = root / "capture"
+    (capture / "values").mkdir(parents=True)
     entries = []
 
     def put(event: int, arg: str, view: ViewDesc, words, step: int) -> None:
-        f = cap / "values" / f"{event}_{arg}.bin"
+        f = capture / "values" / f"{event}_{arg}.bin"
         np.asarray(words).astype(WORDS[view.dtype]).tofile(f)
-        entries.append({"event": event, "arg": arg, "view": view.to_json(), "file": str(f.relative_to(cap)), "step": step,
+        entries.append({"event": event, "arg": arg, "view": view.to_json(), "file": str(f.relative_to(capture)), "step": step,
                         "layout": "logical-row-major"})
 
     n = len(REQUESTS)
     seeds = dict(REQUESTS) | (header_seeds or {})
-    with LogWriter(cap / "log.jsonl.gz") as log:
+    with LogWriter(capture / "log.jsonl.gz") as log:
         if header_first:
-            log.write(RunHeader(schema="x", created_utc="", profile_id="p", profile={"engine_kwargs": {"async_scheduling": False}}, model={},
+            log.write(RunHeader(schema="x", created_utc="", profile_id="p", model={},
+                                profile={"engine_kwargs": {"async_scheduling": False} if attested_lag else {}},
                                 workload={"requests": [{"request_id": r, "seed": seeds[r]} for r, _ in REQUESTS],
                                           "sampling": {"temperature": TEMPERATURE, "top_p": TOP_P, "top_k": 0}}))
-        for step in range(CAP):
+        for step in range(MAX_TOKENS):
             pos = PROMPT_LEN - 1 + step
             rows = [(r, pos) for r, _ in REQUESTS]
             log.write(StepStart(step=step, rows=rows, input_token_ids=[0] * n, positions=[pos] * n, seq_lens={}, num_computed={},
@@ -109,11 +111,11 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
                 tokens[0] ^= 1
             if without_launch != ("SampleEnd", step):
                 log.write(SampleEnd(step=step, logits_view=logits_view, sampled_token_ids=tokens))
-    (cap / "snapshots.json").write_text(json.dumps({"layout": "logical-row-major", "entries": entries}))
+    (capture / "snapshots.json").write_text(json.dumps({"layout": "logical-row-major", "entries": entries}))
     manifest = root / "workload.json"
     declared = dict(REQUESTS) | (manifest_seeds or {})
     manifest.write_text(json.dumps({"schema": SCHEMA, "model": "m", "engine": {}, "sampling": {"variant": "stoch"},
-                                    "requests": [{"request_id": r, "prompt_len": PROMPT_LEN, "max_tokens": CAP, "seed": declared[r]}
+                                    "requests": [{"request_id": r, "prompt_len": PROMPT_LEN, "max_tokens": MAX_TOKENS, "seed": declared[r]}
                                                  for r, _ in REQUESTS],
                                     "variants": {"stoch": {"temperature": TEMPERATURE, "top_p": TOP_P}}}))
     return root, manifest
@@ -122,6 +124,23 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
 def _recompute(run: Path, manifest: Path | None, **kw) -> dict:
     kw = {"jobs": 1, "evaluator": "rows", "reference_rows": 0} | kw
     return SR.recompute_run(run / "capture" / "log.jsonl.gz", run / "capture", workload=None if manifest is None else str(manifest), **kw)
+
+
+def _build(run: Path, splits, eos: int | None = None) -> Path:
+    """A Build beside the capture: its request Program's result for the requests' shape, declaring `splits`, and its workload
+    Program's stop rule where `eos` is given."""
+    (run / "build_request0").mkdir()
+    (run / "build_request0" / "result.json").write_text(json.dumps({"ok": True, "wrapper": "request", "LP": PROMPT_LEN, "T": MAX_TOKENS - 1,
+                                                                   "sampling": {"splits": splits}}))
+    if eos is not None:
+        (run / "build_workload").mkdir()
+        (run / "build_workload" / "workload_program.json").write_text(json.dumps({"stop_rule": {"eos_token_ids": [eos]}}))
+    return run
+
+
+def _ledger(rep: dict) -> dict:
+    """The report's sample ledger: each request's sampled positions against the positions its stop rule executes."""
+    return rep["rng"]["rng_advances_iff_run"]
 
 
 def _tally(exact: int = 0, mismatch: int = 0, no_snapshot: int = 0, skipped: int = 0) -> dict:
@@ -136,8 +155,9 @@ def test_an_honest_capture_passes_under_either_evaluator_with_and_without_its_ma
         s = rep["summary"]
         assert (s["verdict"], rep["reasons"], s["rows"]) == ("PASS", [], _tally(exact=6)), kw
         assert (s["engine_steps_in_record"], s["sampled_steps_in_log"], s["sampled_rows_total"], s["rows_checked"], s["complete"]) == (3, 3, 6, 6, True)
-        assert s["device_facts_all_match"] and s["device_facts_rows"] == 6 and s["masked_rows_all_equal"] and s["draw_ledger_ok"]
-        assert s["program_S_all_agree"] is None and s["requests_at_cap"] == 2 and not s["lag_slot_exercised"]
+        assert s["device_facts_all_match"] and s["device_facts_rows"] == 6 and s["masked_rows_all_equal"]
+        assert s["program_S_all_agree"] is None and not s["lag_slot_exercised"]
+        assert _ledger(rep)["problems"] == [] and [e["finish"] for e in _ledger(rep)["requests"].values()] == ["length", "length"]
         assert rep["declared_facts"] == rep["run_header_facts"] == facts and rep["header_vs_manifest"] == []
         assert rep["schema"] == "verity-r15/stoch-recompute/v2" and rep["evaluator"]["name"] == kw["evaluator"]
         ref = rep["evaluator"]["reference"]
@@ -154,10 +174,10 @@ def test_an_honest_capture_passes_under_either_evaluator_with_and_without_its_ma
         assert first["token"] == first["served"] and first["masked_row_equal_lanes"] == V
         assert first["declared"] == {"seed": 7, "temperature": TEMPERATURE, "top_p": TOP_P, "pos": PROMPT_LEN - 1}
         assert first["device"] == {"seed": 7, "pos": PROMPT_LEN - 1, "temperature": pytest.approx(TEMPERATURE), "top_p": pytest.approx(TOP_P)}
-    # without the manifest the header's records are the declared facts, and the sample ledger has no cap to judge by
+    # without the manifest the header's records are the declared facts, and the sample ledger has no length bound to judge by
     rep = _recompute(run, None)
     assert (rep["summary"]["verdict"], rep["reasons"]) == ("PASS", []) and rep["declared_facts"] == facts and rep["workload"] is None
-    assert rep["summary"]["requests_at_cap"] == 0
+    assert all("finish" not in e for e in _ledger(rep)["requests"].values())
 
 
 def test_a_served_token_the_definition_does_not_give_fails_by_name(tmp_path):
@@ -203,8 +223,48 @@ def test_a_step_whose_chain_or_logits_the_record_lacks_is_counted_and_named_neve
 def test_a_step_without_its_sample_end_leaves_its_requests_served_tokens_unread(tmp_path):
     run, manifest = _capture(tmp_path, without_launch=("SampleEnd", 1))
     rep = _recompute(run, manifest)
-    assert rep["summary"]["draw_ledger_ok"] is False
-    assert "draw ledger a: a sampled row without its served token: the rule cannot be read for this request" in rep["reasons"]
+    assert [e["finish"] for e in _ledger(rep)["requests"].values()] == ["unjudged", "unjudged"] and len(_ledger(rep)["problems"]) == 2
+    assert any(r.endswith(" a: a sampled row without its served token: the rule cannot be read for this request") for r in rep["reasons"])
+
+
+def test_an_early_eos_is_unjudged_without_the_scheduler_profile_and_never_read_as_judged(tmp_path, monkeypatch):
+    """A request served its EOS before its length bound, in a record that does not attest the scheduler's profile: the rule leaves it
+    unjudged and the verdict fails.  Were the rule to judge it, the ledger raises and writes no lag slot."""
+    run, manifest = _capture(tmp_path, attested_lag=False)
+    eos = _recompute(run, manifest)["rows"][0]["served"]                    # the token request `a` is served at its first slot
+    rep = _recompute(run, manifest, build_dir=_build(run, S, eos))
+    assert rep["summary"]["verdict"] == "FAIL" and rep["summary"]["rows"] == _tally(exact=6)
+    assert (_ledger(rep)["requests"]["a"]["finish"], _ledger(rep)["requests_unjudged"], len(_ledger(rep)["problems"])) == ("unjudged", 1, 1)
+    assert len(rep["reasons"]) == 1 and "is unattested: the lag slot cannot be judged" in rep["reasons"][0]
+    monkeypatch.setattr(SR, "expected_executed_slots", lambda served, bound, A, eos_ids: ([1, 2, 3], {"t_eos": 1, "n_executed": 3}))
+    with pytest.raises(TypeError, match="sample ledger a: an EOS at slot 1 of 3 was judged without the scheduler profile"):
+        _recompute(run, manifest, build_dir=run)
+
+
+def test_the_programs_split_count_is_held_to_the_mask_kernels_at_every_row(tmp_path):
+    run, manifest = _capture(tmp_path / "agree")
+    rep = _recompute(run, manifest, build_dir=_build(run, S))
+    s = rep["summary"]
+    assert (s["verdict"], rep["reasons"], s["program_S_all_agree"], s["program_S_rows"]) == ("PASS", [], True, 6)
+    assert rep["program_splits"] == {"a": S, "b": S} and (rep["rows"][0]["program_S"], rep["rows"][0]["S_agree"]) == (S, True)
+    assert "S: kernel constexpr == Program TopPMask S at 6 of 6 rows" in rep["structure_note"]
+    another = ("step 0 row 0 (a) event 0: the mask kernel ran S=4 but the Program declares TopPMask S=8 (Build sampling.splits) -- the "
+               "record's split geometry is not the declared one")
+    unregistered = ("step 0 row 0 (a): the Build declares sampling.splits 'derived', not the registered split count (an int, a Const32[S] "
+                    "of the Program)")
+    for splits, said in ((8, another), ("derived", unregistered)):
+        run, manifest = _capture(tmp_path / str(splits))
+        rep = _recompute(run, manifest, build_dir=_build(run, splits))
+        s = rep["summary"]
+        assert (s["verdict"], s["rows"], s["program_S_all_agree"], s["program_S_rows"]) == ("FAIL", _tally(exact=6), False, 0)
+        assert len(rep["reasons"]) == 6 and rep["reasons"][0] == said
+    # a Build with no request Program of the requests' shape declares no S for them
+    run, manifest = _capture(tmp_path / "none")
+    (run / "build_request0").mkdir()
+    (run / "build_request0" / "result.json").write_text(json.dumps({"ok": True, "wrapper": "request", "LP": 99, "T": 1, "sampling": {"splits": S}}))
+    rep = _recompute(run, manifest, build_dir=run)
+    assert rep["summary"]["verdict"] == "FAIL" and rep["program_splits"] == {"a": None, "b": None}
+    assert rep["reasons"][0] == "step 0 row 0 (a): the Build has no request Program for this request's shape -- its S is undeclared"
 
 
 def test_max_rows_stops_the_check_and_the_verdict_says_how_many_were_checked(tmp_path):
@@ -219,7 +279,7 @@ def test_a_seed_the_kernels_consumed_that_is_not_the_declared_one_fails_though_t
     rep = _recompute(run, manifest)
     s = rep["summary"]
     assert (s["verdict"], s["rows"], s["device_facts_all_match"], s["device_facts_rows"]) == ("FAIL", _tally(exact=6), False, 3)
-    assert rep["reasons"] == [f"step {k} row 0 (a): the sampler kernels consumed seed=8 but the manifest declares seed=7" for k in range(CAP)]
+    assert rep["reasons"] == [f"step {k} row 0 (a): the sampler kernels consumed seed=8 but the manifest declares seed=7" for k in range(MAX_TOKENS)]
 
 
 def test_a_fact_the_kernels_consumed_that_was_not_snapshotted_is_not_tied_to_the_execution(tmp_path):

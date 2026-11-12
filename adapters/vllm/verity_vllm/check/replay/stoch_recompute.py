@@ -380,15 +380,15 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
         if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
-        n_lag = 0                                                 # the lag slots the rule expects: none where no EOS is served before the cap
+        n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
             ent["lag_slot"] = ("not scheduled: the request ran to its cap (nothing is scheduled past the length bound)" if t_eos is None else
                                f"not scheduled: the EOS is served at the cap slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
         else:
-            if lag is None:                                       # the rule leaves an EOS before the cap unjudged without the profile
-                raise TypeError(f"draw ledger {rid}: an EOS at slot {t_eos} before the cap {T} was judged without the scheduler profile")
+            if lag is None:                                       # the rule leaves an early EOS unjudged without the profile
+                raise TypeError(f"sample ledger {rid}: an EOS at slot {t_eos} of {T} was judged without the scheduler profile")
             ent["finish"] = "eos"
             out["requests_with_eos_before_cap"] += 1
             out["lag_slot_exercised"] = True
