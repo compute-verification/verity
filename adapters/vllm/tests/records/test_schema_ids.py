@@ -7,6 +7,7 @@ from verity_vllm.records import schema_ids
 
 #: the ids as the records on disk have them
 ON_DISK = {
+    "ADMISSION_BOUND_SCHEMA": "verity-sweep/admission/f-da-15/v1",
     "ADMISSION_PLAN_SCHEMA": "verity/admission-plan/v1",
     "AOT_COMPARISON_SCHEMA": "verity-vllm/aot-comparison/v1",
     "BATCH_DECOMP_SCHEMA": "cb-a/batch-decomp/v1",
@@ -58,6 +59,7 @@ ON_DISK = {
     "PROFILE_FALLBACK_SCHEMA": "verity-capture/profile-fallback/v1",
     "PROGRAM_CACHE_ENTRY_SCHEMA": "verity-vllm/program-cache-entry/v1",
     "PROGRAM_COMPARE_SCHEMA": "cb-a/compare/v1",
+    "PROTOCOL_COMPOSITION_SCHEMA": "verity-vllm/protocol-composition/v0",
     "QUERY_USE_SCHEMA": "verity-ir/query-use/v1",
     "RANK_COMMIT_BINDING_SCHEMA": "verity/tp2/commit-binding/v1",
     "RANK_MATCH_SCHEMA": "tp2/rank_match/v1",
@@ -84,9 +86,12 @@ ON_DISK = {
     "TP_RANK_REPLAY_SCHEMA": "verity-vllm/tp-rank-replay/v1",
     "TP_REPLAY_DEFERRED_SCHEMA": "verity-vllm/tp-replay-deferred/v1",
     "TP_SAMPLED_REPLAY_SCHEMA": "verity-sweep/tp-sampled-replay/v1",
+    "TP_VALUE_CHECK_SCHEMA": "verity/commit-integ/value-check-tp/v1",
+    "TP_WEIGHTS_PIN_SCHEMA": "verity-sweep/tp-weights-pin/v1",
     "WEIGHTS_OF_RECORD_PRIOR_SCHEMA": "verity/commit/weights-of-record/v1",
     "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
     "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
+    "XRANK_COLLECTIVES_FOLD_SCHEMA": "verity/tp2/xrank-collectives-fold/v1",
     "XRANK_PICKS_SCHEMA": "verity/tp2/xrank-picks/v1",
 }
 
