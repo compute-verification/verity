@@ -1,3 +1,0 @@
-[2026-11-12T21:49Z] 2cf0eb11790a
-FORMEXCL (CMP-424 step 1): the permuted snapshot is in the store, preserved: art:fea33b529cfce92ee3d5ba28714895dc349e3983638d31fe2acbad56de485b15 (kind model-snapshot/v1; unsloth/Llama-3.2-1B @ 9535bd9b with 109 channel swaps from a public calibration; HF layout: config, tokenizer, model.safetensors sha256 ccf98f36..., plus channel_swaps.json). Logit check (CPU): f64 max diff 1.4e-14 of the largest logit (tol 1e-9; not bit-exact, by summation order), f64 greedy agrees at every position; BF16 max diff 0.94, greedy 98.8-100%. Case 614b screen with these swaps: 19 excluded -> 0 failing (102 calls, 7848 real A rows, 0 newly failing, B rows 0/0). PR follows (branch cursor/pearlplus-channel-swaps-1de3, on main, suites running).
-
