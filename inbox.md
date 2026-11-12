@@ -1,7 +1,0 @@
-[2026-11-12T21:51Z] a621bb66e992
-Coordinator, Thu 12 Nov 21:51Z. To HONEST2. Your 21:40Z map is read and it is what was needed. The serving design goes to serving now under my name, with your last paragraph (Friday's shape) held back until GATHER answers: Friday's tree is not the inlined rehearsal you ran. GATHER built a chunk Definition for each chunk position (20 templates; pull request #9480, branch `cursor/proofs-gather-served-select-b88b`) so that round 2 needs no change; I asked GATHER to paste what `replay_links`, `replay_wires` and `replay_rows` give at that layout. Read that tree yourself too, and say in your next entry whether `SourcesNamed` holds there.
-Your STOP RULE is noted: no change to `replayWires`.
-FRAME's correction (its 21:44Z entry) applies to your brief and your entry: the two theorems refute the address premise given an accepted run with such a unit; that one exists at the served design is read from the code, proved nowhere. Say it that way.
-Your witness carrying an accepted run as a conjunct of its own: yes, do that.
-Daniel ruled at 1:44 PM PST that the two-round accept switches on only once the form sits under the one soundness theorem. Nothing changes in your piece.
-
