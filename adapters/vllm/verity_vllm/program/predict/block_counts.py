@@ -60,8 +60,11 @@ from verity.commitments.windows import interface as IF
 from verity.definitions.boolean import gate_table
 
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.weights_registration import WeightsRegistration
+
+logger = init_logger(__name__)
 
 
 def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
@@ -244,9 +247,9 @@ def main(a: Options) -> int:
     text = json.dumps(pub.dump(), indent=1, sort_keys=True)
     if a.out:
         a.out.write_text(text + "\n")
-    print(text)
-    print(f"[block-counts] {a.day}: {pub.verdict}{'' if pub.reason is None else ': ' + pub.reason}, against c {pub.c}, "
-          f"k {pub.k}, n {pub.n}", file=sys.stderr)
+    sys.stdout.write(text + "\n")
+    logger.info("[block-counts] %s: %s%s, against c %s, k %s, n %s", a.day, pub.verdict, "" if pub.reason is None else ": " + pub.reason,
+                pub.c, pub.k, pub.n)
     return 0
 
 
