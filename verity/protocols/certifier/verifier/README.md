@@ -67,9 +67,9 @@ Open premises (`open`):
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
-    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The period
-    check (`network-period`, `NetworkCheck.Period`), the step from a period's records to the network bound, is not in
-    the public tree, because it reads the inference-only policy's layout check, which is withheld;
+    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
+    tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
+    is withheld;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`.
@@ -353,7 +353,9 @@ A spec-level reference for network accounting's timing channel:
   audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
+  policy's layout check, which is withheld. Programs start at
   fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
