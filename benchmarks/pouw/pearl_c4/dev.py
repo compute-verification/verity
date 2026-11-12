@@ -15,8 +15,8 @@ The host supplies only public inputs: the operands, the epoch's salt and each co
 B's rows as the verifier checks them (`commit_rows`) and derives the seeds from the roots; self-timing takes labels for the
 salt and the domain ids.
 
-The pipeline (`Pipeline`) is also the FP4 bench arm's (arm.py): `weight_side` is the per-(weight, epoch) work, `launch` the
-per-call prover step, each on a given stream and capturable into a CUDA graph.
+The pipeline (`Pipeline`) is what both modes run: `weight_side` is the per-(weight, epoch) work, `launch` the per-call
+prover step, each on a given stream and capturable into a CUDA graph.
 """
 
 from __future__ import annotations
