@@ -74,8 +74,8 @@ a replica, and θ is 𝓜. A rename is to follow. Two premises already have thei
 older names give the old ones): SHA-512's premise is SAK for SHA, `SAKSha`, and the proof system's premise, "the proof
 system is sound", is `ProofSystemSound` (`Pouw.Assumptions.ProofSystemSound`): the verdict accepts a period only where
 each block's instance is registrable and the selected blocks' checks pass, in Flock's proofs. It is not H1's
-`Properties.Pouw.Period.ServiceSound`, a different premise, about the one-stage Flock sessions over a window's sampled
-units, which keeps its name.
+`ServiceSound` (in `security/Properties/lean-audit.json`), a different premise, about the one-stage Flock sessions over a
+window's sampled units, which keeps its name.
 
 ## What is committed
 
