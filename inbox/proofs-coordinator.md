@@ -72337,3 +72337,363 @@ Out, at `ad9af609f4ee`, launched 05:39Z to 05:43Z:
 - [read] The three runs. When they end I read them, rewrite the body's Runs section, and write the ready line at `ad9af609f4ee`. Resume me then, or at 07:10Z.
 - [run] The body and the title are rewritten for this head: 14 pieces, twelve written cases, the premise on two entries, the six commits, and under "What is left" the three you named (recomputing `accepted` and `complete`, a drawn port, one read of the session) with `across_all`, soundness's closing and the follow-up above. The title no longer says it stacks on #9028.
 - [read] Not established: the tests that call the Lean verifier have not run on any of this turn's commits until `7bbe` or `e9cb` ends. Locally only the pure-Python test ran (1 passed) and `ruff`.
+
+## SESSIONS, Thu 12 Nov 05:48Z: the binding sum on COUNT's designs, counted by template [run `e68a`]: what today's code can pay is one table a session at the full fixed seconds, 4,865.6 GB at 98.7 bits; no row under 300 GB reaches 100 bits as the proof stands (86.8 to 94.5 for an execution phase in calls); with all three changes every row under 300 GB reads 105.1 to 105.2, and no row reaches 100 for a year in calls
+
+**Everything in this entry is modeled**: the cost model's seconds, and arithmetic on the hash term of the proof's bound. No session of any of these shapes has run, and nothing ran on the served engine.
+
+Tags: [run] is `r20261112-053418-e68a` (exit 0 on vy-nebius-cpu-2, 140 s, at source `c8b46edd10e4`; its `sessions_under_300.json` is sha256 `c0d8ee81ff6b…`, byte for byte a local run's) unless a line says otherwise: `wires_sessions2.py` on the inputs of COUNT's run `r20261112-050407-3150` unchanged (its `count_fixed.py`, source `c8b46edd10e4`, restored from `art:3b81fba3c934…`; ten of ten input digests match its `inputs.sha256`), with my class counts by template as in run `d5e1`. 70 designs priced; the 45 that COUNT's run holds agree with its `fixed.json` in K, GB, sampled proof blocks, sessions, largest session and its binding column, 45 of 45. Mailbox read at 05:39Z: your 05:00Z, 05:05Z and 05:38Z sections are in.
+
+**For Daniel.** Your target is over 100 bits and under 300 GB at 10% compute cost, for a datacenter's 10-minute execution phase. This is the cost table of 05:17Z above with the binding error counted by subcircuit template, which reads 3.4 to 4.6 bits better than the 4,130 classes that table assumed on every proof block. GB is the bound as that table prints it, with the 5% margin in brackets. Bits are minus log2 of the binding error.
+
+1. **What today's code can pay is over 2,500 GB.** [relayed: the measurement entered at 05:25Z] Today every session pays its statement's fixed seconds in full, and a session of several tables pays the verifier's once a table. So the rows that can be paid today are one table a session at the full fixed seconds: 4,865.6 GB (5,108.8) in the best designed configuration, 11,531.0 (12,107.5) on the partition `main` defines, 2,558.2 (2,686.2) in the plan of record's case. At 4,865.6 GB the binding error for an execution phase is 98.7 bits as the proof stands, counting SHA-512 calls on 64 KiB rows, and 107.7 counting compressions; for a year, 83.1 and 92.1. Even these rows write 28 times the lines of session coins that one challenger session's log holds today.
+2. **Under 300 GB exists only in the best designed configuration, and only on one of two things the measurement says are not there today**: sessions of many tables that pay the fixed seconds once (200 tables a session: 296.2 GB (311.0); 64 tables: 348.5), or a block type's later sessions paying a small fraction of them (one table a session needs 0.005 or less, 16 tables 0.05, 64 tables 0.3). The floor is 273.4 GB (287.1), when later sessions are free, at every session size. The other two configurations stop at 716.3 GB (752.1).
+3. **At the rows under 300 GB, as the proof stands, no row reaches 100 bits for an execution phase in calls**: 94.4 to 94.5 at one table a session, 90.4 to 90.5 at 16, 88.4 to 88.5 at 64, 86.8 to 86.9 at 200. Counting compressions the one-table rows read 103.4 to 103.5 and every other row is under 100.
+4. **With the one-wait trace alone** (compiled on a branch, not yet on `main`) the one-table rows read 101.1 to 101.2 for an execution phase in calls, at 273.4 and 296.2 GB. **With all three changes** (the one-wait trace, the wide leaves, reruns charged a table) every row under 300 GB reads 105.1 to 105.2 in calls and 114.1 to 114.2 in compressions. For a year it reads 89.4 to 89.6 in calls and 98.4 to 98.6 in compressions: 1.4 to 1.6 bits short in compressions, 10.4 to 10.6 short in calls.
+5. **For a year, 100 bits costs GB.** In calls no design in the table reaches it in any column. In compressions, with all three changes, the least bound that reaches it is 887.1 GB (931.5) among the designs priced, and about 802 GB by the formula below; among the rows today's code can pay it is 2,558.2 GB.
+6. **Two terms of the proof's bound are outside this sum, and neither caps a row below 100 bits with the proof system's two repetitions as `main` has them.** The sessions' knowledge error is 2^-203.0 at one table a session and 2^-199.0, 2^-197.0 and 2^-195.3 at 16, 64 and 200 tables. The square-root term is 2^-116.5 or smaller for an execution phase at every row, under the stricter of the two hash assumptions; under the other it is not small. If the second repetition were dropped, the knowledge error alone would be 2^-104.4, 2^-100.4, 2^-98.4 and 2^-96.7.
+
+**The rows today's code can pay first: one table a session.** The first row of each configuration (times 1) is the one the 05:25Z measurement supports; the rows below it assume a block type's later sessions pay that fraction of the fixed seconds, which the measurement puts at 0.95 to 1.01 today [relayed: FIXEDCOST 05:25Z, through your 05:38Z section]. Each cell: bits for an execution phase in calls, then in brackets the bits over (+) or short of (−) 100 for a phase in calls / a phase in compressions / a year in calls / a year in compressions. Every one of these rows is past the release log's lines (under 2 below). [run]
+
+| configuration | later sessions' fixed seconds, times | GB (×1.05) | sampled proof blocks | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 4,865.6 (5,108.8) | 203.3 M | 98.73 (−1.3 / +7.7 / −16.9 / −7.9) | 105.45 (+5.4 / +14.4 / −10.2 / −1.2) | 102.73 (+2.7 / +11.7 / −12.9 / −3.9) | 109.45 (+9.4 / +18.4 / −6.2 / +2.8) | 98.73 (−1.3 / +7.7 / −16.9 / −7.9) | 109.45 (+9.4 / +18.4 / −6.2 / +2.8) |
+| the best designed configuration | 0.5 | 2,721.3 (2,857.3) | 406.5 M | 97.73 (−2.3 / +6.7 / −17.9 / −8.9) | 104.45 (+4.4 / +13.4 / −11.2 / −2.2) | 101.73 (+1.7 / +10.7 / −13.9 / −4.9) | 108.45 (+8.4 / +17.4 / −7.2 / +1.8) | 97.73 (−2.3 / +6.7 / −17.9 / −8.9) | 108.45 (+8.4 / +17.4 / −7.2 / +1.8) |
+| the best designed configuration | 0.2 | 1,267.3 (1,330.7) | 875.6 M | 96.63 (−3.4 / +5.6 / −19.1 / −10.1) | 103.34 (+3.3 / +12.3 / −12.3 / −3.3) | 100.63 (+0.6 / +9.6 / −15.1 / −6.1) | 107.34 (+7.3 / +16.3 / −8.3 / +0.7) | 96.63 (−3.4 / +5.6 / −19.1 / −10.1) | 107.34 (+7.3 / +16.3 / −8.3 / +0.7) |
+| the best designed configuration | 0.05 | 507.7 (533.1) | 2,189.0 M | 95.30 (−4.7 / +4.3 / −20.4 / −11.4) | 102.02 (+2.0 / +11.0 / −13.7 / −4.7) | 99.30 (−0.7 / +8.3 / −16.4 / −7.4) | 106.02 (+6.0 / +15.0 / −9.7 / −0.7) | 95.30 (−4.7 / +4.3 / −20.4 / −11.4) | 106.02 (+6.0 / +15.0 / −9.7 / −0.7) |
+| the best designed configuration | 0.005 | 296.2 (311.0) | 3,752.5 M | 94.53 (−5.5 / +3.5 / −21.2 / −12.2) | 101.24 (+1.2 / +10.2 / −14.4 / −5.4) | 98.53 (−1.5 / +7.5 / −17.2 / −8.2) | 105.24 (+5.2 / +14.2 / −10.4 / −1.4) | 94.53 (−5.5 / +3.5 / −21.2 / −12.2) | 105.24 (+5.2 / +14.2 / −10.4 / −1.4) |
+| the best designed configuration | 0 | 273.4 (287.1) | 4,065.2 M | 94.41 (−5.6 / +3.4 / −21.3 / −12.3) | 101.12 (+1.1 / +10.1 / −14.6 / −5.6) | 98.41 (−1.6 / +7.4 / −17.3 / −8.3) | 105.12 (+5.1 / +14.1 / −10.6 / −1.6) | 94.41 (−5.6 / +3.4 / −21.3 / −12.3) | 105.12 (+5.1 / +14.1 / −10.6 / −1.6) |
+| the partition `main` defines | 1 | 11,531.0 (12,107.5) | 83.1 M | 98.80 (−1.2 / +7.8 / −16.9 / −7.9) | 105.51 (+5.5 / +14.5 / −10.2 / −1.2) | 102.80 (+2.8 / +11.8 / −12.9 / −3.9) | 109.51 (+9.5 / +18.5 / −6.2 / +2.8) | 98.80 (−1.2 / +7.8 / −16.9 / −7.9) | 109.51 (+9.5 / +18.5 / −6.2 / +2.8) |
+| the partition `main` defines | 0 | 716.3 (752.1) | 1,510.6 M | 94.61 (−5.4 / +3.6 / −21.1 / −12.1) | 101.33 (+1.3 / +10.3 / −14.4 / −5.4) | 98.61 (−1.4 / +7.6 / −17.1 / −8.1) | 105.33 (+5.3 / +14.3 / −10.4 / −1.4) | 94.61 (−5.4 / +3.6 / −21.1 / −12.1) | 105.33 (+5.3 / +14.3 / −10.4 / −1.4) |
+| the plan of record's case | 1 | 2,558.2 (2,686.2) | 423.0 M | 96.45 (−3.5 / +5.5 / −19.2 / −10.2) | 103.17 (+3.2 / +12.2 / −12.5 / −3.5) | 100.45 (+0.5 / +9.5 / −15.2 / −6.2) | 107.17 (+7.2 / +16.2 / −8.5 / +0.5) | 96.45 (−3.5 / +5.5 / −19.2 / −10.2) | 107.17 (+7.2 / +16.2 / −8.5 / +0.5) |
+| the plan of record's case | 0 | 716.3 (752.1) | 1,510.6 M | 94.61 (−5.4 / +3.6 / −21.1 / −12.1) | 101.33 (+1.3 / +10.3 / −14.4 / −5.4) | 98.61 (−1.4 / +7.6 / −17.1 / −8.1) | 105.33 (+5.3 / +14.3 / −10.4 / −1.4) | 94.61 (−5.4 / +3.6 / −21.1 / −12.1) | 105.33 (+5.3 / +14.3 / −10.4 / −1.4) |
+
+**The columns, and what each one is.**
+- **(1) as it stands**: the hash term of a theorem on `main` (`SpotFlock.code_eventTwoX_le_cls_at_budget`, `hashBound`) at each design's counts, `K_s = K_m` by template, the reruns at the design's largest session. `main` lists no guarantee with this bound [read: FINDER 05:47Z, line 72110 of this file, which read `origin/main:security/lean-audit.json`]. Its compiled numeric instances on `main` are at one table a session and at most 2^37 classes (`hashBound_table1_513_k37`, 2^-96) [relayed: the same]; the rows under 300 GB hold 2^39.2 to 2^39.3 classes, so their figures are the theorem's expression evaluated by my run, not a compiled instance. At 2 to 200 tables a session it is not a statement about the code: `main`'s two-stage verifier refuses a template with more than one table (`SpotFlock.ref_one_table`) [relayed: the same]. Instances of the reruns at 2, 16 and 200 tables are in #9086, open; none at 64 [relayed: COUNT 05:17Z].
+- **(2a) the one-wait trace**: a compiled statement on a branch, now in #9149 (open, unmarked) at `6d1df990db77` on `cursor/proofs-finder-7c1e`. `Flock.SecurityProofs.SpotOneWaitTwo` compiles and its records run `r20261112-033523-ae52` passed, with no premise beyond the three already open (`Claims.ExpectedCR`, `CompiledTwo.Scope`, `SpotFlock.Addresses`) [relayed: FINDER, through you, and its 05:47Z entry]. Not on `main`. Its 6.71 bits are arithmetic on two compiled statements, with no lemma stating the comparison, and a statement about the verifier's code only at one table a session; its compiled instance is 2^-102 at up to 2^38 classes (`εoneWaitAt_le_513`) [read: FINDER 05:47Z, item 1]. The same 6.71 bits at every session size.
+- **(2b) the wide level-0 leaves**: arithmetic on a definition. Daniel's parameter; its analysis side is in #9108 (WIDEZK), unbuilt in the prover, and no instance of the bound is stated at its reruns (162,015,001 at one table) on `main` or in #9108 [relayed: WIDELEAF, through you]. The column assumes every table is at 2^35 bits; a table gains 4.00 bits there, 3, 2 and 1 at 2^34, 2^33 and 2^32, and nothing below [relayed: the same]. I did not read which table sizes the served sessions hold.
+- **(2) both**: (2a) and (2b) together, 10.71 bits.
+- **(3) the reruns charged a table**: arithmetic on a statement nobody has written. TABLEEXT is writing it [relayed: you]; its 04:52Z entry says "tentative verdict: it holds", nothing compiled or run [read: this file, line 70775]. The column is (1) with the reruns of one table at any session size: worth 4.00, 6.00 and 7.64 bits at 16, 64 and 200 tables, nothing at one.
+- **all three**: (2a), (2b) and (3).
+- **† on a row of more than one table: priced once a session; the measurement says once a table** [relayed: FIXEDCOST 05:25Z: two tables of 32 blocks cost the Lean verifier 7.84 to 8.10 s, two one-table sessions 4.80 to 5.03 s]. Those rows stay: they are what a verifier whose fixed seconds follow the session would give.
+- **In calls** is `T = c = 513·2^80`; **in compressions** is `T = c = 2^80`, 9.00 bits better in every cell. **A year** is 52,560 execution phases under a union bound, 15.68 bits worse in every cell.
+
+**The formula, so a new design's bits need no run** [run: each constant is the same to 0.005 bit over every design of its row]. At a configuration, a column and a session size, bits = c − log2(the phase's sampled proof blocks), for an execution phase in calls; add 9.00 for compressions and subtract 15.68 for a year. In the best designed configuration the bound is 1.111·10^12 GB over the sampled proof blocks (1.082·10^12 in the other two) at every design under 2,000 GB, so there bits = c − 40.02 + log2(GB) (c − 39.98 in the other two) [run: the product's range is in the last column].
+
+| configuration | tables a session | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three | GB × sampled proof blocks |
+|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 (11 designs) | 126.33 | 133.05 | 130.33 | 137.05 | 126.33 | 137.05 | 1.11e+12 to 1.111e+12 (8 designs under 2,000 GB) |
+| the best designed configuration | 16 (6 designs) | 122.33 | 129.05 | 126.33 | 133.05 | 126.33 | 137.05 | 1.111e+12 to 1.111e+12 (6 designs under 2,000 GB) |
+| the best designed configuration | 64 (6 designs) | 120.33 | 127.05 | 124.33 | 131.05 | 126.33 | 137.05 | 1.111e+12 to 1.111e+12 (6 designs under 2,000 GB) |
+| the best designed configuration | 200 (3 designs) | 118.69 | 125.40 | 122.69 | 129.40 | 126.33 | 137.05 | 1.111e+12 to 1.111e+12 (3 designs under 2,000 GB) |
+| the partition `main` defines | 1 (7 designs) | 125.11 | 131.82 | 129.11 | 135.82 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (2 designs under 2,000 GB) |
+| the partition `main` defines | 16 (3 designs) | 121.11 | 127.82 | 125.11 | 131.82 | 125.11 | 135.82 | 1.08e+12 to 1.082e+12 (3 designs under 2,000 GB) |
+| the partition `main` defines | 64 (3 designs) | 119.11 | 125.82 | 123.11 | 129.82 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (3 designs under 2,000 GB) |
+| the partition `main` defines | 200 (2 designs) | 117.46 | 124.18 | 121.46 | 128.18 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (2 designs under 2,000 GB) |
+| the plan of record's case | 1 (7 designs) | 125.11 | 131.82 | 129.11 | 135.82 | 125.11 | 135.82 | 1.08e+12 to 1.082e+12 (5 designs under 2,000 GB) |
+| the plan of record's case | 16 (3 designs) | 121.11 | 127.82 | 125.11 | 131.82 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (3 designs under 2,000 GB) |
+| the plan of record's case | 64 (3 designs) | 119.11 | 125.82 | 123.11 | 129.82 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (3 designs under 2,000 GB) |
+| the plan of record's case | 200 (2 designs) | 117.46 | 124.18 | 121.46 | 128.18 | 125.11 | 135.82 | 1.082e+12 to 1.082e+12 (2 designs under 2,000 GB) |
+
+- Read off it [derived]: as the proof stands at one table a session, 100 bits is at most 84.4 million sampled proof blocks a phase in the best designed configuration (2^26.33) and 36.1 million in the other two (2^25.11), where under 300 GB takes about 3,700 million. With the one-wait trace alone it is at most 2^33.05 = 8,866 million for a phase in calls. With all three changes it is at most 2^37.05 = 141,900 million for a phase in calls and 2^30.37 = 1,384 million for a year in compressions, which is 802 GB.
+- COUNT's rows with the fixed seconds charged a table were not in this file at 05:48Z; the constants above give their bits from their sampled proof blocks.
+
+**1. The rows under 300 GB (GB as COUNT prints it), all in the best designed configuration: bits for an execution phase in calls.** Under 300 GB with the 5% margin are only the 273.4 (287.1) rows and 200 tables at times 0.2 (291.6). [run]
+
+| tables a session, at most | later sessions' fixed seconds, times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 0.005 | 296.2 (311.0) | 94.53 | 101.24 | 98.53 | 105.24 | 94.53 | 105.24 |
+| 1 | 0 | 273.4 (287.1) | 94.41 | 101.12 | 98.41 | 105.12 | 94.41 | 105.12 |
+| 16 † | 0.05 | 291.3 (305.9) | 90.50 | 97.22 | 94.50 | 101.22 | 94.50 | 105.22 |
+| 16 † | 0 | 273.4 (287.1) | 90.41 | 97.12 | 94.41 | 101.12 | 94.41 | 105.12 |
+| 64 † | 0.3 | 296.2 (311.0) | 88.53 | 95.24 | 92.53 | 99.24 | 94.53 | 105.24 |
+| 64 † | 0.2 | 291.3 (305.9) | 88.50 | 95.22 | 92.50 | 99.22 | 94.50 | 105.22 |
+| 64 † | 0 | 273.4 (287.1) | 88.41 | 95.12 | 92.41 | 99.12 | 94.41 | 105.12 |
+| 200 † | 1 | 296.2 (311.0) | 86.88 | 93.60 | 90.88 | 97.60 | 94.53 | 105.24 |
+| 200 † | 0.2 | 277.7 (291.6) | 86.79 | 93.50 | 90.79 | 97.50 | 94.43 | 105.15 |
+| 200 † | 0 | 273.4 (287.1) | 86.77 | 93.48 | 90.77 | 97.48 | 94.41 | 105.12 |
+
+**The same rows, bits over (+) or short of (−) 100 under the four readings**: a phase in calls / a phase in compressions / a year in calls / a year in compressions. [run]
+
+| tables | times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 0.005 | 296.2 (311.0) | −5.5 / +3.5 / −21.2 / −12.2 | +1.2 / +10.2 / −14.4 / −5.4 | −1.5 / +7.5 / −17.2 / −8.2 | +5.2 / +14.2 / −10.4 / −1.4 | −5.5 / +3.5 / −21.2 / −12.2 | +5.2 / +14.2 / −10.4 / −1.4 |
+| 1 | 0 | 273.4 (287.1) | −5.6 / +3.4 / −21.3 / −12.3 | +1.1 / +10.1 / −14.6 / −5.6 | −1.6 / +7.4 / −17.3 / −8.3 | +5.1 / +14.1 / −10.6 / −1.6 | −5.6 / +3.4 / −21.3 / −12.3 | +5.1 / +14.1 / −10.6 / −1.6 |
+| 16 † | 0.05 | 291.3 (305.9) | −9.5 / −0.5 / −25.2 / −16.2 | −2.8 / +6.2 / −18.5 / −9.5 | −5.5 / +3.5 / −21.2 / −12.2 | +1.2 / +10.2 / −14.5 / −5.5 | −5.5 / +3.5 / −21.2 / −12.2 | +5.2 / +14.2 / −10.5 / −1.5 |
+| 16 † | 0 | 273.4 (287.1) | −9.6 / −0.6 / −25.3 / −16.3 | −2.9 / +6.1 / −18.6 / −9.6 | −5.6 / +3.4 / −21.3 / −12.3 | +1.1 / +10.1 / −14.6 / −5.6 | −5.6 / +3.4 / −21.3 / −12.3 | +5.1 / +14.1 / −10.6 / −1.6 |
+| 64 † | 0.3 | 296.2 (311.0) | −11.5 / −2.5 / −27.2 / −18.2 | −4.8 / +4.2 / −20.4 / −11.4 | −7.5 / +1.5 / −23.2 / −14.2 | −0.8 / +8.2 / −16.4 / −7.4 | −5.5 / +3.5 / −21.2 / −12.2 | +5.2 / +14.2 / −10.4 / −1.4 |
+| 64 † | 0.2 | 291.3 (305.9) | −11.5 / −2.5 / −27.2 / −18.2 | −4.8 / +4.2 / −20.5 / −11.5 | −7.5 / +1.5 / −23.2 / −14.2 | −0.8 / +8.2 / −16.5 / −7.5 | −5.5 / +3.5 / −21.2 / −12.2 | +5.2 / +14.2 / −10.5 / −1.5 |
+| 64 † | 0 | 273.4 (287.1) | −11.6 / −2.6 / −27.3 / −18.3 | −4.9 / +4.1 / −20.6 / −11.6 | −7.6 / +1.4 / −23.3 / −14.3 | −0.9 / +8.1 / −16.6 / −7.6 | −5.6 / +3.4 / −21.3 / −12.3 | +5.1 / +14.1 / −10.6 / −1.6 |
+| 200 † | 1 | 296.2 (311.0) | −13.1 / −4.1 / −28.8 / −19.8 | −6.4 / +2.6 / −22.1 / −13.1 | −9.1 / −0.1 / −24.8 / −15.8 | −2.4 / +6.6 / −18.1 / −9.1 | −5.5 / +3.5 / −21.2 / −12.2 | +5.2 / +14.2 / −10.4 / −1.4 |
+| 200 † | 0.2 | 277.7 (291.6) | −13.2 / −4.2 / −28.9 / −19.9 | −6.5 / +2.5 / −22.2 / −13.2 | −9.2 / −0.2 / −24.9 / −15.9 | −2.5 / +6.5 / −18.2 / −9.2 | −5.6 / +3.4 / −21.2 / −12.2 | +5.1 / +14.2 / −10.5 / −1.5 |
+| 200 † | 0 | 273.4 (287.1) | −13.2 / −4.2 / −28.9 / −19.9 | −6.5 / +2.5 / −22.2 / −13.2 | −9.2 / −0.2 / −24.9 / −15.9 | −2.5 / +6.5 / −18.2 / −9.2 | −5.6 / +3.4 / −21.3 / −12.3 | +5.1 / +14.1 / −10.6 / −1.6 |
+
+**2. The least GB with 100 bits or more, per column and per reading.** [run] Each cell: GB (×1.05), the design, its bits. "none" where no design of the pool reaches 100.
+
+Over every design priced on the kit (70: COUNT's 45, the thresholds you asked, and sessions of 2, 4, 8, 32, 48, 100 and 128 tables beside them). The same cells hold among the 59 designs of at most 64 tables a session, which is what the Lean verifier takes (`Tags.MAX_TABLES` is 64, `Flock/Tags.lean:85`, thrown at `Flock/HmRow.lean:2492`; 200 is the analysis's scope only, `SpotFlock/Code.lean:98-103`) [read at `c8b46edd10e4`]:
+
+| reading | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|
+| a phase, calls | none | 273.4 (287.1): best designed, 1 table, ×0, 101.1 bits | 1,267.3 (1,330.7): best designed, 1 table, ×0.2, 100.6 bits | 273.4 (287.1): best designed, 1 table, ×0, 105.1 bits | none | 273.4 (287.1): best designed, 1 table, ×0, 105.1 bits |
+| a phase, compressions | 273.4 (287.1): best designed, 1 table, ×0, 103.4 bits | 273.4 (287.1): best designed, 1 table, ×0, 110.1 bits | 273.4 (287.1): best designed, 1 table, ×0, 107.4 bits | 273.4 (287.1): best designed, 1 table, ×0, 114.1 bits | 273.4 (287.1): best designed, 1 table, ×0, 103.4 bits | 273.4 (287.1): best designed, 1 table, ×0, 114.1 bits |
+| a year, calls | none | none | none | none | none | none |
+| a year, compressions | none | none | none | 1,267.3 (1,330.7): best designed, 1 table, ×0.2, 100.7 bits | none | 887.1 (931.5): best designed, 8 tables †, ×1, 100.1 bits |
+
+Among the rows today's code can pay by the 05:25Z measurement (one table a session, every session at the full fixed seconds; three designs, one a configuration):
+
+| reading | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|
+| a phase, calls | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 103.2 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 107.2 bits | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 107.2 bits |
+| a phase, compressions | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 105.5 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 112.2 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 109.5 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 116.2 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 105.5 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 116.2 bits |
+| a year, calls | none | none | none | none | none | none |
+| a year, compressions | none | none | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits |
+
+At the cost model's fixed seconds (times 1) and any session size up to 64 tables (14 designs), the pricing the measurement contradicts above one table:
+
+| reading | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|
+| a phase, calls | none | 1,478.5 (1,552.5): best designed, 4 tables †, ×1, 101.6 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | 423.1 (444.3): best designed, 32 tables †, ×1, 100.8 bits | none | 348.5 (365.9): best designed, 64 tables †, ×1, 105.5 bits |
+| a phase, compressions | 573.3 (601.9): best designed, 16 tables †, ×1, 100.5 bits | 348.5 (365.9): best designed, 64 tables †, ×1, 104.5 bits | 348.5 (365.9): best designed, 64 tables †, ×1, 101.8 bits | 348.5 (365.9): best designed, 64 tables †, ×1, 108.5 bits | 348.5 (365.9): best designed, 64 tables †, ×1, 103.8 bits | 348.5 (365.9): best designed, 64 tables †, ×1, 114.5 bits |
+| a year, calls | none | none | none | none | none | none |
+| a year, compressions | none | none | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | none | 887.1 (931.5): best designed, 8 tables †, ×1, 100.1 bits |
+
+The same up to 200 tables (19 designs):
+
+| reading | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|
+| a phase, calls | none | 1,478.5 (1,552.5): best designed, 4 tables †, ×1, 101.6 bits | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | 423.1 (444.3): best designed, 32 tables †, ×1, 100.8 bits | none | 296.2 (311.0): best designed, 200 tables †, ×1, 105.2 bits |
+| a phase, compressions | 573.3 (601.9): best designed, 16 tables †, ×1, 100.5 bits | 296.2 (311.0): best designed, 200 tables †, ×1, 102.6 bits | 311.8 (327.4): best designed, 128 tables †, ×1, 100.6 bits | 296.2 (311.0): best designed, 200 tables †, ×1, 106.6 bits | 296.2 (311.0): best designed, 200 tables †, ×1, 103.5 bits | 296.2 (311.0): best designed, 200 tables †, ×1, 114.2 bits |
+| a year, calls | none | none | none | none | none | none |
+| a year, compressions | none | none | none | 2,558.2 (2,686.2): plan of record's case, 1 table, ×1, 100.5 bits | none | 887.1 (931.5): best designed, 8 tables †, ×1, 100.1 bits |
+
+- **What "today's code takes" means row by row** [relayed: COUNT 05:17Z, its last column, repeated in the designs' table below]. Up to 64 tables a session the Lean verifier and the CPU prover take the session, and the GPU prover takes one table a session; 200 tables needs the limit raised. **Every row, the one-table rows included, is past the release log's lines, on `main` and at #8914's limits** [relayed: COUNT]: the sessions of one verification phase write more lines of session coins than one challenger session's release log holds, 1,048,576 on `main` and 8,388,608 at #8914's limits, and `total_cost.limits` says of such a design that no deployment runs it today, whatever its bound [read: `total_cost.py:561-592` at `c8b46edd10e4`]. For the one-table rows that is their first limit: 29.2 million lines at 4,865.6 GB and 584.4 million at 273.4 GB [run], 28 and 557 times one log (3.5 and 70 times at #8914's limits) [derived]. So no design in the kit, at any session size, is one today's code runs as one challenger session for a datacenter's 10-minute phase.
+
+**3. The two reconciling lines.**
+- **GB** [run, and read of the two kits]. My 05:11Z figures were already ×1.05 (`count_tables.gb` multiplies by 1.05), so the pairs to compare are 373.2 against 365.9 at 64 tables and 316.3 against 311.0 at 200. At 200 tables the whole difference is the head statement, at 160 core-seconds here and 250 in run `d5e1`: with it at 250, COUNT's kit gives `d5e1`'s own design (K 59, 301.2 (316.3), 3,689,949,562 sampled proof blocks). At 64 tables it is not the head statement: at 250 and at 160 COUNT's kit gives the same K 51, 348.5 (365.9). The difference from `d5e1`'s K 50 is the size of a table: COUNT's kit sizes a block type's table by the staging the `proof_overhead` card measured the block that prices it at (`count_common.staged`), where the kit of `d5e1` took 2^35 bits over the block type's own size (its own `k_log`); 67 of 193 block types' tables differ, 65 of them larger here by 2 to 32 times, 2 at half. Of the twelve designs I ran both ways with the head statement as `d5e1` had it, ten have `d5e1`'s K, sampled proof blocks and GB; the two that differ are this one and the plan of record's case at one table (K 7, 2,686.2 against K 94, 2,833.7).
+- **Bits** [run]. COUNT's column counts 4,130 classes on every sampled proof block; by template the best designed configuration holds 166.7 and the other two 391.6 (your division, confirmed on all 70 designs). So mine reads 4.62 bits over COUNT's on the best designed configuration and 3.39 on the other two, at every design. Nothing else differs: my sum at 4,130 classes a block is COUNT's column to 0.0005 bit on all 70 designs.
+
+**4. What the table leaves out.**
+- **The sessions' knowledge error, both repetitions kept** [read: `main` at `d6075b75d289`]. A session of n tables has it at most n·2^-202.98 (`Claims.Flock.Numbers.κ_le_mul`, `NumbersDeploy.lean:74`, where its tables' error is n·2^-205, which is how SPOT[Flock]'s code sets it, `SpotFlock/Accepting.lean:116-140`): 2^-202.98, 2^-198.98, 2^-196.98 and 2^-195.34 at 1, 16, 64 and 200 tables [derived]. The bound the Lean states at SPOT[Flock]'s code is looser, 2^-190 at up to 200 tables (`κF_le`). The term enters the bound once, as the largest over the proof blocks and not summed over sessions (`κs`, `Definitions/Claims/SamplingGeneric.lean:400`), three times in the one-wait form [read: this file, line 65555]. For a year, 15.68 bits less: 2^-178.1 at worst, 200 tables in the one-wait form.
+- **With the second repetition dropped** [relayed: PARAMS 12:00Z Wed, 2^-104.38 at one table and 104.4 − log2 n; derived at each n]: 2^-104.38, 2^-100.38, 2^-98.38 and 2^-96.74. That would cap the 64 and 200 table rows under 100 for an execution phase on its own, and every row for a year (2^-88.7 at one table).
+- **The square-root term** [derived from the run's sessions and `main`'s lemma forms; no Lean bounds it at these designs]. A session of n tables has at most 2 + 4,400·n rounds and weight n·2^33 (`Vk_zk_le`, `weight_zk_le`, `NumbersDeploy.lean:479-495`), its γ is at most 16·(√(2·rounds·weight) + rounds)² (`γ_le_of`, `NumbersGamma.lean:116`): 2^50.1, 2^58.1, 2^62.1 and 2^65.4 at 1, 16, 64 and 200 tables. With the verifier's rounds at 4 + sessions × rounds (the form of `sqrt_term_le_strict`, `NumbersFinder.lean:164`) and the finder at two runs under the strict birthday bound, the term is 2^-133.6 to 2^-135.7 at one table a session, 2^-129.5 to 2^-130.1 at 16, 2^-127.4 to 2^-127.8 at 64 and 2^-125.5 to 2^-126.1 at 200, counting `T = 2^80`; 9.00 bits worse at `T = 513·2^80`, one more in the one-wait form, 15.68 more for a year. Its worst reading on an under-300 row is 2^-99.8 (200 tables, a year, calls, one-wait form), where the hash sum is 2^-89.4 at best; on every reading where an under-300 row's hash sum is over 100 bits this term is at least 10 bits smaller than it.
+- **That term is small only under the strict birthday bound read at the finder** (`Claims.StrictBirthday`, in the lock's trust base [relayed: this file, line 62715]). Under the linear bound alone it is 2^-33 to 2^-43 at these designs [derived], as this file already says of `main`'s numbers [read: line 67630].
+- **So no row under 300 GB is capped below 100 bits by either term with both repetitions kept.** What caps them is the hash sum.
+- **Not in the table and not established**: the knowledge error and the square-root term under the wide leaves or with reruns charged a table (no statement at either); the classes a session's proof blocks share (uncounted, by your ruling; at most 0.45 bit by my model); the refusal term (0.06 to 0.45 bit at one table, as at 05:11Z).
+
+**The designs** [run; the last two columns and the first limit by relay from COUNT's kit, whose `total_cost.limits` my run calls unchanged]. `e` is the reruns in column (1); the other columns' reruns are under the table.
+
+| configuration | tables a session, at most | later sessions' fixed seconds, times | GB (×1.05) | K | sampled proof blocks | sessions | largest session, tables | e, (1) | `K_m` | classes a sampled block | COUNT's binding column | mine at 4,130 a block | first limit of today's code [relayed: COUNT] | lines of session coins |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 4,865.6 (5,108.8) | 52 | 203,265,972 | 167,824 | 1.00 | 2,592,237,061 | 33,890,680,356 | 166.7 | 94.11 | 94.11 | the release log's lines | 29,201,314 |
+| the best designed configuration | 1 | 0.5 | 2,721.3 (2,857.3) | 26 | 406,522,194 | 335,522 | 1.00 | 2,592,237,061 | 67,777,752,172 | 166.7 | 93.11 | 93.11 | the release log's lines | 58,380,839 |
+| the best designed configuration | 1 | 0.2 | 1,267.3 (1,330.7) | 28 | 875,583,156 | 722,543 | 1.00 | 2,592,237,061 | 145,981,931,900 | 166.7 | 92.01 | 92.01 | the release log's lines | 125,722,533 |
+| the best designed configuration | 1 | 0.05 | 507.7 (533.1) | 35 | 2,188,953,130 | 1,806,186 | 1.00 | 2,592,237,061 | 364,952,236,985 | 166.7 | 90.69 | 90.69 | the release log's lines | 314,276,443 |
+| the best designed configuration | 1 | 0.005 | 296.2 (311.0) | 60 | 3,752,491,080 | 3,096,268 | 1.00 | 2,592,237,061 | 625,632,406,260 | 166.7 | 89.91 | 89.91 | the release log's lines | 538,750,718 |
+| the best designed configuration | 1 | 0 | 273.4 (287.1) | 65 | 4,065,198,670 | 3,358,423 | 1.00 | 2,592,237,061 | 677,768,440,115 | 166.7 | 89.79 | 89.79 | the release log's lines | 584,365,550 |
+| the best designed configuration | 16 † | 1 | 573.3 (601.9) | 31 | 1,938,787,058 | 100,098 | 16.00 | 41,475,792,121 | 323,243,409,901 | 166.7 | 86.86 | 86.86 | the GPU prover's 1 table | 275,350,259 |
+| the best designed configuration | 16 † | 0.2 | 335.3 (352.1) | 53 | 3,314,700,454 | 171,057 | 16.00 | 41,475,792,121 | 552,641,958,863 | 166.7 | 86.09 | 86.09 | the GPU prover's 1 table | 470,759,964 |
+| the best designed configuration | 16 † | 0.05 | 291.3 (305.9) | 61 | 3,815,032,598 | 196,845 | 16.00 | 41,475,792,121 | 636,059,613,031 | 166.7 | 85.88 | 85.88 | the GPU prover's 1 table | 541,818,009 |
+| the best designed configuration | 16 † | 0 | 273.4 (287.1) | 65 | 4,065,198,670 | 222,314 | 16.00 | 41,475,792,121 | 677,768,440,115 | 166.7 | 85.79 | 85.79 | the GPU prover's 1 table | 578,069,077 |
+| the best designed configuration | 64 † | 1 | 348.5 (365.9) | 51 | 3,189,617,418 | 41,248 | 64.00 | 165,903,167,851 | 531,787,545,321 | 166.7 | 84.14 | 84.14 | the GPU prover's 1 table | 452,748,730 |
+| the best designed configuration | 64 † | 0.3 | 296.2 (311.0) | 60 | 3,752,491,080 | 48,518 | 64.00 | 165,903,167,851 | 625,632,406,260 | 166.7 | 83.91 | 83.91 | the GPU prover's 1 table | 532,645,546 |
+| the best designed configuration | 64 † | 0.2 | 291.3 (305.9) | 61 | 3,815,032,598 | 49,332 | 64.00 | 165,903,167,851 | 636,059,613,031 | 166.7 | 83.88 | 83.88 | the GPU prover's 1 table | 541,522,982 |
+| the best designed configuration | 64 † | 0 | 273.4 (287.1) | 65 | 4,065,198,670 | 66,023 | 64.00 | 165,903,167,851 | 677,768,440,115 | 166.7 | 83.79 | 83.79 | the GPU prover's 1 table | 577,733,743 |
+| the best designed configuration | 200 † | 1 | 296.2 (311.0) | 60 | 3,752,491,080 | 15,642 | 200.00 | 518,447,399,191 | 625,632,406,260 | 166.7 | 82.26 | 82.26 | needs the limit raised (64) | 532,579,794 |
+| the best designed configuration | 200 † | 0.2 | 277.7 (291.6) | 64 | 4,002,657,152 | 16,685 | 200.00 | 518,447,399,191 | 667,341,233,344 | 166.7 | 82.17 | 82.17 | needs the limit raised (64) | 568,085,113 |
+| the best designed configuration | 200 † | 0 | 273.4 (287.1) | 65 | 4,065,198,670 | 30,648 | 200.00 | 518,447,399,191 | 677,768,440,115 | 166.7 | 82.15 | 82.15 | needs the limit raised (64) | 577,662,992 |
+| the partition `main` defines | 1 | 1 | 11,531.0 (12,107.5) | 22 | 83,086,234 | 164,327 | 1.00 | 2,592,237,061 | 32,539,024,518 | 391.6 | 95.41 | 95.41 | the release log's lines | 28,592,836 |
+| the partition `main` defines | 1 | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 2,986,730 | 1.00 | 2,592,237,061 | 591,604,000,150 | 391.6 | 91.22 | 91.22 | the release log's lines | 519,690,967 |
+| the partition `main` defines | 64 † | 1 | 895.4 (940.2) | 20 | 1,208,499,640 | 37,427 | 64.00 | 165,903,167,851 | 473,283,200,120 | 391.6 | 85.54 | 85.54 | the GPU prover's 1 table | 410,960,142 |
+| the partition `main` defines | 64 † | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 50,254 | 64.00 | 165,903,167,851 | 591,604,000,150 | 391.6 | 85.22 | 85.22 | the GPU prover's 1 table | 513,806,434 |
+| the partition `main` defines | 200 † | 1 | 778.6 (817.5) | 23 | 1,389,774,586 | 13,871 | 200.00 | 518,447,399,191 | 544,275,680,138 | 391.6 | 83.70 | 83.70 | needs the limit raised (64) | 472,545,824 |
+| the partition `main` defines | 200 † | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 18,748 | 200.00 | 518,447,399,191 | 591,604,000,150 | 391.6 | 83.58 | 83.58 | needs the limit raised (64) | 513,743,423 |
+| the plan of record's case | 1 | 1 | 2,558.2 (2,686.2) | 7 | 422,974,874 | 836,124 | 1.00 | 2,592,237,061 | 165,649,120,042 | 391.6 | 93.06 | 93.06 | the release log's lines | 145,485,631 |
+| the plan of record's case | 1 | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 2,986,730 | 1.00 | 2,592,237,061 | 591,604,000,150 | 391.6 | 91.22 | 91.22 | the release log's lines | 519,690,967 |
+| the plan of record's case | 64 † | 1 | 746.2 (783.5) | 24 | 1,450,199,568 | 44,875 | 64.00 | 165,903,167,851 | 567,939,840,144 | 391.6 | 85.28 | 85.28 | the GPU prover's 1 table | 493,152,096 |
+| the plan of record's case | 64 † | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 50,253 | 64.00 | 165,903,167,851 | 591,604,000,150 | 391.6 | 85.22 | 85.22 | the GPU prover's 1 table | 513,798,020 |
+| the plan of record's case | 200 † | 1 | 716.3 (752.1) | 25 | 1,510,624,550 | 15,058 | 200.00 | 518,447,399,191 | 591,604,000,150 | 391.6 | 83.58 | 83.58 | needs the limit raised (64) | 513,636,727 |
+| the plan of record's case | 200 † | 0 | 716.3 (752.1) | 25 | 1,510,624,550 | 18,708 | 200.00 | 518,447,399,191 | 591,604,000,150 | 391.6 | 83.58 | 83.58 | needs the limit raised (64) | 513,734,932 |
+
+- 1 tables: (1) as it stands 2,592,237,061, (2a) one-wait trace 12,343,987, (2b) wide level-0 leaves 162,015,001, (2) both 771,501, (3) reruns charged a table 2,592,237,061, all three 771,501
+- 16 tables: (1) as it stands 41,475,792,121, (2a) one-wait trace 197,503,773, (2b) wide level-0 leaves 2,592,237,061, (2) both 12,343,987, (3) reruns charged a table 2,592,237,061, all three 771,501
+- 64 tables: (1) as it stands 165,903,167,851, (2a) one-wait trace 790,015,086, (2b) wide level-0 leaves 10,368,948,031, (2) both 49,375,944, (3) reruns charged a table 2,592,237,061, all three 771,501
+- 200 tables: (1) as it stands 518,447,399,191, (2a) one-wait trace 2,468,797,140, (2b) wide level-0 leaves 32,402,962,621, (2) both 154,299,823, (3) reruns charged a table 2,592,237,061, all three 771,501
+
+**Minus log2 of the sum, an execution phase, in calls** [run]:
+
+| configuration | tables | times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 4,865.6 (5,108.8) | 98.73 | 105.45 | 102.73 | 109.45 | 98.73 | 109.45 |
+| the best designed configuration | 1 | 0.5 | 2,721.3 (2,857.3) | 97.73 | 104.45 | 101.73 | 108.45 | 97.73 | 108.45 |
+| the best designed configuration | 1 | 0.2 | 1,267.3 (1,330.7) | 96.63 | 103.34 | 100.63 | 107.34 | 96.63 | 107.34 |
+| the best designed configuration | 1 | 0.05 | 507.7 (533.1) | 95.30 | 102.02 | 99.30 | 106.02 | 95.30 | 106.02 |
+| the best designed configuration | 1 | 0.005 | 296.2 (311.0) | 94.53 | 101.24 | 98.53 | 105.24 | 94.53 | 105.24 |
+| the best designed configuration | 1 | 0 | 273.4 (287.1) | 94.41 | 101.12 | 98.41 | 105.12 | 94.41 | 105.12 |
+| the best designed configuration | 16 † | 1 | 573.3 (601.9) | 91.48 | 98.19 | 95.48 | 102.19 | 95.48 | 106.19 |
+| the best designed configuration | 16 † | 0.2 | 335.3 (352.1) | 90.71 | 97.42 | 94.71 | 101.42 | 94.71 | 105.42 |
+| the best designed configuration | 16 † | 0.05 | 291.3 (305.9) | 90.50 | 97.22 | 94.50 | 101.22 | 94.50 | 105.22 |
+| the best designed configuration | 16 † | 0 | 273.4 (287.1) | 90.41 | 97.12 | 94.41 | 101.12 | 94.41 | 105.12 |
+| the best designed configuration | 64 † | 1 | 348.5 (365.9) | 88.76 | 95.47 | 92.76 | 99.47 | 94.76 | 105.47 |
+| the best designed configuration | 64 † | 0.3 | 296.2 (311.0) | 88.53 | 95.24 | 92.53 | 99.24 | 94.53 | 105.24 |
+| the best designed configuration | 64 † | 0.2 | 291.3 (305.9) | 88.50 | 95.22 | 92.50 | 99.22 | 94.50 | 105.22 |
+| the best designed configuration | 64 † | 0 | 273.4 (287.1) | 88.41 | 95.12 | 92.41 | 99.12 | 94.41 | 105.12 |
+| the best designed configuration | 200 † | 1 | 296.2 (311.0) | 86.88 | 93.60 | 90.88 | 97.60 | 94.53 | 105.24 |
+| the best designed configuration | 200 † | 0.2 | 277.7 (291.6) | 86.79 | 93.50 | 90.79 | 97.50 | 94.43 | 105.15 |
+| the best designed configuration | 200 † | 0 | 273.4 (287.1) | 86.77 | 93.48 | 90.77 | 97.48 | 94.41 | 105.12 |
+| the partition `main` defines | 1 | 1 | 11,531.0 (12,107.5) | 98.80 | 105.51 | 102.80 | 109.51 | 98.80 | 109.51 |
+| the partition `main` defines | 1 | 0 | 716.3 (752.1) | 94.61 | 101.33 | 98.61 | 105.33 | 94.61 | 105.33 |
+| the partition `main` defines | 64 † | 1 | 895.4 (940.2) | 88.94 | 95.65 | 92.94 | 99.65 | 94.94 | 105.65 |
+| the partition `main` defines | 64 † | 0 | 716.3 (752.1) | 88.61 | 95.33 | 92.61 | 99.33 | 94.61 | 105.33 |
+| the partition `main` defines | 200 † | 1 | 778.6 (817.5) | 87.09 | 93.80 | 91.09 | 97.80 | 94.73 | 105.45 |
+| the partition `main` defines | 200 † | 0 | 716.3 (752.1) | 86.97 | 93.68 | 90.97 | 97.68 | 94.61 | 105.33 |
+| the plan of record's case | 1 | 1 | 2,558.2 (2,686.2) | 96.45 | 103.17 | 100.45 | 107.17 | 96.45 | 107.17 |
+| the plan of record's case | 1 | 0 | 716.3 (752.1) | 94.61 | 101.33 | 98.61 | 105.33 | 94.61 | 105.33 |
+| the plan of record's case | 64 † | 1 | 746.2 (783.5) | 88.67 | 95.39 | 92.67 | 99.39 | 94.67 | 105.39 |
+| the plan of record's case | 64 † | 0 | 716.3 (752.1) | 88.61 | 95.33 | 92.61 | 99.33 | 94.61 | 105.33 |
+| the plan of record's case | 200 † | 1 | 716.3 (752.1) | 86.97 | 93.68 | 90.97 | 97.68 | 94.61 | 105.33 |
+| the plan of record's case | 200 † | 0 | 716.3 (752.1) | 86.97 | 93.68 | 90.97 | 97.68 | 94.61 | 105.33 |
+
+**An execution phase, in compressions** [run]:
+
+| configuration | tables | times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 4,865.6 (5,108.8) | 107.74 | 114.45 | 111.74 | 118.45 | 107.74 | 118.45 |
+| the best designed configuration | 1 | 0.5 | 2,721.3 (2,857.3) | 106.74 | 113.45 | 110.74 | 117.45 | 106.74 | 117.45 |
+| the best designed configuration | 1 | 0.2 | 1,267.3 (1,330.7) | 105.63 | 112.34 | 109.63 | 116.34 | 105.63 | 116.34 |
+| the best designed configuration | 1 | 0.05 | 507.7 (533.1) | 104.31 | 111.02 | 108.31 | 115.02 | 104.31 | 115.02 |
+| the best designed configuration | 1 | 0.005 | 296.2 (311.0) | 103.53 | 110.24 | 107.53 | 114.24 | 103.53 | 114.24 |
+| the best designed configuration | 1 | 0 | 273.4 (287.1) | 103.41 | 110.13 | 107.41 | 114.13 | 103.41 | 114.13 |
+| the best designed configuration | 16 † | 1 | 573.3 (601.9) | 100.48 | 107.20 | 104.48 | 111.20 | 104.48 | 115.20 |
+| the best designed configuration | 16 † | 0.2 | 335.3 (352.1) | 99.71 | 106.42 | 103.71 | 110.42 | 103.71 | 114.42 |
+| the best designed configuration | 16 † | 0.05 | 291.3 (305.9) | 99.51 | 106.22 | 103.51 | 110.22 | 103.51 | 114.22 |
+| the best designed configuration | 16 † | 0 | 273.4 (287.1) | 99.41 | 106.13 | 103.41 | 110.13 | 103.41 | 114.13 |
+| the best designed configuration | 64 † | 1 | 348.5 (365.9) | 97.76 | 104.48 | 101.76 | 108.48 | 103.76 | 114.48 |
+| the best designed configuration | 64 † | 0.3 | 296.2 (311.0) | 97.53 | 104.24 | 101.53 | 108.24 | 103.53 | 114.24 |
+| the best designed configuration | 64 † | 0.2 | 291.3 (305.9) | 97.51 | 104.22 | 101.51 | 108.22 | 103.51 | 114.22 |
+| the best designed configuration | 64 † | 0 | 273.4 (287.1) | 97.41 | 104.13 | 101.41 | 108.13 | 103.41 | 114.13 |
+| the best designed configuration | 200 † | 1 | 296.2 (311.0) | 95.89 | 102.60 | 99.89 | 106.60 | 103.53 | 114.24 |
+| the best designed configuration | 200 † | 0.2 | 277.7 (291.6) | 95.79 | 102.51 | 99.79 | 106.51 | 103.44 | 114.15 |
+| the best designed configuration | 200 † | 0 | 273.4 (287.1) | 95.77 | 102.48 | 99.77 | 106.48 | 103.41 | 114.13 |
+| the partition `main` defines | 1 | 1 | 11,531.0 (12,107.5) | 107.80 | 114.52 | 111.80 | 118.52 | 107.80 | 118.52 |
+| the partition `main` defines | 1 | 0 | 716.3 (752.1) | 103.62 | 110.33 | 107.62 | 114.33 | 103.62 | 114.33 |
+| the partition `main` defines | 64 † | 1 | 895.4 (940.2) | 97.94 | 104.65 | 101.94 | 108.65 | 103.94 | 114.65 |
+| the partition `main` defines | 64 † | 0 | 716.3 (752.1) | 97.62 | 104.33 | 101.62 | 108.33 | 103.62 | 114.33 |
+| the partition `main` defines | 200 † | 1 | 778.6 (817.5) | 96.09 | 102.81 | 100.09 | 106.81 | 103.74 | 114.45 |
+| the partition `main` defines | 200 † | 0 | 716.3 (752.1) | 95.97 | 102.69 | 99.97 | 106.69 | 103.62 | 114.33 |
+| the plan of record's case | 1 | 1 | 2,558.2 (2,686.2) | 105.45 | 112.17 | 109.45 | 116.17 | 105.45 | 116.17 |
+| the plan of record's case | 1 | 0 | 716.3 (752.1) | 103.62 | 110.33 | 107.62 | 114.33 | 103.62 | 114.33 |
+| the plan of record's case | 64 † | 1 | 746.2 (783.5) | 97.68 | 104.39 | 101.68 | 108.39 | 103.68 | 114.39 |
+| the plan of record's case | 64 † | 0 | 716.3 (752.1) | 97.62 | 104.33 | 101.62 | 108.33 | 103.62 | 114.33 |
+| the plan of record's case | 200 † | 1 | 716.3 (752.1) | 95.97 | 102.69 | 99.97 | 106.69 | 103.62 | 114.33 |
+| the plan of record's case | 200 † | 0 | 716.3 (752.1) | 95.97 | 102.69 | 99.97 | 106.69 | 103.62 | 114.33 |
+
+**A year, in calls** [run]:
+
+| configuration | tables | times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 4,865.6 (5,108.8) | 83.05 | 89.77 | 87.05 | 93.77 | 83.05 | 93.77 |
+| the best designed configuration | 1 | 0.5 | 2,721.3 (2,857.3) | 82.05 | 88.77 | 86.05 | 92.77 | 82.05 | 92.77 |
+| the best designed configuration | 1 | 0.2 | 1,267.3 (1,330.7) | 80.94 | 87.66 | 84.94 | 91.66 | 80.94 | 91.66 |
+| the best designed configuration | 1 | 0.05 | 507.7 (533.1) | 79.62 | 86.34 | 83.62 | 90.34 | 79.62 | 90.34 |
+| the best designed configuration | 1 | 0.005 | 296.2 (311.0) | 78.84 | 85.56 | 82.84 | 89.56 | 78.84 | 89.56 |
+| the best designed configuration | 1 | 0 | 273.4 (287.1) | 78.73 | 85.44 | 82.73 | 89.44 | 78.73 | 89.44 |
+| the best designed configuration | 16 † | 1 | 573.3 (601.9) | 75.80 | 82.51 | 79.80 | 86.51 | 79.80 | 90.51 |
+| the best designed configuration | 16 † | 0.2 | 335.3 (352.1) | 75.02 | 81.74 | 79.02 | 85.74 | 79.02 | 89.74 |
+| the best designed configuration | 16 † | 0.05 | 291.3 (305.9) | 74.82 | 81.53 | 78.82 | 85.53 | 78.82 | 89.53 |
+| the best designed configuration | 16 † | 0 | 273.4 (287.1) | 74.73 | 81.44 | 78.73 | 85.44 | 78.73 | 89.44 |
+| the best designed configuration | 64 † | 1 | 348.5 (365.9) | 73.08 | 79.79 | 77.08 | 83.79 | 79.08 | 89.79 |
+| the best designed configuration | 64 † | 0.3 | 296.2 (311.0) | 72.84 | 79.56 | 76.84 | 83.56 | 78.84 | 89.56 |
+| the best designed configuration | 64 † | 0.2 | 291.3 (305.9) | 72.82 | 79.53 | 76.82 | 83.53 | 78.82 | 89.53 |
+| the best designed configuration | 64 † | 0 | 273.4 (287.1) | 72.73 | 79.44 | 76.73 | 83.44 | 78.73 | 89.44 |
+| the best designed configuration | 200 † | 1 | 296.2 (311.0) | 71.20 | 77.91 | 75.20 | 81.91 | 78.84 | 89.56 |
+| the best designed configuration | 200 † | 0.2 | 277.7 (291.6) | 71.11 | 77.82 | 75.11 | 81.82 | 78.75 | 89.47 |
+| the best designed configuration | 200 † | 0 | 273.4 (287.1) | 71.09 | 77.80 | 75.09 | 81.80 | 78.73 | 89.44 |
+| the partition `main` defines | 1 | 1 | 11,531.0 (12,107.5) | 83.12 | 89.83 | 87.12 | 93.83 | 83.12 | 93.83 |
+| the partition `main` defines | 1 | 0 | 716.3 (752.1) | 78.93 | 85.65 | 82.93 | 89.65 | 78.93 | 89.65 |
+| the partition `main` defines | 64 † | 1 | 895.4 (940.2) | 73.25 | 79.97 | 77.25 | 83.97 | 79.25 | 89.97 |
+| the partition `main` defines | 64 † | 0 | 716.3 (752.1) | 72.93 | 79.65 | 76.93 | 83.65 | 78.93 | 89.65 |
+| the partition `main` defines | 200 † | 1 | 778.6 (817.5) | 71.41 | 78.12 | 75.41 | 82.12 | 79.05 | 89.77 |
+| the partition `main` defines | 200 † | 0 | 716.3 (752.1) | 71.29 | 78.00 | 75.29 | 82.00 | 78.93 | 89.65 |
+| the plan of record's case | 1 | 1 | 2,558.2 (2,686.2) | 80.77 | 87.48 | 84.77 | 91.48 | 80.77 | 91.48 |
+| the plan of record's case | 1 | 0 | 716.3 (752.1) | 78.93 | 85.65 | 82.93 | 89.65 | 78.93 | 89.65 |
+| the plan of record's case | 64 † | 1 | 746.2 (783.5) | 72.99 | 79.71 | 76.99 | 83.71 | 78.99 | 89.71 |
+| the plan of record's case | 64 † | 0 | 716.3 (752.1) | 72.93 | 79.65 | 76.93 | 83.65 | 78.93 | 89.65 |
+| the plan of record's case | 200 † | 1 | 716.3 (752.1) | 71.29 | 78.00 | 75.29 | 82.00 | 78.93 | 89.65 |
+| the plan of record's case | 200 † | 0 | 716.3 (752.1) | 71.29 | 78.00 | 75.29 | 82.00 | 78.93 | 89.65 |
+
+**A year, in compressions** [run]:
+
+| configuration | tables | times | GB (×1.05) | (1) as it stands | (2a) one-wait trace | (2b) wide level-0 leaves | (2) both | (3) reruns charged a table | all three |
+|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 4,865.6 (5,108.8) | 92.05 | 98.77 | 96.05 | 102.77 | 92.05 | 102.77 |
+| the best designed configuration | 1 | 0.5 | 2,721.3 (2,857.3) | 91.05 | 97.77 | 95.05 | 101.77 | 91.05 | 101.77 |
+| the best designed configuration | 1 | 0.2 | 1,267.3 (1,330.7) | 89.95 | 96.66 | 93.95 | 100.66 | 89.95 | 100.66 |
+| the best designed configuration | 1 | 0.05 | 507.7 (533.1) | 88.62 | 95.34 | 92.62 | 99.34 | 88.62 | 99.34 |
+| the best designed configuration | 1 | 0.005 | 296.2 (311.0) | 87.85 | 94.56 | 91.85 | 98.56 | 87.85 | 98.56 |
+| the best designed configuration | 1 | 0 | 273.4 (287.1) | 87.73 | 94.45 | 91.73 | 98.45 | 87.73 | 98.45 |
+| the best designed configuration | 16 † | 1 | 573.3 (601.9) | 84.80 | 91.51 | 88.80 | 95.51 | 88.80 | 99.51 |
+| the best designed configuration | 16 † | 0.2 | 335.3 (352.1) | 84.03 | 90.74 | 88.03 | 94.74 | 88.03 | 98.74 |
+| the best designed configuration | 16 † | 0.05 | 291.3 (305.9) | 83.82 | 90.54 | 87.82 | 94.54 | 87.82 | 98.54 |
+| the best designed configuration | 16 † | 0 | 273.4 (287.1) | 83.73 | 90.45 | 87.73 | 94.45 | 87.73 | 98.45 |
+| the best designed configuration | 64 † | 1 | 348.5 (365.9) | 82.08 | 88.80 | 86.08 | 92.80 | 88.08 | 98.80 |
+| the best designed configuration | 64 † | 0.3 | 296.2 (311.0) | 81.85 | 88.56 | 85.85 | 92.56 | 87.85 | 98.56 |
+| the best designed configuration | 64 † | 0.2 | 291.3 (305.9) | 81.82 | 88.54 | 85.82 | 92.54 | 87.82 | 98.54 |
+| the best designed configuration | 64 † | 0 | 273.4 (287.1) | 81.73 | 88.45 | 85.73 | 92.45 | 87.73 | 98.45 |
+| the best designed configuration | 200 † | 1 | 296.2 (311.0) | 80.20 | 86.92 | 84.20 | 90.92 | 87.85 | 98.56 |
+| the best designed configuration | 200 † | 0.2 | 277.7 (291.6) | 80.11 | 86.82 | 84.11 | 90.82 | 87.75 | 98.47 |
+| the best designed configuration | 200 † | 0 | 273.4 (287.1) | 80.09 | 86.80 | 84.09 | 90.80 | 87.73 | 98.45 |
+| the partition `main` defines | 1 | 1 | 11,531.0 (12,107.5) | 92.12 | 98.83 | 96.12 | 102.83 | 92.12 | 102.83 |
+| the partition `main` defines | 1 | 0 | 716.3 (752.1) | 87.94 | 94.65 | 91.94 | 98.65 | 87.94 | 98.65 |
+| the partition `main` defines | 64 † | 1 | 895.4 (940.2) | 82.26 | 88.97 | 86.26 | 92.97 | 88.26 | 98.97 |
+| the partition `main` defines | 64 † | 0 | 716.3 (752.1) | 81.94 | 88.65 | 85.94 | 92.65 | 87.94 | 98.65 |
+| the partition `main` defines | 200 † | 1 | 778.6 (817.5) | 80.41 | 87.13 | 84.41 | 91.13 | 88.06 | 98.77 |
+| the partition `main` defines | 200 † | 0 | 716.3 (752.1) | 80.29 | 87.01 | 84.29 | 91.01 | 87.94 | 98.65 |
+| the plan of record's case | 1 | 1 | 2,558.2 (2,686.2) | 89.77 | 96.49 | 93.77 | 100.49 | 89.77 | 100.49 |
+| the plan of record's case | 1 | 0 | 716.3 (752.1) | 87.94 | 94.65 | 91.94 | 98.65 | 87.94 | 98.65 |
+| the plan of record's case | 64 † | 1 | 746.2 (783.5) | 81.99 | 88.71 | 85.99 | 92.71 | 87.99 | 98.71 |
+| the plan of record's case | 64 † | 0 | 716.3 (752.1) | 81.94 | 88.65 | 85.94 | 92.65 | 87.94 | 98.65 |
+| the plan of record's case | 200 † | 1 | 716.3 (752.1) | 80.29 | 87.01 | 84.29 | 91.01 | 87.94 | 98.65 |
+| the plan of record's case | 200 † | 0 | 716.3 (752.1) | 80.29 | 87.01 | 84.29 | 91.01 | 87.94 | 98.65 |
+
+**The two terms outside the sum, design by design** [derived, as item 4 says]:
+
+| configuration | tables | times | sessions | knowledge error, both repetitions | with the second dropped | rounds k_V | a session's γ at most | square-root term, strict birthday, T = 2^80 | T = 513·2^80 | under the linear bound alone, T = 513·2^80 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| the best designed configuration | 1 | 1 | 167,824 | 2^-202.98 | 2^-104.38 | 2^29.46 | 2^50.11 | 2^-135.72 | 2^-126.71 | 2^-43.22 |
+| the best designed configuration | 1 | 0.5 | 335,522 | 2^-202.98 | 2^-104.38 | 2^30.46 | 2^50.11 | 2^-135.22 | 2^-126.21 | 2^-42.72 |
+| the best designed configuration | 1 | 0.2 | 722,543 | 2^-202.98 | 2^-104.38 | 2^31.57 | 2^50.11 | 2^-134.66 | 2^-125.66 | 2^-42.16 |
+| the best designed configuration | 1 | 0.05 | 1,806,186 | 2^-202.98 | 2^-104.38 | 2^32.89 | 2^50.11 | 2^-134.00 | 2^-125.00 | 2^-41.50 |
+| the best designed configuration | 1 | 0.005 | 3,096,268 | 2^-202.98 | 2^-104.38 | 2^33.67 | 2^50.11 | 2^-133.61 | 2^-124.61 | 2^-41.11 |
+| the best designed configuration | 1 | 0 | 3,358,423 | 2^-202.98 | 2^-104.38 | 2^33.78 | 2^50.11 | 2^-133.56 | 2^-124.55 | 2^-41.05 |
+| the best designed configuration | 16 † | 1 | 100,098 | 2^-198.98 | 2^-100.38 | 2^32.71 | 2^58.10 | 2^-130.09 | 2^-121.09 | 2^-37.59 |
+| the best designed configuration | 16 † | 0.2 | 171,057 | 2^-198.98 | 2^-100.38 | 2^33.49 | 2^58.10 | 2^-129.70 | 2^-120.70 | 2^-37.20 |
+| the best designed configuration | 16 † | 0.05 | 196,845 | 2^-198.98 | 2^-100.38 | 2^33.69 | 2^58.10 | 2^-129.60 | 2^-120.60 | 2^-37.10 |
+| the best designed configuration | 16 † | 0 | 222,314 | 2^-198.98 | 2^-100.38 | 2^33.87 | 2^58.10 | 2^-129.51 | 2^-120.51 | 2^-37.01 |
+| the best designed configuration | 64 † | 1 | 41,248 | 2^-196.98 | 2^-98.38 | 2^33.44 | 2^62.10 | 2^-127.73 | 2^-118.73 | 2^-35.23 |
+| the best designed configuration | 64 † | 0.3 | 48,518 | 2^-196.98 | 2^-98.38 | 2^33.67 | 2^62.10 | 2^-127.61 | 2^-118.61 | 2^-35.11 |
+| the best designed configuration | 64 † | 0.2 | 49,332 | 2^-196.98 | 2^-98.38 | 2^33.69 | 2^62.10 | 2^-127.60 | 2^-118.60 | 2^-35.10 |
+| the best designed configuration | 64 † | 0 | 66,023 | 2^-196.98 | 2^-98.38 | 2^34.11 | 2^62.10 | 2^-127.39 | 2^-118.39 | 2^-34.89 |
+| the best designed configuration | 200 † | 1 | 15,642 | 2^-195.34 | 2^-96.74 | 2^33.68 | 2^65.39 | 2^-125.96 | 2^-116.96 | 2^-33.46 |
+| the best designed configuration | 200 † | 0.2 | 16,685 | 2^-195.34 | 2^-96.74 | 2^33.77 | 2^65.39 | 2^-125.92 | 2^-116.91 | 2^-33.42 |
+| the best designed configuration | 200 † | 0 | 30,648 | 2^-195.34 | 2^-96.74 | 2^34.65 | 2^65.39 | 2^-125.48 | 2^-116.48 | 2^-32.98 |
+| the partition `main` defines | 1 | 1 | 164,327 | 2^-202.98 | 2^-104.38 | 2^29.43 | 2^50.11 | 2^-135.73 | 2^-126.73 | 2^-43.23 |
+| the partition `main` defines | 1 | 0 | 2,986,730 | 2^-202.98 | 2^-104.38 | 2^33.61 | 2^50.11 | 2^-133.64 | 2^-124.64 | 2^-41.14 |
+| the partition `main` defines | 64 † | 1 | 37,427 | 2^-196.98 | 2^-98.38 | 2^33.30 | 2^62.10 | 2^-127.80 | 2^-118.80 | 2^-35.30 |
+| the partition `main` defines | 64 † | 0 | 50,254 | 2^-196.98 | 2^-98.38 | 2^33.72 | 2^62.10 | 2^-127.59 | 2^-118.58 | 2^-35.09 |
+| the partition `main` defines | 200 † | 1 | 13,871 | 2^-195.34 | 2^-96.74 | 2^33.51 | 2^65.39 | 2^-126.05 | 2^-117.05 | 2^-33.55 |
+| the partition `main` defines | 200 † | 0 | 18,748 | 2^-195.34 | 2^-96.74 | 2^33.94 | 2^65.39 | 2^-125.83 | 2^-116.83 | 2^-33.33 |
+| the plan of record's case | 1 | 1 | 836,124 | 2^-202.98 | 2^-104.38 | 2^31.78 | 2^50.11 | 2^-134.56 | 2^-125.56 | 2^-42.06 |
+| the plan of record's case | 1 | 0 | 2,986,730 | 2^-202.98 | 2^-104.38 | 2^33.61 | 2^50.11 | 2^-133.64 | 2^-124.64 | 2^-41.14 |
+| the plan of record's case | 64 † | 1 | 44,875 | 2^-196.98 | 2^-98.38 | 2^33.56 | 2^62.10 | 2^-127.67 | 2^-118.67 | 2^-35.17 |
+| the plan of record's case | 64 † | 0 | 50,253 | 2^-196.98 | 2^-98.38 | 2^33.72 | 2^62.10 | 2^-127.59 | 2^-118.58 | 2^-35.09 |
+| the plan of record's case | 200 † | 1 | 15,058 | 2^-195.34 | 2^-96.74 | 2^33.63 | 2^65.39 | 2^-125.99 | 2^-116.99 | 2^-33.49 |
+| the plan of record's case | 200 † | 0 | 18,708 | 2^-195.34 | 2^-96.74 | 2^33.94 | 2^65.39 | 2^-125.83 | 2^-116.83 | 2^-33.33 |
+
+**What I could not establish.**
+- Whether any design under 300 GB can be paid: that is the cost side, COUNT's and FIXEDCOST's, relayed here and not checked by me.
+- Which table sizes the served sessions hold, so whether the wide leaves' 4.00 bits applies whole.
+- (3) has no statement; its column is arithmetic.
+- The square-root term in Lean at these designs' rounds and sessions; the figures above are the lemmas' forms evaluated by me.
+- The run record's `art:` id for run `e68a`: the run is preserved, and I did not look its id up.
+
+Files: `/opt/cursor/artifacts/sessions-under-300/` (`wires_sessions2.py`, its job, `entry_tables2.py`, the run's `out/`). No repository file changed; nothing posted; no Lean.
